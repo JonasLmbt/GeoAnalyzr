@@ -7672,6 +7672,10 @@
   }
 
   // src/analysis.ts
+  var regionDisplay2 = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(
+    [typeof navigator !== "undefined" && navigator.language ? navigator.language : "en", "en"],
+    { type: "region" }
+  ) : null;
   function startOfLocalDay(ts) {
     const d = new Date(ts);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -7755,6 +7759,18 @@
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return x ? x : void 0;
+  }
+  function countryLabel(code) {
+    const c = normalizeCountryCode(code);
+    if (!c) return "-";
+    if (c.length === 2 && regionDisplay2) {
+      try {
+        const name = regionDisplay2.of(c.toUpperCase());
+        if (typeof name === "string" && name.trim()) return name;
+      } catch {
+      }
+    }
+    return c.toUpperCase();
   }
   function playerSlots(round) {
     const out = [];
@@ -7883,7 +7899,7 @@
     }
     const availableCountries = [
       { code: "all", label: "All countries" },
-      ...[...countryCountsBase.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100).map(([code, count]) => ({ code, label: `${code.toUpperCase()} (${count} rounds)` }))
+      ...[...countryCountsBase.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100).map(([code, count]) => ({ code, label: `${countryLabel(code)} (${count} rounds)` }))
     ];
     let games = baseGames;
     let rounds = baseRounds;
@@ -7926,7 +7942,7 @@
       lines: [
         `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
         `Games: ${games.length} | Rounds: ${rounds.length}`,
-        `Filters: mode=${filter?.mode || "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? selectedCountry.toUpperCase() : "all"}`,
+        `Filters: mode=${filter?.mode || "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
         `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
         `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
         `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`
@@ -8020,16 +8036,16 @@
       title: "Country Stats",
       lines: [
         "Most played countries:",
-        ...topCountries.slice(0, 10).map(([c, v]) => `${c.toUpperCase()}: ${v.n} rounds`),
+        ...topCountries.slice(0, 10).map(([c, v]) => `${countryLabel(c)}: ${v.n} rounds`),
         "Best avg-score countries (min 4 rounds):",
-        ...bestCountries.map((x) => `${x.country.toUpperCase()}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`),
+        ...bestCountries.map((x) => `${countryLabel(x.country)}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`),
         "Hardest avg-score countries (min 4 rounds):",
-        ...worstCountries.map((x) => `${x.country.toUpperCase()}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`)
+        ...worstCountries.map((x) => `${countryLabel(x.country)}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`)
       ],
       chart: {
         type: "bar",
         yLabel: "Rounds",
-        bars: topCountries.slice(0, 12).map(([c, v]) => ({ label: c.toUpperCase(), value: v.n }))
+        bars: topCountries.slice(0, 12).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
       }
     });
     const opponentCounts = /* @__PURE__ */ new Map();
@@ -8094,7 +8110,7 @@
         `Sessions (gap >45m): ${sessions} | longest session: ${longest} games`,
         `Longest break between games: ${fmt(longestBreakMs / (1e3 * 60 * 60), 1)} hours`,
         `Most played mode: ${[...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-"}`,
-        `Most played country: ${topCountries[0] ? topCountries[0][0].toUpperCase() : "-"}`
+        `Most played country: ${topCountries[0] ? countryLabel(topCountries[0][0]) : "-"}`
       ]
     });
     const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
@@ -8172,14 +8188,14 @@
       }).filter((x) => !!x).sort((a, b) => a.x - b.x);
       sections.push({
         id: "country_spotlight",
-        title: `Country Spotlight: ${spotlightCountry.toUpperCase()}`,
+        title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
         lines: [
           `Rounds: ${agg.n}`,
           `Hit rate: ${fmt((agg.n > 0 ? agg.correct / agg.n : 0) * 100, 1)}%`,
           `Avg score: ${fmt(avg(agg.score), 1)} | Median score: ${fmt(median(agg.score), 1)}`,
           `Avg distance: ${fmt(avg(agg.dist), 2)} km`,
           wrongGuesses.length > 0 ? "Most common wrong guesses:" : "No wrong guess data.",
-          ...wrongGuesses.map(([g, n]) => `${g.toUpperCase()}: ${n}`)
+          ...wrongGuesses.map(([g, n]) => `${countryLabel(g)}: ${n}`)
         ],
         charts: [
           {
@@ -8190,7 +8206,7 @@
           {
             type: "bar",
             yLabel: "Wrong guesses",
-            bars: wrongGuesses.map(([g, n]) => ({ label: g.toUpperCase(), value: n }))
+            bars: wrongGuesses.map(([g, n]) => ({ label: countryLabel(g), value: n }))
           }
         ]
       });
