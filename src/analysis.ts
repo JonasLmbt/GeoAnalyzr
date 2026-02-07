@@ -146,6 +146,51 @@ function countryLabel(code?: string): string {
   return c.toUpperCase();
 }
 
+function countryFlagEmoji(code?: string): string {
+  const c = normalizeCountryCode(code);
+  if (!c || c.length !== 2) return "";
+  const base = 127397;
+  return c
+    .toUpperCase()
+    .split("")
+    .map((ch) => String.fromCodePoint(base + ch.charCodeAt(0)))
+    .join("");
+}
+
+function extractOwnDuelRating(detail: GameRow, ownPlayerId?: string): { start?: number; end?: number } | undefined {
+  const d = asRecord(detail);
+  const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
+  const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
+  if (ownPlayerId && ownPlayerId === p2) {
+    return {
+      start: getNumber(d, "playerTwoStartRating") ?? getNumber(d, "p2_ratingBefore"),
+      end: getNumber(d, "playerTwoEndRating") ?? getNumber(d, "p2_ratingAfter")
+    };
+  }
+  return {
+    start: getNumber(d, "playerOneStartRating") ?? getNumber(d, "p1_ratingBefore"),
+    end: getNumber(d, "playerOneEndRating") ?? getNumber(d, "p1_ratingAfter")
+  };
+}
+
+function extractOwnTeamRating(detail: GameRow, ownPlayerId?: string): { start?: number; end?: number } | undefined {
+  const d = asRecord(detail);
+  if (ownPlayerId) {
+    const teamOneIds = [getString(d, "teamOnePlayerOneId"), getString(d, "teamOnePlayerTwoId")];
+    const inTeamOne = teamOneIds.includes(ownPlayerId);
+    if (!inTeamOne) {
+      return {
+        start: getNumber(d, "teamTwoStartRating"),
+        end: getNumber(d, "teamTwoEndRating")
+      };
+    }
+  }
+  return {
+    start: getNumber(d, "teamOneStartRating"),
+    end: getNumber(d, "teamOneEndRating")
+  };
+}
+
 function playerSlots(round: RoundRow): Array<1 | 2 | 3 | 4> {
   const out: Array<1 | 2 | 3 | 4> = [];
   const rr = asRecord(round);
@@ -251,6 +296,8 @@ export type AnalysisChart =
 export interface AnalysisSection {
   id: string;
   title: string;
+  group?: "Overview" | "Performance" | "Countries" | "Opponents" | "Rating" | "Fun";
+  appliesFilters?: Array<"date" | "mode" | "teammate" | "country">;
   lines: string[];
   chart?: AnalysisChart;
   charts?: AnalysisChart[];
@@ -383,27 +430,22 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       .map(([code, count]) => ({ code, label: `${countryLabel(code)} (${count} rounds)` }))
   ];
 
-  let games = baseGames;
-  let rounds = baseRounds;
-  let details = baseDetails;
+  const selectedTeammate = filter?.teammateId && filter.teammateId !== "all" ? filter.teammateId : undefined;
+  const selectedCountry = filter?.country && filter.country !== "all" ? filter.country.toLowerCase() : undefined;
 
-  if (filter?.teammateId && filter.teammateId !== "all") {
-    const allowedGameIds = teammateGames.get(filter.teammateId) || new Set<string>();
-    games = games.filter((g) => allowedGameIds.has(g.gameId));
-    const gameSet = new Set(games.map((g) => g.gameId));
-    rounds = rounds.filter((r) => gameSet.has(r.gameId));
-    details = details.filter((d) => gameSet.has(d.gameId));
-  }
+  const teammateGameSet = selectedTeammate ? teammateGames.get(selectedTeammate) || new Set<string>() : undefined;
 
-  if (filter?.country && filter.country !== "all") {
-    const c = filter.country.toLowerCase();
-    rounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === c);
-    const gameSet = new Set(rounds.map((r) => r.gameId));
-    games = games.filter((g) => gameSet.has(g.gameId));
-    details = details.filter((d) => gameSet.has(d.gameId));
-  }
+  const teamGames = selectedTeammate ? baseGames.filter((g) => teammateGameSet?.has(g.gameId)) : baseGames;
+  const teamGameSet = new Set(teamGames.map((g) => g.gameId));
+  const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
+  const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
 
-  if (games.length === 0 || rounds.length === 0) {
+  const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
+  const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
+  const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
+  const countryDetails = teamDetails.filter((d) => countryGameSet.has(d.gameId));
+
+  if (countryGames.length === 0 || countryRounds.length === 0) {
     return {
       sections: [{ id: "empty", title: "Overview", lines: ["Keine Daten fuer den gewaehlten Filter."] }],
       availableModes,
@@ -413,6 +455,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       maxPlayedAt
     };
   }
+
+  const games = countryGames;
+  const rounds = countryRounds;
+  const details = countryDetails;
 
   const sections: AnalysisSection[] = [];
   const gameTimes = games.map((g) => g.playedAt).sort((a, b) => a - b);
@@ -427,12 +473,11 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((v): v is number => v !== undefined)
     .map((ms) => ms / 1e3);
 
-  const selectedTeammate = filter?.teammateId && filter.teammateId !== "all" ? filter.teammateId : undefined;
-  const selectedCountry = filter?.country && filter.country !== "all" ? filter.country.toLowerCase() : undefined;
-
   sections.push({
     id: "overview",
     title: "Overview",
+    group: "Overview",
+    appliesFilters: ["date", "mode", "teammate", "country"],
     lines: [
       `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
       `Games: ${games.length} | Rounds: ${rounds.length}`,
@@ -464,13 +509,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   sections.push({
     id: "modes",
     title: "Mode Breakdown",
+    group: "Overview",
+    appliesFilters: ["date", "mode"],
     lines: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([m, c]) => `${m}: ${c}`),
     chart: {
       type: "bar",
       yLabel: "Games",
       bars: [...modeCounts.entries()]
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
+        .slice(0, 16)
         .map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }))
     }
   });
@@ -486,6 +533,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   sections.push({
     id: "time_patterns",
     title: "Time Patterns",
+    group: "Overview",
+    appliesFilters: ["date", "mode", "teammate"],
     lines: [
       "Weekdays:",
       ...weekday.map((v, i) => `${wdNames[i]}: ${v}`),
@@ -505,7 +554,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       {
         type: "bar",
         yLabel: "Games",
-        bars: hour.map((v, h) => ({ label: String(h), value: v }))
+        bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v }))
       }
     ]
   });
@@ -549,6 +598,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   sections.push({
     id: "country_stats",
     title: "Country Stats",
+    group: "Countries",
+    appliesFilters: ["date", "mode", "teammate", "country"],
     lines: [
       "Most played countries:",
       ...topCountries.slice(0, 10).map(([c, v]) => `${countryLabel(c)}: ${v.n} rounds`),
@@ -557,15 +608,60 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       "Hardest avg-score countries (min 4 rounds):",
       ...worstCountries.map((x) => `${countryLabel(x.country)}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`)
     ],
+    charts: [
+      {
+        type: "bar",
+        yLabel: "Rounds",
+        bars: topCountries.slice(0, 24).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
+      },
+      {
+        type: "bar",
+        yLabel: "Avg score",
+        bars: [...scoredCountries]
+          .sort((a, b) => b.avgScore - a.avgScore)
+          .slice(0, 16)
+          .map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
+      }
+    ]
+  });
+
+  const confusionMap = new Map<string, number>();
+  for (const r of teamRounds) {
+    const truth = normalizeCountryCode(r.trueCountry);
+    const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+    if (!truth || !guess || truth === guess) continue;
+    const key = `${truth}|${guess}`;
+    confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
+  }
+  const confusions = [...confusionMap.entries()]
+    .map(([k, n]) => {
+      const [truth, guess] = k.split("|");
+      return { truth, guess, n };
+    })
+    .sort((a, b) => b.n - a.n);
+  sections.push({
+    id: "country_confusions",
+    title: "Most Confused Country Pairs",
+    group: "Countries",
+    appliesFilters: ["date", "mode", "teammate"],
+    lines: [
+      selectedCountry
+        ? "Country filter is ignored here to reveal global confusion patterns in your selected date/mode/team scope."
+        : "Most frequent wrong guess directions (true country -> guessed country).",
+      ...confusions.slice(0, 20).map((x) => `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}: ${x.n}`)
+    ],
     chart: {
       type: "bar",
-      yLabel: "Rounds",
-      bars: topCountries.slice(0, 12).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
+      yLabel: "Wrong guesses",
+      bars: confusions.slice(0, 20).map((x) => ({
+        label: `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}`,
+        value: x.n
+      }))
     }
   });
 
   const opponentCounts = new Map<string, { games: number; name?: string; country?: string }>();
-  for (const d of details) {
+  for (const d of teamDetails) {
     const dd = asRecord(d);
     const ids: Array<{ id?: string; name?: string; country?: string }> = [];
     const modeFamily = getString(dd, "modeFamily");
@@ -607,16 +703,84 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   sections.push({
     id: "opponents",
     title: "Most Frequent Opponents",
+    group: "Opponents",
+    appliesFilters: ["date", "mode", "teammate"],
     lines: [
+      selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
       ...topOpp.map(([id, v]) => `${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
       "Opponent countries:",
       ...[...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, n]) => `${c}: ${n}`)
-    ],
+    ].filter((x) => x !== ""),
     chart: {
       type: "bar",
       yLabel: "Meetings",
-      bars: topOpp.map(([id, v]) => ({ label: (v.name || id.slice(0, 6)).slice(0, 12), value: v.games }))
+      bars: topOpp.slice(0, 24).map(([id, v]) => ({ label: (v.name || id.slice(0, 6)).slice(0, 20), value: v.games }))
     }
+  });
+
+  const basePlayedAtByGameId = new Map(baseGames.map((g) => [g.gameId, g.playedAt]));
+  const duelRatingTimeline = baseDetails
+    .filter((d) => getString(asRecord(d), "modeFamily") === "duels")
+    .map((d) => {
+      const ts = basePlayedAtByGameId.get(d.gameId);
+      const r = extractOwnDuelRating(d, ownPlayerId);
+      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : undefined;
+    })
+    .filter((x): x is { x: number; y: number; label: string } => !!x)
+    .sort((a, b) => a.x - b.x);
+
+  const teamRatingTimeline = baseDetails
+    .filter((d) => getString(asRecord(d), "modeFamily") === "teamduels")
+    .map((d) => {
+      const ts = basePlayedAtByGameId.get(d.gameId);
+      const r = extractOwnTeamRating(d, ownPlayerId);
+      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : undefined;
+    })
+    .filter((x): x is { x: number; y: number; label: string } => !!x)
+    .sort((a, b) => a.x - b.x);
+
+  const teammateForRating = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
+  const teammateRatingTimeline =
+    teammateForRating && teammateGames.get(teammateForRating)
+      ? baseDetails
+          .filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(teammateForRating)?.has(d.gameId) || false))
+          .map((d) => {
+            const ts = basePlayedAtByGameId.get(d.gameId);
+            const r = extractOwnTeamRating(d, ownPlayerId);
+            return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : undefined;
+          })
+          .filter((x): x is { x: number; y: number; label: string } => !!x)
+          .sort((a, b) => a.x - b.x)
+      : [];
+
+  const duelDelta =
+    duelRatingTimeline.length > 1 ? duelRatingTimeline[duelRatingTimeline.length - 1].y - duelRatingTimeline[0].y : undefined;
+  const teamDelta =
+    teamRatingTimeline.length > 1 ? teamRatingTimeline[teamRatingTimeline.length - 1].y - teamRatingTimeline[0].y : undefined;
+  const teammateDelta =
+    teammateRatingTimeline.length > 1
+      ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y
+      : undefined;
+
+  sections.push({
+    id: "rating_history",
+    title: "Rating History",
+    group: "Rating",
+    appliesFilters: ["date", "mode", "teammate"],
+    lines: [
+      `Duels samples: ${duelRatingTimeline.length}${duelDelta !== undefined ? ` | trend: ${duelDelta >= 0 ? "+" : ""}${fmt(duelDelta, 0)}` : ""}`,
+      `Team Duels samples: ${teamRatingTimeline.length}${teamDelta !== undefined ? ` | trend: ${teamDelta >= 0 ? "+" : ""}${fmt(teamDelta, 0)}` : ""}`,
+      teammateForRating
+        ? `Selected teammate scope (${nameMap.get(teammateForRating) || teammateForRating.slice(0, 8)}): ${teammateRatingTimeline.length} samples${
+            teammateDelta !== undefined ? ` | trend: ${teammateDelta >= 0 ? "+" : ""}${fmt(teammateDelta, 0)}` : ""
+          }`
+        : "No teammate-specific rating scope available."
+    ],
+    charts: [
+      { type: "line", yLabel: "Rating", points: duelRatingTimeline },
+      { type: "line", yLabel: "Rating", points: teamRatingTimeline },
+      { type: "line", yLabel: "Rating", points: teammateRatingTimeline }
+    ]
   });
 
   const sessionsGap = 45 * 60 * 1000;
@@ -638,6 +802,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   sections.push({
     id: "fun_facts",
     title: "Fun Facts",
+    group: "Fun",
+    appliesFilters: ["date", "mode", "teammate", "country"],
     lines: [
       `Current streak depth (last 14d activity bars):`,
       ...makeDayActivityLines(gameTimes, 14).slice(-7),
@@ -691,6 +857,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     sections.push({
       id: "teammate_battle",
       title: `Teammate Battle: You vs ${mateName}`,
+      group: "Performance",
+      appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         `Compared rounds: ${compareRounds.length}`,
         `You better guess: ${myWins} rounds`,
@@ -737,7 +905,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
     sections.push({
       id: "country_spotlight",
-      title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
+      title: `Country Spotlight: ${countryFlagEmoji(spotlightCountry)} ${countryLabel(spotlightCountry)}`,
+      group: "Countries",
+      appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         `Rounds: ${agg.n}`,
         `Hit rate: ${fmt((agg.n > 0 ? agg.correct / agg.n : 0) * 100, 1)}%`,

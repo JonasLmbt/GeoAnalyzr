@@ -6259,12 +6259,12 @@
     chartWrap.style.background = "#121212";
     chartWrap.style.padding = "6px";
     const points = chart.points.slice().sort((a, b) => a.x - b.x);
-    const w = 520;
-    const h = 180;
-    const ml = 42;
-    const mr = 10;
-    const mt = 8;
-    const mb = 24;
+    const w = 1500;
+    const h = 300;
+    const ml = 60;
+    const mr = 20;
+    const mt = 16;
+    const mb = 42;
     const minX = points[0].x;
     const maxX = points[points.length - 1].x;
     const minY = Math.min(...points.map((p) => p.y));
@@ -6280,16 +6280,16 @@
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
-    svg.setAttribute("height", "180");
+    svg.setAttribute("height", "300");
     svg.innerHTML = `
     <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
     <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-    <polyline fill="none" stroke="#66a8ff" stroke-width="2" points="${poly}"/>
+    <polyline fill="none" stroke="#66a8ff" stroke-width="3" points="${poly}"/>
     <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(maxY)}</text>
     <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(yMid)}</text>
     <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(minY)}</text>
-    <text x="${ml}" y="${h - 6}" text-anchor="start" font-size="10" fill="#aaa">${xStartLabel}</text>
-    <text x="${w - mr}" y="${h - 6}" text-anchor="end" font-size="10" fill="#aaa">${xEndLabel}</text>
+    <text x="${ml}" y="${h - 8}" text-anchor="start" font-size="12" fill="#aaa">${xStartLabel}</text>
+    <text x="${w - mr}" y="${h - 8}" text-anchor="end" font-size="12" fill="#aaa">${xEndLabel}</text>
   `;
     chartWrap.appendChild(createChartActions(svg, title));
     chartWrap.appendChild(svg);
@@ -6302,13 +6302,13 @@
     chartWrap.style.borderRadius = "8px";
     chartWrap.style.background = "#121212";
     chartWrap.style.padding = "6px";
-    const bars = chart.bars.slice(0, 16);
-    const w = 520;
-    const h = 190;
-    const ml = 34;
-    const mr = 8;
-    const mt = 8;
-    const mb = 46;
+    const bars = chart.bars.slice(0, 40);
+    const w = 1700;
+    const h = 320;
+    const ml = 52;
+    const mr = 16;
+    const mt = 14;
+    const mb = 80;
     const maxY = Math.max(1, ...bars.map((b) => b.value));
     const innerW = w - ml - mr;
     const innerH = h - mt - mb;
@@ -6318,16 +6318,16 @@
       const x = ml + i * step + (step - bw) / 2;
       const bh = b.value / maxY * innerH;
       const y = mt + innerH - bh;
-      const label = b.label.length > 9 ? `${b.label.slice(0, 9)}..` : b.label;
+      const label = b.label.length > 16 ? `${b.label.slice(0, 16)}..` : b.label;
       return `
         <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="#66a8ff" opacity="0.85" />
-        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 13}" text-anchor="middle" font-size="9" fill="#aaa">${label}</text>
+        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="#aaa">${label}</text>
       `;
     }).join("");
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
-    svg.setAttribute("height", "190");
+    svg.setAttribute("height", "320");
     svg.innerHTML = `
     <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
     <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
@@ -6461,7 +6461,7 @@
     function populateAnalysisWindow(data) {
       const refs = analysisWindow;
       if (!refs || refs.win.closed) return;
-      const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, doc } = refs;
+      const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
       if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
       if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
       const prevMode = modeSelect.value || "all";
@@ -6491,10 +6491,46 @@
         countrySelect.appendChild(opt);
       }
       if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
-      modalBody.innerHTML = "";
+      const sectionsByGroup = /* @__PURE__ */ new Map();
       for (const s of data.sections) {
-        modalBody.appendChild(renderSection(s, doc));
+        const key = s.group || "Other";
+        const arr = sectionsByGroup.get(key) || [];
+        arr.push(s);
+        sectionsByGroup.set(key, arr);
       }
+      tocWrap.innerHTML = "";
+      for (const [group, secs] of sectionsByGroup.entries()) {
+        const groupRow = doc.createElement("div");
+        groupRow.style.display = "flex";
+        groupRow.style.alignItems = "center";
+        groupRow.style.gap = "8px";
+        const groupLabel = doc.createElement("span");
+        groupLabel.textContent = group;
+        groupLabel.style.color = "#9ec2ff";
+        groupLabel.style.fontWeight = "700";
+        groupLabel.style.fontSize = "12px";
+        groupRow.appendChild(groupLabel);
+        for (const s of secs) {
+          const b = doc.createElement("button");
+          b.textContent = s.title;
+          b.style.background = "#212121";
+          b.style.color = "white";
+          b.style.border = "1px solid #3a3a3a";
+          b.style.borderRadius = "999px";
+          b.style.padding = "4px 9px";
+          b.style.cursor = "pointer";
+          b.style.fontSize = "11px";
+          b.addEventListener("click", () => {
+            const id = `section-${s.id}`;
+            const node = doc.getElementById(id);
+            if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
+          });
+          groupRow.appendChild(b);
+        }
+        tocWrap.appendChild(groupRow);
+      }
+      modalBody.innerHTML = "";
+      for (const s of data.sections) modalBody.appendChild(renderSection(s, doc));
     }
     function ensureAnalysisWindow() {
       if (analysisWindow && !analysisWindow.win.closed) {
@@ -6512,7 +6548,7 @@
       doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
       const shell = doc.createElement("div");
       shell.style.display = "grid";
-      shell.style.gridTemplateRows = "auto auto 1fr";
+      shell.style.gridTemplateRows = "auto auto auto 1fr";
       shell.style.height = "100vh";
       const modalHead = doc.createElement("div");
       modalHead.style.display = "flex";
@@ -6536,6 +6572,7 @@
       controls.style.padding = "10px 14px";
       controls.style.borderBottom = "1px solid #2a2a2a";
       controls.style.flexWrap = "wrap";
+      controls.style.background = "#101010";
       const fromInput = doc.createElement("input");
       fromInput.type = "date";
       styleInput(fromInput);
@@ -6576,14 +6613,28 @@
       controls.appendChild(countrySelect);
       controls.appendChild(applyBtn);
       controls.appendChild(resetFilterBtn);
+      const tocWrap = doc.createElement("div");
+      tocWrap.style.display = "flex";
+      tocWrap.style.flexDirection = "column";
+      tocWrap.style.gap = "6px";
+      tocWrap.style.padding = "8px 14px 10px";
+      tocWrap.style.borderBottom = "1px solid #2a2a2a";
+      tocWrap.style.background = "#0f0f0f";
+      tocWrap.style.position = "sticky";
+      tocWrap.style.top = "0";
+      tocWrap.style.zIndex = "5";
       const modalBody = doc.createElement("div");
       modalBody.style.overflow = "auto";
-      modalBody.style.padding = "14px";
+      modalBody.style.padding = "16px";
       modalBody.style.display = "grid";
-      modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(350px, 1fr))";
-      modalBody.style.gap = "10px";
+      modalBody.style.gridTemplateColumns = "minmax(0, 1fr)";
+      modalBody.style.gap = "14px";
+      modalBody.style.maxWidth = "1800px";
+      modalBody.style.width = "100%";
+      modalBody.style.margin = "0 auto";
       shell.appendChild(modalHead);
       shell.appendChild(controls);
+      shell.appendChild(tocWrap);
       shell.appendChild(modalBody);
       doc.body.appendChild(shell);
       modalClose.addEventListener("click", () => win.close());
@@ -6604,7 +6655,7 @@
         countrySelect.value = "all";
         refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
       });
-      analysisWindow = { win, doc, fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody };
+      analysisWindow = { win, doc, fromInput, toInput, modeSelect, teammateSelect, countrySelect, tocWrap, modalBody };
       if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
       return analysisWindow;
     }
@@ -6639,21 +6690,54 @@
     });
     function renderSection(section, doc) {
       const card = doc.createElement("div");
-      card.style.border = "1px solid #2a2a2a";
-      card.style.borderRadius = "10px";
-      card.style.background = "#171717";
-      card.style.padding = "10px";
+      card.id = `section-${section.id}`;
+      card.style.border = "1px solid #2d2d2d";
+      card.style.borderRadius = "12px";
+      card.style.background = "linear-gradient(180deg, #181818 0%, #141414 100%)";
+      card.style.padding = "12px";
+      card.style.scrollMarginTop = "110px";
+      card.style.boxShadow = "0 10px 30px rgba(0,0,0,0.2)";
+      const topMeta = doc.createElement("div");
+      topMeta.style.display = "flex";
+      topMeta.style.gap = "8px";
+      topMeta.style.flexWrap = "wrap";
+      topMeta.style.marginBottom = "6px";
+      if (section.group) {
+        const groupChip = doc.createElement("span");
+        groupChip.textContent = section.group;
+        groupChip.style.background = "#1f3452";
+        groupChip.style.color = "#bcd7ff";
+        groupChip.style.border = "1px solid #2f4f76";
+        groupChip.style.borderRadius = "999px";
+        groupChip.style.padding = "2px 8px";
+        groupChip.style.fontSize = "11px";
+        groupChip.style.fontWeight = "700";
+        topMeta.appendChild(groupChip);
+      }
+      if (section.appliesFilters && section.appliesFilters.length > 0) {
+        const applies = doc.createElement("span");
+        applies.textContent = `Filters: ${section.appliesFilters.join(", ")}`;
+        applies.style.background = "#1e1e1e";
+        applies.style.color = "#cfcfcf";
+        applies.style.border = "1px solid #383838";
+        applies.style.borderRadius = "999px";
+        applies.style.padding = "2px 8px";
+        applies.style.fontSize = "11px";
+        topMeta.appendChild(applies);
+      }
       const title2 = doc.createElement("div");
       title2.textContent = section.title;
       title2.style.fontWeight = "700";
-      title2.style.marginBottom = "6px";
-      title2.style.fontSize = "13px";
+      title2.style.marginBottom = "8px";
+      title2.style.fontSize = "19px";
+      title2.style.letterSpacing = "0.2px";
       const body = doc.createElement("pre");
       body.style.margin = "0";
       body.style.whiteSpace = "pre-wrap";
-      body.style.fontSize = "12px";
-      body.style.lineHeight = "1.35";
+      body.style.fontSize = "14px";
+      body.style.lineHeight = "1.45";
       body.textContent = section.lines.join("\n");
+      card.appendChild(topMeta);
       card.appendChild(title2);
       const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
       for (let i = 0; i < charts.length; i++) {
@@ -7785,6 +7869,44 @@
     }
     return c.toUpperCase();
   }
+  function countryFlagEmoji(code) {
+    const c = normalizeCountryCode(code);
+    if (!c || c.length !== 2) return "";
+    const base = 127397;
+    return c.toUpperCase().split("").map((ch) => String.fromCodePoint(base + ch.charCodeAt(0))).join("");
+  }
+  function extractOwnDuelRating(detail, ownPlayerId) {
+    const d = asRecord(detail);
+    const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
+    const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
+    if (ownPlayerId && ownPlayerId === p2) {
+      return {
+        start: getNumber(d, "playerTwoStartRating") ?? getNumber(d, "p2_ratingBefore"),
+        end: getNumber(d, "playerTwoEndRating") ?? getNumber(d, "p2_ratingAfter")
+      };
+    }
+    return {
+      start: getNumber(d, "playerOneStartRating") ?? getNumber(d, "p1_ratingBefore"),
+      end: getNumber(d, "playerOneEndRating") ?? getNumber(d, "p1_ratingAfter")
+    };
+  }
+  function extractOwnTeamRating(detail, ownPlayerId) {
+    const d = asRecord(detail);
+    if (ownPlayerId) {
+      const teamOneIds = [getString(d, "teamOnePlayerOneId"), getString(d, "teamOnePlayerTwoId")];
+      const inTeamOne = teamOneIds.includes(ownPlayerId);
+      if (!inTeamOne) {
+        return {
+          start: getNumber(d, "teamTwoStartRating"),
+          end: getNumber(d, "teamTwoEndRating")
+        };
+      }
+    }
+    return {
+      start: getNumber(d, "teamOneStartRating"),
+      end: getNumber(d, "teamOneEndRating")
+    };
+  }
   function playerSlots(round) {
     const out = [];
     const rr = asRecord(round);
@@ -7919,24 +8041,18 @@
       { code: "all", label: "All countries" },
       ...[...countryCountsBase.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100).map(([code, count]) => ({ code, label: `${countryLabel(code)} (${count} rounds)` }))
     ];
-    let games = baseGames;
-    let rounds = baseRounds;
-    let details = baseDetails;
-    if (filter?.teammateId && filter.teammateId !== "all") {
-      const allowedGameIds = teammateGames.get(filter.teammateId) || /* @__PURE__ */ new Set();
-      games = games.filter((g) => allowedGameIds.has(g.gameId));
-      const gameSet = new Set(games.map((g) => g.gameId));
-      rounds = rounds.filter((r) => gameSet.has(r.gameId));
-      details = details.filter((d) => gameSet.has(d.gameId));
-    }
-    if (filter?.country && filter.country !== "all") {
-      const c = filter.country.toLowerCase();
-      rounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === c);
-      const gameSet = new Set(rounds.map((r) => r.gameId));
-      games = games.filter((g) => gameSet.has(g.gameId));
-      details = details.filter((d) => gameSet.has(d.gameId));
-    }
-    if (games.length === 0 || rounds.length === 0) {
+    const selectedTeammate = filter?.teammateId && filter.teammateId !== "all" ? filter.teammateId : void 0;
+    const selectedCountry = filter?.country && filter.country !== "all" ? filter.country.toLowerCase() : void 0;
+    const teammateGameSet = selectedTeammate ? teammateGames.get(selectedTeammate) || /* @__PURE__ */ new Set() : void 0;
+    const teamGames = selectedTeammate ? baseGames.filter((g) => teammateGameSet?.has(g.gameId)) : baseGames;
+    const teamGameSet = new Set(teamGames.map((g) => g.gameId));
+    const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
+    const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
+    const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
+    const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
+    const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
+    const countryDetails = teamDetails.filter((d) => countryGameSet.has(d.gameId));
+    if (countryGames.length === 0 || countryRounds.length === 0) {
       return {
         sections: [{ id: "empty", title: "Overview", lines: ["Keine Daten fuer den gewaehlten Filter."] }],
         availableModes,
@@ -7946,17 +8062,20 @@
         maxPlayedAt
       };
     }
+    const games = countryGames;
+    const rounds = countryRounds;
+    const details = countryDetails;
     const sections = [];
     const gameTimes = games.map((g) => g.playedAt).sort((a, b) => a - b);
     const playedAtByGameId = new Map(games.map((g) => [g.gameId, g.playedAt]));
     const scores = rounds.map(extractScore).filter((v) => v !== void 0);
     const distancesKm = rounds.map((r) => extractDistanceMeters(r)).filter((v) => v !== void 0).map((m) => m / 1e3);
     const timesSec = rounds.map(extractTimeMs).filter((v) => v !== void 0).map((ms) => ms / 1e3);
-    const selectedTeammate = filter?.teammateId && filter.teammateId !== "all" ? filter.teammateId : void 0;
-    const selectedCountry = filter?.country && filter.country !== "all" ? filter.country.toLowerCase() : void 0;
     sections.push({
       id: "overview",
       title: "Overview",
+      group: "Overview",
+      appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
         `Games: ${games.length} | Rounds: ${rounds.length}`,
@@ -7985,11 +8104,13 @@
     sections.push({
       id: "modes",
       title: "Mode Breakdown",
+      group: "Overview",
+      appliesFilters: ["date", "mode"],
       lines: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([m, c]) => `${m}: ${c}`),
       chart: {
         type: "bar",
         yLabel: "Games",
-        bars: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }))
+        bars: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }))
       }
     });
     const weekday = new Array(7).fill(0);
@@ -8003,6 +8124,8 @@
     sections.push({
       id: "time_patterns",
       title: "Time Patterns",
+      group: "Overview",
+      appliesFilters: ["date", "mode", "teammate"],
       lines: [
         "Weekdays:",
         ...weekday.map((v, i) => `${wdNames[i]}: ${v}`),
@@ -8018,7 +8141,7 @@
         {
           type: "bar",
           yLabel: "Games",
-          bars: hour.map((v, h) => ({ label: String(h), value: v }))
+          bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v }))
         }
       ]
     });
@@ -8052,6 +8175,8 @@
     sections.push({
       id: "country_stats",
       title: "Country Stats",
+      group: "Countries",
+      appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         "Most played countries:",
         ...topCountries.slice(0, 10).map(([c, v]) => `${countryLabel(c)}: ${v.n} rounds`),
@@ -8060,14 +8185,51 @@
         "Hardest avg-score countries (min 4 rounds):",
         ...worstCountries.map((x) => `${countryLabel(x.country)}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`)
       ],
+      charts: [
+        {
+          type: "bar",
+          yLabel: "Rounds",
+          bars: topCountries.slice(0, 24).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
+        },
+        {
+          type: "bar",
+          yLabel: "Avg score",
+          bars: [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 16).map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
+        }
+      ]
+    });
+    const confusionMap = /* @__PURE__ */ new Map();
+    for (const r of teamRounds) {
+      const truth = normalizeCountryCode(r.trueCountry);
+      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      if (!truth || !guess || truth === guess) continue;
+      const key = `${truth}|${guess}`;
+      confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
+    }
+    const confusions = [...confusionMap.entries()].map(([k, n]) => {
+      const [truth, guess] = k.split("|");
+      return { truth, guess, n };
+    }).sort((a, b) => b.n - a.n);
+    sections.push({
+      id: "country_confusions",
+      title: "Most Confused Country Pairs",
+      group: "Countries",
+      appliesFilters: ["date", "mode", "teammate"],
+      lines: [
+        selectedCountry ? "Country filter is ignored here to reveal global confusion patterns in your selected date/mode/team scope." : "Most frequent wrong guess directions (true country -> guessed country).",
+        ...confusions.slice(0, 20).map((x) => `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}: ${x.n}`)
+      ],
       chart: {
         type: "bar",
-        yLabel: "Rounds",
-        bars: topCountries.slice(0, 12).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
+        yLabel: "Wrong guesses",
+        bars: confusions.slice(0, 20).map((x) => ({
+          label: `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}`,
+          value: x.n
+        }))
       }
     });
     const opponentCounts = /* @__PURE__ */ new Map();
-    for (const d of details) {
+    for (const d of teamDetails) {
       const dd = asRecord(d);
       const ids = [];
       const modeFamily = getString(dd, "modeFamily");
@@ -8107,16 +8269,55 @@
     sections.push({
       id: "opponents",
       title: "Most Frequent Opponents",
+      group: "Opponents",
+      appliesFilters: ["date", "mode", "teammate"],
       lines: [
+        selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
         ...topOpp.map(([id, v]) => `${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
         "Opponent countries:",
         ...[...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, n]) => `${c}: ${n}`)
-      ],
+      ].filter((x) => x !== ""),
       chart: {
         type: "bar",
         yLabel: "Meetings",
-        bars: topOpp.map(([id, v]) => ({ label: (v.name || id.slice(0, 6)).slice(0, 12), value: v.games }))
+        bars: topOpp.slice(0, 24).map(([id, v]) => ({ label: (v.name || id.slice(0, 6)).slice(0, 20), value: v.games }))
       }
+    });
+    const basePlayedAtByGameId = new Map(baseGames.map((g) => [g.gameId, g.playedAt]));
+    const duelRatingTimeline = baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels").map((d) => {
+      const ts = basePlayedAtByGameId.get(d.gameId);
+      const r = extractOwnDuelRating(d, ownPlayerId);
+      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : void 0;
+    }).filter((x) => !!x).sort((a, b) => a.x - b.x);
+    const teamRatingTimeline = baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels").map((d) => {
+      const ts = basePlayedAtByGameId.get(d.gameId);
+      const r = extractOwnTeamRating(d, ownPlayerId);
+      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : void 0;
+    }).filter((x) => !!x).sort((a, b) => a.x - b.x);
+    const teammateForRating = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
+    const teammateRatingTimeline = teammateForRating && teammateGames.get(teammateForRating) ? baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(teammateForRating)?.has(d.gameId) || false)).map((d) => {
+      const ts = basePlayedAtByGameId.get(d.gameId);
+      const r = extractOwnTeamRating(d, ownPlayerId);
+      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : void 0;
+    }).filter((x) => !!x).sort((a, b) => a.x - b.x) : [];
+    const duelDelta = duelRatingTimeline.length > 1 ? duelRatingTimeline[duelRatingTimeline.length - 1].y - duelRatingTimeline[0].y : void 0;
+    const teamDelta = teamRatingTimeline.length > 1 ? teamRatingTimeline[teamRatingTimeline.length - 1].y - teamRatingTimeline[0].y : void 0;
+    const teammateDelta = teammateRatingTimeline.length > 1 ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y : void 0;
+    sections.push({
+      id: "rating_history",
+      title: "Rating History",
+      group: "Rating",
+      appliesFilters: ["date", "mode", "teammate"],
+      lines: [
+        `Duels samples: ${duelRatingTimeline.length}${duelDelta !== void 0 ? ` | trend: ${duelDelta >= 0 ? "+" : ""}${fmt(duelDelta, 0)}` : ""}`,
+        `Team Duels samples: ${teamRatingTimeline.length}${teamDelta !== void 0 ? ` | trend: ${teamDelta >= 0 ? "+" : ""}${fmt(teamDelta, 0)}` : ""}`,
+        teammateForRating ? `Selected teammate scope (${nameMap.get(teammateForRating) || teammateForRating.slice(0, 8)}): ${teammateRatingTimeline.length} samples${teammateDelta !== void 0 ? ` | trend: ${teammateDelta >= 0 ? "+" : ""}${fmt(teammateDelta, 0)}` : ""}` : "No teammate-specific rating scope available."
+      ],
+      charts: [
+        { type: "line", yLabel: "Rating", points: duelRatingTimeline },
+        { type: "line", yLabel: "Rating", points: teamRatingTimeline },
+        { type: "line", yLabel: "Rating", points: teammateRatingTimeline }
+      ]
     });
     const sessionsGap = 45 * 60 * 1e3;
     let sessions = 0;
@@ -8135,6 +8336,8 @@
     sections.push({
       id: "fun_facts",
       title: "Fun Facts",
+      group: "Fun",
+      appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         `Current streak depth (last 14d activity bars):`,
         ...makeDayActivityLines(gameTimes, 14).slice(-7),
@@ -8181,6 +8384,8 @@
       sections.push({
         id: "teammate_battle",
         title: `Teammate Battle: You vs ${mateName}`,
+        group: "Performance",
+        appliesFilters: ["date", "mode", "teammate", "country"],
         lines: [
           `Compared rounds: ${compareRounds.length}`,
           `You better guess: ${myWins} rounds`,
@@ -8210,9 +8415,9 @@
     if (spotlightCountry && countryAgg.has(spotlightCountry)) {
       const agg = countryAgg.get(spotlightCountry);
       const wrongGuesses = [...agg.guessed.entries()].filter(([guess]) => guess !== spotlightCountry).sort((a, b) => b[1] - a[1]).slice(0, 6);
-      const countryRounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+      const countryRounds2 = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
       const scoreTimeline = [];
-      for (const r of countryRounds) {
+      for (const r of countryRounds2) {
         const playedAt = playedAtByGameId.get(r.gameId);
         const s = extractScore(r);
         if (!playedAt || typeof s !== "number") continue;
@@ -8221,7 +8426,9 @@
       scoreTimeline.sort((a, b) => a.x - b.x);
       sections.push({
         id: "country_spotlight",
-        title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
+        title: `Country Spotlight: ${countryFlagEmoji(spotlightCountry)} ${countryLabel(spotlightCountry)}`,
+        group: "Countries",
+        appliesFilters: ["date", "mode", "teammate", "country"],
         lines: [
           `Rounds: ${agg.n}`,
           `Hit rate: ${fmt((agg.n > 0 ? agg.correct / agg.n : 0) * 100, 1)}%`,
