@@ -241,7 +241,7 @@ function orderedPlayers(gameData: any, ownPlayerId?: string): Array<{ teamId: st
     if (found >= 0) {
       ownTeamIndex = found;
     } else {
-      console.warn("[GeoGuessr Analyzer] ownPlayerId not found in teams for game detail payload.", {
+      console.warn("[GeoAnalyzr] ownPlayerId not found in teams for game detail payload.", {
         ownPlayerId,
         teamIds: teams.map((t: any) => String(t?.id || "")),
         teamPlayers: teams.map((t: any) => (Array.isArray(t?.players) ? t.players.map((p: any) => p?.playerId) : []))
@@ -322,7 +322,7 @@ async function normalizeGameAndRounds(
   if (family === "teamduels" && ownPlayerId) {
     const p1IdDebug = typeof players[0]?.player?.playerId === "string" ? players[0].player.playerId : undefined;
     if (p1IdDebug !== ownPlayerId) {
-      console.warn("[GeoGuessr Analyzer] TeamDuel ordering mismatch: p1 is not own player.", {
+      console.warn("[GeoAnalyzr] TeamDuel ordering mismatch: p1 is not own player.", {
         gameId: game.gameId,
         ownPlayerId,
         p1Id: p1IdDebug,
@@ -542,7 +542,7 @@ export async function fetchMissingDuelsDetails(opts: {
   const verifyCompleteness = opts.verifyCompleteness ?? true;
   const ownPlayerId = await getOwnPlayerId();
   opts.onStatus(`Detected own playerId: ${ownPlayerId ?? "not found"}`);
-  console.info("[GeoGuessr Analyzer] Detected own playerId:", ownPlayerId ?? "not found");
+  console.info("[GeoAnalyzr] Detected own playerId:", ownPlayerId ?? "not found");
   const missingRetryAfterMs = 7 * 24 * 60 * 60 * 1000;
 
   const recent = typeof limitGames === "number"

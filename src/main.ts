@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         GeoGuessr Analyzer 
-// @namespace    geoguessr-analyzer
+// @name         GeoAnalyzr
+// @namespace    geoanalyzr
 // @author       JonasLmbt
 // @version      1.0
 // @match        https://www.geoguessr.com/*

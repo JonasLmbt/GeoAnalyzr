@@ -1,6 +1,6 @@
 import { httpGetJson } from "./http";
 
-type Position = [number, number];
+type Position = [number, number]; // [lng, lat]
 type Ring = Position[];
 type PolygonCoords = Ring[];
 type MultiPolygonCoords = PolygonCoords[];
@@ -15,19 +15,48 @@ interface CountryFeature {
 let countriesPromise: Promise<CountryFeature[]> | null = null;
 const guessCountryCache = new Map<string, string | undefined>();
 
-function computeBboxPolygon(coords: PolygonCoords): { minLng: number; minLat: number; maxLng: number; maxLat: number } {
-  let minLng = Infinity;
-  let minLat = Infinity;
-  let maxLng = -Infinity;
-  let maxLat = -Infinity;
+function isFiniteNumber(x: unknown): x is number {
+  return typeof x === "number" && Number.isFinite(x);
+}
+
+function normalizeLatLng(
+  lat?: number,
+  lng?: number
+): { lat?: number; lng?: number } {
+  if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) return { lat: undefined, lng: undefined };
+
+  // If swapped by caller (common): lat looks like a longitude and lng looks like a latitude
+  const latLooksLikeLng = Math.abs(lat) > 90 && Math.abs(lat) <= 180;
+  const lngLooksLikeLat = Math.abs(lng) <= 90;
+
+  if (latLooksLikeLng && lngLooksLikeLat) {
+    return { lat: lng, lng: lat };
+  }
+
+  // Hard validation
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return { lat: undefined, lng: undefined };
+  }
+
+  return { lat, lng };
+}
+
+function computeBboxPolygon(coords: PolygonCoords) {
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+
   for (const ring of coords) {
-    for (const [lng, lat] of ring) {
+    for (const pos of ring) {
+      const lng = pos?.[0];
+      const lat = pos?.[1];
+      if (!isFiniteNumber(lng) || !isFiniteNumber(lat)) continue;
+
       if (lng < minLng) minLng = lng;
       if (lat < minLat) minLat = lat;
       if (lng > maxLng) maxLng = lng;
       if (lat > maxLat) maxLat = lat;
     }
   }
+
   return { minLng, minLat, maxLng, maxLat };
 }
 
@@ -44,19 +73,31 @@ function mergeBbox(
 }
 
 function pointInRing(lng: number, lat: number, ring: Ring): boolean {
+  // Ray casting algorithm, [x,y] = [lng,lat]
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const xi = ring[i][0], yi = ring[i][1];
     const xj = ring[j][0], yj = ring[j][1];
-    const intersect = yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi + Number.EPSILON) + xi;
-    if (intersect) inside = !inside;
+
+    // Skip invalid points (defensive)
+    if (!isFiniteNumber(xi) || !isFiniteNumber(yi) || !isFiniteNumber(xj) || !isFiniteNumber(yj)) continue;
+
+    const intersects =
+      (yi > lat) !== (yj > lat) &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+
+    if (intersects) inside = !inside;
   }
   return inside;
 }
 
 function pointInPolygon(lng: number, lat: number, poly: PolygonCoords): boolean {
-  if (poly.length === 0) return false;
+  if (!Array.isArray(poly) || poly.length === 0) return false;
+
+  // Outer ring
   if (!pointInRing(lng, lat, poly[0])) return false;
+
+  // Holes
   for (let i = 1; i < poly.length; i++) {
     if (pointInRing(lng, lat, poly[i])) return false;
   }
@@ -64,10 +105,38 @@ function pointInPolygon(lng: number, lat: number, poly: PolygonCoords): boolean 
 }
 
 function pointInMultiPolygon(lng: number, lat: number, mpoly: MultiPolygonCoords): boolean {
+  if (!Array.isArray(mpoly)) return false;
   for (const poly of mpoly) {
     if (pointInPolygon(lng, lat, poly)) return true;
   }
   return false;
+}
+
+function parseGeoJsonMaybe(data: unknown): any {
+  if (data && typeof data === "object") return data;
+  if (typeof data === "string") {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function getIso2FromProperties(props: any): string {
+  const candidates = [
+    props?.ISO_A2,
+    props?.iso_a2,
+    props?.ISO2,
+    props?.iso2,
+    props?.ADMIN?.ISO_A2
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length === 2 && c !== "-99") return c.toLowerCase();
+  }
+  return "";
 }
 
 async function loadCountries(): Promise<CountryFeature[]> {
@@ -78,30 +147,39 @@ async function loadCountries(): Promise<CountryFeature[]> {
       "https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson",
       "https://cdn.jsdelivr.net/gh/datasets/geo-countries@master/data/countries.geojson"
     ];
+
     let geo: any = null;
     let lastErr: unknown = null;
+
     for (const url of urls) {
       try {
         const res = await httpGetJson(url, { forceGm: true });
-        if (res.status >= 200 && res.status < 300) {
-          geo = res.data;
+
+        // res.data might be an object OR a string
+        const parsed = parseGeoJsonMaybe(res.data);
+        if (res.status >= 200 && res.status < 300 && parsed?.features) {
+          geo = parsed;
           break;
         }
-        lastErr = new Error(`Country GeoJSON HTTP ${res.status}`);
+
+        lastErr = new Error(`Country GeoJSON invalid or HTTP ${res.status}`);
       } catch (e) {
         lastErr = e;
       }
     }
-    if (!geo) throw lastErr instanceof Error ? lastErr : new Error("Country GeoJSON load failed");
-    const features = Array.isArray(geo?.features) ? geo.features : [];
 
+    if (!geo) throw lastErr instanceof Error ? lastErr : new Error("Country GeoJSON load failed");
+
+    const features = Array.isArray(geo.features) ? geo.features : [];
     const out: CountryFeature[] = [];
+
     for (const f of features) {
-      const isoRaw = f?.properties?.ISO_A2;
-      const iso2 = typeof isoRaw === "string" ? isoRaw.toLowerCase() : "";
+      const iso2 = getIso2FromProperties(f?.properties);
+      if (!iso2) continue;
+
       const type = f?.geometry?.type;
       const coordinates = f?.geometry?.coordinates;
-      if (!iso2 || iso2 === "-99") continue;
+
       if (type === "Polygon" && Array.isArray(coordinates)) {
         const bbox = computeBboxPolygon(coordinates as PolygonCoords);
         out.push({ iso2, geometryType: "Polygon", coordinates: coordinates as PolygonCoords, bbox });
@@ -112,6 +190,7 @@ async function loadCountries(): Promise<CountryFeature[]> {
         out.push({ iso2, geometryType: "MultiPolygon", coordinates: polys, bbox });
       }
     }
+
     return out;
   })();
 
@@ -119,26 +198,37 @@ async function loadCountries(): Promise<CountryFeature[]> {
 }
 
 export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Promise<string | undefined> {
-  if (lat === undefined || lng === undefined) return undefined;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+  const norm = normalizeLatLng(lat, lng);
+  if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return undefined;
 
-  const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  // Cache key based on normalized values
+  const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
   if (guessCountryCache.has(key)) return guessCountryCache.get(key);
 
   try {
     const countries = await loadCountries();
+    if (!countries.length) {
+      console.warn("No countries loaded");
+      guessCountryCache.set(key, undefined);
+      return undefined;
+    }
+
     for (const c of countries) {
-      if (lng < c.bbox.minLng || lng > c.bbox.maxLng || lat < c.bbox.minLat || lat > c.bbox.maxLat) continue;
-      const hit = c.geometryType === "Polygon"
-        ? pointInPolygon(lng, lat, c.coordinates as PolygonCoords)
-        : pointInMultiPolygon(lng, lat, c.coordinates as MultiPolygonCoords);
+      const { minLng, maxLng, minLat, maxLat } = c.bbox;
+      if (norm.lng < minLng || norm.lng > maxLng || norm.lat < minLat || norm.lat > maxLat) continue;
+
+      const hit =
+        c.geometryType === "Polygon"
+          ? pointInPolygon(norm.lng, norm.lat, c.coordinates as PolygonCoords)
+          : pointInMultiPolygon(norm.lng, norm.lat, c.coordinates as MultiPolygonCoords);
+
       if (hit) {
         guessCountryCache.set(key, c.iso2);
         return c.iso2;
       }
     }
-  } catch {
-    // Fail soft; caller keeps undefined.
+  } catch (e) {
+    console.error("resolveCountryCodeByLatLng failed:", e);
   }
 
   guessCountryCache.set(key, undefined);

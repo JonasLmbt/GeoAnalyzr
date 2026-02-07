@@ -137,7 +137,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>): HTMLEle
 
 export function createUI(): UIHandle {
   const iconBtn = document.createElement("button");
-  iconBtn.title = "GeoGuessr Analyzer";
+  iconBtn.title = "GeoAnalyzr";
   iconBtn.style.position = "fixed";
   iconBtn.style.left = "16px";
   iconBtn.style.bottom = "16px";
@@ -178,7 +178,7 @@ export function createUI(): UIHandle {
   header.style.marginBottom = "8px";
 
   const title = document.createElement("div");
-  title.textContent = "GeoGuessr Analyzer";
+  title.textContent = "GeoAnalyzr";
   title.style.fontWeight = "700";
   title.style.fontSize = "14px";
 
@@ -286,7 +286,7 @@ export function createUI(): UIHandle {
   modalHead.style.alignItems = "center";
   modalHead.style.padding = "12px 14px";
   modalHead.style.borderBottom = "1px solid #2a2a2a";
-  modalHead.innerHTML = `<div style="font-weight:700">GeoGuessr Analyzer - Full Analysis</div>`;
+  modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
   const modalClose = document.createElement("button");
   modalClose.textContent = "x";
   modalClose.style.background = "transparent";
