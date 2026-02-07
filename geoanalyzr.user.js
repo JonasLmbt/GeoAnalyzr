@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.2
+// @version      1.0.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6069,8 +6069,7 @@
   // src/ui.ts
   var analysisSettings = {
     theme: "dark",
-    accent: "#66a8ff",
-    animateCharts: true
+    accent: "#66a8ff"
   };
   function getThemePalette() {
     if (analysisSettings.theme === "light") {
@@ -6101,36 +6100,6 @@
       chipBg: "#1f3452",
       chipText: "#bcd7ff"
     };
-  }
-  var revealObserverByDoc = /* @__PURE__ */ new WeakMap();
-  function getRevealObserver(doc) {
-    const existing = revealObserverByDoc.get(doc);
-    if (existing) return existing;
-    const obs = new IntersectionObserver(
-      (entries, observer) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          const el = entry.target;
-          el.style.opacity = "1";
-          el.style.transform = "translateY(0)";
-          observer.unobserve(el);
-        }
-      },
-      { threshold: 0.15 }
-    );
-    revealObserverByDoc.set(doc, obs);
-    return obs;
-  }
-  function attachRevealAnimation(el, doc) {
-    if (!analysisSettings.animateCharts) {
-      el.style.opacity = "1";
-      el.style.transform = "none";
-      return;
-    }
-    el.style.opacity = "0";
-    el.style.transform = "translateY(12px)";
-    el.style.transition = "opacity 420ms ease, transform 420ms ease";
-    getRevealObserver(doc).observe(el);
   }
   function isoDateLocal(ts) {
     if (!ts) return "";
@@ -6325,6 +6294,12 @@
     chartWrap.style.borderRadius = "8px";
     chartWrap.style.background = palette.panelAlt;
     chartWrap.style.padding = "6px";
+    const chartHeading = doc.createElement("div");
+    chartHeading.textContent = title;
+    chartHeading.style.fontSize = "12px";
+    chartHeading.style.color = palette.textMuted;
+    chartHeading.style.margin = "2px 4px 6px";
+    chartWrap.appendChild(chartHeading);
     const points = chart.points.slice().sort((a, b) => a.x - b.x);
     const w = 1500;
     const h = 300;
@@ -6361,7 +6336,6 @@
   `;
     chartWrap.appendChild(createChartActions(svg, title));
     chartWrap.appendChild(svg);
-    attachRevealAnimation(chartWrap, doc);
     return chartWrap;
   }
   function renderBarChart(chart, title, doc) {
@@ -6372,6 +6346,12 @@
     chartWrap.style.borderRadius = "8px";
     chartWrap.style.background = palette.panelAlt;
     chartWrap.style.padding = "6px";
+    const chartHeading = doc.createElement("div");
+    chartHeading.textContent = title;
+    chartHeading.style.fontSize = "12px";
+    chartHeading.style.color = palette.textMuted;
+    chartHeading.style.margin = "2px 4px 6px";
+    chartWrap.appendChild(chartHeading);
     const bars = chart.bars.slice(0, 40);
     const w = 1700;
     const h = 320;
@@ -6408,7 +6388,6 @@
   `;
     chartWrap.appendChild(createChartActions(svg, title));
     chartWrap.appendChild(svg);
-    attachRevealAnimation(chartWrap, doc);
     return chartWrap;
   }
   function createUI() {
@@ -6708,10 +6687,6 @@
       colorInput.style.height = "32px";
       colorInput.style.borderRadius = "8px";
       colorInput.style.cursor = "pointer";
-      const animateCheckbox = doc.createElement("input");
-      animateCheckbox.type = "checkbox";
-      animateCheckbox.checked = analysisSettings.animateCharts;
-      animateCheckbox.style.cursor = "pointer";
       controls.appendChild(doc.createTextNode("From:"));
       controls.appendChild(fromInput);
       controls.appendChild(doc.createTextNode("To:"));
@@ -6728,8 +6703,6 @@
       controls.appendChild(themeSelect);
       controls.appendChild(doc.createTextNode("Graph Color:"));
       controls.appendChild(colorInput);
-      controls.appendChild(doc.createTextNode("Animate:"));
-      controls.appendChild(animateCheckbox);
       const tocWrap = doc.createElement("div");
       tocWrap.style.display = "flex";
       tocWrap.style.flexDirection = "column";
@@ -6783,10 +6756,6 @@
         analysisSettings.accent = colorInput.value;
         if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
       });
-      animateCheckbox.addEventListener("change", () => {
-        analysisSettings.animateCharts = animateCheckbox.checked;
-        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-      });
       analysisWindow = {
         win,
         doc,
@@ -6799,7 +6768,6 @@
         countrySelect,
         themeSelect,
         colorInput,
-        animateCheckbox,
         tocWrap,
         modalBody
       };
@@ -6893,7 +6861,7 @@
       const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
       for (let i = 0; i < charts.length; i++) {
         const chart = charts[i];
-        const chartTitle = `${section.title} - Chart ${i + 1}`;
+        const chartTitle = chart.yLabel ? `${section.title} - ${chart.yLabel}` : `${section.title} - Chart ${i + 1}`;
         if (chart.type === "line" && chart.points.length > 1) {
           card.appendChild(renderLineChart(chart, chartTitle, doc));
         }
@@ -6902,7 +6870,6 @@
         }
       }
       card.appendChild(body);
-      attachRevealAnimation(card, doc);
       return card;
     }
     return {
@@ -8180,8 +8147,8 @@
       ...[...teammateGames.entries()].map(([id, games2]) => {
         const name = nameMap.get(id) || id.slice(0, 8);
         const rounds2 = teammateRoundSamples.get(id) || 0;
-        return { id, label: `${name} (${games2.size} games, ${rounds2} rounds)` };
-      }).sort((a, b) => a.label.localeCompare(b.label))
+        return { id, label: `${name} (${games2.size} games, ${rounds2} rounds)`, games: games2.size };
+      }).sort((a, b) => b.games - a.games || a.label.localeCompare(b.label)).map(({ id, label }) => ({ id, label }))
     ];
     const countryCountsBase = /* @__PURE__ */ new Map();
     for (const r of baseRounds) {
@@ -8266,22 +8233,79 @@
     });
     const weekday = new Array(7).fill(0);
     const hour = new Array(24).fill(0);
+    const weekdayScoreSum = new Array(7).fill(0);
+    const weekdayScoreCount = new Array(7).fill(0);
+    const weekdayTimeSum = new Array(7).fill(0);
+    const weekdayTimeCount = new Array(7).fill(0);
+    const hourScoreSum = new Array(24).fill(0);
+    const hourScoreCount = new Array(24).fill(0);
+    const hourTimeSum = new Array(24).fill(0);
+    const hourTimeCount = new Array(24).fill(0);
     for (const ts of gameTimes) {
       const d = new Date(ts);
       weekday[d.getDay()]++;
       hour[d.getHours()]++;
     }
+    for (const r of rounds) {
+      const ts = playedAtByGameId.get(r.gameId);
+      if (!ts) continue;
+      const d = new Date(ts);
+      const wd = d.getDay();
+      const hr = d.getHours();
+      const sc = extractScore(r);
+      const tm = extractTimeMs(r);
+      if (typeof sc === "number") {
+        weekdayScoreSum[wd] += sc;
+        weekdayScoreCount[wd]++;
+        hourScoreSum[hr] += sc;
+        hourScoreCount[hr]++;
+      }
+      if (typeof tm === "number") {
+        weekdayTimeSum[wd] += tm;
+        weekdayTimeCount[wd]++;
+        hourTimeSum[hr] += tm;
+        hourTimeCount[hr]++;
+      }
+    }
     const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const weekdayAvgScore = wdNames.map((name, i) => ({
+      name,
+      value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : -Infinity
+    }));
+    const weekdayAvgTime = wdNames.map((name, i) => ({
+      name,
+      value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : Infinity
+    }));
+    const hourAvgScore = hour.map((_, h) => ({
+      hour: h,
+      value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : -Infinity
+    }));
+    const hourAvgTime = hour.map((_, h) => ({
+      hour: h,
+      value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : Infinity
+    }));
+    const bestDayByScore = [...weekdayAvgScore].sort((a, b) => b.value - a.value)[0];
+    const worstDayByScore = [...weekdayAvgScore].sort((a, b) => a.value - b.value)[0];
+    const bestHourByScore = [...hourAvgScore].sort((a, b) => b.value - a.value)[0];
+    const worstHourByScore = [...hourAvgScore].sort((a, b) => a.value - b.value)[0];
+    const fastestDay = [...weekdayAvgTime].sort((a, b) => a.value - b.value)[0];
+    const slowestDay = [...weekdayAvgTime].sort((a, b) => b.value - a.value)[0];
+    const fastestHour = [...hourAvgTime].sort((a, b) => a.value - b.value)[0];
+    const slowestHour = [...hourAvgTime].sort((a, b) => b.value - a.value)[0];
     sections.push({
       id: "time_patterns",
       title: "Time Patterns",
       group: "Overview",
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
-        "Weekdays:",
-        ...weekday.map((v, i) => `${wdNames[i]}: ${v}`),
-        "Top hours:",
-        ...hour.map((v, h) => ({ h, v })).sort((a, b) => b.v - a.v).slice(0, 6).map((x) => `${String(x.h).padStart(2, "0")}:00 -> ${x.v} games`)
+        `Best day by avg score: ${bestDayByScore?.name || "-"} (${fmt(bestDayByScore?.value, 1)})`,
+        `Hardest day by avg score: ${worstDayByScore?.name || "-"} (${fmt(worstDayByScore?.value, 1)})`,
+        `Best hour by avg score: ${bestHourByScore ? `${String(bestHourByScore.hour).padStart(2, "0")}:00` : "-"} (${fmt(bestHourByScore?.value, 1)})`,
+        `Hardest hour by avg score: ${worstHourByScore ? `${String(worstHourByScore.hour).padStart(2, "0")}:00` : "-"} (${fmt(worstHourByScore?.value, 1)})`,
+        `Fastest day (avg guess time): ${fastestDay?.name || "-"} (${fmt(fastestDay?.value, 1)} s)`,
+        `Slowest day (avg guess time): ${slowestDay?.name || "-"} (${fmt(slowestDay?.value, 1)} s)`,
+        `Fastest hour: ${fastestHour ? `${String(fastestHour.hour).padStart(2, "0")}:00` : "-"} (${fmt(fastestHour?.value, 1)} s)`,
+        `Slowest hour: ${slowestHour ? `${String(slowestHour.hour).padStart(2, "0")}:00` : "-"} (${fmt(slowestHour?.value, 1)} s)`
       ],
       charts: [
         {
@@ -8323,18 +8347,17 @@
     }));
     const bestCountries = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 5);
     const worstCountries = [...scoredCountries].sort((a, b) => a.avgScore - b.avgScore).slice(0, 5);
+    const bestHitRate = [...scoredCountries].filter((x) => x.n >= 8).sort((a, b) => b.hitRate - a.hitRate)[0];
+    const avgScoreRankPoints = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).map((x, idx) => ({ x: idx + 1, y: x.avgScore, label: countryLabel(x.country) }));
     sections.push({
       id: "country_stats",
       title: "Country Stats",
       group: "Countries",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
-        "Most played countries:",
-        ...topCountries.slice(0, 10).map(([c, v]) => `${countryLabel(c)}: ${v.n} rounds`),
-        "Best avg-score countries (min 4 rounds):",
-        ...bestCountries.map((x) => `${countryLabel(x.country)}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`),
-        "Hardest avg-score countries (min 4 rounds):",
-        ...worstCountries.map((x) => `${countryLabel(x.country)}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`)
+        `Best avg-score country: ${bestCountries[0] ? `${countryLabel(bestCountries[0].country)} (${fmt(bestCountries[0].avgScore, 1)})` : "-"}`,
+        `Hardest avg-score country: ${worstCountries[0] ? `${countryLabel(worstCountries[0].country)} (${fmt(worstCountries[0].avgScore, 1)})` : "-"}`,
+        `Highest hit-rate country (min 8 rounds): ${bestHitRate ? `${countryLabel(bestHitRate.country)} (${fmt(bestHitRate.hitRate * 100, 1)}%)` : "-"}`
       ],
       charts: [
         {
@@ -8343,9 +8366,9 @@
           bars: topCountries.slice(0, 24).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
         },
         {
-          type: "bar",
-          yLabel: "Avg score",
-          bars: [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 16).map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
+          type: "line",
+          yLabel: "Avg score by country rank",
+          points: avgScoreRankPoints
         }
       ]
     });
@@ -8411,7 +8434,7 @@
         opponentCounts.set(x.id, cur2);
       }
     }
-    const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 12);
+    const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 20);
     const oppCountryCounts = /* @__PURE__ */ new Map();
     for (const [, v] of topOpp) {
       const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
@@ -8424,14 +8447,14 @@
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
         selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
-        ...topOpp.map(([id, v]) => `${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
-        "Opponent countries:",
-        ...[...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, n]) => `${c}: ${n}`)
+        "Top 3 opponents:",
+        ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
+        `Unique opponents in scope: ${opponentCounts.size}`
       ].filter((x) => x !== ""),
       chart: {
         type: "bar",
-        yLabel: "Meetings",
-        bars: topOpp.slice(0, 24).map(([id, v]) => ({ label: (v.name || id.slice(0, 6)).slice(0, 20), value: v.games }))
+        yLabel: "Meetings by opponent country",
+        bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n }))
       }
     });
     const basePlayedAtByGameId = new Map(baseGames.map((g) => [g.gameId, g.playedAt]));
@@ -8454,21 +8477,20 @@
     const duelDelta = duelRatingTimeline.length > 1 ? duelRatingTimeline[duelRatingTimeline.length - 1].y - duelRatingTimeline[0].y : void 0;
     const teamDelta = teamRatingTimeline.length > 1 ? teamRatingTimeline[teamRatingTimeline.length - 1].y - teamRatingTimeline[0].y : void 0;
     const teammateDelta = teammateRatingTimeline.length > 1 ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y : void 0;
+    const ratingPoints = selectedTeammate ? teammateRatingTimeline : duelRatingTimeline;
+    const ratingDelta = selectedTeammate ? teammateDelta : duelDelta;
+    const ratingTitle = selectedTeammate ? `Rating History: Team Duels with ${nameMap.get(selectedTeammate) || selectedTeammate.slice(0, 8)}` : "Rating History: Duels";
     sections.push({
       id: "rating_history",
-      title: "Rating History",
+      title: ratingTitle,
       group: "Rating",
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
-        `Duels samples: ${duelRatingTimeline.length}${duelDelta !== void 0 ? ` | trend: ${duelDelta >= 0 ? "+" : ""}${fmt(duelDelta, 0)}` : ""}`,
-        `Team Duels samples: ${teamRatingTimeline.length}${teamDelta !== void 0 ? ` | trend: ${teamDelta >= 0 ? "+" : ""}${fmt(teamDelta, 0)}` : ""}`,
-        teammateForRating ? `Selected teammate scope (${nameMap.get(teammateForRating) || teammateForRating.slice(0, 8)}): ${teammateRatingTimeline.length} samples${teammateDelta !== void 0 ? ` | trend: ${teammateDelta >= 0 ? "+" : ""}${fmt(teammateDelta, 0)}` : ""}` : "No teammate-specific rating scope available."
+        `Samples: ${ratingPoints.length}`,
+        ratingDelta !== void 0 ? `Trend: ${ratingDelta >= 0 ? "+" : ""}${fmt(ratingDelta, 0)}` : "Trend: -",
+        selectedTeammate ? `Scope: teamduels filtered to selected teammate` : `Scope: duels only`
       ],
-      charts: [
-        { type: "line", yLabel: "Rating", points: duelRatingTimeline },
-        { type: "line", yLabel: "Rating", points: teamRatingTimeline },
-        { type: "line", yLabel: "Rating", points: teammateRatingTimeline }
-      ]
+      charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : void 0
     });
     const sessionsGap = 45 * 60 * 1e3;
     let sessions = 0;
@@ -8484,20 +8506,6 @@
       if (cur > longest) longest = cur;
     }
     const longestBreakMs = gameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - gameTimes[i]), 0);
-    sections.push({
-      id: "fun_facts",
-      title: "Fun Facts",
-      group: "Fun",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Current streak depth (last 14d activity bars):`,
-        ...makeDayActivityLines(gameTimes, 14).slice(-7),
-        `Sessions (gap >45m): ${sessions} | longest session: ${longest} games`,
-        `Longest break between games: ${fmt(longestBreakMs / (1e3 * 60 * 60), 1)} hours`,
-        `Most played mode: ${[...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-"}`,
-        `Most played country: ${topCountries[0] ? countryLabel(topCountries[0][0]) : "-"}`
-      ]
-    });
     const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
     if (teammateToUse && ownPlayerId) {
       const compareRounds = rounds.filter((r) => {
@@ -8508,10 +8516,15 @@
       let myWins = 0;
       let mateWins = 0;
       let ties = 0;
-      const cumulative = [];
-      let net = 0;
+      let myScoreTotal = 0;
+      let mateScoreTotal = 0;
+      let myScoreCount = 0;
+      let mateScoreCount = 0;
+      let myDistTotal = 0;
+      let mateDistTotal = 0;
+      let myDistCount = 0;
+      let mateDistCount = 0;
       for (const r of compareRounds) {
-        const playedAt = playedAtByGameId.get(r.gameId);
         const mine = getPlayerStatFromRound(r, ownPlayerId);
         const mate = getPlayerStatFromRound(r, teammateToUse);
         let result = 0;
@@ -8522,14 +8535,27 @@
         }
         if (result > 0) {
           myWins++;
-          net++;
         } else if (result < 0) {
           mateWins++;
-          net--;
         } else {
           ties++;
         }
-        if (playedAt) cumulative.push({ x: playedAt, y: net, label: formatDay(playedAt) });
+        if (typeof mine.score === "number") {
+          myScoreTotal += mine.score;
+          myScoreCount++;
+        }
+        if (typeof mate.score === "number") {
+          mateScoreTotal += mate.score;
+          mateScoreCount++;
+        }
+        if (typeof mine.distanceKm === "number") {
+          myDistTotal += mine.distanceKm;
+          myDistCount++;
+        }
+        if (typeof mate.distanceKm === "number") {
+          mateDistTotal += mate.distanceKm;
+          mateDistCount++;
+        }
       }
       const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
       sections.push({
@@ -8542,9 +8568,10 @@
           `You better guess: ${myWins} rounds`,
           `${mateName} better guess: ${mateWins} rounds`,
           `Tie rounds: ${ties}`,
-          `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`
-        ],
-        charts: cumulative.length > 1 ? [{ type: "line", yLabel: "Net lead", points: cumulative }] : void 0
+          `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`,
+          `Avg score: you ${myScoreCount ? fmt(myScoreTotal / myScoreCount, 1) : "-"} vs ${mateName} ${mateScoreCount ? fmt(mateScoreTotal / mateScoreCount, 1) : "-"}`,
+          `Avg distance: you ${myDistCount ? fmt(myDistTotal / myDistCount, 2) : "-"} km vs ${mateName} ${mateDistCount ? fmt(mateDistTotal / mateDistCount, 2) : "-"} km`
+        ]
       });
     }
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];
@@ -8587,6 +8614,27 @@
         ]
       });
     }
+    const bestMode = [...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
+    const topCountry = topCountries[0]?.[0];
+    const avgScoreAll = avg(scores);
+    const p90Score = scores.length > 0 ? [...scores].sort((a, b) => a - b)[Math.max(0, Math.min(scores.length - 1, Math.floor(scores.length * 0.9) - 1))] : void 0;
+    sections.push({
+      id: "fun_facts",
+      title: "Fun Facts",
+      group: "Fun",
+      appliesFilters: ["date", "mode", "teammate", "country"],
+      lines: [
+        `Sessions (gap >45m): ${sessions} | longest session: ${longest} games`,
+        `Longest break between games: ${fmt(longestBreakMs / (1e3 * 60 * 60), 1)} hours`,
+        `Most played mode: ${bestMode}`,
+        `Most played country: ${topCountry ? countryLabel(topCountry) : "-"}`,
+        `Top 10% score threshold: ${fmt(p90Score, 1)} points`,
+        `Avg score per round: ${fmt(avgScoreAll, 1)}`,
+        `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`,
+        `Last 7-day activity snapshot:`,
+        ...makeDayActivityLines(gameTimes, 7)
+      ]
+    });
     return {
       sections,
       availableModes,

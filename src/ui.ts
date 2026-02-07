@@ -4,7 +4,6 @@ type AnalysisTheme = "dark" | "light";
 type AnalysisSettings = {
   theme: AnalysisTheme;
   accent: string;
-  animateCharts: boolean;
 };
 
 type ThemePalette = {
@@ -23,8 +22,7 @@ type ThemePalette = {
 
 const analysisSettings: AnalysisSettings = {
   theme: "dark",
-  accent: "#66a8ff",
-  animateCharts: true
+  accent: "#66a8ff"
 };
 
 function getThemePalette(): ThemePalette {
@@ -56,38 +54,6 @@ function getThemePalette(): ThemePalette {
     chipBg: "#1f3452",
     chipText: "#bcd7ff"
   };
-}
-
-const revealObserverByDoc = new WeakMap<Document, IntersectionObserver>();
-function getRevealObserver(doc: Document): IntersectionObserver {
-  const existing = revealObserverByDoc.get(doc);
-  if (existing) return existing;
-  const obs = new IntersectionObserver(
-    (entries, observer) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const el = entry.target as HTMLElement;
-        el.style.opacity = "1";
-        el.style.transform = "translateY(0)";
-        observer.unobserve(el);
-      }
-    },
-    { threshold: 0.15 }
-  );
-  revealObserverByDoc.set(doc, obs);
-  return obs;
-}
-
-function attachRevealAnimation(el: HTMLElement, doc: Document) {
-  if (!analysisSettings.animateCharts) {
-    el.style.opacity = "1";
-    el.style.transform = "none";
-    return;
-  }
-  el.style.opacity = "0";
-  el.style.transform = "translateY(12px)";
-  el.style.transition = "opacity 420ms ease, transform 420ms ease";
-  getRevealObserver(doc).observe(el);
 }
 
 export interface UIHandle {
@@ -323,6 +289,12 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   chartWrap.style.borderRadius = "8px";
   chartWrap.style.background = palette.panelAlt;
   chartWrap.style.padding = "6px";
+  const chartHeading = doc.createElement("div");
+  chartHeading.textContent = title;
+  chartHeading.style.fontSize = "12px";
+  chartHeading.style.color = palette.textMuted;
+  chartHeading.style.margin = "2px 4px 6px";
+  chartWrap.appendChild(chartHeading);
 
   const points = chart.points.slice().sort((a, b) => a.x - b.x);
   const w = 1500;
@@ -360,7 +332,6 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   `;
   chartWrap.appendChild(createChartActions(svg, title));
   chartWrap.appendChild(svg);
-  attachRevealAnimation(chartWrap, doc);
   return chartWrap;
 }
 
@@ -372,6 +343,12 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   chartWrap.style.borderRadius = "8px";
   chartWrap.style.background = palette.panelAlt;
   chartWrap.style.padding = "6px";
+  const chartHeading = doc.createElement("div");
+  chartHeading.textContent = title;
+  chartHeading.style.fontSize = "12px";
+  chartHeading.style.color = palette.textMuted;
+  chartHeading.style.margin = "2px 4px 6px";
+  chartWrap.appendChild(chartHeading);
 
   const bars = chart.bars.slice(0, 40);
   const w = 1700;
@@ -412,7 +389,6 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   `;
   chartWrap.appendChild(createChartActions(svg, title));
   chartWrap.appendChild(svg);
-  attachRevealAnimation(chartWrap, doc);
   return chartWrap;
 }
 
@@ -549,7 +525,6 @@ export function createUI(): UIHandle {
     countrySelect: HTMLSelectElement;
     themeSelect: HTMLSelectElement;
     colorInput: HTMLInputElement;
-    animateCheckbox: HTMLInputElement;
     tocWrap: HTMLDivElement;
     modalBody: HTMLDivElement;
   };
@@ -767,11 +742,6 @@ export function createUI(): UIHandle {
     colorInput.style.borderRadius = "8px";
     colorInput.style.cursor = "pointer";
 
-    const animateCheckbox = doc.createElement("input");
-    animateCheckbox.type = "checkbox";
-    animateCheckbox.checked = analysisSettings.animateCharts;
-    animateCheckbox.style.cursor = "pointer";
-
     controls.appendChild(doc.createTextNode("From:"));
     controls.appendChild(fromInput);
     controls.appendChild(doc.createTextNode("To:"));
@@ -788,8 +758,6 @@ export function createUI(): UIHandle {
     controls.appendChild(themeSelect);
     controls.appendChild(doc.createTextNode("Graph Color:"));
     controls.appendChild(colorInput);
-    controls.appendChild(doc.createTextNode("Animate:"));
-    controls.appendChild(animateCheckbox);
 
     const tocWrap = doc.createElement("div");
     tocWrap.style.display = "flex";
@@ -848,11 +816,6 @@ export function createUI(): UIHandle {
       analysisSettings.accent = colorInput.value;
       if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
     });
-    animateCheckbox.addEventListener("change", () => {
-      analysisSettings.animateCharts = animateCheckbox.checked;
-      if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-    });
-
     analysisWindow = {
       win,
       doc,
@@ -865,7 +828,6 @@ export function createUI(): UIHandle {
       countrySelect,
       themeSelect,
       colorInput,
-      animateCheckbox,
       tocWrap,
       modalBody
     };
@@ -977,7 +939,7 @@ export function createUI(): UIHandle {
     const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
     for (let i = 0; i < charts.length; i++) {
       const chart = charts[i];
-      const chartTitle = `${section.title} - Chart ${i + 1}`;
+      const chartTitle = chart.yLabel ? `${section.title} - ${chart.yLabel}` : `${section.title} - Chart ${i + 1}`;
       if (chart.type === "line" && chart.points.length > 1) {
         card.appendChild(renderLineChart(chart, chartTitle, doc));
       }
@@ -987,7 +949,6 @@ export function createUI(): UIHandle {
     }
 
     card.appendChild(body);
-    attachRevealAnimation(card, doc);
     return card;
   }
 
