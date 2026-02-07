@@ -1,45 +1,45 @@
 # GeoAnalyzr
 
-GeoAnalyzr ist ein Tampermonkey-Userscript zur Analyse deiner GeoGuessr-Spiele.  
-Es synchronisiert deinen Feed, lädt fehlende Round-Details nach und bietet dir Auswertungen sowie Excel-Export.
+GeoAnalyzr is a Tampermonkey userscript for analyzing your GeoGuessr games.  
+It syncs your feed, fetches missing round details, and provides analysis plus Excel export.
 
-## Voraussetzungen
+## Requirements
 
-Für die Nutzung:
-- Ein Browser mit Tampermonkey (z. B. Chrome/Edge/Firefox)
-- Ein GeoGuessr-Account
+For usage:
+- A browser with Tampermonkey (Chrome/Edge/Firefox)
+- A GeoGuessr account
 
-Für die Entwicklung:
-- Node.js (aktuelle LTS-Version empfohlen)
+For development:
+- Node.js (latest LTS recommended)
 - npm
 - Git
 
-## Installation (als Nutzer)
+## Installation (User)
 
-1. Öffne diese Datei im Browser:
+1. Open this file in your browser:
    - `https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/main/geoanalyzr.user.js`
-2. Tampermonkey zeigt den Install-Dialog an.
-3. Installieren klicken.
+2. Tampermonkey will show the install dialog.
+3. Click install.
 
-## Auto-Updates
+## Auto Updates
 
-Das Script enthält bereits:
+The script already includes:
 - `@updateURL`
 - `@downloadURL`
 
-Damit erkennt Tampermonkey neue Versionen automatisch, sobald du eine neue Version in `main` veröffentlichst.
+Tampermonkey can therefore detect and install updates automatically when you publish a new version to `main`.
 
-## Nutzung
+## Usage
 
-1. GeoGuessr öffnen und einloggen.
-2. Das GeoAnalyzr-Panel öffnen.
-3. `Fetch Data` ausführen, um neue Spiele und fehlende Details zu laden.
-4. Optional `_ncfa` Token setzen, um vollständigere Daten zu bekommen.
-5. Analysen öffnen oder Excel exportieren.
+1. Open GeoGuessr and log in.
+2. Open the GeoAnalyzr panel.
+3. Run `Fetch Data` to sync new games and fetch missing details.
+4. Optionally set an `_ncfa` token for more complete data fetching.
+5. Open analysis or export to Excel.
 
-## Entwicklung
+## Development
 
-Repository klonen:
+Clone the repository:
 
 ```bash
 git clone https://github.com/JonasLmbt/GeoAnalyzr.git
@@ -47,42 +47,44 @@ cd GeoAnalyzr
 npm install
 ```
 
-Builds:
+Build commands:
 
 ```bash
-# Dev-Build (dist/userscript.user.js)
+# Dev build (dist/userscript.user.js)
 npm run build:dev
 
-# Release-Build (geoanalyzr.user.js)
+# Release build (geoanalyzr.user.js)
 npm run build:release
 
-# Beide Builds
+# Build both
 npm run build
 ```
 
-Watch-Modus:
+Watch mode:
 
 ```bash
 npm run watch
 ```
 
-## `_ncfa` Cookie finden
+## Getting your `_ncfa` cookie
 
-1. GeoGuessr im Browser öffnen und einloggen.
-2. DevTools öffnen (`F12` / `Ctrl+Shift+I`, auf Mac `Cmd+Option+I`).
-3. Zum Tab `Network` wechseln.
-4. Seite neu laden.
-5. Nach `stats` filtern.
-6. Einen `stats`-Request öffnen.
-7. In den Request-Headers die Cookie `_ncfa` suchen.
-8. Nur den Wert kopieren (nach `=` bis vor `;`).
+1. Open GeoGuessr in your browser and log in.
+2. Open DevTools (`F12` / `Ctrl+Shift+I`, on Mac `Cmd+Option+I`).
+3. Go to the `Network` tab.
+4. Reload the page.
+5. Filter by `stats`.
+6. Open a `stats` request.
+7. Locate the `_ncfa` cookie in the request headers.
+8. Copy only the value after `=` and before `;`.
 
-## Sicherheit und Datenschutz
+![NCFA cookie location](images/ncfa.PNG)
 
-- GeoAnalyzr nutzt **keine externe Datenbank** und sendet keine Analysedaten an eigene Server.
-- Daten werden lokal im Browser (IndexedDB) gespeichert.
-- Der `_ncfa`-Token wird lokal gespeichert, damit du ihn nicht ständig neu eingeben musst.
-- Mit `Reset Database` kannst du lokale Daten jederzeit löschen.
+## Security and Privacy
+
+- GeoAnalyzr does **not** use an external database and does not send analysis data to custom servers.
+- Data is stored locally in your browser (IndexedDB).
+- The `_ncfa` token is stored locally so you do not have to re-enter it every time.
+- You can remove local data at any time using `Reset Database`.
 
 ## Acknowledgements
 
