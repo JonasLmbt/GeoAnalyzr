@@ -6125,8 +6125,8 @@
       URL.revokeObjectURL(svgUrl);
     }
   }
-  function openChartInNewTab(svg, title) {
-    const win = window.open("", "_blank");
+  function openChartInNewTab(svg, title, hostWindow = window) {
+    const win = hostWindow.open("", "_blank");
     if (!win) return;
     const svgMarkup = svg.outerHTML;
     const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -6153,7 +6153,9 @@
     win.document.close();
   }
   function openZoomOverlay(svg, title) {
-    const overlay = document.createElement("div");
+    const doc = svg.ownerDocument;
+    const hostWindow = doc.defaultView ?? window;
+    const overlay = doc.createElement("div");
     overlay.style.position = "fixed";
     overlay.style.inset = "0";
     overlay.style.background = "rgba(0,0,0,0.82)";
@@ -6161,7 +6163,7 @@
     overlay.style.display = "grid";
     overlay.style.placeItems = "center";
     overlay.style.padding = "20px";
-    const card = document.createElement("div");
+    const card = doc.createElement("div");
     card.style.width = "min(1500px, 96vw)";
     card.style.maxHeight = "92vh";
     card.style.overflow = "auto";
@@ -6169,13 +6171,13 @@
     card.style.border = "1px solid #2a2a2a";
     card.style.borderRadius = "12px";
     card.style.padding = "12px";
-    const header = document.createElement("div");
+    const header = doc.createElement("div");
     header.style.display = "flex";
     header.style.justifyContent = "space-between";
     header.style.alignItems = "center";
     header.style.marginBottom = "8px";
     header.innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff">${title}</div>`;
-    const closeBtn = document.createElement("button");
+    const closeBtn = doc.createElement("button");
     closeBtn.textContent = "Close";
     closeBtn.style.background = "#303030";
     closeBtn.style.color = "#fff";
@@ -6187,18 +6189,18 @@
     const svgClone = svg.cloneNode(true);
     svgClone.setAttribute("width", "100%");
     svgClone.setAttribute("height", "640");
-    const chartWrap = document.createElement("div");
+    const chartWrap = doc.createElement("div");
     chartWrap.style.border = "1px solid #2a2a2a";
     chartWrap.style.borderRadius = "10px";
     chartWrap.style.background = "#121212";
     chartWrap.style.padding = "8px";
     chartWrap.appendChild(svgClone);
-    const actions = document.createElement("div");
+    const actions = doc.createElement("div");
     actions.style.display = "flex";
     actions.style.gap = "8px";
     actions.style.marginBottom = "10px";
     function mkAction(label, onClick) {
-      const b = document.createElement("button");
+      const b = doc.createElement("button");
       b.textContent = label;
       b.style.background = "#214a78";
       b.style.color = "white";
@@ -6209,7 +6211,7 @@
       b.addEventListener("click", onClick);
       return b;
     }
-    actions.appendChild(mkAction("New Tab", () => openChartInNewTab(svgClone, title)));
+    actions.appendChild(mkAction("New Tab", () => openChartInNewTab(svgClone, title, hostWindow)));
     actions.appendChild(mkAction("Save SVG", () => void downloadSvg(svgClone, title)));
     actions.appendChild(mkAction("Save PNG", () => void downloadPng(svgClone, title)));
     closeBtn.addEventListener("click", () => overlay.remove());
@@ -6220,16 +6222,18 @@
     card.appendChild(actions);
     card.appendChild(chartWrap);
     overlay.appendChild(card);
-    document.body.appendChild(overlay);
+    doc.body.appendChild(overlay);
   }
   function createChartActions(svg, title) {
-    const row = document.createElement("div");
+    const doc = svg.ownerDocument;
+    const hostWindow = doc.defaultView ?? window;
+    const row = doc.createElement("div");
     row.style.display = "flex";
     row.style.justifyContent = "flex-end";
     row.style.gap = "6px";
     row.style.marginBottom = "6px";
     function mkBtn(label, onClick) {
-      const b = document.createElement("button");
+      const b = doc.createElement("button");
       b.textContent = label;
       b.style.background = "#303030";
       b.style.color = "#fff";
@@ -6242,13 +6246,13 @@
       return b;
     }
     row.appendChild(mkBtn("Zoom", () => openZoomOverlay(svg, title)));
-    row.appendChild(mkBtn("New Tab", () => openChartInNewTab(svg, title)));
+    row.appendChild(mkBtn("New Tab", () => openChartInNewTab(svg, title, hostWindow)));
     row.appendChild(mkBtn("Save SVG", () => void downloadSvg(svg, title)));
     row.appendChild(mkBtn("Save PNG", () => void downloadPng(svg, title)));
     return row;
   }
-  function renderLineChart(chart, title) {
-    const chartWrap = document.createElement("div");
+  function renderLineChart(chart, title, doc) {
+    const chartWrap = doc.createElement("div");
     chartWrap.style.marginBottom = "8px";
     chartWrap.style.border = "1px solid #2a2a2a";
     chartWrap.style.borderRadius = "8px";
@@ -6273,7 +6277,7 @@
     const yMid = (minY + maxY) / 2;
     const xStartLabel = points[0].label || "";
     const xEndLabel = points[points.length - 1].label || "";
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "180");
@@ -6291,8 +6295,8 @@
     chartWrap.appendChild(svg);
     return chartWrap;
   }
-  function renderBarChart(chart, title) {
-    const chartWrap = document.createElement("div");
+  function renderBarChart(chart, title, doc) {
+    const chartWrap = doc.createElement("div");
     chartWrap.style.marginBottom = "8px";
     chartWrap.style.border = "1px solid #2a2a2a";
     chartWrap.style.borderRadius = "8px";
@@ -6320,7 +6324,7 @@
         <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 13}" text-anchor="middle" font-size="9" fill="#aaa">${label}</text>
       `;
     }).join("");
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "190");
@@ -6445,137 +6449,174 @@
     panel.appendChild(exportBtn);
     panel.appendChild(resetBtn);
     panel.appendChild(counts);
-    const modalBackdrop = document.createElement("div");
-    modalBackdrop.style.position = "fixed";
-    modalBackdrop.style.inset = "0";
-    modalBackdrop.style.zIndex = "1000000";
-    modalBackdrop.style.background = "rgba(0,0,0,0.6)";
-    modalBackdrop.style.display = "none";
-    const modal = document.createElement("div");
-    modal.style.position = "absolute";
-    modal.style.left = "50%";
-    modal.style.top = "50%";
-    modal.style.transform = "translate(-50%, -50%)";
-    modal.style.width = "min(1180px, calc(100vw - 30px))";
-    modal.style.height = "min(760px, calc(100vh - 30px))";
-    modal.style.borderRadius = "14px";
-    modal.style.border = "1px solid #2a2a2a";
-    modal.style.background = "#111";
-    modal.style.color = "#fff";
-    modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    modal.style.boxShadow = "0 25px 60px rgba(0,0,0,0.55)";
-    modal.style.display = "grid";
-    modal.style.gridTemplateRows = "auto auto 1fr";
-    modal.style.overflow = "hidden";
-    const modalHead = document.createElement("div");
-    modalHead.style.display = "flex";
-    modalHead.style.justifyContent = "space-between";
-    modalHead.style.alignItems = "center";
-    modalHead.style.padding = "12px 14px";
-    modalHead.style.borderBottom = "1px solid #2a2a2a";
-    modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
-    const modalClose = document.createElement("button");
-    modalClose.textContent = "x";
-    modalClose.style.background = "transparent";
-    modalClose.style.color = "white";
-    modalClose.style.border = "none";
-    modalClose.style.cursor = "pointer";
-    modalClose.style.fontSize = "18px";
-    modalHead.appendChild(modalClose);
-    const controls = document.createElement("div");
-    controls.style.display = "flex";
-    controls.style.gap = "10px";
-    controls.style.alignItems = "center";
-    controls.style.padding = "10px 14px";
-    controls.style.borderBottom = "1px solid #2a2a2a";
-    controls.style.flexWrap = "wrap";
-    const fromInput = document.createElement("input");
-    fromInput.type = "date";
-    fromInput.style.background = "#1b1b1b";
-    fromInput.style.color = "white";
-    fromInput.style.border = "1px solid #3a3a3a";
-    fromInput.style.borderRadius = "8px";
-    fromInput.style.padding = "6px 8px";
-    const toInput = document.createElement("input");
-    toInput.type = "date";
-    toInput.style.background = "#1b1b1b";
-    toInput.style.color = "white";
-    toInput.style.border = "1px solid #3a3a3a";
-    toInput.style.borderRadius = "8px";
-    toInput.style.padding = "6px 8px";
-    const modeSelect = document.createElement("select");
-    modeSelect.style.background = "#1b1b1b";
-    modeSelect.style.color = "white";
-    modeSelect.style.border = "1px solid #3a3a3a";
-    modeSelect.style.borderRadius = "8px";
-    modeSelect.style.padding = "6px 8px";
-    const teammateSelect = document.createElement("select");
-    teammateSelect.style.background = "#1b1b1b";
-    teammateSelect.style.color = "white";
-    teammateSelect.style.border = "1px solid #3a3a3a";
-    teammateSelect.style.borderRadius = "8px";
-    teammateSelect.style.padding = "6px 8px";
-    const countrySelect = document.createElement("select");
-    countrySelect.style.background = "#1b1b1b";
-    countrySelect.style.color = "white";
-    countrySelect.style.border = "1px solid #3a3a3a";
-    countrySelect.style.borderRadius = "8px";
-    countrySelect.style.padding = "6px 8px";
-    const applyBtn = document.createElement("button");
-    applyBtn.textContent = "Apply Filter";
-    applyBtn.style.background = "#214a78";
-    applyBtn.style.color = "white";
-    applyBtn.style.border = "1px solid #2f6096";
-    applyBtn.style.borderRadius = "8px";
-    applyBtn.style.padding = "6px 10px";
-    applyBtn.style.cursor = "pointer";
-    const resetFilterBtn = document.createElement("button");
-    resetFilterBtn.textContent = "Reset Filter";
-    resetFilterBtn.style.background = "#303030";
-    resetFilterBtn.style.color = "white";
-    resetFilterBtn.style.border = "1px solid #444";
-    resetFilterBtn.style.borderRadius = "8px";
-    resetFilterBtn.style.padding = "6px 10px";
-    resetFilterBtn.style.cursor = "pointer";
-    controls.appendChild(document.createTextNode("From:"));
-    controls.appendChild(fromInput);
-    controls.appendChild(document.createTextNode("To:"));
-    controls.appendChild(toInput);
-    controls.appendChild(document.createTextNode("Mode:"));
-    controls.appendChild(modeSelect);
-    controls.appendChild(document.createTextNode("Teammate:"));
-    controls.appendChild(teammateSelect);
-    controls.appendChild(document.createTextNode("Country:"));
-    controls.appendChild(countrySelect);
-    controls.appendChild(applyBtn);
-    controls.appendChild(resetFilterBtn);
-    const modalBody = document.createElement("div");
-    modalBody.style.overflow = "auto";
-    modalBody.style.padding = "14px";
-    modalBody.style.display = "grid";
-    modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(350px, 1fr))";
-    modalBody.style.gap = "10px";
-    modal.appendChild(modalHead);
-    modal.appendChild(controls);
-    modal.appendChild(modalBody);
-    modalBackdrop.appendChild(modal);
+    let analysisWindow = null;
+    let lastAnalysisData = null;
+    function styleInput(el) {
+      el.style.background = "#1b1b1b";
+      el.style.color = "white";
+      el.style.border = "1px solid #3a3a3a";
+      el.style.borderRadius = "8px";
+      el.style.padding = "6px 8px";
+    }
+    function populateAnalysisWindow(data) {
+      const refs = analysisWindow;
+      if (!refs || refs.win.closed) return;
+      const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, doc } = refs;
+      if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
+      if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
+      const prevMode = modeSelect.value || "all";
+      const prevTeammate = teammateSelect.value || "all";
+      const prevCountry = countrySelect.value || "all";
+      modeSelect.innerHTML = "";
+      for (const mode of data.availableModes) {
+        const opt = doc.createElement("option");
+        opt.value = mode;
+        opt.textContent = mode;
+        modeSelect.appendChild(opt);
+      }
+      if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
+      teammateSelect.innerHTML = "";
+      for (const teammate of data.availableTeammates) {
+        const opt = doc.createElement("option");
+        opt.value = teammate.id;
+        opt.textContent = teammate.label;
+        teammateSelect.appendChild(opt);
+      }
+      if ([...teammateSelect.options].some((o) => o.value === prevTeammate)) teammateSelect.value = prevTeammate;
+      countrySelect.innerHTML = "";
+      for (const country of data.availableCountries) {
+        const opt = doc.createElement("option");
+        opt.value = country.code;
+        opt.textContent = country.label;
+        countrySelect.appendChild(opt);
+      }
+      if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
+      modalBody.innerHTML = "";
+      for (const s of data.sections) {
+        modalBody.appendChild(renderSection(s, doc));
+      }
+    }
+    function ensureAnalysisWindow() {
+      if (analysisWindow && !analysisWindow.win.closed) {
+        analysisWindow.win.focus();
+        return analysisWindow;
+      }
+      const win = window.open("", "geoanalyzr-analysis");
+      if (!win) return null;
+      const doc = win.document;
+      doc.title = "GeoAnalyzr - Full Analysis";
+      doc.body.innerHTML = "";
+      doc.body.style.margin = "0";
+      doc.body.style.background = "#111";
+      doc.body.style.color = "#fff";
+      doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      const shell = doc.createElement("div");
+      shell.style.display = "grid";
+      shell.style.gridTemplateRows = "auto auto 1fr";
+      shell.style.height = "100vh";
+      const modalHead = doc.createElement("div");
+      modalHead.style.display = "flex";
+      modalHead.style.justifyContent = "space-between";
+      modalHead.style.alignItems = "center";
+      modalHead.style.padding = "12px 14px";
+      modalHead.style.borderBottom = "1px solid #2a2a2a";
+      modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
+      const modalClose = doc.createElement("button");
+      modalClose.textContent = "x";
+      modalClose.style.background = "transparent";
+      modalClose.style.color = "white";
+      modalClose.style.border = "none";
+      modalClose.style.cursor = "pointer";
+      modalClose.style.fontSize = "18px";
+      modalHead.appendChild(modalClose);
+      const controls = doc.createElement("div");
+      controls.style.display = "flex";
+      controls.style.gap = "10px";
+      controls.style.alignItems = "center";
+      controls.style.padding = "10px 14px";
+      controls.style.borderBottom = "1px solid #2a2a2a";
+      controls.style.flexWrap = "wrap";
+      const fromInput = doc.createElement("input");
+      fromInput.type = "date";
+      styleInput(fromInput);
+      const toInput = doc.createElement("input");
+      toInput.type = "date";
+      styleInput(toInput);
+      const modeSelect = doc.createElement("select");
+      styleInput(modeSelect);
+      const teammateSelect = doc.createElement("select");
+      styleInput(teammateSelect);
+      const countrySelect = doc.createElement("select");
+      styleInput(countrySelect);
+      const applyBtn = doc.createElement("button");
+      applyBtn.textContent = "Apply Filter";
+      applyBtn.style.background = "#214a78";
+      applyBtn.style.color = "white";
+      applyBtn.style.border = "1px solid #2f6096";
+      applyBtn.style.borderRadius = "8px";
+      applyBtn.style.padding = "6px 10px";
+      applyBtn.style.cursor = "pointer";
+      const resetFilterBtn = doc.createElement("button");
+      resetFilterBtn.textContent = "Reset Filter";
+      resetFilterBtn.style.background = "#303030";
+      resetFilterBtn.style.color = "white";
+      resetFilterBtn.style.border = "1px solid #444";
+      resetFilterBtn.style.borderRadius = "8px";
+      resetFilterBtn.style.padding = "6px 10px";
+      resetFilterBtn.style.cursor = "pointer";
+      controls.appendChild(doc.createTextNode("From:"));
+      controls.appendChild(fromInput);
+      controls.appendChild(doc.createTextNode("To:"));
+      controls.appendChild(toInput);
+      controls.appendChild(doc.createTextNode("Mode:"));
+      controls.appendChild(modeSelect);
+      controls.appendChild(doc.createTextNode("Teammate:"));
+      controls.appendChild(teammateSelect);
+      controls.appendChild(doc.createTextNode("Country:"));
+      controls.appendChild(countrySelect);
+      controls.appendChild(applyBtn);
+      controls.appendChild(resetFilterBtn);
+      const modalBody = doc.createElement("div");
+      modalBody.style.overflow = "auto";
+      modalBody.style.padding = "14px";
+      modalBody.style.display = "grid";
+      modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(350px, 1fr))";
+      modalBody.style.gap = "10px";
+      shell.appendChild(modalHead);
+      shell.appendChild(controls);
+      shell.appendChild(modalBody);
+      doc.body.appendChild(shell);
+      modalClose.addEventListener("click", () => win.close());
+      applyBtn.addEventListener("click", () => {
+        refreshAnalysisHandler?.({
+          fromTs: parseDateInput(fromInput.value, false),
+          toTs: parseDateInput(toInput.value, true),
+          mode: modeSelect.value || "all",
+          teammateId: teammateSelect.value || "all",
+          country: countrySelect.value || "all"
+        });
+      });
+      resetFilterBtn.addEventListener("click", () => {
+        fromInput.value = "";
+        toInput.value = "";
+        modeSelect.value = "all";
+        teammateSelect.value = "all";
+        countrySelect.value = "all";
+        refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
+      });
+      analysisWindow = { win, doc, fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody };
+      if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+      return analysisWindow;
+    }
     document.body.appendChild(iconBtn);
     document.body.appendChild(panel);
-    document.body.appendChild(modalBackdrop);
     let open = false;
     function setOpen(v) {
       open = v;
       panel.style.display = open ? "block" : "none";
     }
-    function setModalOpen(v) {
-      modalBackdrop.style.display = v ? "block" : "none";
-    }
     iconBtn.addEventListener("click", () => setOpen(!open));
     closeBtn.addEventListener("click", () => setOpen(false));
-    modalClose.addEventListener("click", () => setModalOpen(false));
-    modalBackdrop.addEventListener("click", (ev) => {
-      if (ev.target === modalBackdrop) setModalOpen(false);
-    });
     let updateHandler = null;
     let resetHandler = null;
     let exportHandler = null;
@@ -6592,38 +6633,22 @@
     exportBtn.addEventListener("click", () => exportHandler?.());
     resetBtn.addEventListener("click", () => resetHandler?.());
     analysisBtn.addEventListener("click", () => {
-      setModalOpen(true);
+      const win = ensureAnalysisWindow();
+      if (!win) return;
       openAnalysisHandler?.();
     });
-    applyBtn.addEventListener("click", () => {
-      refreshAnalysisHandler?.({
-        fromTs: parseDateInput(fromInput.value, false),
-        toTs: parseDateInput(toInput.value, true),
-        mode: modeSelect.value || "all",
-        teammateId: teammateSelect.value || "all",
-        country: countrySelect.value || "all"
-      });
-    });
-    resetFilterBtn.addEventListener("click", () => {
-      fromInput.value = "";
-      toInput.value = "";
-      modeSelect.value = "all";
-      teammateSelect.value = "all";
-      countrySelect.value = "all";
-      refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
-    });
-    function renderSection(section) {
-      const card = document.createElement("div");
+    function renderSection(section, doc) {
+      const card = doc.createElement("div");
       card.style.border = "1px solid #2a2a2a";
       card.style.borderRadius = "10px";
       card.style.background = "#171717";
       card.style.padding = "10px";
-      const title2 = document.createElement("div");
+      const title2 = doc.createElement("div");
       title2.textContent = section.title;
       title2.style.fontWeight = "700";
       title2.style.marginBottom = "6px";
       title2.style.fontSize = "13px";
-      const body = document.createElement("pre");
+      const body = doc.createElement("pre");
       body.style.margin = "0";
       body.style.whiteSpace = "pre-wrap";
       body.style.fontSize = "12px";
@@ -6635,10 +6660,10 @@
         const chart = charts[i];
         const chartTitle = `${section.title} - Chart ${i + 1}`;
         if (chart.type === "line" && chart.points.length > 1) {
-          card.appendChild(renderLineChart(chart, chartTitle));
+          card.appendChild(renderLineChart(chart, chartTitle, doc));
         }
         if (chart.type === "bar" && chart.bars.length > 0) {
-          card.appendChild(renderBarChart(chart, chartTitle));
+          card.appendChild(renderBarChart(chart, chartTitle, doc));
         }
       }
       card.appendChild(body);
@@ -6649,7 +6674,9 @@
         iconBtn.style.display = visible ? "flex" : "none";
         if (!visible) {
           panel.style.display = "none";
-          modalBackdrop.style.display = "none";
+          if (analysisWindow && !analysisWindow.win.closed) {
+            analysisWindow.win.close();
+          }
         }
       },
       setStatus(msg) {
@@ -6659,39 +6686,8 @@
         counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
       },
       setAnalysisWindowData(data) {
-        if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
-        if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
-        const prevMode = modeSelect.value || "all";
-        const prevTeammate = teammateSelect.value || "all";
-        const prevCountry = countrySelect.value || "all";
-        modeSelect.innerHTML = "";
-        for (const mode of data.availableModes) {
-          const opt = document.createElement("option");
-          opt.value = mode;
-          opt.textContent = mode;
-          modeSelect.appendChild(opt);
-        }
-        if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
-        teammateSelect.innerHTML = "";
-        for (const teammate of data.availableTeammates) {
-          const opt = document.createElement("option");
-          opt.value = teammate.id;
-          opt.textContent = teammate.label;
-          teammateSelect.appendChild(opt);
-        }
-        if ([...teammateSelect.options].some((o) => o.value === prevTeammate)) teammateSelect.value = prevTeammate;
-        countrySelect.innerHTML = "";
-        for (const country of data.availableCountries) {
-          const opt = document.createElement("option");
-          opt.value = country.code;
-          opt.textContent = country.label;
-          countrySelect.appendChild(opt);
-        }
-        if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
-        modalBody.innerHTML = "";
-        for (const s of data.sections) {
-          modalBody.appendChild(renderSection(s));
-        }
+        lastAnalysisData = data;
+        populateAnalysisWindow(data);
       },
       onUpdateClick(fn) {
         updateHandler = fn;
@@ -7672,7 +7668,18 @@
   }
 
   // src/analysis.ts
-  var regionDisplay2 = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+  function asRecord(v) {
+    return typeof v === "object" && v !== null ? v : {};
+  }
+  function getString(rec, key) {
+    const v = rec[key];
+    return typeof v === "string" ? v : void 0;
+  }
+  function getNumber(rec, key) {
+    const v = rec[key];
+    return typeof v === "number" ? v : void 0;
+  }
+  var regionDisplay2 = typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
   function startOfLocalDay(ts) {
     const d = new Date(ts);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -7708,18 +7715,27 @@
     return n.toFixed(digits);
   }
   function extractScore(r) {
-    if (typeof r.p1_score === "number") return r.p1_score;
-    if (typeof r.score === "number") return r.score;
+    const rr = asRecord(r);
+    const p1Score = getNumber(rr, "p1_score");
+    if (typeof p1Score === "number") return p1Score;
+    const legacyScore = getNumber(rr, "score");
+    if (typeof legacyScore === "number") return legacyScore;
     return void 0;
   }
   function extractDistanceMeters(r) {
-    if (typeof r.p1_distanceKm === "number") return r.p1_distanceKm * 1e3;
-    if (typeof r.p1_distanceMeters === "number") return r.p1_distanceMeters;
-    if (typeof r.distanceMeters === "number") return r.distanceMeters;
+    const rr = asRecord(r);
+    const p1DistanceKm = getNumber(rr, "p1_distanceKm");
+    if (typeof p1DistanceKm === "number") return p1DistanceKm * 1e3;
+    const p1DistanceMeters = getNumber(rr, "p1_distanceMeters");
+    if (typeof p1DistanceMeters === "number") return p1DistanceMeters;
+    const legacyDistanceMeters = getNumber(rr, "distanceMeters");
+    if (typeof legacyDistanceMeters === "number") return legacyDistanceMeters;
     return void 0;
   }
   function extractTimeMs(r) {
-    if (typeof r.timeMs === "number") return r.timeMs;
+    const rr = asRecord(r);
+    const legacyTimeMs = getNumber(rr, "timeMs");
+    if (typeof legacyTimeMs === "number") return legacyTimeMs;
     if (typeof r.durationSeconds === "number") return r.durationSeconds * 1e3;
     return void 0;
   }
@@ -7771,20 +7787,22 @@
   }
   function playerSlots(round) {
     const out = [];
+    const rr = asRecord(round);
     for (const slot of [1, 2, 3, 4]) {
-      const id = round[`p${slot}_playerId`];
+      const id = getString(rr, `p${slot}_playerId`);
       if (typeof id === "string" && id.trim()) out.push(slot);
     }
     return out;
   }
   function getPlayerStatFromRound(round, playerId) {
+    const rr = asRecord(round);
     for (const slot of playerSlots(round)) {
-      const pid = round[`p${slot}_playerId`];
+      const pid = getString(rr, `p${slot}_playerId`);
       if (pid !== playerId) continue;
       return {
-        score: typeof round[`p${slot}_score`] === "number" ? round[`p${slot}_score`] : void 0,
-        distanceKm: typeof round[`p${slot}_distanceKm`] === "number" ? round[`p${slot}_distanceKm`] : void 0,
-        teamId: typeof round[`p${slot}_teamId`] === "string" ? round[`p${slot}_teamId`] : void 0
+        score: getNumber(rr, `p${slot}_score`),
+        distanceKm: getNumber(rr, `p${slot}_distanceKm`),
+        teamId: getString(rr, `p${slot}_teamId`)
       };
     }
     return void 0;
@@ -7792,8 +7810,9 @@
   function inferOwnPlayerId(rounds) {
     const counts = /* @__PURE__ */ new Map();
     for (const r of rounds) {
-      if (typeof r.p1_playerId === "string" && r.p1_playerId.trim()) {
-        counts.set(r.p1_playerId, (counts.get(r.p1_playerId) || 0) + 1);
+      const p1PlayerId = getString(asRecord(r), "p1_playerId");
+      if (typeof p1PlayerId === "string" && p1PlayerId.trim()) {
+        counts.set(p1PlayerId, (counts.get(p1PlayerId) || 0) + 1);
       }
     }
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -7802,13 +7821,14 @@
   function collectPlayerNames(details) {
     const map = /* @__PURE__ */ new Map();
     for (const d of details) {
+      const dd = asRecord(d);
       const pairs = [
-        [d.playerOneId ?? d.p1_playerId, d.playerOneName ?? d.p1_playerName],
-        [d.playerTwoId ?? d.p2_playerId, d.playerTwoName ?? d.p2_playerName],
-        [d.teamOnePlayerOneId, d.teamOnePlayerOneName],
-        [d.teamOnePlayerTwoId, d.teamOnePlayerTwoName],
-        [d.teamTwoPlayerOneId, d.teamTwoPlayerOneName],
-        [d.teamTwoPlayerTwoId, d.teamTwoPlayerTwoName]
+        [getString(dd, "playerOneId") ?? getString(dd, "p1_playerId"), getString(dd, "playerOneName") ?? getString(dd, "p1_playerName")],
+        [getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"), getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName")],
+        [getString(dd, "teamOnePlayerOneId"), getString(dd, "teamOnePlayerOneName")],
+        [getString(dd, "teamOnePlayerTwoId"), getString(dd, "teamOnePlayerTwoName")],
+        [getString(dd, "teamTwoPlayerOneId"), getString(dd, "teamTwoPlayerOneName")],
+        [getString(dd, "teamTwoPlayerTwoId"), getString(dd, "teamTwoPlayerTwoName")]
       ];
       for (const [id, name] of pairs) {
         if (typeof id !== "string" || !id.trim()) continue;
@@ -7860,10 +7880,11 @@
     const teammateGames = /* @__PURE__ */ new Map();
     const teammateRoundSamples = /* @__PURE__ */ new Map();
     for (const d of baseDetails) {
-      const m = d.modeFamily;
+      const dd = asRecord(d);
+      const m = getString(dd, "modeFamily");
       if (m !== "teamduels") continue;
-      const p1 = d.teamOnePlayerOneId;
-      const p2 = d.teamOnePlayerTwoId;
+      const p1 = getString(dd, "teamOnePlayerOneId");
+      const p2 = getString(dd, "teamOnePlayerTwoId");
       const own = ownPlayerId && [p1, p2].includes(ownPlayerId) ? ownPlayerId : p1;
       const mate = [p1, p2].find((x) => !!x && x !== own);
       if (!mate) continue;
@@ -8011,7 +8032,7 @@
       if (typeof sc === "number") entry.score.push(sc);
       const dm = extractDistanceMeters(r);
       if (typeof dm === "number") entry.dist.push(dm / 1e3);
-      const guess = normalizeCountryCode(r.p1_guessCountry);
+      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
       if (guess) {
         entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
         if (guess === t) entry.correct++;
@@ -8047,13 +8068,26 @@
     });
     const opponentCounts = /* @__PURE__ */ new Map();
     for (const d of details) {
+      const dd = asRecord(d);
       const ids = [];
-      const modeFamily = d.modeFamily;
+      const modeFamily = getString(dd, "modeFamily");
       if (modeFamily === "duels") {
-        ids.push({ id: d.playerTwoId ?? d.p2_playerId, name: d.playerTwoName, country: d.playerTwoCountry });
+        ids.push({
+          id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
+          name: getString(dd, "playerTwoName"),
+          country: getString(dd, "playerTwoCountry")
+        });
       } else if (modeFamily === "teamduels") {
-        ids.push({ id: d.teamTwoPlayerOneId, name: d.teamTwoPlayerOneName, country: d.teamTwoPlayerOneCountry });
-        ids.push({ id: d.teamTwoPlayerTwoId, name: d.teamTwoPlayerTwoName, country: d.teamTwoPlayerTwoCountry });
+        ids.push({
+          id: getString(dd, "teamTwoPlayerOneId"),
+          name: getString(dd, "teamTwoPlayerOneName"),
+          country: getString(dd, "teamTwoPlayerOneCountry")
+        });
+        ids.push({
+          id: getString(dd, "teamTwoPlayerTwoId"),
+          name: getString(dd, "teamTwoPlayerTwoName"),
+          country: getString(dd, "teamTwoPlayerTwoCountry")
+        });
       }
       for (const x of ids) {
         if (!x.id) continue;
@@ -8177,12 +8211,14 @@
       const agg = countryAgg.get(spotlightCountry);
       const wrongGuesses = [...agg.guessed.entries()].filter(([guess]) => guess !== spotlightCountry).sort((a, b) => b[1] - a[1]).slice(0, 6);
       const countryRounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
-      const scoreTimeline = countryRounds.map((r) => {
+      const scoreTimeline = [];
+      for (const r of countryRounds) {
         const playedAt = playedAtByGameId.get(r.gameId);
         const s = extractScore(r);
-        if (!playedAt || typeof s !== "number") return void 0;
-        return { x: playedAt, y: s, label: formatDay(playedAt) };
-      }).filter((x) => !!x).sort((a, b) => a.x - b.x);
+        if (!playedAt || typeof s !== "number") continue;
+        scoreTimeline.push({ x: playedAt, y: s, label: formatDay(playedAt) });
+      }
+      scoreTimeline.sort((a, b) => a.x - b.x);
       sections.push({
         id: "country_spotlight",
         title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,

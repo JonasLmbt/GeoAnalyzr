@@ -10,20 +10,22 @@ export interface UIHandle {
     detailsError: number;
     detailsMissing: number;
   }) => void;
-  setAnalysisWindowData: (data: {
-    sections: AnalysisSection[];
-    availableModes: string[];
-    availableTeammates: Array<{ id: string; label: string }>;
-    availableCountries: Array<{ code: string; label: string }>;
-    minPlayedAt?: number;
-    maxPlayedAt?: number;
-  }) => void;
+  setAnalysisWindowData: (data: AnalysisWindowData) => void;
   onUpdateClick: (fn: () => void) => void;
   onResetClick: (fn: () => void) => void;
   onExportClick: (fn: () => void) => void;
   onTokenClick: (fn: () => void) => void;
   onOpenAnalysisClick: (fn: () => void) => void;
   onRefreshAnalysisClick: (fn: (filter: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) => void) => void;
+}
+
+export interface AnalysisWindowData {
+  sections: AnalysisSection[];
+  availableModes: string[];
+  availableTeammates: Array<{ id: string; label: string }>;
+  availableCountries: Array<{ code: string; label: string }>;
+  minPlayedAt?: number;
+  maxPlayedAt?: number;
 }
 
 function isoDateLocal(ts?: number): string {
@@ -91,8 +93,8 @@ async function downloadPng(svg: SVGSVGElement, title: string): Promise<void> {
   }
 }
 
-function openChartInNewTab(svg: SVGSVGElement, title: string): void {
-  const win = window.open("", "_blank");
+function openChartInNewTab(svg: SVGSVGElement, title: string, hostWindow: Window = window): void {
+  const win = hostWindow.open("", "_blank");
   if (!win) return;
   const svgMarkup = svg.outerHTML;
   const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -120,7 +122,9 @@ function openChartInNewTab(svg: SVGSVGElement, title: string): void {
 }
 
 function openZoomOverlay(svg: SVGSVGElement, title: string): void {
-  const overlay = document.createElement("div");
+  const doc = svg.ownerDocument;
+  const hostWindow = doc.defaultView ?? window;
+  const overlay = doc.createElement("div");
   overlay.style.position = "fixed";
   overlay.style.inset = "0";
   overlay.style.background = "rgba(0,0,0,0.82)";
@@ -129,7 +133,7 @@ function openZoomOverlay(svg: SVGSVGElement, title: string): void {
   overlay.style.placeItems = "center";
   overlay.style.padding = "20px";
 
-  const card = document.createElement("div");
+  const card = doc.createElement("div");
   card.style.width = "min(1500px, 96vw)";
   card.style.maxHeight = "92vh";
   card.style.overflow = "auto";
@@ -138,13 +142,13 @@ function openZoomOverlay(svg: SVGSVGElement, title: string): void {
   card.style.borderRadius = "12px";
   card.style.padding = "12px";
 
-  const header = document.createElement("div");
+  const header = doc.createElement("div");
   header.style.display = "flex";
   header.style.justifyContent = "space-between";
   header.style.alignItems = "center";
   header.style.marginBottom = "8px";
   header.innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff">${title}</div>`;
-  const closeBtn = document.createElement("button");
+  const closeBtn = doc.createElement("button");
   closeBtn.textContent = "Close";
   closeBtn.style.background = "#303030";
   closeBtn.style.color = "#fff";
@@ -158,20 +162,20 @@ function openZoomOverlay(svg: SVGSVGElement, title: string): void {
   svgClone.setAttribute("width", "100%");
   svgClone.setAttribute("height", "640");
 
-  const chartWrap = document.createElement("div");
+  const chartWrap = doc.createElement("div");
   chartWrap.style.border = "1px solid #2a2a2a";
   chartWrap.style.borderRadius = "10px";
   chartWrap.style.background = "#121212";
   chartWrap.style.padding = "8px";
   chartWrap.appendChild(svgClone);
 
-  const actions = document.createElement("div");
+  const actions = doc.createElement("div");
   actions.style.display = "flex";
   actions.style.gap = "8px";
   actions.style.marginBottom = "10px";
 
   function mkAction(label: string, onClick: () => void): HTMLButtonElement {
-    const b = document.createElement("button");
+    const b = doc.createElement("button");
     b.textContent = label;
     b.style.background = "#214a78";
     b.style.color = "white";
@@ -183,7 +187,7 @@ function openZoomOverlay(svg: SVGSVGElement, title: string): void {
     return b;
   }
 
-  actions.appendChild(mkAction("New Tab", () => openChartInNewTab(svgClone, title)));
+  actions.appendChild(mkAction("New Tab", () => openChartInNewTab(svgClone, title, hostWindow)));
   actions.appendChild(mkAction("Save SVG", () => void downloadSvg(svgClone, title)));
   actions.appendChild(mkAction("Save PNG", () => void downloadPng(svgClone, title)));
 
@@ -196,18 +200,20 @@ function openZoomOverlay(svg: SVGSVGElement, title: string): void {
   card.appendChild(actions);
   card.appendChild(chartWrap);
   overlay.appendChild(card);
-  document.body.appendChild(overlay);
+  doc.body.appendChild(overlay);
 }
 
 function createChartActions(svg: SVGSVGElement, title: string): HTMLElement {
-  const row = document.createElement("div");
+  const doc = svg.ownerDocument;
+  const hostWindow = doc.defaultView ?? window;
+  const row = doc.createElement("div");
   row.style.display = "flex";
   row.style.justifyContent = "flex-end";
   row.style.gap = "6px";
   row.style.marginBottom = "6px";
 
   function mkBtn(label: string, onClick: () => void): HTMLButtonElement {
-    const b = document.createElement("button");
+    const b = doc.createElement("button");
     b.textContent = label;
     b.style.background = "#303030";
     b.style.color = "#fff";
@@ -221,14 +227,14 @@ function createChartActions(svg: SVGSVGElement, title: string): HTMLElement {
   }
 
   row.appendChild(mkBtn("Zoom", () => openZoomOverlay(svg, title)));
-  row.appendChild(mkBtn("New Tab", () => openChartInNewTab(svg, title)));
+  row.appendChild(mkBtn("New Tab", () => openChartInNewTab(svg, title, hostWindow)));
   row.appendChild(mkBtn("Save SVG", () => void downloadSvg(svg, title)));
   row.appendChild(mkBtn("Save PNG", () => void downloadPng(svg, title)));
   return row;
 }
 
-function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title: string): HTMLElement {
-  const chartWrap = document.createElement("div");
+function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title: string, doc: Document): HTMLElement {
+  const chartWrap = doc.createElement("div");
   chartWrap.style.marginBottom = "8px";
   chartWrap.style.border = "1px solid #2a2a2a";
   chartWrap.style.borderRadius = "8px";
@@ -254,7 +260,7 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   const yMid = (minY + maxY) / 2;
   const xStartLabel = points[0].label || "";
   const xEndLabel = points[points.length - 1].label || "";
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "180");
@@ -273,8 +279,8 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   return chartWrap;
 }
 
-function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: string): HTMLElement {
-  const chartWrap = document.createElement("div");
+function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: string, doc: Document): HTMLElement {
+  const chartWrap = doc.createElement("div");
   chartWrap.style.marginBottom = "8px";
   chartWrap.style.border = "1px solid #2a2a2a";
   chartWrap.style.borderRadius = "8px";
@@ -306,7 +312,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
     })
     .join("");
 
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "190");
@@ -443,137 +449,204 @@ export function createUI(): UIHandle {
   panel.appendChild(resetBtn);
   panel.appendChild(counts);
 
-  const modalBackdrop = document.createElement("div");
-  modalBackdrop.style.position = "fixed";
-  modalBackdrop.style.inset = "0";
-  modalBackdrop.style.zIndex = "1000000";
-  modalBackdrop.style.background = "rgba(0,0,0,0.6)";
-  modalBackdrop.style.display = "none";
+  type AnalysisWindowRefs = {
+    win: Window;
+    doc: Document;
+    fromInput: HTMLInputElement;
+    toInput: HTMLInputElement;
+    modeSelect: HTMLSelectElement;
+    teammateSelect: HTMLSelectElement;
+    countrySelect: HTMLSelectElement;
+    modalBody: HTMLDivElement;
+  };
 
-  const modal = document.createElement("div");
-  modal.style.position = "absolute";
-  modal.style.left = "50%";
-  modal.style.top = "50%";
-  modal.style.transform = "translate(-50%, -50%)";
-  modal.style.width = "min(1180px, calc(100vw - 30px))";
-  modal.style.height = "min(760px, calc(100vh - 30px))";
-  modal.style.borderRadius = "14px";
-  modal.style.border = "1px solid #2a2a2a";
-  modal.style.background = "#111";
-  modal.style.color = "#fff";
-  modal.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
-  modal.style.boxShadow = "0 25px 60px rgba(0,0,0,0.55)";
-  modal.style.display = "grid";
-  modal.style.gridTemplateRows = "auto auto 1fr";
-  modal.style.overflow = "hidden";
+  let analysisWindow: AnalysisWindowRefs | null = null;
+  let lastAnalysisData: AnalysisWindowData | null = null;
 
-  const modalHead = document.createElement("div");
-  modalHead.style.display = "flex";
-  modalHead.style.justifyContent = "space-between";
-  modalHead.style.alignItems = "center";
-  modalHead.style.padding = "12px 14px";
-  modalHead.style.borderBottom = "1px solid #2a2a2a";
-  modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
-  const modalClose = document.createElement("button");
-  modalClose.textContent = "x";
-  modalClose.style.background = "transparent";
-  modalClose.style.color = "white";
-  modalClose.style.border = "none";
-  modalClose.style.cursor = "pointer";
-  modalClose.style.fontSize = "18px";
-  modalHead.appendChild(modalClose);
+  function styleInput(el: HTMLInputElement | HTMLSelectElement) {
+    el.style.background = "#1b1b1b";
+    el.style.color = "white";
+    el.style.border = "1px solid #3a3a3a";
+    el.style.borderRadius = "8px";
+    el.style.padding = "6px 8px";
+  }
 
-  const controls = document.createElement("div");
-  controls.style.display = "flex";
-  controls.style.gap = "10px";
-  controls.style.alignItems = "center";
-  controls.style.padding = "10px 14px";
-  controls.style.borderBottom = "1px solid #2a2a2a";
-  controls.style.flexWrap = "wrap";
+  function populateAnalysisWindow(data: AnalysisWindowData) {
+    const refs = analysisWindow;
+    if (!refs || refs.win.closed) return;
 
-  const fromInput = document.createElement("input");
-  fromInput.type = "date";
-  fromInput.style.background = "#1b1b1b";
-  fromInput.style.color = "white";
-  fromInput.style.border = "1px solid #3a3a3a";
-  fromInput.style.borderRadius = "8px";
-  fromInput.style.padding = "6px 8px";
+    const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, doc } = refs;
+    if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
+    if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
 
-  const toInput = document.createElement("input");
-  toInput.type = "date";
-  toInput.style.background = "#1b1b1b";
-  toInput.style.color = "white";
-  toInput.style.border = "1px solid #3a3a3a";
-  toInput.style.borderRadius = "8px";
-  toInput.style.padding = "6px 8px";
+    const prevMode = modeSelect.value || "all";
+    const prevTeammate = teammateSelect.value || "all";
+    const prevCountry = countrySelect.value || "all";
 
-  const modeSelect = document.createElement("select");
-  modeSelect.style.background = "#1b1b1b";
-  modeSelect.style.color = "white";
-  modeSelect.style.border = "1px solid #3a3a3a";
-  modeSelect.style.borderRadius = "8px";
-  modeSelect.style.padding = "6px 8px";
+    modeSelect.innerHTML = "";
+    for (const mode of data.availableModes) {
+      const opt = doc.createElement("option");
+      opt.value = mode;
+      opt.textContent = mode;
+      modeSelect.appendChild(opt);
+    }
+    if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
 
-  const teammateSelect = document.createElement("select");
-  teammateSelect.style.background = "#1b1b1b";
-  teammateSelect.style.color = "white";
-  teammateSelect.style.border = "1px solid #3a3a3a";
-  teammateSelect.style.borderRadius = "8px";
-  teammateSelect.style.padding = "6px 8px";
+    teammateSelect.innerHTML = "";
+    for (const teammate of data.availableTeammates) {
+      const opt = doc.createElement("option");
+      opt.value = teammate.id;
+      opt.textContent = teammate.label;
+      teammateSelect.appendChild(opt);
+    }
+    if ([...teammateSelect.options].some((o) => o.value === prevTeammate)) teammateSelect.value = prevTeammate;
 
-  const countrySelect = document.createElement("select");
-  countrySelect.style.background = "#1b1b1b";
-  countrySelect.style.color = "white";
-  countrySelect.style.border = "1px solid #3a3a3a";
-  countrySelect.style.borderRadius = "8px";
-  countrySelect.style.padding = "6px 8px";
+    countrySelect.innerHTML = "";
+    for (const country of data.availableCountries) {
+      const opt = doc.createElement("option");
+      opt.value = country.code;
+      opt.textContent = country.label;
+      countrySelect.appendChild(opt);
+    }
+    if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
 
-  const applyBtn = document.createElement("button");
-  applyBtn.textContent = "Apply Filter";
-  applyBtn.style.background = "#214a78";
-  applyBtn.style.color = "white";
-  applyBtn.style.border = "1px solid #2f6096";
-  applyBtn.style.borderRadius = "8px";
-  applyBtn.style.padding = "6px 10px";
-  applyBtn.style.cursor = "pointer";
+    modalBody.innerHTML = "";
+    for (const s of data.sections) {
+      modalBody.appendChild(renderSection(s, doc));
+    }
+  }
 
-  const resetFilterBtn = document.createElement("button");
-  resetFilterBtn.textContent = "Reset Filter";
-  resetFilterBtn.style.background = "#303030";
-  resetFilterBtn.style.color = "white";
-  resetFilterBtn.style.border = "1px solid #444";
-  resetFilterBtn.style.borderRadius = "8px";
-  resetFilterBtn.style.padding = "6px 10px";
-  resetFilterBtn.style.cursor = "pointer";
+  function ensureAnalysisWindow(): AnalysisWindowRefs | null {
+    if (analysisWindow && !analysisWindow.win.closed) {
+      analysisWindow.win.focus();
+      return analysisWindow;
+    }
 
-  controls.appendChild(document.createTextNode("From:"));
-  controls.appendChild(fromInput);
-  controls.appendChild(document.createTextNode("To:"));
-  controls.appendChild(toInput);
-  controls.appendChild(document.createTextNode("Mode:"));
-  controls.appendChild(modeSelect);
-  controls.appendChild(document.createTextNode("Teammate:"));
-  controls.appendChild(teammateSelect);
-  controls.appendChild(document.createTextNode("Country:"));
-  controls.appendChild(countrySelect);
-  controls.appendChild(applyBtn);
-  controls.appendChild(resetFilterBtn);
+    const win = window.open("", "geoanalyzr-analysis");
+    if (!win) return null;
+    const doc = win.document;
+    doc.title = "GeoAnalyzr - Full Analysis";
+    doc.body.innerHTML = "";
+    doc.body.style.margin = "0";
+    doc.body.style.background = "#111";
+    doc.body.style.color = "#fff";
+    doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
-  const modalBody = document.createElement("div");
-  modalBody.style.overflow = "auto";
-  modalBody.style.padding = "14px";
-  modalBody.style.display = "grid";
-  modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(350px, 1fr))";
-  modalBody.style.gap = "10px";
+    const shell = doc.createElement("div");
+    shell.style.display = "grid";
+    shell.style.gridTemplateRows = "auto auto 1fr";
+    shell.style.height = "100vh";
 
-  modal.appendChild(modalHead);
-  modal.appendChild(controls);
-  modal.appendChild(modalBody);
-  modalBackdrop.appendChild(modal);
+    const modalHead = doc.createElement("div");
+    modalHead.style.display = "flex";
+    modalHead.style.justifyContent = "space-between";
+    modalHead.style.alignItems = "center";
+    modalHead.style.padding = "12px 14px";
+    modalHead.style.borderBottom = "1px solid #2a2a2a";
+    modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
+    const modalClose = doc.createElement("button");
+    modalClose.textContent = "x";
+    modalClose.style.background = "transparent";
+    modalClose.style.color = "white";
+    modalClose.style.border = "none";
+    modalClose.style.cursor = "pointer";
+    modalClose.style.fontSize = "18px";
+    modalHead.appendChild(modalClose);
+
+    const controls = doc.createElement("div");
+    controls.style.display = "flex";
+    controls.style.gap = "10px";
+    controls.style.alignItems = "center";
+    controls.style.padding = "10px 14px";
+    controls.style.borderBottom = "1px solid #2a2a2a";
+    controls.style.flexWrap = "wrap";
+
+    const fromInput = doc.createElement("input");
+    fromInput.type = "date";
+    styleInput(fromInput);
+
+    const toInput = doc.createElement("input");
+    toInput.type = "date";
+    styleInput(toInput);
+
+    const modeSelect = doc.createElement("select");
+    styleInput(modeSelect);
+
+    const teammateSelect = doc.createElement("select");
+    styleInput(teammateSelect);
+
+    const countrySelect = doc.createElement("select");
+    styleInput(countrySelect);
+
+    const applyBtn = doc.createElement("button");
+    applyBtn.textContent = "Apply Filter";
+    applyBtn.style.background = "#214a78";
+    applyBtn.style.color = "white";
+    applyBtn.style.border = "1px solid #2f6096";
+    applyBtn.style.borderRadius = "8px";
+    applyBtn.style.padding = "6px 10px";
+    applyBtn.style.cursor = "pointer";
+
+    const resetFilterBtn = doc.createElement("button");
+    resetFilterBtn.textContent = "Reset Filter";
+    resetFilterBtn.style.background = "#303030";
+    resetFilterBtn.style.color = "white";
+    resetFilterBtn.style.border = "1px solid #444";
+    resetFilterBtn.style.borderRadius = "8px";
+    resetFilterBtn.style.padding = "6px 10px";
+    resetFilterBtn.style.cursor = "pointer";
+
+    controls.appendChild(doc.createTextNode("From:"));
+    controls.appendChild(fromInput);
+    controls.appendChild(doc.createTextNode("To:"));
+    controls.appendChild(toInput);
+    controls.appendChild(doc.createTextNode("Mode:"));
+    controls.appendChild(modeSelect);
+    controls.appendChild(doc.createTextNode("Teammate:"));
+    controls.appendChild(teammateSelect);
+    controls.appendChild(doc.createTextNode("Country:"));
+    controls.appendChild(countrySelect);
+    controls.appendChild(applyBtn);
+    controls.appendChild(resetFilterBtn);
+
+    const modalBody = doc.createElement("div");
+    modalBody.style.overflow = "auto";
+    modalBody.style.padding = "14px";
+    modalBody.style.display = "grid";
+    modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(350px, 1fr))";
+    modalBody.style.gap = "10px";
+
+    shell.appendChild(modalHead);
+    shell.appendChild(controls);
+    shell.appendChild(modalBody);
+    doc.body.appendChild(shell);
+
+    modalClose.addEventListener("click", () => win.close());
+    applyBtn.addEventListener("click", () => {
+      refreshAnalysisHandler?.({
+        fromTs: parseDateInput(fromInput.value, false),
+        toTs: parseDateInput(toInput.value, true),
+        mode: modeSelect.value || "all",
+        teammateId: teammateSelect.value || "all",
+        country: countrySelect.value || "all"
+      });
+    });
+    resetFilterBtn.addEventListener("click", () => {
+      fromInput.value = "";
+      toInput.value = "";
+      modeSelect.value = "all";
+      teammateSelect.value = "all";
+      countrySelect.value = "all";
+      refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
+    });
+
+    analysisWindow = { win, doc, fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody };
+    if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+    return analysisWindow;
+  }
 
   document.body.appendChild(iconBtn);
   document.body.appendChild(panel);
-  document.body.appendChild(modalBackdrop);
 
   let open = false;
   function setOpen(v: boolean) {
@@ -581,16 +654,8 @@ export function createUI(): UIHandle {
     panel.style.display = open ? "block" : "none";
   }
 
-  function setModalOpen(v: boolean) {
-    modalBackdrop.style.display = v ? "block" : "none";
-  }
-
   iconBtn.addEventListener("click", () => setOpen(!open));
   closeBtn.addEventListener("click", () => setOpen(false));
-  modalClose.addEventListener("click", () => setModalOpen(false));
-  modalBackdrop.addEventListener("click", (ev) => {
-    if (ev.target === modalBackdrop) setModalOpen(false);
-  });
 
   let updateHandler: (() => void) | null = null;
   let resetHandler: (() => void) | null = null;
@@ -617,39 +682,23 @@ export function createUI(): UIHandle {
   exportBtn.addEventListener("click", () => exportHandler?.());
   resetBtn.addEventListener("click", () => resetHandler?.());
   analysisBtn.addEventListener("click", () => {
-    setModalOpen(true);
+    const win = ensureAnalysisWindow();
+    if (!win) return;
     openAnalysisHandler?.();
   });
-  applyBtn.addEventListener("click", () => {
-    refreshAnalysisHandler?.({
-      fromTs: parseDateInput(fromInput.value, false),
-      toTs: parseDateInput(toInput.value, true),
-      mode: modeSelect.value || "all",
-      teammateId: teammateSelect.value || "all",
-      country: countrySelect.value || "all"
-    });
-  });
-  resetFilterBtn.addEventListener("click", () => {
-    fromInput.value = "";
-    toInput.value = "";
-    modeSelect.value = "all";
-    teammateSelect.value = "all";
-    countrySelect.value = "all";
-    refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
-  });
 
-  function renderSection(section: AnalysisSection): HTMLElement {
-    const card = document.createElement("div");
+  function renderSection(section: AnalysisSection, doc: Document): HTMLElement {
+    const card = doc.createElement("div");
     card.style.border = "1px solid #2a2a2a";
     card.style.borderRadius = "10px";
     card.style.background = "#171717";
     card.style.padding = "10px";
-    const title2 = document.createElement("div");
+    const title2 = doc.createElement("div");
     title2.textContent = section.title;
     title2.style.fontWeight = "700";
     title2.style.marginBottom = "6px";
     title2.style.fontSize = "13px";
-    const body = document.createElement("pre");
+    const body = doc.createElement("pre");
     body.style.margin = "0";
     body.style.whiteSpace = "pre-wrap";
     body.style.fontSize = "12px";
@@ -662,10 +711,10 @@ export function createUI(): UIHandle {
       const chart = charts[i];
       const chartTitle = `${section.title} - Chart ${i + 1}`;
       if (chart.type === "line" && chart.points.length > 1) {
-        card.appendChild(renderLineChart(chart, chartTitle));
+        card.appendChild(renderLineChart(chart, chartTitle, doc));
       }
       if (chart.type === "bar" && chart.bars.length > 0) {
-        card.appendChild(renderBarChart(chart, chartTitle));
+        card.appendChild(renderBarChart(chart, chartTitle, doc));
       }
     }
 
@@ -678,7 +727,9 @@ export function createUI(): UIHandle {
       iconBtn.style.display = visible ? "flex" : "none";
       if (!visible) {
         panel.style.display = "none";
-        modalBackdrop.style.display = "none";
+        if (analysisWindow && !analysisWindow.win.closed) {
+          analysisWindow.win.close();
+        }
       }
     },
     setStatus(msg) {
@@ -688,44 +739,8 @@ export function createUI(): UIHandle {
       counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
     },
     setAnalysisWindowData(data) {
-      if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
-      if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
-
-      const prevMode = modeSelect.value || "all";
-      const prevTeammate = teammateSelect.value || "all";
-      const prevCountry = countrySelect.value || "all";
-
-      modeSelect.innerHTML = "";
-      for (const mode of data.availableModes) {
-        const opt = document.createElement("option");
-        opt.value = mode;
-        opt.textContent = mode;
-        modeSelect.appendChild(opt);
-      }
-      if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
-
-      teammateSelect.innerHTML = "";
-      for (const teammate of data.availableTeammates) {
-        const opt = document.createElement("option");
-        opt.value = teammate.id;
-        opt.textContent = teammate.label;
-        teammateSelect.appendChild(opt);
-      }
-      if ([...teammateSelect.options].some((o) => o.value === prevTeammate)) teammateSelect.value = prevTeammate;
-
-      countrySelect.innerHTML = "";
-      for (const country of data.availableCountries) {
-        const opt = document.createElement("option");
-        opt.value = country.code;
-        opt.textContent = country.label;
-        countrySelect.appendChild(opt);
-      }
-      if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
-
-      modalBody.innerHTML = "";
-      for (const s of data.sections) {
-        modalBody.appendChild(renderSection(s));
-      }
+      lastAnalysisData = data;
+      populateAnalysisWindow(data);
     },
     onUpdateClick(fn) {
       updateHandler = fn;
