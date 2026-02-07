@@ -120,10 +120,9 @@ export function createUI(): UIHandle {
     return b;
   }
 
-  const updateBtn = mkBtn("Update", "rgba(255,255,255,0.10)");
+  const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
   const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
   const tokenBtn = mkBtn("Set NCFA Token", "rgba(95,95,30,0.35)");
-  tokenBtn.style.marginTop = "0";
   const tokenHelpBtn = document.createElement("button");
   tokenHelpBtn.textContent = "?";
   tokenHelpBtn.title = "How to get _ncfa token";
@@ -138,7 +137,7 @@ export function createUI(): UIHandle {
   tokenHelpBtn.style.marginTop = "8px";
   tokenHelpBtn.style.marginLeft = "8px";
   const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
-  const resetBtn = mkBtn("Reset DB", "rgba(160,35,35,0.35)");
+  const resetBtn = mkBtn("Reset Database", "rgba(160,35,35,0.35)");
 
   const counts = document.createElement("div");
   counts.style.marginTop = "10px";
@@ -154,7 +153,7 @@ export function createUI(): UIHandle {
   const tokenRow = document.createElement("div");
   tokenRow.style.display = "flex";
   tokenRow.style.alignItems = "stretch";
-  tokenRow.style.marginTop = "8px";
+  tokenRow.style.marginTop = "0";
   tokenRow.appendChild(tokenBtn);
   tokenRow.appendChild(tokenHelpBtn);
   panel.appendChild(tokenRow);
