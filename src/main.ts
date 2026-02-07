@@ -158,7 +158,7 @@ async function refreshUI(ui: ReturnType<typeof createUI>) {
     }
   });
 
-  async function refreshAnalysisWindow(filter?: { fromTs?: number; toTs?: number; mode?: string }) {
+  async function refreshAnalysisWindow(filter?: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) {
     const data = await getAnalysisWindowData(filter);
     ui.setAnalysisWindowData(data);
   }
@@ -166,7 +166,7 @@ async function refreshUI(ui: ReturnType<typeof createUI>) {
   ui.onOpenAnalysisClick(async () => {
     try {
       ui.setStatus("Loading analysis...");
-      await refreshAnalysisWindow({ mode: "all" });
+      await refreshAnalysisWindow({ mode: "all", teammateId: "all", country: "all" });
       ui.setStatus("Analysis loaded.");
     } catch (e) {
       ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));

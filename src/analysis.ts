@@ -1,4 +1,4 @@
-import { db, FeedGameRow, RoundRow } from "./db";
+import { db, FeedGameRow, GameRow, RoundRow } from "./db";
 import { getModeCounts } from "./sync";
 
 function startOfLocalDay(ts: number): number {
@@ -33,8 +33,8 @@ function stdDev(values: number[]): number | undefined {
   if (values.length < 2) return undefined;
   const m = avg(values);
   if (m === undefined) return undefined;
-  const v = avg(values.map((x) => (x - m) ** 2));
-  return v === undefined ? undefined : Math.sqrt(v);
+  const vari = avg(values.map((x) => (x - m) ** 2));
+  return vari === undefined ? undefined : Math.sqrt(vari);
 }
 
 function fmt(n: number | undefined, digits = 2): string {
@@ -48,29 +48,22 @@ function extractScore(r: RoundRow): number | undefined {
   return undefined;
 }
 
-function extractDistance(r: RoundRow): number | undefined {
+function extractDistanceMeters(r: RoundRow): number | undefined {
   if (typeof (r as any).p1_distanceKm === "number") return (r as any).p1_distanceKm * 1e3;
   if (typeof r.p1_distanceMeters === "number") return r.p1_distanceMeters;
   if (typeof r.distanceMeters === "number") return r.distanceMeters;
   return undefined;
 }
 
-function extractTime(r: RoundRow): number | undefined {
+function extractTimeMs(r: RoundRow): number | undefined {
   if (typeof r.timeMs === "number") return r.timeMs;
   if (typeof r.durationSeconds === "number") return r.durationSeconds * 1e3;
   return undefined;
 }
 
-function extractP1DistanceKm(r: RoundRow): number | undefined {
-  const km = (r as any).p1_distanceKm;
-  if (typeof km === "number" && Number.isFinite(km)) return km;
-  const m = extractDistance(r);
-  return typeof m === "number" && Number.isFinite(m) ? m / 1e3 : undefined;
-}
-
 function makeAsciiBar(value: number, maxValue: number, width = 16): string {
   if (maxValue <= 0) return "-".repeat(width);
-  const filled = Math.max(0, Math.min(width, Math.round(value / maxValue * width)));
+  const filled = Math.max(0, Math.min(width, Math.round((value / maxValue) * width)));
   return `${"#".repeat(filled)}${"-".repeat(width - filled)}`;
 }
 
@@ -93,22 +86,95 @@ function makeDayActivityLines(gameTimestamps: number[], lastDays = 14): string[]
   return days.map((d) => `${formatDay(d.day)}  ${makeAsciiBar(d.count, maxCount)}  ${d.count}`);
 }
 
-function filterByGames(
-  games: FeedGameRow[],
-  rounds: RoundRow[],
-  filter: { fromTs?: number; toTs?: number; mode?: string }
-): { games: FeedGameRow[]; rounds: RoundRow[] } {
-  const byTime = games.filter((g) => {
-    if (filter.fromTs !== undefined && g.playedAt < filter.fromTs) return false;
-    if (filter.toTs !== undefined && g.playedAt > filter.toTs) return false;
-    if (filter.mode && filter.mode !== "all") {
-      const m = g.gameMode || g.mode || "";
-      if (m !== filter.mode) return false;
+function inTsRange(ts: number, fromTs?: number, toTs?: number): boolean {
+  if (fromTs !== undefined && ts < fromTs) return false;
+  if (toTs !== undefined && ts > toTs) return false;
+  return true;
+}
+
+function getGameMode(game: FeedGameRow): string {
+  return game.gameMode || game.mode || "unknown";
+}
+
+function normalizeCountryCode(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const x = v.trim().toLowerCase();
+  return x ? x : undefined;
+}
+
+function playerSlots(round: RoundRow): Array<1 | 2 | 3 | 4> {
+  const out: Array<1 | 2 | 3 | 4> = [];
+  for (const slot of [1, 2, 3, 4] as const) {
+    const id = (round as any)[`p${slot}_playerId`];
+    if (typeof id === "string" && id.trim()) out.push(slot);
+  }
+  return out;
+}
+
+function getPlayerStatFromRound(round: RoundRow, playerId: string): { score?: number; distanceKm?: number; teamId?: string } | undefined {
+  for (const slot of playerSlots(round)) {
+    const pid = (round as any)[`p${slot}_playerId`];
+    if (pid !== playerId) continue;
+    return {
+      score: typeof (round as any)[`p${slot}_score`] === "number" ? (round as any)[`p${slot}_score`] : undefined,
+      distanceKm: typeof (round as any)[`p${slot}_distanceKm`] === "number" ? (round as any)[`p${slot}_distanceKm`] : undefined,
+      teamId: typeof (round as any)[`p${slot}_teamId`] === "string" ? (round as any)[`p${slot}_teamId`] : undefined
+    };
+  }
+  return undefined;
+}
+
+function inferOwnPlayerId(rounds: RoundRow[]): string | undefined {
+  const counts = new Map<string, number>();
+  for (const r of rounds) {
+    if (typeof r.p1_playerId === "string" && r.p1_playerId.trim()) {
+      counts.set(r.p1_playerId, (counts.get(r.p1_playerId) || 0) + 1);
     }
-    return true;
-  });
-  const gameSet = new Set(byTime.map((g) => g.gameId));
-  return { games: byTime, rounds: rounds.filter((r) => gameSet.has(r.gameId)) };
+  }
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best?.[0];
+}
+
+function collectPlayerNames(details: GameRow[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const d of details) {
+    const pairs: Array<[string | undefined, string | undefined]> = [
+      [(d as any).playerOneId ?? (d as any).p1_playerId, (d as any).playerOneName ?? (d as any).p1_playerName],
+      [(d as any).playerTwoId ?? (d as any).p2_playerId, (d as any).playerTwoName ?? (d as any).p2_playerName],
+      [(d as any).teamOnePlayerOneId, (d as any).teamOnePlayerOneName],
+      [(d as any).teamOnePlayerTwoId, (d as any).teamOnePlayerTwoName],
+      [(d as any).teamTwoPlayerOneId, (d as any).teamTwoPlayerOneName],
+      [(d as any).teamTwoPlayerTwoId, (d as any).teamTwoPlayerTwoName]
+    ];
+    for (const [id, name] of pairs) {
+      if (typeof id !== "string" || !id.trim()) continue;
+      if (typeof name !== "string" || !name.trim()) continue;
+      if (!map.has(id)) map.set(id, name.trim());
+    }
+  }
+  return map;
+}
+
+function toChartPointsByDay(values: Array<{ ts: number; value: number }>): Array<{ x: number; y: number; label?: string }> {
+  const byDay = new Map<number, number[]>();
+  for (const v of values) {
+    const day = startOfLocalDay(v.ts);
+    const arr = byDay.get(day) || [];
+    arr.push(v.value);
+    byDay.set(day, arr);
+  }
+  return [...byDay.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([day, vals]) => ({ x: day, y: avg(vals) || 0, label: formatDay(day) }));
+}
+
+function toCountsByDay(timestamps: number[]): Array<{ x: number; y: number; label?: string }> {
+  const map = new Map<number, number>();
+  for (const ts of timestamps) {
+    const day = startOfLocalDay(ts);
+    map.set(day, (map.get(day) || 0) + 1);
+  }
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([day, c]) => ({ x: day, y: c, label: formatDay(day) }));
 }
 
 export interface DayPoint {
@@ -122,20 +188,31 @@ export interface DashboardData {
   modes: Array<{ mode: string; count: number }>;
 }
 
+export type AnalysisChart =
+  | {
+      type: "line";
+      yLabel?: string;
+      points: Array<{ x: number; y: number; label?: string }>;
+    }
+  | {
+      type: "bar";
+      yLabel?: string;
+      bars: Array<{ label: string; value: number }>;
+    };
+
 export interface AnalysisSection {
   id: string;
   title: string;
   lines: string[];
-  chart?: {
-    type: "line";
-    yLabel?: string;
-    points: Array<{ x: number; y: number; label?: string }>;
-  };
+  chart?: AnalysisChart;
+  charts?: AnalysisChart[];
 }
 
 export interface AnalysisWindowData {
   sections: AnalysisSection[];
   availableModes: string[];
+  availableTeammates: Array<{ id: string; label: string }>;
+  availableCountries: Array<{ code: string; label: string }>;
   minPlayedAt?: number;
   maxPlayedAt?: number;
 }
@@ -144,13 +221,12 @@ export interface AnalysisFilter {
   fromTs?: number;
   toTs?: number;
   mode?: string;
+  teammateId?: string;
+  country?: string;
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const [games, rounds] = await Promise.all([
-    db.games.orderBy("playedAt").toArray(),
-    db.rounds.toArray()
-  ]);
+  const [games, rounds] = await Promise.all([db.games.orderBy("playedAt").toArray(), db.rounds.toArray()]);
   if (games.length === 0) {
     return { reportLines: ["No games yet. Run sync first."], activity: [], modes: [] };
   }
@@ -186,31 +262,104 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     db.rounds.toArray(),
     db.details.toArray()
   ]);
+
   const modeSet = new Set<string>();
-  for (const g of allGames) modeSet.add(g.gameMode || g.mode || "unknown");
+  for (const g of allGames) modeSet.add(getGameMode(g));
   const availableModes = ["all", ...[...modeSet].sort((a, b) => a.localeCompare(b))];
   const minPlayedAt = allGames.length ? allGames[0].playedAt : undefined;
   const maxPlayedAt = allGames.length ? allGames[allGames.length - 1].playedAt : undefined;
 
-  const filtered = filterByGames(allGames, allRounds, {
-    fromTs: filter?.fromTs,
-    toTs: filter?.toTs,
-    mode: filter?.mode
+  const baseGames = allGames.filter((g) => {
+    if (!inTsRange(g.playedAt, filter?.fromTs, filter?.toTs)) return false;
+    if (filter?.mode && filter.mode !== "all" && getGameMode(g) !== filter.mode) return false;
+    return true;
   });
+  const baseGameSet = new Set(baseGames.map((g) => g.gameId));
+  const baseRounds = allRounds.filter((r) => baseGameSet.has(r.gameId));
+  const baseDetails = allDetails.filter((d) => baseGameSet.has(d.gameId));
 
-  const games = filtered.games;
-  const rounds = filtered.rounds;
-  const gameIdSet = new Set(games.map((g) => g.gameId));
-  const details = allDetails.filter((d) => gameIdSet.has(d.gameId));
-  const knownTotals = details
-    .map((d) => d.totalRounds)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0);
-  const avgRoundsFromTotals = knownTotals.length ? avg(knownTotals) : undefined;
+  const ownPlayerId = inferOwnPlayerId(baseRounds);
+  const nameMap = collectPlayerNames(baseDetails);
 
-  if (games.length === 0) {
+  const teammateGames = new Map<string, Set<string>>();
+  const teammateRoundSamples = new Map<string, number>();
+
+  for (const d of baseDetails) {
+    const m = (d as any).modeFamily as string | undefined;
+    if (m !== "teamduels") continue;
+
+    const p1 = (d as any).teamOnePlayerOneId as string | undefined;
+    const p2 = (d as any).teamOnePlayerTwoId as string | undefined;
+    const own = ownPlayerId && [p1, p2].includes(ownPlayerId) ? ownPlayerId : p1;
+    const mate = [p1, p2].find((x) => !!x && x !== own);
+    if (!mate) continue;
+
+    if (!teammateGames.has(mate)) teammateGames.set(mate, new Set<string>());
+    teammateGames.get(mate)?.add(d.gameId);
+  }
+
+  for (const r of baseRounds) {
+    for (const [tid] of teammateGames) {
+      if (!teammateGames.get(tid)?.has(r.gameId)) continue;
+      const st = getPlayerStatFromRound(r, tid);
+      if (!st) continue;
+      if (typeof st.score === "number" || typeof st.distanceKm === "number") {
+        teammateRoundSamples.set(tid, (teammateRoundSamples.get(tid) || 0) + 1);
+      }
+    }
+  }
+
+  const availableTeammates = [
+    { id: "all", label: "All teammates" },
+    ...[...teammateGames.entries()]
+      .map(([id, games]) => {
+        const name = nameMap.get(id) || id.slice(0, 8);
+        const rounds = teammateRoundSamples.get(id) || 0;
+        return { id, label: `${name} (${games.size} games, ${rounds} rounds)` };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label))
+  ];
+
+  const countryCountsBase = new Map<string, number>();
+  for (const r of baseRounds) {
+    const c = normalizeCountryCode(r.trueCountry);
+    if (!c) continue;
+    countryCountsBase.set(c, (countryCountsBase.get(c) || 0) + 1);
+  }
+  const availableCountries = [
+    { code: "all", label: "All countries" },
+    ...[...countryCountsBase.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 100)
+      .map(([code, count]) => ({ code, label: `${code.toUpperCase()} (${count} rounds)` }))
+  ];
+
+  let games = baseGames;
+  let rounds = baseRounds;
+  let details = baseDetails;
+
+  if (filter?.teammateId && filter.teammateId !== "all") {
+    const allowedGameIds = teammateGames.get(filter.teammateId) || new Set<string>();
+    games = games.filter((g) => allowedGameIds.has(g.gameId));
+    const gameSet = new Set(games.map((g) => g.gameId));
+    rounds = rounds.filter((r) => gameSet.has(r.gameId));
+    details = details.filter((d) => gameSet.has(d.gameId));
+  }
+
+  if (filter?.country && filter.country !== "all") {
+    const c = filter.country.toLowerCase();
+    rounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === c);
+    const gameSet = new Set(rounds.map((r) => r.gameId));
+    games = games.filter((g) => gameSet.has(g.gameId));
+    details = details.filter((d) => gameSet.has(d.gameId));
+  }
+
+  if (games.length === 0 || rounds.length === 0) {
     return {
       sections: [{ id: "empty", title: "Overview", lines: ["Keine Daten fuer den gewaehlten Filter."] }],
       availableModes,
+      availableTeammates,
+      availableCountries,
       minPlayedAt,
       maxPlayedAt
     };
@@ -218,67 +367,65 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const sections: AnalysisSection[] = [];
   const gameTimes = games.map((g) => g.playedAt).sort((a, b) => a - b);
+  const playedAtByGameId = new Map(games.map((g) => [g.gameId, g.playedAt]));
   const scores = rounds.map(extractScore).filter((v): v is number => v !== undefined);
-  const distances = rounds.map(extractDistance).filter((v): v is number => v !== undefined);
-  const timesMs = rounds.map(extractTime).filter((v): v is number => v !== undefined);
+  const distancesKm = rounds
+    .map((r) => extractDistanceMeters(r))
+    .filter((v): v is number => v !== undefined)
+    .map((m) => m / 1e3);
+  const timesSec = rounds
+    .map(extractTimeMs)
+    .filter((v): v is number => v !== undefined)
+    .map((ms) => ms / 1e3);
+
+  const selectedTeammate = filter?.teammateId && filter.teammateId !== "all" ? filter.teammateId : undefined;
+  const selectedCountry = filter?.country && filter.country !== "all" ? filter.country.toLowerCase() : undefined;
 
   sections.push({
     id: "overview",
     title: "Overview",
     lines: [
       `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
-      `Games: ${games.length}`,
-      `Rounds: ${rounds.length}`,
-      `Avg rounds/game (from detail totals): ${fmt(avgRoundsFromTotals, 2)} (${knownTotals.length}/${games.length} games with details)`
+      `Games: ${games.length} | Rounds: ${rounds.length}`,
+      `Filters: mode=${filter?.mode || "all"}, teammate=${selectedTeammate ? (nameMap.get(selectedTeammate) || selectedTeammate) : "all"}, country=${selectedCountry ? selectedCountry.toUpperCase() : "all"}`,
+      `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
+      `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
+      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`
+    ],
+    charts: [
+      {
+        type: "line",
+        yLabel: "Games/day",
+        points: toCountsByDay(games.map((g) => g.playedAt))
+      },
+      {
+        type: "line",
+        yLabel: "Avg score/day",
+        points: toChartPointsByDay(
+          rounds
+            .map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) }))
+            .filter((x): x is { ts: number; value: number } => x.ts > 0 && typeof x.value === "number")
+        )
+      }
     ]
   });
 
-  const modeMap = new Map<string, number>();
-  for (const g of games) {
-    const m = g.gameMode || g.mode || "unknown";
-    modeMap.set(m, (modeMap.get(m) || 0) + 1);
-  }
+  const modeCounts = new Map<string, number>();
+  for (const g of games) modeCounts.set(getGameMode(g), (modeCounts.get(getGameMode(g)) || 0) + 1);
   sections.push({
     id: "modes",
     title: "Mode Breakdown",
-    lines: [...modeMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([m, c]) => `${m}: ${c}`)
-  });
-
-  sections.push({
-    id: "performance",
-    title: "Performance",
-    lines: [
-      `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)} | Samples: ${scores.length}`,
-      `Avg distance (km): ${fmt(avg(distances) !== undefined ? avg(distances)! / 1e3 : undefined, 2)} | Median (km): ${fmt(median(distances) !== undefined ? median(distances)! / 1e3 : undefined, 2)} | Samples: ${distances.length}`,
-      `Avg time (s): ${fmt(avg(timesMs) !== undefined ? avg(timesMs)! / 1e3 : undefined, 1)} | Median (s): ${fmt(median(timesMs) !== undefined ? median(timesMs)! / 1e3 : undefined, 1)} | Samples: ${timesMs.length}`
-    ]
-  });
-
-  // Sessions
-  const gapMs = 45 * 60 * 1000;
-  let sessions = 0;
-  let curSession = 0;
-  let longest = 0;
-  for (let i = 0; i < gameTimes.length; i++) {
-    if (i === 0 || gameTimes[i] - gameTimes[i - 1] > gapMs) {
-      sessions++;
-      curSession = 1;
-    } else {
-      curSession++;
+    lines: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([m, c]) => `${m}: ${c}`),
+    chart: {
+      type: "bar",
+      yLabel: "Games",
+      bars: [...modeCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }))
     }
-    if (curSession > longest) longest = curSession;
-  }
-  sections.push({
-    id: "sessions",
-    title: "Sessions",
-    lines: [
-      `Sessions (gap >45m): ${sessions}`,
-      `Avg games/session: ${fmt(games.length / Math.max(1, sessions), 2)}`,
-      `Longest session: ${longest}`
-    ]
   });
 
-  // Time patterns
   const weekday = new Array(7).fill(0);
   const hour = new Array(24).fill(0);
   for (const ts of gameTimes) {
@@ -288,173 +435,279 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   }
   const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   sections.push({
-    id: "time",
+    id: "time_patterns",
     title: "Time Patterns",
     lines: [
-      "By weekday:",
+      "Weekdays:",
       ...weekday.map((v, i) => `${wdNames[i]}: ${v}`),
       "Top hours:",
       ...hour
-        .map((v, i) => ({ h: i, v }))
+        .map((v, h) => ({ h, v }))
         .sort((a, b) => b.v - a.v)
         .slice(0, 6)
-        .map((x) => `${String(x.h).padStart(2, "0")}:00 - ${x.v} games`)
+        .map((x) => `${String(x.h).padStart(2, "0")}:00 -> ${x.v} games`)
+    ],
+    charts: [
+      {
+        type: "bar",
+        yLabel: "Games",
+        bars: weekday.map((v, i) => ({ label: wdNames[i], value: v }))
+      },
+      {
+        type: "bar",
+        yLabel: "Games",
+        bars: hour.map((v, h) => ({ label: String(h), value: v }))
+      }
     ]
   });
 
-  // Duel-specific method
-  const duelRounds = rounds.filter((r) => typeof r.p2_score === "number" && typeof r.p1_score === "number");
-  if (duelRounds.length > 0) {
-    const margins = duelRounds.map((r) => (r.p1_score || 0) - (r.p2_score || 0));
-    const healCount = duelRounds.filter((r) => r.isHealingRound).length;
-    const multRounds = duelRounds.filter((r) => (r.damageMultiplier || 1) > 1).length;
-    sections.push({
-      id: "duels",
-      title: "Duel Analysis",
-      lines: [
-        `Rounds with both scores: ${duelRounds.length}`,
-        `Avg score margin (p1-p2): ${fmt(avg(margins), 2)}`,
-        `Healing rounds: ${healCount}`,
-        `Damage-multiplier rounds: ${multRounds}`
-      ]
-    });
+  const countryAgg = new Map<string, { n: number; score: number[]; dist: number[]; correct: number; guessed: Map<string, number> }>();
+  for (const r of rounds) {
+    const t = normalizeCountryCode(r.trueCountry);
+    if (!t) continue;
+    const entry = countryAgg.get(t) || { n: 0, score: [], dist: [], correct: 0, guessed: new Map<string, number>() };
+    entry.n++;
 
-    const countryComparable = duelRounds.filter((r) => {
-      const t = typeof r.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
-      const g = typeof r.p1_guessCountry === "string" ? r.p1_guessCountry.trim().toLowerCase() : "";
-      return !!t && !!g;
-    });
+    const sc = extractScore(r);
+    if (typeof sc === "number") entry.score.push(sc);
 
-    const mismatchPairs = new Map<string, number>();
-    for (const r of countryComparable) {
-      const t = (r.trueCountry as string).trim().toLowerCase();
-      const g = (r.p1_guessCountry as string).trim().toLowerCase();
-      if (t === g) continue;
-      const key = `${t}->${g}`;
-      mismatchPairs.set(key, (mismatchPairs.get(key) || 0) + 1);
+    const dm = extractDistanceMeters(r);
+    if (typeof dm === "number") entry.dist.push(dm / 1e3);
+
+    const guess = normalizeCountryCode((r as any).p1_guessCountry);
+    if (guess) {
+      entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
+      if (guess === t) entry.correct++;
     }
-    const topConfusions = [...mismatchPairs.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([pair, count]) => {
-        const [t, g] = pair.split("->");
-        return `${t} -> ${g}: ${count} times`;
-      });
-    sections.push({
-      id: "duel_confusions",
-      title: "Duel Most Confused Countries (p1)",
-      lines: topConfusions.length > 0 ? topConfusions : ["No confusion pairs available."]
-    });
 
-    type CountryAgg = { sumScore: number; sumDistKm: number; nScore: number; nDist: number; total: number; correct: number };
-    const perCountry = new Map<string, CountryAgg>();
-    for (const r of duelRounds) {
-      const t = typeof r.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
-      if (!t) continue;
-      const guess = typeof r.p1_guessCountry === "string" ? r.p1_guessCountry.trim().toLowerCase() : "";
-      const score = typeof r.p1_score === "number" ? r.p1_score : undefined;
-      const distKm = extractP1DistanceKm(r);
-      const agg = perCountry.get(t) || { sumScore: 0, sumDistKm: 0, nScore: 0, nDist: 0, total: 0, correct: 0 };
-      agg.total++;
-      if (guess && guess === t) agg.correct++;
-      if (typeof score === "number" && Number.isFinite(score)) {
-        agg.sumScore += score;
-        agg.nScore++;
-      }
-      if (typeof distKm === "number" && Number.isFinite(distKm)) {
-        agg.sumDistKm += distKm;
-        agg.nDist++;
-      }
-      perCountry.set(t, agg);
-    }
-    const countryRows = [...perCountry.entries()]
-      .map(([country, a]) => ({
-        country,
-        avg_score: a.nScore > 0 ? a.sumScore / a.nScore : undefined,
-        avg_distance: a.nDist > 0 ? a.sumDistKm / a.nDist : undefined,
-        hit_rate: a.total > 0 ? a.correct / a.total : 0,
-        samples: a.total
-      }))
-      .sort((a, b) => (b.avg_score || -Infinity) - (a.avg_score || -Infinity));
-    sections.push({
-      id: "duel_country_perf",
-      title: "Duel Average Score/Distance/Hit Rate Per Country (p1)",
-      lines: countryRows.length > 0
-        ? countryRows.slice(0, 20).map((r) =>
-            `${r.country}: score=${fmt(r.avg_score, 1)} | dist_km=${fmt(r.avg_distance, 2)} | hit_rate=${fmt(r.hit_rate * 100, 1)}% | n=${r.samples}`
-          )
-        : ["No country-level duel data available."]
-    });
+    countryAgg.set(t, entry);
   }
 
-  // Duel rating history (p1 end rating)
-  const duelGameSet = new Set(
-    games
-      .filter((g) => {
-        const fam = g.modeFamily;
-        if (fam) return fam === "duels";
-        const m = String(g.gameMode || g.mode || "").toLowerCase();
-        return m.includes("duel") && !m.includes("team");
-      })
-      .map((g) => g.gameId)
-  );
-  const gameById = new Map(games.map((g) => [g.gameId, g]));
-  const ratingPoints = details
-    .map((d) => {
-      if (!duelGameSet.has(d.gameId)) return undefined;
-      const g = gameById.get(d.gameId);
-      if (!g) return undefined;
-      const after = (d as any).playerOneEndRating ?? (d as any).p1_ratingAfter;
-      const before = (d as any).playerOneStartRating ?? (d as any).p1_ratingBefore;
-      if (after === undefined && before === undefined) return undefined;
-      return {
-        t: g.playedAt,
-        before,
-        after
-      };
-    })
-    .filter((x): x is { t: number; before?: number; after?: number } => !!x)
-    .sort((a, b) => a.t - b.t);
+  const topCountries = [...countryAgg.entries()].sort((a, b) => b[1].n - a[1].n);
+  const scoredCountries = topCountries
+    .filter(([, v]) => v.score.length >= 4)
+    .map(([c, v]) => ({
+      country: c,
+      n: v.n,
+      avgScore: avg(v.score) || 0,
+      avgDist: avg(v.dist),
+      hitRate: v.n > 0 ? v.correct / v.n : 0
+    }));
 
-  if (ratingPoints.length > 0) {
-    const afterVals = ratingPoints.map((r) => r.after).filter((v): v is number => v !== undefined);
-    const first = ratingPoints[0];
-    const last = ratingPoints[ratingPoints.length - 1];
-    const lastLines = ratingPoints.slice(-20).map((p) => {
-      const d = formatDay(p.t);
-      const b = p.before !== undefined ? p.before.toFixed(0) : "-";
-      const a = p.after !== undefined ? p.after.toFixed(0) : "-";
-      const diff = p.before !== undefined && p.after !== undefined ? (p.after - p.before).toFixed(0) : "-";
-      return `${d}: ${b} -> ${a} (${diff})`;
-    });
-    sections.push({
-      id: "rating_duels",
-      title: "Duels Rating History (p1 end rating)",
-      lines: [
-        `Samples: ${ratingPoints.length}`,
-        `Current rating: ${last.after !== undefined ? last.after.toFixed(0) : "-"}`,
-        `First rating: ${first.before !== undefined ? first.before.toFixed(0) : "-"}`,
-        `Min/Max (after): ${afterVals.length ? Math.min(...afterVals).toFixed(0) : "-"} / ${afterVals.length ? Math.max(...afterVals).toFixed(0) : "-"}`,
-        "Recent points:",
-        ...lastLines
-      ],
-      chart: {
-        type: "line",
-        yLabel: "Rating",
-        points: ratingPoints
-          .filter((p) => p.after !== undefined)
-          .map((p) => ({ x: p.t, y: p.after as number, label: formatDay(p.t) }))
-      }
-    });
+  const bestCountries = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 5);
+  const worstCountries = [...scoredCountries].sort((a, b) => a.avgScore - b.avgScore).slice(0, 5);
+
+  sections.push({
+    id: "country_stats",
+    title: "Country Stats",
+    lines: [
+      "Most played countries:",
+      ...topCountries.slice(0, 10).map(([c, v]) => `${c.toUpperCase()}: ${v.n} rounds`),
+      "Best avg-score countries (min 4 rounds):",
+      ...bestCountries.map((x) => `${x.country.toUpperCase()}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`),
+      "Hardest avg-score countries (min 4 rounds):",
+      ...worstCountries.map((x) => `${x.country.toUpperCase()}: score ${fmt(x.avgScore, 1)} | hit ${fmt(x.hitRate * 100, 1)}% | n=${x.n}`)
+    ],
+    chart: {
+      type: "bar",
+      yLabel: "Rounds",
+      bars: topCountries.slice(0, 12).map(([c, v]) => ({ label: c.toUpperCase(), value: v.n }))
+    }
+  });
+
+  const opponentCounts = new Map<string, { games: number; name?: string; country?: string }>();
+  for (const d of details) {
+    const ids: Array<{ id?: string; name?: string; country?: string }> = [];
+    const modeFamily = (d as any).modeFamily as string | undefined;
+    if (modeFamily === "duels") {
+      ids.push({ id: (d as any).playerTwoId ?? (d as any).p2_playerId, name: (d as any).playerTwoName, country: (d as any).playerTwoCountry });
+    } else if (modeFamily === "teamduels") {
+      ids.push({ id: (d as any).teamTwoPlayerOneId, name: (d as any).teamTwoPlayerOneName, country: (d as any).teamTwoPlayerOneCountry });
+      ids.push({ id: (d as any).teamTwoPlayerTwoId, name: (d as any).teamTwoPlayerTwoName, country: (d as any).teamTwoPlayerTwoCountry });
+    }
+    for (const x of ids) {
+      if (!x.id) continue;
+      const cur = opponentCounts.get(x.id) || { games: 0 };
+      cur.games += 1;
+      if (x.name) cur.name = x.name;
+      if (x.country) cur.country = x.country;
+      opponentCounts.set(x.id, cur);
+    }
+  }
+
+  const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 12);
+  const oppCountryCounts = new Map<string, number>();
+  for (const [, v] of topOpp) {
+    const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
+    oppCountryCounts.set(c, (oppCountryCounts.get(c) || 0) + v.games);
   }
 
   sections.push({
-    id: "activity14d",
-    title: "Activity (14d)",
-    lines: makeDayActivityLines(gameTimes, 14)
+    id: "opponents",
+    title: "Most Frequent Opponents",
+    lines: [
+      ...topOpp.map(([id, v]) => `${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
+      "Opponent countries:",
+      ...[...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, n]) => `${c}: ${n}`)
+    ],
+    chart: {
+      type: "bar",
+      yLabel: "Meetings",
+      bars: topOpp.map(([id, v]) => ({ label: (v.name || id.slice(0, 6)).slice(0, 12), value: v.games }))
+    }
   });
 
-  return { sections, availableModes, minPlayedAt, maxPlayedAt };
+  const sessionsGap = 45 * 60 * 1000;
+  let sessions = 0;
+  let longest = 0;
+  let cur = 0;
+  for (let i = 0; i < gameTimes.length; i++) {
+    if (i === 0 || gameTimes[i] - gameTimes[i - 1] > sessionsGap) {
+      sessions++;
+      cur = 1;
+    } else {
+      cur++;
+    }
+    if (cur > longest) longest = cur;
+  }
+
+  const longestBreakMs = gameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - gameTimes[i]), 0);
+
+  sections.push({
+    id: "fun_facts",
+    title: "Fun Facts",
+    lines: [
+      `Current streak depth (last 14d activity bars):`,
+      ...makeDayActivityLines(gameTimes, 14).slice(-7),
+      `Sessions (gap >45m): ${sessions} | longest session: ${longest} games`,
+      `Longest break between games: ${fmt(longestBreakMs / (1000 * 60 * 60), 1)} hours`,
+      `Most played mode: ${[...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-"}`,
+      `Most played country: ${topCountries[0] ? topCountries[0][0].toUpperCase() : "-"}`
+    ]
+  });
+
+  const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
+  if (teammateToUse && ownPlayerId) {
+    const compareRounds = rounds.filter((r) => {
+      const mine = getPlayerStatFromRound(r, ownPlayerId);
+      const mate = getPlayerStatFromRound(r, teammateToUse);
+      return !!mine && !!mate;
+    });
+
+    let myWins = 0;
+    let mateWins = 0;
+    let ties = 0;
+    const cumulative: Array<{ x: number; y: number; label?: string }> = [];
+    let net = 0;
+
+    for (const r of compareRounds) {
+      const playedAt = playedAtByGameId.get(r.gameId);
+      const mine = getPlayerStatFromRound(r, ownPlayerId)!;
+      const mate = getPlayerStatFromRound(r, teammateToUse)!;
+
+      let result = 0;
+      if (typeof mine.score === "number" && typeof mate.score === "number") {
+        result = mine.score > mate.score ? 1 : mine.score < mate.score ? -1 : 0;
+      } else if (typeof mine.distanceKm === "number" && typeof mate.distanceKm === "number") {
+        result = mine.distanceKm < mate.distanceKm ? 1 : mine.distanceKm > mate.distanceKm ? -1 : 0;
+      }
+
+      if (result > 0) {
+        myWins++;
+        net++;
+      } else if (result < 0) {
+        mateWins++;
+        net--;
+      } else {
+        ties++;
+      }
+
+      if (playedAt) cumulative.push({ x: playedAt, y: net, label: formatDay(playedAt) });
+    }
+
+    const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
+    sections.push({
+      id: "teammate_battle",
+      title: `Teammate Battle: You vs ${mateName}`,
+      lines: [
+        `Compared rounds: ${compareRounds.length}`,
+        `You better guess: ${myWins} rounds`,
+        `${mateName} better guess: ${mateWins} rounds`,
+        `Tie rounds: ${ties}`,
+        `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`
+      ],
+      charts: [
+        {
+          type: "bar",
+          yLabel: "Rounds",
+          bars: [
+            { label: "You", value: myWins },
+            { label: mateName.slice(0, 12), value: mateWins },
+            { label: "Tie", value: ties }
+          ]
+        },
+        {
+          type: "line",
+          yLabel: "Net lead",
+          points: cumulative
+        }
+      ]
+    });
+  }
+
+  const spotlightCountry = selectedCountry || topCountries[0]?.[0];
+  if (spotlightCountry && countryAgg.has(spotlightCountry)) {
+    const agg = countryAgg.get(spotlightCountry)!;
+    const wrongGuesses = [...agg.guessed.entries()]
+      .filter(([guess]) => guess !== spotlightCountry)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+
+    const countryRounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+    const scoreTimeline = countryRounds
+      .map((r) => {
+        const playedAt = playedAtByGameId.get(r.gameId);
+        const s = extractScore(r);
+        if (!playedAt || typeof s !== "number") return undefined;
+        return { x: playedAt, y: s, label: formatDay(playedAt) };
+      })
+      .filter((x): x is { x: number; y: number; label?: string } => !!x)
+      .sort((a, b) => a.x - b.x);
+
+    sections.push({
+      id: "country_spotlight",
+      title: `Country Spotlight: ${spotlightCountry.toUpperCase()}`,
+      lines: [
+        `Rounds: ${agg.n}`,
+        `Hit rate: ${fmt((agg.n > 0 ? agg.correct / agg.n : 0) * 100, 1)}%`,
+        `Avg score: ${fmt(avg(agg.score), 1)} | Median score: ${fmt(median(agg.score), 1)}`,
+        `Avg distance: ${fmt(avg(agg.dist), 2)} km`,
+        wrongGuesses.length > 0 ? "Most common wrong guesses:" : "No wrong guess data.",
+        ...wrongGuesses.map(([g, n]) => `${g.toUpperCase()}: ${n}`)
+      ],
+      charts: [
+        {
+          type: "line",
+          yLabel: "Score",
+          points: scoreTimeline
+        },
+        {
+          type: "bar",
+          yLabel: "Wrong guesses",
+          bars: wrongGuesses.map(([g, n]) => ({ label: g.toUpperCase(), value: n }))
+        }
+      ]
+    });
+  }
+
+  return {
+    sections,
+    availableModes,
+    availableTeammates,
+    availableCountries,
+    minPlayedAt,
+    maxPlayedAt
+  };
 }
 
 export async function getAnalysisReport(): Promise<string[]> {

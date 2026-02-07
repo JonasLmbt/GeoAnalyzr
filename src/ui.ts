@@ -1,4 +1,4 @@
-import { AnalysisSection } from "./analysis";
+import { AnalysisChart, AnalysisSection } from "./analysis";
 
 export interface UIHandle {
   setVisible: (visible: boolean) => void;
@@ -13,6 +13,8 @@ export interface UIHandle {
   setAnalysisWindowData: (data: {
     sections: AnalysisSection[];
     availableModes: string[];
+    availableTeammates: Array<{ id: string; label: string }>;
+    availableCountries: Array<{ code: string; label: string }>;
     minPlayedAt?: number;
     maxPlayedAt?: number;
   }) => void;
@@ -21,7 +23,7 @@ export interface UIHandle {
   onExportClick: (fn: () => void) => void;
   onTokenClick: (fn: () => void) => void;
   onOpenAnalysisClick: (fn: () => void) => void;
-  onRefreshAnalysisClick: (fn: (filter: { fromTs?: number; toTs?: number; mode?: string }) => void) => void;
+  onRefreshAnalysisClick: (fn: (filter: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) => void) => void;
 }
 
 function isoDateLocal(ts?: number): string {
@@ -38,6 +40,99 @@ function parseDateInput(v: string, endOfDay = false): number | undefined {
   const d = new Date(`${v}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
   const t = d.getTime();
   return Number.isFinite(t) ? t : undefined;
+}
+
+function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>): HTMLElement {
+  const chartWrap = document.createElement("div");
+  chartWrap.style.marginBottom = "8px";
+  chartWrap.style.border = "1px solid #2a2a2a";
+  chartWrap.style.borderRadius = "8px";
+  chartWrap.style.background = "#121212";
+  chartWrap.style.padding = "6px";
+
+  const points = chart.points.slice().sort((a, b) => a.x - b.x);
+  const w = 520;
+  const h = 180;
+  const ml = 42;
+  const mr = 10;
+  const mt = 8;
+  const mb = 24;
+  const minX = points[0].x;
+  const maxX = points[points.length - 1].x;
+  const minY = Math.min(...points.map((p) => p.y));
+  const maxY = Math.max(...points.map((p) => p.y));
+  const xSpan = Math.max(1, maxX - minX);
+  const ySpan = Math.max(1, maxY - minY);
+  const mapX = (x: number) => ml + ((x - minX) / xSpan) * (w - ml - mr);
+  const mapY = (y: number) => h - mb - ((y - minY) / ySpan) * (h - mt - mb);
+  const poly = points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
+  const yMid = (minY + maxY) / 2;
+  const xStartLabel = points[0].label || "";
+  const xEndLabel = points[points.length - 1].label || "";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "180");
+  svg.innerHTML = `
+    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
+    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
+    <polyline fill="none" stroke="#66a8ff" stroke-width="2" points="${poly}"/>
+    <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(maxY)}</text>
+    <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(yMid)}</text>
+    <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(minY)}</text>
+    <text x="${ml}" y="${h - 6}" text-anchor="start" font-size="10" fill="#aaa">${xStartLabel}</text>
+    <text x="${w - mr}" y="${h - 6}" text-anchor="end" font-size="10" fill="#aaa">${xEndLabel}</text>
+  `;
+  chartWrap.appendChild(svg);
+  return chartWrap;
+}
+
+function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>): HTMLElement {
+  const chartWrap = document.createElement("div");
+  chartWrap.style.marginBottom = "8px";
+  chartWrap.style.border = "1px solid #2a2a2a";
+  chartWrap.style.borderRadius = "8px";
+  chartWrap.style.background = "#121212";
+  chartWrap.style.padding = "6px";
+
+  const bars = chart.bars.slice(0, 16);
+  const w = 520;
+  const h = 190;
+  const ml = 34;
+  const mr = 8;
+  const mt = 8;
+  const mb = 46;
+  const maxY = Math.max(1, ...bars.map((b) => b.value));
+  const innerW = w - ml - mr;
+  const innerH = h - mt - mb;
+  const step = bars.length > 0 ? innerW / bars.length : innerW;
+  const bw = Math.max(4, step * 0.66);
+  const rects = bars
+    .map((b, i) => {
+      const x = ml + i * step + (step - bw) / 2;
+      const bh = (b.value / maxY) * innerH;
+      const y = mt + innerH - bh;
+      const label = b.label.length > 9 ? `${b.label.slice(0, 9)}..` : b.label;
+      return `
+        <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="#66a8ff" opacity="0.85" />
+        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 13}" text-anchor="middle" font-size="9" fill="#aaa">${label}</text>
+      `;
+    })
+    .join("");
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "190");
+  svg.innerHTML = `
+    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
+    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
+    <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(maxY)}</text>
+    <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="#aaa">0</text>
+    ${rects}
+  `;
+  chartWrap.appendChild(svg);
+  return chartWrap;
 }
 
 export function createUI(): UIHandle {
@@ -161,7 +256,6 @@ export function createUI(): UIHandle {
   panel.appendChild(resetBtn);
   panel.appendChild(counts);
 
-  // Opaque analysis modal
   const modalBackdrop = document.createElement("div");
   modalBackdrop.style.position = "fixed";
   modalBackdrop.style.inset = "0";
@@ -174,7 +268,7 @@ export function createUI(): UIHandle {
   modal.style.left = "50%";
   modal.style.top = "50%";
   modal.style.transform = "translate(-50%, -50%)";
-  modal.style.width = "min(1100px, calc(100vw - 30px))";
+  modal.style.width = "min(1180px, calc(100vw - 30px))";
   modal.style.height = "min(760px, calc(100vh - 30px))";
   modal.style.borderRadius = "14px";
   modal.style.border = "1px solid #2a2a2a";
@@ -233,6 +327,20 @@ export function createUI(): UIHandle {
   modeSelect.style.borderRadius = "8px";
   modeSelect.style.padding = "6px 8px";
 
+  const teammateSelect = document.createElement("select");
+  teammateSelect.style.background = "#1b1b1b";
+  teammateSelect.style.color = "white";
+  teammateSelect.style.border = "1px solid #3a3a3a";
+  teammateSelect.style.borderRadius = "8px";
+  teammateSelect.style.padding = "6px 8px";
+
+  const countrySelect = document.createElement("select");
+  countrySelect.style.background = "#1b1b1b";
+  countrySelect.style.color = "white";
+  countrySelect.style.border = "1px solid #3a3a3a";
+  countrySelect.style.borderRadius = "8px";
+  countrySelect.style.padding = "6px 8px";
+
   const applyBtn = document.createElement("button");
   applyBtn.textContent = "Apply Filter";
   applyBtn.style.background = "#214a78";
@@ -257,6 +365,10 @@ export function createUI(): UIHandle {
   controls.appendChild(toInput);
   controls.appendChild(document.createTextNode("Mode:"));
   controls.appendChild(modeSelect);
+  controls.appendChild(document.createTextNode("Teammate:"));
+  controls.appendChild(teammateSelect);
+  controls.appendChild(document.createTextNode("Country:"));
+  controls.appendChild(countrySelect);
   controls.appendChild(applyBtn);
   controls.appendChild(resetFilterBtn);
 
@@ -264,7 +376,7 @@ export function createUI(): UIHandle {
   modalBody.style.overflow = "auto";
   modalBody.style.padding = "14px";
   modalBody.style.display = "grid";
-  modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(320px, 1fr))";
+  modalBody.style.gridTemplateColumns = "repeat(auto-fit, minmax(350px, 1fr))";
   modalBody.style.gap = "10px";
 
   modal.appendChild(modalHead);
@@ -298,7 +410,7 @@ export function createUI(): UIHandle {
   let exportHandler: (() => void) | null = null;
   let tokenHandler: (() => void) | null = null;
   let openAnalysisHandler: (() => void) | null = null;
-  let refreshAnalysisHandler: ((filter: { fromTs?: number; toTs?: number; mode?: string }) => void) | null = null;
+  let refreshAnalysisHandler: ((filter: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) => void) | null = null;
 
   updateBtn.addEventListener("click", () => updateHandler?.());
   tokenBtn.addEventListener("click", () => tokenHandler?.());
@@ -325,14 +437,18 @@ export function createUI(): UIHandle {
     refreshAnalysisHandler?.({
       fromTs: parseDateInput(fromInput.value, false),
       toTs: parseDateInput(toInput.value, true),
-      mode: modeSelect.value || "all"
+      mode: modeSelect.value || "all",
+      teammateId: teammateSelect.value || "all",
+      country: countrySelect.value || "all"
     });
   });
   resetFilterBtn.addEventListener("click", () => {
     fromInput.value = "";
     toInput.value = "";
     modeSelect.value = "all";
-    refreshAnalysisHandler?.({ mode: "all" });
+    teammateSelect.value = "all";
+    countrySelect.value = "all";
+    refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
   });
 
   function renderSection(section: AnalysisSection): HTMLElement {
@@ -353,50 +469,17 @@ export function createUI(): UIHandle {
     body.style.lineHeight = "1.35";
     body.textContent = section.lines.join("\n");
     card.appendChild(title2);
-    if (section.chart?.type === "line" && section.chart.points.length > 1) {
-      const chartWrap = document.createElement("div");
-      chartWrap.style.marginBottom = "8px";
-      chartWrap.style.border = "1px solid #2a2a2a";
-      chartWrap.style.borderRadius = "8px";
-      chartWrap.style.background = "#121212";
-      chartWrap.style.padding = "6px";
 
-      const points = section.chart.points.slice().sort((a, b) => a.x - b.x);
-      const w = 520;
-      const h = 180;
-      const ml = 42;
-      const mr = 10;
-      const mt = 8;
-      const mb = 24;
-      const minX = points[0].x;
-      const maxX = points[points.length - 1].x;
-      const minY = Math.min(...points.map((p) => p.y));
-      const maxY = Math.max(...points.map((p) => p.y));
-      const xSpan = Math.max(1, maxX - minX);
-      const ySpan = Math.max(1, maxY - minY);
-      const mapX = (x: number) => ml + ((x - minX) / xSpan) * (w - ml - mr);
-      const mapY = (y: number) => h - mb - ((y - minY) / ySpan) * (h - mt - mb);
-      const poly = points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
-      const yMid = (minY + maxY) / 2;
-      const xStartLabel = points[0].label || "";
-      const xEndLabel = points[points.length - 1].label || "";
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-      svg.setAttribute("width", "100%");
-      svg.setAttribute("height", "180");
-      svg.innerHTML = `
-        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-        <polyline fill="none" stroke="#66a8ff" stroke-width="2" points="${poly}"/>
-        <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(maxY)}</text>
-        <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(yMid)}</text>
-        <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(minY)}</text>
-        <text x="${ml}" y="${h - 6}" text-anchor="start" font-size="10" fill="#aaa">${xStartLabel}</text>
-        <text x="${w - mr}" y="${h - 6}" text-anchor="end" font-size="10" fill="#aaa">${xEndLabel}</text>
-      `;
-      chartWrap.appendChild(svg);
-      card.appendChild(chartWrap);
+    const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
+    for (const chart of charts) {
+      if (chart.type === "line" && chart.points.length > 1) {
+        card.appendChild(renderLineChart(chart));
+      }
+      if (chart.type === "bar" && chart.bars.length > 0) {
+        card.appendChild(renderBarChart(chart));
+      }
     }
+
     card.appendChild(body);
     return card;
   }
@@ -416,11 +499,13 @@ export function createUI(): UIHandle {
       counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
     },
     setAnalysisWindowData(data) {
-      // set filter bounds/options once data comes in
       if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
       if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
 
-      const prev = modeSelect.value || "all";
+      const prevMode = modeSelect.value || "all";
+      const prevTeammate = teammateSelect.value || "all";
+      const prevCountry = countrySelect.value || "all";
+
       modeSelect.innerHTML = "";
       for (const mode of data.availableModes) {
         const opt = document.createElement("option");
@@ -428,7 +513,25 @@ export function createUI(): UIHandle {
         opt.textContent = mode;
         modeSelect.appendChild(opt);
       }
-      if ([...modeSelect.options].some((o) => o.value === prev)) modeSelect.value = prev;
+      if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
+
+      teammateSelect.innerHTML = "";
+      for (const teammate of data.availableTeammates) {
+        const opt = document.createElement("option");
+        opt.value = teammate.id;
+        opt.textContent = teammate.label;
+        teammateSelect.appendChild(opt);
+      }
+      if ([...teammateSelect.options].some((o) => o.value === prevTeammate)) teammateSelect.value = prevTeammate;
+
+      countrySelect.innerHTML = "";
+      for (const country of data.availableCountries) {
+        const opt = document.createElement("option");
+        opt.value = country.code;
+        opt.textContent = country.label;
+        countrySelect.appendChild(opt);
+      }
+      if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
 
       modalBody.innerHTML = "";
       for (const s of data.sections) {
