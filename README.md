@@ -17,7 +17,7 @@ For development:
 ## Installation (User)
 
 1. Open this file in your browser:
-   - `https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js`
+   - <https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js>
 2. Tampermonkey will show the install dialog.
 3. Click install.
 
