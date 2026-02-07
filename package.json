@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --outfile=dist/userscript.user.js --format=iife",
+    "build": "npm run build:dev && npm run build:release",
+    "build:dev": "node scripts/build-release.cjs dist/userscript.user.js",
+    "build:release": "node scripts/build-release.cjs",
     "watch": "esbuild src/main.ts --bundle --outfile=dist/userscript.user.js --format=iife --watch"
   },
   "dependencies": {

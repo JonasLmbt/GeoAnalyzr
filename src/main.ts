@@ -1,17 +1,3 @@
-// ==UserScript==
-// @name         GeoAnalyzr
-// @namespace    geoanalyzr
-// @author       JonasLmbt
-// @version      1.0
-// @match        https://www.geoguessr.com/*
-// @grant        GM_download
-// @grant        GM_xmlhttpRequest
-// @connect      www.geoguessr.com
-// @connect      game-server.geoguessr.com
-// @connect      raw.githubusercontent.com
-// @connect      cdn.jsdelivr.net
-// ==/UserScript==
-
 import { createUI } from "./ui";
 import { db } from "./db";
 import { syncFeed } from "./sync";
