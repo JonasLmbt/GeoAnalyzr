@@ -6067,6 +6067,71 @@
   });
 
   // src/ui.ts
+  var analysisSettings = {
+    theme: "dark",
+    accent: "#66a8ff",
+    animateCharts: true
+  };
+  function getThemePalette() {
+    if (analysisSettings.theme === "light") {
+      return {
+        bg: "#f3f6fb",
+        text: "#111827",
+        panel: "#ffffff",
+        panelAlt: "#eef2f8",
+        border: "#d0d9e6",
+        axis: "#9aa8bf",
+        textMuted: "#4b5a73",
+        buttonBg: "#edf1f7",
+        buttonText: "#1e2a40",
+        chipBg: "#e7edf8",
+        chipText: "#2a466e"
+      };
+    }
+    return {
+      bg: "#111",
+      text: "#fff",
+      panel: "#171717",
+      panelAlt: "#121212",
+      border: "#2d2d2d",
+      axis: "#3a3a3a",
+      textMuted: "#aaa",
+      buttonBg: "#303030",
+      buttonText: "#fff",
+      chipBg: "#1f3452",
+      chipText: "#bcd7ff"
+    };
+  }
+  var revealObserverByDoc = /* @__PURE__ */ new WeakMap();
+  function getRevealObserver(doc) {
+    const existing = revealObserverByDoc.get(doc);
+    if (existing) return existing;
+    const obs = new IntersectionObserver(
+      (entries, observer) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const el = entry.target;
+          el.style.opacity = "1";
+          el.style.transform = "translateY(0)";
+          observer.unobserve(el);
+        }
+      },
+      { threshold: 0.15 }
+    );
+    revealObserverByDoc.set(doc, obs);
+    return obs;
+  }
+  function attachRevealAnimation(el, doc) {
+    if (!analysisSettings.animateCharts) {
+      el.style.opacity = "1";
+      el.style.transform = "none";
+      return;
+    }
+    el.style.opacity = "0";
+    el.style.transform = "translateY(12px)";
+    el.style.transition = "opacity 420ms ease, transform 420ms ease";
+    getRevealObserver(doc).observe(el);
+  }
   function isoDateLocal(ts) {
     if (!ts) return "";
     const d = new Date(ts);
@@ -6225,6 +6290,7 @@
     doc.body.appendChild(overlay);
   }
   function createChartActions(svg, title) {
+    const palette = getThemePalette();
     const doc = svg.ownerDocument;
     const hostWindow = doc.defaultView ?? window;
     const row = doc.createElement("div");
@@ -6235,9 +6301,9 @@
     function mkBtn(label, onClick) {
       const b = doc.createElement("button");
       b.textContent = label;
-      b.style.background = "#303030";
-      b.style.color = "#fff";
-      b.style.border = "1px solid #444";
+      b.style.background = palette.buttonBg;
+      b.style.color = palette.buttonText;
+      b.style.border = `1px solid ${palette.border}`;
       b.style.borderRadius = "6px";
       b.style.padding = "3px 7px";
       b.style.fontSize = "11px";
@@ -6252,11 +6318,12 @@
     return row;
   }
   function renderLineChart(chart, title, doc) {
+    const palette = getThemePalette();
     const chartWrap = doc.createElement("div");
     chartWrap.style.marginBottom = "8px";
-    chartWrap.style.border = "1px solid #2a2a2a";
+    chartWrap.style.border = `1px solid ${palette.border}`;
     chartWrap.style.borderRadius = "8px";
-    chartWrap.style.background = "#121212";
+    chartWrap.style.background = palette.panelAlt;
     chartWrap.style.padding = "6px";
     const points = chart.points.slice().sort((a, b) => a.x - b.x);
     const w = 1500;
@@ -6277,30 +6344,33 @@
     const yMid = (minY + maxY) / 2;
     const xStartLabel = points[0].label || "";
     const xEndLabel = points[points.length - 1].label || "";
+    const accent = analysisSettings.accent;
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "300");
     svg.innerHTML = `
-    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-    <polyline fill="none" stroke="#66a8ff" stroke-width="3" points="${poly}"/>
-    <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(maxY)}</text>
-    <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(yMid)}</text>
-    <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(minY)}</text>
-    <text x="${ml}" y="${h - 8}" text-anchor="start" font-size="12" fill="#aaa">${xStartLabel}</text>
-    <text x="${w - mr}" y="${h - 8}" text-anchor="end" font-size="12" fill="#aaa">${xEndLabel}</text>
+    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+    <polyline fill="none" stroke="${accent}" stroke-width="3" points="${poly}"/>
+    <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+    <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(yMid)}</text>
+    <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(minY)}</text>
+    <text x="${ml}" y="${h - 8}" text-anchor="start" font-size="12" fill="${palette.textMuted}">${xStartLabel}</text>
+    <text x="${w - mr}" y="${h - 8}" text-anchor="end" font-size="12" fill="${palette.textMuted}">${xEndLabel}</text>
   `;
     chartWrap.appendChild(createChartActions(svg, title));
     chartWrap.appendChild(svg);
+    attachRevealAnimation(chartWrap, doc);
     return chartWrap;
   }
   function renderBarChart(chart, title, doc) {
+    const palette = getThemePalette();
     const chartWrap = doc.createElement("div");
     chartWrap.style.marginBottom = "8px";
-    chartWrap.style.border = "1px solid #2a2a2a";
+    chartWrap.style.border = `1px solid ${palette.border}`;
     chartWrap.style.borderRadius = "8px";
-    chartWrap.style.background = "#121212";
+    chartWrap.style.background = palette.panelAlt;
     chartWrap.style.padding = "6px";
     const bars = chart.bars.slice(0, 40);
     const w = 1700;
@@ -6314,14 +6384,15 @@
     const innerH = h - mt - mb;
     const step = bars.length > 0 ? innerW / bars.length : innerW;
     const bw = Math.max(4, step * 0.66);
+    const accent = analysisSettings.accent;
     const rects = bars.map((b, i) => {
       const x = ml + i * step + (step - bw) / 2;
       const bh = b.value / maxY * innerH;
       const y = mt + innerH - bh;
       const label = b.label.length > 16 ? `${b.label.slice(0, 16)}..` : b.label;
       return `
-        <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="#66a8ff" opacity="0.85" />
-        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="#aaa">${label}</text>
+        <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
+        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
       `;
     }).join("");
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -6329,14 +6400,15 @@
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "320");
     svg.innerHTML = `
-    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="#3a3a3a" stroke-width="1"/>
-    <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="#aaa">${Math.round(maxY)}</text>
-    <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="#aaa">0</text>
+    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+    <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+    <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
     ${rects}
   `;
     chartWrap.appendChild(createChartActions(svg, title));
     chartWrap.appendChild(svg);
+    attachRevealAnimation(chartWrap, doc);
     return chartWrap;
   }
   function createUI() {
@@ -6452,15 +6524,35 @@
     let analysisWindow = null;
     let lastAnalysisData = null;
     function styleInput(el) {
-      el.style.background = "#1b1b1b";
-      el.style.color = "white";
-      el.style.border = "1px solid #3a3a3a";
+      const palette = getThemePalette();
+      el.style.background = palette.panelAlt;
+      el.style.color = palette.text;
+      el.style.border = `1px solid ${palette.border}`;
       el.style.borderRadius = "8px";
       el.style.padding = "6px 8px";
+    }
+    function applyThemeToWindow(refs) {
+      const palette = getThemePalette();
+      refs.doc.body.style.background = palette.bg;
+      refs.doc.body.style.color = palette.text;
+      refs.shell.style.background = palette.bg;
+      refs.controls.style.background = palette.bg;
+      refs.controls.style.borderBottom = `1px solid ${palette.border}`;
+      refs.tocWrap.style.background = palette.panelAlt;
+      refs.tocWrap.style.borderBottom = `1px solid ${palette.border}`;
+      styleInput(refs.fromInput);
+      styleInput(refs.toInput);
+      styleInput(refs.modeSelect);
+      styleInput(refs.teammateSelect);
+      styleInput(refs.countrySelect);
+      styleInput(refs.themeSelect);
+      refs.colorInput.style.border = `1px solid ${palette.border}`;
+      refs.colorInput.style.background = palette.panelAlt;
     }
     function populateAnalysisWindow(data) {
       const refs = analysisWindow;
       if (!refs || refs.win.closed) return;
+      const palette = getThemePalette();
       const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
       if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
       if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
@@ -6506,16 +6598,16 @@
         groupRow.style.gap = "8px";
         const groupLabel = doc.createElement("span");
         groupLabel.textContent = group;
-        groupLabel.style.color = "#9ec2ff";
+        groupLabel.style.color = palette.chipText;
         groupLabel.style.fontWeight = "700";
         groupLabel.style.fontSize = "12px";
         groupRow.appendChild(groupLabel);
         for (const s of secs) {
           const b = doc.createElement("button");
           b.textContent = s.title;
-          b.style.background = "#212121";
-          b.style.color = "white";
-          b.style.border = "1px solid #3a3a3a";
+          b.style.background = palette.buttonBg;
+          b.style.color = palette.buttonText;
+          b.style.border = `1px solid ${palette.border}`;
           b.style.borderRadius = "999px";
           b.style.padding = "4px 9px";
           b.style.cursor = "pointer";
@@ -6540,11 +6632,12 @@
       const win = window.open("", "geoanalyzr-analysis");
       if (!win) return null;
       const doc = win.document;
+      const palette = getThemePalette();
       doc.title = "GeoAnalyzr - Full Analysis";
       doc.body.innerHTML = "";
       doc.body.style.margin = "0";
-      doc.body.style.background = "#111";
-      doc.body.style.color = "#fff";
+      doc.body.style.background = palette.bg;
+      doc.body.style.color = palette.text;
       doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
       const shell = doc.createElement("div");
       shell.style.display = "grid";
@@ -6555,7 +6648,7 @@
       modalHead.style.justifyContent = "space-between";
       modalHead.style.alignItems = "center";
       modalHead.style.padding = "12px 14px";
-      modalHead.style.borderBottom = "1px solid #2a2a2a";
+      modalHead.style.borderBottom = `1px solid ${palette.border}`;
       modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
       const modalClose = doc.createElement("button");
       modalClose.textContent = "x";
@@ -6570,9 +6663,9 @@
       controls.style.gap = "10px";
       controls.style.alignItems = "center";
       controls.style.padding = "10px 14px";
-      controls.style.borderBottom = "1px solid #2a2a2a";
+      controls.style.borderBottom = `1px solid ${palette.border}`;
       controls.style.flexWrap = "wrap";
-      controls.style.background = "#101010";
+      controls.style.background = palette.bg;
       const fromInput = doc.createElement("input");
       fromInput.type = "date";
       styleInput(fromInput);
@@ -6601,6 +6694,24 @@
       resetFilterBtn.style.borderRadius = "8px";
       resetFilterBtn.style.padding = "6px 10px";
       resetFilterBtn.style.cursor = "pointer";
+      const themeSelect = doc.createElement("select");
+      themeSelect.innerHTML = `
+      <option value="dark">Dark</option>
+      <option value="light">Light</option>
+    `;
+      themeSelect.value = analysisSettings.theme;
+      styleInput(themeSelect);
+      const colorInput = doc.createElement("input");
+      colorInput.type = "color";
+      colorInput.value = analysisSettings.accent;
+      colorInput.style.width = "44px";
+      colorInput.style.height = "32px";
+      colorInput.style.borderRadius = "8px";
+      colorInput.style.cursor = "pointer";
+      const animateCheckbox = doc.createElement("input");
+      animateCheckbox.type = "checkbox";
+      animateCheckbox.checked = analysisSettings.animateCharts;
+      animateCheckbox.style.cursor = "pointer";
       controls.appendChild(doc.createTextNode("From:"));
       controls.appendChild(fromInput);
       controls.appendChild(doc.createTextNode("To:"));
@@ -6613,13 +6724,19 @@
       controls.appendChild(countrySelect);
       controls.appendChild(applyBtn);
       controls.appendChild(resetFilterBtn);
+      controls.appendChild(doc.createTextNode("Theme:"));
+      controls.appendChild(themeSelect);
+      controls.appendChild(doc.createTextNode("Graph Color:"));
+      controls.appendChild(colorInput);
+      controls.appendChild(doc.createTextNode("Animate:"));
+      controls.appendChild(animateCheckbox);
       const tocWrap = doc.createElement("div");
       tocWrap.style.display = "flex";
       tocWrap.style.flexDirection = "column";
       tocWrap.style.gap = "6px";
       tocWrap.style.padding = "8px 14px 10px";
-      tocWrap.style.borderBottom = "1px solid #2a2a2a";
-      tocWrap.style.background = "#0f0f0f";
+      tocWrap.style.borderBottom = `1px solid ${palette.border}`;
+      tocWrap.style.background = palette.panelAlt;
       tocWrap.style.position = "sticky";
       tocWrap.style.top = "0";
       tocWrap.style.zIndex = "5";
@@ -6655,7 +6772,38 @@
         countrySelect.value = "all";
         refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
       });
-      analysisWindow = { win, doc, fromInput, toInput, modeSelect, teammateSelect, countrySelect, tocWrap, modalBody };
+      themeSelect.addEventListener("change", () => {
+        analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
+        if (analysisWindow) {
+          applyThemeToWindow(analysisWindow);
+          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+        }
+      });
+      colorInput.addEventListener("input", () => {
+        analysisSettings.accent = colorInput.value;
+        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+      });
+      animateCheckbox.addEventListener("change", () => {
+        analysisSettings.animateCharts = animateCheckbox.checked;
+        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+      });
+      analysisWindow = {
+        win,
+        doc,
+        shell,
+        controls,
+        fromInput,
+        toInput,
+        modeSelect,
+        teammateSelect,
+        countrySelect,
+        themeSelect,
+        colorInput,
+        animateCheckbox,
+        tocWrap,
+        modalBody
+      };
+      applyThemeToWindow(analysisWindow);
       if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
       return analysisWindow;
     }
@@ -6689,11 +6837,12 @@
       openAnalysisHandler?.();
     });
     function renderSection(section, doc) {
+      const palette = getThemePalette();
       const card = doc.createElement("div");
       card.id = `section-${section.id}`;
-      card.style.border = "1px solid #2d2d2d";
+      card.style.border = `1px solid ${palette.border}`;
       card.style.borderRadius = "12px";
-      card.style.background = "linear-gradient(180deg, #181818 0%, #141414 100%)";
+      card.style.background = palette.panel;
       card.style.padding = "12px";
       card.style.scrollMarginTop = "110px";
       card.style.boxShadow = "0 10px 30px rgba(0,0,0,0.2)";
@@ -6705,9 +6854,9 @@
       if (section.group) {
         const groupChip = doc.createElement("span");
         groupChip.textContent = section.group;
-        groupChip.style.background = "#1f3452";
-        groupChip.style.color = "#bcd7ff";
-        groupChip.style.border = "1px solid #2f4f76";
+        groupChip.style.background = palette.chipBg;
+        groupChip.style.color = palette.chipText;
+        groupChip.style.border = `1px solid ${palette.border}`;
         groupChip.style.borderRadius = "999px";
         groupChip.style.padding = "2px 8px";
         groupChip.style.fontSize = "11px";
@@ -6717,9 +6866,9 @@
       if (section.appliesFilters && section.appliesFilters.length > 0) {
         const applies = doc.createElement("span");
         applies.textContent = `Filters: ${section.appliesFilters.join(", ")}`;
-        applies.style.background = "#1e1e1e";
-        applies.style.color = "#cfcfcf";
-        applies.style.border = "1px solid #383838";
+        applies.style.background = palette.panelAlt;
+        applies.style.color = palette.textMuted;
+        applies.style.border = `1px solid ${palette.border}`;
         applies.style.borderRadius = "999px";
         applies.style.padding = "2px 8px";
         applies.style.fontSize = "11px";
@@ -6731,11 +6880,13 @@
       title2.style.marginBottom = "8px";
       title2.style.fontSize = "19px";
       title2.style.letterSpacing = "0.2px";
+      title2.style.color = palette.text;
       const body = doc.createElement("pre");
       body.style.margin = "0";
       body.style.whiteSpace = "pre-wrap";
       body.style.fontSize = "14px";
       body.style.lineHeight = "1.45";
+      body.style.color = palette.text;
       body.textContent = section.lines.join("\n");
       card.appendChild(topMeta);
       card.appendChild(title2);
@@ -6751,6 +6902,7 @@
         }
       }
       card.appendChild(body);
+      attachRevealAnimation(card, doc);
       return card;
     }
     return {
@@ -8101,17 +8253,16 @@
     });
     const modeCounts = /* @__PURE__ */ new Map();
     for (const g of games) modeCounts.set(getGameMode(g), (modeCounts.get(getGameMode(g)) || 0) + 1);
+    const sortedModes = [...modeCounts.entries()].sort((a, b) => b[1] - a[1]);
+    const modeBars = sortedModes.slice(0, 16).map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }));
+    const modeChart = modeBars.length >= 4 ? { type: "bar", yLabel: "Games", bars: modeBars } : void 0;
     sections.push({
       id: "modes",
       title: "Mode Breakdown",
       group: "Overview",
       appliesFilters: ["date", "mode"],
-      lines: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([m, c]) => `${m}: ${c}`),
-      chart: {
-        type: "bar",
-        yLabel: "Games",
-        bars: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }))
-      }
+      lines: sortedModes.slice(0, 20).map(([m, c]) => `${m}: ${c}`),
+      chart: modeChart
     });
     const weekday = new Array(7).fill(0);
     const hour = new Array(24).fill(0);
@@ -8393,22 +8544,7 @@
           `Tie rounds: ${ties}`,
           `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`
         ],
-        charts: [
-          {
-            type: "bar",
-            yLabel: "Rounds",
-            bars: [
-              { label: "You", value: myWins },
-              { label: mateName.slice(0, 12), value: mateWins },
-              { label: "Tie", value: ties }
-            ]
-          },
-          {
-            type: "line",
-            yLabel: "Net lead",
-            points: cumulative
-          }
-        ]
+        charts: cumulative.length > 1 ? [{ type: "line", yLabel: "Net lead", points: cumulative }] : void 0
       });
     }
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];

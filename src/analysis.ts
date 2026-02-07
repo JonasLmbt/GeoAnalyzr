@@ -506,20 +506,19 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const modeCounts = new Map<string, number>();
   for (const g of games) modeCounts.set(getGameMode(g), (modeCounts.get(getGameMode(g)) || 0) + 1);
+  const sortedModes = [...modeCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const modeBars = sortedModes
+    .slice(0, 16)
+    .map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }));
+  const modeChart = modeBars.length >= 4 ? { type: "bar" as const, yLabel: "Games", bars: modeBars } : undefined;
+
   sections.push({
     id: "modes",
     title: "Mode Breakdown",
     group: "Overview",
     appliesFilters: ["date", "mode"],
-    lines: [...modeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([m, c]) => `${m}: ${c}`),
-    chart: {
-      type: "bar",
-      yLabel: "Games",
-      bars: [...modeCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 16)
-        .map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }))
-    }
+    lines: sortedModes.slice(0, 20).map(([m, c]) => `${m}: ${c}`),
+    chart: modeChart
   });
 
   const weekday = new Array(7).fill(0);
@@ -866,22 +865,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         `Tie rounds: ${ties}`,
         `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`
       ],
-      charts: [
-        {
-          type: "bar",
-          yLabel: "Rounds",
-          bars: [
-            { label: "You", value: myWins },
-            { label: mateName.slice(0, 12), value: mateWins },
-            { label: "Tie", value: ties }
-          ]
-        },
-        {
-          type: "line",
-          yLabel: "Net lead",
-          points: cumulative
-        }
-      ]
+      charts: cumulative.length > 1 ? [{ type: "line", yLabel: "Net lead", points: cumulative }] : undefined
     });
   }
 
