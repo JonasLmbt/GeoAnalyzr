@@ -7672,10 +7672,7 @@
   }
 
   // src/analysis.ts
-  var regionDisplay2 = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(
-    [typeof navigator !== "undefined" && navigator.language ? navigator.language : "en", "en"],
-    { type: "region" }
-  ) : null;
+  var regionDisplay2 = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
   function startOfLocalDay(ts) {
     const d = new Date(ts);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();

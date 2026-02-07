@@ -3,10 +3,7 @@ import { getModeCounts } from "./sync";
 
 const regionDisplay =
   typeof Intl !== "undefined" && typeof (Intl as any).DisplayNames === "function"
-    ? new Intl.DisplayNames(
-        [typeof navigator !== "undefined" && navigator.language ? navigator.language : "en", "en"],
-        { type: "region" }
-      )
+    ? new Intl.DisplayNames(["en"], { type: "region" })
     : null;
 
 function startOfLocalDay(ts: number): number {
