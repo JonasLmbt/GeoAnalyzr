@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --outfile=dist/userscript.user.js --format=iife",
+    "watch": "esbuild src/main.ts --bundle --outfile=dist/userscript.user.js --format=iife --watch"
+  },
+  "dependencies": {
+    "dexie": "^4.3.0",
+    "esbuild": "^0.27.3",
+    "xlsx": "^0.18.5"
+  }
+}
