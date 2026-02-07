@@ -3,8 +3,8 @@
 // @namespace    geoanalyzr
 // @author       JonasLmbt
 // @version      1.0
-// @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/main/geoanalyzr.user.js
-// @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/main/geoanalyzr.user.js
+// @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
+// @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
