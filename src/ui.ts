@@ -42,7 +42,192 @@ function parseDateInput(v: string, endOfDay = false): number | undefined {
   return Number.isFinite(t) ? t : undefined;
 }
 
-function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>): HTMLElement {
+function sanitizeFileName(input: string): string {
+  return input.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/\s+/g, "_").slice(0, 80);
+}
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+async function downloadSvg(svg: SVGSVGElement, title: string): Promise<void> {
+  const svgText = svg.outerHTML;
+  const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+  triggerDownload(blob, `${sanitizeFileName(title)}.svg`);
+}
+
+async function downloadPng(svg: SVGSVGElement, title: string): Promise<void> {
+  const svgText = svg.outerHTML;
+  const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("SVG image load failed"));
+      img.src = svgUrl;
+    });
+
+    const width = Math.max(1200, img.width || 1200);
+    const height = Math.max(420, img.height || 420);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context not available");
+    ctx.fillStyle = "#101010";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error("PNG conversion failed");
+    triggerDownload(blob, `${sanitizeFileName(title)}.png`);
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+function openChartInNewTab(svg: SVGSVGElement, title: string): void {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  const svgMarkup = svg.outerHTML;
+  const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  win.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${safeTitle}</title>
+    <style>
+      body { margin: 0; background: #101010; color: #fff; font-family: system-ui, sans-serif; }
+      .wrap { padding: 20px; }
+      h1 { margin: 0 0 14px; font-size: 18px; }
+      .chart { border: 1px solid #2a2a2a; border-radius: 10px; padding: 8px; background: #141414; }
+      svg { width: 100%; height: auto; min-height: 420px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>${safeTitle}</h1>
+      <div class="chart">${svgMarkup}</div>
+    </div>
+  </body>
+</html>`);
+  win.document.close();
+}
+
+function openZoomOverlay(svg: SVGSVGElement, title: string): void {
+  const overlay = document.createElement("div");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0,0,0,0.82)";
+  overlay.style.zIndex = "1000005";
+  overlay.style.display = "grid";
+  overlay.style.placeItems = "center";
+  overlay.style.padding = "20px";
+
+  const card = document.createElement("div");
+  card.style.width = "min(1500px, 96vw)";
+  card.style.maxHeight = "92vh";
+  card.style.overflow = "auto";
+  card.style.background = "#111";
+  card.style.border = "1px solid #2a2a2a";
+  card.style.borderRadius = "12px";
+  card.style.padding = "12px";
+
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.justifyContent = "space-between";
+  header.style.alignItems = "center";
+  header.style.marginBottom = "8px";
+  header.innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff">${title}</div>`;
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "Close";
+  closeBtn.style.background = "#303030";
+  closeBtn.style.color = "#fff";
+  closeBtn.style.border = "1px solid #444";
+  closeBtn.style.borderRadius = "6px";
+  closeBtn.style.padding = "4px 8px";
+  closeBtn.style.cursor = "pointer";
+  header.appendChild(closeBtn);
+
+  const svgClone = svg.cloneNode(true) as SVGSVGElement;
+  svgClone.setAttribute("width", "100%");
+  svgClone.setAttribute("height", "640");
+
+  const chartWrap = document.createElement("div");
+  chartWrap.style.border = "1px solid #2a2a2a";
+  chartWrap.style.borderRadius = "10px";
+  chartWrap.style.background = "#121212";
+  chartWrap.style.padding = "8px";
+  chartWrap.appendChild(svgClone);
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "8px";
+  actions.style.marginBottom = "10px";
+
+  function mkAction(label: string, onClick: () => void): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.background = "#214a78";
+    b.style.color = "white";
+    b.style.border = "1px solid #2f6096";
+    b.style.borderRadius = "6px";
+    b.style.padding = "5px 9px";
+    b.style.cursor = "pointer";
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  actions.appendChild(mkAction("New Tab", () => openChartInNewTab(svgClone, title)));
+  actions.appendChild(mkAction("Save SVG", () => void downloadSvg(svgClone, title)));
+  actions.appendChild(mkAction("Save PNG", () => void downloadPng(svgClone, title)));
+
+  closeBtn.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) overlay.remove();
+  });
+
+  card.appendChild(header);
+  card.appendChild(actions);
+  card.appendChild(chartWrap);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+}
+
+function createChartActions(svg: SVGSVGElement, title: string): HTMLElement {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.justifyContent = "flex-end";
+  row.style.gap = "6px";
+  row.style.marginBottom = "6px";
+
+  function mkBtn(label: string, onClick: () => void): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.background = "#303030";
+    b.style.color = "#fff";
+    b.style.border = "1px solid #444";
+    b.style.borderRadius = "6px";
+    b.style.padding = "3px 7px";
+    b.style.fontSize = "11px";
+    b.style.cursor = "pointer";
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  row.appendChild(mkBtn("Zoom", () => openZoomOverlay(svg, title)));
+  row.appendChild(mkBtn("New Tab", () => openChartInNewTab(svg, title)));
+  row.appendChild(mkBtn("Save SVG", () => void downloadSvg(svg, title)));
+  row.appendChild(mkBtn("Save PNG", () => void downloadPng(svg, title)));
+  return row;
+}
+
+function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title: string): HTMLElement {
   const chartWrap = document.createElement("div");
   chartWrap.style.marginBottom = "8px";
   chartWrap.style.border = "1px solid #2a2a2a";
@@ -83,11 +268,12 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>): HTMLE
     <text x="${ml}" y="${h - 6}" text-anchor="start" font-size="10" fill="#aaa">${xStartLabel}</text>
     <text x="${w - mr}" y="${h - 6}" text-anchor="end" font-size="10" fill="#aaa">${xEndLabel}</text>
   `;
+  chartWrap.appendChild(createChartActions(svg, title));
   chartWrap.appendChild(svg);
   return chartWrap;
 }
 
-function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>): HTMLElement {
+function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: string): HTMLElement {
   const chartWrap = document.createElement("div");
   chartWrap.style.marginBottom = "8px";
   chartWrap.style.border = "1px solid #2a2a2a";
@@ -131,6 +317,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>): HTMLEle
     <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="#aaa">0</text>
     ${rects}
   `;
+  chartWrap.appendChild(createChartActions(svg, title));
   chartWrap.appendChild(svg);
   return chartWrap;
 }
@@ -471,12 +658,14 @@ export function createUI(): UIHandle {
     card.appendChild(title2);
 
     const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
-    for (const chart of charts) {
+    for (let i = 0; i < charts.length; i++) {
+      const chart = charts[i];
+      const chartTitle = `${section.title} - Chart ${i + 1}`;
       if (chart.type === "line" && chart.points.length > 1) {
-        card.appendChild(renderLineChart(chart));
+        card.appendChild(renderLineChart(chart, chartTitle));
       }
       if (chart.type === "bar" && chart.bars.length > 0) {
-        card.appendChild(renderBarChart(chart));
+        card.appendChild(renderBarChart(chart, chartTitle));
       }
     }
 
