@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.14
+// @version      1.1.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7623,21 +7623,21 @@
           autoBtn.disabled = false;
         }
       });
-      const helpBtn = mkSmallBtn("Show Instructions", "rgba(90,90,90,0.45)", () => {
-        alert(options.helpText);
-      });
-      const repoBtn = mkSmallBtn("Open GitHub README", "rgba(40,120,50,0.45)", () => {
+      const helpBtn = mkSmallBtn("Show Instructions", "rgba(40,120,50,0.45)", () => {
         window.open(options.repoUrl, "_blank");
+      });
+      const closeRedBtn = mkSmallBtn("Close", "rgba(160,35,35,0.55)", () => {
+        closeModal();
       });
       actions.appendChild(saveBtn);
       actions.appendChild(autoBtn);
       actions.appendChild(helpBtn);
-      actions.appendChild(repoBtn);
+      actions.appendChild(closeRedBtn);
       const hint = document.createElement("div");
       hint.style.marginTop = "10px";
       hint.style.fontSize = "11px";
       hint.style.color = palette.textMuted;
-      hint.textContent = "Auto-detect reads stored token first, then browser cookie (if accessible).";
+      hint.textContent = "Auto-detect checks stored token, then cookie access, then authenticated session (cookie can be HttpOnly).";
       modal.appendChild(head);
       modal.appendChild(input);
       modal.appendChild(feedback);
@@ -31506,6 +31506,14 @@
     ]);
     ui.setCounts({ games, rounds, detailsOk, detailsError, detailsMissing });
   }
+  async function hasAuthenticatedSession() {
+    try {
+      const res = await fetch("https://www.geoguessr.com/api/v4/feed/private", { credentials: "include" });
+      return res.status >= 200 && res.status < 300;
+    } catch {
+      return false;
+    }
+  }
   (async function boot() {
     const ui = createUI();
     ui.onUpdateClick(async () => {
@@ -31591,15 +31599,21 @@ ${NCFA_HELP_TEXT}`, "");
         },
         onAutoDetect: async () => {
           const resolved = await getResolvedNcfaToken();
-          if (!resolved.token) {
-            const message2 = "Auto-detect failed: no accessible token found (stored/cookie).";
+          if (resolved.token) {
+            await setNcfaToken(resolved.token);
+            const message2 = `Auto-detect successful (${resolved.source}). Token saved.`;
             ui.setStatus(message2);
-            return { detected: false, source: resolved.source, message: message2 };
+            return { detected: true, token: resolved.token, source: resolved.source, message: message2 };
           }
-          await setNcfaToken(resolved.token);
-          const message = `Auto-detect successful (${resolved.source}). Token saved.`;
+          const sessionOk = await hasAuthenticatedSession();
+          if (sessionOk) {
+            const message2 = "No readable _ncfa token found. Session auth works, likely because _ncfa is HttpOnly. You can keep manual token if needed for cross-domain endpoints.";
+            ui.setStatus(message2);
+            return { detected: true, source: "session", message: message2 };
+          }
+          const message = "Auto-detect failed: no stored token, no readable cookie, and no authenticated session detected.";
           ui.setStatus(message);
-          return { detected: true, token: resolved.token, source: resolved.source, message };
+          return { detected: false, source: "none", message };
         }
       });
     });

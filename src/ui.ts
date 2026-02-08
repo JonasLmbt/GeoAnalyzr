@@ -76,7 +76,7 @@ export interface UIHandle {
     helpText: string;
     repoUrl: string;
     onSave: (token: string) => Promise<{ saved: boolean; token?: string; message: string }>;
-    onAutoDetect: () => Promise<{ detected: boolean; token?: string; source?: "stored" | "cookie" | "none"; message: string }>;
+    onAutoDetect: () => Promise<{ detected: boolean; token?: string; source?: "stored" | "cookie" | "session" | "none"; message: string }>;
   }) => void;
   onOpenAnalysisClick: (fn: () => void) => void;
   onRefreshAnalysisClick: (fn: (filter: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) => void) => void;
@@ -1007,7 +1007,7 @@ export function createUI(): UIHandle {
     helpText: string;
     repoUrl: string;
     onSave: (token: string) => Promise<{ saved: boolean; token?: string; message: string }>;
-    onAutoDetect: () => Promise<{ detected: boolean; token?: string; source?: "stored" | "cookie" | "none"; message: string }>;
+    onAutoDetect: () => Promise<{ detected: boolean; token?: string; source?: "stored" | "cookie" | "session" | "none"; message: string }>;
   }) {
     const palette = getThemePalette();
     const overlay = document.createElement("div");
@@ -1112,24 +1112,24 @@ export function createUI(): UIHandle {
       }
     });
 
-    const helpBtn = mkSmallBtn("Show Instructions", "rgba(90,90,90,0.45)", () => {
-      alert(options.helpText);
+    const helpBtn = mkSmallBtn("Show Instructions", "rgba(40,120,50,0.45)", () => {
+      window.open(options.repoUrl, "_blank");
     });
 
-    const repoBtn = mkSmallBtn("Open GitHub README", "rgba(40,120,50,0.45)", () => {
-      window.open(options.repoUrl, "_blank");
+    const closeRedBtn = mkSmallBtn("Close", "rgba(160,35,35,0.55)", () => {
+      closeModal();
     });
 
     actions.appendChild(saveBtn);
     actions.appendChild(autoBtn);
     actions.appendChild(helpBtn);
-    actions.appendChild(repoBtn);
+    actions.appendChild(closeRedBtn);
 
     const hint = document.createElement("div");
     hint.style.marginTop = "10px";
     hint.style.fontSize = "11px";
     hint.style.color = palette.textMuted;
-    hint.textContent = "Auto-detect reads stored token first, then browser cookie (if accessible).";
+    hint.textContent = "Auto-detect checks stored token, then cookie access, then authenticated session (cookie can be HttpOnly).";
 
     modal.appendChild(head);
     modal.appendChild(input);

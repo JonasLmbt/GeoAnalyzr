@@ -59,6 +59,15 @@ async function refreshUI(ui: ReturnType<typeof createUI>) {
   ui.setCounts({ games, rounds, detailsOk, detailsError, detailsMissing });
 }
 
+async function hasAuthenticatedSession(): Promise<boolean> {
+  try {
+    const res = await fetch("https://www.geoguessr.com/api/v4/feed/private", { credentials: "include" });
+    return res.status >= 200 && res.status < 300;
+  } catch {
+    return false;
+  }
+}
+
 (async function boot() {
   const ui = createUI();
 
@@ -146,15 +155,22 @@ async function refreshUI(ui: ReturnType<typeof createUI>) {
       },
       onAutoDetect: async () => {
         const resolved = await getResolvedNcfaToken();
-        if (!resolved.token) {
-          const message = "Auto-detect failed: no accessible token found (stored/cookie).";
+        if (resolved.token) {
+          await setNcfaToken(resolved.token);
+          const message = `Auto-detect successful (${resolved.source}). Token saved.`;
           ui.setStatus(message);
-          return { detected: false, source: resolved.source, message };
+          return { detected: true, token: resolved.token, source: resolved.source, message };
         }
-        await setNcfaToken(resolved.token);
-        const message = `Auto-detect successful (${resolved.source}). Token saved.`;
+        const sessionOk = await hasAuthenticatedSession();
+        if (sessionOk) {
+          const message =
+            "No readable _ncfa token found. Session auth works, likely because _ncfa is HttpOnly. You can keep manual token if needed for cross-domain endpoints.";
+          ui.setStatus(message);
+          return { detected: true, source: "session", message };
+        }
+        const message = "Auto-detect failed: no stored token, no readable cookie, and no authenticated session detected.";
         ui.setStatus(message);
-        return { detected: true, token: resolved.token, source: resolved.source, message };
+        return { detected: false, source: "none", message };
       }
     });
   });
