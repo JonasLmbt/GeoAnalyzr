@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.1.2
+// @version      1.1.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7268,9 +7268,14 @@
         analysisWindow.win.focus();
         return analysisWindow;
       }
-      const win = window.open("", "geoanalyzr-analysis");
+      const win = window.open("about:blank", "_blank");
       if (!win) return null;
-      const doc = win.document;
+      let doc;
+      try {
+        doc = win.document;
+      } catch {
+        return null;
+      }
       const palette = getThemePalette();
       doc.title = "GeoAnalyzr - Full Analysis";
       doc.body.innerHTML = "";

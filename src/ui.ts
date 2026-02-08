@@ -712,9 +712,15 @@ export function createUI(): UIHandle {
       return analysisWindow;
     }
 
-    const win = window.open("", "geoanalyzr-analysis");
+    // Always open a fresh about:blank window to avoid cross-origin named-window reuse.
+    const win = window.open("about:blank", "_blank");
     if (!win) return null;
-    const doc = win.document;
+    let doc: Document;
+    try {
+      doc = win.document;
+    } catch {
+      return null;
+    }
     const palette = getThemePalette();
     doc.title = "GeoAnalyzr - Full Analysis";
     doc.body.innerHTML = "";
