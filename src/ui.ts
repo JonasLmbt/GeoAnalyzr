@@ -148,7 +148,7 @@ async function downloadPng(svg: SVGSVGElement, title: string): Promise<void> {
 }
 
 function openChartInNewTab(svg: SVGSVGElement, title: string, hostWindow: Window = window): void {
-  const win = hostWindow.open("", "_blank");
+  const win = hostWindow.open("about:blank", "_blank");
   if (!win) return;
   const svgMarkup = svg.outerHTML;
   const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -706,21 +706,33 @@ export function createUI(): UIHandle {
     for (const s of data.sections) modalBody.appendChild(renderSection(s, doc));
   }
 
+  function canAccessWindow(win: Window | null): win is Window {
+    if (!win) return false;
+    try {
+      void win.closed;
+      void win.location.href;
+      void win.document;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function ensureAnalysisWindow(): AnalysisWindowRefs | null {
     if (analysisWindow && !analysisWindow.win.closed) {
-      analysisWindow.win.focus();
-      return analysisWindow;
+      if (canAccessWindow(analysisWindow.win)) {
+        analysisWindow.win.focus();
+        return analysisWindow;
+      }
+      analysisWindow = null;
     }
 
-    // Always open a fresh about:blank window to avoid cross-origin named-window reuse.
-    const win = window.open("about:blank", "_blank");
-    if (!win) return null;
-    let doc: Document;
-    try {
-      doc = win.document;
-    } catch {
-      return null;
+    let win = window.open("about:blank", "geoanalyzr-analysis");
+    if (!canAccessWindow(win)) {
+      win = window.open("about:blank", "_blank");
     }
+    if (!canAccessWindow(win)) return null;
+    const doc = win.document;
     const palette = getThemePalette();
     doc.title = "GeoAnalyzr - Full Analysis";
     doc.body.innerHTML = "";
