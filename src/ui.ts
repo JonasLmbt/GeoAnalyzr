@@ -410,7 +410,11 @@ export function createUI(): UIHandle {
   iconBtn.style.alignItems = "center";
   iconBtn.style.justifyContent = "center";
   iconBtn.style.boxShadow = "0 6px 20px rgba(0,0,0,0.35)";
-  iconBtn.textContent = "A";
+  iconBtn.innerHTML =
+    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">' +
+    '<polyline points="3,16 9,10 14,15 21,8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
+    '<polyline points="16,8 21,8 21,13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
+    "</svg>";
 
   const panel = document.createElement("div");
   panel.style.position = "fixed";
