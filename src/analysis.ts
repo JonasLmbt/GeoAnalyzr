@@ -1296,7 +1296,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     chart: {
       type: "bar",
       yLabel: "Score distribution (smoothed)",
-      initialBars: 24,
       bars: scoreDistributionBars
     }
   });
@@ -1703,29 +1702,13 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const spotlightCountry = selectedCountry || topCountries[0]?.[0];
   if (spotlightCountry && countryAgg.has(spotlightCountry)) {
     const agg = countryAgg.get(spotlightCountry)!;
-    const wrongGuesses = [...agg.guessed.entries()]
-      .filter(([guess]) => guess !== spotlightCountry)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
 
     const countryRounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
     const countryScores = countryRounds.map(extractScore).filter((x): x is number => typeof x === "number");
     const countryFiveK = countryScores.filter((s) => s >= 5000).length;
     const countryThrows = countryScores.filter((s) => s < 50).length;
-    const distributionBuckets = [
-      { label: "0-49", min: 0, max: 50 },
-      { label: "50-499", min: 50, max: 500 },
-      { label: "500-999", min: 500, max: 1000 },
-      { label: "1000-1999", min: 1000, max: 2000 },
-      { label: "2000-2999", min: 2000, max: 3000 },
-      { label: "3000-3999", min: 3000, max: 4000 },
-      { label: "4000-4999", min: 4000, max: 5000 },
-      { label: "5000", min: 5000, max: Infinity }
-    ];
-    const distributionBars = distributionBuckets.map((b) => ({
-      label: b.label,
-      value: countryScores.filter((s) => s >= b.min && s < b.max).length
-    }));
+    const distributionAll = buildSmoothedScoreDistribution(countryScores);
+    const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
     const scoreTimeline: Array<{ x: number; y: number; label: string }> = [];
     for (const r of countryRounds) {
       const playedAt = playedAtByGameId.get(r.gameId);
@@ -1755,14 +1738,14 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
           points: scoreTimeline
         },
         {
-          type: "bar",
-          yLabel: "Score distribution",
-          bars: distributionBars
-        },
-        {
-          type: "bar",
-          yLabel: "Wrong guesses",
-          bars: wrongGuesses.map(([g, n]) => ({ label: countryLabel(g), value: n }))
+          type: "selectableBar",
+          yLabel: "Score distribution (smoothed)",
+          defaultMetricKey: "all_guesses",
+          defaultSort: "chronological",
+          options: [
+            { key: "all_guesses", label: "All guesses", bars: distributionAll },
+            { key: "correct_only", label: "Only correct-country guesses", bars: distributionCorrectOnly }
+          ]
         }
       ]
     });

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.2
+// @version      1.3.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7038,8 +7038,9 @@
     chartHeading.style.margin = "2px 4px 6px";
     chartWrap.appendChild(chartHeading);
     const allBars = chart.bars.slice(0, 240);
+    const isScoreDistribution = /score distribution/i.test(title);
     const initialBars = Math.max(1, Math.min(chart.initialBars ?? 40, allBars.length || 1));
-    let expanded = allBars.length <= initialBars;
+    let expanded = isScoreDistribution ? true : allBars.length <= initialBars;
     const content = doc.createElement("div");
     chartWrap.appendChild(content);
     const render = () => {
@@ -7093,7 +7094,7 @@
           const x = ml + i * step + (step - bw) / 2;
           const bh = b.value / maxY * innerH;
           const y = mt + innerH - bh;
-          const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+          const label = isScoreDistribution ? i === 0 ? "0" : i === bars.length - 1 ? "5000" : "" : b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
           return `
             <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
             <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
@@ -7110,7 +7111,7 @@
       `;
       }
       content.appendChild(createChartActions(svg, title));
-      if (allBars.length > initialBars) {
+      if (!isScoreDistribution && allBars.length > initialBars) {
         const toggle = doc.createElement("button");
         toggle.textContent = expanded ? "Show less" : `Show all (${allBars.length})`;
         toggle.style.background = palette.buttonBg;
@@ -10750,7 +10751,6 @@
       chart: {
         type: "bar",
         yLabel: "Score distribution (smoothed)",
-        initialBars: 24,
         bars: scoreDistributionBars
       }
     });
@@ -11096,25 +11096,12 @@
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];
     if (spotlightCountry && countryAgg.has(spotlightCountry)) {
       const agg = countryAgg.get(spotlightCountry);
-      const wrongGuesses = [...agg.guessed.entries()].filter(([guess]) => guess !== spotlightCountry).sort((a, b) => b[1] - a[1]).slice(0, 6);
       const countryRounds2 = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
       const countryScores = countryRounds2.map(extractScore).filter((x) => typeof x === "number");
       const countryFiveK = countryScores.filter((s) => s >= 5e3).length;
       const countryThrows = countryScores.filter((s) => s < 50).length;
-      const distributionBuckets = [
-        { label: "0-49", min: 0, max: 50 },
-        { label: "50-499", min: 50, max: 500 },
-        { label: "500-999", min: 500, max: 1e3 },
-        { label: "1000-1999", min: 1e3, max: 2e3 },
-        { label: "2000-2999", min: 2e3, max: 3e3 },
-        { label: "3000-3999", min: 3e3, max: 4e3 },
-        { label: "4000-4999", min: 4e3, max: 5e3 },
-        { label: "5000", min: 5e3, max: Infinity }
-      ];
-      const distributionBars = distributionBuckets.map((b) => ({
-        label: b.label,
-        value: countryScores.filter((s) => s >= b.min && s < b.max).length
-      }));
+      const distributionAll = buildSmoothedScoreDistribution(countryScores);
+      const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
       const scoreTimeline = [];
       for (const r of countryRounds2) {
         const playedAt = playedAtByGameId.get(r.gameId);
@@ -11143,14 +11130,14 @@
             points: scoreTimeline
           },
           {
-            type: "bar",
-            yLabel: "Score distribution",
-            bars: distributionBars
-          },
-          {
-            type: "bar",
-            yLabel: "Wrong guesses",
-            bars: wrongGuesses.map(([g, n]) => ({ label: countryLabel(g), value: n }))
+            type: "selectableBar",
+            yLabel: "Score distribution (smoothed)",
+            defaultMetricKey: "all_guesses",
+            defaultSort: "chronological",
+            options: [
+              { key: "all_guesses", label: "All guesses", bars: distributionAll },
+              { key: "correct_only", label: "Only correct-country guesses", bars: distributionCorrectOnly }
+            ]
           }
         ]
       });

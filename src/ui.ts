@@ -448,8 +448,9 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   chartWrap.appendChild(chartHeading);
 
   const allBars = chart.bars.slice(0, 240);
+  const isScoreDistribution = /score distribution/i.test(title);
   const initialBars = Math.max(1, Math.min(chart.initialBars ?? 40, allBars.length || 1));
-  let expanded = allBars.length <= initialBars;
+  let expanded = isScoreDistribution ? true : allBars.length <= initialBars;
   const content = doc.createElement("div");
   chartWrap.appendChild(content);
 
@@ -507,7 +508,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
           const x = ml + i * step + (step - bw) / 2;
           const bh = (b.value / maxY) * innerH;
           const y = mt + innerH - bh;
-          const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+          const label = isScoreDistribution ? (i === 0 ? "0" : i === bars.length - 1 ? "5000" : "") : b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
           return `
             <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
             <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
@@ -525,7 +526,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
       `;
     }
     content.appendChild(createChartActions(svg, title));
-    if (allBars.length > initialBars) {
+    if (!isScoreDistribution && allBars.length > initialBars) {
       const toggle = doc.createElement("button");
       toggle.textContent = expanded ? "Show less" : `Show all (${allBars.length})`;
       toggle.style.background = palette.buttonBg;
