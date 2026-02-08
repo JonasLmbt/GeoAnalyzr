@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.7
+// @version      1.2.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9823,6 +9823,16 @@
     const vari = avg(values.map((x) => (x - m) ** 2));
     return vari === void 0 ? void 0 : Math.sqrt(vari);
   }
+  function formatDurationHuman(ms) {
+    if (!Number.isFinite(ms) || ms <= 0) return "-";
+    const totalMinutes = Math.round(ms / 6e4);
+    const days2 = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor(totalMinutes % (60 * 24) / 60);
+    const minutes = totalMinutes % 60;
+    if (days2 > 0) return `${days2}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
   function buildSmoothedScoreDistribution(scores, bucketSize = 100) {
     if (scores.length === 0) return [];
     const maxScore = 5e3;
@@ -10956,16 +10966,23 @@
     const teammateDelta = teammateRatingTimeline.length > 1 ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y : void 0;
     const ratingPoints = selectedTeammate ? teammateRatingTimeline : duelRatingTimeline;
     const ratingDelta = selectedTeammate ? teammateDelta : duelDelta;
-    const ratingTitle = selectedTeammate ? `Rating History: Team Duels with ${nameMap.get(selectedTeammate) || selectedTeammate.slice(0, 8)}` : "Rating History: Duels";
+    let bestGain;
+    let worstLoss;
+    for (let i = 1; i < ratingPoints.length; i++) {
+      const delta = ratingPoints[i].y - ratingPoints[i - 1].y;
+      const ts = ratingPoints[i].x;
+      if (!bestGain || delta > bestGain.delta) bestGain = { delta, ts };
+      if (!worstLoss || delta < worstLoss.delta) worstLoss = { delta, ts };
+    }
     sections.push({
       id: "rating_history",
-      title: ratingTitle,
+      title: "Rating",
       group: "Rating",
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
-        `Samples: ${ratingPoints.length}`,
         ratingDelta !== void 0 ? `Trend: ${ratingDelta >= 0 ? "+" : ""}${fmt(ratingDelta, 0)}` : "Trend: -",
-        selectedTeammate ? `Scope: teamduels filtered to selected teammate` : `Scope: duels only`
+        bestGain ? `Biggest rating gain: ${bestGain.delta >= 0 ? "+" : ""}${fmt(bestGain.delta, 0)} at ${formatShortDateTime(bestGain.ts)}` : "Biggest rating gain: -",
+        worstLoss ? `Biggest rating loss: ${worstLoss.delta >= 0 ? "+" : ""}${fmt(worstLoss.delta, 0)} at ${formatShortDateTime(worstLoss.ts)}` : "Biggest rating loss: -"
       ],
       charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : void 0
     });
@@ -10974,72 +10991,146 @@
     const longestBreakMs = sortedGameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - sortedGameTimes[i]), 0);
     const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
     if (teammateToUse && ownPlayerId) {
+      const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
+      const teammateGameSet2 = teammateGames.get(teammateToUse) || /* @__PURE__ */ new Set();
+      const gamesTogether = baseGames.filter((g) => teammateGameSet2.has(g.gameId)).sort((a, b) => a.playedAt - b.playedAt);
+      const roundsTogether = baseRounds.filter((r) => teammateGameSet2.has(r.gameId));
       const compareRounds = rounds.filter((r) => {
         const mine = getPlayerStatFromRound(r, ownPlayerId);
         const mate = getPlayerStatFromRound(r, teammateToUse);
         return !!mine && !!mate;
       });
-      let myWins = 0;
-      let mateWins = 0;
-      let ties = 0;
-      let myScoreTotal = 0;
-      let mateScoreTotal = 0;
-      let myScoreCount = 0;
-      let mateScoreCount = 0;
-      let myDistTotal = 0;
-      let mateDistTotal = 0;
-      let myDistCount = 0;
-      let mateDistCount = 0;
+      let myScoreWins = 0;
+      let mateScoreWins = 0;
+      let scoreTies = 0;
+      let myCloser = 0;
+      let mateCloser = 0;
+      let distanceTies = 0;
+      let myThrows = 0;
+      let mateThrows = 0;
+      let myFiveKs = 0;
+      let mateFiveKs = 0;
+      let myScored = 0;
+      let mateScored = 0;
       for (const r of compareRounds) {
         const mine = getPlayerStatFromRound(r, ownPlayerId);
         const mate = getPlayerStatFromRound(r, teammateToUse);
-        let result = 0;
         if (typeof mine.score === "number" && typeof mate.score === "number") {
-          result = mine.score > mate.score ? 1 : mine.score < mate.score ? -1 : 0;
-        } else if (typeof mine.distanceKm === "number" && typeof mate.distanceKm === "number") {
-          result = mine.distanceKm < mate.distanceKm ? 1 : mine.distanceKm > mate.distanceKm ? -1 : 0;
+          if (mine.score > mate.score) myScoreWins++;
+          else if (mine.score < mate.score) mateScoreWins++;
+          else scoreTies++;
+          if (mine.score < 50) myThrows++;
+          if (mate.score < 50) mateThrows++;
+          if (mine.score >= 5e3) myFiveKs++;
+          if (mate.score >= 5e3) mateFiveKs++;
+          myScored++;
+          mateScored++;
         }
-        if (result > 0) {
-          myWins++;
-        } else if (result < 0) {
-          mateWins++;
-        } else {
-          ties++;
-        }
-        if (typeof mine.score === "number") {
-          myScoreTotal += mine.score;
-          myScoreCount++;
-        }
-        if (typeof mate.score === "number") {
-          mateScoreTotal += mate.score;
-          mateScoreCount++;
-        }
-        if (typeof mine.distanceKm === "number") {
-          myDistTotal += mine.distanceKm;
-          myDistCount++;
-        }
-        if (typeof mate.distanceKm === "number") {
-          mateDistTotal += mate.distanceKm;
-          mateDistCount++;
+        if (typeof mine.distanceKm === "number" && typeof mate.distanceKm === "number") {
+          if (mine.distanceKm < mate.distanceKm) myCloser++;
+          else if (mine.distanceKm > mate.distanceKm) mateCloser++;
+          else distanceTies++;
         }
       }
-      const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
+      const decideLeader = (youValue, mateValue, neutralLabel = "Tie") => {
+        const decisive = youValue + mateValue;
+        if (decisive === 0) return `${neutralLabel} (-)`;
+        if (youValue === mateValue) return `${neutralLabel} (50.0%)`;
+        const youWin = youValue > mateValue;
+        const leader = youWin ? "You" : mateName;
+        const share = youWin ? pct(youValue, decisive) : pct(mateValue, decisive);
+        return `${leader} (${fmt(share, 1)}%)`;
+      };
+      const pairTimes = gamesTogether.map((g) => g.playedAt);
+      let firstTogether;
+      let lastTogether;
+      let longestPairSessionGames = 0;
+      let longestPairSessionStart;
+      let longestPairSessionEnd;
+      let avgPairGamesPerSession;
+      let longestPairBreak;
+      if (pairTimes.length > 0) {
+        firstTogether = pairTimes[0];
+        lastTogether = pairTimes[pairTimes.length - 1];
+        let start = pairTimes[0];
+        let prev = pairTimes[0];
+        let gamesInSession = 1;
+        let sessionCount = 0;
+        let sessionTotalGames = 0;
+        for (let i = 1; i < pairTimes.length; i++) {
+          const ts = pairTimes[i];
+          const gap = ts - prev;
+          longestPairBreak = Math.max(longestPairBreak || 0, gap);
+          if (gap > 45 * 60 * 1e3) {
+            sessionCount++;
+            sessionTotalGames += gamesInSession;
+            if (gamesInSession > longestPairSessionGames) {
+              longestPairSessionGames = gamesInSession;
+              longestPairSessionStart = start;
+              longestPairSessionEnd = prev;
+            }
+            start = ts;
+            gamesInSession = 1;
+          } else {
+            gamesInSession++;
+          }
+          prev = ts;
+        }
+        sessionCount++;
+        sessionTotalGames += gamesInSession;
+        if (gamesInSession > longestPairSessionGames) {
+          longestPairSessionGames = gamesInSession;
+          longestPairSessionStart = start;
+          longestPairSessionEnd = prev;
+        }
+        avgPairGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
+      }
+      const h2hCategories = [
+        { label: "Higher score", you: myScoreWins, mate: mateScoreWins },
+        { label: "Closer guesses", you: myCloser, mate: mateCloser },
+        { label: "Fewer throws", you: mateThrows, mate: myThrows },
+        { label: "More 5k", you: myFiveKs, mate: mateFiveKs }
+      ];
       sections.push({
         id: "teammate_battle",
-        title: `Teammate Battle: You vs ${mateName}`,
+        title: `Team: You + ${mateName}`,
         group: "Performance",
-        appliesFilters: ["date", "mode", "teammate", "country"],
+        appliesFilters: ["date", "mode", "teammate"],
         lines: [
-          `Compared rounds: ${compareRounds.length}`,
-          `You better guess: ${myWins} rounds`,
-          `${mateName} better guess: ${mateWins} rounds`,
-          `Tie rounds: ${ties}`,
-          `Win rate (decisive): ${fmt(pct(myWins, myWins + mateWins), 1)}%`,
-          `Win rate (all rounds): ${fmt(pct(myWins, compareRounds.length), 1)}%`,
-          `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`,
-          `Avg score: you ${myScoreCount ? fmt(myScoreTotal / myScoreCount, 1) : "-"} vs ${mateName} ${mateScoreCount ? fmt(mateScoreTotal / mateScoreCount, 1) : "-"}`,
-          `Avg distance: you ${myDistCount ? fmt(myDistTotal / myDistCount, 2) : "-"} km vs ${mateName} ${mateDistCount ? fmt(mateDistTotal / mateDistCount, 2) : "-"} km`
-        ]
+          selectedCountry ? "Country filter is ignored here (team perspective)." : "",
+          "Head-to-head questions:",
+          `Closer guesses: ${decideLeader(myCloser, mateCloser)}`,
+          `Higher score rounds: ${decideLeader(myScoreWins, mateScoreWins)}`,
+          `Fewer throws (<50): ${decideLeader(mateThrows, myThrows)}`,
+          `More 5k rounds: ${decideLeader(myFiveKs, mateFiveKs)}`,
+          "Team facts:",
+          `Games together: ${gamesTogether.length}`,
+          `Rounds together: ${roundsTogether.length}`,
+          `First game together: ${firstTogether ? formatShortDateTime(firstTogether) : "-"}`,
+          `Most recent game together: ${lastTogether ? formatShortDateTime(lastTogether) : "-"}`,
+          `Longest session together: ${longestPairSessionGames > 0 && longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? `${longestPairSessionGames} games (${formatShortDateTime(longestPairSessionStart)} -> ${formatShortDateTime(longestPairSessionEnd)})` : "-"}`,
+          `Avg games per session together: ${fmt(avgPairGamesPerSession, 1)}`,
+          `Longest break between games together: ${longestPairBreak ? formatDurationHuman(longestPairBreak) : "-"}`
+        ].filter((x) => x !== ""),
+        chart: {
+          type: "selectableBar",
+          yLabel: "Team head-to-head",
+          initialBars: 4,
+          defaultMetricKey: "your_share",
+          defaultSort: "chronological",
+          options: [
+            {
+              key: "your_share",
+              label: "Your share (%)",
+              bars: h2hCategories.map((c) => ({ label: c.label, value: c.you + c.mate ? pct(c.you, c.you + c.mate) : 0 }))
+            },
+            {
+              key: "teammate_share",
+              label: `${mateName} share (%)`,
+              bars: h2hCategories.map((c) => ({ label: c.label, value: c.you + c.mate ? pct(c.mate, c.you + c.mate) : 0 }))
+            }
+          ]
+        }
       });
     }
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];
