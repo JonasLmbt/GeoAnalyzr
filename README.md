@@ -21,14 +21,6 @@ For development:
 2. Tampermonkey will show the install dialog.
 3. Click install.
 
-## Auto Updates
-
-The script already includes:
-- `@updateURL`
-- `@downloadURL`
-
-Tampermonkey can therefore detect and install updates automatically when you publish a new version to `main`.
-
 ## Usage
 
 1. Open GeoGuessr and log in.
@@ -36,6 +28,34 @@ Tampermonkey can therefore detect and install updates automatically when you pub
 3. Run `Fetch Data` to sync new games and fetch missing details.
 4. Optionally set an `_ncfa` token for more complete data fetching.
 5. Open analysis or export to Excel.
+
+## Auto Updates
+
+The script already includes:
+- `@updateURL`
+- `@downloadURL`
+
+Tampermonkey can therefore detect and install updates automatically.
+
+## Getting your `_ncfa` cookie
+
+1. Open GeoGuessr in your browser and log in.
+2. Open DevTools (`F12` / `Ctrl+Shift+I`, on Mac `Cmd+Option+I`).
+3. Go to the `Network` tab.
+4. Reload the page.
+5. Filter by `stats`.
+6. Open a `stats` request.
+7. Locate the `_ncfa` cookie in the request headers.
+8. Copy only the value after `=` and before `;`.
+
+![NCFA cookie location](images/ncfa.PNG)
+
+## Security and Privacy
+
+- GeoAnalyzr does **not** use an external database and does not send analysis data to custom servers.
+- Data is stored locally in your browser (IndexedDB).
+- The `_ncfa` token is stored locally so you do not have to re-enter it every time.
+- You can remove local data at any time using `Reset Database`.
 
 ## Development
 
@@ -65,26 +85,6 @@ Watch mode:
 ```bash
 npm run watch
 ```
-
-## Getting your `_ncfa` cookie
-
-1. Open GeoGuessr in your browser and log in.
-2. Open DevTools (`F12` / `Ctrl+Shift+I`, on Mac `Cmd+Option+I`).
-3. Go to the `Network` tab.
-4. Reload the page.
-5. Filter by `stats`.
-6. Open a `stats` request.
-7. Locate the `_ncfa` cookie in the request headers.
-8. Copy only the value after `=` and before `;`.
-
-![NCFA cookie location](images/ncfa.PNG)
-
-## Security and Privacy
-
-- GeoAnalyzr does **not** use an external database and does not send analysis data to custom servers.
-- Data is stored locally in your browser (IndexedDB).
-- The `_ncfa` token is stored locally so you do not have to re-enter it every time.
-- You can remove local data at any time using `Reset Database`.
 
 ## Acknowledgements
 
