@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.1.5
+// @version      1.1.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7013,7 +7013,7 @@
     const render = () => {
       content.innerHTML = "";
       const bars = expanded ? allBars : allBars.slice(0, initialBars);
-      const horizontal = /avg score by country/i.test(title);
+      const horizontal = chart.orientation === "horizontal" || /avg score by country/i.test(title);
       const w = 1700;
       const accent = analysisSettings.accent;
       const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -7099,6 +7099,80 @@
     };
     render();
     return chartWrap;
+  }
+  function renderSelectableBarChart(chart, title, doc) {
+    const palette = getThemePalette();
+    const wrap = doc.createElement("div");
+    wrap.style.marginBottom = "8px";
+    wrap.style.border = `1px solid ${palette.border}`;
+    wrap.style.borderRadius = "8px";
+    wrap.style.background = palette.panelAlt;
+    wrap.style.padding = "6px";
+    const head = doc.createElement("div");
+    head.style.display = "flex";
+    head.style.flexWrap = "wrap";
+    head.style.alignItems = "center";
+    head.style.gap = "8px";
+    head.style.margin = "2px 4px 6px";
+    wrap.appendChild(head);
+    const heading = doc.createElement("div");
+    heading.textContent = title;
+    heading.style.fontSize = "12px";
+    heading.style.fontWeight = "700";
+    heading.style.color = palette.textMuted;
+    head.appendChild(heading);
+    const metricSelect = doc.createElement("select");
+    metricSelect.style.background = palette.buttonBg;
+    metricSelect.style.color = palette.buttonText;
+    metricSelect.style.border = `1px solid ${palette.border}`;
+    metricSelect.style.borderRadius = "7px";
+    metricSelect.style.padding = "2px 6px";
+    metricSelect.style.fontSize = "11px";
+    for (const o of chart.options) {
+      const opt = doc.createElement("option");
+      opt.value = o.key;
+      opt.textContent = o.label;
+      metricSelect.appendChild(opt);
+    }
+    metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
+    head.appendChild(metricSelect);
+    const sortSelect = doc.createElement("select");
+    sortSelect.style.background = palette.buttonBg;
+    sortSelect.style.color = palette.buttonText;
+    sortSelect.style.border = `1px solid ${palette.border}`;
+    sortSelect.style.borderRadius = "7px";
+    sortSelect.style.padding = "2px 6px";
+    sortSelect.style.fontSize = "11px";
+    for (const key of ["chronological", "desc", "asc"]) {
+      const opt = doc.createElement("option");
+      opt.value = key;
+      opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
+      sortSelect.appendChild(opt);
+    }
+    sortSelect.value = chart.defaultSort || "chronological";
+    head.appendChild(sortSelect);
+    const content = doc.createElement("div");
+    wrap.appendChild(content);
+    const render = () => {
+      content.innerHTML = "";
+      const selected = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
+      if (!selected) return;
+      let bars = selected.bars.slice();
+      if (sortSelect.value === "desc") bars.sort((a, b) => b.value - a.value);
+      else if (sortSelect.value === "asc") bars.sort((a, b) => a.value - b.value);
+      const barChart = {
+        type: "bar",
+        yLabel: selected.label,
+        initialBars: chart.initialBars ?? 10,
+        orientation: chart.orientation || "horizontal",
+        bars
+      };
+      content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc));
+    };
+    metricSelect.addEventListener("change", render);
+    sortSelect.addEventListener("change", render);
+    render();
+    return wrap;
   }
   function createUI() {
     const iconBtn = document.createElement("button");
@@ -7244,6 +7318,9 @@
       const refs = analysisWindow;
       if (!refs || refs.win.closed) return;
       const palette = getThemePalette();
+      const windowTitle = data.playerName ? `GeoAnalyzr - Full Analysis for ${data.playerName}` : "GeoAnalyzr - Full Analysis";
+      refs.doc.title = windowTitle;
+      refs.modalTitle.textContent = windowTitle;
       const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
       if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
       if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
@@ -7366,7 +7443,10 @@
       modalHead.style.alignItems = "center";
       modalHead.style.padding = "12px 14px";
       modalHead.style.borderBottom = `1px solid ${palette.border}`;
-      modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
+      const modalTitle = doc.createElement("div");
+      modalTitle.style.fontWeight = "700";
+      modalTitle.textContent = "GeoAnalyzr - Full Analysis";
+      modalHead.appendChild(modalTitle);
       const modalClose = doc.createElement("button");
       modalClose.textContent = "x";
       modalClose.style.background = "transparent";
@@ -7498,6 +7578,7 @@
         win,
         doc,
         shell,
+        modalTitle,
         controls,
         fromInput,
         toInput,
@@ -7650,6 +7731,9 @@
         }
         if (chart.type === "bar" && chart.bars.length > 0) {
           card.appendChild(renderBarChart(chart, chartTitle, doc));
+        }
+        if (chart.type === "selectableBar" && chart.options.length > 0) {
+          card.appendChild(renderSelectableBarChart(chart, chartTitle, doc));
         }
       }
       return card;
@@ -10006,6 +10090,7 @@
     const baseDetails = allDetails.filter((d) => baseGameSet.has(d.gameId));
     const ownPlayerId = inferOwnPlayerId(baseRounds);
     const nameMap = collectPlayerNames(baseDetails);
+    const playerName = ownPlayerId ? nameMap.get(ownPlayerId) || ownPlayerId : void 0;
     const teammateGames = /* @__PURE__ */ new Map();
     const teammateRoundSamples = /* @__PURE__ */ new Map();
     for (const d of baseDetails) {
@@ -10201,10 +10286,16 @@
     const weekdayScoreCount = new Array(7).fill(0);
     const weekdayTimeSum = new Array(7).fill(0);
     const weekdayTimeCount = new Array(7).fill(0);
+    const weekdayRounds = new Array(7).fill(0);
+    const weekdayThrows = new Array(7).fill(0);
+    const weekdayFiveKs = new Array(7).fill(0);
     const hourScoreSum = new Array(24).fill(0);
     const hourScoreCount = new Array(24).fill(0);
     const hourTimeSum = new Array(24).fill(0);
     const hourTimeCount = new Array(24).fill(0);
+    const hourRounds = new Array(24).fill(0);
+    const hourThrows = new Array(24).fill(0);
+    const hourFiveKs = new Array(24).fill(0);
     for (const ts of gameTimes) {
       const d = new Date(ts);
       weekday[d.getDay()]++;
@@ -10218,11 +10309,21 @@
       const hr = d.getHours();
       const sc = extractScore(r);
       const tm = extractTimeMs(r);
+      weekdayRounds[wd]++;
+      hourRounds[hr]++;
       if (typeof sc === "number") {
         weekdayScoreSum[wd] += sc;
         weekdayScoreCount[wd]++;
         hourScoreSum[hr] += sc;
         hourScoreCount[hr]++;
+        if (sc < 50) {
+          weekdayThrows[wd]++;
+          hourThrows[hr]++;
+        }
+        if (sc >= 5e3) {
+          weekdayFiveKs[wd]++;
+          hourFiveKs[hr]++;
+        }
       }
       if (typeof tm === "number") {
         weekdayTimeSum[wd] += tm;
@@ -10256,6 +10357,52 @@
     const slowestDay = [...weekdayAvgTime].sort((a, b) => b.value - a.value)[0];
     const fastestHour = [...hourAvgTime].sort((a, b) => a.value - b.value)[0];
     const slowestHour = [...hourAvgTime].sort((a, b) => b.value - a.value)[0];
+    const weekdayMetricOptions = [
+      { key: "games", label: "Games", bars: weekday.map((v, i) => ({ label: wdNames[i], value: v })) },
+      {
+        key: "avg_score",
+        label: "Avg score",
+        bars: wdNames.map((name, i) => ({ label: name, value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : 0 }))
+      },
+      {
+        key: "avg_time",
+        label: "Avg guess time (s)",
+        bars: wdNames.map((name, i) => ({ label: name, value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : 0 }))
+      },
+      {
+        key: "throw_rate",
+        label: "Throw rate (%)",
+        bars: wdNames.map((name, i) => ({ label: name, value: weekdayRounds[i] ? pct(weekdayThrows[i], weekdayRounds[i]) : 0 }))
+      },
+      {
+        key: "fivek_rate",
+        label: "5k rate (%)",
+        bars: wdNames.map((name, i) => ({ label: name, value: weekdayRounds[i] ? pct(weekdayFiveKs[i], weekdayRounds[i]) : 0 }))
+      }
+    ];
+    const hourMetricOptions = [
+      { key: "games", label: "Games", bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v })) },
+      {
+        key: "avg_score",
+        label: "Avg score",
+        bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : 0 }))
+      },
+      {
+        key: "avg_time",
+        label: "Avg guess time (s)",
+        bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : 0 }))
+      },
+      {
+        key: "throw_rate",
+        label: "Throw rate (%)",
+        bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourRounds[h] ? pct(hourThrows[h], hourRounds[h]) : 0 }))
+      },
+      {
+        key: "fivek_rate",
+        label: "5k rate (%)",
+        bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourRounds[h] ? pct(hourFiveKs[h], hourRounds[h]) : 0 }))
+      }
+    ];
     sections.push({
       id: "time_patterns",
       title: "Time Patterns",
@@ -10273,14 +10420,22 @@
       ],
       charts: [
         {
-          type: "bar",
-          yLabel: "Games",
-          bars: weekday.map((v, i) => ({ label: wdNames[i], value: v }))
+          type: "selectableBar",
+          yLabel: "Weekday patterns",
+          orientation: "horizontal",
+          initialBars: 10,
+          defaultMetricKey: "games",
+          defaultSort: "chronological",
+          options: weekdayMetricOptions
         },
         {
-          type: "bar",
-          yLabel: "Games",
-          bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v }))
+          type: "selectableBar",
+          yLabel: "Hour-of-day patterns",
+          orientation: "horizontal",
+          initialBars: 10,
+          defaultMetricKey: "games",
+          defaultSort: "chronological",
+          options: hourMetricOptions
         }
       ]
     });
@@ -10355,6 +10510,15 @@
       const rate = decisive > 0 ? pct(res?.wins || 0, decisive) : 0;
       return { label: formatShortDateTime(s.start), value: rate };
     }) : [];
+    const sessionMetricOptions = [
+      { key: "avg_score", label: "Avg score", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore })) },
+      { key: "throw_rate", label: "Throw rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate })) },
+      { key: "fivek_rate", label: "5k rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate })) },
+      { key: "avg_duration", label: "Avg duration (s)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0 })) },
+      { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games })) },
+      { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds })) }
+    ];
+    if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
     sections.push({
       id: "session_quality",
       title: "Session Quality",
@@ -10367,28 +10531,15 @@
         ),
         ...worstSessionRows.slice(0, 2).map((s) => `Hardest: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
       ],
-      charts: [
-        {
-          type: "bar",
-          yLabel: "Avg score by session",
-          initialBars: 10,
-          bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore }))
-        },
-        {
-          type: "bar",
-          yLabel: "Throw rate % by session",
-          initialBars: 10,
-          bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate }))
-        },
-        ...sessionWinRateBars.length > 0 ? [
-          {
-            type: "bar",
-            yLabel: "Win rate % by session",
-            initialBars: 10,
-            bars: sessionWinRateBars
-          }
-        ] : []
-      ]
+      chart: {
+        type: "selectableBar",
+        yLabel: "Session Quality",
+        orientation: "horizontal",
+        initialBars: 10,
+        defaultMetricKey: "avg_score",
+        defaultSort: "desc",
+        options: sessionMetricOptions
+      }
     });
     const tempoBuckets = [
       { name: "0-10s", min: 0, max: 10 },
@@ -10900,6 +11051,7 @@
       availableModes,
       availableTeammates,
       availableCountries,
+      playerName,
       minPlayedAt,
       maxPlayedAt
     };

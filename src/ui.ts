@@ -409,7 +409,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   const render = () => {
     content.innerHTML = "";
     const bars = expanded ? allBars : allBars.slice(0, initialBars);
-    const horizontal = /avg score by country/i.test(title);
+    const horizontal = chart.orientation === "horizontal" || /avg score by country/i.test(title);
     const w = 1700;
     const accent = analysisSettings.accent;
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -499,6 +499,88 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   };
   render();
   return chartWrap;
+}
+
+function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selectableBar" }>, title: string, doc: Document): HTMLElement {
+  const palette = getThemePalette();
+  const wrap = doc.createElement("div");
+  wrap.style.marginBottom = "8px";
+  wrap.style.border = `1px solid ${palette.border}`;
+  wrap.style.borderRadius = "8px";
+  wrap.style.background = palette.panelAlt;
+  wrap.style.padding = "6px";
+
+  const head = doc.createElement("div");
+  head.style.display = "flex";
+  head.style.flexWrap = "wrap";
+  head.style.alignItems = "center";
+  head.style.gap = "8px";
+  head.style.margin = "2px 4px 6px";
+  wrap.appendChild(head);
+
+  const heading = doc.createElement("div");
+  heading.textContent = title;
+  heading.style.fontSize = "12px";
+  heading.style.fontWeight = "700";
+  heading.style.color = palette.textMuted;
+  head.appendChild(heading);
+
+  const metricSelect = doc.createElement("select");
+  metricSelect.style.background = palette.buttonBg;
+  metricSelect.style.color = palette.buttonText;
+  metricSelect.style.border = `1px solid ${palette.border}`;
+  metricSelect.style.borderRadius = "7px";
+  metricSelect.style.padding = "2px 6px";
+  metricSelect.style.fontSize = "11px";
+  for (const o of chart.options) {
+    const opt = doc.createElement("option");
+    opt.value = o.key;
+    opt.textContent = o.label;
+    metricSelect.appendChild(opt);
+  }
+  metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
+  head.appendChild(metricSelect);
+
+  const sortSelect = doc.createElement("select");
+  sortSelect.style.background = palette.buttonBg;
+  sortSelect.style.color = palette.buttonText;
+  sortSelect.style.border = `1px solid ${palette.border}`;
+  sortSelect.style.borderRadius = "7px";
+  sortSelect.style.padding = "2px 6px";
+  sortSelect.style.fontSize = "11px";
+  for (const key of ["chronological", "desc", "asc"] as const) {
+    const opt = doc.createElement("option");
+    opt.value = key;
+    opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
+    sortSelect.appendChild(opt);
+  }
+  sortSelect.value = chart.defaultSort || "chronological";
+  head.appendChild(sortSelect);
+
+  const content = doc.createElement("div");
+  wrap.appendChild(content);
+
+  const render = () => {
+    content.innerHTML = "";
+    const selected = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
+    if (!selected) return;
+    let bars = selected.bars.slice();
+    if (sortSelect.value === "desc") bars.sort((a, b) => b.value - a.value);
+    else if (sortSelect.value === "asc") bars.sort((a, b) => a.value - b.value);
+    const barChart: Extract<AnalysisChart, { type: "bar" }> = {
+      type: "bar",
+      yLabel: selected.label,
+      initialBars: chart.initialBars ?? 10,
+      orientation: chart.orientation || "horizontal",
+      bars
+    };
+    content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc));
+  };
+
+  metricSelect.addEventListener("change", render);
+  sortSelect.addEventListener("change", render);
+  render();
+  return wrap;
 }
 
 export function createUI(): UIHandle {
@@ -611,6 +693,7 @@ export function createUI(): UIHandle {
     win: Window;
     doc: Document;
     shell: HTMLDivElement;
+    modalTitle: HTMLDivElement;
     controls: HTMLDivElement;
     fromInput: HTMLInputElement;
     toInput: HTMLInputElement;
@@ -681,6 +764,11 @@ export function createUI(): UIHandle {
     const refs = analysisWindow;
     if (!refs || refs.win.closed) return;
     const palette = getThemePalette();
+    const windowTitle = data.playerName
+      ? `GeoAnalyzr - Full Analysis for ${data.playerName}`
+      : "GeoAnalyzr - Full Analysis";
+    refs.doc.title = windowTitle;
+    refs.modalTitle.textContent = windowTitle;
 
     const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
     if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
@@ -816,7 +904,10 @@ export function createUI(): UIHandle {
     modalHead.style.alignItems = "center";
     modalHead.style.padding = "12px 14px";
     modalHead.style.borderBottom = `1px solid ${palette.border}`;
-    modalHead.innerHTML = `<div style="font-weight:700">GeoAnalyzr - Full Analysis</div>`;
+    const modalTitle = doc.createElement("div");
+    modalTitle.style.fontWeight = "700";
+    modalTitle.textContent = "GeoAnalyzr - Full Analysis";
+    modalHead.appendChild(modalTitle);
     const modalClose = doc.createElement("button");
     modalClose.textContent = "x";
     modalClose.style.background = "transparent";
@@ -964,6 +1055,7 @@ export function createUI(): UIHandle {
       win,
       doc,
       shell,
+      modalTitle,
       controls,
       fromInput,
       toInput,
@@ -1129,6 +1221,9 @@ export function createUI(): UIHandle {
       }
       if (chart.type === "bar" && chart.bars.length > 0) {
         card.appendChild(renderBarChart(chart, chartTitle, doc));
+      }
+      if (chart.type === "selectableBar" && chart.options.length > 0) {
+        card.appendChild(renderSelectableBarChart(chart, chartTitle, doc));
       }
     }
     return card;

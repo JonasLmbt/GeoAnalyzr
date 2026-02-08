@@ -507,7 +507,21 @@ export type AnalysisChart =
       type: "bar";
       yLabel?: string;
       initialBars?: number;
+      orientation?: "vertical" | "horizontal";
       bars: Array<{ label: string; value: number }>;
+    }
+  | {
+      type: "selectableBar";
+      yLabel?: string;
+      initialBars?: number;
+      orientation?: "vertical" | "horizontal";
+      defaultMetricKey?: string;
+      defaultSort?: "chronological" | "desc" | "asc";
+      options: Array<{
+        key: string;
+        label: string;
+        bars: Array<{ label: string; value: number }>;
+      }>;
     };
 
 export interface AnalysisSection {
@@ -525,6 +539,7 @@ export interface AnalysisWindowData {
   availableModes: string[];
   availableTeammates: Array<{ id: string; label: string }>;
   availableCountries: Array<{ code: string; label: string }>;
+  playerName?: string;
   minPlayedAt?: number;
   maxPlayedAt?: number;
 }
@@ -600,6 +615,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const ownPlayerId = inferOwnPlayerId(baseRounds);
   const nameMap = collectPlayerNames(baseDetails);
+  const playerName = ownPlayerId ? nameMap.get(ownPlayerId) || ownPlayerId : undefined;
 
   const teammateGames = new Map<string, Set<string>>();
   const teammateRoundSamples = new Map<string, number>();
@@ -839,10 +855,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const weekdayScoreCount = new Array(7).fill(0);
   const weekdayTimeSum = new Array(7).fill(0);
   const weekdayTimeCount = new Array(7).fill(0);
+  const weekdayRounds = new Array(7).fill(0);
+  const weekdayThrows = new Array(7).fill(0);
+  const weekdayFiveKs = new Array(7).fill(0);
   const hourScoreSum = new Array(24).fill(0);
   const hourScoreCount = new Array(24).fill(0);
   const hourTimeSum = new Array(24).fill(0);
   const hourTimeCount = new Array(24).fill(0);
+  const hourRounds = new Array(24).fill(0);
+  const hourThrows = new Array(24).fill(0);
+  const hourFiveKs = new Array(24).fill(0);
   for (const ts of gameTimes) {
     const d = new Date(ts);
     weekday[d.getDay()]++;
@@ -856,11 +878,21 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const hr = d.getHours();
     const sc = extractScore(r);
     const tm = extractTimeMs(r);
+    weekdayRounds[wd]++;
+    hourRounds[hr]++;
     if (typeof sc === "number") {
       weekdayScoreSum[wd] += sc;
       weekdayScoreCount[wd]++;
       hourScoreSum[hr] += sc;
       hourScoreCount[hr]++;
+      if (sc < 50) {
+        weekdayThrows[wd]++;
+        hourThrows[hr]++;
+      }
+      if (sc >= 5000) {
+        weekdayFiveKs[wd]++;
+        hourFiveKs[hr]++;
+      }
     }
     if (typeof tm === "number") {
       weekdayTimeSum[wd] += tm;
@@ -902,6 +934,52 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const slowestDay = [...weekdayAvgTime].sort((a, b) => b.value - a.value)[0];
   const fastestHour = [...hourAvgTime].sort((a, b) => a.value - b.value)[0];
   const slowestHour = [...hourAvgTime].sort((a, b) => b.value - a.value)[0];
+  const weekdayMetricOptions = [
+    { key: "games", label: "Games", bars: weekday.map((v, i) => ({ label: wdNames[i], value: v })) },
+    {
+      key: "avg_score",
+      label: "Avg score",
+      bars: wdNames.map((name, i) => ({ label: name, value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : 0 }))
+    },
+    {
+      key: "avg_time",
+      label: "Avg guess time (s)",
+      bars: wdNames.map((name, i) => ({ label: name, value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : 0 }))
+    },
+    {
+      key: "throw_rate",
+      label: "Throw rate (%)",
+      bars: wdNames.map((name, i) => ({ label: name, value: weekdayRounds[i] ? pct(weekdayThrows[i], weekdayRounds[i]) : 0 }))
+    },
+    {
+      key: "fivek_rate",
+      label: "5k rate (%)",
+      bars: wdNames.map((name, i) => ({ label: name, value: weekdayRounds[i] ? pct(weekdayFiveKs[i], weekdayRounds[i]) : 0 }))
+    }
+  ];
+  const hourMetricOptions = [
+    { key: "games", label: "Games", bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v })) },
+    {
+      key: "avg_score",
+      label: "Avg score",
+      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : 0 }))
+    },
+    {
+      key: "avg_time",
+      label: "Avg guess time (s)",
+      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : 0 }))
+    },
+    {
+      key: "throw_rate",
+      label: "Throw rate (%)",
+      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourRounds[h] ? pct(hourThrows[h], hourRounds[h]) : 0 }))
+    },
+    {
+      key: "fivek_rate",
+      label: "5k rate (%)",
+      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourRounds[h] ? pct(hourFiveKs[h], hourRounds[h]) : 0 }))
+    }
+  ];
   sections.push({
     id: "time_patterns",
     title: "Time Patterns",
@@ -919,14 +997,22 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ],
     charts: [
       {
-        type: "bar",
-        yLabel: "Games",
-        bars: weekday.map((v, i) => ({ label: wdNames[i], value: v }))
+        type: "selectableBar",
+        yLabel: "Weekday patterns",
+        orientation: "horizontal",
+        initialBars: 10,
+        defaultMetricKey: "games",
+        defaultSort: "chronological",
+        options: weekdayMetricOptions
       },
       {
-        type: "bar",
-        yLabel: "Games",
-        bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v }))
+        type: "selectableBar",
+        yLabel: "Hour-of-day patterns",
+        orientation: "horizontal",
+        initialBars: 10,
+        defaultMetricKey: "games",
+        defaultSort: "chronological",
+        options: hourMetricOptions
       }
     ]
   });
@@ -1009,6 +1095,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         return { label: formatShortDateTime(s.start), value: rate };
       })
     : [];
+  const sessionMetricOptions: Array<{ key: string; label: string; bars: Array<{ label: string; value: number }> }> = [
+    { key: "avg_score", label: "Avg score", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore })) },
+    { key: "throw_rate", label: "Throw rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate })) },
+    { key: "fivek_rate", label: "5k rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate })) },
+    { key: "avg_duration", label: "Avg duration (s)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0 })) },
+    { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games })) },
+    { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds })) }
+  ];
+  if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
   sections.push({
     id: "session_quality",
     title: "Session Quality",
@@ -1026,30 +1121,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         .slice(0, 2)
         .map((s) => `Hardest: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
     ],
-    charts: [
-      {
-        type: "bar",
-        yLabel: "Avg score by session",
-        initialBars: 10,
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore }))
-      },
-      {
-        type: "bar",
-        yLabel: "Throw rate % by session",
-        initialBars: 10,
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate }))
-      },
-      ...(sessionWinRateBars.length > 0
-        ? [
-            {
-              type: "bar" as const,
-              yLabel: "Win rate % by session",
-              initialBars: 10,
-              bars: sessionWinRateBars
-            }
-          ]
-        : [])
-    ]
+    chart: {
+      type: "selectableBar",
+      yLabel: "Session Quality",
+      orientation: "horizontal",
+      initialBars: 10,
+      defaultMetricKey: "avg_score",
+      defaultSort: "desc",
+      options: sessionMetricOptions
+    }
   });
 
   const tempoBuckets = [
@@ -1634,6 +1714,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     availableModes,
     availableTeammates,
     availableCountries,
+    playerName,
     minPlayedAt,
     maxPlayedAt
   };
