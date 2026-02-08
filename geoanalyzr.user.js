@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.6
+// @version      1.3.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10366,6 +10366,8 @@
     const scores = rounds.map(extractScore).filter((v) => v !== void 0);
     const distancesKm = rounds.map((r) => extractDistanceMeters(r)).filter((v) => v !== void 0).map((m) => m / 1e3);
     const timesSec = rounds.map(extractTimeMs).filter((v) => v !== void 0).map((ms) => ms / 1e3);
+    const overviewTimePlayedMs = rounds.map(extractTimeMs).filter((v) => typeof v === "number").reduce((acc, v) => acc + v, 0);
+    const overviewTimedRounds = rounds.reduce((acc, r) => acc + (typeof extractTimeMs(r) === "number" ? 1 : 0), 0);
     const roundMetrics = rounds.map((r) => {
       const ts = playedAtByGameId.get(r.gameId);
       const score = extractScore(r);
@@ -10442,6 +10444,7 @@
       `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
       `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
       `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
+      `Time played: ${overviewTimedRounds > 0 ? formatDurationHuman(overviewTimePlayedMs) : "-"}${overviewTimedRounds > 0 && overviewTimedRounds < rounds.length ? ` (from ${overviewTimedRounds}/${rounds.length} rounds with time data)` : ""}`,
       `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
       `Longest win streak: ${bestWinStreak}`,
       `Longest loss streak: ${worstLossStreak}`
@@ -11016,6 +11019,8 @@
       const teammateGameSet2 = teammateGames.get(teammateToUse) || /* @__PURE__ */ new Set();
       const gamesTogether = baseGames.filter((g) => teammateGameSet2.has(g.gameId)).sort((a, b) => a.playedAt - b.playedAt);
       const roundsTogether = baseRounds.filter((r) => teammateGameSet2.has(r.gameId));
+      const teamTimePlayedMs = roundsTogether.map(extractTimeMs).filter((v) => typeof v === "number").reduce((acc, v) => acc + v, 0);
+      const teamTimedRounds = roundsTogether.reduce((acc, r) => acc + (typeof extractTimeMs(r) === "number" ? 1 : 0), 0);
       const compareRounds = rounds.filter((r) => {
         const mine = getPlayerStatFromRound(r, ownPlayerId);
         const mate = getPlayerStatFromRound(r, teammateToUse);
@@ -11121,6 +11126,7 @@
           "Team facts:",
           `Games together: ${gamesTogether.length}`,
           `Rounds together: ${roundsTogether.length}`,
+          `Time played together: ${teamTimedRounds > 0 ? formatDurationHuman(teamTimePlayedMs) : "-"}${teamTimedRounds > 0 && teamTimedRounds < roundsTogether.length ? ` (from ${teamTimedRounds}/${roundsTogether.length} rounds with time data)` : ""}`,
           `First game together: ${firstTogether ? formatShortDateTime(firstTogether) : "-"}`,
           `Most recent game together: ${lastTogether ? formatShortDateTime(lastTogether) : "-"}`,
           `Longest session together: ${longestPairSessionGames > 0 && longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? `${longestPairSessionGames} games (${formatShortDateTime(longestPairSessionStart)} -> ${formatShortDateTime(longestPairSessionEnd)})` : "-"}`,
