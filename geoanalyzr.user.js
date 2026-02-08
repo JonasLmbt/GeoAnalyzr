@@ -7351,7 +7351,17 @@
     return Number.isFinite(t) ? t : void 0;
   }
   function asNum(v) {
-    return typeof v === "number" && Number.isFinite(v) ? v : void 0;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const parsed = Number(v);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return void 0;
+  }
+  function normalizeCountryCode(v) {
+    if (typeof v !== "string") return void 0;
+    const x = v.trim().toLowerCase();
+    return x || void 0;
   }
   function getByPath2(obj, path) {
     const parts = path.split(".");
@@ -7567,6 +7577,47 @@
     const nums = values.filter((v) => typeof v === "number" && Number.isFinite(v));
     if (!nums.length) return void 0;
     return nums.reduce((a, b) => a + b, 0) / nums.length;
+  }
+  async function backfillMissingGuessCountries(onStatus) {
+    const rounds = await db.rounds.toArray();
+    if (rounds.length === 0) return { updatedRounds: 0, filledCountries: 0 };
+    const startedAt = Date.now();
+    const updated = [];
+    let filledCountries = 0;
+    for (let i = 0; i < rounds.length; i++) {
+      const r = rounds[i];
+      let changed = false;
+      const next = { ...r };
+      for (const slot of [1, 2, 3, 4]) {
+        const countryKey = `p${slot}_guessCountry`;
+        const latKey = `p${slot}_guessLat`;
+        const lngKey = `p${slot}_guessLng`;
+        const currentCountry = normalizeCountryCode(next[countryKey]);
+        if (currentCountry) continue;
+        const lat = asNum(slot === 1 ? next[latKey] ?? next.guessLat : next[latKey]);
+        const lng = asNum(slot === 1 ? next[lngKey] ?? next.guessLng : next[lngKey]);
+        if (lat === void 0 || lng === void 0) continue;
+        const resolved = await resolveCountryCodeByLatLng(lat, lng);
+        const normalized = normalizeCountryCode(resolved);
+        if (!normalized) continue;
+        next[countryKey] = normalized;
+        filledCountries++;
+        changed = true;
+      }
+      if (changed) updated.push(next);
+      if ((i + 1) % 250 === 0) {
+        const elapsed = Date.now() - startedAt;
+        const rate = (i + 1) / Math.max(1, elapsed);
+        const etaMs = rate > 0 ? (rounds.length - (i + 1)) / rate : 0;
+        onStatus(
+          `Backfilling guess countries ${i + 1}/${rounds.length} (updated ${updated.length}) ETA ~${etaLabel2(etaMs)}`
+        );
+      }
+    }
+    for (let i = 0; i < updated.length; i += 500) {
+      await db.rounds.bulkPut(updated.slice(i, i + 500));
+    }
+    return { updatedRounds: updated.length, filledCountries };
   }
   async function normalizeGameAndRounds(game, gameData, endpoint, ownPlayerId, ncfa) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
@@ -7818,7 +7869,11 @@
     }
     if (markMissing.length > 0) await db.details.bulkPut(markMissing);
     if (queue.length === 0) {
-      opts.onStatus("No missing detail entries.");
+      opts.onStatus("No missing detail entries. Checking guess-country completeness...");
+      const backfillOnly = await backfillMissingGuessCountries(opts.onStatus);
+      opts.onStatus(
+        `No missing detail entries. Guess-country backfill: updated rounds ${backfillOnly.updatedRounds}, filled countries ${backfillOnly.filledCountries}.`
+      );
       return;
     }
     opts.onStatus(`Fetching details for ${queue.length} duel games...`);
@@ -7867,7 +7922,11 @@
     }
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
     const topFailModes = [...failByMode.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([mode, count]) => `${mode}:${count}`).join(", ");
-    opts.onStatus(`Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""}`);
+    opts.onStatus("Checking guess-country completeness...");
+    const backfill = await backfillMissingGuessCountries(opts.onStatus);
+    opts.onStatus(
+      `Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""} | backfill rounds=${backfill.updatedRounds}, countries=${backfill.filledCountries}`
+    );
   }
 
   // src/analysis.ts
@@ -7979,13 +8038,13 @@
   function getGameMode(game) {
     return game.gameMode || game.mode || "unknown";
   }
-  function normalizeCountryCode(v) {
+  function normalizeCountryCode2(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return x ? x : void 0;
   }
   function countryLabel(code) {
-    const c = normalizeCountryCode(code);
+    const c = normalizeCountryCode2(code);
     if (!c) return "-";
     if (c.length === 2 && regionDisplay2) {
       try {
@@ -7997,7 +8056,7 @@
     return c.toUpperCase();
   }
   function countryFlagEmoji(code) {
-    const c = normalizeCountryCode(code);
+    const c = normalizeCountryCode2(code);
     if (!c || c.length !== 2) return "";
     const base = 127397;
     return c.toUpperCase().split("").map((ch) => String.fromCodePoint(base + ch.charCodeAt(0))).join("");
@@ -8243,7 +8302,7 @@
     ];
     const countryCountsBase = /* @__PURE__ */ new Map();
     for (const r of baseRounds) {
-      const c = normalizeCountryCode(r.trueCountry);
+      const c = normalizeCountryCode2(r.trueCountry);
       if (!c) continue;
       countryCountsBase.set(c, (countryCountsBase.get(c) || 0) + 1);
     }
@@ -8259,7 +8318,7 @@
     const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
     const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
     const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
-    const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
+    const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode2(r.trueCountry) === selectedCountry) : teamRounds;
     const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
     const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
     if (countryGames.length === 0 || countryRounds.length === 0) {
@@ -8599,7 +8658,7 @@
     });
     const countryAgg = /* @__PURE__ */ new Map();
     for (const r of rounds) {
-      const t = normalizeCountryCode(r.trueCountry);
+      const t = normalizeCountryCode2(r.trueCountry);
       if (!t) continue;
       const entry = countryAgg.get(t) || { n: 0, score: [], dist: [], correct: 0, guessed: /* @__PURE__ */ new Map() };
       entry.n++;
@@ -8607,7 +8666,7 @@
       if (typeof sc === "number") entry.score.push(sc);
       const dm = extractDistanceMeters(r);
       if (typeof dm === "number") entry.dist.push(dm / 1e3);
-      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      const guess = normalizeCountryCode2(getString(asRecord(r), "p1_guessCountry"));
       if (guess) {
         entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
         if (guess === t) entry.correct++;
@@ -8652,7 +8711,7 @@
     const damageByCountry = /* @__PURE__ */ new Map();
     if (ownPlayerId) {
       for (const r of teamRounds) {
-        const country = normalizeCountryCode(r.trueCountry);
+        const country = normalizeCountryCode2(r.trueCountry);
         if (!country) continue;
         const diff = getRoundDamageDiff(r, ownPlayerId);
         if (typeof diff !== "number" || !Number.isFinite(diff)) continue;
@@ -8702,8 +8761,8 @@
     });
     const confusionMap = /* @__PURE__ */ new Map();
     for (const r of teamRounds) {
-      const truth = normalizeCountryCode(r.trueCountry);
-      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      const truth = normalizeCountryCode2(r.trueCountry);
+      const guess = normalizeCountryCode2(getString(asRecord(r), "p1_guessCountry"));
       if (!truth || !guess || truth === guess) continue;
       const key = `${truth}|${guess}`;
       confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
@@ -8894,7 +8953,7 @@
     if (spotlightCountry && countryAgg.has(spotlightCountry)) {
       const agg = countryAgg.get(spotlightCountry);
       const wrongGuesses = [...agg.guessed.entries()].filter(([guess]) => guess !== spotlightCountry).sort((a, b) => b[1] - a[1]).slice(0, 6);
-      const countryRounds2 = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+      const countryRounds2 = rounds.filter((r) => normalizeCountryCode2(r.trueCountry) === spotlightCountry);
       const countryScores = countryRounds2.map(extractScore).filter((x) => typeof x === "number");
       const countryFiveK = countryScores.filter((s) => s >= 5e3).length;
       const countryThrows = countryScores.filter((s) => s < 50).length;

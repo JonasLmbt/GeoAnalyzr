@@ -34,7 +34,18 @@ function toTs(isoMaybe: unknown): number | undefined {
 }
 
 function asNum(v: unknown): number | undefined {
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const parsed = Number(v);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function normalizeCountryCode(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const x = v.trim().toLowerCase();
+  return x || undefined;
 }
 
 function getByPath(obj: any, path: string): any {
@@ -278,6 +289,60 @@ function averageDefined(values: Array<number | undefined>): number | undefined {
   const nums = values.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   if (!nums.length) return undefined;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+async function backfillMissingGuessCountries(
+  onStatus: (msg: string) => void
+): Promise<{ updatedRounds: number; filledCountries: number }> {
+  const rounds = await db.rounds.toArray();
+  if (rounds.length === 0) return { updatedRounds: 0, filledCountries: 0 };
+
+  const startedAt = Date.now();
+  const updated: RoundRow[] = [];
+  let filledCountries = 0;
+
+  for (let i = 0; i < rounds.length; i++) {
+    const r = rounds[i] as any;
+    let changed = false;
+    const next: any = { ...r };
+
+    for (const slot of [1, 2, 3, 4] as const) {
+      const countryKey = `p${slot}_guessCountry`;
+      const latKey = `p${slot}_guessLat`;
+      const lngKey = `p${slot}_guessLng`;
+      const currentCountry = normalizeCountryCode(next[countryKey]);
+      if (currentCountry) continue;
+
+      const lat = asNum(slot === 1 ? (next[latKey] ?? next.guessLat) : next[latKey]);
+      const lng = asNum(slot === 1 ? (next[lngKey] ?? next.guessLng) : next[lngKey]);
+      if (lat === undefined || lng === undefined) continue;
+
+      const resolved = await resolveCountryCodeByLatLng(lat, lng);
+      const normalized = normalizeCountryCode(resolved);
+      if (!normalized) continue;
+
+      next[countryKey] = normalized;
+      filledCountries++;
+      changed = true;
+    }
+
+    if (changed) updated.push(next as RoundRow);
+
+    if ((i + 1) % 250 === 0) {
+      const elapsed = Date.now() - startedAt;
+      const rate = (i + 1) / Math.max(1, elapsed);
+      const etaMs = rate > 0 ? (rounds.length - (i + 1)) / rate : 0;
+      onStatus(
+        `Backfilling guess countries ${i + 1}/${rounds.length} (updated ${updated.length}) ETA ~${etaLabel(etaMs)}`
+      );
+    }
+  }
+
+  for (let i = 0; i < updated.length; i += 500) {
+    await db.rounds.bulkPut(updated.slice(i, i + 500));
+  }
+
+  return { updatedRounds: updated.length, filledCountries };
 }
 
 async function normalizeGameAndRounds(
@@ -595,7 +660,11 @@ export async function fetchMissingDuelsDetails(opts: {
 
   if (markMissing.length > 0) await db.details.bulkPut(markMissing);
   if (queue.length === 0) {
-    opts.onStatus("No missing detail entries.");
+    opts.onStatus("No missing detail entries. Checking guess-country completeness...");
+    const backfillOnly = await backfillMissingGuessCountries(opts.onStatus);
+    opts.onStatus(
+      `No missing detail entries. Guess-country backfill: updated rounds ${backfillOnly.updatedRounds}, filled countries ${backfillOnly.filledCountries}.`
+    );
     return;
   }
 
@@ -655,5 +724,9 @@ export async function fetchMissingDuelsDetails(opts: {
     .slice(0, 6)
     .map(([mode, count]) => `${mode}:${count}`)
     .join(", ");
-  opts.onStatus(`Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""}`);
+  opts.onStatus("Checking guess-country completeness...");
+  const backfill = await backfillMissingGuessCountries(opts.onStatus);
+  opts.onStatus(
+    `Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""} | backfill rounds=${backfill.updatedRounds}, countries=${backfill.filledCountries}`
+  );
 }
