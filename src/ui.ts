@@ -522,7 +522,10 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
       const mr = 22;
       const mt = 14;
       const mb = 20;
-      const h = Math.max((chart as Extract<AnalysisChart, { type: "bar" }>).minHeight ?? 300, mt + mb + bars.length * rowH);
+      const contentHeight = mt + mb + bars.length * rowH;
+      const defaultMinHeight = Math.max(140, contentHeight);
+      const requestedMinHeight = (chart as Extract<AnalysisChart, { type: "bar" }>).minHeight;
+      const h = Math.max(typeof requestedMinHeight === "number" ? requestedMinHeight : defaultMinHeight, contentHeight);
       const maxY = Math.max(1, ...bars.map((b) => b.value));
       const innerW = w - ml - mr;
       const rects = bars

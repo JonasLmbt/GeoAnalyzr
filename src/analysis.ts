@@ -1457,18 +1457,18 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (modeFamily === "duels") {
       ids.push({
         id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
-        name: getString(dd, "playerTwoName"),
+        name: getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName"),
         country: getString(dd, "playerTwoCountry")
       });
     } else if (modeFamily === "teamduels") {
       ids.push({
-        id: getString(dd, "teamTwoPlayerOneId"),
-        name: getString(dd, "teamTwoPlayerOneName"),
+        id: getString(dd, "p3_playerId") ?? getString(dd, "teamTwoPlayerOneId"),
+        name: getString(dd, "p3_playerName") ?? getString(dd, "teamTwoPlayerOneName"),
         country: getString(dd, "teamTwoPlayerOneCountry")
       });
       ids.push({
-        id: getString(dd, "teamTwoPlayerTwoId"),
-        name: getString(dd, "teamTwoPlayerTwoName"),
+        id: getString(dd, "p4_playerId") ?? getString(dd, "teamTwoPlayerTwoId"),
+        name: getString(dd, "p4_playerName") ?? getString(dd, "teamTwoPlayerTwoName"),
         country: getString(dd, "teamTwoPlayerTwoCountry")
       });
     }
@@ -1484,7 +1484,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 20);
   const oppCountryCounts = new Map<string, number>();
-  for (const [, v] of topOpp) {
+  for (const [, v] of opponentCounts) {
     const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
     oppCountryCounts.set(c, (oppCountryCounts.get(c) || 0) + v.games);
   }
@@ -1730,7 +1730,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
     sections.push({
       id: "country_spotlight",
-      title: `Country Spotlight: ${countryFlagEmoji(spotlightCountry)} ${countryLabel(spotlightCountry)}`,
+      title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
       group: "Countries",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.8
+// @version      1.3.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7104,7 +7104,10 @@
         const mr = 22;
         const mt = 14;
         const mb = 20;
-        const h = Math.max(chart.minHeight ?? 300, mt + mb + bars.length * rowH);
+        const contentHeight = mt + mb + bars.length * rowH;
+        const defaultMinHeight = Math.max(140, contentHeight);
+        const requestedMinHeight = chart.minHeight;
+        const h = Math.max(typeof requestedMinHeight === "number" ? requestedMinHeight : defaultMinHeight, contentHeight);
         const maxY = Math.max(1, ...bars.map((b) => b.value));
         const innerW = w - ml - mr;
         const rects = bars.map((b, i) => {
@@ -10023,12 +10026,6 @@
     }
     return c.toUpperCase();
   }
-  function countryFlagEmoji(code) {
-    const c = normalizeCountryCode(code);
-    if (!c || c.length !== 2) return "";
-    const base = 127397;
-    return c.toUpperCase().split("").map((ch) => String.fromCodePoint(base + ch.charCodeAt(0))).join("");
-  }
   function extractOwnDuelRating(detail, ownPlayerId) {
     const d = asRecord(detail);
     const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
@@ -10951,18 +10948,18 @@
       if (modeFamily === "duels") {
         ids.push({
           id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
-          name: getString(dd, "playerTwoName"),
+          name: getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName"),
           country: getString(dd, "playerTwoCountry")
         });
       } else if (modeFamily === "teamduels") {
         ids.push({
-          id: getString(dd, "teamTwoPlayerOneId"),
-          name: getString(dd, "teamTwoPlayerOneName"),
+          id: getString(dd, "p3_playerId") ?? getString(dd, "teamTwoPlayerOneId"),
+          name: getString(dd, "p3_playerName") ?? getString(dd, "teamTwoPlayerOneName"),
           country: getString(dd, "teamTwoPlayerOneCountry")
         });
         ids.push({
-          id: getString(dd, "teamTwoPlayerTwoId"),
-          name: getString(dd, "teamTwoPlayerTwoName"),
+          id: getString(dd, "p4_playerId") ?? getString(dd, "teamTwoPlayerTwoId"),
+          name: getString(dd, "p4_playerName") ?? getString(dd, "teamTwoPlayerTwoName"),
           country: getString(dd, "teamTwoPlayerTwoCountry")
         });
       }
@@ -10977,7 +10974,7 @@
     }
     const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 20);
     const oppCountryCounts = /* @__PURE__ */ new Map();
-    for (const [, v] of topOpp) {
+    for (const [, v] of opponentCounts) {
       const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
       oppCountryCounts.set(c, (oppCountryCounts.get(c) || 0) + v.games);
     }
@@ -11180,7 +11177,7 @@
       const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
       sections.push({
         id: "country_spotlight",
-        title: `Country Spotlight: ${countryFlagEmoji(spotlightCountry)} ${countryLabel(spotlightCountry)}`,
+        title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
         group: "Countries",
         appliesFilters: ["date", "mode", "teammate", "country"],
         lines: [
