@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.5
+// @version      1.2.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7724,17 +7724,13 @@
       body.style.gap = "8px";
       body.style.marginBottom = "10px";
       body.style.marginTop = "2px";
-      for (const line of section.lines) {
+      const createLineRow = (line) => {
         const row = doc.createElement("div");
-        row.style.border = `1px solid ${palette.border}`;
-        row.style.background = palette.panelAlt;
-        row.style.borderRadius = "8px";
         row.style.padding = "9px 11px";
         row.style.display = "flex";
         row.style.alignItems = "center";
         row.style.justifyContent = "space-between";
         row.style.gap = "12px";
-        row.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
         const sep = line.indexOf(":");
         if (sep > 0 && sep < line.length - 1) {
           const left = doc.createElement("span");
@@ -7765,7 +7761,47 @@
           only.style.letterSpacing = "0.1px";
           row.appendChild(only);
         }
-        body.appendChild(row);
+        return row;
+      };
+      const createStandaloneCard = (line) => {
+        const row = createLineRow(line);
+        row.style.border = `1px solid ${palette.border}`;
+        row.style.background = palette.panelAlt;
+        row.style.borderRadius = "8px";
+        row.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
+        return row;
+      };
+      for (let i = 0; i < section.lines.length; i++) {
+        const line = section.lines[i];
+        const isGroupHeader = /:\s*$/.test(line);
+        if (!isGroupHeader || i === section.lines.length - 1) {
+          body.appendChild(createStandaloneCard(line));
+          continue;
+        }
+        let end = i + 1;
+        while (end < section.lines.length && !/:\s*$/.test(section.lines[end])) {
+          end++;
+        }
+        const groupCard = doc.createElement("div");
+        groupCard.style.border = `1px solid ${palette.border}`;
+        groupCard.style.background = palette.panelAlt;
+        groupCard.style.borderRadius = "8px";
+        groupCard.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
+        groupCard.style.overflow = "hidden";
+        const header2 = doc.createElement("div");
+        header2.textContent = line;
+        header2.style.padding = "9px 11px";
+        header2.style.fontSize = "13px";
+        header2.style.fontWeight = "700";
+        header2.style.color = palette.text;
+        groupCard.appendChild(header2);
+        for (let j = i + 1; j < end; j++) {
+          const itemRow = createLineRow(section.lines[j]);
+          itemRow.style.borderTop = `1px solid ${palette.border}`;
+          groupCard.appendChild(itemRow);
+        }
+        body.appendChild(groupCard);
+        i = end - 1;
       }
       card.appendChild(topMeta);
       card.appendChild(title2);
