@@ -516,14 +516,14 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("width", "100%");
     if (horizontal) {
-      const rowH = 18;
-      const barH = 12;
+      const rowH = 16;
+      const barH = 14;
       const ml = 250;
       const mr = 22;
-      const mt = 14;
-      const mb = 20;
+      const mt = 6;
+      const mb = 10;
       const contentHeight = mt + mb + bars.length * rowH;
-      const defaultMinHeight = Math.max(140, contentHeight);
+      const defaultMinHeight = Math.max(80, contentHeight);
       const requestedMinHeight = (chart as Extract<AnalysisChart, { type: "bar" }>).minHeight;
       const h = Math.max(typeof requestedMinHeight === "number" ? requestedMinHeight : defaultMinHeight, contentHeight);
       const maxY = Math.max(1, ...bars.map((b) => b.value));

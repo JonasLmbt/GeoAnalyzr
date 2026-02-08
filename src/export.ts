@@ -57,6 +57,13 @@ function toTsMaybe(isoMaybe: unknown): number | undefined {
   return Number.isFinite(t) ? t : undefined;
 }
 
+function exportModeSheetKey(gameMode: string | undefined, modeFamily: string | undefined): string {
+  const family = String(modeFamily || "").toLowerCase();
+  if (family === "standard") return "standard";
+  if (family === "streak") return "streak";
+  return gameMode || "unknown";
+}
+
 async function resolveGuessCountryForExport(
   existing: unknown,
   lat?: number,
@@ -111,13 +118,13 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
   const gamesByMode = new Map<string, Array<any & { __playedAt?: number }>>();
   for (const g of games) {
     const d = detailsByGame.get(g.gameId);
-    const mode = g.gameMode || g.mode || "unknown";
+    const modeFamily = g.modeFamily || "";
+    const mode = exportModeSheetKey(g.gameMode || g.mode, modeFamily);
     if (!gamesByMode.has(mode)) gamesByMode.set(mode, []);
     const played = new Date(g.playedAt);
     const date = played.toISOString().slice(0, 10);
     const time = played.toISOString().slice(11, 23);
     const isTeam = (mode || "").toLowerCase().includes("team");
-    const modeFamily = g.modeFamily || "";
     const isStandard = modeFamily === "standard";
     const isStreak = modeFamily === "streak" && !(mode || "").toLowerCase().includes("team");
     const raw = g.raw as any;
@@ -211,7 +218,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
   const roundsByMode = new Map<string, any[]>();
   for (const r of rounds) {
     const g = gameById.get(r.gameId);
-    const mode = g?.gameMode || g?.mode || "unknown";
+    const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
     if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
     const p1Lat = r.p1_guessLat ?? r.guessLat;
     const p1Lng = r.p1_guessLng ?? r.guessLng;

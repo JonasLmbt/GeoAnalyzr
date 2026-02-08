@@ -55,6 +55,27 @@ function classifyModeFamily(gameMode?: string): ModeFamily {
   return "other";
 }
 
+function classifyModeFamilyFromEvent(ev: any, gameMode?: string): ModeFamily {
+  const byMode = classifyModeFamily(gameMode);
+  if (byMode !== "other") return byMode;
+  const hintRaw = pickFirst(ev, [
+    "type",
+    "__typename",
+    "payload.type",
+    "payload.__typename",
+    "payload.gameType",
+    "payload.mode",
+    "payload.slug"
+  ]);
+  const hint = String(hintRaw || "").toLowerCase();
+  if (!hint) return "other";
+  if (hint.includes("team") && hint.includes("duel")) return "teamduels";
+  if (hint.includes("duel")) return "duels";
+  if (hint.includes("streak")) return "streak";
+  if (hint.includes("standard") || hint.includes("singleplayer") || hint.includes("classic")) return "standard";
+  return "other";
+}
+
 function classifyTypeFromFamily(family: ModeFamily): FeedGameRow["type"] {
   if (family === "duels" || family === "teamduels") return "duels";
   if (family === "standard" || family === "streak") return "classic";
@@ -137,7 +158,7 @@ export async function syncFeed(opts: {
         if (!gameId) continue;
         const playedAt = extractEventTimeMs(ev, entry);
         const gameMode = extractGameMode(ev, entry);
-        const modeFamily = classifyModeFamily(gameMode);
+        const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
         pageRows.push({
           gameId,
           playedAt,

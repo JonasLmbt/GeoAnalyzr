@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.9
+// @version      1.3.10
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7098,14 +7098,14 @@
       const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("width", "100%");
       if (horizontal) {
-        const rowH = 18;
-        const barH = 12;
+        const rowH = 16;
+        const barH = 14;
         const ml = 250;
         const mr = 22;
-        const mt = 14;
-        const mb = 20;
+        const mt = 6;
+        const mb = 10;
         const contentHeight = mt + mb + bars.length * rowH;
-        const defaultMinHeight = Math.max(140, contentHeight);
+        const defaultMinHeight = Math.max(80, contentHeight);
         const requestedMinHeight = chart.minHeight;
         const h = Math.max(typeof requestedMinHeight === "number" ? requestedMinHeight : defaultMinHeight, contentHeight);
         const maxY = Math.max(1, ...bars.map((b) => b.value));
@@ -8226,6 +8226,26 @@
     if (m.includes("streak")) return "streak";
     return "other";
   }
+  function classifyModeFamilyFromEvent(ev, gameMode) {
+    const byMode = classifyModeFamily(gameMode);
+    if (byMode !== "other") return byMode;
+    const hintRaw = pickFirst(ev, [
+      "type",
+      "__typename",
+      "payload.type",
+      "payload.__typename",
+      "payload.gameType",
+      "payload.mode",
+      "payload.slug"
+    ]);
+    const hint = String(hintRaw || "").toLowerCase();
+    if (!hint) return "other";
+    if (hint.includes("team") && hint.includes("duel")) return "teamduels";
+    if (hint.includes("duel")) return "duels";
+    if (hint.includes("streak")) return "streak";
+    if (hint.includes("standard") || hint.includes("singleplayer") || hint.includes("classic")) return "standard";
+    return "other";
+  }
   function classifyTypeFromFamily(family) {
     if (family === "duels" || family === "teamduels") return "duels";
     if (family === "standard" || family === "streak") return "classic";
@@ -8293,7 +8313,7 @@
           if (!gameId) continue;
           const playedAt = extractEventTimeMs(ev, entry);
           const gameMode = extractGameMode(ev, entry);
-          const modeFamily = classifyModeFamily(gameMode);
+          const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
           pageRows.push({
             gameId,
             playedAt,
@@ -31798,6 +31818,12 @@
     const t = Date.parse(isoMaybe);
     return Number.isFinite(t) ? t : void 0;
   }
+  function exportModeSheetKey(gameMode, modeFamily) {
+    const family = String(modeFamily || "").toLowerCase();
+    if (family === "standard") return "standard";
+    if (family === "streak") return "streak";
+    return gameMode || "unknown";
+  }
   async function resolveGuessCountryForExport(existing, lat, lng) {
     const direct = normalizeIso23(existing);
     if (direct) return direct;
@@ -31842,13 +31868,13 @@
     const gamesByMode = /* @__PURE__ */ new Map();
     for (const g of games) {
       const d = detailsByGame.get(g.gameId);
-      const mode = g.gameMode || g.mode || "unknown";
+      const modeFamily = g.modeFamily || "";
+      const mode = exportModeSheetKey(g.gameMode || g.mode, modeFamily);
       if (!gamesByMode.has(mode)) gamesByMode.set(mode, []);
       const played = new Date(g.playedAt);
       const date = played.toISOString().slice(0, 10);
       const time = played.toISOString().slice(11, 23);
       const isTeam = (mode || "").toLowerCase().includes("team");
-      const modeFamily = g.modeFamily || "";
       const isStandard = modeFamily === "standard";
       const isStreak = modeFamily === "streak" && !(mode || "").toLowerCase().includes("team");
       const raw = g.raw;
@@ -31940,7 +31966,7 @@
     const roundsByMode = /* @__PURE__ */ new Map();
     for (const r of rounds) {
       const g = gameById.get(r.gameId);
-      const mode = g?.gameMode || g?.mode || "unknown";
+      const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
       if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
       const p1Lat = r.p1_guessLat ?? r.guessLat;
       const p1Lng = r.p1_guessLng ?? r.guessLng;
