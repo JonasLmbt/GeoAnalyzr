@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.5
+// @version      1.3.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7859,7 +7859,13 @@
       return card;
     }
     function showNcfaManagerModal(options) {
-      const palette = getThemePalette();
+      const dark = {
+        panel: "#111827",
+        panelAlt: "#0b1220",
+        border: "#334155",
+        text: "#e5e7eb",
+        textMuted: "#93a4bc"
+      };
       const overlay = document.createElement("div");
       overlay.style.position = "fixed";
       overlay.style.inset = "0";
@@ -7870,10 +7876,10 @@
       overlay.style.padding = "16px";
       const modal = document.createElement("div");
       modal.style.width = "min(640px, 96vw)";
-      modal.style.border = `1px solid ${palette.border}`;
+      modal.style.border = `1px solid ${dark.border}`;
       modal.style.borderRadius = "12px";
-      modal.style.background = palette.panel;
-      modal.style.color = palette.text;
+      modal.style.background = dark.panel;
+      modal.style.color = dark.text;
       modal.style.boxShadow = "0 10px 30px rgba(0,0,0,0.45)";
       modal.style.padding = "14px";
       const head = document.createElement("div");
@@ -7888,7 +7894,7 @@
       closeBtn2.textContent = "x";
       closeBtn2.style.background = "transparent";
       closeBtn2.style.border = "none";
-      closeBtn2.style.color = palette.text;
+      closeBtn2.style.color = dark.text;
       closeBtn2.style.cursor = "pointer";
       closeBtn2.style.fontSize = "18px";
       head.appendChild(headTitle);
@@ -7899,9 +7905,9 @@
       input.value = options.initialToken || "";
       input.style.width = "100%";
       input.style.boxSizing = "border-box";
-      input.style.background = palette.panelAlt;
-      input.style.color = palette.text;
-      input.style.border = `1px solid ${palette.border}`;
+      input.style.background = dark.panelAlt;
+      input.style.color = dark.text;
+      input.style.border = `1px solid ${dark.border}`;
       input.style.borderRadius = "8px";
       input.style.padding = "8px 10px";
       input.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
@@ -7909,7 +7915,7 @@
       const feedback = document.createElement("div");
       feedback.style.marginTop = "8px";
       feedback.style.fontSize = "12px";
-      feedback.style.color = palette.textMuted;
+      feedback.style.color = dark.textMuted;
       feedback.textContent = "Set manually or use auto-detect.";
       const actions = document.createElement("div");
       actions.style.display = "grid";
@@ -7966,7 +7972,7 @@
       const hint = document.createElement("div");
       hint.style.marginTop = "10px";
       hint.style.fontSize = "11px";
-      hint.style.color = palette.textMuted;
+      hint.style.color = dark.textMuted;
       hint.textContent = "Auto-detect checks stored token, then cookie access, then authenticated session (cookie can be HttpOnly).";
       modal.appendChild(head);
       modal.appendChild(input);
