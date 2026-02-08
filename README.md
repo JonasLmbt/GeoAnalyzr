@@ -25,8 +25,8 @@ For development:
 
 1. Open GeoGuessr and log in.
 2. Click the GeoAnalyzr icon in the bottom-left corner to open the panel.
-3. Run `Fetch Data` to sync new games and fetch missing details.
-4. Optionally set an `_ncfa` token for more complete data fetching.
+3. Set your `_ncfa` token first (`Set NCFA Token`) for more complete and reliable data fetching.
+4. Run `Fetch Data` to sync new games and fetch missing details.
 5. Open analysis or export to Excel.
 
 ![GeoAnalyzr panel entry point](images/geoanalyzr.png)
