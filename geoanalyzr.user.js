@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.0
+// @version      1.3.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9788,19 +9788,19 @@
   }
   function formatDay(ts) {
     const d = new Date(ts);
-    const y = String(d.getFullYear()).slice(-2);
+    const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
-    return `${day}-${m}-${y}`;
+    return `${day}/${m}/${y}`;
   }
   function formatShortDateTime(ts) {
     const d = new Date(ts);
-    const y = String(d.getFullYear()).slice(-2);
+    const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${day}-${m}-${y} ${hh}:${mm}`;
+    return `${day}/${m}/${y} ${hh}:${mm}`;
   }
   function sum(values) {
     return values.reduce((a, b) => a + b, 0);
@@ -10135,6 +10135,7 @@
     return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([day, c]) => ({ x: day, y: c, label: formatDay(day) }));
   }
   var DAY_MS = 24 * 60 * 60 * 1e3;
+  var SESSION_GAP_MS = 45 * 60 * 1e3;
   function pickOverviewBucketMs(spanMs) {
     const spanDays = spanMs / DAY_MS;
     if (spanDays > 900) return 30 * DAY_MS;
@@ -10352,33 +10353,27 @@
       rounds.map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) })).filter((x) => x.ts > 0 && typeof x.value === "number"),
       overviewBucketMs
     );
-    sections.push({
-      id: "overview",
-      title: "Overview",
-      group: "Overview",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`,
-        `Games: ${games.length} | Rounds: ${rounds.length}`,
-        `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
-        `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
-        `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
-        `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
-        `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
-      ],
-      charts: [
-        {
-          type: "line",
-          yLabel: overviewBucketMs ? `Games/day (${overviewBucketDays}d aggregated)` : "Games/day",
-          points: gamesPerDayPoints
-        },
-        {
-          type: "line",
-          yLabel: overviewBucketMs ? `Avg score/day (${overviewBucketDays}d aggregated)` : "Avg score/day",
-          points: avgScorePerDayPoints
-        }
-      ]
-    });
+    const overviewLines = [
+      `Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`,
+      `Games: ${games.length} | Rounds: ${rounds.length}`,
+      `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
+      `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
+      `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
+      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
+      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
+    ];
+    const overviewCharts = [
+      {
+        type: "line",
+        yLabel: overviewBucketMs ? `Games/day (${overviewBucketDays}d aggregated)` : "Games/day",
+        points: gamesPerDayPoints
+      },
+      {
+        type: "line",
+        yLabel: overviewBucketMs ? `Avg score/day (${overviewBucketDays}d aggregated)` : "Avg score/day",
+        points: avgScorePerDayPoints
+      }
+    ];
     const outcomeTimeline = ownPlayerId ? teamDetails.map((d) => {
       const ts = teamPlayedAtByGameId.get(d.gameId);
       const result = getGameResult(d, ownPlayerId);
@@ -10409,22 +10404,15 @@
       currentWinStreak = 0;
       currentLossStreak = 0;
     }
-    sections.push({
-      id: "results_streaks",
-      title: "Results, Win Rate & Streaks",
-      group: "Performance",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: ownPlayerId ? [
-        selectedCountry ? "Country filter is ignored here (game-level results)." : "",
-        `Games with result data: ${totalResultGames}`,
-        `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
-        `Win rate (decisive): ${fmt(pct(winCount, decisiveGames), 1)}%`,
-        `Win rate (all): ${fmt(pct(winCount, totalResultGames), 1)}%`,
-        `Longest win streak: ${bestWinStreak}`,
-        `Longest loss streak: ${worstLossStreak}`
-      ].filter((x) => x !== "") : ["No own player id inferred, so game-level win/loss is unavailable."],
-      chart: void 0
-    });
+    const resultLines = ownPlayerId ? [
+      selectedCountry ? "Country filter is ignored here (game-level results)." : "",
+      `Games with result data: ${totalResultGames}`,
+      `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
+      `Win rate (decisive): ${fmt(pct(winCount, decisiveGames), 1)}%`,
+      `Win rate (all): ${fmt(pct(winCount, totalResultGames), 1)}%`,
+      `Longest win streak: ${bestWinStreak}`,
+      `Longest loss streak: ${worstLossStreak}`
+    ].filter((x) => x !== "") : ["No own player id inferred, so game-level win/loss is unavailable."];
     const modeCounts = /* @__PURE__ */ new Map();
     const movementCounts = /* @__PURE__ */ new Map();
     const movementByFilteredGameId = new Map(games.map((g) => [g.gameId, movementByGameId.get(g.gameId) || "unknown"]));
@@ -10435,20 +10423,25 @@
       movementCounts.set(m, (movementCounts.get(m) || 0) + 1);
     }
     const sortedModes = [...modeCounts.entries()].sort((a, b) => b[1] - a[1]);
-    const modeBars = sortedModes.map(([m, c]) => ({ label: gameModeLabel(m), value: c }));
     const movementOrderForBreakdown = ["moving", "no_move", "nmpz", "unknown"];
     const movementBars = movementOrderForBreakdown.filter((m) => (movementCounts.get(m) || 0) > 0).map((m) => ({ label: movementTypeLabel(m), value: movementCounts.get(m) || 0 }));
+    const breakdownLines = [
+      "Mode Breakdown:",
+      ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
+      "Movement Breakdown:",
+      ...movementBars.map((b) => `${b.label}: ${b.value}`)
+    ];
+    overviewLines.push("Results, Win Rate & Streaks:");
+    overviewLines.push(...resultLines);
+    overviewLines.push("Mode & Movement Breakdown:");
+    overviewLines.push(...breakdownLines);
     sections.push({
-      id: "overall_breakdown",
-      title: "Overall - Mode & Movement Breakdown",
+      id: "overview",
+      title: "Overview",
       group: "Overview",
-      appliesFilters: ["date", "mode", "movement"],
-      lines: [
-        "Mode Breakdown:",
-        ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
-        "Movement Breakdown:",
-        ...movementBars.map((b) => `${b.label}: ${b.value}`)
-      ]
+      appliesFilters: ["date", "mode", "movement", "teammate", "country"],
+      lines: overviewLines,
+      charts: overviewCharts
     });
     const weekday = new Array(7).fill(0);
     const hour = new Array(24).fill(0);
@@ -10956,11 +10949,23 @@
     const ratingDelta = selectedTeammate ? teammateDelta : duelDelta;
     let bestGain;
     let worstLoss;
-    for (let i = 1; i < ratingPoints.length; i++) {
-      const delta = ratingPoints[i].y - ratingPoints[i - 1].y;
-      const ts = ratingPoints[i].x;
-      if (!bestGain || delta > bestGain.delta) bestGain = { delta, ts };
-      if (!worstLoss || delta < worstLoss.delta) worstLoss = { delta, ts };
+    if (ratingPoints.length > 1) {
+      let sessionStartIdx = 0;
+      for (let i = 1; i <= ratingPoints.length; i++) {
+        const reachedEnd = i === ratingPoints.length;
+        const gapBreak = !reachedEnd && ratingPoints[i].x - ratingPoints[i - 1].x > SESSION_GAP_MS;
+        if (!reachedEnd && !gapBreak) continue;
+        const sessionEndIdx = i - 1;
+        if (sessionEndIdx > sessionStartIdx) {
+          const start = ratingPoints[sessionStartIdx];
+          const end = ratingPoints[sessionEndIdx];
+          const delta = end.y - start.y;
+          const summary = { delta, startTs: start.x, endTs: end.x };
+          if (!bestGain || delta > bestGain.delta) bestGain = summary;
+          if (!worstLoss || delta < worstLoss.delta) worstLoss = summary;
+        }
+        sessionStartIdx = i;
+      }
     }
     sections.push({
       id: "rating_history",
@@ -10969,8 +10974,8 @@
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
         ratingDelta !== void 0 ? `Trend: ${ratingDelta >= 0 ? "+" : ""}${fmt(ratingDelta, 0)}` : "Trend: -",
-        bestGain ? `Biggest rating gain: ${bestGain.delta >= 0 ? "+" : ""}${fmt(bestGain.delta, 0)} at ${formatShortDateTime(bestGain.ts)}` : "Biggest rating gain: -",
-        worstLoss ? `Biggest rating loss: ${worstLoss.delta >= 0 ? "+" : ""}${fmt(worstLoss.delta, 0)} at ${formatShortDateTime(worstLoss.ts)}` : "Biggest rating loss: -"
+        bestGain ? `Biggest session rating gain: ${bestGain.delta >= 0 ? "+" : ""}${fmt(bestGain.delta, 0)} (${formatShortDateTime(bestGain.startTs)} -> ${formatShortDateTime(bestGain.endTs)})` : "Biggest session rating gain: -",
+        worstLoss ? `Biggest session rating loss: ${worstLoss.delta >= 0 ? "+" : ""}${fmt(worstLoss.delta, 0)} (${formatShortDateTime(worstLoss.startTs)} -> ${formatShortDateTime(worstLoss.endTs)})` : "Biggest session rating loss: -"
       ],
       charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : void 0
     });
