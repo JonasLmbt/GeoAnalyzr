@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.8
+// @version      1.2.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9790,10 +9790,10 @@
   }
   function formatDay(ts) {
     const d = new Date(ts);
-    const y = d.getFullYear();
+    const y = String(d.getFullYear()).slice(-2);
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
+    return `${day}-${m}-${y}`;
   }
   function formatShortDateTime(ts) {
     const d = new Date(ts);
@@ -9802,7 +9802,7 @@
     const day = String(d.getDate()).padStart(2, "0");
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${y}-${m}-${day} ${hh}:${mm}`;
+    return `${day}-${m}-${y} ${hh}:${mm}`;
   }
   function sum(values) {
     return values.reduce((a, b) => a + b, 0);
@@ -10360,7 +10360,7 @@
       group: "Overview",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
-        `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
+        `Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`,
         `Games: ${games.length} | Rounds: ${rounds.length}`,
         `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
         `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
@@ -10450,18 +10450,6 @@
         ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
         "Movement Breakdown:",
         ...movementBars.map((b) => `${b.label}: ${b.value}`)
-      ],
-      charts: [
-        {
-          type: "bar",
-          yLabel: "Games by mode",
-          bars: modeBars
-        },
-        {
-          type: "bar",
-          yLabel: "Games by movement",
-          bars: movementBars
-        }
       ]
     });
     const weekday = new Array(7).fill(0);
@@ -10936,18 +10924,20 @@
     }
     sections.push({
       id: "opponents",
-      title: "Most Frequent Opponents",
+      title: "Opponents",
       group: "Opponents",
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
         selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
         "Top 3 opponents:",
-        ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
-        `Unique opponents in scope: ${opponentCounts.size}`
+        ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`),
+        "Scope:",
+        `Unique opponents: ${opponentCounts.size}`,
+        `Unique countries: ${oppCountryCounts.size}`
       ].filter((x) => x !== ""),
       chart: {
         type: "bar",
-        yLabel: "Meetings by opponent country",
+        yLabel: "Match-ups by opponent country",
         bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n }))
       }
     });
@@ -11085,12 +11075,6 @@
         }
         avgPairGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
       }
-      const h2hCategories = [
-        { label: "Higher score", you: myScoreWins, mate: mateScoreWins },
-        { label: "Closer guesses", you: myCloser, mate: mateCloser },
-        { label: "Fewer throws", you: mateThrows, mate: myThrows },
-        { label: "More 5k", you: myFiveKs, mate: mateFiveKs }
-      ];
       sections.push({
         id: "teammate_battle",
         title: `Team: You + ${mateName}`,
@@ -11111,26 +11095,7 @@
           `Longest session together: ${longestPairSessionGames > 0 && longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? `${longestPairSessionGames} games (${formatShortDateTime(longestPairSessionStart)} -> ${formatShortDateTime(longestPairSessionEnd)})` : "-"}`,
           `Avg games per session together: ${fmt(avgPairGamesPerSession, 1)}`,
           `Longest break between games together: ${longestPairBreak ? formatDurationHuman(longestPairBreak) : "-"}`
-        ].filter((x) => x !== ""),
-        chart: {
-          type: "selectableBar",
-          yLabel: "Team head-to-head",
-          initialBars: 4,
-          defaultMetricKey: "your_share",
-          defaultSort: "chronological",
-          options: [
-            {
-              key: "your_share",
-              label: "Your share (%)",
-              bars: h2hCategories.map((c) => ({ label: c.label, value: c.you + c.mate ? pct(c.you, c.you + c.mate) : 0 }))
-            },
-            {
-              key: "teammate_share",
-              label: `${mateName} share (%)`,
-              bars: h2hCategories.map((c) => ({ label: c.label, value: c.you + c.mate ? pct(c.mate, c.you + c.mate) : 0 }))
-            }
-          ]
-        }
+        ].filter((x) => x !== "")
       });
     }
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];

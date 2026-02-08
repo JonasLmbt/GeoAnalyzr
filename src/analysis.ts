@@ -34,10 +34,10 @@ function startOfLocalDay(ts: number): number {
 
 function formatDay(ts: number): string {
   const d = new Date(ts);
-  const y = d.getFullYear();
+  const y = String(d.getFullYear()).slice(-2);
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return `${day}-${m}-${y}`;
 }
 
 function formatShortDateTime(ts: number): string {
@@ -47,7 +47,7 @@ function formatShortDateTime(ts: number): string {
   const day = String(d.getDate()).padStart(2, "0");
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${day} ${hh}:${mm}`;
+  return `${day}-${m}-${y} ${hh}:${mm}`;
 }
 
 function sum(values: number[]): number {
@@ -657,7 +657,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   const gameTimes = games.map((g) => g.playedAt).sort((a, b) => a - b);
   const lines: string[] = [];
-  lines.push(`Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`);
+  lines.push(`Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`);
   lines.push(`Games: ${games.length} | Rounds: ${rounds.length}`);
   lines.push("");
   lines.push("Activity (last 14 days):");
@@ -865,7 +865,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     group: "Overview",
     appliesFilters: ["date", "mode", "teammate", "country"],
     lines: [
-      `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
+      `Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`,
       `Games: ${games.length} | Rounds: ${rounds.length}`,
       `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${
         movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"
@@ -971,18 +971,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
       "Movement Breakdown:",
       ...movementBars.map((b) => `${b.label}: ${b.value}`)
-    ],
-    charts: [
-      {
-        type: "bar",
-        yLabel: "Games by mode",
-        bars: modeBars
-      },
-      {
-        type: "bar",
-        yLabel: "Games by movement",
-        bars: movementBars
-      }
     ]
   });
 
@@ -1510,18 +1498,20 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   sections.push({
     id: "opponents",
-    title: "Most Frequent Opponents",
+    title: "Opponents",
     group: "Opponents",
     appliesFilters: ["date", "mode", "teammate"],
     lines: [
       selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
       "Top 3 opponents:",
-      ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} meetings${v.country ? ` (${v.country})` : ""}`),
-      `Unique opponents in scope: ${opponentCounts.size}`
+      ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`),
+      "Scope:",
+      `Unique opponents: ${opponentCounts.size}`,
+      `Unique countries: ${oppCountryCounts.size}`
     ].filter((x) => x !== ""),
     chart: {
       type: "bar",
-      yLabel: "Meetings by opponent country",
+      yLabel: "Match-ups by opponent country",
       bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n }))
     }
   });
@@ -1685,13 +1675,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       avgPairGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : undefined;
     }
 
-    const h2hCategories = [
-      { label: "Higher score", you: myScoreWins, mate: mateScoreWins },
-      { label: "Closer guesses", you: myCloser, mate: mateCloser },
-      { label: "Fewer throws", you: mateThrows, mate: myThrows },
-      { label: "More 5k", you: myFiveKs, mate: mateFiveKs }
-    ];
-
     sections.push({
       id: "teammate_battle",
       title: `Team: You + ${mateName}`,
@@ -1716,26 +1699,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         }`,
         `Avg games per session together: ${fmt(avgPairGamesPerSession, 1)}`,
         `Longest break between games together: ${longestPairBreak ? formatDurationHuman(longestPairBreak) : "-"}`
-      ].filter((x) => x !== ""),
-      chart: {
-        type: "selectableBar",
-        yLabel: "Team head-to-head",
-        initialBars: 4,
-        defaultMetricKey: "your_share",
-        defaultSort: "chronological",
-        options: [
-          {
-            key: "your_share",
-            label: "Your share (%)",
-            bars: h2hCategories.map((c) => ({ label: c.label, value: c.you + c.mate ? pct(c.you, c.you + c.mate) : 0 }))
-          },
-          {
-            key: "teammate_share",
-            label: `${mateName} share (%)`,
-            bars: h2hCategories.map((c) => ({ label: c.label, value: c.you + c.mate ? pct(c.mate, c.you + c.mate) : 0 }))
-          }
-        ]
-      }
+      ].filter((x) => x !== "")
     });
   }
 
