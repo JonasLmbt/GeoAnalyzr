@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.6
+// @version      1.0.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7358,11 +7358,6 @@
     }
     return void 0;
   }
-  function normalizeCountryCode(v) {
-    if (typeof v !== "string") return void 0;
-    const x = v.trim().toLowerCase();
-    return x || void 0;
-  }
   function getByPath2(obj, path) {
     const parts = path.split(".");
     let cur = obj;
@@ -7378,6 +7373,45 @@
       if (v !== void 0 && v !== null) return v;
     }
     return void 0;
+  }
+  function normalizeIso2(v) {
+    if (typeof v !== "string") return void 0;
+    const x = v.trim().toLowerCase();
+    if (!x) return void 0;
+    return /^[a-z]{2}$/.test(x) ? x : void 0;
+  }
+  function extractGuessLatLng(guess) {
+    const lat = asNum(
+      pickFirst2(guess, [
+        "lat",
+        "latitude",
+        "location.lat",
+        "position.lat",
+        "coordinates.1"
+      ])
+    );
+    const lng = asNum(
+      pickFirst2(guess, [
+        "lng",
+        "lon",
+        "longitude",
+        "location.lng",
+        "location.lon",
+        "position.lng",
+        "position.lon",
+        "coordinates.0"
+      ])
+    );
+    return { lat, lng };
+  }
+  function extractGuessCountryCode(guess) {
+    return normalizeIso2(
+      pickFirst2(guess, [
+        "countryCode",
+        "country_code",
+        "country"
+      ])
+    );
   }
   function roundId(gameId, roundNumber) {
     return `${gameId}:${roundNumber}`;
@@ -7580,10 +7614,15 @@
   }
   async function backfillMissingGuessCountries(onStatus) {
     const rounds = await db.rounds.toArray();
-    if (rounds.length === 0) return { updatedRounds: 0, filledCountries: 0 };
+    if (rounds.length === 0) {
+      return { updatedRounds: 0, filledCountries: 0, attempted: 0, noLatLng: 0, resolveFailed: 0 };
+    }
     const startedAt = Date.now();
     const updated = [];
     let filledCountries = 0;
+    let attempted = 0;
+    let noLatLng = 0;
+    let resolveFailed = 0;
     for (let i = 0; i < rounds.length; i++) {
       const r = rounds[i];
       let changed = false;
@@ -7592,14 +7631,21 @@
         const countryKey = `p${slot}_guessCountry`;
         const latKey = `p${slot}_guessLat`;
         const lngKey = `p${slot}_guessLng`;
-        const currentCountry = normalizeCountryCode(next[countryKey]);
+        const currentCountry = normalizeIso2(next[countryKey]);
         if (currentCountry) continue;
         const lat = asNum(slot === 1 ? next[latKey] ?? next.guessLat : next[latKey]);
         const lng = asNum(slot === 1 ? next[lngKey] ?? next.guessLng : next[lngKey]);
-        if (lat === void 0 || lng === void 0) continue;
+        if (lat === void 0 || lng === void 0) {
+          noLatLng++;
+          continue;
+        }
+        attempted++;
         const resolved = await resolveCountryCodeByLatLng(lat, lng);
-        const normalized = normalizeCountryCode(resolved);
-        if (!normalized) continue;
+        const normalized = normalizeIso2(resolved);
+        if (!normalized) {
+          resolveFailed++;
+          continue;
+        }
         next[countryKey] = normalized;
         filledCountries++;
         changed = true;
@@ -7617,7 +7663,7 @@
     for (let i = 0; i < updated.length; i += 500) {
       await db.rounds.bulkPut(updated.slice(i, i + 500));
     }
-    return { updatedRounds: updated.length, filledCountries };
+    return { updatedRounds: updated.length, filledCountries, attempted, noLatLng, resolveFailed };
   }
   async function normalizeGameAndRounds(game, gameData, endpoint, ownPlayerId, ncfa) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
@@ -7766,8 +7812,9 @@
           const playerIndex = p + 1;
           const { teamId, player, healthMap } = players[p];
           const guess = guessMaps[p].get(rn);
-          const guessLat = asNum(guess?.lat);
-          const guessLng = asNum(guess?.lng);
+          const guessPos = extractGuessLatLng(guess);
+          const guessLat = guessPos.lat;
+          const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
           round[`p${playerIndex}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
           round[`p${playerIndex}_teamId`] = teamId || void 0;
@@ -7775,7 +7822,7 @@
           round[`p${playerIndex}_guessLng`] = guessLng;
           round[`p${playerIndex}_distanceMeters`] = distanceMeters;
           round[`p${playerIndex}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
-          round[`p${playerIndex}_guessCountry`] = typeof guess?.countryCode === "string" ? guess.countryCode.toLowerCase() : await resolveCountryCodeByLatLng(guessLat, guessLng);
+          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveCountryCodeByLatLng(guessLat, guessLng);
           round[`p${playerIndex}_score`] = asNum(guess?.score);
           round[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
           round[`p${playerIndex}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
@@ -7787,14 +7834,15 @@
           const playerIndex = p + 1;
           const { player, healthMap } = players[p];
           const guess = guessMaps[p].get(rn);
-          const guessLat = asNum(guess?.lat);
-          const guessLng = asNum(guess?.lng);
+          const guessPos = extractGuessLatLng(guess);
+          const guessLat = guessPos.lat;
+          const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
           round[`p${playerIndex}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
           round[`p${playerIndex}_guessLat`] = guessLat;
           round[`p${playerIndex}_guessLng`] = guessLng;
           round[`p${playerIndex}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
-          round[`p${playerIndex}_guessCountry`] = typeof guess?.countryCode === "string" ? guess.countryCode.toLowerCase() : await resolveCountryCodeByLatLng(guessLat, guessLng);
+          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveCountryCodeByLatLng(guessLat, guessLng);
           round[`p${playerIndex}_score`] = asNum(guess?.score);
           round[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
         }
@@ -7872,7 +7920,7 @@
       opts.onStatus("No missing detail entries. Checking guess-country completeness...");
       const backfillOnly = await backfillMissingGuessCountries(opts.onStatus);
       opts.onStatus(
-        `No missing detail entries. Guess-country backfill: updated rounds ${backfillOnly.updatedRounds}, filled countries ${backfillOnly.filledCountries}.`
+        `No missing detail entries. Guess-country backfill: updated rounds ${backfillOnly.updatedRounds}, filled ${backfillOnly.filledCountries}, attempted ${backfillOnly.attempted}, noLatLng ${backfillOnly.noLatLng}, failed ${backfillOnly.resolveFailed}.`
       );
       return;
     }
@@ -7925,7 +7973,7 @@
     opts.onStatus("Checking guess-country completeness...");
     const backfill = await backfillMissingGuessCountries(opts.onStatus);
     opts.onStatus(
-      `Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""} | backfill rounds=${backfill.updatedRounds}, countries=${backfill.filledCountries}`
+      `Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""} | backfill rounds=${backfill.updatedRounds}, countries=${backfill.filledCountries}, attempted=${backfill.attempted}, noLatLng=${backfill.noLatLng}, failed=${backfill.resolveFailed}`
     );
   }
 
@@ -8038,13 +8086,13 @@
   function getGameMode(game) {
     return game.gameMode || game.mode || "unknown";
   }
-  function normalizeCountryCode2(v) {
+  function normalizeCountryCode(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return x ? x : void 0;
   }
   function countryLabel(code) {
-    const c = normalizeCountryCode2(code);
+    const c = normalizeCountryCode(code);
     if (!c) return "-";
     if (c.length === 2 && regionDisplay2) {
       try {
@@ -8056,7 +8104,7 @@
     return c.toUpperCase();
   }
   function countryFlagEmoji(code) {
-    const c = normalizeCountryCode2(code);
+    const c = normalizeCountryCode(code);
     if (!c || c.length !== 2) return "";
     const base = 127397;
     return c.toUpperCase().split("").map((ch) => String.fromCodePoint(base + ch.charCodeAt(0))).join("");
@@ -8302,7 +8350,7 @@
     ];
     const countryCountsBase = /* @__PURE__ */ new Map();
     for (const r of baseRounds) {
-      const c = normalizeCountryCode2(r.trueCountry);
+      const c = normalizeCountryCode(r.trueCountry);
       if (!c) continue;
       countryCountsBase.set(c, (countryCountsBase.get(c) || 0) + 1);
     }
@@ -8318,7 +8366,7 @@
     const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
     const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
     const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
-    const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode2(r.trueCountry) === selectedCountry) : teamRounds;
+    const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
     const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
     const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
     if (countryGames.length === 0 || countryRounds.length === 0) {
@@ -8658,7 +8706,7 @@
     });
     const countryAgg = /* @__PURE__ */ new Map();
     for (const r of rounds) {
-      const t = normalizeCountryCode2(r.trueCountry);
+      const t = normalizeCountryCode(r.trueCountry);
       if (!t) continue;
       const entry = countryAgg.get(t) || { n: 0, score: [], dist: [], correct: 0, guessed: /* @__PURE__ */ new Map() };
       entry.n++;
@@ -8666,7 +8714,7 @@
       if (typeof sc === "number") entry.score.push(sc);
       const dm = extractDistanceMeters(r);
       if (typeof dm === "number") entry.dist.push(dm / 1e3);
-      const guess = normalizeCountryCode2(getString(asRecord(r), "p1_guessCountry"));
+      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
       if (guess) {
         entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
         if (guess === t) entry.correct++;
@@ -8711,7 +8759,7 @@
     const damageByCountry = /* @__PURE__ */ new Map();
     if (ownPlayerId) {
       for (const r of teamRounds) {
-        const country = normalizeCountryCode2(r.trueCountry);
+        const country = normalizeCountryCode(r.trueCountry);
         if (!country) continue;
         const diff = getRoundDamageDiff(r, ownPlayerId);
         if (typeof diff !== "number" || !Number.isFinite(diff)) continue;
@@ -8761,8 +8809,8 @@
     });
     const confusionMap = /* @__PURE__ */ new Map();
     for (const r of teamRounds) {
-      const truth = normalizeCountryCode2(r.trueCountry);
-      const guess = normalizeCountryCode2(getString(asRecord(r), "p1_guessCountry"));
+      const truth = normalizeCountryCode(r.trueCountry);
+      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
       if (!truth || !guess || truth === guess) continue;
       const key = `${truth}|${guess}`;
       confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
@@ -8953,7 +9001,7 @@
     if (spotlightCountry && countryAgg.has(spotlightCountry)) {
       const agg = countryAgg.get(spotlightCountry);
       const wrongGuesses = [...agg.guessed.entries()].filter(([guess]) => guess !== spotlightCountry).sort((a, b) => b[1] - a[1]).slice(0, 6);
-      const countryRounds2 = rounds.filter((r) => normalizeCountryCode2(r.trueCountry) === spotlightCountry);
+      const countryRounds2 = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
       const countryScores = countryRounds2.map(extractScore).filter((x) => typeof x === "number");
       const countryFiveK = countryScores.filter((s) => s >= 5e3).length;
       const countryThrows = countryScores.filter((s) => s < 50).length;
@@ -29611,6 +29659,24 @@
     const n = (name || "unknown").replace(/[\\/*?:[\]]/g, "_");
     return n.length > 31 ? n.slice(0, 31) : n;
   }
+  function normalizeIso22(v) {
+    if (typeof v !== "string") return void 0;
+    const x = v.trim().toLowerCase();
+    return /^[a-z]{2}$/.test(x) ? x : void 0;
+  }
+  function fmtCoord(v) {
+    return typeof v === "number" && Number.isFinite(v) ? v.toFixed(4) : "?";
+  }
+  async function resolveGuessCountryForExport(existing, lat, lng) {
+    const direct = normalizeIso22(existing);
+    if (direct) return direct;
+    if (typeof lat !== "number" || !Number.isFinite(lat) || typeof lng !== "number" || !Number.isFinite(lng)) {
+      return "ERR_NO_LATLNG";
+    }
+    const resolved = normalizeIso22(await resolveCountryCodeByLatLng(lat, lng));
+    if (resolved) return resolved;
+    return `ERR_RESOLVE_FAILED(${fmtCoord(lat)},${fmtCoord(lng)})`;
+  }
   async function downloadWorkbook(wb, filename) {
     const arrayBuffer = writeSync(wb, { type: "array", bookType: "xlsx" });
     const blob = new Blob([arrayBuffer], {
@@ -29742,10 +29808,12 @@
       const g = gameById.get(r.gameId);
       const mode = g?.gameMode || g?.mode || "unknown";
       if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
-      const p1Country = r.p1_guessCountry ?? await resolveCountryCodeByLatLng(r.p1_guessLat ?? r.guessLat, r.p1_guessLng ?? r.guessLng);
-      const p2Country = r.p2_guessCountry ?? await resolveCountryCodeByLatLng(r.p2_guessLat, r.p2_guessLng);
-      const p3Country = r.p3_guessCountry ?? await resolveCountryCodeByLatLng(r.p3_guessLat, r.p3_guessLng);
-      const p4Country = r.p4_guessCountry ?? await resolveCountryCodeByLatLng(r.p4_guessLat, r.p4_guessLng);
+      const p1Lat = r.p1_guessLat ?? r.guessLat;
+      const p1Lng = r.p1_guessLng ?? r.guessLng;
+      const p1Country = await resolveGuessCountryForExport(r.p1_guessCountry, p1Lat, p1Lng);
+      const p2Country = await resolveGuessCountryForExport(r.p2_guessCountry, r.p2_guessLat, r.p2_guessLng);
+      const p3Country = await resolveGuessCountryForExport(r.p3_guessCountry, r.p3_guessLat, r.p3_guessLng);
+      const p4Country = await resolveGuessCountryForExport(r.p4_guessCountry, r.p4_guessLat, r.p4_guessLng);
       const rowBase = {
         gameId: r.gameId,
         roundNumber: r.roundNumber,
@@ -29758,19 +29826,17 @@
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
         p1_playerId: r.p1_playerId ?? "",
-        p1_teamId: r.p1_teamId ?? "",
         p1_guessLat: r.p1_guessLat ?? r.guessLat ?? "",
         p1_guessLng: r.p1_guessLng ?? r.guessLng ?? "",
-        p1_guessCountry: p1Country ?? "",
+        p1_guessCountry: p1Country,
         p1_distance_km: r.p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== void 0 ? (r.p1_distanceMeters ?? r.distanceMeters) / 1e3 : ""),
         p1_score: r.p1_score ?? r.score ?? "",
         p1_healthAfter: r.p1_healthAfter ?? "",
         p1_isBestGuess: r.p1_isBestGuess ? 1 : 0,
         p2_playerId: r.p2_playerId ?? "",
-        p2_teamId: r.p2_teamId ?? "",
         p2_guessLat: r.p2_guessLat ?? "",
         p2_guessLng: r.p2_guessLng ?? "",
-        p2_guessCountry: p2Country ?? "",
+        p2_guessCountry: p2Country,
         p2_distance_km: r.p2_distanceKm ?? (r.p2_distanceMeters !== void 0 ? r.p2_distanceMeters / 1e3 : ""),
         p2_score: r.p2_score ?? "",
         p2_healthAfter: r.p2_healthAfter ?? "",
@@ -29779,11 +29845,13 @@
       };
       const isTeamMode = (mode || "").toLowerCase().includes("team");
       if (isTeamMode) {
+        rowBase.p1_teamId = r.p1_teamId ?? "";
+        rowBase.p2_teamId = r.p2_teamId ?? "";
         rowBase.p3_playerId = r.p3_playerId ?? "";
         rowBase.p3_teamId = r.p3_teamId ?? "";
         rowBase.p3_guessLat = r.p3_guessLat ?? "";
         rowBase.p3_guessLng = r.p3_guessLng ?? "";
-        rowBase.p3_guessCountry = p3Country ?? "";
+        rowBase.p3_guessCountry = p3Country;
         rowBase.p3_distance_km = r.p3_distanceKm ?? (r.p3_distanceMeters !== void 0 ? r.p3_distanceMeters / 1e3 : "");
         rowBase.p3_score = r.p3_score ?? "";
         rowBase.p3_healthAfter = r.p3_healthAfter ?? "";
@@ -29792,7 +29860,7 @@
         rowBase.p4_teamId = r.p4_teamId ?? "";
         rowBase.p4_guessLat = r.p4_guessLat ?? "";
         rowBase.p4_guessLng = r.p4_guessLng ?? "";
-        rowBase.p4_guessCountry = p4Country ?? "";
+        rowBase.p4_guessCountry = p4Country;
         rowBase.p4_distance_km = r.p4_distanceKm ?? (r.p4_distanceMeters !== void 0 ? r.p4_distanceMeters / 1e3 : "");
         rowBase.p4_score = r.p4_score ?? "";
         rowBase.p4_healthAfter = r.p4_healthAfter ?? "";

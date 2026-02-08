@@ -30,6 +30,31 @@ function sanitizeSheetName(name: string): string {
   return n.length > 31 ? n.slice(0, 31) : n;
 }
 
+function normalizeIso2(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const x = v.trim().toLowerCase();
+  return /^[a-z]{2}$/.test(x) ? x : undefined;
+}
+
+function fmtCoord(v?: number): string {
+  return typeof v === "number" && Number.isFinite(v) ? v.toFixed(4) : "?";
+}
+
+async function resolveGuessCountryForExport(
+  existing: unknown,
+  lat?: number,
+  lng?: number
+): Promise<string> {
+  const direct = normalizeIso2(existing);
+  if (direct) return direct;
+  if (typeof lat !== "number" || !Number.isFinite(lat) || typeof lng !== "number" || !Number.isFinite(lng)) {
+    return "ERR_NO_LATLNG";
+  }
+  const resolved = normalizeIso2(await resolveCountryCodeByLatLng(lat, lng));
+  if (resolved) return resolved;
+  return `ERR_RESOLVE_FAILED(${fmtCoord(lat)},${fmtCoord(lng)})`;
+}
+
 async function downloadWorkbook(wb: XLSX.WorkBook, filename: string): Promise<void> {
   const arrayBuffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
   const blob = new Blob([arrayBuffer], {
@@ -168,10 +193,12 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     const g = gameById.get(r.gameId);
     const mode = g?.gameMode || g?.mode || "unknown";
     if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
-    const p1Country = r.p1_guessCountry ?? await resolveCountryCodeByLatLng(r.p1_guessLat ?? r.guessLat, r.p1_guessLng ?? r.guessLng);
-    const p2Country = r.p2_guessCountry ?? await resolveCountryCodeByLatLng(r.p2_guessLat, r.p2_guessLng);
-    const p3Country = r.p3_guessCountry ?? await resolveCountryCodeByLatLng(r.p3_guessLat, r.p3_guessLng);
-    const p4Country = r.p4_guessCountry ?? await resolveCountryCodeByLatLng(r.p4_guessLat, r.p4_guessLng);
+    const p1Lat = r.p1_guessLat ?? r.guessLat;
+    const p1Lng = r.p1_guessLng ?? r.guessLng;
+    const p1Country = await resolveGuessCountryForExport(r.p1_guessCountry, p1Lat, p1Lng);
+    const p2Country = await resolveGuessCountryForExport(r.p2_guessCountry, r.p2_guessLat, r.p2_guessLng);
+    const p3Country = await resolveGuessCountryForExport(r.p3_guessCountry, r.p3_guessLat, r.p3_guessLng);
+    const p4Country = await resolveGuessCountryForExport(r.p4_guessCountry, r.p4_guessLat, r.p4_guessLng);
     const rowBase: any = {
       gameId: r.gameId,
       roundNumber: r.roundNumber,
@@ -184,19 +211,17 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       damage_multiplier: r.damageMultiplier ?? "",
       is_healing_round: r.isHealingRound ? 1 : 0,
       p1_playerId: r.p1_playerId ?? "",
-      p1_teamId: r.p1_teamId ?? "",
       p1_guessLat: r.p1_guessLat ?? r.guessLat ?? "",
       p1_guessLng: r.p1_guessLng ?? r.guessLng ?? "",
-      p1_guessCountry: p1Country ?? "",
+      p1_guessCountry: p1Country,
       p1_distance_km: (r as any).p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== undefined ? (r.p1_distanceMeters ?? r.distanceMeters)! / 1e3 : ""),
       p1_score: r.p1_score ?? r.score ?? "",
       p1_healthAfter: r.p1_healthAfter ?? "",
       p1_isBestGuess: r.p1_isBestGuess ? 1 : 0,
       p2_playerId: r.p2_playerId ?? "",
-      p2_teamId: r.p2_teamId ?? "",
       p2_guessLat: r.p2_guessLat ?? "",
       p2_guessLng: r.p2_guessLng ?? "",
-      p2_guessCountry: p2Country ?? "",
+      p2_guessCountry: p2Country,
       p2_distance_km: (r as any).p2_distanceKm ?? (r.p2_distanceMeters !== undefined ? r.p2_distanceMeters / 1e3 : ""),
       p2_score: r.p2_score ?? "",
       p2_healthAfter: r.p2_healthAfter ?? "",
@@ -205,11 +230,13 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     };
     const isTeamMode = (mode || "").toLowerCase().includes("team");
     if (isTeamMode) {
+      rowBase.p1_teamId = r.p1_teamId ?? "";
+      rowBase.p2_teamId = r.p2_teamId ?? "";
       rowBase.p3_playerId = r.p3_playerId ?? "";
       rowBase.p3_teamId = r.p3_teamId ?? "";
       rowBase.p3_guessLat = r.p3_guessLat ?? "";
       rowBase.p3_guessLng = r.p3_guessLng ?? "";
-      rowBase.p3_guessCountry = p3Country ?? "";
+      rowBase.p3_guessCountry = p3Country;
       rowBase.p3_distance_km = (r as any).p3_distanceKm ?? (r.p3_distanceMeters !== undefined ? r.p3_distanceMeters / 1e3 : "");
       rowBase.p3_score = r.p3_score ?? "";
       rowBase.p3_healthAfter = r.p3_healthAfter ?? "";
@@ -218,7 +245,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       rowBase.p4_teamId = r.p4_teamId ?? "";
       rowBase.p4_guessLat = r.p4_guessLat ?? "";
       rowBase.p4_guessLng = r.p4_guessLng ?? "";
-      rowBase.p4_guessCountry = p4Country ?? "";
+      rowBase.p4_guessCountry = p4Country;
       rowBase.p4_distance_km = (r as any).p4_distanceKm ?? (r.p4_distanceMeters !== undefined ? r.p4_distanceMeters / 1e3 : "");
       rowBase.p4_score = r.p4_score ?? "";
       rowBase.p4_healthAfter = r.p4_healthAfter ?? "";
