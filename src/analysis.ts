@@ -146,6 +146,32 @@ function getGameMode(game: FeedGameRow): string {
   return game.gameMode || game.mode || "unknown";
 }
 
+type MovementTypeKey = "moving" | "no_move" | "nmpz" | "unknown";
+
+function normalizeMovementType(raw: unknown): MovementTypeKey {
+  if (typeof raw !== "string") return "unknown";
+  const s = raw.trim().toLowerCase();
+  if (!s) return "unknown";
+  if (s.includes("nmpz")) return "nmpz";
+  if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+  if (s.includes("moving")) return "moving";
+  return "unknown";
+}
+
+function movementTypeLabel(kind: MovementTypeKey): string {
+  if (kind === "moving") return "Moving";
+  if (kind === "no_move") return "No Move";
+  if (kind === "nmpz") return "NMPZ";
+  return "Unknown";
+}
+
+function getMovementType(game: FeedGameRow, detail?: GameRow): MovementTypeKey {
+  const d = asRecord(detail);
+  const fromDetail = getString(d, "gameModeSimple");
+  if (typeof fromDetail === "string" && fromDetail.trim()) return normalizeMovementType(fromDetail);
+  return normalizeMovementType(game.gameMode);
+}
+
 function normalizeCountryCode(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const x = v.trim().toLowerCase();
@@ -528,7 +554,7 @@ export interface AnalysisSection {
   id: string;
   title: string;
   group?: "Overview" | "Performance" | "Countries" | "Opponents" | "Rating" | "Fun";
-  appliesFilters?: Array<"date" | "mode" | "teammate" | "country">;
+  appliesFilters?: Array<"date" | "mode" | "gameMode" | "movement" | "teammate" | "country">;
   lines: string[];
   chart?: AnalysisChart;
   charts?: AnalysisChart[];
@@ -536,7 +562,8 @@ export interface AnalysisSection {
 
 export interface AnalysisWindowData {
   sections: AnalysisSection[];
-  availableModes: string[];
+  availableGameModes: string[];
+  availableMovementTypes: Array<{ key: MovementTypeKey | "all"; label: string }>;
   availableTeammates: Array<{ id: string; label: string }>;
   availableCountries: Array<{ code: string; label: string }>;
   playerName?: string;
@@ -547,7 +574,9 @@ export interface AnalysisWindowData {
 export interface AnalysisFilter {
   fromTs?: number;
   toTs?: number;
-  mode?: string;
+  gameMode?: string;
+  movementType?: MovementTypeKey | "all";
+  mode?: string; // legacy alias for gameMode
   teammateId?: string;
   country?: string;
 }
@@ -598,15 +627,39 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     db.details.toArray()
   ]);
 
-  const modeSet = new Set<string>();
-  for (const g of allGames) modeSet.add(getGameMode(g));
-  const availableModes = ["all", ...[...modeSet].sort((a, b) => a.localeCompare(b))];
+  const gameModeFilter = filter?.gameMode ?? filter?.mode;
   const minPlayedAt = allGames.length ? allGames[0].playedAt : undefined;
   const maxPlayedAt = allGames.length ? allGames[allGames.length - 1].playedAt : undefined;
 
-  const baseGames = allGames.filter((g) => {
+  const dateGames = allGames.filter((g) => {
     if (!inTsRange(g.playedAt, filter?.fromTs, filter?.toTs)) return false;
-    if (filter?.mode && filter.mode !== "all" && getGameMode(g) !== filter.mode) return false;
+    return true;
+  });
+  const gameModeSet = new Set<string>();
+  for (const g of dateGames) gameModeSet.add(getGameMode(g));
+  const availableGameModes = ["all", ...[...gameModeSet].sort((a, b) => a.localeCompare(b))];
+
+  const modeGames = dateGames.filter((g) => {
+    if (gameModeFilter && gameModeFilter !== "all" && getGameMode(g) !== gameModeFilter) return false;
+    return true;
+  });
+  const detailByGameId = new Map(allDetails.map((d) => [d.gameId, d]));
+  const movementByGameId = new Map(modeGames.map((g) => [g.gameId, getMovementType(g, detailByGameId.get(g.gameId))]));
+  const movementOrder: MovementTypeKey[] = ["moving", "no_move", "nmpz", "unknown"];
+  const movementSet = new Set<MovementTypeKey>();
+  for (const kind of movementByGameId.values()) movementSet.add(kind);
+  const availableMovementTypes: Array<{ key: MovementTypeKey | "all"; label: string }> = [
+    { key: "all", label: "All movement types" },
+    ...movementOrder
+      .filter((k) => movementSet.has(k))
+      .map((k) => ({ key: k, label: movementTypeLabel(k) }))
+  ];
+  const movementFilter = filter?.movementType;
+  const baseGames = modeGames.filter((g) => {
+    if (movementFilter && movementFilter !== "all") {
+      const kind = movementByGameId.get(g.gameId) || "unknown";
+      if (kind !== movementFilter) return false;
+    }
     return true;
   });
   const baseGameSet = new Set(baseGames.map((g) => g.gameId));
@@ -690,7 +743,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   if (countryGames.length === 0 || countryRounds.length === 0) {
     return {
       sections: [{ id: "empty", title: "Overview", lines: ["Keine Daten fuer den gewaehlten Filter."] }],
-      availableModes,
+      availableGameModes,
+      availableMovementTypes,
       availableTeammates,
       availableCountries,
       minPlayedAt,
@@ -750,7 +804,11 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     lines: [
       `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
       `Games: ${games.length} | Rounds: ${rounds.length}`,
-      `Filters: mode=${filter?.mode || "all"}, teammate=${selectedTeammate ? (nameMap.get(selectedTeammate) || selectedTeammate) : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
+      `Filters: game mode=${gameModeFilter || "all"}, movement=${
+        movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"
+      }, teammate=${selectedTeammate ? (nameMap.get(selectedTeammate) || selectedTeammate) : "all"}, country=${
+        selectedCountry ? countryLabel(selectedCountry) : "all"
+      }`,
       `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
       `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
       `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
@@ -1711,7 +1769,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   return {
     sections,
-    availableModes,
+    availableGameModes,
+    availableMovementTypes,
     availableTeammates,
     availableCountries,
     playerName,

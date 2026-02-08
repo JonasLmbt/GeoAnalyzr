@@ -79,7 +79,16 @@ export interface UIHandle {
     onAutoDetect: () => Promise<{ detected: boolean; token?: string; source?: "stored" | "cookie" | "session" | "none"; message: string }>;
   }) => void;
   onOpenAnalysisClick: (fn: () => void) => void;
-  onRefreshAnalysisClick: (fn: (filter: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) => void) => void;
+  onRefreshAnalysisClick: (
+    fn: (filter: {
+      fromTs?: number;
+      toTs?: number;
+      gameMode?: string;
+      movementType?: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+      teammateId?: string;
+      country?: string;
+    }) => void
+  ) => void;
 }
 
 function isoDateLocal(ts?: number): string {
@@ -698,6 +707,7 @@ export function createUI(): UIHandle {
     fromInput: HTMLInputElement;
     toInput: HTMLInputElement;
     modeSelect: HTMLSelectElement;
+    movementSelect: HTMLSelectElement;
     teammateSelect: HTMLSelectElement;
     countrySelect: HTMLSelectElement;
     themeSelect: HTMLSelectElement;
@@ -731,6 +741,7 @@ export function createUI(): UIHandle {
     styleInput(refs.fromInput);
     styleInput(refs.toInput);
     styleInput(refs.modeSelect);
+    styleInput(refs.movementSelect);
     styleInput(refs.teammateSelect);
     styleInput(refs.countrySelect);
     styleInput(refs.themeSelect);
@@ -770,22 +781,32 @@ export function createUI(): UIHandle {
     refs.doc.title = windowTitle;
     refs.modalTitle.textContent = windowTitle;
 
-    const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
+    const { fromInput, toInput, modeSelect, movementSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
     if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
     if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
 
     const prevMode = modeSelect.value || "all";
+    const prevMovement = movementSelect.value || "all";
     const prevTeammate = teammateSelect.value || "all";
     const prevCountry = countrySelect.value || "all";
 
     modeSelect.innerHTML = "";
-    for (const mode of data.availableModes) {
+    for (const mode of data.availableGameModes) {
       const opt = doc.createElement("option");
       opt.value = mode;
       opt.textContent = mode;
       modeSelect.appendChild(opt);
     }
     if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
+
+    movementSelect.innerHTML = "";
+    for (const movement of data.availableMovementTypes) {
+      const opt = doc.createElement("option");
+      opt.value = movement.key;
+      opt.textContent = movement.label;
+      movementSelect.appendChild(opt);
+    }
+    if ([...movementSelect.options].some((o) => o.value === prevMovement)) movementSelect.value = prevMovement;
 
     teammateSelect.innerHTML = "";
     for (const teammate of data.availableTeammates) {
@@ -937,6 +958,9 @@ export function createUI(): UIHandle {
     const modeSelect = doc.createElement("select");
     styleInput(modeSelect);
 
+    const movementSelect = doc.createElement("select");
+    styleInput(movementSelect);
+
     const teammateSelect = doc.createElement("select");
     styleInput(teammateSelect);
 
@@ -981,8 +1005,10 @@ export function createUI(): UIHandle {
     controls.appendChild(fromInput);
     controls.appendChild(doc.createTextNode("To:"));
     controls.appendChild(toInput);
-    controls.appendChild(doc.createTextNode("Mode:"));
+    controls.appendChild(doc.createTextNode("Game Mode:"));
     controls.appendChild(modeSelect);
+    controls.appendChild(doc.createTextNode("Movement:"));
+    controls.appendChild(movementSelect);
     controls.appendChild(doc.createTextNode("Teammate:"));
     controls.appendChild(teammateSelect);
     controls.appendChild(doc.createTextNode("Country:"));
@@ -1026,7 +1052,8 @@ export function createUI(): UIHandle {
       refreshAnalysisHandler?.({
         fromTs: parseDateInput(fromInput.value, false),
         toTs: parseDateInput(toInput.value, true),
-        mode: modeSelect.value || "all",
+        gameMode: modeSelect.value || "all",
+        movementType: movementSelect.value || "all",
         teammateId: teammateSelect.value || "all",
         country: countrySelect.value || "all"
       });
@@ -1035,9 +1062,10 @@ export function createUI(): UIHandle {
       fromInput.value = "";
       toInput.value = "";
       modeSelect.value = "all";
+      movementSelect.value = "all";
       teammateSelect.value = "all";
       countrySelect.value = "all";
-      refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
+      refreshAnalysisHandler?.({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
     });
 
     themeSelect.addEventListener("change", () => {
@@ -1060,6 +1088,7 @@ export function createUI(): UIHandle {
       fromInput,
       toInput,
       modeSelect,
+      movementSelect,
       teammateSelect,
       countrySelect,
       themeSelect,
@@ -1089,7 +1118,16 @@ export function createUI(): UIHandle {
   let exportHandler: (() => void) | null = null;
   let tokenHandler: (() => void) | null = null;
   let openAnalysisHandler: (() => void) | null = null;
-  let refreshAnalysisHandler: ((filter: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) => void) | null = null;
+  let refreshAnalysisHandler: ((
+    filter: {
+      fromTs?: number;
+      toTs?: number;
+      gameMode?: string;
+      movementType?: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+      teammateId?: string;
+      country?: string;
+    }
+  ) => void) | null = null;
 
   updateBtn.addEventListener("click", () => updateHandler?.());
   tokenBtn.addEventListener("click", () => tokenHandler?.());

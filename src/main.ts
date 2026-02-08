@@ -175,7 +175,14 @@ async function hasAuthenticatedSession(): Promise<boolean> {
     });
   });
 
-  async function refreshAnalysisWindow(filter?: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) {
+  async function refreshAnalysisWindow(filter?: {
+    fromTs?: number;
+    toTs?: number;
+    gameMode?: string;
+    movementType?: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+    teammateId?: string;
+    country?: string;
+  }) {
     const data = await getAnalysisWindowData(filter);
     ui.setAnalysisWindowData(data);
   }
@@ -183,7 +190,7 @@ async function hasAuthenticatedSession(): Promise<boolean> {
   ui.onOpenAnalysisClick(async () => {
     try {
       ui.setStatus("Loading analysis...");
-      await refreshAnalysisWindow({ mode: "all", teammateId: "all", country: "all" });
+      await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
       ui.setStatus("Analysis loaded.");
     } catch (e) {
       ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));

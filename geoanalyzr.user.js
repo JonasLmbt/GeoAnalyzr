@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.1.6
+// @version      1.2.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7288,6 +7288,7 @@
       styleInput(refs.fromInput);
       styleInput(refs.toInput);
       styleInput(refs.modeSelect);
+      styleInput(refs.movementSelect);
       styleInput(refs.teammateSelect);
       styleInput(refs.countrySelect);
       styleInput(refs.themeSelect);
@@ -7321,20 +7322,29 @@
       const windowTitle = data.playerName ? `GeoAnalyzr - Full Analysis for ${data.playerName}` : "GeoAnalyzr - Full Analysis";
       refs.doc.title = windowTitle;
       refs.modalTitle.textContent = windowTitle;
-      const { fromInput, toInput, modeSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
+      const { fromInput, toInput, modeSelect, movementSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
       if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
       if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
       const prevMode = modeSelect.value || "all";
+      const prevMovement = movementSelect.value || "all";
       const prevTeammate = teammateSelect.value || "all";
       const prevCountry = countrySelect.value || "all";
       modeSelect.innerHTML = "";
-      for (const mode of data.availableModes) {
+      for (const mode of data.availableGameModes) {
         const opt = doc.createElement("option");
         opt.value = mode;
         opt.textContent = mode;
         modeSelect.appendChild(opt);
       }
       if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
+      movementSelect.innerHTML = "";
+      for (const movement of data.availableMovementTypes) {
+        const opt = doc.createElement("option");
+        opt.value = movement.key;
+        opt.textContent = movement.label;
+        movementSelect.appendChild(opt);
+      }
+      if ([...movementSelect.options].some((o) => o.value === prevMovement)) movementSelect.value = prevMovement;
       teammateSelect.innerHTML = "";
       for (const teammate of data.availableTeammates) {
         const opt = doc.createElement("option");
@@ -7471,6 +7481,8 @@
       styleInput(toInput);
       const modeSelect = doc.createElement("select");
       styleInput(modeSelect);
+      const movementSelect = doc.createElement("select");
+      styleInput(movementSelect);
       const teammateSelect = doc.createElement("select");
       styleInput(teammateSelect);
       const countrySelect = doc.createElement("select");
@@ -7509,8 +7521,10 @@
       controls.appendChild(fromInput);
       controls.appendChild(doc.createTextNode("To:"));
       controls.appendChild(toInput);
-      controls.appendChild(doc.createTextNode("Mode:"));
+      controls.appendChild(doc.createTextNode("Game Mode:"));
       controls.appendChild(modeSelect);
+      controls.appendChild(doc.createTextNode("Movement:"));
+      controls.appendChild(movementSelect);
       controls.appendChild(doc.createTextNode("Teammate:"));
       controls.appendChild(teammateSelect);
       controls.appendChild(doc.createTextNode("Country:"));
@@ -7550,7 +7564,8 @@
         refreshAnalysisHandler?.({
           fromTs: parseDateInput(fromInput.value, false),
           toTs: parseDateInput(toInput.value, true),
-          mode: modeSelect.value || "all",
+          gameMode: modeSelect.value || "all",
+          movementType: movementSelect.value || "all",
           teammateId: teammateSelect.value || "all",
           country: countrySelect.value || "all"
         });
@@ -7559,9 +7574,10 @@
         fromInput.value = "";
         toInput.value = "";
         modeSelect.value = "all";
+        movementSelect.value = "all";
         teammateSelect.value = "all";
         countrySelect.value = "all";
-        refreshAnalysisHandler?.({ mode: "all", teammateId: "all", country: "all" });
+        refreshAnalysisHandler?.({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
       });
       themeSelect.addEventListener("change", () => {
         analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
@@ -7583,6 +7599,7 @@
         fromInput,
         toInput,
         modeSelect,
+        movementSelect,
         teammateSelect,
         countrySelect,
         themeSelect,
@@ -9794,6 +9811,27 @@
   function getGameMode(game) {
     return game.gameMode || game.mode || "unknown";
   }
+  function normalizeMovementType(raw) {
+    if (typeof raw !== "string") return "unknown";
+    const s = raw.trim().toLowerCase();
+    if (!s) return "unknown";
+    if (s.includes("nmpz")) return "nmpz";
+    if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+    if (s.includes("moving")) return "moving";
+    return "unknown";
+  }
+  function movementTypeLabel(kind) {
+    if (kind === "moving") return "Moving";
+    if (kind === "no_move") return "No Move";
+    if (kind === "nmpz") return "NMPZ";
+    return "Unknown";
+  }
+  function getMovementType(game, detail) {
+    const d = asRecord(detail);
+    const fromDetail = getString(d, "gameModeSimple");
+    if (typeof fromDetail === "string" && fromDetail.trim()) return normalizeMovementType(fromDetail);
+    return normalizeMovementType(game.gameMode);
+  }
   function normalizeCountryCode(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
@@ -10075,14 +10113,35 @@
       db.rounds.toArray(),
       db.details.toArray()
     ]);
-    const modeSet = /* @__PURE__ */ new Set();
-    for (const g of allGames) modeSet.add(getGameMode(g));
-    const availableModes = ["all", ...[...modeSet].sort((a, b) => a.localeCompare(b))];
+    const gameModeFilter = filter?.gameMode ?? filter?.mode;
     const minPlayedAt = allGames.length ? allGames[0].playedAt : void 0;
     const maxPlayedAt = allGames.length ? allGames[allGames.length - 1].playedAt : void 0;
-    const baseGames = allGames.filter((g) => {
+    const dateGames = allGames.filter((g) => {
       if (!inTsRange(g.playedAt, filter?.fromTs, filter?.toTs)) return false;
-      if (filter?.mode && filter.mode !== "all" && getGameMode(g) !== filter.mode) return false;
+      return true;
+    });
+    const gameModeSet = /* @__PURE__ */ new Set();
+    for (const g of dateGames) gameModeSet.add(getGameMode(g));
+    const availableGameModes = ["all", ...[...gameModeSet].sort((a, b) => a.localeCompare(b))];
+    const modeGames = dateGames.filter((g) => {
+      if (gameModeFilter && gameModeFilter !== "all" && getGameMode(g) !== gameModeFilter) return false;
+      return true;
+    });
+    const detailByGameId = new Map(allDetails.map((d) => [d.gameId, d]));
+    const movementByGameId = new Map(modeGames.map((g) => [g.gameId, getMovementType(g, detailByGameId.get(g.gameId))]));
+    const movementOrder = ["moving", "no_move", "nmpz", "unknown"];
+    const movementSet = /* @__PURE__ */ new Set();
+    for (const kind of movementByGameId.values()) movementSet.add(kind);
+    const availableMovementTypes = [
+      { key: "all", label: "All movement types" },
+      ...movementOrder.filter((k) => movementSet.has(k)).map((k) => ({ key: k, label: movementTypeLabel(k) }))
+    ];
+    const movementFilter = filter?.movementType;
+    const baseGames = modeGames.filter((g) => {
+      if (movementFilter && movementFilter !== "all") {
+        const kind = movementByGameId.get(g.gameId) || "unknown";
+        if (kind !== movementFilter) return false;
+      }
       return true;
     });
     const baseGameSet = new Set(baseGames.map((g) => g.gameId));
@@ -10147,7 +10206,8 @@
     if (countryGames.length === 0 || countryRounds.length === 0) {
       return {
         sections: [{ id: "empty", title: "Overview", lines: ["Keine Daten fuer den gewaehlten Filter."] }],
-        availableModes,
+        availableGameModes,
+        availableMovementTypes,
         availableTeammates,
         availableCountries,
         minPlayedAt,
@@ -10194,7 +10254,7 @@
       lines: [
         `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
         `Games: ${games.length} | Rounds: ${rounds.length}`,
-        `Filters: mode=${filter?.mode || "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
+        `Filters: game mode=${gameModeFilter || "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
         `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
         `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
         `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
@@ -11048,7 +11108,8 @@
     });
     return {
       sections,
-      availableModes,
+      availableGameModes,
+      availableMovementTypes,
       availableTeammates,
       availableCountries,
       playerName,
@@ -32005,7 +32066,7 @@ ${NCFA_HELP_TEXT}`, "");
     ui.onOpenAnalysisClick(async () => {
       try {
         ui.setStatus("Loading analysis...");
-        await refreshAnalysisWindow({ mode: "all", teammateId: "all", country: "all" });
+        await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
         ui.setStatus("Analysis loaded.");
       } catch (e) {
         ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
