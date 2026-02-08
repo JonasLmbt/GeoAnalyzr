@@ -108,6 +108,30 @@ function extractGuessCountryCode(guess: any): string | undefined {
   );
 }
 
+function isLatLngInRange(lat?: number, lng?: number): boolean {
+  return (
+    typeof lat === "number" &&
+    Number.isFinite(lat) &&
+    Math.abs(lat) <= 90 &&
+    typeof lng === "number" &&
+    Number.isFinite(lng) &&
+    Math.abs(lng) <= 180
+  );
+}
+
+async function resolveGuessCountryResilient(lat?: number, lng?: number): Promise<string | undefined> {
+  if (!isLatLngInRange(lat, lng)) return undefined;
+  const primary = normalizeIso2(await resolveCountryCodeByLatLng(lat, lng));
+  if (primary) return primary;
+
+  // Fallback: some payloads/providers flip coordinate order.
+  if (isLatLngInRange(lng, lat)) {
+    const swapped = normalizeIso2(await resolveCountryCodeByLatLng(lng, lat));
+    if (swapped) return swapped;
+  }
+  return undefined;
+}
+
 function roundId(gameId: string, roundNumber: number): string {
   return `${gameId}:${roundNumber}`;
 }
@@ -374,8 +398,7 @@ async function backfillMissingGuessCountries(
       }
 
       attempted++;
-      const resolved = await resolveCountryCodeByLatLng(lat, lng);
-      const normalized = normalizeIso2(resolved);
+      const normalized = await resolveGuessCountryResilient(lat, lng);
       if (!normalized) {
         resolveFailed++;
         continue;
@@ -601,7 +624,7 @@ async function normalizeGameAndRounds(
         (round as any)[`p${playerIndex}_distanceMeters`] = distanceMeters;
         (round as any)[`p${playerIndex}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
         (round as any)[`p${playerIndex}_guessCountry`] =
-          extractGuessCountryCode(guess) ?? await resolveCountryCodeByLatLng(guessLat, guessLng);
+          extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
         (round as any)[`p${playerIndex}_score`] = asNum(guess?.score);
         (round as any)[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
         (round as any)[`p${playerIndex}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
@@ -623,7 +646,7 @@ async function normalizeGameAndRounds(
         (round as any)[`p${playerIndex}_guessLng`] = guessLng;
         (round as any)[`p${playerIndex}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
         (round as any)[`p${playerIndex}_guessCountry`] =
-          extractGuessCountryCode(guess) ?? await resolveCountryCodeByLatLng(guessLat, guessLng);
+          extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
         (round as any)[`p${playerIndex}_score`] = asNum(guess?.score);
         (round as any)[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
       }

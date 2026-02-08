@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.7
+// @version      1.0.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7413,6 +7413,19 @@
       ])
     );
   }
+  function isLatLngInRange(lat, lng) {
+    return typeof lat === "number" && Number.isFinite(lat) && Math.abs(lat) <= 90 && typeof lng === "number" && Number.isFinite(lng) && Math.abs(lng) <= 180;
+  }
+  async function resolveGuessCountryResilient(lat, lng) {
+    if (!isLatLngInRange(lat, lng)) return void 0;
+    const primary = normalizeIso2(await resolveCountryCodeByLatLng(lat, lng));
+    if (primary) return primary;
+    if (isLatLngInRange(lng, lat)) {
+      const swapped = normalizeIso2(await resolveCountryCodeByLatLng(lng, lat));
+      if (swapped) return swapped;
+    }
+    return void 0;
+  }
   function roundId(gameId, roundNumber) {
     return `${gameId}:${roundNumber}`;
   }
@@ -7640,8 +7653,7 @@
           continue;
         }
         attempted++;
-        const resolved = await resolveCountryCodeByLatLng(lat, lng);
-        const normalized = normalizeIso2(resolved);
+        const normalized = await resolveGuessCountryResilient(lat, lng);
         if (!normalized) {
           resolveFailed++;
           continue;
@@ -7822,7 +7834,7 @@
           round[`p${playerIndex}_guessLng`] = guessLng;
           round[`p${playerIndex}_distanceMeters`] = distanceMeters;
           round[`p${playerIndex}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
-          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveCountryCodeByLatLng(guessLat, guessLng);
+          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
           round[`p${playerIndex}_score`] = asNum(guess?.score);
           round[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
           round[`p${playerIndex}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
@@ -7842,7 +7854,7 @@
           round[`p${playerIndex}_guessLat`] = guessLat;
           round[`p${playerIndex}_guessLng`] = guessLng;
           round[`p${playerIndex}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
-          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveCountryCodeByLatLng(guessLat, guessLng);
+          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
           round[`p${playerIndex}_score`] = asNum(guess?.score);
           round[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
         }
@@ -29667,13 +29679,24 @@
   function fmtCoord(v) {
     return typeof v === "number" && Number.isFinite(v) ? v.toFixed(4) : "?";
   }
+  function isLatLngInRange2(lat, lng) {
+    return typeof lat === "number" && Number.isFinite(lat) && Math.abs(lat) <= 90 && typeof lng === "number" && Number.isFinite(lng) && Math.abs(lng) <= 180;
+  }
+  function toTsMaybe(isoMaybe) {
+    if (typeof isoMaybe !== "string" || !isoMaybe) return void 0;
+    const t = Date.parse(isoMaybe);
+    return Number.isFinite(t) ? t : void 0;
+  }
   async function resolveGuessCountryForExport(existing, lat, lng) {
     const direct = normalizeIso22(existing);
     if (direct) return direct;
-    if (typeof lat !== "number" || !Number.isFinite(lat) || typeof lng !== "number" || !Number.isFinite(lng)) {
-      return "ERR_NO_LATLNG";
+    if (!isLatLngInRange2(lat, lng)) {
+      return "";
     }
-    const resolved = normalizeIso22(await resolveCountryCodeByLatLng(lat, lng));
+    let resolved = normalizeIso22(await resolveCountryCodeByLatLng(lat, lng));
+    if (!resolved && isLatLngInRange2(lng, lat)) {
+      resolved = normalizeIso22(await resolveCountryCodeByLatLng(lng, lat));
+    }
     if (resolved) return resolved;
     return `ERR_RESOLVE_FAILED(${fmtCoord(lat)},${fmtCoord(lng)})`;
   }
@@ -29820,9 +29843,9 @@
         startTime: iso(r.startTime),
         endTime: iso(r.endTime),
         durationSeconds: r.durationSeconds ?? "",
+        true_country: r.trueCountry ?? "",
         true_lat: r.trueLat ?? "",
         true_lng: r.trueLng ?? "",
-        true_country: r.trueCountry ?? "",
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
         p1_playerId: r.p1_playerId ?? "",
@@ -29841,7 +29864,8 @@
         p2_score: r.p2_score ?? "",
         p2_healthAfter: r.p2_healthAfter ?? "",
         p2_isBestGuess: r.p2_isBestGuess ? 1 : 0,
-        healthDiffAfter: r.healthDiffAfter ?? ""
+        healthDiffAfter: r.healthDiffAfter ?? "",
+        __sortTs: r.startTime ?? g?.playedAt ?? 0
       };
       const isTeamMode = (mode || "").toLowerCase().includes("team");
       if (isTeamMode) {
@@ -29881,7 +29905,17 @@
     }
     const statsWb = utils.book_new();
     for (const [mode, rows] of [...roundsByMode.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      utils.book_append_sheet(statsWb, utils.json_to_sheet(rows), sanitizeSheetName(mode));
+      const sortedRows = [...rows].sort((a, b) => {
+        const ta = typeof a.__sortTs === "number" && Number.isFinite(a.__sortTs) ? a.__sortTs : toTsMaybe(a.startTime) ?? 0;
+        const tb = typeof b.__sortTs === "number" && Number.isFinite(b.__sortTs) ? b.__sortTs : toTsMaybe(b.startTime) ?? 0;
+        if (tb !== ta) return tb - ta;
+        const ga = String(a.gameId || "");
+        const gb = String(b.gameId || "");
+        if (gb !== ga) return gb.localeCompare(ga);
+        return Number(b.roundNumber || 0) - Number(a.roundNumber || 0);
+      });
+      for (const r of sortedRows) delete r.__sortTs;
+      utils.book_append_sheet(statsWb, utils.json_to_sheet(sortedRows), sanitizeSheetName(mode));
     }
     const now = /* @__PURE__ */ new Date();
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
