@@ -17,6 +17,11 @@ function getNumber(rec: UnknownRecord, key: string): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+function getBoolean(rec: UnknownRecord, key: string): boolean | undefined {
+  const v = rec[key];
+  return typeof v === "boolean" ? v : undefined;
+}
+
 const regionDisplay =
   typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function"
     ? new Intl.DisplayNames(["en"], { type: "region" })
@@ -217,6 +222,102 @@ function getPlayerStatFromRound(round: RoundRow, playerId: string): { score?: nu
       teamId: getString(rr, `p${slot}_teamId`)
     };
   }
+  return undefined;
+}
+
+type GameResult = "W" | "L" | "T";
+
+function getRoundDamageDiff(round: RoundRow, ownPlayerId: string): number | undefined {
+  const rr = asRecord(round);
+  const modeFamily = getString(rr, "modeFamily");
+
+  if (modeFamily === "duels") {
+    const p1 = getString(rr, "p1_playerId");
+    const p2 = getString(rr, "p2_playerId");
+    const p1Score = getNumber(rr, "p1_score");
+    const p2Score = getNumber(rr, "p2_score");
+    if (typeof p1Score !== "number" || typeof p2Score !== "number") return undefined;
+    if (ownPlayerId === p2) return p2Score - p1Score;
+    if (ownPlayerId === p1 || !p1 || !p2) return p1Score - p2Score;
+    return undefined;
+  }
+
+  if (modeFamily === "teamduels") {
+    const own = getPlayerStatFromRound(round, ownPlayerId);
+    if (!own?.teamId) return undefined;
+    let ownTeamScore = 0;
+    let ownTeamN = 0;
+    let oppTeamScore = 0;
+    let oppTeamN = 0;
+    for (const slot of playerSlots(round)) {
+      const pid = getString(rr, `p${slot}_playerId`);
+      if (!pid) continue;
+      const teamId = getString(rr, `p${slot}_teamId`);
+      const score = getNumber(rr, `p${slot}_score`);
+      if (typeof score !== "number" || !teamId) continue;
+      if (teamId === own.teamId) {
+        ownTeamScore += score;
+        ownTeamN++;
+      } else {
+        oppTeamScore += score;
+        oppTeamN++;
+      }
+    }
+    if (!ownTeamN || !oppTeamN) return undefined;
+    return ownTeamScore / ownTeamN - oppTeamScore / oppTeamN;
+  }
+
+  return undefined;
+}
+
+function getGameResult(detail: GameRow, ownPlayerId?: string): GameResult | undefined {
+  const d = asRecord(detail);
+  const modeFamily = getString(d, "modeFamily");
+
+  if (modeFamily === "duels") {
+    const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
+    const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
+    const ownIsP2 = ownPlayerId && ownPlayerId === p2;
+    const ownWin = ownIsP2 ? getBoolean(d, "playerTwoVictory") : getBoolean(d, "playerOneVictory");
+    const oppWin = ownIsP2 ? getBoolean(d, "playerOneVictory") : getBoolean(d, "playerTwoVictory");
+    if (typeof ownWin === "boolean") return ownWin ? "W" : "L";
+    if (typeof oppWin === "boolean") return oppWin ? "L" : "W";
+
+    const p1Hp = getNumber(d, "playerOneFinalHealth");
+    const p2Hp = getNumber(d, "playerTwoFinalHealth");
+    if (typeof p1Hp === "number" && typeof p2Hp === "number") {
+      const ownHp = ownIsP2 ? p2Hp : p1Hp;
+      const oppHp = ownIsP2 ? p1Hp : p2Hp;
+      if (ownHp > oppHp) return "W";
+      if (ownHp < oppHp) return "L";
+      return "T";
+    }
+    if (!ownPlayerId && (p1 || p2)) return "T";
+    return undefined;
+  }
+
+  if (modeFamily === "teamduels") {
+    const t1p1 = getString(d, "teamOnePlayerOneId");
+    const t1p2 = getString(d, "teamOnePlayerTwoId");
+    const ownInTeamOne = ownPlayerId ? [t1p1, t1p2].includes(ownPlayerId) : true;
+
+    const ownWin = ownInTeamOne ? getBoolean(d, "teamOneVictory") : getBoolean(d, "teamTwoVictory");
+    const oppWin = ownInTeamOne ? getBoolean(d, "teamTwoVictory") : getBoolean(d, "teamOneVictory");
+    if (typeof ownWin === "boolean") return ownWin ? "W" : "L";
+    if (typeof oppWin === "boolean") return oppWin ? "L" : "W";
+
+    const t1Hp = getNumber(d, "teamOneFinalHealth");
+    const t2Hp = getNumber(d, "teamTwoFinalHealth");
+    if (typeof t1Hp === "number" && typeof t2Hp === "number") {
+      const ownHp = ownInTeamOne ? t1Hp : t2Hp;
+      const oppHp = ownInTeamOne ? t2Hp : t1Hp;
+      if (ownHp > oppHp) return "W";
+      if (ownHp < oppHp) return "L";
+      return "T";
+    }
+    return undefined;
+  }
+
   return undefined;
 }
 
@@ -445,6 +546,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const teamGameSet = new Set(teamGames.map((g) => g.gameId));
   const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
   const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
+  const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
 
   const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
   const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
@@ -525,6 +627,68 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         )
       }
     ]
+  });
+
+  const outcomeTimeline = ownPlayerId
+    ? teamDetails
+        .map((d) => {
+          const ts = teamPlayedAtByGameId.get(d.gameId);
+          const result = getGameResult(d, ownPlayerId);
+          return ts && result ? { ts, result } : undefined;
+        })
+        .filter((x): x is { ts: number; result: GameResult } => !!x)
+        .sort((a, b) => a.ts - b.ts)
+    : [];
+  const winCount = outcomeTimeline.filter((x) => x.result === "W").length;
+  const lossCount = outcomeTimeline.filter((x) => x.result === "L").length;
+  const tieCount = outcomeTimeline.filter((x) => x.result === "T").length;
+  const decisiveGames = winCount + lossCount;
+  const totalResultGames = decisiveGames + tieCount;
+  let currentWinStreak = 0;
+  let currentLossStreak = 0;
+  let bestWinStreak = 0;
+  let worstLossStreak = 0;
+  for (const g of outcomeTimeline) {
+    if (g.result === "W") {
+      currentWinStreak++;
+      currentLossStreak = 0;
+      bestWinStreak = Math.max(bestWinStreak, currentWinStreak);
+      continue;
+    }
+    if (g.result === "L") {
+      currentLossStreak++;
+      currentWinStreak = 0;
+      worstLossStreak = Math.max(worstLossStreak, currentLossStreak);
+      continue;
+    }
+    currentWinStreak = 0;
+    currentLossStreak = 0;
+  }
+  sections.push({
+    id: "results_streaks",
+    title: "Results, Win Rate & Streaks",
+    group: "Performance",
+    appliesFilters: ["date", "mode", "teammate"],
+    lines: ownPlayerId
+      ? [
+          selectedCountry ? "Country filter is ignored here (game-level results)." : "",
+          `Games with result data: ${totalResultGames}`,
+          `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
+          `Win rate (decisive): ${fmt(pct(winCount, decisiveGames), 1)}%`,
+          `Win rate (all): ${fmt(pct(winCount, totalResultGames), 1)}%`,
+          `Longest win streak: ${bestWinStreak}`,
+          `Longest loss streak: ${worstLossStreak}`
+        ].filter((x) => x !== "")
+      : ["No own player id inferred, so game-level win/loss is unavailable."],
+    chart: {
+      type: "bar",
+      yLabel: "Games",
+      bars: [
+        { label: "Wins", value: winCount },
+        { label: "Losses", value: lossCount },
+        { label: "Ties", value: tieCount }
+      ]
+    }
   });
 
   const modeCounts = new Map<string, number>();
@@ -819,6 +983,63 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ]
   });
 
+  const damageByCountry = new Map<string, { n: number; sumDiff: number; wins: number; losses: number }>();
+  if (ownPlayerId) {
+    for (const r of teamRounds) {
+      const country = normalizeCountryCode(r.trueCountry);
+      if (!country) continue;
+      const diff = getRoundDamageDiff(r, ownPlayerId);
+      if (typeof diff !== "number" || !Number.isFinite(diff)) continue;
+      const cur = damageByCountry.get(country) || { n: 0, sumDiff: 0, wins: 0, losses: 0 };
+      cur.n++;
+      cur.sumDiff += diff;
+      if (diff > 0) cur.wins++;
+      if (diff < 0) cur.losses++;
+      damageByCountry.set(country, cur);
+    }
+  }
+  const damageRows = [...damageByCountry.entries()]
+    .map(([country, v]) => ({
+      country,
+      n: v.n,
+      avgDiff: v.sumDiff / Math.max(1, v.n),
+      winRate: pct(v.wins, v.n)
+    }))
+    .filter((x) => x.n >= 5)
+    .sort((a, b) => b.avgDiff - a.avgDiff);
+  const topDamage = damageRows.slice(0, 8);
+  const worstDamage = [...damageRows].sort((a, b) => a.avgDiff - b.avgDiff).slice(0, 8);
+  sections.push({
+    id: "country_damage",
+    title: "Country Damage Balance (You/Team vs Opponents)",
+    group: "Countries",
+    appliesFilters: ["date", "mode", "teammate"],
+    lines: ownPlayerId
+      ? [
+          selectedCountry ? "Country filter is ignored here (global country advantage/disadvantage)." : "",
+          `Countries with enough rounds (n>=5): ${damageRows.length}`,
+          ...topDamage.slice(0, 3).map(
+            (x) => `Best: ${countryLabel(x.country)} avg diff ${fmt(x.avgDiff, 1)} | win rounds ${fmt(x.winRate, 1)}% | n=${x.n}`
+          ),
+          ...worstDamage.slice(0, 3).map(
+            (x) => `Hardest: ${countryLabel(x.country)} avg diff ${fmt(x.avgDiff, 1)} | win rounds ${fmt(x.winRate, 1)}% | n=${x.n}`
+          )
+        ].filter((x) => x !== "")
+      : ["No own player id inferred, so country damage balance is unavailable."],
+    charts: [
+      {
+        type: "bar",
+        yLabel: "Avg score diff (you/team - opponent)",
+        bars: topDamage.map((x) => ({ label: countryLabel(x.country), value: x.avgDiff }))
+      },
+      {
+        type: "bar",
+        yLabel: "Avg score diff disadvantage",
+        bars: worstDamage.map((x) => ({ label: countryLabel(x.country), value: -x.avgDiff }))
+      }
+    ]
+  });
+
   const confusionMap = new Map<string, number>();
   for (const r of teamRounds) {
     const truth = normalizeCountryCode(r.trueCountry);
@@ -1038,6 +1259,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         `You better guess: ${myWins} rounds`,
         `${mateName} better guess: ${mateWins} rounds`,
         `Tie rounds: ${ties}`,
+        `Win rate (decisive): ${fmt(pct(myWins, myWins + mateWins), 1)}%`,
+        `Win rate (all rounds): ${fmt(pct(myWins, compareRounds.length), 1)}%`,
         `Edge: ${myWins - mateWins >= 0 ? "+" : ""}${myWins - mateWins}`,
         `Avg score: you ${myScoreCount ? fmt(myScoreTotal / myScoreCount, 1) : "-"} vs ${mateName} ${
           mateScoreCount ? fmt(mateScoreTotal / mateScoreCount, 1) : "-"
