@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.12
+// @version      1.0.13
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7645,6 +7645,19 @@
   var db = new GGDB();
 
   // src/http.ts
+  function readNcfaFromDocumentCookie() {
+    if (typeof document === "undefined") return void 0;
+    const raw = typeof document.cookie === "string" ? document.cookie : "";
+    if (!raw) return void 0;
+    const parts = raw.split(";");
+    for (const part of parts) {
+      const [k, ...rest] = part.trim().split("=");
+      if (k !== "_ncfa") continue;
+      const value = rest.join("=").trim();
+      if (value) return value;
+    }
+    return void 0;
+  }
   function hasGmXhr() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
@@ -7655,7 +7668,8 @@
         Accept: "application/json",
         ...opts?.headers || {}
       };
-      if (opts?.ncfa) headers.Cookie = `_ncfa=${opts.ncfa}`;
+      const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
+      if (ncfa) headers.Cookie = `_ncfa=${ncfa}`;
       gm({
         method: "GET",
         url,
@@ -7676,7 +7690,7 @@
     });
   }
   async function httpGetJson(url, opts) {
-    const ncfa = opts?.ncfa;
+    const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
     if ((opts?.forceGm || ncfa) && hasGmXhr()) {
       const res2 = await gmRequest(url, { ncfa, headers: opts?.headers });
       return { status: res2.status, data: res2.json() };
@@ -31319,10 +31333,30 @@
 
   // src/auth.ts
   var AUTH_META_KEY = "auth";
+  function readNcfaFromDocumentCookie2() {
+    if (typeof document === "undefined") return void 0;
+    const raw = typeof document.cookie === "string" ? document.cookie : "";
+    if (!raw) return void 0;
+    const parts = raw.split(";");
+    for (const part of parts) {
+      const [k, ...rest] = part.trim().split("=");
+      if (k !== "_ncfa") continue;
+      const value = rest.join("=").trim();
+      if (value) return value;
+    }
+    return void 0;
+  }
   async function getNcfaToken() {
     const row = await db.meta.get(AUTH_META_KEY);
     const token = row?.value?.ncfa;
     return typeof token === "string" && token.trim() ? token.trim() : void 0;
+  }
+  async function getResolvedNcfaToken() {
+    const stored = await getNcfaToken();
+    if (stored) return { token: stored, source: "stored" };
+    const cookie = readNcfaFromDocumentCookie2();
+    if (cookie) return { token: cookie, source: "cookie" };
+    return { source: "none" };
   }
   async function setNcfaToken(token) {
     const clean = typeof token === "string" ? token.trim() : "";
@@ -31373,7 +31407,8 @@
     ui.onUpdateClick(async () => {
       try {
         ui.setStatus("Update started...");
-        let ncfa = await getNcfaToken();
+        let resolved = await getResolvedNcfaToken();
+        let ncfa = resolved.token;
         if (!ncfa) {
           const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
           if (wantsSet) {
@@ -31382,10 +31417,13 @@
 ${NCFA_HELP_TEXT}`, "");
             if (entered !== null) {
               await setNcfaToken(entered);
-              ncfa = await getNcfaToken();
+              resolved = await getResolvedNcfaToken();
+              ncfa = resolved.token;
               ui.setStatus(ncfa ? "NCFA token saved. Continuing update..." : "No token saved. Continuing without NCFA...");
             }
           }
+        } else if (resolved.source === "cookie") {
+          ui.setStatus("Using NCFA token from browser cookie. Continuing update...");
         }
         const res = await syncFeed({
           onStatus: (m) => ui.setStatus(m),

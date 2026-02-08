@@ -4,7 +4,7 @@ import { syncFeed } from "./sync";
 import { fetchMissingDuelsDetails } from "./details";
 import { getAnalysisWindowData } from "./analysis";
 import { exportExcel } from "./export";
-import { getNcfaToken, setNcfaToken } from "./auth";
+import { getNcfaToken, getResolvedNcfaToken, setNcfaToken } from "./auth";
 
 const NCFA_HELP_TEXT =
   "NCFA token setup:\n\n" +
@@ -65,17 +65,21 @@ async function refreshUI(ui: ReturnType<typeof createUI>) {
   ui.onUpdateClick(async () => {
     try {
       ui.setStatus("Update started...");
-      let ncfa = await getNcfaToken();
+      let resolved = await getResolvedNcfaToken();
+      let ncfa = resolved.token;
       if (!ncfa) {
         const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
         if (wantsSet) {
           const entered = prompt(`Paste _ncfa token here.\n\n${NCFA_HELP_TEXT}`, "");
           if (entered !== null) {
             await setNcfaToken(entered);
-            ncfa = await getNcfaToken();
+            resolved = await getResolvedNcfaToken();
+            ncfa = resolved.token;
             ui.setStatus(ncfa ? "NCFA token saved. Continuing update..." : "No token saved. Continuing without NCFA...");
           }
         }
+      } else if (resolved.source === "cookie") {
+        ui.setStatus("Using NCFA token from browser cookie. Continuing update...");
       }
       const res = await syncFeed({
         onStatus: (m) => ui.setStatus(m),

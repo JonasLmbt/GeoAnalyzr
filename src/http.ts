@@ -4,6 +4,20 @@ type HttpResult = {
   json: () => any;
 };
 
+function readNcfaFromDocumentCookie(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const raw = typeof document.cookie === "string" ? document.cookie : "";
+  if (!raw) return undefined;
+  const parts = raw.split(";");
+  for (const part of parts) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k !== "_ncfa") continue;
+    const value = rest.join("=").trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
 function hasGmXhr(): boolean {
   return typeof (globalThis as any).GM_xmlhttpRequest === "function";
 }
@@ -15,7 +29,8 @@ function gmRequest(url: string, opts?: { ncfa?: string; headers?: Record<string,
       Accept: "application/json",
       ...(opts?.headers || {})
     };
-    if (opts?.ncfa) headers.Cookie = `_ncfa=${opts.ncfa}`;
+    const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
+    if (ncfa) headers.Cookie = `_ncfa=${ncfa}`;
     gm({
       method: "GET",
       url,
@@ -37,7 +52,7 @@ function gmRequest(url: string, opts?: { ncfa?: string; headers?: Record<string,
 }
 
 export async function httpGetJson(url: string, opts?: { ncfa?: string; forceGm?: boolean; headers?: Record<string, string> }): Promise<{ status: number; data: any }> {
-  const ncfa = opts?.ncfa;
+  const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
   if ((opts?.forceGm || ncfa) && hasGmXhr()) {
     const res = await gmRequest(url, { ncfa, headers: opts?.headers });
     return { status: res.status, data: res.json() };
