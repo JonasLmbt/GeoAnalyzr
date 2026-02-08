@@ -40,6 +40,16 @@ function formatDay(ts: number): string {
   return `${y}-${m}-${day}`;
 }
 
+function formatShortDateTime(ts: number): string {
+  const d = new Date(ts);
+  const y = String(d.getFullYear()).slice(-2);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day} ${hh}:${mm}`;
+}
+
 function sum(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
 }
@@ -396,6 +406,7 @@ export type AnalysisChart =
   | {
       type: "bar";
       yLabel?: string;
+      initialBars?: number;
       bars: Array<{ label: string; value: number }>;
     };
 
@@ -745,22 +756,30 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
   }
   const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const weekdayAvgScore = wdNames.map((name, i) => ({
-    name,
-    value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : -Infinity
-  }));
-  const weekdayAvgTime = wdNames.map((name, i) => ({
-    name,
-    value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : Infinity
-  }));
-  const hourAvgScore = hour.map((_, h) => ({
-    hour: h,
-    value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : -Infinity
-  }));
-  const hourAvgTime = hour.map((_, h) => ({
-    hour: h,
-    value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : Infinity
-  }));
+  const weekdayAvgScore = wdNames
+    .map((name, i) => ({
+      name,
+      value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : undefined
+    }))
+    .filter((x): x is { name: string; value: number } => typeof x.value === "number");
+  const weekdayAvgTime = wdNames
+    .map((name, i) => ({
+      name,
+      value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : undefined
+    }))
+    .filter((x): x is { name: string; value: number } => typeof x.value === "number");
+  const hourAvgScore = hour
+    .map((_, h) => ({
+      hour: h,
+      value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : undefined
+    }))
+    .filter((x): x is { hour: number; value: number } => typeof x.value === "number");
+  const hourAvgTime = hour
+    .map((_, h) => ({
+      hour: h,
+      value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : undefined
+    }))
+    .filter((x): x is { hour: number; value: number } => typeof x.value === "number");
   const bestDayByScore = [...weekdayAvgScore].sort((a, b) => b.value - a.value)[0];
   const worstDayByScore = [...weekdayAvgScore].sort((a, b) => a.value - b.value)[0];
   const bestHourByScore = [...hourAvgScore].sort((a, b) => b.value - a.value)[0];
@@ -808,6 +827,21 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     gameSessionIndex.set(ts, sessionIdx);
     prevTs = ts;
   }
+  const sessionBounds = new Map<number, { start: number; end: number; games: number }>();
+  for (const ts of sortedGameTimes) {
+    const idx = gameSessionIndex.get(ts);
+    if (idx === undefined) continue;
+    const cur = sessionBounds.get(idx);
+    if (!cur) {
+      sessionBounds.set(idx, { start: ts, end: ts, games: 1 });
+    } else {
+      cur.start = Math.min(cur.start, ts);
+      cur.end = Math.max(cur.end, ts);
+      cur.games += 1;
+      sessionBounds.set(idx, cur);
+    }
+  }
+
   const sessionsAgg = new Map<number, { rounds: number; scores: number[]; fiveK: number; throws: number; avgTimeSrc: number[] }>();
   for (const rm of roundMetrics) {
     const idx = gameSessionIndex.get(rm.ts);
@@ -823,13 +857,21 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const sessionRows = [...sessionsAgg.entries()]
     .map(([idx, s]) => ({
       idx,
+      start: sessionBounds.get(idx)?.start || 0,
+      end: sessionBounds.get(idx)?.end || 0,
+      games: sessionBounds.get(idx)?.games || 0,
       rounds: s.rounds,
       avgScore: avg(s.scores) || 0,
       fiveKRate: pct(s.fiveK, s.rounds),
       throwRate: pct(s.throws, s.rounds),
-      avgTime: avg(s.avgTimeSrc)
+      avgTime: avg(s.avgTimeSrc),
+      label: sessionBounds.get(idx)
+        ? `${formatShortDateTime(sessionBounds.get(idx)!.start)} -> ${formatShortDateTime(sessionBounds.get(idx)!.end)}`
+        : `Session ${idx + 1}`
     }))
-    .sort((a, b) => b.avgScore - a.avgScore);
+    .sort((a, b) => a.start - b.start);
+  const bestSessionRows = [...sessionRows].sort((a, b) => b.avgScore - a.avgScore);
+  const worstSessionRows = [...sessionRows].sort((a, b) => a.avgScore - b.avgScore);
   sections.push({
     id: "session_quality",
     title: "Session Quality",
@@ -837,19 +879,28 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     appliesFilters: ["date", "mode", "teammate", "country"],
     lines: [
       `Sessions detected (gap >45m): ${sessionRows.length}`,
-      ...sessionRows.slice(0, 3).map((s, i) => `${i + 1}. Session #${s.idx + 1}: avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}% | avg time ${fmt(s.avgTime, 1)}s`),
-      ...sessionRows.slice(-2).map((s) => `Low session #${s.idx + 1}: avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
+      ...bestSessionRows
+        .slice(0, 3)
+        .map(
+          (s, i) =>
+            `${i + 1}. Best: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}% | avg time ${fmt(s.avgTime, 1)}s`
+        ),
+      ...worstSessionRows
+        .slice(0, 2)
+        .map((s) => `Hardest: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
     ],
     charts: [
       {
         type: "bar",
         yLabel: "Avg score by session",
-        bars: sessionRows.slice(0, 20).map((s) => ({ label: `S${s.idx + 1}`, value: s.avgScore }))
+        initialBars: 10,
+        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore }))
       },
       {
         type: "bar",
         yLabel: "Throw rate % by session",
-        bars: sessionRows.slice(0, 20).map((s) => ({ label: `S${s.idx + 1}`, value: s.throwRate }))
+        initialBars: 10,
+        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate }))
       }
     ]
   });
@@ -920,7 +971,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   });
 
   const countryAgg = new Map<string, { n: number; score: number[]; dist: number[]; correct: number; guessed: Map<string, number> }>();
-  for (const r of rounds) {
+  for (const r of teamRounds) {
     const t = normalizeCountryCode(r.trueCountry);
     if (!t) continue;
     const entry = countryAgg.get(t) || { n: 0, score: [], dist: [], correct: 0, guessed: new Map<string, number>() };
@@ -955,20 +1006,17 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const bestCountries = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 5);
   const worstCountries = [...scoredCountries].sort((a, b) => a.avgScore - b.avgScore).slice(0, 5);
   const bestHitRate = [...scoredCountries].filter((x) => x.n >= 8).sort((a, b) => b.hitRate - a.hitRate)[0];
-  const avgScoreRankPoints = [...scoredCountries]
-    .sort((a, b) => b.avgScore - a.avgScore)
-    .map((x, idx) => ({ x: idx + 1, y: x.avgScore, label: countryLabel(x.country) }));
-
   sections.push({
     id: "country_stats",
     title: "Country Stats",
     group: "Countries",
-    appliesFilters: ["date", "mode", "teammate", "country"],
+    appliesFilters: ["date", "mode", "teammate"],
     lines: [
+      selectedCountry ? "Country filter is ignored here (global country comparison)." : "",
       `Best avg-score country: ${bestCountries[0] ? `${countryLabel(bestCountries[0].country)} (${fmt(bestCountries[0].avgScore, 1)})` : "-"}`,
       `Hardest avg-score country: ${worstCountries[0] ? `${countryLabel(worstCountries[0].country)} (${fmt(worstCountries[0].avgScore, 1)})` : "-"}`,
       `Highest hit-rate country (min 8 rounds): ${bestHitRate ? `${countryLabel(bestHitRate.country)} (${fmt(bestHitRate.hitRate * 100, 1)}%)` : "-"}`
-    ],
+    ].filter((x) => x !== ""),
     charts: [
       {
         type: "bar",
@@ -976,9 +1024,12 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         bars: topCountries.slice(0, 24).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
       },
       {
-        type: "line",
-        yLabel: "Avg score by country rank",
-        points: avgScoreRankPoints
+        type: "bar",
+        yLabel: "Avg score by country",
+        initialBars: 5,
+        bars: [...scoredCountries]
+          .sort((a, b) => b.avgScore - a.avgScore)
+          .map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
       }
     ]
   });
@@ -1072,8 +1123,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     chart: {
       type: "bar",
       yLabel: "Top confusion pairs",
-      bars: confusions.slice(0, 20).map((x) => ({
-        label: `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}`,
+      bars: confusions.slice(0, 10).map((x) => ({
+        label: `${x.truth.toUpperCase()} -> ${x.guess.toUpperCase()}`,
         value: x.n
       }))
     }

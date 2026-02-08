@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.11
+// @version      1.0.12
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6902,6 +6902,44 @@
     row.appendChild(mkBtn("Save PNG", () => void downloadPng(svg, title)));
     return row;
   }
+  function aggregateLinePoints(points) {
+    if (points.length <= 120) return points;
+    const sorted = points.slice().sort((a, b) => a.x - b.x);
+    const span = Math.max(1, sorted[sorted.length - 1].x - sorted[0].x);
+    const spanDays = span / (24 * 60 * 60 * 1e3);
+    let bucketMs = 24 * 60 * 60 * 1e3;
+    if (spanDays > 365 * 2) bucketMs = 30 * 24 * 60 * 60 * 1e3;
+    else if (spanDays > 365) bucketMs = 14 * 24 * 60 * 60 * 1e3;
+    else if (spanDays > 120) bucketMs = 7 * 24 * 60 * 60 * 1e3;
+    else if (spanDays > 31) bucketMs = 2 * 24 * 60 * 60 * 1e3;
+    const buckets = /* @__PURE__ */ new Map();
+    for (const p of sorted) {
+      const key = Math.floor(p.x / bucketMs) * bucketMs;
+      const cur = buckets.get(key) || { sumY: 0, n: 0, x: p.x, label: p.label };
+      cur.sumY += p.y;
+      cur.n += 1;
+      cur.x = p.x;
+      cur.label = p.label;
+      buckets.set(key, cur);
+    }
+    let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => ({ x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label }));
+    const hardLimit = 180;
+    if (out.length > hardLimit) {
+      const stride = Math.ceil(out.length / hardLimit);
+      const compressed = [];
+      for (let i = 0; i < out.length; i += stride) {
+        const chunk = out.slice(i, i + stride);
+        const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
+        compressed.push({
+          x: chunk[chunk.length - 1].x,
+          y: avgY,
+          label: chunk[chunk.length - 1].label
+        });
+      }
+      out = compressed;
+    }
+    return out.length > 1 ? out : points;
+  }
   function renderLineChart(chart, title, doc) {
     const palette = getThemePalette();
     const chartWrap = doc.createElement("div");
@@ -6916,7 +6954,7 @@
     chartHeading.style.color = palette.textMuted;
     chartHeading.style.margin = "2px 4px 6px";
     chartWrap.appendChild(chartHeading);
-    const points = chart.points.slice().sort((a, b) => a.x - b.x);
+    const points = aggregateLinePoints(chart.points);
     const w = 1500;
     const h = 300;
     const ml = 60;
@@ -6968,42 +7006,68 @@
     chartHeading.style.color = palette.textMuted;
     chartHeading.style.margin = "2px 4px 6px";
     chartWrap.appendChild(chartHeading);
-    const bars = chart.bars.slice(0, 40);
-    const w = 1700;
-    const h = 320;
-    const ml = 52;
-    const mr = 16;
-    const mt = 14;
-    const mb = 80;
-    const maxY = Math.max(1, ...bars.map((b) => b.value));
-    const innerW = w - ml - mr;
-    const innerH = h - mt - mb;
-    const step = bars.length > 0 ? innerW / bars.length : innerW;
-    const bw = Math.max(4, step * 0.66);
-    const accent = analysisSettings.accent;
-    const rects = bars.map((b, i) => {
-      const x = ml + i * step + (step - bw) / 2;
-      const bh = b.value / maxY * innerH;
-      const y = mt + innerH - bh;
-      const label = b.label.length > 16 ? `${b.label.slice(0, 16)}..` : b.label;
-      return `
-        <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
-        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
-      `;
-    }).join("");
-    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("height", "320");
-    svg.innerHTML = `
-    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-    <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
-    ${rects}
-  `;
-    chartWrap.appendChild(createChartActions(svg, title));
-    chartWrap.appendChild(svg);
+    const allBars = chart.bars.slice(0, 240);
+    const initialBars = Math.max(1, Math.min(chart.initialBars ?? 40, allBars.length || 1));
+    let expanded = allBars.length <= initialBars;
+    const content = doc.createElement("div");
+    chartWrap.appendChild(content);
+    const render = () => {
+      content.innerHTML = "";
+      const bars = expanded ? allBars : allBars.slice(0, initialBars);
+      const w = 1700;
+      const h = 320;
+      const ml = 52;
+      const mr = 16;
+      const mt = 14;
+      const mb = 80;
+      const maxY = Math.max(1, ...bars.map((b) => b.value));
+      const innerW = w - ml - mr;
+      const innerH = h - mt - mb;
+      const step = bars.length > 0 ? innerW / bars.length : innerW;
+      const bw = Math.max(4, step * 0.66);
+      const accent = analysisSettings.accent;
+      const rects = bars.map((b, i) => {
+        const x = ml + i * step + (step - bw) / 2;
+        const bh = b.value / maxY * innerH;
+        const y = mt + innerH - bh;
+        const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+        return `
+          <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
+          <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
+        `;
+      }).join("");
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.setAttribute("width", "100%");
+      svg.setAttribute("height", "320");
+      svg.innerHTML = `
+      <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+      <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+      <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+      <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
+      ${rects}
+    `;
+      content.appendChild(createChartActions(svg, title));
+      if (allBars.length > initialBars) {
+        const toggle = doc.createElement("button");
+        toggle.textContent = expanded ? "Show less" : `Show all (${allBars.length})`;
+        toggle.style.background = palette.buttonBg;
+        toggle.style.color = palette.buttonText;
+        toggle.style.border = `1px solid ${palette.border}`;
+        toggle.style.borderRadius = "6px";
+        toggle.style.padding = "3px 8px";
+        toggle.style.fontSize = "11px";
+        toggle.style.cursor = "pointer";
+        toggle.style.marginBottom = "6px";
+        toggle.addEventListener("click", () => {
+          expanded = !expanded;
+          render();
+        });
+        content.appendChild(toggle);
+      }
+      content.appendChild(svg);
+    };
+    render();
     return chartWrap;
   }
   function createUI() {
@@ -9312,6 +9376,15 @@
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
   }
+  function formatShortDateTime(ts) {
+    const d = new Date(ts);
+    const y = String(d.getFullYear()).slice(-2);
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${y}-${m}-${day} ${hh}:${mm}`;
+  }
   function sum(values) {
     return values.reduce((a, b) => a + b, 0);
   }
@@ -9845,20 +9918,20 @@
     const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const weekdayAvgScore = wdNames.map((name, i) => ({
       name,
-      value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : -Infinity
-    }));
+      value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : void 0
+    })).filter((x) => typeof x.value === "number");
     const weekdayAvgTime = wdNames.map((name, i) => ({
       name,
-      value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : Infinity
-    }));
+      value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : void 0
+    })).filter((x) => typeof x.value === "number");
     const hourAvgScore = hour.map((_, h) => ({
       hour: h,
-      value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : -Infinity
-    }));
+      value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : void 0
+    })).filter((x) => typeof x.value === "number");
     const hourAvgTime = hour.map((_, h) => ({
       hour: h,
-      value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : Infinity
-    }));
+      value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : void 0
+    })).filter((x) => typeof x.value === "number");
     const bestDayByScore = [...weekdayAvgScore].sort((a, b) => b.value - a.value)[0];
     const worstDayByScore = [...weekdayAvgScore].sort((a, b) => a.value - b.value)[0];
     const bestHourByScore = [...hourAvgScore].sort((a, b) => b.value - a.value)[0];
@@ -9905,6 +9978,20 @@
       gameSessionIndex.set(ts, sessionIdx);
       prevTs = ts;
     }
+    const sessionBounds = /* @__PURE__ */ new Map();
+    for (const ts of sortedGameTimes) {
+      const idx = gameSessionIndex.get(ts);
+      if (idx === void 0) continue;
+      const cur = sessionBounds.get(idx);
+      if (!cur) {
+        sessionBounds.set(idx, { start: ts, end: ts, games: 1 });
+      } else {
+        cur.start = Math.min(cur.start, ts);
+        cur.end = Math.max(cur.end, ts);
+        cur.games += 1;
+        sessionBounds.set(idx, cur);
+      }
+    }
     const sessionsAgg = /* @__PURE__ */ new Map();
     for (const rm of roundMetrics) {
       const idx = gameSessionIndex.get(rm.ts);
@@ -9919,12 +10006,18 @@
     }
     const sessionRows = [...sessionsAgg.entries()].map(([idx, s]) => ({
       idx,
+      start: sessionBounds.get(idx)?.start || 0,
+      end: sessionBounds.get(idx)?.end || 0,
+      games: sessionBounds.get(idx)?.games || 0,
       rounds: s.rounds,
       avgScore: avg(s.scores) || 0,
       fiveKRate: pct(s.fiveK, s.rounds),
       throwRate: pct(s.throws, s.rounds),
-      avgTime: avg(s.avgTimeSrc)
-    })).sort((a, b) => b.avgScore - a.avgScore);
+      avgTime: avg(s.avgTimeSrc),
+      label: sessionBounds.get(idx) ? `${formatShortDateTime(sessionBounds.get(idx).start)} -> ${formatShortDateTime(sessionBounds.get(idx).end)}` : `Session ${idx + 1}`
+    })).sort((a, b) => a.start - b.start);
+    const bestSessionRows = [...sessionRows].sort((a, b) => b.avgScore - a.avgScore);
+    const worstSessionRows = [...sessionRows].sort((a, b) => a.avgScore - b.avgScore);
     sections.push({
       id: "session_quality",
       title: "Session Quality",
@@ -9932,19 +10025,23 @@
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         `Sessions detected (gap >45m): ${sessionRows.length}`,
-        ...sessionRows.slice(0, 3).map((s, i) => `${i + 1}. Session #${s.idx + 1}: avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}% | avg time ${fmt(s.avgTime, 1)}s`),
-        ...sessionRows.slice(-2).map((s) => `Low session #${s.idx + 1}: avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
+        ...bestSessionRows.slice(0, 3).map(
+          (s, i) => `${i + 1}. Best: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}% | avg time ${fmt(s.avgTime, 1)}s`
+        ),
+        ...worstSessionRows.slice(0, 2).map((s) => `Hardest: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
       ],
       charts: [
         {
           type: "bar",
           yLabel: "Avg score by session",
-          bars: sessionRows.slice(0, 20).map((s) => ({ label: `S${s.idx + 1}`, value: s.avgScore }))
+          initialBars: 10,
+          bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore }))
         },
         {
           type: "bar",
           yLabel: "Throw rate % by session",
-          bars: sessionRows.slice(0, 20).map((s) => ({ label: `S${s.idx + 1}`, value: s.throwRate }))
+          initialBars: 10,
+          bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate }))
         }
       ]
     });
@@ -10012,7 +10109,7 @@
       }
     });
     const countryAgg = /* @__PURE__ */ new Map();
-    for (const r of rounds) {
+    for (const r of teamRounds) {
       const t = normalizeCountryCode(r.trueCountry);
       if (!t) continue;
       const entry = countryAgg.get(t) || { n: 0, score: [], dist: [], correct: 0, guessed: /* @__PURE__ */ new Map() };
@@ -10039,17 +10136,17 @@
     const bestCountries = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 5);
     const worstCountries = [...scoredCountries].sort((a, b) => a.avgScore - b.avgScore).slice(0, 5);
     const bestHitRate = [...scoredCountries].filter((x) => x.n >= 8).sort((a, b) => b.hitRate - a.hitRate)[0];
-    const avgScoreRankPoints = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).map((x, idx) => ({ x: idx + 1, y: x.avgScore, label: countryLabel(x.country) }));
     sections.push({
       id: "country_stats",
       title: "Country Stats",
       group: "Countries",
-      appliesFilters: ["date", "mode", "teammate", "country"],
+      appliesFilters: ["date", "mode", "teammate"],
       lines: [
+        selectedCountry ? "Country filter is ignored here (global country comparison)." : "",
         `Best avg-score country: ${bestCountries[0] ? `${countryLabel(bestCountries[0].country)} (${fmt(bestCountries[0].avgScore, 1)})` : "-"}`,
         `Hardest avg-score country: ${worstCountries[0] ? `${countryLabel(worstCountries[0].country)} (${fmt(worstCountries[0].avgScore, 1)})` : "-"}`,
         `Highest hit-rate country (min 8 rounds): ${bestHitRate ? `${countryLabel(bestHitRate.country)} (${fmt(bestHitRate.hitRate * 100, 1)}%)` : "-"}`
-      ],
+      ].filter((x) => x !== ""),
       charts: [
         {
           type: "bar",
@@ -10057,9 +10154,10 @@
           bars: topCountries.slice(0, 24).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
         },
         {
-          type: "line",
-          yLabel: "Avg score by country rank",
-          points: avgScoreRankPoints
+          type: "bar",
+          yLabel: "Avg score by country",
+          initialBars: 5,
+          bars: [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
         }
       ]
     });
@@ -10142,8 +10240,8 @@
       chart: {
         type: "bar",
         yLabel: "Top confusion pairs",
-        bars: confusions.slice(0, 20).map((x) => ({
-          label: `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}`,
+        bars: confusions.slice(0, 10).map((x) => ({
+          label: `${x.truth.toUpperCase()} -> ${x.guess.toUpperCase()}`,
           value: x.n
         }))
       }

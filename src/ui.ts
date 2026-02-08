@@ -281,6 +281,50 @@ function createChartActions(svg: SVGSVGElement, title: string): HTMLElement {
   return row;
 }
 
+function aggregateLinePoints(points: Array<{ x: number; y: number; label?: string }>): Array<{ x: number; y: number; label?: string }> {
+  if (points.length <= 120) return points;
+  const sorted = points.slice().sort((a, b) => a.x - b.x);
+  const span = Math.max(1, sorted[sorted.length - 1].x - sorted[0].x);
+  const spanDays = span / (24 * 60 * 60 * 1000);
+  let bucketMs = 24 * 60 * 60 * 1000;
+  if (spanDays > 365 * 2) bucketMs = 30 * 24 * 60 * 60 * 1000;
+  else if (spanDays > 365) bucketMs = 14 * 24 * 60 * 60 * 1000;
+  else if (spanDays > 120) bucketMs = 7 * 24 * 60 * 60 * 1000;
+  else if (spanDays > 31) bucketMs = 2 * 24 * 60 * 60 * 1000;
+
+  const buckets = new Map<number, { sumY: number; n: number; x: number; label?: string }>();
+  for (const p of sorted) {
+    const key = Math.floor(p.x / bucketMs) * bucketMs;
+    const cur = buckets.get(key) || { sumY: 0, n: 0, x: p.x, label: p.label };
+    cur.sumY += p.y;
+    cur.n += 1;
+    cur.x = p.x;
+    cur.label = p.label;
+    buckets.set(key, cur);
+  }
+
+  let out = [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => ({ x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label }));
+
+  const hardLimit = 180;
+  if (out.length > hardLimit) {
+    const stride = Math.ceil(out.length / hardLimit);
+    const compressed: Array<{ x: number; y: number; label?: string }> = [];
+    for (let i = 0; i < out.length; i += stride) {
+      const chunk = out.slice(i, i + stride);
+      const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
+      compressed.push({
+        x: chunk[chunk.length - 1].x,
+        y: avgY,
+        label: chunk[chunk.length - 1].label
+      });
+    }
+    out = compressed;
+  }
+  return out.length > 1 ? out : points;
+}
+
 function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title: string, doc: Document): HTMLElement {
   const palette = getThemePalette();
   const chartWrap = doc.createElement("div");
@@ -296,7 +340,7 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   chartHeading.style.margin = "2px 4px 6px";
   chartWrap.appendChild(chartHeading);
 
-  const points = chart.points.slice().sort((a, b) => a.x - b.x);
+  const points = aggregateLinePoints(chart.points);
   const w = 1500;
   const h = 300;
   const ml = 60;
@@ -350,45 +394,72 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   chartHeading.style.margin = "2px 4px 6px";
   chartWrap.appendChild(chartHeading);
 
-  const bars = chart.bars.slice(0, 40);
-  const w = 1700;
-  const h = 320;
-  const ml = 52;
-  const mr = 16;
-  const mt = 14;
-  const mb = 80;
-  const maxY = Math.max(1, ...bars.map((b) => b.value));
-  const innerW = w - ml - mr;
-  const innerH = h - mt - mb;
-  const step = bars.length > 0 ? innerW / bars.length : innerW;
-  const bw = Math.max(4, step * 0.66);
-  const accent = analysisSettings.accent;
-  const rects = bars
-    .map((b, i) => {
-      const x = ml + i * step + (step - bw) / 2;
-      const bh = (b.value / maxY) * innerH;
-      const y = mt + innerH - bh;
-      const label = b.label.length > 16 ? `${b.label.slice(0, 16)}..` : b.label;
-      return `
-        <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
-        <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
-      `;
-    })
-    .join("");
+  const allBars = chart.bars.slice(0, 240);
+  const initialBars = Math.max(1, Math.min(chart.initialBars ?? 40, allBars.length || 1));
+  let expanded = allBars.length <= initialBars;
+  const content = doc.createElement("div");
+  chartWrap.appendChild(content);
 
-  const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  svg.setAttribute("width", "100%");
-  svg.setAttribute("height", "320");
-  svg.innerHTML = `
-    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-    <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
-    ${rects}
-  `;
-  chartWrap.appendChild(createChartActions(svg, title));
-  chartWrap.appendChild(svg);
+  const render = () => {
+    content.innerHTML = "";
+    const bars = expanded ? allBars : allBars.slice(0, initialBars);
+    const w = 1700;
+    const h = 320;
+    const ml = 52;
+    const mr = 16;
+    const mt = 14;
+    const mb = 80;
+    const maxY = Math.max(1, ...bars.map((b) => b.value));
+    const innerW = w - ml - mr;
+    const innerH = h - mt - mb;
+    const step = bars.length > 0 ? innerW / bars.length : innerW;
+    const bw = Math.max(4, step * 0.66);
+    const accent = analysisSettings.accent;
+    const rects = bars
+      .map((b, i) => {
+        const x = ml + i * step + (step - bw) / 2;
+        const bh = (b.value / maxY) * innerH;
+        const y = mt + innerH - bh;
+        const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+        return `
+          <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
+          <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
+        `;
+      })
+      .join("");
+
+    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "320");
+    svg.innerHTML = `
+      <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+      <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+      <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+      <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
+      ${rects}
+    `;
+    content.appendChild(createChartActions(svg, title));
+    if (allBars.length > initialBars) {
+      const toggle = doc.createElement("button");
+      toggle.textContent = expanded ? "Show less" : `Show all (${allBars.length})`;
+      toggle.style.background = palette.buttonBg;
+      toggle.style.color = palette.buttonText;
+      toggle.style.border = `1px solid ${palette.border}`;
+      toggle.style.borderRadius = "6px";
+      toggle.style.padding = "3px 8px";
+      toggle.style.fontSize = "11px";
+      toggle.style.cursor = "pointer";
+      toggle.style.marginBottom = "6px";
+      toggle.addEventListener("click", () => {
+        expanded = !expanded;
+        render();
+      });
+      content.appendChild(toggle);
+    }
+    content.appendChild(svg);
+  };
+  render();
   return chartWrap;
 }
 
