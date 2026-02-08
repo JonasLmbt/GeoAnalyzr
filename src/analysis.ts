@@ -63,6 +63,11 @@ function fmt(n: number | undefined, digits = 2): string {
   return n.toFixed(digits);
 }
 
+function pct(part: number, total: number): number {
+  if (!total) return 0;
+  return (part / total) * 100;
+}
+
 function extractScore(r: RoundRow): number | undefined {
   const rr = asRecord(r);
   const p1Score = getNumber(rr, "p1_score");
@@ -444,7 +449,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
   const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
   const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
-  const countryDetails = teamDetails.filter((d) => countryGameSet.has(d.gameId));
 
   if (countryGames.length === 0 || countryRounds.length === 0) {
     return {
@@ -459,7 +463,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const games = countryGames;
   const rounds = countryRounds;
-  const details = countryDetails;
 
   const sections: AnalysisSection[] = [];
   const gameTimes = games.map((g) => g.playedAt).sort((a, b) => a - b);
@@ -473,6 +476,24 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .map(extractTimeMs)
     .filter((v): v is number => v !== undefined)
     .map((ms) => ms / 1e3);
+  const roundMetrics = rounds
+    .map((r) => {
+      const ts = playedAtByGameId.get(r.gameId);
+      const score = extractScore(r);
+      const timeMs = extractTimeMs(r);
+      const distMeters = extractDistanceMeters(r);
+      if (!ts || typeof score !== "number") return undefined;
+      return {
+        ts,
+        day: startOfLocalDay(ts),
+        score,
+        timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
+        distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined
+      };
+    })
+    .filter((x): x is { ts: number; day: number; score: number; timeSec?: number; distKm?: number } => !!x);
+  const fiveKCount = roundMetrics.filter((x) => x.score >= 5000).length;
+  const throwCount = roundMetrics.filter((x) => x.score < 50).length;
 
   sections.push({
     id: "overview",
@@ -485,7 +506,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       `Filters: mode=${filter?.mode || "all"}, teammate=${selectedTeammate ? (nameMap.get(selectedTeammate) || selectedTeammate) : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
       `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
       `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
-      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`
+      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
+      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
     ],
     charts: [
       {
@@ -612,6 +634,127 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ]
   });
 
+  const sessionGapMs = 45 * 60 * 1000;
+  const sortedGameTimes = [...gameTimes].sort((a, b) => a - b);
+  const gameSessionIndex = new Map<number, number>();
+  let sessionIdx = -1;
+  let prevTs: number | undefined;
+  for (const ts of sortedGameTimes) {
+    if (prevTs === undefined || ts - prevTs > sessionGapMs) sessionIdx++;
+    gameSessionIndex.set(ts, sessionIdx);
+    prevTs = ts;
+  }
+  const sessionsAgg = new Map<number, { rounds: number; scores: number[]; fiveK: number; throws: number; avgTimeSrc: number[] }>();
+  for (const rm of roundMetrics) {
+    const idx = gameSessionIndex.get(rm.ts);
+    if (idx === undefined) continue;
+    const cur = sessionsAgg.get(idx) || { rounds: 0, scores: [], fiveK: 0, throws: 0, avgTimeSrc: [] };
+    cur.rounds++;
+    cur.scores.push(rm.score);
+    if (rm.score >= 5000) cur.fiveK++;
+    if (rm.score < 50) cur.throws++;
+    if (typeof rm.timeSec === "number") cur.avgTimeSrc.push(rm.timeSec);
+    sessionsAgg.set(idx, cur);
+  }
+  const sessionRows = [...sessionsAgg.entries()]
+    .map(([idx, s]) => ({
+      idx,
+      rounds: s.rounds,
+      avgScore: avg(s.scores) || 0,
+      fiveKRate: pct(s.fiveK, s.rounds),
+      throwRate: pct(s.throws, s.rounds),
+      avgTime: avg(s.avgTimeSrc)
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore);
+  sections.push({
+    id: "session_quality",
+    title: "Session Quality",
+    group: "Performance",
+    appliesFilters: ["date", "mode", "teammate", "country"],
+    lines: [
+      `Sessions detected (gap >45m): ${sessionRows.length}`,
+      ...sessionRows.slice(0, 3).map((s, i) => `${i + 1}. Session #${s.idx + 1}: avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}% | avg time ${fmt(s.avgTime, 1)}s`),
+      ...sessionRows.slice(-2).map((s) => `Low session #${s.idx + 1}: avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
+    ],
+    charts: [
+      {
+        type: "bar",
+        yLabel: "Avg score by session",
+        bars: sessionRows.slice(0, 20).map((s) => ({ label: `S${s.idx + 1}`, value: s.avgScore }))
+      },
+      {
+        type: "bar",
+        yLabel: "Throw rate % by session",
+        bars: sessionRows.slice(0, 20).map((s) => ({ label: `S${s.idx + 1}`, value: s.throwRate }))
+      }
+    ]
+  });
+
+  const tempoBuckets = [
+    { name: "0-10s", min: 0, max: 10 },
+    { name: "10-20s", min: 10, max: 20 },
+    { name: "20-30s", min: 20, max: 30 },
+    { name: "30-45s", min: 30, max: 45 },
+    { name: "45-60s", min: 45, max: 60 },
+    { name: "60-90s", min: 60, max: 90 },
+    { name: "90s+", min: 90, max: Infinity }
+  ];
+  const tempoAgg = tempoBuckets.map((b) => ({ ...b, n: 0, scores: [] as number[], dist: [] as number[] }));
+  for (const rm of roundMetrics) {
+    if (typeof rm.timeSec !== "number") continue;
+    const bucket = tempoAgg.find((b) => rm.timeSec >= b.min && rm.timeSec < b.max);
+    if (!bucket) continue;
+    bucket.n++;
+    bucket.scores.push(rm.score);
+    if (typeof rm.distKm === "number") bucket.dist.push(rm.distKm);
+  }
+  sections.push({
+    id: "tempo_vs_quality",
+    title: "Tempo vs Quality",
+    group: "Performance",
+    appliesFilters: ["date", "mode", "teammate", "country"],
+    lines: [
+      ...tempoAgg.map((b) => `${b.name}: n=${b.n} | avg score ${fmt(avg(b.scores), 1)} | avg distance ${fmt(avg(b.dist), 2)} km`)
+    ],
+    charts: [
+      {
+        type: "bar",
+        yLabel: "Avg score by guess-time bucket",
+        bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0 }))
+      },
+      {
+        type: "bar",
+        yLabel: "Avg distance km by guess-time bucket",
+        bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0 }))
+      }
+    ]
+  });
+
+  const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
+  const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;
+  sections.push({
+    id: "score_extremes",
+    title: "Score Extremes",
+    group: "Performance",
+    appliesFilters: ["date", "mode", "teammate", "country"],
+    lines: [
+      `Perfect 5k: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
+      `Near-perfect (>=4500): ${nearPerfectCount} (${fmt(pct(nearPerfectCount, roundMetrics.length), 1)}%)`,
+      `Low scores (<500): ${lowScoreCount} (${fmt(pct(lowScoreCount, roundMetrics.length), 1)}%)`,
+      `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
+    ],
+    chart: {
+      type: "bar",
+      yLabel: "Rounds count",
+      bars: [
+        { label: "5k", value: fiveKCount },
+        { label: ">=4500", value: nearPerfectCount },
+        { label: "<500", value: lowScoreCount },
+        { label: "Throw <50", value: throwCount }
+      ]
+    }
+  });
+
   const countryAgg = new Map<string, { n: number; score: number[]; dist: number[]; correct: number; guessed: Map<string, number> }>();
   for (const r of rounds) {
     const t = normalizeCountryCode(r.trueCountry);
@@ -690,20 +833,24 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       return { truth, guess, n };
     })
     .sort((a, b) => b.n - a.n);
+  const confusionRows = [...new Set(confusions.map((x) => x.truth))].slice(0, 10).map((truth) => {
+    const row = confusions.filter((x) => x.truth === truth).slice(0, 3);
+    return `${countryLabel(truth)} -> ${row.map((r) => `${countryLabel(r.guess)} (${r.n})`).join(", ")}`;
+  });
   sections.push({
     id: "country_confusions",
-    title: "Most Confused Country Pairs",
+    title: "Country Confusion Matrix (Top)",
     group: "Countries",
     appliesFilters: ["date", "mode", "teammate"],
     lines: [
       selectedCountry
         ? "Country filter is ignored here to reveal global confusion patterns in your selected date/mode/team scope."
-        : "Most frequent wrong guess directions (true country -> guessed country).",
-      ...confusions.slice(0, 20).map((x) => `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}: ${x.n}`)
+        : "Top confusion rows (true country -> most common wrong guesses):",
+      ...confusionRows
     ],
     chart: {
       type: "bar",
-      yLabel: "Wrong guesses",
+      yLabel: "Top confusion pairs",
       bars: confusions.slice(0, 20).map((x) => ({
         label: `${countryLabel(x.truth)} -> ${countryLabel(x.guess)}`,
         value: x.n
@@ -780,21 +927,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((x): x is { x: number; y: number; label: string } => !!x)
     .sort((a, b) => a.x - b.x);
 
-  const teamRatingTimeline = baseDetails
-    .filter((d) => getString(asRecord(d), "modeFamily") === "teamduels")
-    .map((d) => {
-      const ts = basePlayedAtByGameId.get(d.gameId);
-      const r = extractOwnTeamRating(d, ownPlayerId);
-      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : undefined;
-    })
-    .filter((x): x is { x: number; y: number; label: string } => !!x)
-    .sort((a, b) => a.x - b.x);
-
-  const teammateForRating = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
   const teammateRatingTimeline =
-    teammateForRating && teammateGames.get(teammateForRating)
+    selectedTeammate && teammateGames.get(selectedTeammate)
       ? baseDetails
-          .filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(teammateForRating)?.has(d.gameId) || false))
+          .filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(selectedTeammate)?.has(d.gameId) || false))
           .map((d) => {
             const ts = basePlayedAtByGameId.get(d.gameId);
             const r = extractOwnTeamRating(d, ownPlayerId);
@@ -806,8 +942,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const duelDelta =
     duelRatingTimeline.length > 1 ? duelRatingTimeline[duelRatingTimeline.length - 1].y - duelRatingTimeline[0].y : undefined;
-  const teamDelta =
-    teamRatingTimeline.length > 1 ? teamRatingTimeline[teamRatingTimeline.length - 1].y - teamRatingTimeline[0].y : undefined;
   const teammateDelta =
     teammateRatingTimeline.length > 1
       ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y
@@ -832,21 +966,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : undefined
   });
 
-  const sessionsGap = 45 * 60 * 1000;
-  let sessions = 0;
-  let longest = 0;
-  let cur = 0;
-  for (let i = 0; i < gameTimes.length; i++) {
-    if (i === 0 || gameTimes[i] - gameTimes[i - 1] > sessionsGap) {
-      sessions++;
-      cur = 1;
-    } else {
-      cur++;
-    }
-    if (cur > longest) longest = cur;
-  }
-
-  const longestBreakMs = gameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - gameTimes[i]), 0);
+  const sessions = sessionRows.length;
+  const longest = sessionRows.length ? Math.max(...sessionRows.map((s) => s.rounds)) : 0;
+  const longestBreakMs = sortedGameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - sortedGameTimes[i]), 0);
 
   const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
   if (teammateToUse && ownPlayerId) {
@@ -936,6 +1058,23 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       .slice(0, 6);
 
     const countryRounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+    const countryScores = countryRounds.map(extractScore).filter((x): x is number => typeof x === "number");
+    const countryFiveK = countryScores.filter((s) => s >= 5000).length;
+    const countryThrows = countryScores.filter((s) => s < 50).length;
+    const distributionBuckets = [
+      { label: "0-49", min: 0, max: 50 },
+      { label: "50-499", min: 50, max: 500 },
+      { label: "500-999", min: 500, max: 1000 },
+      { label: "1000-1999", min: 1000, max: 2000 },
+      { label: "2000-2999", min: 2000, max: 3000 },
+      { label: "3000-3999", min: 3000, max: 4000 },
+      { label: "4000-4999", min: 4000, max: 5000 },
+      { label: "5000", min: 5000, max: Infinity }
+    ];
+    const distributionBars = distributionBuckets.map((b) => ({
+      label: b.label,
+      value: countryScores.filter((s) => s >= b.min && s < b.max).length
+    }));
     const scoreTimeline: Array<{ x: number; y: number; label: string }> = [];
     for (const r of countryRounds) {
       const playedAt = playedAtByGameId.get(r.gameId);
@@ -955,6 +1094,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         `Hit rate: ${fmt((agg.n > 0 ? agg.correct / agg.n : 0) * 100, 1)}%`,
         `Avg score: ${fmt(avg(agg.score), 1)} | Median score: ${fmt(median(agg.score), 1)}`,
         `Avg distance: ${fmt(avg(agg.dist), 2)} km`,
+        `Perfect 5k in this country: ${countryFiveK} (${fmt(pct(countryFiveK, countryScores.length), 1)}%)`,
+        `Throws (<50) in this country: ${countryThrows} (${fmt(pct(countryThrows, countryScores.length), 1)}%)`,
         wrongGuesses.length > 0 ? "Most common wrong guesses:" : "No wrong guess data.",
         ...wrongGuesses.map(([g, n]) => `${countryLabel(g)}: ${n}`)
       ],
@@ -966,12 +1107,77 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         },
         {
           type: "bar",
+          yLabel: "Score distribution",
+          bars: distributionBars
+        },
+        {
+          type: "bar",
           yLabel: "Wrong guesses",
           bars: wrongGuesses.map(([g, n]) => ({ label: countryLabel(g), value: n }))
         }
       ]
     });
   }
+
+  const scoresByDay = new Map<number, number[]>();
+  const timesByDay = new Map<number, number[]>();
+  for (const rm of roundMetrics) {
+    const s = scoresByDay.get(rm.day) || [];
+    s.push(rm.score);
+    scoresByDay.set(rm.day, s);
+    if (typeof rm.timeSec === "number") {
+      const t = timesByDay.get(rm.day) || [];
+      t.push(rm.timeSec);
+      timesByDay.set(rm.day, t);
+    }
+  }
+  const dayRecords = [...scoresByDay.entries()].map(([day, vals]) => ({
+    day,
+    avgScore: avg(vals) || 0,
+    rounds: vals.length,
+    avgTime: avg(timesByDay.get(day) || [])
+  }));
+  const bestDay = [...dayRecords].sort((a, b) => b.avgScore - a.avgScore)[0];
+  const worstDay = [...dayRecords].sort((a, b) => a.avgScore - b.avgScore)[0];
+  const fastestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (a.avgTime || 0) - (b.avgTime || 0))[0];
+  const slowestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (b.avgTime || 0) - (a.avgTime || 0))[0];
+  let fivekStreak = 0;
+  let bestFivekStreak = 0;
+  let throwStreak = 0;
+  let worstThrowStreak = 0;
+  for (const s of roundMetrics.map((x) => x.score)) {
+    if (s >= 5000) {
+      fivekStreak++;
+      bestFivekStreak = Math.max(bestFivekStreak, fivekStreak);
+    } else {
+      fivekStreak = 0;
+    }
+    if (s < 50) {
+      throwStreak++;
+      worstThrowStreak = Math.max(worstThrowStreak, throwStreak);
+    } else {
+      throwStreak = 0;
+    }
+  }
+  sections.push({
+    id: "personal_records",
+    title: "Personal Records",
+    group: "Performance",
+    appliesFilters: ["date", "mode", "teammate", "country"],
+    lines: [
+      `Best day: ${bestDay ? `${formatDay(bestDay.day)} (avg ${fmt(bestDay.avgScore, 1)}, n=${bestDay.rounds})` : "-"}`,
+      `Hardest day: ${worstDay ? `${formatDay(worstDay.day)} (avg ${fmt(worstDay.avgScore, 1)}, n=${worstDay.rounds})` : "-"}`,
+      `Fastest day: ${fastestDayRecord ? `${formatDay(fastestDayRecord.day)} (${fmt(fastestDayRecord.avgTime, 1)} s)` : "-"}`,
+      `Slowest day: ${slowestDayRecord ? `${formatDay(slowestDayRecord.day)} (${fmt(slowestDayRecord.avgTime, 1)} s)` : "-"}`,
+      `Best 5k streak: ${bestFivekStreak} rounds in a row`,
+      `Worst throw streak (<50): ${worstThrowStreak} rounds in a row`
+    ],
+    chart: {
+      type: "line",
+      yLabel: "Avg daily score",
+      points: dayRecords.sort((a, b) => a.day - b.day).map((d) => ({ x: d.day, y: d.avgScore, label: formatDay(d.day) }))
+    }
+  });
 
   const bestMode = [...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
   const topCountry = topCountries[0]?.[0];
@@ -992,6 +1198,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       `Most played country: ${topCountry ? countryLabel(topCountry) : "-"}`,
       `Top 10% score threshold: ${fmt(p90Score, 1)} points`,
       `Avg score per round: ${fmt(avgScoreAll, 1)}`,
+      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
+      `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
       `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`,
       `Last 7-day activity snapshot:`,
       ...makeDayActivityLines(gameTimes, 7)
