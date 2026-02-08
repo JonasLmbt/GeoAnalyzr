@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.2
+// @version      1.2.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10623,16 +10623,11 @@
       { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0 })) },
       { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0 })) },
       { key: "fivek_rate", label: "5k rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.fiveKs, b.n) : 0 })) },
-      { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n })) },
-      {
-        key: "avg_time",
-        label: "Avg guess time (s)",
-        bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.timeSum / b.n : 0 }))
-      }
+      { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n })) }
     ];
     sections.push({
       id: "tempo_vs_quality",
-      title: "Tempo vs Quality",
+      title: "Tempo",
       group: "Performance",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
@@ -10678,54 +10673,94 @@
     for (const r of teamRounds) {
       const t = normalizeCountryCode(r.trueCountry);
       if (!t) continue;
-      const entry = countryAgg.get(t) || { n: 0, score: [], dist: [], correct: 0, guessed: /* @__PURE__ */ new Map() };
+      const entry = countryAgg.get(t) || {
+        n: 0,
+        score: [],
+        scoreCorrectOnly: [],
+        dist: [],
+        correct: 0,
+        guessed: /* @__PURE__ */ new Map(),
+        throws: 0,
+        fiveKs: 0
+      };
       entry.n++;
       const sc = extractScore(r);
-      if (typeof sc === "number") entry.score.push(sc);
+      if (typeof sc === "number") {
+        entry.score.push(sc);
+        if (sc < 50) entry.throws++;
+        if (sc >= 5e3) entry.fiveKs++;
+      }
       const dm = extractDistanceMeters(r);
       if (typeof dm === "number") entry.dist.push(dm / 1e3);
       const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
       if (guess) {
         entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
-        if (guess === t) entry.correct++;
+        if (guess === t) {
+          entry.correct++;
+          if (typeof sc === "number") entry.scoreCorrectOnly.push(sc);
+        }
       }
       countryAgg.set(t, entry);
     }
     const topCountries = [...countryAgg.entries()].sort((a, b) => b[1].n - a[1].n);
-    const scoredCountries = topCountries.filter(([, v]) => v.score.length >= 4).map(([c, v]) => ({
+    const countryMetricRows = topCountries.map(([c, v]) => ({
       country: c,
       n: v.n,
       avgScore: avg(v.score) || 0,
+      avgScoreCorrectOnly: avg(v.scoreCorrectOnly) || 0,
       avgDist: avg(v.dist),
-      hitRate: v.n > 0 ? v.correct / v.n : 0
+      hitRate: v.n > 0 ? v.correct / v.n : 0,
+      throwRate: v.score.length > 0 ? v.throws / v.score.length : 0,
+      fiveKRate: v.score.length > 0 ? v.fiveKs / v.score.length : 0
     }));
-    const bestCountries = [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).slice(0, 5);
-    const worstCountries = [...scoredCountries].sort((a, b) => a.avgScore - b.avgScore).slice(0, 5);
-    const bestHitRate = [...scoredCountries].filter((x) => x.n >= 8).sort((a, b) => b.hitRate - a.hitRate)[0];
+    const countryMetricOptions = [
+      { key: "avg_score", label: "Avg score", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore })) },
+      {
+        key: "avg_score_correct_only",
+        label: "Avg score (correct guesses only)",
+        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScoreCorrectOnly }))
+      },
+      { key: "hit_rate", label: "Hit rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.hitRate * 100 })) },
+      { key: "avg_distance", label: "Avg distance (km)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDist || 0 })) },
+      { key: "throw_rate", label: "Throw rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.throwRate * 100 })) },
+      { key: "fivek_rate", label: "5k rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100 })) },
+      { key: "rounds", label: "Rounds", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n })) }
+    ];
+    const confusionMap = /* @__PURE__ */ new Map();
+    for (const r of teamRounds) {
+      const truth = normalizeCountryCode(r.trueCountry);
+      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      if (!truth || !guess || truth === guess) continue;
+      const key = `${truth}|${guess}`;
+      confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
+    }
+    const confusions = [...confusionMap.entries()].map(([k, n]) => {
+      const [truth, guess] = k.split("|");
+      return { truth, guess, n };
+    }).sort((a, b) => b.n - a.n);
+    const confusionRows = [...new Set(confusions.map((x) => x.truth))].slice(0, 10).map((truth) => {
+      const row = confusions.filter((x) => x.truth === truth).slice(0, 3);
+      return `${countryLabel(truth)} -> ${row.map((r) => `${countryLabel(r.guess)} (${r.n})`).join(", ")}`;
+    });
     sections.push({
       id: "country_stats",
-      title: "Country Stats",
+      title: "Countries",
       group: "Countries",
       appliesFilters: ["date", "mode", "teammate"],
       lines: [
         selectedCountry ? "Country filter is ignored here (global country comparison)." : "",
-        `Best avg-score country: ${bestCountries[0] ? `${countryLabel(bestCountries[0].country)} (${fmt(bestCountries[0].avgScore, 1)})` : "-"}`,
-        `Hardest avg-score country: ${worstCountries[0] ? `${countryLabel(worstCountries[0].country)} (${fmt(worstCountries[0].avgScore, 1)})` : "-"}`,
-        `Highest hit-rate country (min 8 rounds): ${bestHitRate ? `${countryLabel(bestHitRate.country)} (${fmt(bestHitRate.hitRate * 100, 1)}%)` : "-"}`
+        "Confusion Matrix (Top):",
+        ...confusionRows
       ].filter((x) => x !== ""),
-      charts: [
-        {
-          type: "bar",
-          yLabel: "Rounds",
-          bars: topCountries.slice(0, 24).map(([c, v]) => ({ label: countryLabel(c), value: v.n }))
-        },
-        {
-          type: "bar",
-          yLabel: "Avg score by country",
-          initialBars: 25,
-          bars: [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
-        }
-      ]
+      chart: {
+        type: "selectableBar",
+        yLabel: "Country metrics",
+        orientation: "horizontal",
+        initialBars: 25,
+        defaultMetricKey: "avg_score",
+        defaultSort: "desc",
+        options: countryMetricOptions
+      }
     });
     const damageByCountry = /* @__PURE__ */ new Map();
     if (ownPlayerId) {
@@ -10778,40 +10813,7 @@
         }
       ]
     });
-    const confusionMap = /* @__PURE__ */ new Map();
-    for (const r of teamRounds) {
-      const truth = normalizeCountryCode(r.trueCountry);
-      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
-      if (!truth || !guess || truth === guess) continue;
-      const key = `${truth}|${guess}`;
-      confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
-    }
-    const confusions = [...confusionMap.entries()].map(([k, n]) => {
-      const [truth, guess] = k.split("|");
-      return { truth, guess, n };
-    }).sort((a, b) => b.n - a.n);
-    const confusionRows = [...new Set(confusions.map((x) => x.truth))].slice(0, 10).map((truth) => {
-      const row = confusions.filter((x) => x.truth === truth).slice(0, 3);
-      return `${countryLabel(truth)} -> ${row.map((r) => `${countryLabel(r.guess)} (${r.n})`).join(", ")}`;
-    });
-    sections.push({
-      id: "country_confusions",
-      title: "Country Confusion Matrix (Top)",
-      group: "Countries",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: [
-        selectedCountry ? "Country filter is ignored here to reveal global confusion patterns in your selected date/mode/team scope." : "Top confusion rows (true country -> most common wrong guesses):",
-        ...confusionRows
-      ],
-      chart: {
-        type: "bar",
-        yLabel: "Top confusion pairs",
-        bars: confusions.slice(0, 10).map((x) => ({
-          label: `${x.truth.toUpperCase()} -> ${x.guess.toUpperCase()}`,
-          value: x.n
-        }))
-      }
-    });
+    void confusions;
     const opponentCounts = /* @__PURE__ */ new Map();
     for (const d of teamDetails) {
       const dd = asRecord(d);
