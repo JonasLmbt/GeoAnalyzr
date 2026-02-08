@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.3
+// @version      1.3.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7135,6 +7135,7 @@
   }
   function renderSelectableBarChart(chart, title, doc) {
     const palette = getThemePalette();
+    const allowSort = chart.allowSort !== false;
     const wrap = doc.createElement("div");
     wrap.style.marginBottom = "8px";
     wrap.style.border = `1px solid ${palette.border}`;
@@ -7169,21 +7170,24 @@
     }
     metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
     head.appendChild(metricSelect);
-    const sortSelect = doc.createElement("select");
-    sortSelect.style.background = palette.buttonBg;
-    sortSelect.style.color = palette.buttonText;
-    sortSelect.style.border = `1px solid ${palette.border}`;
-    sortSelect.style.borderRadius = "7px";
-    sortSelect.style.padding = "2px 6px";
-    sortSelect.style.fontSize = "11px";
-    for (const key of ["chronological", "desc", "asc"]) {
-      const opt = doc.createElement("option");
-      opt.value = key;
-      opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
-      sortSelect.appendChild(opt);
+    let sortSelect = null;
+    if (allowSort) {
+      sortSelect = doc.createElement("select");
+      sortSelect.style.background = palette.buttonBg;
+      sortSelect.style.color = palette.buttonText;
+      sortSelect.style.border = `1px solid ${palette.border}`;
+      sortSelect.style.borderRadius = "7px";
+      sortSelect.style.padding = "2px 6px";
+      sortSelect.style.fontSize = "11px";
+      for (const key of ["chronological", "desc", "asc"]) {
+        const opt = doc.createElement("option");
+        opt.value = key;
+        opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
+        sortSelect.appendChild(opt);
+      }
+      sortSelect.value = chart.defaultSort || "chronological";
+      head.appendChild(sortSelect);
     }
-    sortSelect.value = chart.defaultSort || "chronological";
-    head.appendChild(sortSelect);
     const content = doc.createElement("div");
     wrap.appendChild(content);
     const render = () => {
@@ -7191,8 +7195,8 @@
       const selected = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
       if (!selected) return;
       let bars = selected.bars.slice();
-      if (sortSelect.value === "desc") bars.sort((a, b) => b.value - a.value);
-      else if (sortSelect.value === "asc") bars.sort((a, b) => a.value - b.value);
+      if (allowSort && sortSelect?.value === "desc") bars.sort((a, b) => b.value - a.value);
+      else if (allowSort && sortSelect?.value === "asc") bars.sort((a, b) => a.value - b.value);
       const barChart = {
         type: "bar",
         yLabel: selected.label,
@@ -7204,7 +7208,7 @@
       content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc));
     };
     metricSelect.addEventListener("change", render);
-    sortSelect.addEventListener("change", render);
+    if (sortSelect) sortSelect.addEventListener("change", render);
     render();
     return wrap;
   }
@@ -11102,14 +11106,6 @@
       const countryThrows = countryScores.filter((s) => s < 50).length;
       const distributionAll = buildSmoothedScoreDistribution(countryScores);
       const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
-      const scoreTimeline = [];
-      for (const r of countryRounds2) {
-        const playedAt = playedAtByGameId.get(r.gameId);
-        const s = extractScore(r);
-        if (!playedAt || typeof s !== "number") continue;
-        scoreTimeline.push({ x: playedAt, y: s, label: formatDay(playedAt) });
-      }
-      scoreTimeline.sort((a, b) => a.x - b.x);
       sections.push({
         id: "country_spotlight",
         title: `Country Spotlight: ${countryFlagEmoji(spotlightCountry)} ${countryLabel(spotlightCountry)}`,
@@ -11125,13 +11121,9 @@
         ],
         charts: [
           {
-            type: "line",
-            yLabel: "Score",
-            points: scoreTimeline
-          },
-          {
             type: "selectableBar",
             yLabel: "Score distribution (smoothed)",
+            allowSort: false,
             defaultMetricKey: "all_guesses",
             defaultSort: "chronological",
             options: [

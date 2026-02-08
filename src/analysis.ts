@@ -602,6 +602,7 @@ export type AnalysisChart =
       initialBars?: number;
       orientation?: "vertical" | "horizontal";
       minHeight?: number;
+      allowSort?: boolean;
       defaultMetricKey?: string;
       defaultSort?: "chronological" | "desc" | "asc";
       options: Array<{
@@ -1709,15 +1710,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const countryThrows = countryScores.filter((s) => s < 50).length;
     const distributionAll = buildSmoothedScoreDistribution(countryScores);
     const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
-    const scoreTimeline: Array<{ x: number; y: number; label: string }> = [];
-    for (const r of countryRounds) {
-      const playedAt = playedAtByGameId.get(r.gameId);
-      const s = extractScore(r);
-      if (!playedAt || typeof s !== "number") continue;
-      scoreTimeline.push({ x: playedAt, y: s, label: formatDay(playedAt) });
-    }
-    scoreTimeline.sort((a, b) => a.x - b.x);
-
     sections.push({
       id: "country_spotlight",
       title: `Country Spotlight: ${countryFlagEmoji(spotlightCountry)} ${countryLabel(spotlightCountry)}`,
@@ -1733,13 +1725,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       ],
       charts: [
         {
-          type: "line",
-          yLabel: "Score",
-          points: scoreTimeline
-        },
-        {
           type: "selectableBar",
           yLabel: "Score distribution (smoothed)",
+          allowSort: false,
           defaultMetricKey: "all_guesses",
           defaultSort: "chronological",
           options: [

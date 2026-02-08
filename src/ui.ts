@@ -551,6 +551,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
 
 function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selectableBar" }>, title: string, doc: Document): HTMLElement {
   const palette = getThemePalette();
+  const allowSort = chart.allowSort !== false;
   const wrap = doc.createElement("div");
   wrap.style.marginBottom = "8px";
   wrap.style.border = `1px solid ${palette.border}`;
@@ -589,21 +590,24 @@ function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selecta
   metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
   head.appendChild(metricSelect);
 
-  const sortSelect = doc.createElement("select");
-  sortSelect.style.background = palette.buttonBg;
-  sortSelect.style.color = palette.buttonText;
-  sortSelect.style.border = `1px solid ${palette.border}`;
-  sortSelect.style.borderRadius = "7px";
-  sortSelect.style.padding = "2px 6px";
-  sortSelect.style.fontSize = "11px";
-  for (const key of ["chronological", "desc", "asc"] as const) {
-    const opt = doc.createElement("option");
-    opt.value = key;
-    opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
-    sortSelect.appendChild(opt);
+  let sortSelect: HTMLSelectElement | null = null;
+  if (allowSort) {
+    sortSelect = doc.createElement("select");
+    sortSelect.style.background = palette.buttonBg;
+    sortSelect.style.color = palette.buttonText;
+    sortSelect.style.border = `1px solid ${palette.border}`;
+    sortSelect.style.borderRadius = "7px";
+    sortSelect.style.padding = "2px 6px";
+    sortSelect.style.fontSize = "11px";
+    for (const key of ["chronological", "desc", "asc"] as const) {
+      const opt = doc.createElement("option");
+      opt.value = key;
+      opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
+      sortSelect.appendChild(opt);
+    }
+    sortSelect.value = chart.defaultSort || "chronological";
+    head.appendChild(sortSelect);
   }
-  sortSelect.value = chart.defaultSort || "chronological";
-  head.appendChild(sortSelect);
 
   const content = doc.createElement("div");
   wrap.appendChild(content);
@@ -613,8 +617,8 @@ function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selecta
     const selected = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
     if (!selected) return;
     let bars = selected.bars.slice();
-    if (sortSelect.value === "desc") bars.sort((a, b) => b.value - a.value);
-    else if (sortSelect.value === "asc") bars.sort((a, b) => a.value - b.value);
+    if (allowSort && sortSelect?.value === "desc") bars.sort((a, b) => b.value - a.value);
+    else if (allowSort && sortSelect?.value === "asc") bars.sort((a, b) => a.value - b.value);
     const barChart: Extract<AnalysisChart, { type: "bar" }> = {
       type: "bar",
       yLabel: selected.label,
@@ -627,7 +631,7 @@ function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selecta
   };
 
   metricSelect.addEventListener("change", render);
-  sortSelect.addEventListener("change", render);
+  if (sortSelect) sortSelect.addEventListener("change", render);
   render();
   return wrap;
 }
