@@ -7528,7 +7528,7 @@
       card.appendChild(body);
       return card;
     }
-    function openNcfaManager(options) {
+    function showNcfaManagerModal(options) {
       const palette = getThemePalette();
       const overlay = document.createElement("div");
       overlay.style.position = "fixed";
@@ -7686,7 +7686,7 @@
         tokenHandler = fn;
       },
       openNcfaManager(options) {
-        openNcfaManager(options);
+        showNcfaManagerModal(options);
       },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;

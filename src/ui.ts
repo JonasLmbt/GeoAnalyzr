@@ -1002,7 +1002,7 @@ export function createUI(): UIHandle {
     return card;
   }
 
-  function openNcfaManager(options: {
+  function showNcfaManagerModal(options: {
     initialToken?: string;
     helpText: string;
     repoUrl: string;
@@ -1181,7 +1181,7 @@ export function createUI(): UIHandle {
       tokenHandler = fn;
     },
     openNcfaManager(options) {
-      openNcfaManager(options);
+      showNcfaManagerModal(options);
     },
     onOpenAnalysisClick(fn) {
       openAnalysisHandler = fn;
