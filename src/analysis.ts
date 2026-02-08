@@ -860,19 +860,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     overviewBucketMs
   );
 
-  const overviewLines: string[] = [
-    `Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`,
-    `Games: ${games.length} | Rounds: ${rounds.length}`,
-    `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${
-      movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"
-    }, teammate=${selectedTeammate ? (nameMap.get(selectedTeammate) || selectedTeammate) : "all"}, country=${
-      selectedCountry ? countryLabel(selectedCountry) : "all"
-    }`,
-    `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
-    `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
-    `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
-    `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
-  ];
+  const overviewLines: string[] = [];
   const overviewCharts: AnalysisChart[] = [
     {
       type: "line",
@@ -928,6 +916,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
         `Win rate (decisive): ${fmt(pct(winCount, decisiveGames), 1)}%`,
         `Win rate (all): ${fmt(pct(winCount, totalResultGames), 1)}%`,
+        `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
+        `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
+        `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
+        `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
         `Longest win streak: ${bestWinStreak}`,
         `Longest loss streak: ${worstLossStreak}`
       ].filter((x) => x !== "")
@@ -956,7 +948,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   overviewLines.push("Results, Win Rate & Streaks:");
   overviewLines.push(...resultLines);
-  overviewLines.push("Mode & Movement Breakdown:");
   overviewLines.push(...breakdownLines);
 
   sections.push({

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.1
+// @version      1.3.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10353,15 +10353,7 @@
       rounds.map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) })).filter((x) => x.ts > 0 && typeof x.value === "number"),
       overviewBucketMs
     );
-    const overviewLines = [
-      `Range: ${formatShortDateTime(gameTimes[0])} -> ${formatShortDateTime(gameTimes[gameTimes.length - 1])}`,
-      `Games: ${games.length} | Rounds: ${rounds.length}`,
-      `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
-      `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
-      `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
-      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
-      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
-    ];
+    const overviewLines = [];
     const overviewCharts = [
       {
         type: "line",
@@ -10410,6 +10402,10 @@
       `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
       `Win rate (decisive): ${fmt(pct(winCount, decisiveGames), 1)}%`,
       `Win rate (all): ${fmt(pct(winCount, totalResultGames), 1)}%`,
+      `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
+      `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
+      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
+      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
       `Longest win streak: ${bestWinStreak}`,
       `Longest loss streak: ${worstLossStreak}`
     ].filter((x) => x !== "") : ["No own player id inferred, so game-level win/loss is unavailable."];
@@ -10433,7 +10429,6 @@
     ];
     overviewLines.push("Results, Win Rate & Streaks:");
     overviewLines.push(...resultLines);
-    overviewLines.push("Mode & Movement Breakdown:");
     overviewLines.push(...breakdownLines);
     sections.push({
       id: "overview",
