@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.1.0
+// @version      1.1.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7456,9 +7456,17 @@
     exportBtn.addEventListener("click", () => exportHandler?.());
     resetBtn.addEventListener("click", () => resetHandler?.());
     analysisBtn.addEventListener("click", () => {
-      const win = ensureAnalysisWindow();
-      if (!win) return;
-      openAnalysisHandler?.();
+      try {
+        const win = ensureAnalysisWindow();
+        if (!win) {
+          status.textContent = "Could not open analysis window (popup blocked?).";
+          return;
+        }
+        openAnalysisHandler?.();
+      } catch (e) {
+        status.textContent = `Analysis open failed: ${e instanceof Error ? e.message : String(e)}`;
+        console.error("[GeoAnalyzr] Failed to open analysis window", e);
+      }
     });
     function renderSection(section, doc) {
       const palette = getThemePalette();

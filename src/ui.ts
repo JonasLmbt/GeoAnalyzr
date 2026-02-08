@@ -923,9 +923,17 @@ export function createUI(): UIHandle {
   exportBtn.addEventListener("click", () => exportHandler?.());
   resetBtn.addEventListener("click", () => resetHandler?.());
   analysisBtn.addEventListener("click", () => {
-    const win = ensureAnalysisWindow();
-    if (!win) return;
-    openAnalysisHandler?.();
+    try {
+      const win = ensureAnalysisWindow();
+      if (!win) {
+        status.textContent = "Could not open analysis window (popup blocked?).";
+        return;
+      }
+      openAnalysisHandler?.();
+    } catch (e) {
+      status.textContent = `Analysis open failed: ${e instanceof Error ? e.message : String(e)}`;
+      console.error("[GeoAnalyzr] Failed to open analysis window", e);
+    }
   });
 
   function renderSection(section: AnalysisSection, doc: Document): HTMLElement {
