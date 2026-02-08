@@ -15,6 +15,12 @@ interface CountryFeature {
 let countriesPromise: Promise<CountryFeature[]> | null = null;
 const guessCountryCache = new Map<string, string | undefined>();
 
+function normalizeIso2(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const x = v.trim().toLowerCase();
+  return /^[a-z]{2}$/.test(x) ? x : undefined;
+}
+
 function isFiniteNumber(x: unknown): x is number {
   return typeof x === "number" && Number.isFinite(x);
 }
@@ -73,6 +79,14 @@ function mergeBbox(
 }
 
 function pointInRing(lng: number, lat: number, ring: Ring): boolean {
+  function pointOnSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): boolean {
+    const eps = 1e-12;
+    const cross = (px - x1) * (y2 - y1) - (py - y1) * (x2 - x1);
+    if (Math.abs(cross) > eps) return false;
+    const dot = (px - x1) * (px - x2) + (py - y1) * (py - y2);
+    return dot <= eps;
+  }
+
   // Ray casting algorithm, [x,y] = [lng,lat]
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -81,6 +95,9 @@ function pointInRing(lng: number, lat: number, ring: Ring): boolean {
 
     // Skip invalid points (defensive)
     if (!isFiniteNumber(xi) || !isFiniteNumber(yi) || !isFiniteNumber(xj) || !isFiniteNumber(yj)) continue;
+
+    // Treat boundary points as inside.
+    if (pointOnSegment(lng, lat, xi, yi, xj, yj)) return true;
 
     const intersects =
       (yi > lat) !== (yj > lat) &&
@@ -197,6 +214,30 @@ async function loadCountries(): Promise<CountryFeature[]> {
   return countriesPromise;
 }
 
+async function reverseGeocodeCountry(lat: number, lng: number): Promise<string | undefined> {
+  const urls = [
+    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(
+      String(lat)
+    )}&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`
+  ];
+
+  for (const url of urls) {
+    try {
+      const res = await httpGetJson(url, { forceGm: true });
+      if (res.status < 200 || res.status >= 300) continue;
+      const iso2 = normalizeIso2(
+        (res.data as any)?.countryCode ??
+          (res.data as any)?.country_code ??
+          (res.data as any)?.countryCodeAlpha2
+      );
+      if (iso2) return iso2;
+    } catch {
+      // try next provider
+    }
+  }
+  return undefined;
+}
+
 export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Promise<string | undefined> {
   const norm = normalizeLatLng(lat, lng);
   if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return undefined;
@@ -226,6 +267,13 @@ export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Pr
         guessCountryCache.set(key, c.iso2);
         return c.iso2;
       }
+    }
+
+    // Fallback for rare polygon misses / border quirks.
+    const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
+    if (fallback) {
+      guessCountryCache.set(key, fallback);
+      return fallback;
     }
   } catch (e) {
     console.error("resolveCountryCodeByLatLng failed:", e);

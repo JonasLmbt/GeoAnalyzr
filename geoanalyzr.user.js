@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.8
+// @version      1.0.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -12,6 +12,7 @@
 // @connect      game-server.geoguessr.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
+// @connect      api.bigdatacloud.net
 // ==/UserScript==
 (() => {
   var __create = Object.create;
@@ -7174,6 +7175,11 @@
   // src/countries.ts
   var countriesPromise = null;
   var guessCountryCache = /* @__PURE__ */ new Map();
+  function normalizeIso2(v) {
+    if (typeof v !== "string") return void 0;
+    const x = v.trim().toLowerCase();
+    return /^[a-z]{2}$/.test(x) ? x : void 0;
+  }
   function isFiniteNumber(x) {
     return typeof x === "number" && Number.isFinite(x);
   }
@@ -7213,11 +7219,19 @@
     };
   }
   function pointInRing(lng, lat, ring) {
+    function pointOnSegment(px, py, x1, y1, x2, y2) {
+      const eps = 1e-12;
+      const cross = (px - x1) * (y2 - y1) - (py - y1) * (x2 - x1);
+      if (Math.abs(cross) > eps) return false;
+      const dot = (px - x1) * (px - x2) + (py - y1) * (py - y2);
+      return dot <= eps;
+    }
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
       const xi = ring[i][0], yi = ring[i][1];
       const xj = ring[j][0], yj = ring[j][1];
       if (!isFiniteNumber(xi) || !isFiniteNumber(yi) || !isFiniteNumber(xj) || !isFiniteNumber(yj)) continue;
+      if (pointOnSegment(lng, lat, xi, yi, xj, yj)) return true;
       const intersects = yi > lat !== yj > lat && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi;
       if (intersects) inside = !inside;
     }
@@ -7306,6 +7320,25 @@
     })();
     return countriesPromise;
   }
+  async function reverseGeocodeCountry(lat, lng) {
+    const urls = [
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(
+        String(lat)
+      )}&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`
+    ];
+    for (const url of urls) {
+      try {
+        const res = await httpGetJson(url, { forceGm: true });
+        if (res.status < 200 || res.status >= 300) continue;
+        const iso2 = normalizeIso2(
+          res.data?.countryCode ?? res.data?.country_code ?? res.data?.countryCodeAlpha2
+        );
+        if (iso2) return iso2;
+      } catch {
+      }
+    }
+    return void 0;
+  }
   async function resolveCountryCodeByLatLng(lat, lng) {
     const norm = normalizeLatLng(lat, lng);
     if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return void 0;
@@ -7326,6 +7359,11 @@
           guessCountryCache.set(key, c.iso2);
           return c.iso2;
         }
+      }
+      const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
+      if (fallback) {
+        guessCountryCache.set(key, fallback);
+        return fallback;
       }
     } catch (e) {
       console.error("resolveCountryCodeByLatLng failed:", e);
@@ -7374,7 +7412,7 @@
     }
     return void 0;
   }
-  function normalizeIso2(v) {
+  function normalizeIso22(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     if (!x) return void 0;
@@ -7405,7 +7443,7 @@
     return { lat, lng };
   }
   function extractGuessCountryCode(guess) {
-    return normalizeIso2(
+    return normalizeIso22(
       pickFirst2(guess, [
         "countryCode",
         "country_code",
@@ -7418,10 +7456,10 @@
   }
   async function resolveGuessCountryResilient(lat, lng) {
     if (!isLatLngInRange(lat, lng)) return void 0;
-    const primary = normalizeIso2(await resolveCountryCodeByLatLng(lat, lng));
+    const primary = normalizeIso22(await resolveCountryCodeByLatLng(lat, lng));
     if (primary) return primary;
     if (isLatLngInRange(lng, lat)) {
-      const swapped = normalizeIso2(await resolveCountryCodeByLatLng(lng, lat));
+      const swapped = normalizeIso22(await resolveCountryCodeByLatLng(lng, lat));
       if (swapped) return swapped;
     }
     return void 0;
@@ -7644,7 +7682,7 @@
         const countryKey = `p${slot}_guessCountry`;
         const latKey = `p${slot}_guessLat`;
         const lngKey = `p${slot}_guessLng`;
-        const currentCountry = normalizeIso2(next[countryKey]);
+        const currentCountry = normalizeIso22(next[countryKey]);
         if (currentCountry) continue;
         const lat = asNum(slot === 1 ? next[latKey] ?? next.guessLat : next[latKey]);
         const lng = asNum(slot === 1 ? next[lngKey] ?? next.guessLng : next[lngKey]);
@@ -29671,7 +29709,7 @@
     const n = (name || "unknown").replace(/[\\/*?:[\]]/g, "_");
     return n.length > 31 ? n.slice(0, 31) : n;
   }
-  function normalizeIso22(v) {
+  function normalizeIso23(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : void 0;
@@ -29688,14 +29726,14 @@
     return Number.isFinite(t) ? t : void 0;
   }
   async function resolveGuessCountryForExport(existing, lat, lng) {
-    const direct = normalizeIso22(existing);
+    const direct = normalizeIso23(existing);
     if (direct) return direct;
     if (!isLatLngInRange2(lat, lng)) {
       return "";
     }
-    let resolved = normalizeIso22(await resolveCountryCodeByLatLng(lat, lng));
+    let resolved = normalizeIso23(await resolveCountryCodeByLatLng(lat, lng));
     if (!resolved && isLatLngInRange2(lng, lat)) {
-      resolved = normalizeIso22(await resolveCountryCodeByLatLng(lng, lat));
+      resolved = normalizeIso23(await resolveCountryCodeByLatLng(lng, lat));
     }
     if (resolved) return resolved;
     return `ERR_RESOLVE_FAILED(${fmtCoord(lat)},${fmtCoord(lng)})`;
