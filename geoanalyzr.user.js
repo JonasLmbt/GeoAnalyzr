@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.1
+// @version      1.2.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7050,7 +7050,7 @@
         const mr = 22;
         const mt = 14;
         const mb = 20;
-        const h = Math.max(300, mt + mb + bars.length * rowH);
+        const h = Math.max(chart.minHeight ?? 300, mt + mb + bars.length * rowH);
         const maxY = Math.max(1, ...bars.map((b) => b.value));
         const innerW = w - ml - mr;
         const rects = bars.map((b, i) => {
@@ -7190,6 +7190,7 @@
         yLabel: selected.label,
         initialBars: chart.initialBars ?? 10,
         orientation: chart.orientation || "horizontal",
+        minHeight: chart.minHeight,
         bars
       };
       content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc));
@@ -10402,30 +10403,6 @@
       }
     }
     const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const weekdayAvgScore = wdNames.map((name, i) => ({
-      name,
-      value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : void 0
-    })).filter((x) => typeof x.value === "number");
-    const weekdayAvgTime = wdNames.map((name, i) => ({
-      name,
-      value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : void 0
-    })).filter((x) => typeof x.value === "number");
-    const hourAvgScore = hour.map((_, h) => ({
-      hour: h,
-      value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : void 0
-    })).filter((x) => typeof x.value === "number");
-    const hourAvgTime = hour.map((_, h) => ({
-      hour: h,
-      value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : void 0
-    })).filter((x) => typeof x.value === "number");
-    const bestDayByScore = [...weekdayAvgScore].sort((a, b) => b.value - a.value)[0];
-    const worstDayByScore = [...weekdayAvgScore].sort((a, b) => a.value - b.value)[0];
-    const bestHourByScore = [...hourAvgScore].sort((a, b) => b.value - a.value)[0];
-    const worstHourByScore = [...hourAvgScore].sort((a, b) => a.value - b.value)[0];
-    const fastestDay = [...weekdayAvgTime].sort((a, b) => a.value - b.value)[0];
-    const slowestDay = [...weekdayAvgTime].sort((a, b) => b.value - a.value)[0];
-    const fastestHour = [...hourAvgTime].sort((a, b) => a.value - b.value)[0];
-    const slowestHour = [...hourAvgTime].sort((a, b) => b.value - a.value)[0];
     const weekdayMetricOptions = [
       { key: "games", label: "Games", bars: weekday.map((v, i) => ({ label: wdNames[i], value: v })) },
       {
@@ -10477,22 +10454,14 @@
       title: "Time Patterns",
       group: "Overview",
       appliesFilters: ["date", "mode", "teammate"],
-      lines: [
-        `Best day by avg score: ${bestDayByScore?.name || "-"} (${fmt(bestDayByScore?.value, 1)})`,
-        `Hardest day by avg score: ${worstDayByScore?.name || "-"} (${fmt(worstDayByScore?.value, 1)})`,
-        `Best hour by avg score: ${bestHourByScore ? `${String(bestHourByScore.hour).padStart(2, "0")}:00` : "-"} (${fmt(bestHourByScore?.value, 1)})`,
-        `Hardest hour by avg score: ${worstHourByScore ? `${String(worstHourByScore.hour).padStart(2, "0")}:00` : "-"} (${fmt(worstHourByScore?.value, 1)})`,
-        `Fastest day (avg guess time): ${fastestDay?.name || "-"} (${fmt(fastestDay?.value, 1)} s)`,
-        `Slowest day (avg guess time): ${slowestDay?.name || "-"} (${fmt(slowestDay?.value, 1)} s)`,
-        `Fastest hour: ${fastestHour ? `${String(fastestHour.hour).padStart(2, "0")}:00` : "-"} (${fmt(fastestHour?.value, 1)} s)`,
-        `Slowest hour: ${slowestHour ? `${String(slowestHour.hour).padStart(2, "0")}:00` : "-"} (${fmt(slowestHour?.value, 1)} s)`
-      ],
+      lines: [],
       charts: [
         {
           type: "selectableBar",
           yLabel: "Weekday patterns",
           orientation: "horizontal",
-          initialBars: 10,
+          initialBars: 7,
+          minHeight: 190,
           defaultMetricKey: "games",
           defaultSort: "chronological",
           options: weekdayMetricOptions
@@ -10501,7 +10470,7 @@
           type: "selectableBar",
           yLabel: "Hour-of-day patterns",
           orientation: "horizontal",
-          initialBars: 10,
+          initialBars: 24,
           defaultMetricKey: "games",
           defaultSort: "chronological",
           options: hourMetricOptions
@@ -10571,8 +10540,14 @@
         sessionResultAgg.set(idx, cur);
       }
     }
-    const bestSessionRows = [...sessionRows].sort((a, b) => b.avgScore - a.avgScore);
-    const worstSessionRows = [...sessionRows].sort((a, b) => a.avgScore - b.avgScore);
+    const sortedSessions = sessionRows.slice().sort((a, b) => a.start - b.start);
+    const longestSessionBreakMs = sortedSessions.slice(1).reduce((maxGap, cur, i) => {
+      const prev = sortedSessions[i];
+      const gap = Math.max(0, cur.start - prev.end);
+      return Math.max(maxGap, gap);
+    }, 0);
+    const longestSessionBreakLabel = longestSessionBreakMs > 24 * 60 * 60 * 1e3 ? `${fmt(longestSessionBreakMs / (24 * 60 * 60 * 1e3), 2)} days` : `${fmt(longestSessionBreakMs / (60 * 60 * 1e3), 2)} hours`;
+    const avgGamesPerSession = avg(sessionRows.map((s) => s.games));
     const sessionWinRateBars = ownPlayerId ? sessionRows.map((s) => {
       const res = sessionResultAgg.get(s.idx);
       const decisive = (res?.wins || 0) + (res?.losses || 0);
@@ -10590,19 +10565,17 @@
     if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
     sections.push({
       id: "session_quality",
-      title: "Session Quality",
+      title: "Sessions",
       group: "Performance",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
         `Sessions detected (gap >45m): ${sessionRows.length}`,
-        ...bestSessionRows.slice(0, 3).map(
-          (s, i) => `${i + 1}. Best: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}% | avg time ${fmt(s.avgTime, 1)}s`
-        ),
-        ...worstSessionRows.slice(0, 2).map((s) => `Hardest: ${s.label} | avg score ${fmt(s.avgScore, 1)} | 5k ${fmt(s.fiveKRate, 1)}% | throw ${fmt(s.throwRate, 1)}%`)
+        `Longest break between sessions: ${longestSessionBreakLabel}`,
+        `Avg games per session: ${fmt(avgGamesPerSession, 2)}`
       ],
       chart: {
         type: "selectableBar",
-        yLabel: "Session Quality",
+        yLabel: "Sessions",
         orientation: "horizontal",
         initialBars: 10,
         defaultMetricKey: "avg_score",
@@ -10611,44 +10584,71 @@
       }
     });
     const tempoBuckets = [
-      { name: "0-10s", min: 0, max: 10 },
-      { name: "10-20s", min: 10, max: 20 },
-      { name: "20-30s", min: 20, max: 30 },
-      { name: "30-45s", min: 30, max: 45 },
-      { name: "45-60s", min: 45, max: 60 },
-      { name: "60-90s", min: 60, max: 90 },
-      { name: "90s+", min: 90, max: Infinity }
+      { name: "<20 sec", min: 0, max: 20 },
+      { name: "20-30 sec", min: 20, max: 30 },
+      { name: "30-45 sec", min: 30, max: 45 },
+      { name: "45-60 sec", min: 45, max: 60 },
+      { name: "60-90 sec", min: 60, max: 90 },
+      { name: "90-180 sec", min: 90, max: 180 },
+      { name: ">180 sec", min: 180, max: Infinity }
     ];
-    const tempoAgg = tempoBuckets.map((b) => ({ ...b, n: 0, scores: [], dist: [] }));
+    const tempoAgg = tempoBuckets.map((b) => ({
+      ...b,
+      n: 0,
+      scores: [],
+      dist: [],
+      throws: 0,
+      fiveKs: 0,
+      timeSum: 0
+    }));
     for (const rm of roundMetrics) {
       if (typeof rm.timeSec !== "number") continue;
-      const ts = rm.timeSec;
-      const bucket = tempoAgg.find((b) => ts >= b.min && ts < b.max);
+      const t = rm.timeSec;
+      const bucket = tempoAgg.find((b) => t >= b.min && t < b.max);
       if (!bucket) continue;
       bucket.n++;
       bucket.scores.push(rm.score);
       if (typeof rm.distKm === "number") bucket.dist.push(rm.distKm);
+      if (rm.score < 50) bucket.throws++;
+      if (rm.score >= 5e3) bucket.fiveKs++;
+      bucket.timeSum += t;
     }
+    const timedRounds = roundMetrics.filter((r) => typeof r.timeSec === "number");
+    const fastestGuess = timedRounds.slice().sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
+    const slowestGuess = timedRounds.slice().sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
+    const fastestFiveK = timedRounds.filter((r) => r.score >= 5e3).sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
+    const slowestThrow = timedRounds.filter((r) => r.score < 50).sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
+    const tempoMetricOptions = [
+      { key: "avg_score", label: "Avg score", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0 })) },
+      { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0 })) },
+      { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0 })) },
+      { key: "fivek_rate", label: "5k rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.fiveKs, b.n) : 0 })) },
+      { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n })) },
+      {
+        key: "avg_time",
+        label: "Avg guess time (s)",
+        bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.timeSum / b.n : 0 }))
+      }
+    ];
     sections.push({
       id: "tempo_vs_quality",
       title: "Tempo vs Quality",
       group: "Performance",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
-        ...tempoAgg.map((b) => `${b.name}: n=${b.n} | avg score ${fmt(avg(b.scores), 1)} | avg distance ${fmt(avg(b.dist), 2)} km`)
+        `Fastest guess: ${fastestGuess ? `${fmt(fastestGuess.timeSec, 1)}s on ${formatShortDateTime(fastestGuess.ts)} (score ${fmt(fastestGuess.score, 0)})` : "-"}`,
+        `Slowest guess: ${slowestGuess ? `${fmt(slowestGuess.timeSec, 1)}s on ${formatShortDateTime(slowestGuess.ts)} (score ${fmt(slowestGuess.score, 0)})` : "-"}`,
+        `Fastest 5k: ${fastestFiveK ? `${fmt(fastestFiveK.timeSec, 1)}s on ${formatShortDateTime(fastestFiveK.ts)}` : "-"}`,
+        `Slowest throw (<50): ${slowestThrow ? `${fmt(slowestThrow.timeSec, 1)}s on ${formatShortDateTime(slowestThrow.ts)} (score ${fmt(slowestThrow.score, 0)})` : "-"}`
       ],
-      charts: [
-        {
-          type: "bar",
-          yLabel: "Avg score by guess-time bucket",
-          bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0 }))
-        },
-        {
-          type: "bar",
-          yLabel: "Avg distance km by guess-time bucket",
-          bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0 }))
-        }
-      ]
+      chart: {
+        type: "selectableBar",
+        yLabel: "Time bucket metrics",
+        initialBars: tempoBuckets.length,
+        defaultMetricKey: "avg_score",
+        defaultSort: "chronological",
+        options: tempoMetricOptions
+      }
     });
     const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
     const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;

@@ -460,7 +460,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
       const mr = 22;
       const mt = 14;
       const mb = 20;
-      const h = Math.max(300, mt + mb + bars.length * rowH);
+      const h = Math.max((chart as Extract<AnalysisChart, { type: "bar" }>).minHeight ?? 300, mt + mb + bars.length * rowH);
       const maxY = Math.max(1, ...bars.map((b) => b.value));
       const innerW = w - ml - mr;
       const rects = bars
@@ -611,6 +611,7 @@ function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selecta
       yLabel: selected.label,
       initialBars: chart.initialBars ?? 10,
       orientation: chart.orientation || "horizontal",
+      minHeight: chart.minHeight,
       bars
     };
     content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc));
