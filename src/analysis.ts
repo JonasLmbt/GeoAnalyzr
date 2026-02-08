@@ -386,6 +386,106 @@ function toCountsByDay(timestamps: number[]): Array<{ x: number; y: number; labe
   return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([day, c]) => ({ x: day, y: c, label: formatDay(day) }));
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function pickOverviewBucketMs(spanMs: number): number | undefined {
+  const spanDays = spanMs / DAY_MS;
+  if (spanDays > 900) return 30 * DAY_MS;
+  if (spanDays > 540) return 14 * DAY_MS;
+  if (spanDays > 180) return 7 * DAY_MS;
+  return undefined;
+}
+
+function buildOverviewGamesSeries(timestamps: number[], fromTs: number, toTs: number, bucketMs?: number): Array<{ x: number; y: number; label?: string }> {
+  if (!bucketMs) return toCountsByDay(timestamps);
+
+  const dayCounts = new Map<number, number>();
+  for (const ts of timestamps) {
+    const day = startOfLocalDay(ts);
+    dayCounts.set(day, (dayCounts.get(day) || 0) + 1);
+  }
+
+  const startDay = startOfLocalDay(fromTs);
+  const endDay = startOfLocalDay(toTs);
+  const buckets = new Map<number, { sum: number; days: number; endDay: number }>();
+  for (let day = startDay; day <= endDay; day += DAY_MS) {
+    const key = Math.floor(day / bucketMs) * bucketMs;
+    const cur = buckets.get(key) || { sum: 0, days: 0, endDay: day };
+    cur.sum += dayCounts.get(day) || 0;
+    cur.days += 1;
+    cur.endDay = day;
+    buckets.set(key, cur);
+  }
+
+  return [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => ({ x: v.endDay, y: v.sum / Math.max(1, v.days), label: formatDay(v.endDay) }));
+}
+
+function buildOverviewAvgScoreSeries(
+  values: Array<{ ts: number; value: number }>,
+  bucketMs?: number
+): Array<{ x: number; y: number; label?: string }> {
+  const byDay = new Map<number, { sum: number; n: number }>();
+  for (const v of values) {
+    const day = startOfLocalDay(v.ts);
+    const cur = byDay.get(day) || { sum: 0, n: 0 };
+    cur.sum += v.value;
+    cur.n += 1;
+    byDay.set(day, cur);
+  }
+
+  if (!bucketMs) {
+    return [...byDay.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([day, v]) => ({ x: day, y: v.sum / Math.max(1, v.n), label: formatDay(day) }));
+  }
+
+  const buckets = new Map<number, { sum: number; n: number; endDay: number }>();
+  for (const [day, v] of byDay.entries()) {
+    const key = Math.floor(day / bucketMs) * bucketMs;
+    const cur = buckets.get(key) || { sum: 0, n: 0, endDay: day };
+    cur.sum += v.sum;
+    cur.n += v.n;
+    cur.endDay = day;
+    buckets.set(key, cur);
+  }
+
+  return [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, v]) => ({ x: v.endDay, y: v.sum / Math.max(1, v.n), label: formatDay(v.endDay) }));
+}
+
+function smoothDailyScoreRecords(
+  records: Array<{ day: number; avgScore: number; rounds: number }>
+): { points: Array<{ x: number; y: number; label?: string }>; bucketDays?: number } {
+  if (records.length === 0) return { points: [] };
+  const sorted = records.slice().sort((a, b) => a.day - b.day);
+  const spanMs = Math.max(0, sorted[sorted.length - 1].day - sorted[0].day);
+  const bucketMs = pickOverviewBucketMs(spanMs);
+  if (!bucketMs) {
+    return {
+      points: sorted.map((d) => ({ x: d.day, y: d.avgScore, label: formatDay(d.day) }))
+    };
+  }
+  const buckets = new Map<number, { weighted: number; weight: number; endDay: number }>();
+  for (const d of sorted) {
+    const key = Math.floor(d.day / bucketMs) * bucketMs;
+    const cur = buckets.get(key) || { weighted: 0, weight: 0, endDay: d.day };
+    const w = Math.max(1, d.rounds);
+    cur.weighted += d.avgScore * w;
+    cur.weight += w;
+    cur.endDay = d.day;
+    buckets.set(key, cur);
+  }
+  return {
+    bucketDays: Math.round(bucketMs / DAY_MS),
+    points: [...buckets.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, v]) => ({ x: v.endDay, y: v.weighted / Math.max(1, v.weight), label: formatDay(v.endDay) }))
+  };
+}
+
 export interface DayPoint {
   day: string;
   count: number;
@@ -616,6 +716,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((x): x is RoundMetric => x !== undefined);
   const fiveKCount = roundMetrics.filter((x) => x.score >= 5000).length;
   const throwCount = roundMetrics.filter((x) => x.score < 50).length;
+  const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
+  const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 0;
+  const gamesPerDayPoints = buildOverviewGamesSeries(games.map((g) => g.playedAt), gameTimes[0], gameTimes[gameTimes.length - 1], overviewBucketMs);
+  const avgScorePerDayPoints = buildOverviewAvgScoreSeries(
+    rounds
+      .map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) }))
+      .filter((x): x is { ts: number; value: number } => x.ts > 0 && typeof x.value === "number"),
+    overviewBucketMs
+  );
 
   sections.push({
     id: "overview",
@@ -634,17 +743,13 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     charts: [
       {
         type: "line",
-        yLabel: "Games/day",
-        points: toCountsByDay(games.map((g) => g.playedAt))
+        yLabel: overviewBucketMs ? `Games/day (${overviewBucketDays}d aggregated)` : "Games/day",
+        points: gamesPerDayPoints
       },
       {
         type: "line",
-        yLabel: "Avg score/day",
-        points: toChartPointsByDay(
-          rounds
-            .map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) }))
-            .filter((x): x is { ts: number; value: number } => x.ts > 0 && typeof x.value === "number")
-        )
+        yLabel: overviewBucketMs ? `Avg score/day (${overviewBucketDays}d aggregated)` : "Avg score/day",
+        points: avgScorePerDayPoints
       }
     ]
   });
@@ -879,8 +984,31 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         : `Session ${idx + 1}`
     }))
     .sort((a, b) => a.start - b.start);
+  const sessionResultAgg = new Map<number, { wins: number; losses: number; ties: number }>();
+  if (ownPlayerId) {
+    for (const d of teamDetails) {
+      const ts = teamPlayedAtByGameId.get(d.gameId);
+      const result = getGameResult(d, ownPlayerId);
+      if (ts === undefined || !result) continue;
+      const idx = gameSessionIndex.get(ts);
+      if (idx === undefined) continue;
+      const cur = sessionResultAgg.get(idx) || { wins: 0, losses: 0, ties: 0 };
+      if (result === "W") cur.wins++;
+      else if (result === "L") cur.losses++;
+      else cur.ties++;
+      sessionResultAgg.set(idx, cur);
+    }
+  }
   const bestSessionRows = [...sessionRows].sort((a, b) => b.avgScore - a.avgScore);
   const worstSessionRows = [...sessionRows].sort((a, b) => a.avgScore - b.avgScore);
+  const sessionWinRateBars = ownPlayerId
+    ? sessionRows.map((s) => {
+        const res = sessionResultAgg.get(s.idx);
+        const decisive = (res?.wins || 0) + (res?.losses || 0);
+        const rate = decisive > 0 ? pct(res?.wins || 0, decisive) : 0;
+        return { label: formatShortDateTime(s.start), value: rate };
+      })
+    : [];
   sections.push({
     id: "session_quality",
     title: "Session Quality",
@@ -910,7 +1038,17 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         yLabel: "Throw rate % by session",
         initialBars: 10,
         bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate }))
-      }
+      },
+      ...(sessionWinRateBars.length > 0
+        ? [
+            {
+              type: "bar" as const,
+              yLabel: "Win rate % by session",
+              initialBars: 10,
+              bars: sessionWinRateBars
+            }
+          ]
+        : [])
     ]
   });
 
@@ -926,7 +1064,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const tempoAgg = tempoBuckets.map((b) => ({ ...b, n: 0, scores: [] as number[], dist: [] as number[] }));
   for (const rm of roundMetrics) {
     if (typeof rm.timeSec !== "number") continue;
-    const bucket = tempoAgg.find((b) => rm.timeSec >= b.min && rm.timeSec < b.max);
+    const ts = rm.timeSec;
+    const bucket = tempoAgg.find((b) => ts >= b.min && ts < b.max);
     if (!bucket) continue;
     bucket.n++;
     bucket.scores.push(rm.score);
@@ -1035,7 +1174,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       {
         type: "bar",
         yLabel: "Avg score by country",
-        initialBars: 5,
+        initialBars: 25,
         bars: [...scoredCountries]
           .sort((a, b) => b.avgScore - a.avgScore)
           .map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
@@ -1424,6 +1563,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const worstDay = [...dayRecords].sort((a, b) => a.avgScore - b.avgScore)[0];
   const fastestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (a.avgTime || 0) - (b.avgTime || 0))[0];
   const slowestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (b.avgTime || 0) - (a.avgTime || 0))[0];
+  const smoothedDaily = smoothDailyScoreRecords(dayRecords);
   let fivekStreak = 0;
   let bestFivekStreak = 0;
   let throwStreak = 0;
@@ -1457,8 +1597,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ],
     chart: {
       type: "line",
-      yLabel: "Avg daily score",
-      points: dayRecords.sort((a, b) => a.day - b.day).map((d) => ({ x: d.day, y: d.avgScore, label: formatDay(d.day) }))
+      yLabel: smoothedDaily.bucketDays ? `Avg daily score (${smoothedDaily.bucketDays}d smoothed)` : "Avg daily score",
+      points: smoothedDaily.points
     }
   });
 

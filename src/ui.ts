@@ -409,42 +409,74 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
   const render = () => {
     content.innerHTML = "";
     const bars = expanded ? allBars : allBars.slice(0, initialBars);
+    const horizontal = /avg score by country/i.test(title);
     const w = 1700;
-    const h = 320;
-    const ml = 52;
-    const mr = 16;
-    const mt = 14;
-    const mb = 80;
-    const maxY = Math.max(1, ...bars.map((b) => b.value));
-    const innerW = w - ml - mr;
-    const innerH = h - mt - mb;
-    const step = bars.length > 0 ? innerW / bars.length : innerW;
-    const bw = Math.max(4, step * 0.66);
     const accent = analysisSettings.accent;
-    const rects = bars
-      .map((b, i) => {
-        const x = ml + i * step + (step - bw) / 2;
-        const bh = (b.value / maxY) * innerH;
-        const y = mt + innerH - bh;
-        const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
-        return `
-          <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
-          <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
-        `;
-      })
-      .join("");
-
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
-    svg.setAttribute("height", "320");
-    svg.innerHTML = `
-      <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-      <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-      <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-      <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
-      ${rects}
-    `;
+    if (horizontal) {
+      const rowH = 18;
+      const barH = 12;
+      const ml = 250;
+      const mr = 22;
+      const mt = 14;
+      const mb = 20;
+      const h = Math.max(300, mt + mb + bars.length * rowH);
+      const maxY = Math.max(1, ...bars.map((b) => b.value));
+      const innerW = w - ml - mr;
+      const rects = bars
+        .map((b, i) => {
+          const y = mt + i * rowH + (rowH - barH) / 2;
+          const bw = (b.value / maxY) * innerW;
+          const label = b.label.length > 34 ? `${b.label.slice(0, 34)}..` : b.label;
+          return `
+            <text x="${ml - 8}" y="${(y + barH / 2 + 3).toFixed(2)}" text-anchor="end" font-size="11" fill="${palette.textMuted}">${label}</text>
+            <rect x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85" />
+          `;
+        })
+        .join("");
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.setAttribute("height", `${h}`);
+      svg.innerHTML = `
+        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <text x="${ml}" y="${h - 4}" text-anchor="start" font-size="10" fill="${palette.textMuted}">0</text>
+        <text x="${w - mr}" y="${h - 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+        ${rects}
+      `;
+    } else {
+      const h = 320;
+      const ml = 52;
+      const mr = 16;
+      const mt = 14;
+      const mb = 80;
+      const maxY = Math.max(1, ...bars.map((b) => b.value));
+      const innerW = w - ml - mr;
+      const innerH = h - mt - mb;
+      const step = bars.length > 0 ? innerW / bars.length : innerW;
+      const bw = Math.max(4, step * 0.66);
+      const rects = bars
+        .map((b, i) => {
+          const x = ml + i * step + (step - bw) / 2;
+          const bh = (b.value / maxY) * innerH;
+          const y = mt + innerH - bh;
+          const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+          return `
+            <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
+            <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
+          `;
+        })
+        .join("");
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.setAttribute("height", "320");
+      svg.innerHTML = `
+        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+        <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
+        ${rects}
+      `;
+    }
     content.appendChild(createChartActions(svg, title));
     if (allBars.length > initialBars) {
       const toggle = doc.createElement("button");
@@ -591,6 +623,7 @@ export function createUI(): UIHandle {
     modalBody: HTMLDivElement;
   };
 
+  const ANALYSIS_ROOT_ID = "geoanalyzr-analysis-root";
   let analysisWindow: AnalysisWindowRefs | null = null;
   let lastAnalysisData: AnalysisWindowData | null = null;
 
@@ -620,6 +653,28 @@ export function createUI(): UIHandle {
     styleInput(refs.themeSelect);
     refs.colorInput.style.border = `1px solid ${palette.border}`;
     refs.colorInput.style.background = palette.panelAlt;
+  }
+
+  function createGroupIcon(group: string, doc: Document): HTMLElement {
+    const palette = getThemePalette();
+    const wrap = doc.createElement("span");
+    wrap.style.display = "inline-flex";
+    wrap.style.alignItems = "center";
+    wrap.style.justifyContent = "center";
+    wrap.style.width = "14px";
+    wrap.style.height = "14px";
+    wrap.style.flex = "0 0 auto";
+    const stroke = palette.buttonText;
+    const svgBase = (paths: string) =>
+      `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+    if (group === "Overview") wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
+    else if (group === "Performance") wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
+    else if (group === "Countries") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
+    else if (group === "Opponents") wrap.innerHTML = svgBase('<path d="M8 4l8 8-8 8"/><path d="M16 4l-8 8 8 8"/>');
+    else if (group === "Rating") wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
+    else if (group === "Fun") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M8 15c1.2 1 2.5 1.5 4 1.5s2.8-.5 4-1.5"/>');
+    else wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1"/>');
+    return wrap;
   }
 
   function populateAnalysisWindow(data: AnalysisWindowData) {
@@ -669,37 +724,32 @@ export function createUI(): UIHandle {
       arr.push(s);
       sectionsByGroup.set(key, arr);
     }
-
     tocWrap.innerHTML = "";
     for (const [group, secs] of sectionsByGroup.entries()) {
-      const groupRow = doc.createElement("div");
-      groupRow.style.display = "flex";
-      groupRow.style.alignItems = "center";
-      groupRow.style.gap = "8px";
-      const groupLabel = doc.createElement("span");
-      groupLabel.textContent = group;
-      groupLabel.style.color = palette.chipText;
-      groupLabel.style.fontWeight = "700";
-      groupLabel.style.fontSize = "12px";
-      groupRow.appendChild(groupLabel);
-      for (const s of secs) {
-        const b = doc.createElement("button");
-        b.textContent = s.title;
-        b.style.background = palette.buttonBg;
-        b.style.color = palette.buttonText;
-        b.style.border = `1px solid ${palette.border}`;
-        b.style.borderRadius = "999px";
-        b.style.padding = "4px 9px";
-        b.style.cursor = "pointer";
-        b.style.fontSize = "11px";
-        b.addEventListener("click", () => {
-          const id = `section-${s.id}`;
-          const node = doc.getElementById(id);
-          if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-        groupRow.appendChild(b);
-      }
-      tocWrap.appendChild(groupRow);
+      const first = secs[0];
+      if (!first) continue;
+      const b = doc.createElement("button");
+      b.style.background = palette.buttonBg;
+      b.style.color = palette.buttonText;
+      b.style.border = `1px solid ${palette.border}`;
+      b.style.borderRadius = "999px";
+      b.style.padding = "4px 9px";
+      b.style.cursor = "pointer";
+      b.style.fontSize = "11px";
+      b.style.fontWeight = "700";
+      b.style.display = "inline-flex";
+      b.style.alignItems = "center";
+      b.style.gap = "6px";
+      b.appendChild(createGroupIcon(group, doc));
+      const label = doc.createElement("span");
+      label.textContent = group;
+      b.appendChild(label);
+      b.addEventListener("click", () => {
+        const id = `section-${first.id}`;
+        const node = doc.getElementById(id);
+        if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      tocWrap.appendChild(b);
     }
 
     modalBody.innerHTML = "";
@@ -718,21 +768,34 @@ export function createUI(): UIHandle {
     }
   }
 
+  function hasAnalysisShell(refs: AnalysisWindowRefs): boolean {
+    try {
+      return !!refs.doc.getElementById(ANALYSIS_ROOT_ID);
+    } catch {
+      return false;
+    }
+  }
+
   function ensureAnalysisWindow(): AnalysisWindowRefs | null {
-    if (analysisWindow && !analysisWindow.win.closed) {
-      if (canAccessWindow(analysisWindow.win)) {
+    if (analysisWindow && !analysisWindow.win.closed && canAccessWindow(analysisWindow.win)) {
+      if (hasAnalysisShell(analysisWindow)) {
         analysisWindow.win.focus();
         return analysisWindow;
+      }
+      try {
+        analysisWindow.win.close();
+      } catch {
       }
       analysisWindow = null;
     }
 
-    let win = window.open("about:blank", "geoanalyzr-analysis");
-    if (!canAccessWindow(win)) {
-      win = window.open("about:blank", "_blank");
-    }
+    let win = window.open("about:blank", "_blank");
     if (!canAccessWindow(win)) return null;
     const doc = win.document;
+    doc.open();
+    doc.write("<!doctype html><html><head><meta charset=\"utf-8\"><title>GeoAnalyzr - Full Analysis</title></head><body></body></html>");
+    doc.close();
+    if (!doc.body) return null;
     const palette = getThemePalette();
     doc.title = "GeoAnalyzr - Full Analysis";
     doc.body.innerHTML = "";
@@ -742,6 +805,7 @@ export function createUI(): UIHandle {
     doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
 
     const shell = doc.createElement("div");
+    shell.id = ANALYSIS_ROOT_ID;
     shell.style.display = "grid";
     shell.style.gridTemplateRows = "auto auto auto 1fr";
     shell.style.height = "100vh";
@@ -841,9 +905,9 @@ export function createUI(): UIHandle {
 
     const tocWrap = doc.createElement("div");
     tocWrap.style.display = "flex";
-    tocWrap.style.flexDirection = "column";
+    tocWrap.style.flexWrap = "wrap";
     tocWrap.style.gap = "6px";
-    tocWrap.style.padding = "8px 14px 10px";
+    tocWrap.style.padding = "6px 12px 8px";
     tocWrap.style.borderBottom = `1px solid ${palette.border}`;
     tocWrap.style.background = palette.panelAlt;
     tocWrap.style.position = "sticky";
@@ -1001,15 +1065,60 @@ export function createUI(): UIHandle {
     title2.style.fontSize = "19px";
     title2.style.letterSpacing = "0.2px";
     title2.style.color = palette.text;
-    const body = doc.createElement("pre");
-    body.style.margin = "0";
-    body.style.whiteSpace = "pre-wrap";
-    body.style.fontSize = "14px";
-    body.style.lineHeight = "1.45";
-    body.style.color = palette.text;
-    body.textContent = section.lines.join("\n");
+    const body = doc.createElement("div");
+    body.style.display = "grid";
+    body.style.gap = "8px";
+    body.style.marginBottom = "10px";
+    body.style.marginTop = "2px";
+    for (const line of section.lines) {
+      const row = doc.createElement("div");
+      row.style.border = `1px solid ${palette.border}`;
+      row.style.background = palette.panelAlt;
+      row.style.borderRadius = "8px";
+      row.style.padding = "9px 11px";
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.justifyContent = "space-between";
+      row.style.gap = "12px";
+      row.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
+
+      const sep = line.indexOf(":");
+      if (sep > 0 && sep < line.length - 1) {
+        const left = doc.createElement("span");
+        left.textContent = line.slice(0, sep).trim();
+        left.style.fontSize = "13px";
+        left.style.fontWeight = "600";
+        left.style.color = palette.textMuted;
+        left.style.letterSpacing = "0.15px";
+
+        const right = doc.createElement("span");
+        right.textContent = line.slice(sep + 1).trim();
+        right.style.fontSize = "14px";
+        right.style.fontWeight = "700";
+        right.style.color = palette.text;
+        right.style.textAlign = "right";
+        right.style.marginLeft = "auto";
+        right.style.maxWidth = "68%";
+        right.style.padding = "2px 8px";
+        right.style.borderRadius = "999px";
+        right.style.background = "rgba(255,255,255,0.08)";
+
+        row.appendChild(left);
+        row.appendChild(right);
+      } else {
+        const only = doc.createElement("span");
+        only.textContent = line;
+        only.style.fontSize = "13px";
+        only.style.fontWeight = "600";
+        only.style.color = palette.text;
+        only.style.letterSpacing = "0.1px";
+        row.appendChild(only);
+      }
+      body.appendChild(row);
+    }
     card.appendChild(topMeta);
     card.appendChild(title2);
+    card.appendChild(body);
 
     const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
     for (let i = 0; i < charts.length; i++) {
@@ -1022,8 +1131,6 @@ export function createUI(): UIHandle {
         card.appendChild(renderBarChart(chart, chartTitle, doc));
       }
     }
-
-    card.appendChild(body);
     return card;
   }
 
@@ -1216,3 +1323,4 @@ export function createUI(): UIHandle {
     }
   };
 }
+

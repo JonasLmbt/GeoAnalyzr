@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.1.4
+// @version      1.1.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7013,39 +7013,70 @@
     const render = () => {
       content.innerHTML = "";
       const bars = expanded ? allBars : allBars.slice(0, initialBars);
+      const horizontal = /avg score by country/i.test(title);
       const w = 1700;
-      const h = 320;
-      const ml = 52;
-      const mr = 16;
-      const mt = 14;
-      const mb = 80;
-      const maxY = Math.max(1, ...bars.map((b) => b.value));
-      const innerW = w - ml - mr;
-      const innerH = h - mt - mb;
-      const step = bars.length > 0 ? innerW / bars.length : innerW;
-      const bw = Math.max(4, step * 0.66);
       const accent = analysisSettings.accent;
-      const rects = bars.map((b, i) => {
-        const x = ml + i * step + (step - bw) / 2;
-        const bh = b.value / maxY * innerH;
-        const y = mt + innerH - bh;
-        const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
-        return `
-          <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
-          <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
-        `;
-      }).join("");
       const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       svg.setAttribute("width", "100%");
-      svg.setAttribute("height", "320");
-      svg.innerHTML = `
-      <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-      <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-      <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-      <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
-      ${rects}
-    `;
+      if (horizontal) {
+        const rowH = 18;
+        const barH = 12;
+        const ml = 250;
+        const mr = 22;
+        const mt = 14;
+        const mb = 20;
+        const h = Math.max(300, mt + mb + bars.length * rowH);
+        const maxY = Math.max(1, ...bars.map((b) => b.value));
+        const innerW = w - ml - mr;
+        const rects = bars.map((b, i) => {
+          const y = mt + i * rowH + (rowH - barH) / 2;
+          const bw = b.value / maxY * innerW;
+          const label = b.label.length > 34 ? `${b.label.slice(0, 34)}..` : b.label;
+          return `
+            <text x="${ml - 8}" y="${(y + barH / 2 + 3).toFixed(2)}" text-anchor="end" font-size="11" fill="${palette.textMuted}">${label}</text>
+            <rect x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85" />
+          `;
+        }).join("");
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+        svg.setAttribute("height", `${h}`);
+        svg.innerHTML = `
+        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <text x="${ml}" y="${h - 4}" text-anchor="start" font-size="10" fill="${palette.textMuted}">0</text>
+        <text x="${w - mr}" y="${h - 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+        ${rects}
+      `;
+      } else {
+        const h = 320;
+        const ml = 52;
+        const mr = 16;
+        const mt = 14;
+        const mb = 80;
+        const maxY = Math.max(1, ...bars.map((b) => b.value));
+        const innerW = w - ml - mr;
+        const innerH = h - mt - mb;
+        const step = bars.length > 0 ? innerW / bars.length : innerW;
+        const bw = Math.max(4, step * 0.66);
+        const rects = bars.map((b, i) => {
+          const x = ml + i * step + (step - bw) / 2;
+          const bh = b.value / maxY * innerH;
+          const y = mt + innerH - bh;
+          const label = b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+          return `
+            <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
+            <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
+          `;
+        }).join("");
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+        svg.setAttribute("height", "320");
+        svg.innerHTML = `
+        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
+        <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
+        <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
+        ${rects}
+      `;
+      }
       content.appendChild(createChartActions(svg, title));
       if (allBars.length > initialBars) {
         const toggle = doc.createElement("button");
@@ -7160,6 +7191,7 @@
     panel.appendChild(exportBtn);
     panel.appendChild(resetBtn);
     panel.appendChild(counts);
+    const ANALYSIS_ROOT_ID = "geoanalyzr-analysis-root";
     let analysisWindow = null;
     let lastAnalysisData = null;
     function styleInput(el) {
@@ -7187,6 +7219,26 @@
       styleInput(refs.themeSelect);
       refs.colorInput.style.border = `1px solid ${palette.border}`;
       refs.colorInput.style.background = palette.panelAlt;
+    }
+    function createGroupIcon(group, doc) {
+      const palette = getThemePalette();
+      const wrap = doc.createElement("span");
+      wrap.style.display = "inline-flex";
+      wrap.style.alignItems = "center";
+      wrap.style.justifyContent = "center";
+      wrap.style.width = "14px";
+      wrap.style.height = "14px";
+      wrap.style.flex = "0 0 auto";
+      const stroke = palette.buttonText;
+      const svgBase = (paths) => `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+      if (group === "Overview") wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
+      else if (group === "Performance") wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
+      else if (group === "Countries") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
+      else if (group === "Opponents") wrap.innerHTML = svgBase('<path d="M8 4l8 8-8 8"/><path d="M16 4l-8 8 8 8"/>');
+      else if (group === "Rating") wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
+      else if (group === "Fun") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M8 15c1.2 1 2.5 1.5 4 1.5s2.8-.5 4-1.5"/>');
+      else wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1"/>');
+      return wrap;
     }
     function populateAnalysisWindow(data) {
       const refs = analysisWindow;
@@ -7231,34 +7283,30 @@
       }
       tocWrap.innerHTML = "";
       for (const [group, secs] of sectionsByGroup.entries()) {
-        const groupRow = doc.createElement("div");
-        groupRow.style.display = "flex";
-        groupRow.style.alignItems = "center";
-        groupRow.style.gap = "8px";
-        const groupLabel = doc.createElement("span");
-        groupLabel.textContent = group;
-        groupLabel.style.color = palette.chipText;
-        groupLabel.style.fontWeight = "700";
-        groupLabel.style.fontSize = "12px";
-        groupRow.appendChild(groupLabel);
-        for (const s of secs) {
-          const b = doc.createElement("button");
-          b.textContent = s.title;
-          b.style.background = palette.buttonBg;
-          b.style.color = palette.buttonText;
-          b.style.border = `1px solid ${palette.border}`;
-          b.style.borderRadius = "999px";
-          b.style.padding = "4px 9px";
-          b.style.cursor = "pointer";
-          b.style.fontSize = "11px";
-          b.addEventListener("click", () => {
-            const id = `section-${s.id}`;
-            const node = doc.getElementById(id);
-            if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
-          });
-          groupRow.appendChild(b);
-        }
-        tocWrap.appendChild(groupRow);
+        const first = secs[0];
+        if (!first) continue;
+        const b = doc.createElement("button");
+        b.style.background = palette.buttonBg;
+        b.style.color = palette.buttonText;
+        b.style.border = `1px solid ${palette.border}`;
+        b.style.borderRadius = "999px";
+        b.style.padding = "4px 9px";
+        b.style.cursor = "pointer";
+        b.style.fontSize = "11px";
+        b.style.fontWeight = "700";
+        b.style.display = "inline-flex";
+        b.style.alignItems = "center";
+        b.style.gap = "6px";
+        b.appendChild(createGroupIcon(group, doc));
+        const label = doc.createElement("span");
+        label.textContent = group;
+        b.appendChild(label);
+        b.addEventListener("click", () => {
+          const id = `section-${first.id}`;
+          const node = doc.getElementById(id);
+          if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        tocWrap.appendChild(b);
       }
       modalBody.innerHTML = "";
       for (const s of data.sections) modalBody.appendChild(renderSection(s, doc));
@@ -7274,20 +7322,32 @@
         return false;
       }
     }
+    function hasAnalysisShell(refs) {
+      try {
+        return !!refs.doc.getElementById(ANALYSIS_ROOT_ID);
+      } catch {
+        return false;
+      }
+    }
     function ensureAnalysisWindow() {
-      if (analysisWindow && !analysisWindow.win.closed) {
-        if (canAccessWindow(analysisWindow.win)) {
+      if (analysisWindow && !analysisWindow.win.closed && canAccessWindow(analysisWindow.win)) {
+        if (hasAnalysisShell(analysisWindow)) {
           analysisWindow.win.focus();
           return analysisWindow;
         }
+        try {
+          analysisWindow.win.close();
+        } catch {
+        }
         analysisWindow = null;
       }
-      let win = window.open("about:blank", "geoanalyzr-analysis");
-      if (!canAccessWindow(win)) {
-        win = window.open("about:blank", "_blank");
-      }
+      let win = window.open("about:blank", "_blank");
       if (!canAccessWindow(win)) return null;
       const doc = win.document;
+      doc.open();
+      doc.write('<!doctype html><html><head><meta charset="utf-8"><title>GeoAnalyzr - Full Analysis</title></head><body></body></html>');
+      doc.close();
+      if (!doc.body) return null;
       const palette = getThemePalette();
       doc.title = "GeoAnalyzr - Full Analysis";
       doc.body.innerHTML = "";
@@ -7296,6 +7356,7 @@
       doc.body.style.color = palette.text;
       doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
       const shell = doc.createElement("div");
+      shell.id = ANALYSIS_ROOT_ID;
       shell.style.display = "grid";
       shell.style.gridTemplateRows = "auto auto auto 1fr";
       shell.style.height = "100vh";
@@ -7382,9 +7443,9 @@
       controls.appendChild(colorInput);
       const tocWrap = doc.createElement("div");
       tocWrap.style.display = "flex";
-      tocWrap.style.flexDirection = "column";
+      tocWrap.style.flexWrap = "wrap";
       tocWrap.style.gap = "6px";
-      tocWrap.style.padding = "8px 14px 10px";
+      tocWrap.style.padding = "6px 12px 8px";
       tocWrap.style.borderBottom = `1px solid ${palette.border}`;
       tocWrap.style.background = palette.panelAlt;
       tocWrap.style.position = "sticky";
@@ -7529,15 +7590,57 @@
       title2.style.fontSize = "19px";
       title2.style.letterSpacing = "0.2px";
       title2.style.color = palette.text;
-      const body = doc.createElement("pre");
-      body.style.margin = "0";
-      body.style.whiteSpace = "pre-wrap";
-      body.style.fontSize = "14px";
-      body.style.lineHeight = "1.45";
-      body.style.color = palette.text;
-      body.textContent = section.lines.join("\n");
+      const body = doc.createElement("div");
+      body.style.display = "grid";
+      body.style.gap = "8px";
+      body.style.marginBottom = "10px";
+      body.style.marginTop = "2px";
+      for (const line of section.lines) {
+        const row = doc.createElement("div");
+        row.style.border = `1px solid ${palette.border}`;
+        row.style.background = palette.panelAlt;
+        row.style.borderRadius = "8px";
+        row.style.padding = "9px 11px";
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.justifyContent = "space-between";
+        row.style.gap = "12px";
+        row.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
+        const sep = line.indexOf(":");
+        if (sep > 0 && sep < line.length - 1) {
+          const left = doc.createElement("span");
+          left.textContent = line.slice(0, sep).trim();
+          left.style.fontSize = "13px";
+          left.style.fontWeight = "600";
+          left.style.color = palette.textMuted;
+          left.style.letterSpacing = "0.15px";
+          const right = doc.createElement("span");
+          right.textContent = line.slice(sep + 1).trim();
+          right.style.fontSize = "14px";
+          right.style.fontWeight = "700";
+          right.style.color = palette.text;
+          right.style.textAlign = "right";
+          right.style.marginLeft = "auto";
+          right.style.maxWidth = "68%";
+          right.style.padding = "2px 8px";
+          right.style.borderRadius = "999px";
+          right.style.background = "rgba(255,255,255,0.08)";
+          row.appendChild(left);
+          row.appendChild(right);
+        } else {
+          const only = doc.createElement("span");
+          only.textContent = line;
+          only.style.fontSize = "13px";
+          only.style.fontWeight = "600";
+          only.style.color = palette.text;
+          only.style.letterSpacing = "0.1px";
+          row.appendChild(only);
+        }
+        body.appendChild(row);
+      }
       card.appendChild(topMeta);
       card.appendChild(title2);
+      card.appendChild(body);
       const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
       for (let i = 0; i < charts.length; i++) {
         const chart = charts[i];
@@ -7549,7 +7652,6 @@
           card.appendChild(renderBarChart(chart, chartTitle, doc));
         }
       }
-      card.appendChild(body);
       return card;
     }
     function showNcfaManagerModal(options) {
@@ -9799,16 +9901,6 @@
     }
     return map;
   }
-  function toChartPointsByDay(values) {
-    const byDay = /* @__PURE__ */ new Map();
-    for (const v of values) {
-      const day = startOfLocalDay(v.ts);
-      const arr = byDay.get(day) || [];
-      arr.push(v.value);
-      byDay.set(day, arr);
-    }
-    return [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([day, vals]) => ({ x: day, y: avg(vals) || 0, label: formatDay(day) }));
-  }
   function toCountsByDay(timestamps) {
     const map = /* @__PURE__ */ new Map();
     for (const ts of timestamps) {
@@ -9816,6 +9908,82 @@
       map.set(day, (map.get(day) || 0) + 1);
     }
     return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([day, c]) => ({ x: day, y: c, label: formatDay(day) }));
+  }
+  var DAY_MS = 24 * 60 * 60 * 1e3;
+  function pickOverviewBucketMs(spanMs) {
+    const spanDays = spanMs / DAY_MS;
+    if (spanDays > 900) return 30 * DAY_MS;
+    if (spanDays > 540) return 14 * DAY_MS;
+    if (spanDays > 180) return 7 * DAY_MS;
+    return void 0;
+  }
+  function buildOverviewGamesSeries(timestamps, fromTs, toTs2, bucketMs) {
+    if (!bucketMs) return toCountsByDay(timestamps);
+    const dayCounts = /* @__PURE__ */ new Map();
+    for (const ts of timestamps) {
+      const day = startOfLocalDay(ts);
+      dayCounts.set(day, (dayCounts.get(day) || 0) + 1);
+    }
+    const startDay = startOfLocalDay(fromTs);
+    const endDay = startOfLocalDay(toTs2);
+    const buckets = /* @__PURE__ */ new Map();
+    for (let day = startDay; day <= endDay; day += DAY_MS) {
+      const key = Math.floor(day / bucketMs) * bucketMs;
+      const cur = buckets.get(key) || { sum: 0, days: 0, endDay: day };
+      cur.sum += dayCounts.get(day) || 0;
+      cur.days += 1;
+      cur.endDay = day;
+      buckets.set(key, cur);
+    }
+    return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => ({ x: v.endDay, y: v.sum / Math.max(1, v.days), label: formatDay(v.endDay) }));
+  }
+  function buildOverviewAvgScoreSeries(values, bucketMs) {
+    const byDay = /* @__PURE__ */ new Map();
+    for (const v of values) {
+      const day = startOfLocalDay(v.ts);
+      const cur = byDay.get(day) || { sum: 0, n: 0 };
+      cur.sum += v.value;
+      cur.n += 1;
+      byDay.set(day, cur);
+    }
+    if (!bucketMs) {
+      return [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([day, v]) => ({ x: day, y: v.sum / Math.max(1, v.n), label: formatDay(day) }));
+    }
+    const buckets = /* @__PURE__ */ new Map();
+    for (const [day, v] of byDay.entries()) {
+      const key = Math.floor(day / bucketMs) * bucketMs;
+      const cur = buckets.get(key) || { sum: 0, n: 0, endDay: day };
+      cur.sum += v.sum;
+      cur.n += v.n;
+      cur.endDay = day;
+      buckets.set(key, cur);
+    }
+    return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => ({ x: v.endDay, y: v.sum / Math.max(1, v.n), label: formatDay(v.endDay) }));
+  }
+  function smoothDailyScoreRecords(records) {
+    if (records.length === 0) return { points: [] };
+    const sorted = records.slice().sort((a, b) => a.day - b.day);
+    const spanMs = Math.max(0, sorted[sorted.length - 1].day - sorted[0].day);
+    const bucketMs = pickOverviewBucketMs(spanMs);
+    if (!bucketMs) {
+      return {
+        points: sorted.map((d) => ({ x: d.day, y: d.avgScore, label: formatDay(d.day) }))
+      };
+    }
+    const buckets = /* @__PURE__ */ new Map();
+    for (const d of sorted) {
+      const key = Math.floor(d.day / bucketMs) * bucketMs;
+      const cur = buckets.get(key) || { weighted: 0, weight: 0, endDay: d.day };
+      const w = Math.max(1, d.rounds);
+      cur.weighted += d.avgScore * w;
+      cur.weight += w;
+      cur.endDay = d.day;
+      buckets.set(key, cur);
+    }
+    return {
+      bucketDays: Math.round(bucketMs / DAY_MS),
+      points: [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => ({ x: v.endDay, y: v.weighted / Math.max(1, v.weight), label: formatDay(v.endDay) }))
+    };
   }
   async function getAnalysisWindowData(filter) {
     const [allGames, allRounds, allDetails] = await Promise.all([
@@ -9926,6 +10094,13 @@
     }).filter((x) => x !== void 0);
     const fiveKCount = roundMetrics.filter((x) => x.score >= 5e3).length;
     const throwCount = roundMetrics.filter((x) => x.score < 50).length;
+    const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
+    const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 0;
+    const gamesPerDayPoints = buildOverviewGamesSeries(games.map((g) => g.playedAt), gameTimes[0], gameTimes[gameTimes.length - 1], overviewBucketMs);
+    const avgScorePerDayPoints = buildOverviewAvgScoreSeries(
+      rounds.map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) })).filter((x) => x.ts > 0 && typeof x.value === "number"),
+      overviewBucketMs
+    );
     sections.push({
       id: "overview",
       title: "Overview",
@@ -9943,15 +10118,13 @@
       charts: [
         {
           type: "line",
-          yLabel: "Games/day",
-          points: toCountsByDay(games.map((g) => g.playedAt))
+          yLabel: overviewBucketMs ? `Games/day (${overviewBucketDays}d aggregated)` : "Games/day",
+          points: gamesPerDayPoints
         },
         {
           type: "line",
-          yLabel: "Avg score/day",
-          points: toChartPointsByDay(
-            rounds.map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) })).filter((x) => x.ts > 0 && typeof x.value === "number")
-          )
+          yLabel: overviewBucketMs ? `Avg score/day (${overviewBucketDays}d aggregated)` : "Avg score/day",
+          points: avgScorePerDayPoints
         }
       ]
     });
@@ -10159,8 +10332,29 @@
       avgTime: avg(s.avgTimeSrc),
       label: sessionBounds.get(idx) ? `${formatShortDateTime(sessionBounds.get(idx).start)} -> ${formatShortDateTime(sessionBounds.get(idx).end)}` : `Session ${idx + 1}`
     })).sort((a, b) => a.start - b.start);
+    const sessionResultAgg = /* @__PURE__ */ new Map();
+    if (ownPlayerId) {
+      for (const d of teamDetails) {
+        const ts = teamPlayedAtByGameId.get(d.gameId);
+        const result = getGameResult(d, ownPlayerId);
+        if (ts === void 0 || !result) continue;
+        const idx = gameSessionIndex.get(ts);
+        if (idx === void 0) continue;
+        const cur = sessionResultAgg.get(idx) || { wins: 0, losses: 0, ties: 0 };
+        if (result === "W") cur.wins++;
+        else if (result === "L") cur.losses++;
+        else cur.ties++;
+        sessionResultAgg.set(idx, cur);
+      }
+    }
     const bestSessionRows = [...sessionRows].sort((a, b) => b.avgScore - a.avgScore);
     const worstSessionRows = [...sessionRows].sort((a, b) => a.avgScore - b.avgScore);
+    const sessionWinRateBars = ownPlayerId ? sessionRows.map((s) => {
+      const res = sessionResultAgg.get(s.idx);
+      const decisive = (res?.wins || 0) + (res?.losses || 0);
+      const rate = decisive > 0 ? pct(res?.wins || 0, decisive) : 0;
+      return { label: formatShortDateTime(s.start), value: rate };
+    }) : [];
     sections.push({
       id: "session_quality",
       title: "Session Quality",
@@ -10185,7 +10379,15 @@
           yLabel: "Throw rate % by session",
           initialBars: 10,
           bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate }))
-        }
+        },
+        ...sessionWinRateBars.length > 0 ? [
+          {
+            type: "bar",
+            yLabel: "Win rate % by session",
+            initialBars: 10,
+            bars: sessionWinRateBars
+          }
+        ] : []
       ]
     });
     const tempoBuckets = [
@@ -10200,7 +10402,8 @@
     const tempoAgg = tempoBuckets.map((b) => ({ ...b, n: 0, scores: [], dist: [] }));
     for (const rm of roundMetrics) {
       if (typeof rm.timeSec !== "number") continue;
-      const bucket = tempoAgg.find((b) => rm.timeSec >= b.min && rm.timeSec < b.max);
+      const ts = rm.timeSec;
+      const bucket = tempoAgg.find((b) => ts >= b.min && ts < b.max);
       if (!bucket) continue;
       bucket.n++;
       bucket.scores.push(rm.score);
@@ -10299,7 +10502,7 @@
         {
           type: "bar",
           yLabel: "Avg score by country",
-          initialBars: 5,
+          initialBars: 25,
           bars: [...scoredCountries].sort((a, b) => b.avgScore - a.avgScore).map((x) => ({ label: countryLabel(x.country), value: x.avgScore }))
         }
       ]
@@ -10631,6 +10834,7 @@
     const worstDay = [...dayRecords].sort((a, b) => a.avgScore - b.avgScore)[0];
     const fastestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (a.avgTime || 0) - (b.avgTime || 0))[0];
     const slowestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (b.avgTime || 0) - (a.avgTime || 0))[0];
+    const smoothedDaily = smoothDailyScoreRecords(dayRecords);
     let fivekStreak = 0;
     let bestFivekStreak = 0;
     let throwStreak = 0;
@@ -10664,8 +10868,8 @@
       ],
       chart: {
         type: "line",
-        yLabel: "Avg daily score",
-        points: dayRecords.sort((a, b) => a.day - b.day).map((d) => ({ x: d.day, y: d.avgScore, label: formatDay(d.day) }))
+        yLabel: smoothedDaily.bucketDays ? `Avg daily score (${smoothedDaily.bucketDays}d smoothed)` : "Avg daily score",
+        points: smoothedDaily.points
       }
     });
     const bestMode = [...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
