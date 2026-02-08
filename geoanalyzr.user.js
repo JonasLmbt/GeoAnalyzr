@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.7
+// @version      1.3.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6766,6 +6766,9 @@
   function sanitizeFileName(input) {
     return input.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/\s+/g, "_").slice(0, 80);
   }
+  function escapeSvgText(input) {
+    return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
   function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -7027,18 +7030,35 @@
     const mapX = (x) => ml + (x - minX) / xSpan * (w - ml - mr);
     const mapY = (y) => h - mb - (y - minY) / ySpan * (h - mt - mb);
     const poly = points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
+    const accent = analysisSettings.accent;
+    const pointMarkers = points.map((p) => {
+      const x = mapX(p.x).toFixed(2);
+      const y = mapY(p.y).toFixed(2);
+      const label = p.label ? `${p.label} - ` : "";
+      const value = Number.isFinite(p.y) ? Math.abs(p.y) >= 100 ? p.y.toFixed(1) : p.y.toFixed(2) : String(p.y);
+      const tip = escapeSvgText(`${label}${value}`);
+      return `<circle class="ga-line-point" cx="${x}" cy="${y}" r="2.5" fill="${accent}"><title>${tip}</title></circle>`;
+    }).join("");
     const yMid = (minY + maxY) / 2;
     const xStartLabel = points[0].label || "";
     const xEndLabel = points[points.length - 1].label || "";
-    const accent = analysisSettings.accent;
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "300");
     svg.innerHTML = `
+    <style>
+      .ga-line-main { transition: stroke-width .12s ease, opacity .12s ease; }
+      .ga-line-main:hover { stroke-width: 4; opacity: 1; }
+      .ga-line-point { transition: r .12s ease, opacity .12s ease; opacity: .72; }
+      .ga-line-point:hover { r: 5; opacity: 1; }
+    </style>
     <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
     <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <polyline fill="none" stroke="${accent}" stroke-width="3" points="${poly}"/>
+    <polyline class="ga-line-main" fill="none" stroke="${accent}" stroke-width="3" points="${poly}">
+      <title>${escapeSvgText(`${title} (hover points for exact values)`)}</title>
+    </polyline>
+    ${pointMarkers}
     <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
     <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(yMid)}</text>
     <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(minY)}</text>
@@ -7091,14 +7111,21 @@
           const y = mt + i * rowH + (rowH - barH) / 2;
           const bw = b.value / maxY * innerW;
           const label = b.label.length > 34 ? `${b.label.slice(0, 34)}..` : b.label;
+          const tip = escapeSvgText(`${b.label}: ${Number.isFinite(b.value) ? b.value.toFixed(2) : b.value}`);
           return `
             <text x="${ml - 8}" y="${(y + barH / 2 + 3).toFixed(2)}" text-anchor="end" font-size="11" fill="${palette.textMuted}">${label}</text>
-            <rect x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85" />
+            <rect class="ga-bar" x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85">
+              <title>${tip}</title>
+            </rect>
           `;
         }).join("");
         svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
         svg.setAttribute("height", `${h}`);
         svg.innerHTML = `
+        <style>
+          .ga-bar { transition: opacity .12s ease, filter .12s ease; }
+          .ga-bar:hover { opacity: 1; filter: brightness(1.15); }
+        </style>
         <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
         <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
         <text x="${ml}" y="${h - 4}" text-anchor="start" font-size="10" fill="${palette.textMuted}">0</text>
@@ -7121,14 +7148,21 @@
           const bh = b.value / maxY * innerH;
           const y = mt + innerH - bh;
           const label = isScoreDistribution ? i === 0 ? "0" : i === bars.length - 1 ? "5000" : "" : b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
+          const tip = escapeSvgText(`${b.label}: ${Number.isFinite(b.value) ? b.value.toFixed(2) : b.value}`);
           return `
-            <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85" />
+            <rect class="ga-bar" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85">
+              <title>${tip}</title>
+            </rect>
             <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
           `;
         }).join("");
         svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
         svg.setAttribute("height", "320");
         svg.innerHTML = `
+        <style>
+          .ga-bar { transition: opacity .12s ease, filter .12s ease; }
+          .ga-bar:hover { opacity: 1; filter: brightness(1.15); }
+        </style>
         <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
         <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
         <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
@@ -7448,7 +7482,9 @@
         b.style.gap = "6px";
         b.appendChild(createSectionIcon(section, doc));
         const label = doc.createElement("span");
-        label.textContent = section.title;
+        if (section.id === "teammate_battle") label.textContent = "Team";
+        else if (section.id === "country_spotlight") label.textContent = "Country Spotlight";
+        else label.textContent = section.title;
         b.appendChild(label);
         b.addEventListener("click", () => {
           const id = `section-${section.id}`;
@@ -7596,9 +7632,7 @@
       controls.appendChild(countrySelect);
       controls.appendChild(applyBtn);
       controls.appendChild(resetFilterBtn);
-      controls.appendChild(doc.createTextNode("Theme:"));
       controls.appendChild(themeSelect);
-      controls.appendChild(doc.createTextNode("Graph Color:"));
       controls.appendChild(colorInput);
       const tocWrap = doc.createElement("div");
       tocWrap.style.display = "flex";
