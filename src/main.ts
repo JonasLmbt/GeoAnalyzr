@@ -132,20 +132,31 @@ async function refreshUI(ui: ReturnType<typeof createUI>) {
   });
 
   ui.onTokenClick(async () => {
-    try {
-      const existing = await getNcfaToken();
-      const msg = existing
-        ? "NCFA Token setzen/aktualisieren. Leer lassen zum Loeschen."
-        : "NCFA Token setzen (optional).";
-      const next = prompt(msg, existing || "");
-      if (next === null) return;
-      await setNcfaToken(next);
-      const now = await getNcfaToken();
-      ui.setStatus(now ? "NCFA token gespeichert." : "NCFA token entfernt.");
-    } catch (e) {
-      ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
-      console.error(e);
-    }
+    const existing = await getNcfaToken();
+    ui.openNcfaManager({
+      initialToken: existing || "",
+      helpText: NCFA_HELP_TEXT,
+      repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
+      onSave: async (token) => {
+        await setNcfaToken(token);
+        const now = await getNcfaToken();
+        const message = now ? "NCFA token saved." : "NCFA token removed.";
+        ui.setStatus(message);
+        return { saved: !!now, token: now, message };
+      },
+      onAutoDetect: async () => {
+        const resolved = await getResolvedNcfaToken();
+        if (!resolved.token) {
+          const message = "Auto-detect failed: no accessible token found (stored/cookie).";
+          ui.setStatus(message);
+          return { detected: false, source: resolved.source, message };
+        }
+        await setNcfaToken(resolved.token);
+        const message = `Auto-detect successful (${resolved.source}). Token saved.`;
+        ui.setStatus(message);
+        return { detected: true, token: resolved.token, source: resolved.source, message };
+      }
+    });
   });
 
   async function refreshAnalysisWindow(filter?: { fromTs?: number; toTs?: number; mode?: string; teammateId?: string; country?: string }) {

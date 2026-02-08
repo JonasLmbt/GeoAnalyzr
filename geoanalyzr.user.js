@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.0.13
+// @version      1.0.14
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7145,19 +7145,6 @@
     const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
     const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
     const tokenBtn = mkBtn("Set NCFA Token", "rgba(95,95,30,0.35)");
-    const tokenHelpBtn = document.createElement("button");
-    tokenHelpBtn.textContent = "?";
-    tokenHelpBtn.title = "How to get _ncfa token";
-    tokenHelpBtn.style.width = "36px";
-    tokenHelpBtn.style.padding = "10px 0";
-    tokenHelpBtn.style.borderRadius = "12px";
-    tokenHelpBtn.style.border = "1px solid rgba(255,255,255,0.25)";
-    tokenHelpBtn.style.background = "rgba(95,95,30,0.35)";
-    tokenHelpBtn.style.color = "white";
-    tokenHelpBtn.style.cursor = "pointer";
-    tokenHelpBtn.style.fontWeight = "700";
-    tokenHelpBtn.style.marginTop = "8px";
-    tokenHelpBtn.style.marginLeft = "8px";
     const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
     const resetBtn = mkBtn("Reset Database", "rgba(160,35,35,0.35)");
     const counts = document.createElement("div");
@@ -7170,13 +7157,7 @@
     panel.appendChild(status);
     panel.appendChild(updateBtn);
     panel.appendChild(analysisBtn);
-    const tokenRow = document.createElement("div");
-    tokenRow.style.display = "flex";
-    tokenRow.style.alignItems = "stretch";
-    tokenRow.style.marginTop = "0";
-    tokenRow.appendChild(tokenBtn);
-    tokenRow.appendChild(tokenHelpBtn);
-    panel.appendChild(tokenRow);
+    panel.appendChild(tokenBtn);
     panel.appendChild(exportBtn);
     panel.appendChild(resetBtn);
     panel.appendChild(counts);
@@ -7472,11 +7453,6 @@
     let refreshAnalysisHandler = null;
     updateBtn.addEventListener("click", () => updateHandler?.());
     tokenBtn.addEventListener("click", () => tokenHandler?.());
-    tokenHelpBtn.addEventListener("click", () => {
-      alert(
-        "NCFA token setup:\n\n1) Open geoguessr.com and log in.\n2) Open browser DevTools (F12 / Ctrl+Shift+I).\n3) Go to Network tab.\n4) Reload the page.\n5) Use filter and search for 'stats'.\n6) Open a 'stats' request.\n7) In request headers, find the '_ncfa' cookie.\n8) Copy only the value after '=' up to ';' (without ';')."
-      );
-    });
     exportBtn.addEventListener("click", () => exportHandler?.());
     resetBtn.addEventListener("click", () => resetHandler?.());
     analysisBtn.addEventListener("click", () => {
@@ -7552,6 +7528,131 @@
       card.appendChild(body);
       return card;
     }
+    function openNcfaManager(options) {
+      const palette = getThemePalette();
+      const overlay = document.createElement("div");
+      overlay.style.position = "fixed";
+      overlay.style.inset = "0";
+      overlay.style.background = "rgba(0,0,0,0.75)";
+      overlay.style.zIndex = "1000006";
+      overlay.style.display = "grid";
+      overlay.style.placeItems = "center";
+      overlay.style.padding = "16px";
+      const modal = document.createElement("div");
+      modal.style.width = "min(640px, 96vw)";
+      modal.style.border = `1px solid ${palette.border}`;
+      modal.style.borderRadius = "12px";
+      modal.style.background = palette.panel;
+      modal.style.color = palette.text;
+      modal.style.boxShadow = "0 10px 30px rgba(0,0,0,0.45)";
+      modal.style.padding = "14px";
+      const head = document.createElement("div");
+      head.style.display = "flex";
+      head.style.justifyContent = "space-between";
+      head.style.alignItems = "center";
+      head.style.marginBottom = "10px";
+      const headTitle = document.createElement("div");
+      headTitle.textContent = "NCFA Token Manager";
+      headTitle.style.fontWeight = "700";
+      const closeBtn2 = document.createElement("button");
+      closeBtn2.textContent = "x";
+      closeBtn2.style.background = "transparent";
+      closeBtn2.style.border = "none";
+      closeBtn2.style.color = palette.text;
+      closeBtn2.style.cursor = "pointer";
+      closeBtn2.style.fontSize = "18px";
+      head.appendChild(headTitle);
+      head.appendChild(closeBtn2);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "_ncfa value";
+      input.value = options.initialToken || "";
+      input.style.width = "100%";
+      input.style.boxSizing = "border-box";
+      input.style.background = palette.panelAlt;
+      input.style.color = palette.text;
+      input.style.border = `1px solid ${palette.border}`;
+      input.style.borderRadius = "8px";
+      input.style.padding = "8px 10px";
+      input.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+      input.style.fontSize = "12px";
+      const feedback = document.createElement("div");
+      feedback.style.marginTop = "8px";
+      feedback.style.fontSize = "12px";
+      feedback.style.color = palette.textMuted;
+      feedback.textContent = "Set manually or use auto-detect.";
+      const actions = document.createElement("div");
+      actions.style.display = "grid";
+      actions.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
+      actions.style.gap = "8px";
+      actions.style.marginTop = "12px";
+      function mkSmallBtn(label, bg, onClick) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.style.padding = "9px 10px";
+        b.style.borderRadius = "8px";
+        b.style.border = "1px solid rgba(255,255,255,0.2)";
+        b.style.background = bg;
+        b.style.color = "#fff";
+        b.style.cursor = "pointer";
+        b.style.fontWeight = "600";
+        b.addEventListener("click", onClick);
+        return b;
+      }
+      const saveBtn = mkSmallBtn("Save Manually", "rgba(95,95,30,0.45)", async () => {
+        saveBtn.disabled = true;
+        try {
+          const res = await options.onSave(input.value);
+          input.value = res.token || "";
+          feedback.textContent = res.message;
+        } catch (e) {
+          feedback.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+      const autoBtn = mkSmallBtn("Auto-Detect", "rgba(35,95,160,0.45)", async () => {
+        autoBtn.disabled = true;
+        try {
+          const res = await options.onAutoDetect();
+          if (res.token) input.value = res.token;
+          feedback.textContent = res.message;
+        } catch (e) {
+          feedback.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+          autoBtn.disabled = false;
+        }
+      });
+      const helpBtn = mkSmallBtn("Show Instructions", "rgba(90,90,90,0.45)", () => {
+        alert(options.helpText);
+      });
+      const repoBtn = mkSmallBtn("Open GitHub README", "rgba(40,120,50,0.45)", () => {
+        window.open(options.repoUrl, "_blank");
+      });
+      actions.appendChild(saveBtn);
+      actions.appendChild(autoBtn);
+      actions.appendChild(helpBtn);
+      actions.appendChild(repoBtn);
+      const hint = document.createElement("div");
+      hint.style.marginTop = "10px";
+      hint.style.fontSize = "11px";
+      hint.style.color = palette.textMuted;
+      hint.textContent = "Auto-detect reads stored token first, then browser cookie (if accessible).";
+      modal.appendChild(head);
+      modal.appendChild(input);
+      modal.appendChild(feedback);
+      modal.appendChild(actions);
+      modal.appendChild(hint);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+      function closeModal() {
+        overlay.remove();
+      }
+      closeBtn2.addEventListener("click", closeModal);
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) closeModal();
+      });
+    }
     return {
       setVisible(visible) {
         iconBtn.style.display = visible ? "flex" : "none";
@@ -7583,6 +7684,9 @@
       },
       onTokenClick(fn) {
         tokenHandler = fn;
+      },
+      openNcfaManager(options) {
+        openNcfaManager(options);
       },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;
@@ -31473,18 +31577,31 @@ ${NCFA_HELP_TEXT}`, "");
       }
     });
     ui.onTokenClick(async () => {
-      try {
-        const existing = await getNcfaToken();
-        const msg = existing ? "NCFA Token setzen/aktualisieren. Leer lassen zum Loeschen." : "NCFA Token setzen (optional).";
-        const next = prompt(msg, existing || "");
-        if (next === null) return;
-        await setNcfaToken(next);
-        const now = await getNcfaToken();
-        ui.setStatus(now ? "NCFA token gespeichert." : "NCFA token entfernt.");
-      } catch (e) {
-        ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
-        console.error(e);
-      }
+      const existing = await getNcfaToken();
+      ui.openNcfaManager({
+        initialToken: existing || "",
+        helpText: NCFA_HELP_TEXT,
+        repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
+        onSave: async (token) => {
+          await setNcfaToken(token);
+          const now = await getNcfaToken();
+          const message = now ? "NCFA token saved." : "NCFA token removed.";
+          ui.setStatus(message);
+          return { saved: !!now, token: now, message };
+        },
+        onAutoDetect: async () => {
+          const resolved = await getResolvedNcfaToken();
+          if (!resolved.token) {
+            const message2 = "Auto-detect failed: no accessible token found (stored/cookie).";
+            ui.setStatus(message2);
+            return { detected: false, source: resolved.source, message: message2 };
+          }
+          await setNcfaToken(resolved.token);
+          const message = `Auto-detect successful (${resolved.source}). Token saved.`;
+          ui.setStatus(message);
+          return { detected: true, token: resolved.token, source: resolved.source, message };
+        }
+      });
     });
     async function refreshAnalysisWindow(filter) {
       const data = await getAnalysisWindowData(filter);
