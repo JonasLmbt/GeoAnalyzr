@@ -1370,11 +1370,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     title: "Countries",
     group: "Countries",
     appliesFilters: ["date", "mode", "teammate"],
-    lines: [
-      selectedCountry ? "Country filter is ignored here (global country comparison)." : "",
-      "Confusion Matrix (Top):",
-      ...confusionRows
-    ].filter((x) => x !== ""),
+    lines: [selectedCountry ? "Country filter is ignored here (global country comparison)." : ""].filter((x) => x !== ""),
     charts: [
       {
         type: "selectableBar",

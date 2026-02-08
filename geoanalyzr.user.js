@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.4
+// @version      1.2.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10762,11 +10762,7 @@
       title: "Countries",
       group: "Countries",
       appliesFilters: ["date", "mode", "teammate"],
-      lines: [
-        selectedCountry ? "Country filter is ignored here (global country comparison)." : "",
-        "Confusion Matrix (Top):",
-        ...confusionRows
-      ].filter((x) => x !== ""),
+      lines: [selectedCountry ? "Country filter is ignored here (global country comparison)." : ""].filter((x) => x !== ""),
       charts: [
         {
           type: "selectableBar",
