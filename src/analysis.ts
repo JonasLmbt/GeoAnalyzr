@@ -1761,9 +1761,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       `Avg score per round: ${fmt(avgScoreAll, 1)}`,
       `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
       `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
-      `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`,
-      `Last 7-day activity snapshot:`,
-      ...makeDayActivityLines(gameTimes, 7)
+      `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`
     ]
   });
 

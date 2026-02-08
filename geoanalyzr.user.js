@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.0
+// @version      1.2.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6683,10 +6683,35 @@
   });
 
   // src/ui.ts
-  var analysisSettings = {
+  var ANALYSIS_SETTINGS_STORAGE_KEY = "geoanalyzr:analysis:settings:v1";
+  var defaultAnalysisSettings = {
     theme: "dark",
     accent: "#66a8ff"
   };
+  function normalizeAccent(value) {
+    if (typeof value !== "string") return defaultAnalysisSettings.accent;
+    const v = value.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : defaultAnalysisSettings.accent;
+  }
+  function loadAnalysisSettings() {
+    try {
+      const raw = localStorage.getItem(ANALYSIS_SETTINGS_STORAGE_KEY);
+      if (!raw) return { ...defaultAnalysisSettings };
+      const parsed = JSON.parse(raw);
+      const theme = parsed.theme === "light" ? "light" : "dark";
+      const accent = normalizeAccent(parsed.accent);
+      return { theme, accent };
+    } catch {
+      return { ...defaultAnalysisSettings };
+    }
+  }
+  function saveAnalysisSettings() {
+    try {
+      localStorage.setItem(ANALYSIS_SETTINGS_STORAGE_KEY, JSON.stringify(analysisSettings));
+    } catch {
+    }
+  }
+  var analysisSettings = loadAnalysisSettings();
   function getThemePalette() {
     if (analysisSettings.theme === "light") {
       return {
@@ -7471,7 +7496,10 @@
       controls.style.alignItems = "center";
       controls.style.padding = "10px 14px";
       controls.style.borderBottom = `1px solid ${palette.border}`;
-      controls.style.flexWrap = "wrap";
+      controls.style.flexWrap = "nowrap";
+      controls.style.whiteSpace = "nowrap";
+      controls.style.overflowX = "auto";
+      controls.style.overflowY = "hidden";
       controls.style.background = palette.bg;
       const fromInput = doc.createElement("input");
       fromInput.type = "date";
@@ -7581,13 +7609,15 @@
       });
       themeSelect.addEventListener("change", () => {
         analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
+        saveAnalysisSettings();
         if (analysisWindow) {
           applyThemeToWindow(analysisWindow);
           if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
         }
       });
       colorInput.addEventListener("input", () => {
-        analysisSettings.accent = colorInput.value;
+        analysisSettings.accent = normalizeAccent(colorInput.value);
+        saveAnalysisSettings();
         if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
       });
       analysisWindow = {
@@ -9782,27 +9812,6 @@
     if (typeof r.durationSeconds === "number") return r.durationSeconds * 1e3;
     return void 0;
   }
-  function makeAsciiBar(value, maxValue, width = 16) {
-    if (maxValue <= 0) return "-".repeat(width);
-    const filled = Math.max(0, Math.min(width, Math.round(value / maxValue * width)));
-    return `${"#".repeat(filled)}${"-".repeat(width - filled)}`;
-  }
-  function makeDayActivityLines(gameTimestamps, lastDays = 14) {
-    const now = Date.now();
-    const today = startOfLocalDay(now);
-    const perDay = /* @__PURE__ */ new Map();
-    for (const ts of gameTimestamps) {
-      const day = startOfLocalDay(ts);
-      perDay.set(day, (perDay.get(day) || 0) + 1);
-    }
-    const days2 = [];
-    for (let i = lastDays - 1; i >= 0; i--) {
-      const day = today - i * 24 * 60 * 60 * 1e3;
-      days2.push({ day, count: perDay.get(day) || 0 });
-    }
-    const maxCount = Math.max(1, ...days2.map((d) => d.count));
-    return days2.map((d) => `${formatDay(d.day)}  ${makeAsciiBar(d.count, maxCount)}  ${d.count}`);
-  }
   function inTsRange(ts, fromTs, toTs2) {
     if (fromTs !== void 0 && ts < fromTs) return false;
     if (toTs2 !== void 0 && ts > toTs2) return false;
@@ -11101,9 +11110,7 @@
         `Avg score per round: ${fmt(avgScoreAll, 1)}`,
         `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
         `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
-        `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`,
-        `Last 7-day activity snapshot:`,
-        ...makeDayActivityLines(gameTimes, 7)
+        `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`
       ]
     });
     return {

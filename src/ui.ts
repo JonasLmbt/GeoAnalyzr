@@ -20,10 +20,40 @@ type ThemePalette = {
   chipText: string;
 };
 
-const analysisSettings: AnalysisSettings = {
+const ANALYSIS_SETTINGS_STORAGE_KEY = "geoanalyzr:analysis:settings:v1";
+const defaultAnalysisSettings: AnalysisSettings = {
   theme: "dark",
   accent: "#66a8ff"
 };
+
+function normalizeAccent(value: unknown): string {
+  if (typeof value !== "string") return defaultAnalysisSettings.accent;
+  const v = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : defaultAnalysisSettings.accent;
+}
+
+function loadAnalysisSettings(): AnalysisSettings {
+  try {
+    const raw = localStorage.getItem(ANALYSIS_SETTINGS_STORAGE_KEY);
+    if (!raw) return { ...defaultAnalysisSettings };
+    const parsed = JSON.parse(raw) as Partial<AnalysisSettings>;
+    const theme: AnalysisTheme = parsed.theme === "light" ? "light" : "dark";
+    const accent = normalizeAccent(parsed.accent);
+    return { theme, accent };
+  } catch {
+    return { ...defaultAnalysisSettings };
+  }
+}
+
+function saveAnalysisSettings(): void {
+  try {
+    localStorage.setItem(ANALYSIS_SETTINGS_STORAGE_KEY, JSON.stringify(analysisSettings));
+  } catch {
+    // ignore persistence issues
+  }
+}
+
+const analysisSettings: AnalysisSettings = loadAnalysisSettings();
 
 function getThemePalette(): ThemePalette {
   if (analysisSettings.theme === "light") {
@@ -944,7 +974,10 @@ export function createUI(): UIHandle {
     controls.style.alignItems = "center";
     controls.style.padding = "10px 14px";
     controls.style.borderBottom = `1px solid ${palette.border}`;
-    controls.style.flexWrap = "wrap";
+    controls.style.flexWrap = "nowrap";
+    controls.style.whiteSpace = "nowrap";
+    controls.style.overflowX = "auto";
+    controls.style.overflowY = "hidden";
     controls.style.background = palette.bg;
 
     const fromInput = doc.createElement("input");
@@ -1070,13 +1103,15 @@ export function createUI(): UIHandle {
 
     themeSelect.addEventListener("change", () => {
       analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
+      saveAnalysisSettings();
       if (analysisWindow) {
         applyThemeToWindow(analysisWindow);
         if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
       }
     });
     colorInput.addEventListener("input", () => {
-      analysisSettings.accent = colorInput.value;
+      analysisSettings.accent = normalizeAccent(colorInput.value);
+      saveAnalysisSettings();
       if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
     });
     analysisWindow = {
