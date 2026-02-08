@@ -788,7 +788,7 @@ export function createUI(): UIHandle {
     refs.colorInput.style.background = palette.panelAlt;
   }
 
-  function createGroupIcon(group: string, doc: Document): HTMLElement {
+  function createSectionIcon(section: AnalysisSection, doc: Document): HTMLElement {
     const palette = getThemePalette();
     const wrap = doc.createElement("span");
     wrap.style.display = "inline-flex";
@@ -798,14 +798,21 @@ export function createUI(): UIHandle {
     wrap.style.height = "14px";
     wrap.style.flex = "0 0 auto";
     const stroke = palette.buttonText;
+    const title = section.title.toLowerCase();
     const svgBase = (paths: string) =>
       `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-    if (group === "Overview") wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
-    else if (group === "Performance") wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
-    else if (group === "Countries") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
-    else if (group === "Opponents") wrap.innerHTML = svgBase('<path d="M8 4l8 8-8 8"/><path d="M16 4l-8 8 8 8"/>');
-    else if (group === "Rating") wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
-    else if (group === "Fun") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M8 15c1.2 1 2.5 1.5 4 1.5s2.8-.5 4-1.5"/>');
+    if (title.includes("overview")) wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
+    else if (title.includes("mode") || title.includes("movement")) wrap.innerHTML = svgBase('<path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/>');
+    else if (title.includes("results")) wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
+    else if (title.includes("sessions")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="8"/><path d="M12 8v5"/><path d="M12 12l3 2"/>');
+    else if (title.includes("time patterns")) wrap.innerHTML = svgBase('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/>');
+    else if (title.includes("tempo")) wrap.innerHTML = svgBase('<path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><path d="M12 14h0"/>');
+    else if (title.includes("scores")) wrap.innerHTML = svgBase('<path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-9"/><path d="M22 20v-6"/>');
+    else if (title.includes("countries") || title.includes("country spotlight")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
+    else if (title.includes("opponents")) wrap.innerHTML = svgBase('<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><path d="M3 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/><path d="M11 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/>');
+    else if (title === "rating" || title.includes("rating")) wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
+    else if (title.includes("team")) wrap.innerHTML = svgBase('<circle cx="9" cy="8" r="2.5"/><circle cx="15" cy="8" r="2.5"/><path d="M4 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/><path d="M10 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/>');
+    else if (title.includes("personal records")) wrap.innerHTML = svgBase('<path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M10 14h4"/><path d="M9 18h6"/>');
     else wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1"/>');
     return wrap;
   }
@@ -865,17 +872,8 @@ export function createUI(): UIHandle {
     }
     if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
 
-    const sectionsByGroup = new Map<string, AnalysisSection[]>();
-    for (const s of data.sections) {
-      const key = s.group || "Other";
-      const arr = sectionsByGroup.get(key) || [];
-      arr.push(s);
-      sectionsByGroup.set(key, arr);
-    }
     tocWrap.innerHTML = "";
-    for (const [group, secs] of sectionsByGroup.entries()) {
-      const first = secs[0];
-      if (!first) continue;
+    for (const section of data.sections) {
       const b = doc.createElement("button");
       b.style.background = palette.buttonBg;
       b.style.color = palette.buttonText;
@@ -888,12 +886,12 @@ export function createUI(): UIHandle {
       b.style.display = "inline-flex";
       b.style.alignItems = "center";
       b.style.gap = "6px";
-      b.appendChild(createGroupIcon(group, doc));
+      b.appendChild(createSectionIcon(section, doc));
       const label = doc.createElement("span");
-      label.textContent = group;
+      label.textContent = section.title;
       b.appendChild(label);
       b.addEventListener("click", () => {
-        const id = `section-${first.id}`;
+        const id = `section-${section.id}`;
         const node = doc.getElementById(id);
         if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
       });

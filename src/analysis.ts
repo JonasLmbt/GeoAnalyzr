@@ -1569,10 +1569,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : undefined
   });
 
-  const sessions = sessionRows.length;
-  const longest = sessionRows.length ? Math.max(...sessionRows.map((s) => s.rounds)) : 0;
-  const longestBreakMs = sortedGameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - sortedGameTimes[i]), 0);
-
   const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
   if (teammateToUse && ownPlayerId) {
     const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
@@ -1749,9 +1745,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         `Avg score: ${fmt(avg(agg.score), 1)} | Median score: ${fmt(median(agg.score), 1)}`,
         `Avg distance: ${fmt(avg(agg.dist), 2)} km`,
         `Perfect 5k in this country: ${countryFiveK} (${fmt(pct(countryFiveK, countryScores.length), 1)}%)`,
-        `Throws (<50) in this country: ${countryThrows} (${fmt(pct(countryThrows, countryScores.length), 1)}%)`,
-        wrongGuesses.length > 0 ? "Most common wrong guesses:" : "No wrong guess data.",
-        ...wrongGuesses.map(([g, n]) => `${countryLabel(g)}: ${n}`)
+        `Throws (<50) in this country: ${countryThrows} (${fmt(pct(countryThrows, countryScores.length), 1)}%)`
       ],
       charts: [
         {
@@ -1832,31 +1826,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       yLabel: smoothedDaily.bucketDays ? `Avg daily score (${smoothedDaily.bucketDays}d smoothed)` : "Avg daily score",
       points: smoothedDaily.points
     }
-  });
-
-  const bestMode = [...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
-  const topCountry = topCountries[0]?.[0];
-  const avgScoreAll = avg(scores);
-  const p90Score =
-    scores.length > 0
-      ? [...scores].sort((a, b) => a - b)[Math.max(0, Math.min(scores.length - 1, Math.floor(scores.length * 0.9) - 1))]
-      : undefined;
-  sections.push({
-    id: "fun_facts",
-    title: "Fun Facts",
-    group: "Fun",
-    appliesFilters: ["date", "mode", "teammate", "country"],
-    lines: [
-      `Sessions (gap >45m): ${sessions} | longest session: ${longest} games`,
-      `Longest break between games: ${fmt(longestBreakMs / (1000 * 60 * 60), 1)} hours`,
-      `Most played mode: ${bestMode}`,
-      `Most played country: ${topCountry ? countryLabel(topCountry) : "-"}`,
-      `Top 10% score threshold: ${fmt(p90Score, 1)} points`,
-      `Avg score per round: ${fmt(avgScoreAll, 1)}`,
-      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
-      `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
-      `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`
-    ]
   });
 
   return {

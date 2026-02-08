@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.9
+// @version      1.3.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7328,7 +7328,7 @@
       refs.colorInput.style.border = `1px solid ${palette.border}`;
       refs.colorInput.style.background = palette.panelAlt;
     }
-    function createGroupIcon(group, doc) {
+    function createSectionIcon(section, doc) {
       const palette = getThemePalette();
       const wrap = doc.createElement("span");
       wrap.style.display = "inline-flex";
@@ -7338,13 +7338,20 @@
       wrap.style.height = "14px";
       wrap.style.flex = "0 0 auto";
       const stroke = palette.buttonText;
+      const title2 = section.title.toLowerCase();
       const svgBase = (paths) => `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-      if (group === "Overview") wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
-      else if (group === "Performance") wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
-      else if (group === "Countries") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
-      else if (group === "Opponents") wrap.innerHTML = svgBase('<path d="M8 4l8 8-8 8"/><path d="M16 4l-8 8 8 8"/>');
-      else if (group === "Rating") wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
-      else if (group === "Fun") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/><path d="M8 15c1.2 1 2.5 1.5 4 1.5s2.8-.5 4-1.5"/>');
+      if (title2.includes("overview")) wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
+      else if (title2.includes("mode") || title2.includes("movement")) wrap.innerHTML = svgBase('<path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/>');
+      else if (title2.includes("results")) wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
+      else if (title2.includes("sessions")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="8"/><path d="M12 8v5"/><path d="M12 12l3 2"/>');
+      else if (title2.includes("time patterns")) wrap.innerHTML = svgBase('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/>');
+      else if (title2.includes("tempo")) wrap.innerHTML = svgBase('<path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><path d="M12 14h0"/>');
+      else if (title2.includes("scores")) wrap.innerHTML = svgBase('<path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-9"/><path d="M22 20v-6"/>');
+      else if (title2.includes("countries") || title2.includes("country spotlight")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
+      else if (title2.includes("opponents")) wrap.innerHTML = svgBase('<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><path d="M3 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/><path d="M11 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/>');
+      else if (title2 === "rating" || title2.includes("rating")) wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
+      else if (title2.includes("team")) wrap.innerHTML = svgBase('<circle cx="9" cy="8" r="2.5"/><circle cx="15" cy="8" r="2.5"/><path d="M4 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/><path d="M10 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/>');
+      else if (title2.includes("personal records")) wrap.innerHTML = svgBase('<path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M10 14h4"/><path d="M9 18h6"/>');
       else wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1"/>');
       return wrap;
     }
@@ -7394,17 +7401,8 @@
         countrySelect.appendChild(opt);
       }
       if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
-      const sectionsByGroup = /* @__PURE__ */ new Map();
-      for (const s of data.sections) {
-        const key = s.group || "Other";
-        const arr = sectionsByGroup.get(key) || [];
-        arr.push(s);
-        sectionsByGroup.set(key, arr);
-      }
       tocWrap.innerHTML = "";
-      for (const [group, secs] of sectionsByGroup.entries()) {
-        const first = secs[0];
-        if (!first) continue;
+      for (const section of data.sections) {
         const b = doc.createElement("button");
         b.style.background = palette.buttonBg;
         b.style.color = palette.buttonText;
@@ -7417,12 +7415,12 @@
         b.style.display = "inline-flex";
         b.style.alignItems = "center";
         b.style.gap = "6px";
-        b.appendChild(createGroupIcon(group, doc));
+        b.appendChild(createSectionIcon(section, doc));
         const label = doc.createElement("span");
-        label.textContent = group;
+        label.textContent = section.title;
         b.appendChild(label);
         b.addEventListener("click", () => {
-          const id = `section-${first.id}`;
+          const id = `section-${section.id}`;
           const node = doc.getElementById(id);
           if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
         });
@@ -10976,9 +10974,6 @@
       ],
       charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : void 0
     });
-    const sessions = sessionRows.length;
-    const longest = sessionRows.length ? Math.max(...sessionRows.map((s) => s.rounds)) : 0;
-    const longestBreakMs = sortedGameTimes.slice(1).reduce((mx, ts, i) => Math.max(mx, ts - sortedGameTimes[i]), 0);
     const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
     if (teammateToUse && ownPlayerId) {
       const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
@@ -11139,9 +11134,7 @@
           `Avg score: ${fmt(avg(agg.score), 1)} | Median score: ${fmt(median(agg.score), 1)}`,
           `Avg distance: ${fmt(avg(agg.dist), 2)} km`,
           `Perfect 5k in this country: ${countryFiveK} (${fmt(pct(countryFiveK, countryScores.length), 1)}%)`,
-          `Throws (<50) in this country: ${countryThrows} (${fmt(pct(countryThrows, countryScores.length), 1)}%)`,
-          wrongGuesses.length > 0 ? "Most common wrong guesses:" : "No wrong guess data.",
-          ...wrongGuesses.map(([g, n]) => `${countryLabel(g)}: ${n}`)
+          `Throws (<50) in this country: ${countryThrows} (${fmt(pct(countryThrows, countryScores.length), 1)}%)`
         ],
         charts: [
           {
@@ -11221,27 +11214,6 @@
         yLabel: smoothedDaily.bucketDays ? `Avg daily score (${smoothedDaily.bucketDays}d smoothed)` : "Avg daily score",
         points: smoothedDaily.points
       }
-    });
-    const bestMode = [...modeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "-";
-    const topCountry = topCountries[0]?.[0];
-    const avgScoreAll = avg(scores);
-    const p90Score = scores.length > 0 ? [...scores].sort((a, b) => a - b)[Math.max(0, Math.min(scores.length - 1, Math.floor(scores.length * 0.9) - 1))] : void 0;
-    sections.push({
-      id: "fun_facts",
-      title: "Fun Facts",
-      group: "Fun",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Sessions (gap >45m): ${sessions} | longest session: ${longest} games`,
-        `Longest break between games: ${fmt(longestBreakMs / (1e3 * 60 * 60), 1)} hours`,
-        `Most played mode: ${bestMode}`,
-        `Most played country: ${topCountry ? countryLabel(topCountry) : "-"}`,
-        `Top 10% score threshold: ${fmt(p90Score, 1)} points`,
-        `Avg score per round: ${fmt(avgScoreAll, 1)}`,
-        `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
-        `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
-        `Avg rounds per game: ${fmt(rounds.length / games.length, 2)}`
-      ]
     });
     return {
       sections,
