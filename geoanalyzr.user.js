@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.3
+// @version      1.2.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10681,7 +10681,10 @@
         correct: 0,
         guessed: /* @__PURE__ */ new Map(),
         throws: 0,
-        fiveKs: 0
+        fiveKs: 0,
+        damageDealt: 0,
+        damageTaken: 0,
+        damageN: 0
       };
       entry.n++;
       const sc = extractScore(r);
@@ -10700,6 +10703,14 @@
           if (typeof sc === "number") entry.scoreCorrectOnly.push(sc);
         }
       }
+      if (ownPlayerId) {
+        const diff = getRoundDamageDiff(r, ownPlayerId);
+        if (typeof diff === "number" && Number.isFinite(diff)) {
+          if (diff > 0) entry.damageDealt += diff;
+          if (diff < 0) entry.damageTaken += -diff;
+          entry.damageN++;
+        }
+      }
       countryAgg.set(t, entry);
     }
     const topCountries = [...countryAgg.entries()].sort((a, b) => b[1].n - a[1].n);
@@ -10711,7 +10722,9 @@
       avgDist: avg(v.dist),
       hitRate: v.n > 0 ? v.correct / v.n : 0,
       throwRate: v.score.length > 0 ? v.throws / v.score.length : 0,
-      fiveKRate: v.score.length > 0 ? v.fiveKs / v.score.length : 0
+      fiveKRate: v.score.length > 0 ? v.fiveKs / v.score.length : 0,
+      avgDamageDealt: v.damageN > 0 ? v.damageDealt / v.damageN : 0,
+      avgDamageTaken: v.damageN > 0 ? v.damageTaken / v.damageN : 0
     }));
     const countryMetricOptions = [
       { key: "avg_score", label: "Avg score", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore })) },
@@ -10724,6 +10737,8 @@
       { key: "avg_distance", label: "Avg distance (km)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDist || 0 })) },
       { key: "throw_rate", label: "Throw rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.throwRate * 100 })) },
       { key: "fivek_rate", label: "5k rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100 })) },
+      { key: "damage_dealt", label: "Avg damage dealt", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageDealt })) },
+      { key: "damage_taken", label: "Avg damage taken", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageTaken })) },
       { key: "rounds", label: "Rounds", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n })) }
     ];
     const confusionMap = /* @__PURE__ */ new Map();
@@ -10752,68 +10767,28 @@
         "Confusion Matrix (Top):",
         ...confusionRows
       ].filter((x) => x !== ""),
-      chart: {
-        type: "selectableBar",
-        yLabel: "Country metrics",
-        orientation: "horizontal",
-        initialBars: 25,
-        defaultMetricKey: "avg_score",
-        defaultSort: "desc",
-        options: countryMetricOptions
-      }
-    });
-    const damageByCountry = /* @__PURE__ */ new Map();
-    if (ownPlayerId) {
-      for (const r of teamRounds) {
-        const country = normalizeCountryCode(r.trueCountry);
-        if (!country) continue;
-        const diff = getRoundDamageDiff(r, ownPlayerId);
-        if (typeof diff !== "number" || !Number.isFinite(diff)) continue;
-        const cur = damageByCountry.get(country) || { n: 0, sumDiff: 0, wins: 0, losses: 0 };
-        cur.n++;
-        cur.sumDiff += diff;
-        if (diff > 0) cur.wins++;
-        if (diff < 0) cur.losses++;
-        damageByCountry.set(country, cur);
-      }
-    }
-    const damageRows = [...damageByCountry.entries()].map(([country, v]) => ({
-      country,
-      n: v.n,
-      avgDiff: v.sumDiff / Math.max(1, v.n),
-      winRate: pct(v.wins, v.n)
-    })).filter((x) => x.n >= 5).sort((a, b) => b.avgDiff - a.avgDiff);
-    const topDamage = damageRows.slice(0, 8);
-    const worstDamage = [...damageRows].sort((a, b) => a.avgDiff - b.avgDiff).slice(0, 8);
-    sections.push({
-      id: "country_damage",
-      title: "Country Damage Balance (You/Team vs Opponents)",
-      group: "Countries",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: ownPlayerId ? [
-        selectedCountry ? "Country filter is ignored here (global country advantage/disadvantage)." : "",
-        `Countries with enough rounds (n>=5): ${damageRows.length}`,
-        ...topDamage.slice(0, 3).map(
-          (x) => `Best: ${countryLabel(x.country)} avg diff ${fmt(x.avgDiff, 1)} | win rounds ${fmt(x.winRate, 1)}% | n=${x.n}`
-        ),
-        ...worstDamage.slice(0, 3).map(
-          (x) => `Hardest: ${countryLabel(x.country)} avg diff ${fmt(x.avgDiff, 1)} | win rounds ${fmt(x.winRate, 1)}% | n=${x.n}`
-        )
-      ].filter((x) => x !== "") : ["No own player id inferred, so country damage balance is unavailable."],
       charts: [
         {
-          type: "bar",
-          yLabel: "Avg score diff (you/team - opponent)",
-          bars: topDamage.map((x) => ({ label: countryLabel(x.country), value: x.avgDiff }))
+          type: "selectableBar",
+          yLabel: "Country metrics",
+          orientation: "horizontal",
+          initialBars: 25,
+          defaultMetricKey: "avg_score",
+          defaultSort: "desc",
+          options: countryMetricOptions
         },
         {
           type: "bar",
-          yLabel: "Avg score diff disadvantage",
-          bars: worstDamage.map((x) => ({ label: countryLabel(x.country), value: -x.avgDiff }))
+          yLabel: "Confusion matrix (top pairs)",
+          initialBars: 12,
+          orientation: "vertical",
+          bars: confusions.slice(0, 24).map((x) => ({
+            label: `${x.truth.toUpperCase()} -> ${x.guess.toUpperCase()}`,
+            value: x.n
+          }))
         }
       ]
     });
-    void confusions;
     const opponentCounts = /* @__PURE__ */ new Map();
     for (const d of teamDetails) {
       const dd = asRecord(d);
