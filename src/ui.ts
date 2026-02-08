@@ -158,14 +158,39 @@ function triggerDownload(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
+function prepareSvgForExport(svg: SVGSVGElement): { text: string; width: number; height: number } {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  if (!clone.getAttribute("xmlns:xlink")) clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+  let width = parseFloat(clone.getAttribute("width") || "");
+  let height = parseFloat(clone.getAttribute("height") || "");
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+    const vb = (clone.getAttribute("viewBox") || "").trim().split(/\s+/).map(Number);
+    if (vb.length === 4 && Number.isFinite(vb[2]) && Number.isFinite(vb[3]) && vb[2] > 0 && vb[3] > 0) {
+      width = vb[2];
+      height = vb[3];
+    }
+  }
+  if (!Number.isFinite(width) || width <= 0) width = 1200;
+  if (!Number.isFinite(height) || height <= 0) height = 420;
+
+  clone.setAttribute("width", String(Math.round(width)));
+  clone.setAttribute("height", String(Math.round(height)));
+
+  const text = new XMLSerializer().serializeToString(clone);
+  return { text, width: Math.round(width), height: Math.round(height) };
+}
+
 async function downloadSvg(svg: SVGSVGElement, title: string): Promise<void> {
-  const svgText = svg.outerHTML;
+  const svgText = prepareSvgForExport(svg).text;
   const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
   triggerDownload(blob, `${sanitizeFileName(title)}.svg`);
 }
 
 async function downloadPng(svg: SVGSVGElement, title: string): Promise<void> {
-  const svgText = svg.outerHTML;
+  const prepared = prepareSvgForExport(svg);
+  const svgText = prepared.text;
   const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
   const svgUrl = URL.createObjectURL(svgBlob);
   try {
@@ -176,8 +201,8 @@ async function downloadPng(svg: SVGSVGElement, title: string): Promise<void> {
       img.src = svgUrl;
     });
 
-    const width = Math.max(1200, img.width || 1200);
-    const height = Math.max(420, img.height || 420);
+    const width = Math.max(1200, img.width || prepared.width || 1200);
+    const height = Math.max(420, img.height || prepared.height || 420);
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -187,8 +212,13 @@ async function downloadPng(svg: SVGSVGElement, title: string): Promise<void> {
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-    if (!blob) throw new Error("PNG conversion failed");
-    triggerDownload(blob, `${sanitizeFileName(title)}.png`);
+    if (blob) {
+      triggerDownload(blob, `${sanitizeFileName(title)}.png`);
+      return;
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    const fallbackBlob = await (await fetch(dataUrl)).blob();
+    triggerDownload(fallbackBlob, `${sanitizeFileName(title)}.png`);
   } finally {
     URL.revokeObjectURL(svgUrl);
   }

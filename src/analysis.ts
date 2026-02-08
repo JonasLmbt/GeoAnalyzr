@@ -1727,6 +1727,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         {
           type: "selectableBar",
           yLabel: "Score distribution (smoothed)",
+          orientation: "vertical",
           allowSort: false,
           defaultMetricKey: "all_guesses",
           defaultSort: "chronological",
