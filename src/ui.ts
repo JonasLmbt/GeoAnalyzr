@@ -86,6 +86,14 @@ function getThemePalette(): ThemePalette {
   };
 }
 
+function gameModeSelectLabel(mode: string): string {
+  const normalized = mode.trim().toLowerCase();
+  if (normalized === "all") return "all";
+  if (normalized === "duels" || normalized === "duel") return "Duel";
+  if (normalized === "teamduels" || normalized === "team duel" || normalized === "team_duels" || normalized === "teamduel") return "Team Duel";
+  return mode;
+}
+
 export interface UIHandle {
   setVisible: (visible: boolean) => void;
   setStatus: (msg: string) => void;
@@ -825,7 +833,7 @@ export function createUI(): UIHandle {
     for (const mode of data.availableGameModes) {
       const opt = doc.createElement("option");
       opt.value = mode;
-      opt.textContent = mode;
+      opt.textContent = gameModeSelectLabel(mode);
       modeSelect.appendChild(opt);
     }
     if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;

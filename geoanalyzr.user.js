@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.2.6
+// @version      1.2.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6742,6 +6742,13 @@
       chipText: "#bcd7ff"
     };
   }
+  function gameModeSelectLabel(mode) {
+    const normalized = mode.trim().toLowerCase();
+    if (normalized === "all") return "all";
+    if (normalized === "duels" || normalized === "duel") return "Duel";
+    if (normalized === "teamduels" || normalized === "team duel" || normalized === "team_duels" || normalized === "teamduel") return "Team Duel";
+    return mode;
+  }
   function isoDateLocal(ts) {
     if (!ts) return "";
     const d = new Date(ts);
@@ -7359,7 +7366,7 @@
       for (const mode of data.availableGameModes) {
         const opt = doc.createElement("option");
         opt.value = mode;
-        opt.textContent = mode;
+        opt.textContent = gameModeSelectLabel(mode);
         modeSelect.appendChild(opt);
       }
       if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
@@ -9816,6 +9823,36 @@
     const vari = avg(values.map((x) => (x - m) ** 2));
     return vari === void 0 ? void 0 : Math.sqrt(vari);
   }
+  function buildSmoothedScoreDistribution(scores, bucketSize = 100) {
+    if (scores.length === 0) return [];
+    const maxScore = 5e3;
+    const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
+    const buckets = new Array(bucketCount).fill(0);
+    for (const sRaw of scores) {
+      const s = Math.max(0, Math.min(maxScore, sRaw));
+      const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
+      buckets[idx]++;
+    }
+    const weights = [1, 2, 3, 2, 1];
+    const radius = Math.floor(weights.length / 2);
+    const smoothed = buckets.map((_, i) => {
+      let weighted = 0;
+      let weightSum = 0;
+      for (let k = -radius; k <= radius; k++) {
+        const j = i + k;
+        if (j < 0 || j >= buckets.length) continue;
+        const w = weights[k + radius];
+        weighted += buckets[j] * w;
+        weightSum += w;
+      }
+      return weightSum ? weighted / weightSum : 0;
+    });
+    return smoothed.map((v, i) => {
+      const start = i * bucketSize;
+      const end = Math.min(maxScore, start + bucketSize - 1);
+      return { label: `${start}-${end}`, value: v };
+    });
+  }
   function fmt(n, digits = 2) {
     if (n === void 0 || !Number.isFinite(n)) return "-";
     return n.toFixed(digits);
@@ -9856,6 +9893,18 @@
   }
   function getGameMode(game) {
     return game.gameMode || game.mode || "unknown";
+  }
+  function normalizeGameModeKey(raw) {
+    const s = (raw || "").trim().toLowerCase();
+    if (s === "duels" || s === "duel") return "duels";
+    if (s === "teamduels" || s === "team_duels" || s === "team duel" || s === "teamduel") return "teamduels";
+    return "other";
+  }
+  function gameModeLabel(mode) {
+    const key = normalizeGameModeKey(mode);
+    if (key === "duels") return "Duel";
+    if (key === "teamduels") return "Team Duel";
+    return mode;
   }
   function normalizeMovementType(raw) {
     if (typeof raw !== "string") return "unknown";
@@ -10166,11 +10215,14 @@
       if (!inTsRange(g.playedAt, filter?.fromTs, filter?.toTs)) return false;
       return true;
     });
-    const gameModeSet = /* @__PURE__ */ new Set();
-    for (const g of dateGames) gameModeSet.add(getGameMode(g));
-    const availableGameModes = ["all", ...[...gameModeSet].sort((a, b) => a.localeCompare(b))];
+    const availableGameModes = ["all", "duels", "teamduels"].filter((mode) => {
+      if (mode === "all") return true;
+      return dateGames.some((g) => normalizeGameModeKey(getGameMode(g)) === mode);
+    });
     const modeGames = dateGames.filter((g) => {
-      if (gameModeFilter && gameModeFilter !== "all" && getGameMode(g) !== gameModeFilter) return false;
+      if (gameModeFilter && gameModeFilter !== "all") {
+        if (normalizeGameModeKey(getGameMode(g)) !== gameModeFilter) return false;
+      }
       return true;
     });
     const detailByGameId = new Map(allDetails.map((d) => [d.gameId, d]));
@@ -10180,7 +10232,7 @@
     for (const kind of movementByGameId.values()) movementSet.add(kind);
     const availableMovementTypes = [
       { key: "all", label: "All movement types" },
-      ...movementOrder.filter((k) => movementSet.has(k)).map((k) => ({ key: k, label: movementTypeLabel(k) }))
+      ...movementOrder.filter((k) => k !== "unknown" && movementSet.has(k)).map((k) => ({ key: k, label: movementTypeLabel(k) }))
     ];
     const movementFilter = filter?.movementType;
     const baseGames = modeGames.filter((g) => {
@@ -10300,7 +10352,7 @@
       lines: [
         `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
         `Games: ${games.length} | Rounds: ${rounds.length}`,
-        `Filters: game mode=${gameModeFilter || "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
+        `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"}, teammate=${selectedTeammate ? nameMap.get(selectedTeammate) || selectedTeammate : "all"}, country=${selectedCountry ? countryLabel(selectedCountry) : "all"}`,
         `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
         `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
         `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
@@ -10363,28 +10415,44 @@
         `Longest win streak: ${bestWinStreak}`,
         `Longest loss streak: ${worstLossStreak}`
       ].filter((x) => x !== "") : ["No own player id inferred, so game-level win/loss is unavailable."],
-      chart: {
-        type: "bar",
-        yLabel: "Games",
-        bars: [
-          { label: "Wins", value: winCount },
-          { label: "Losses", value: lossCount },
-          { label: "Ties", value: tieCount }
-        ]
-      }
+      chart: void 0
     });
     const modeCounts = /* @__PURE__ */ new Map();
-    for (const g of games) modeCounts.set(getGameMode(g), (modeCounts.get(getGameMode(g)) || 0) + 1);
+    const movementCounts = /* @__PURE__ */ new Map();
+    const movementByFilteredGameId = new Map(games.map((g) => [g.gameId, movementByGameId.get(g.gameId) || "unknown"]));
+    for (const g of games) {
+      const modeKey = normalizeGameModeKey(getGameMode(g));
+      if (modeKey === "duels" || modeKey === "teamduels") modeCounts.set(modeKey, (modeCounts.get(modeKey) || 0) + 1);
+      const m = movementByFilteredGameId.get(g.gameId) || "unknown";
+      movementCounts.set(m, (movementCounts.get(m) || 0) + 1);
+    }
     const sortedModes = [...modeCounts.entries()].sort((a, b) => b[1] - a[1]);
-    const modeBars = sortedModes.slice(0, 16).map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }));
-    const modeChart = modeBars.length >= 4 ? { type: "bar", yLabel: "Games", bars: modeBars } : void 0;
+    const modeBars = sortedModes.map(([m, c]) => ({ label: gameModeLabel(m), value: c }));
+    const movementOrderForBreakdown = ["moving", "no_move", "nmpz", "unknown"];
+    const movementBars = movementOrderForBreakdown.filter((m) => (movementCounts.get(m) || 0) > 0).map((m) => ({ label: movementTypeLabel(m), value: movementCounts.get(m) || 0 }));
     sections.push({
-      id: "modes",
-      title: "Mode Breakdown",
+      id: "overall_breakdown",
+      title: "Overall - Mode & Movement Breakdown",
       group: "Overview",
-      appliesFilters: ["date", "mode"],
-      lines: sortedModes.slice(0, 20).map(([m, c]) => `${m}: ${c}`),
-      chart: modeChart
+      appliesFilters: ["date", "mode", "movement"],
+      lines: [
+        "Mode Breakdown:",
+        ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
+        "Movement Breakdown:",
+        ...movementBars.map((b) => `${b.label}: ${b.value}`)
+      ],
+      charts: [
+        {
+          type: "bar",
+          yLabel: "Games by mode",
+          bars: modeBars
+        },
+        {
+          type: "bar",
+          yLabel: "Games by movement",
+          bars: movementBars
+        }
+      ]
     });
     const weekday = new Array(7).fill(0);
     const hour = new Array(24).fill(0);
@@ -10683,9 +10751,10 @@
     });
     const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
     const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;
+    const scoreDistributionBars = buildSmoothedScoreDistribution(scores);
     sections.push({
-      id: "score_extremes",
-      title: "Score Extremes",
+      id: "scores",
+      title: "Scores",
       group: "Performance",
       appliesFilters: ["date", "mode", "teammate", "country"],
       lines: [
@@ -10696,13 +10765,9 @@
       ],
       chart: {
         type: "bar",
-        yLabel: "Rounds count",
-        bars: [
-          { label: "5k", value: fiveKCount },
-          { label: ">=4500", value: nearPerfectCount },
-          { label: "<500", value: lowScoreCount },
-          { label: "Throw <50", value: throwCount }
-        ]
+        yLabel: "Score distribution (smoothed)",
+        initialBars: 24,
+        bars: scoreDistributionBars
       }
     });
     const countryAgg = /* @__PURE__ */ new Map();

@@ -73,6 +73,37 @@ function stdDev(values: number[]): number | undefined {
   return vari === undefined ? undefined : Math.sqrt(vari);
 }
 
+function buildSmoothedScoreDistribution(scores: number[], bucketSize = 100): Array<{ label: string; value: number }> {
+  if (scores.length === 0) return [];
+  const maxScore = 5000;
+  const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
+  const buckets = new Array(bucketCount).fill(0);
+  for (const sRaw of scores) {
+    const s = Math.max(0, Math.min(maxScore, sRaw));
+    const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
+    buckets[idx]++;
+  }
+  const weights = [1, 2, 3, 2, 1];
+  const radius = Math.floor(weights.length / 2);
+  const smoothed = buckets.map((_, i) => {
+    let weighted = 0;
+    let weightSum = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const j = i + k;
+      if (j < 0 || j >= buckets.length) continue;
+      const w = weights[k + radius];
+      weighted += buckets[j] * w;
+      weightSum += w;
+    }
+    return weightSum ? weighted / weightSum : 0;
+  });
+  return smoothed.map((v, i) => {
+    const start = i * bucketSize;
+    const end = Math.min(maxScore, start + bucketSize - 1);
+    return { label: `${start}-${end}`, value: v };
+  });
+}
+
 function fmt(n: number | undefined, digits = 2): string {
   if (n === undefined || !Number.isFinite(n)) return "-";
   return n.toFixed(digits);
@@ -144,6 +175,22 @@ function inTsRange(ts: number, fromTs?: number, toTs?: number): boolean {
 
 function getGameMode(game: FeedGameRow): string {
   return game.gameMode || game.mode || "unknown";
+}
+
+type GameModeKey = "duels" | "teamduels" | "other";
+
+function normalizeGameModeKey(raw: string | undefined): GameModeKey {
+  const s = (raw || "").trim().toLowerCase();
+  if (s === "duels" || s === "duel") return "duels";
+  if (s === "teamduels" || s === "team_duels" || s === "team duel" || s === "teamduel") return "teamduels";
+  return "other";
+}
+
+function gameModeLabel(mode: string): string {
+  const key = normalizeGameModeKey(mode);
+  if (key === "duels") return "Duel";
+  if (key === "teamduels") return "Team Duel";
+  return mode;
 }
 
 type MovementTypeKey = "moving" | "no_move" | "nmpz" | "unknown";
@@ -637,12 +684,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (!inTsRange(g.playedAt, filter?.fromTs, filter?.toTs)) return false;
     return true;
   });
-  const gameModeSet = new Set<string>();
-  for (const g of dateGames) gameModeSet.add(getGameMode(g));
-  const availableGameModes = ["all", ...[...gameModeSet].sort((a, b) => a.localeCompare(b))];
+  const availableGameModes = ["all", "duels", "teamduels"].filter((mode) => {
+    if (mode === "all") return true;
+    return dateGames.some((g) => normalizeGameModeKey(getGameMode(g)) === mode);
+  });
 
   const modeGames = dateGames.filter((g) => {
-    if (gameModeFilter && gameModeFilter !== "all" && getGameMode(g) !== gameModeFilter) return false;
+    if (gameModeFilter && gameModeFilter !== "all") {
+      if (normalizeGameModeKey(getGameMode(g)) !== gameModeFilter) return false;
+    }
     return true;
   });
   const detailByGameId = new Map(allDetails.map((d) => [d.gameId, d]));
@@ -653,7 +703,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const availableMovementTypes: Array<{ key: MovementTypeKey | "all"; label: string }> = [
     { key: "all", label: "All movement types" },
     ...movementOrder
-      .filter((k) => movementSet.has(k))
+      .filter((k) => k !== "unknown" && movementSet.has(k))
       .map((k) => ({ key: k, label: movementTypeLabel(k) }))
   ];
   const movementFilter = filter?.movementType;
@@ -806,7 +856,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     lines: [
       `Range: ${new Date(gameTimes[0]).toLocaleString()} -> ${new Date(gameTimes[gameTimes.length - 1]).toLocaleString()}`,
       `Games: ${games.length} | Rounds: ${rounds.length}`,
-      `Filters: game mode=${gameModeFilter || "all"}, movement=${
+      `Filters: game mode=${gameModeFilter && gameModeFilter !== "all" ? gameModeLabel(gameModeFilter) : "all"}, movement=${
         movementFilter && movementFilter !== "all" ? movementTypeLabel(movementFilter) : "all"
       }, teammate=${selectedTeammate ? (nameMap.get(selectedTeammate) || selectedTeammate) : "all"}, country=${
         selectedCountry ? countryLabel(selectedCountry) : "all"
@@ -881,32 +931,48 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
           `Longest loss streak: ${worstLossStreak}`
         ].filter((x) => x !== "")
       : ["No own player id inferred, so game-level win/loss is unavailable."],
-    chart: {
-      type: "bar",
-      yLabel: "Games",
-      bars: [
-        { label: "Wins", value: winCount },
-        { label: "Losses", value: lossCount },
-        { label: "Ties", value: tieCount }
-      ]
-    }
+    chart: undefined
   });
 
   const modeCounts = new Map<string, number>();
-  for (const g of games) modeCounts.set(getGameMode(g), (modeCounts.get(getGameMode(g)) || 0) + 1);
+  const movementCounts = new Map<MovementTypeKey, number>();
+  const movementByFilteredGameId = new Map(games.map((g) => [g.gameId, movementByGameId.get(g.gameId) || "unknown"]));
+  for (const g of games) {
+    const modeKey = normalizeGameModeKey(getGameMode(g));
+    if (modeKey === "duels" || modeKey === "teamduels") modeCounts.set(modeKey, (modeCounts.get(modeKey) || 0) + 1);
+    const m = movementByFilteredGameId.get(g.gameId) || "unknown";
+    movementCounts.set(m, (movementCounts.get(m) || 0) + 1);
+  }
   const sortedModes = [...modeCounts.entries()].sort((a, b) => b[1] - a[1]);
-  const modeBars = sortedModes
-    .slice(0, 16)
-    .map(([m, c]) => ({ label: m.length > 18 ? `${m.slice(0, 18)}...` : m, value: c }));
-  const modeChart = modeBars.length >= 4 ? { type: "bar" as const, yLabel: "Games", bars: modeBars } : undefined;
+  const modeBars = sortedModes.map(([m, c]) => ({ label: gameModeLabel(m), value: c }));
+  const movementOrderForBreakdown: MovementTypeKey[] = ["moving", "no_move", "nmpz", "unknown"];
+  const movementBars = movementOrderForBreakdown
+    .filter((m) => (movementCounts.get(m) || 0) > 0)
+    .map((m) => ({ label: movementTypeLabel(m), value: movementCounts.get(m) || 0 }));
 
   sections.push({
-    id: "modes",
-    title: "Mode Breakdown",
+    id: "overall_breakdown",
+    title: "Overall - Mode & Movement Breakdown",
     group: "Overview",
-    appliesFilters: ["date", "mode"],
-    lines: sortedModes.slice(0, 20).map(([m, c]) => `${m}: ${c}`),
-    chart: modeChart
+    appliesFilters: ["date", "mode", "movement"],
+    lines: [
+      "Mode Breakdown:",
+      ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
+      "Movement Breakdown:",
+      ...movementBars.map((b) => `${b.label}: ${b.value}`)
+    ],
+    charts: [
+      {
+        type: "bar",
+        yLabel: "Games by mode",
+        bars: modeBars
+      },
+      {
+        type: "bar",
+        yLabel: "Games by movement",
+        bars: movementBars
+      }
+    ]
   });
 
   const weekday = new Array(7).fill(0);
@@ -1231,9 +1297,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
   const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;
+  const scoreDistributionBars = buildSmoothedScoreDistribution(scores);
   sections.push({
-    id: "score_extremes",
-    title: "Score Extremes",
+    id: "scores",
+    title: "Scores",
     group: "Performance",
     appliesFilters: ["date", "mode", "teammate", "country"],
     lines: [
@@ -1244,13 +1311,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ],
     chart: {
       type: "bar",
-      yLabel: "Rounds count",
-      bars: [
-        { label: "5k", value: fiveKCount },
-        { label: ">=4500", value: nearPerfectCount },
-        { label: "<500", value: lowScoreCount },
-        { label: "Throw <50", value: throwCount }
-      ]
+      yLabel: "Score distribution (smoothed)",
+      initialBars: 24,
+      bars: scoreDistributionBars
     }
   });
 
