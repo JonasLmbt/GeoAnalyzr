@@ -437,6 +437,14 @@ export interface AnalysisFilter {
   country?: string;
 }
 
+type RoundMetric = {
+  ts: number;
+  day: number;
+  score: number;
+  timeSec: number | undefined;
+  distKm: number | undefined;
+};
+
 export async function getDashboardData(): Promise<DashboardData> {
   const [games, rounds] = await Promise.all([db.games.orderBy("playedAt").toArray(), db.rounds.toArray()]);
   if (games.length === 0) {
@@ -595,16 +603,17 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       const score = extractScore(r);
       const timeMs = extractTimeMs(r);
       const distMeters = extractDistanceMeters(r);
-      if (!ts || typeof score !== "number") return undefined;
-      return {
+      if (ts === undefined || typeof score !== "number") return undefined;
+      const item: RoundMetric = {
         ts,
         day: startOfLocalDay(ts),
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined
       };
+      return item;
     })
-    .filter((x): x is { ts: number; day: number; score: number; timeSec?: number; distKm?: number } => !!x);
+    .filter((x): x is RoundMetric => x !== undefined);
   const fiveKCount = roundMetrics.filter((x) => x.score >= 5000).length;
   const throwCount = roundMetrics.filter((x) => x.score < 50).length;
 

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.1.1
+// @version      1.1.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6922,7 +6922,9 @@
       cur.label = p.label;
       buckets.set(key, cur);
     }
-    let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => ({ x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label }));
+    let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(
+      ([, v]) => v.label !== void 0 ? { x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label } : { x: v.x, y: v.sumY / Math.max(1, v.n) }
+    );
     const hardLimit = 180;
     if (out.length > hardLimit) {
       const stride = Math.ceil(out.length / hardLimit);
@@ -6930,11 +6932,8 @@
       for (let i = 0; i < out.length; i += stride) {
         const chunk = out.slice(i, i + stride);
         const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
-        compressed.push({
-          x: chunk[chunk.length - 1].x,
-          y: avgY,
-          label: chunk[chunk.length - 1].label
-        });
+        const last = chunk[chunk.length - 1];
+        compressed.push(last.label !== void 0 ? { x: last.x, y: avgY, label: last.label } : { x: last.x, y: avgY });
       }
       out = compressed;
     }
@@ -9898,15 +9897,16 @@
       const score = extractScore(r);
       const timeMs = extractTimeMs(r);
       const distMeters = extractDistanceMeters(r);
-      if (!ts || typeof score !== "number") return void 0;
-      return {
+      if (ts === void 0 || typeof score !== "number") return void 0;
+      const item = {
         ts,
         day: startOfLocalDay(ts),
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0
       };
-    }).filter((x) => !!x);
+      return item;
+    }).filter((x) => x !== void 0);
     const fiveKCount = roundMetrics.filter((x) => x.score >= 5e3).length;
     const throwCount = roundMetrics.filter((x) => x.score < 50).length;
     sections.push({

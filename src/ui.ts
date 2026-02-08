@@ -310,9 +310,11 @@ function aggregateLinePoints(points: Array<{ x: number; y: number; label?: strin
     buckets.set(key, cur);
   }
 
-  let out = [...buckets.entries()]
+  let out: Array<{ x: number; y: number; label?: string }> = [...buckets.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([, v]) => ({ x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label }));
+    .map(([, v]) =>
+      v.label !== undefined ? { x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label } : { x: v.x, y: v.sumY / Math.max(1, v.n) }
+    );
 
   const hardLimit = 180;
   if (out.length > hardLimit) {
@@ -321,11 +323,8 @@ function aggregateLinePoints(points: Array<{ x: number; y: number; label?: strin
     for (let i = 0; i < out.length; i += stride) {
       const chunk = out.slice(i, i + stride);
       const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
-      compressed.push({
-        x: chunk[chunk.length - 1].x,
-        y: avgY,
-        label: chunk[chunk.length - 1].label
-      });
+      const last = chunk[chunk.length - 1];
+      compressed.push(last.label !== undefined ? { x: last.x, y: avgY, label: last.label } : { x: last.x, y: avgY });
     }
     out = compressed;
   }
