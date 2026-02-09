@@ -103,7 +103,7 @@ async function hasAuthenticatedSession(): Promise<boolean> {
       }
       const res = await syncFeed({
         onStatus: (m) => ui.setStatus(m),
-        maxPages: 200,
+        maxPages: 5000,
         delayMs: 200,
         ncfa
       });
