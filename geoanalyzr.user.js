@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.7
+// @version      1.4.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -11754,12 +11754,17 @@
       if (!roundsByGame.has(rm.gameId)) roundsByGame.set(rm.gameId, []);
       roundsByGame.get(rm.gameId).push(rm);
     }
-    const gameRoundEntries = [...roundsByGame.entries()].map(([gameId, items]) => ({ gameId, items, n: items.length }));
+    const gameRoundEntries = [...roundsByGame.entries()].map(([gameId, items]) => {
+      const maxRoundNumber = items.reduce((mx, r) => Math.max(mx, r.roundNumber), 0);
+      const hasOutOfRangeRound = maxRoundNumber > items.length;
+      return { gameId, items, n: items.length, maxRoundNumber, hasOutOfRangeRound };
+    });
     const maxRoundsEntry = gameRoundEntries.slice().sort((a, b) => b.n - a.n)[0];
-    const minRoundsEligibleEntries = gameRoundEntries.filter((x) => x.n >= 2);
+    const minRoundsEligibleEntries = gameRoundEntries.filter((x) => x.n >= 2 && !x.hasOutOfRangeRound);
     const minRoundsSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
     const minRounds = minRoundsSource.length > 0 ? Math.min(...minRoundsSource.map((x) => x.n)) : 0;
     const minRoundsEntries = minRoundsSource.filter((x) => x.n === minRounds);
+    const excludedFewestInconsistentGames = gameRoundEntries.filter((x) => x.n >= 2 && x.hasOutOfRangeRound).length;
     const maxSpreadEntry = gameRoundEntries.map((x) => {
       const scores2 = x.items.map((r) => r.score);
       const spread = scores2.length > 0 ? Math.max(...scores2) - Math.min(...scores2) : 0;
@@ -11769,7 +11774,7 @@
     const avgScoreSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
     const bestAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => b.avgScore - a.avgScore)[0];
     const worstAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => a.avgScore - b.avgScore)[0];
-    const gameEntryDrill = (entry) => entry ? entry.items.map((r) => toDrilldownItem(r.round, r.ts, r.score)) : [];
+    const gameEntryDrill = (entry, enforceRoundCap = false) => entry ? entry.items.filter((r) => !enforceRoundCap || r.roundNumber <= entry.n).map((r) => toDrilldownItem(r.round, r.ts, r.score)) : [];
     const gameDateLabel = (entry) => entry && entry.items.length > 0 ? formatShortDateTime(entry.items[0].ts) : "-";
     sections.push({
       id: "rounds",
@@ -11779,12 +11784,13 @@
       lines: [
         `Game with most rounds: ${maxRoundsEntry ? `${maxRoundsEntry.n} rounds (${gameDateLabel(maxRoundsEntry)})` : "-"}`,
         `Games with fewest rounds: ${minRoundsEntries.length > 0 ? `${minRounds} rounds (${minRoundsEntries.length} game(s))` : "-"}`,
+        excludedFewestInconsistentGames > 0 ? `Excluded inconsistent games from fewest-rounds: ${excludedFewestInconsistentGames} (detected round number > game length)` : `Excluded inconsistent games from fewest-rounds: 0`,
         `Largest score spread (max-min in one game): ${maxSpreadEntry ? `${fmt(maxSpreadEntry.spread, 0)} points (${gameDateLabel(maxSpreadEntry)})` : "-"}`,
         `Most throws (<50) in one game: ${maxThrowsEntry ? `${maxThrowsEntry.throws} throws (${gameDateLabel(maxThrowsEntry)})` : "-"}`
       ],
       lineDrilldowns: [
         { lineLabel: "Game with most rounds", items: gameEntryDrill(maxRoundsEntry) },
-        { lineLabel: "Games with fewest rounds", items: minRoundsEntries.flatMap((entry) => gameEntryDrill(entry)) },
+        { lineLabel: "Games with fewest rounds", items: minRoundsEntries.flatMap((entry) => gameEntryDrill(entry, true)) },
         { lineLabel: "Largest score spread (max-min in one game)", items: gameEntryDrill(maxSpreadEntry) },
         { lineLabel: "Most throws (<50) in one game", items: gameEntryDrill(maxThrowsEntry) }
       ],
