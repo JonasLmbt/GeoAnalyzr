@@ -349,6 +349,42 @@ function formatDrilldownDate(ts?: number): string {
   return `${day}/${month}/${year} ${hh}:${mm}`;
 }
 
+function formatGuessDuration(sec?: number): string {
+  if (typeof sec !== "number" || !Number.isFinite(sec)) return "-";
+  return `${sec.toFixed(1)}s`;
+}
+
+function formatDamageValue(value?: number): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  const rounded = Math.round(value);
+  return `${rounded >= 0 ? "+" : ""}${rounded}`;
+}
+
+const regionNameDisplay =
+  typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function"
+    ? new Intl.DisplayNames(["en"], { type: "region" })
+    : null;
+
+function countryNameFromCode(code?: string): string {
+  if (typeof code !== "string") return "-";
+  const normalized = code.trim().toLowerCase();
+  if (!normalized) return "-";
+  if (normalized.length === 2 && regionNameDisplay) {
+    try {
+      const label = regionNameDisplay.of(normalized.toUpperCase());
+      if (typeof label === "string" && label.trim()) return label;
+    } catch {
+      // fallback below
+    }
+  }
+  return normalized.toUpperCase();
+}
+
+function shortGameId(gameId: string): string {
+  if (gameId.length <= 14) return gameId;
+  return `${gameId.slice(0, 8)}...`;
+}
+
 function openDrilldownOverlay(doc: Document, title: string, subtitle: string, drilldown: AnalysisDrilldownItem[]): void {
   if (drilldown.length === 0) return;
   const palette = getThemePalette();
@@ -363,7 +399,7 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   overlay.style.padding = "28px 16px";
 
   const card = doc.createElement("div");
-  card.style.width = "min(1400px, 98vw)";
+  card.style.width = "min(1500px, 98vw)";
   card.style.maxHeight = "90vh";
   card.style.overflow = "auto";
   card.style.background = palette.panel;
@@ -378,7 +414,6 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   header.style.justifyContent = "space-between";
   header.style.alignItems = "center";
   header.style.marginBottom = "8px";
-
   const headTitle = doc.createElement("div");
   headTitle.style.fontWeight = "800";
   headTitle.style.fontSize = "14px";
@@ -412,30 +447,78 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     score: "desc",
     country: "asc"
   };
-  const sortLabel = (label: string, active: boolean, dir: SortDir): string => (active ? `${label} ${dir === "asc" ? "▲" : "▼"}` : label);
+  const sortLabel = (label: string, active: boolean, dir: SortDir): string => (active ? `${label} ${dir === "asc" ? "^" : "v"}` : label);
   let sortKey: SortKey = "date";
   let sortDir: SortDir = "desc";
 
+  const movementValues = [...new Set(drilldown.map((d) => d.movement).filter((x): x is string => typeof x === "string" && x.trim().length > 0))];
+  const modeValues = [...new Set(drilldown.map((d) => d.gameMode).filter((x): x is string => typeof x === "string" && x.trim().length > 0))];
+  const showMovement = movementValues.length > 1;
+  const showGameMode = modeValues.length > 1;
+  const showMate = drilldown.some((d) => typeof d.teammate === "string" && d.teammate.trim().length > 0);
+  const showDuration = drilldown.some((d) => typeof d.guessDurationSec === "number" && Number.isFinite(d.guessDurationSec));
+  const showDamage = drilldown.some((d) => typeof d.damage === "number" && Number.isFinite(d.damage));
+  const showGuessMaps = drilldown.some((d) => typeof d.googleMapsUrl === "string" && d.googleMapsUrl.length > 0);
+  const showStreetView = drilldown.some((d) => typeof d.streetViewUrl === "string" && d.streetViewUrl.length > 0);
+
+  type DrillColumn = {
+    key: string;
+    label: string;
+    sortKey?: SortKey;
+    width?: string;
+    muted?: boolean;
+    render: (item: AnalysisDrilldownItem) => HTMLElement;
+  };
+
+  const mkTextCell = (text: string, muted = false): HTMLElement => {
+    const span = doc.createElement("span");
+    span.textContent = text;
+    if (muted) span.style.color = palette.textMuted;
+    return span;
+  };
+
+  const mkLinkCell = (url?: string): HTMLElement => {
+    if (!url) return mkTextCell("-", true);
+    const a = doc.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = "Open";
+    a.style.color = analysisSettings.accent;
+    return a;
+  };
+
+  const columns: DrillColumn[] = [
+    { key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) },
+    { key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) },
+    { key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") },
+    { key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) }
+  ];
+  if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+  if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
+  if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+  if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+  if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+  columns.push({
+    key: "game",
+    label: "Game",
+    width: "120px",
+    muted: true,
+    render: (item) => {
+      const span = mkTextCell(shortGameId(item.gameId), true);
+      span.title = item.gameId;
+      return span;
+    }
+  });
+  if (showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
+  if (showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
+
   const thead = doc.createElement("thead");
   const headRow = doc.createElement("tr");
-  const thDate = doc.createElement("th");
-  const thGame = doc.createElement("th");
-  const thRound = doc.createElement("th");
-  const thScore = doc.createElement("th");
-  const thCountry = doc.createElement("th");
-  const thMaps = doc.createElement("th");
-  const thSv = doc.createElement("th");
-  const headers: Array<[HTMLTableCellElement, string, SortKey | null]> = [
-    [thDate, "Date", "date"],
-    [thGame, "Game", null],
-    [thRound, "Round", "round"],
-    [thScore, "Score", "score"],
-    [thCountry, "Country", "country"],
-    [thMaps, "Google Maps", null],
-    [thSv, "Street View", null]
-  ];
-  for (const [th, label, key] of headers) {
-    th.textContent = label;
+  const thBySort = new Map<SortKey, HTMLTableCellElement>();
+  for (const col of columns) {
+    const th = doc.createElement("th");
+    th.textContent = col.label;
     th.style.textAlign = "left";
     th.style.padding = "7px 8px";
     th.style.borderBottom = `1px solid ${palette.border}`;
@@ -443,15 +526,17 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     th.style.position = "sticky";
     th.style.top = "0";
     th.style.background = palette.panel;
-    if (key) {
+    if (col.width) th.style.minWidth = col.width;
+    if (col.sortKey) {
       th.style.cursor = "pointer";
       th.style.userSelect = "none";
+      thBySort.set(col.sortKey, th);
       th.addEventListener("click", () => {
-        if (sortKey === key) {
+        if (sortKey === col.sortKey) {
           sortDir = sortDir === "asc" ? "desc" : "asc";
         } else {
-          sortKey = key;
-          sortDir = defaultSortDir[key];
+          sortKey = col.sortKey;
+          sortDir = defaultSortDir[col.sortKey];
         }
         shown = 0;
         renderRows(true);
@@ -464,7 +549,6 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
 
   const tbody = doc.createElement("tbody");
   table.appendChild(tbody);
-
   const getSortedItems = (): AnalysisDrilldownItem[] => {
     const items = drilldown.slice();
     items.sort((a, b) => {
@@ -483,20 +567,22 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
         const bv = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
         return sortDir === "asc" ? av - bv : bv - av;
       }
-      const av = (a.trueCountry || "").toLowerCase();
-      const bv = (b.trueCountry || "").toLowerCase();
+      const av = countryNameFromCode(a.trueCountry).toLowerCase();
+      const bv = countryNameFromCode(b.trueCountry).toLowerCase();
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return items;
   };
-
   const updateHeaderLabels = () => {
-    thDate.textContent = sortLabel("Date", sortKey === "date", sortDir);
-    thRound.textContent = sortLabel("Round", sortKey === "round", sortDir);
-    thScore.textContent = sortLabel("Score", sortKey === "score", sortDir);
-    thCountry.textContent = sortLabel("Country", sortKey === "country", sortDir);
+    const dateTh = thBySort.get("date");
+    const roundTh = thBySort.get("round");
+    const scoreTh = thBySort.get("score");
+    const countryTh = thBySort.get("country");
+    if (dateTh) dateTh.textContent = sortLabel("Date", sortKey === "date", sortDir);
+    if (roundTh) roundTh.textContent = sortLabel("Round", sortKey === "round", sortDir);
+    if (scoreTh) scoreTh.textContent = sortLabel("Score", sortKey === "score", sortDir);
+    if (countryTh) countryTh.textContent = sortLabel("Country", sortKey === "country", sortDir);
   };
-
   let shown = 0;
   const pageSize = 60;
   const renderRows = (resetBody = false) => {
@@ -507,62 +593,14 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
       const item = sorted[i];
       const tr = doc.createElement("tr");
       tr.style.borderBottom = `1px solid ${palette.border}`;
-
-      const dateTd = doc.createElement("td");
-      dateTd.textContent = formatDrilldownDate(item.ts);
-      dateTd.style.padding = "6px 8px";
-      tr.appendChild(dateTd);
-
-      const gameTd = doc.createElement("td");
-      gameTd.textContent = item.gameId;
-      gameTd.style.padding = "6px 8px";
-      tr.appendChild(gameTd);
-
-      const roundTd = doc.createElement("td");
-      roundTd.textContent = String(item.roundNumber);
-      roundTd.style.padding = "6px 8px";
-      tr.appendChild(roundTd);
-
-      const scoreTd = doc.createElement("td");
-      scoreTd.textContent = typeof item.score === "number" ? String(Math.round(item.score)) : "-";
-      scoreTd.style.padding = "6px 8px";
-      tr.appendChild(scoreTd);
-
-      const countryTd = doc.createElement("td");
-      countryTd.textContent = item.trueCountry || "-";
-      countryTd.style.padding = "6px 8px";
-      tr.appendChild(countryTd);
-
-      const mapsTd = doc.createElement("td");
-      mapsTd.style.padding = "6px 8px";
-      if (item.googleMapsUrl) {
-        const a = doc.createElement("a");
-        a.href = item.googleMapsUrl;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = "Open";
-        a.style.color = analysisSettings.accent;
-        mapsTd.appendChild(a);
-      } else {
-        mapsTd.textContent = "-";
+      for (const col of columns) {
+        const td = doc.createElement("td");
+        td.style.padding = "6px 8px";
+        if (col.width) td.style.minWidth = col.width;
+        if (col.muted) td.style.color = palette.textMuted;
+        td.appendChild(col.render(item));
+        tr.appendChild(td);
       }
-      tr.appendChild(mapsTd);
-
-      const svTd = doc.createElement("td");
-      svTd.style.padding = "6px 8px";
-      if (item.streetViewUrl) {
-        const a = doc.createElement("a");
-        a.href = item.streetViewUrl;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.textContent = "Open";
-        a.style.color = analysisSettings.accent;
-        svTd.appendChild(a);
-      } else {
-        svTd.textContent = "-";
-      }
-      tr.appendChild(svTd);
-
       tbody.appendChild(tr);
     }
     shown = next;
@@ -574,7 +612,6 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     }
     updateHeaderLabels();
   };
-
   const moreBtn = doc.createElement("button");
   moreBtn.textContent = "";
   moreBtn.style.marginTop = "10px";
@@ -588,14 +625,12 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   moreBtn.addEventListener("click", () => renderRows(false));
   card.appendChild(moreBtn);
   renderRows(true);
-
   overlay.addEventListener("click", (ev) => {
     if (ev.target === overlay) overlay.remove();
   });
   overlay.appendChild(card);
   doc.body.appendChild(overlay);
 }
-
 function openBarDrilldownOverlay(doc: Document, title: string, barLabel: string, bars: AnalysisBarPoint[], barIndex: number): void {
   const bar = bars[barIndex];
   const drilldown = bar?.drilldown || [];
@@ -1593,12 +1628,19 @@ export function createUI(): UIHandle {
     doc.body.appendChild(shell);
 
     modalClose.addEventListener("click", () => win.close());
+    const toMovementType = (value: string): "all" | "moving" | "no_move" | "nmpz" | "unknown" => {
+      if (value === "moving" || value === "no_move" || value === "nmpz" || value === "unknown" || value === "all") {
+        return value;
+      }
+      return "all";
+    };
+
     applyBtn.addEventListener("click", () => {
       refreshAnalysisHandler?.({
         fromTs: parseDateInput(fromInput.value, false),
         toTs: parseDateInput(toInput.value, true),
         gameMode: modeSelect.value || "all",
-        movementType: movementSelect.value || "all",
+        movementType: toMovementType(movementSelect.value || "all"),
         teammateId: teammateSelect.value || "all",
         country: countrySelect.value || "all"
       });

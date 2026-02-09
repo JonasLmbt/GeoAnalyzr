@@ -297,6 +297,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       p1_playerId: r.p1_playerId ?? "",
       p1_guessLat: r.p1_guessLat ?? r.guessLat ?? "",
       p1_guessLng: r.p1_guessLng ?? r.guessLng ?? "",
+      p1_googleMaps_url: buildGoogleMapsUrl(r.p1_guessLat ?? r.guessLat, r.p1_guessLng ?? r.guessLng),
       p1_guessCountry: p1Country,
       p1_distance_km: (r as any).p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== undefined ? (r.p1_distanceMeters ?? r.distanceMeters)! / 1e3 : ""),
       p1_score: r.p1_score ?? r.score ?? "",
@@ -305,6 +306,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       p2_playerId: r.p2_playerId ?? "",
       p2_guessLat: r.p2_guessLat ?? "",
       p2_guessLng: r.p2_guessLng ?? "",
+      p2_googleMaps_url: buildGoogleMapsUrl(r.p2_guessLat, r.p2_guessLng),
       p2_guessCountry: p2Country,
       p2_distance_km: (r as any).p2_distanceKm ?? (r.p2_distanceMeters !== undefined ? r.p2_distanceMeters / 1e3 : ""),
       p2_score: r.p2_score ?? "",
@@ -321,6 +323,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       rowBase.p3_teamId = r.p3_teamId ?? "";
       rowBase.p3_guessLat = r.p3_guessLat ?? "";
       rowBase.p3_guessLng = r.p3_guessLng ?? "";
+      rowBase.p3_googleMaps_url = buildGoogleMapsUrl(r.p3_guessLat, r.p3_guessLng);
       rowBase.p3_guessCountry = p3Country;
       rowBase.p3_distance_km = (r as any).p3_distanceKm ?? (r.p3_distanceMeters !== undefined ? r.p3_distanceMeters / 1e3 : "");
       rowBase.p3_score = r.p3_score ?? "";
@@ -330,6 +333,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       rowBase.p4_teamId = r.p4_teamId ?? "";
       rowBase.p4_guessLat = r.p4_guessLat ?? "";
       rowBase.p4_guessLng = r.p4_guessLng ?? "";
+      rowBase.p4_googleMaps_url = buildGoogleMapsUrl(r.p4_guessLat, r.p4_guessLng);
       rowBase.p4_guessCountry = p4Country;
       rowBase.p4_distance_km = (r as any).p4_distanceKm ?? (r.p4_distanceMeters !== undefined ? r.p4_distanceMeters / 1e3 : "");
       rowBase.p4_score = r.p4_score ?? "";

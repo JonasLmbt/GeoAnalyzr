@@ -60,9 +60,25 @@ function buildStreetViewUrl(lat?: number, lng?: number): string | undefined {
   return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
 }
 
-function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number): AnalysisDrilldownItem {
+type AnalysisDrilldownMeta = {
+  movementLabel?: string;
+  gameModeLabel?: string;
+  teammateName?: string;
+  ownPlayerId?: string;
+};
+
+function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number, meta?: AnalysisDrilldownMeta): AnalysisDrilldownItem {
+  const rr = asRecord(r);
   const trueLat = typeof r.trueLat === "number" ? r.trueLat : undefined;
   const trueLng = typeof r.trueLng === "number" ? r.trueLng : undefined;
+  const guessLat =
+    getNumber(rr, "p1_guessLat") ??
+    getNumber(rr, "guessLat");
+  const guessLng =
+    getNumber(rr, "p1_guessLng") ??
+    getNumber(rr, "guessLng");
+  const timeMs = extractTimeMs(r);
+  const damage = meta?.ownPlayerId ? getRoundDamageDiff(r, meta.ownPlayerId) : undefined;
   return {
     gameId: r.gameId,
     roundNumber: r.roundNumber,
@@ -72,7 +88,14 @@ function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number): Analysi
     guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
     trueLat,
     trueLng,
-    googleMapsUrl: buildGoogleMapsUrl(trueLat, trueLng),
+    guessLat,
+    guessLng,
+    guessDurationSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
+    movement: meta?.movementLabel,
+    gameMode: meta?.gameModeLabel,
+    teammate: meta?.teammateName,
+    damage,
+    googleMapsUrl: buildGoogleMapsUrl(guessLat, guessLng),
     streetViewUrl: buildStreetViewUrl(trueLat, trueLng)
   };
 }
@@ -151,6 +174,13 @@ export interface AnalysisDrilldownItem {
   guessCountry?: string;
   trueLat?: number;
   trueLng?: number;
+  guessLat?: number;
+  guessLng?: number;
+  guessDurationSec?: number;
+  movement?: string;
+  gameMode?: string;
+  teammate?: string;
+  damage?: number;
   googleMapsUrl?: string;
   streetViewUrl?: string;
 }
@@ -174,7 +204,7 @@ function buildSmoothedScoreDistributionWithDrilldown(
   const maxScore = 5000;
   const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
   const buckets = new Array(bucketCount).fill(0);
-  const drillByBucket: AnalysisDrilldownItem[][] = new Array(bucketCount).fill(null).map(() => []);
+  const drillByBucket: AnalysisDrilldownItem[][] = Array.from({ length: bucketCount }, () => []);
   for (const p of points) {
     const s = Math.max(0, Math.min(maxScore, p.score));
     const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
@@ -536,6 +566,31 @@ function collectPlayerNames(details: GameRow[]): Map<string, string> {
   return map;
 }
 
+function getTeammateNameForGame(detail: GameRow, ownPlayerId: string | undefined, nameMap: Map<string, string>): string | undefined {
+  const d = asRecord(detail);
+  if (getString(d, "modeFamily") !== "teamduels" || !ownPlayerId) return undefined;
+
+  const t1p1 = getString(d, "teamOnePlayerOneId");
+  const t1p2 = getString(d, "teamOnePlayerTwoId");
+  const t2p1 = getString(d, "teamTwoPlayerOneId");
+  const t2p2 = getString(d, "teamTwoPlayerTwoId");
+
+  let mateId: string | undefined;
+  if (ownPlayerId === t1p1) mateId = t1p2;
+  else if (ownPlayerId === t1p2) mateId = t1p1;
+  else if (ownPlayerId === t2p1) mateId = t2p2;
+  else if (ownPlayerId === t2p2) mateId = t2p1;
+  if (!mateId) return undefined;
+
+  const explicitName =
+    (mateId === t1p1 ? getString(d, "teamOnePlayerOneName") : undefined) ??
+    (mateId === t1p2 ? getString(d, "teamOnePlayerTwoName") : undefined) ??
+    (mateId === t2p1 ? getString(d, "teamTwoPlayerOneName") : undefined) ??
+    (mateId === t2p2 ? getString(d, "teamTwoPlayerTwoName") : undefined);
+
+  return explicitName || nameMap.get(mateId) || mateId.slice(0, 8);
+}
+
 function toChartPointsByDay(values: Array<{ ts: number; value: number }>): Array<{ x: number; y: number; label?: string }> {
   const byDay = new Map<number, number[]>();
   for (const v of values) {
@@ -756,6 +811,7 @@ export interface AnalysisFilter {
 }
 
 type RoundMetric = {
+  round: RoundRow;
   ts: number;
   day: number;
   gameId: string;
@@ -918,6 +974,22 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
   const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
   const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
+  const drilldownMetaByGameId = new Map<string, AnalysisDrilldownMeta>();
+  for (const g of teamGames) {
+    drilldownMetaByGameId.set(g.gameId, {
+      movementLabel: movementTypeLabel(movementByGameId.get(g.gameId) || "unknown"),
+      gameModeLabel: gameModeLabel(getGameMode(g)),
+      ownPlayerId
+    });
+  }
+  for (const d of teamDetails) {
+    const meta = drilldownMetaByGameId.get(d.gameId);
+    if (!meta) continue;
+    const teammateName = getTeammateNameForGame(d, ownPlayerId, nameMap);
+    if (teammateName) meta.teammateName = teammateName;
+  }
+  const toDrilldownItem = (r: RoundRow, ts?: number, score?: number): AnalysisDrilldownItem =>
+    toDrilldownFromRound(r, ts, score, drilldownMetaByGameId.get(r.gameId));
 
   const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
   const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
@@ -963,6 +1035,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       const distMeters = extractDistanceMeters(r);
       if (ts === undefined || typeof score !== "number") return undefined;
       const item: RoundMetric = {
+        round: r,
         ts,
         day: startOfLocalDay(ts),
         gameId: r.gameId,
@@ -982,56 +1055,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const throwCount = roundMetrics.filter((x) => x.score < 50).length;
   const perfectFiveKDrill = roundMetrics
     .filter((x) => x.score >= 5000)
-    .map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
+    .map((x) => toDrilldownItem(x.round, x.ts, x.score));
   const nearPerfectDrill = roundMetrics
     .filter((x) => x.score >= 4500)
-    .map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
+    .map((x) => toDrilldownItem(x.round, x.ts, x.score));
   const lowScoreDrill = roundMetrics
     .filter((x) => x.score < 500)
-    .map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
+    .map((x) => toDrilldownItem(x.round, x.ts, x.score));
   const throwDrill = roundMetrics
     .filter((x) => x.score < 50)
-    .map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
+    .map((x) => toDrilldownItem(x.round, x.ts, x.score));
   const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
   const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 0;
   const gamesPerDayPoints = buildOverviewGamesSeries(games.map((g) => g.playedAt), gameTimes[0], gameTimes[gameTimes.length - 1], overviewBucketMs);
@@ -1203,15 +1236,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   }
   const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const weekdayDrilldowns = wdNames.map<AnalysisDrilldownItem[]>(() => []);
-  const hourDrilldowns = new Array<AnalysisDrilldownItem[]>(24).fill(null).map(() => []);
+  const hourDrilldowns: AnalysisDrilldownItem[][] = Array.from({ length: 24 }, () => []);
   for (const r of rounds) {
     const ts = playedAtByGameId.get(r.gameId);
     if (typeof ts !== "number") continue;
     const d = new Date(ts);
     const wd = d.getDay();
     const hr = d.getHours();
-    weekdayDrilldowns[wd].push(toDrilldownFromRound(r, ts, extractScore(r)));
-    hourDrilldowns[hr].push(toDrilldownFromRound(r, ts, extractScore(r)));
+    weekdayDrilldowns[wd].push(toDrilldownItem(r, ts, extractScore(r)));
+    hourDrilldowns[hr].push(toDrilldownItem(r, ts, extractScore(r)));
   }
   const weekdayMetricOptions = [
     {
@@ -1366,18 +1399,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (typeof rm.timeSec === "number") cur.avgTimeSrc.push(rm.timeSec);
     sessionsAgg.set(idx, cur);
     const drill = sessionDrillByIdx.get(idx) || [];
-    drill.push({
-      gameId: rm.gameId,
-      roundNumber: rm.roundNumber,
-      ts: rm.ts,
-      score: rm.score,
-      trueCountry: rm.trueCountry,
-      guessCountry: rm.guessCountry,
-      trueLat: rm.trueLat,
-      trueLng: rm.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
-      streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
-    });
+    drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
     sessionDrillByIdx.set(idx, drill);
   }
   const sessionRows = [...sessionsAgg.entries()]
@@ -1506,18 +1528,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (rm.score < 50) bucket.throws++;
     if (rm.score >= 5000) bucket.fiveKs++;
     bucket.timeSum += t;
-    bucket.drilldown.push({
-      gameId: rm.gameId,
-      roundNumber: rm.roundNumber,
-      ts: rm.ts,
-      score: rm.score,
-      trueCountry: rm.trueCountry,
-      guessCountry: rm.guessCountry,
-      trueLat: rm.trueLat,
-      trueLng: rm.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
-      streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
-    });
+    bucket.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
   }
   const timedRounds = roundMetrics.filter((r) => typeof r.timeSec === "number");
   const fastestGuess = timedRounds.slice().sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
@@ -1569,17 +1580,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const scoreDistributionBars = buildSmoothedScoreDistributionWithDrilldown(
     roundMetrics.map((rm) => ({
       score: rm.score,
-      drill: {
-        gameId: rm.gameId,
-        roundNumber: rm.roundNumber,
-        ts: rm.ts,
-        score: rm.score,
-        trueCountry: rm.trueCountry,
-        trueLat: rm.trueLat,
-        trueLng: rm.trueLng,
-        googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
-        streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
-      }
+      drill: toDrilldownItem(rm.round, rm.ts, rm.score)
     }))
   );
   sections.push({
@@ -1629,7 +1630,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (!t) continue;
     const ts = teamPlayedAtByGameId.get(r.gameId);
     const sc = extractScore(r);
-    const drillItem = toDrilldownFromRound(r, ts, sc);
+    const drillItem = toDrilldownItem(r, ts, sc);
     if (!countryDrilldowns.has(t)) countryDrilldowns.set(t, []);
     countryDrilldowns.get(t)!.push(drillItem);
     const entry = countryAgg.get(t) || {
@@ -2094,17 +2095,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
           score,
           guessCountry,
           trueCountry,
-          drill: {
-            gameId: r.gameId,
-            roundNumber: r.roundNumber,
-            ts,
-            score,
-            trueCountry,
-            trueLat: typeof r.trueLat === "number" ? r.trueLat : undefined,
-            trueLng: typeof r.trueLng === "number" ? r.trueLng : undefined,
-            googleMapsUrl: buildGoogleMapsUrl(r.trueLat, r.trueLng),
-            streetViewUrl: buildStreetViewUrl(r.trueLat, r.trueLng)
-          } as AnalysisDrilldownItem
+          drill: toDrilldownItem(r, ts, score)
         };
       })
       .filter(
@@ -2112,8 +2103,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
           x
         ): x is {
           score: number;
-          guessCountry?: string;
-          trueCountry?: string;
+          guessCountry: string | undefined;
+          trueCountry: string | undefined;
           drill: AnalysisDrilldownItem;
         } => x !== undefined
       );
@@ -2126,13 +2117,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         .filter((x) => x.guessCountry && x.trueCountry && x.guessCountry === x.trueCountry)
         .map((x) => ({ score: x.score, drill: x.drill }))
     );
-    const spotlightCandidates = [
+    const spotlightCandidates: string[] = [
       spotlightCountry,
       ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
     ];
 
-    const spanStart = teamGames[0]?.playedAt ?? gameTimes[0];
-    const spanEnd = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
+    const spanStartRaw = teamGames[0]?.playedAt ?? gameTimes[0];
+    const spanEndRaw = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
+    const spanStart = typeof spanStartRaw === "number" && Number.isFinite(spanStartRaw) ? spanStartRaw : 0;
+    const spanEnd = typeof spanEndRaw === "number" && Number.isFinite(spanEndRaw) ? spanEndRaw : spanStart;
     const timelineBucketMs = pickOverviewBucketMs(Math.max(0, spanEnd - spanStart));
     const countryTimeline = new Map<
       string,

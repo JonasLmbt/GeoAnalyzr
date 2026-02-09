@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.3
+// @version      1.4.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6945,6 +6945,33 @@
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${day}/${month}/${year} ${hh}:${mm}`;
   }
+  function formatGuessDuration(sec) {
+    if (typeof sec !== "number" || !Number.isFinite(sec)) return "-";
+    return `${sec.toFixed(1)}s`;
+  }
+  function formatDamageValue(value) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+    const rounded = Math.round(value);
+    return `${rounded >= 0 ? "+" : ""}${rounded}`;
+  }
+  var regionNameDisplay = typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+  function countryNameFromCode(code) {
+    if (typeof code !== "string") return "-";
+    const normalized = code.trim().toLowerCase();
+    if (!normalized) return "-";
+    if (normalized.length === 2 && regionNameDisplay) {
+      try {
+        const label = regionNameDisplay.of(normalized.toUpperCase());
+        if (typeof label === "string" && label.trim()) return label;
+      } catch {
+      }
+    }
+    return normalized.toUpperCase();
+  }
+  function shortGameId(gameId) {
+    if (gameId.length <= 14) return gameId;
+    return `${gameId.slice(0, 8)}...`;
+  }
   function openDrilldownOverlay(doc, title, subtitle, drilldown) {
     if (drilldown.length === 0) return;
     const palette = getThemePalette();
@@ -6958,7 +6985,7 @@
     overlay.style.alignItems = "flex-start";
     overlay.style.padding = "28px 16px";
     const card = doc.createElement("div");
-    card.style.width = "min(1400px, 98vw)";
+    card.style.width = "min(1500px, 98vw)";
     card.style.maxHeight = "90vh";
     card.style.overflow = "auto";
     card.style.background = palette.panel;
@@ -7000,29 +7027,64 @@
       score: "desc",
       country: "asc"
     };
-    const sortLabel = (label, active, dir) => active ? `${label} ${dir === "asc" ? "\u25B2" : "\u25BC"}` : label;
+    const sortLabel = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
     let sortKey = "date";
     let sortDir = "desc";
+    const movementValues = [...new Set(drilldown.map((d) => d.movement).filter((x) => typeof x === "string" && x.trim().length > 0))];
+    const modeValues = [...new Set(drilldown.map((d) => d.gameMode).filter((x) => typeof x === "string" && x.trim().length > 0))];
+    const showMovement = movementValues.length > 1;
+    const showGameMode = modeValues.length > 1;
+    const showMate = drilldown.some((d) => typeof d.teammate === "string" && d.teammate.trim().length > 0);
+    const showDuration = drilldown.some((d) => typeof d.guessDurationSec === "number" && Number.isFinite(d.guessDurationSec));
+    const showDamage = drilldown.some((d) => typeof d.damage === "number" && Number.isFinite(d.damage));
+    const showGuessMaps = drilldown.some((d) => typeof d.googleMapsUrl === "string" && d.googleMapsUrl.length > 0);
+    const showStreetView = drilldown.some((d) => typeof d.streetViewUrl === "string" && d.streetViewUrl.length > 0);
+    const mkTextCell = (text, muted = false) => {
+      const span = doc.createElement("span");
+      span.textContent = text;
+      if (muted) span.style.color = palette.textMuted;
+      return span;
+    };
+    const mkLinkCell = (url) => {
+      if (!url) return mkTextCell("-", true);
+      const a = doc.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "Open";
+      a.style.color = analysisSettings.accent;
+      return a;
+    };
+    const columns = [
+      { key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) },
+      { key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) },
+      { key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") },
+      { key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) }
+    ];
+    if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+    if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
+    if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+    if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+    columns.push({
+      key: "game",
+      label: "Game",
+      width: "120px",
+      muted: true,
+      render: (item) => {
+        const span = mkTextCell(shortGameId(item.gameId), true);
+        span.title = item.gameId;
+        return span;
+      }
+    });
+    if (showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
+    if (showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
     const thead = doc.createElement("thead");
     const headRow = doc.createElement("tr");
-    const thDate = doc.createElement("th");
-    const thGame = doc.createElement("th");
-    const thRound = doc.createElement("th");
-    const thScore = doc.createElement("th");
-    const thCountry = doc.createElement("th");
-    const thMaps = doc.createElement("th");
-    const thSv = doc.createElement("th");
-    const headers = [
-      [thDate, "Date", "date"],
-      [thGame, "Game", null],
-      [thRound, "Round", "round"],
-      [thScore, "Score", "score"],
-      [thCountry, "Country", "country"],
-      [thMaps, "Google Maps", null],
-      [thSv, "Street View", null]
-    ];
-    for (const [th, label, key] of headers) {
-      th.textContent = label;
+    const thBySort = /* @__PURE__ */ new Map();
+    for (const col of columns) {
+      const th = doc.createElement("th");
+      th.textContent = col.label;
       th.style.textAlign = "left";
       th.style.padding = "7px 8px";
       th.style.borderBottom = `1px solid ${palette.border}`;
@@ -7030,15 +7092,17 @@
       th.style.position = "sticky";
       th.style.top = "0";
       th.style.background = palette.panel;
-      if (key) {
+      if (col.width) th.style.minWidth = col.width;
+      if (col.sortKey) {
         th.style.cursor = "pointer";
         th.style.userSelect = "none";
+        thBySort.set(col.sortKey, th);
         th.addEventListener("click", () => {
-          if (sortKey === key) {
+          if (sortKey === col.sortKey) {
             sortDir = sortDir === "asc" ? "desc" : "asc";
           } else {
-            sortKey = key;
-            sortDir = defaultSortDir[key];
+            sortKey = col.sortKey;
+            sortDir = defaultSortDir[col.sortKey];
           }
           shown = 0;
           renderRows(true);
@@ -7068,17 +7132,21 @@
           const bv2 = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
           return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
         }
-        const av = (a.trueCountry || "").toLowerCase();
-        const bv = (b.trueCountry || "").toLowerCase();
+        const av = countryNameFromCode(a.trueCountry).toLowerCase();
+        const bv = countryNameFromCode(b.trueCountry).toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
       return items;
     };
     const updateHeaderLabels = () => {
-      thDate.textContent = sortLabel("Date", sortKey === "date", sortDir);
-      thRound.textContent = sortLabel("Round", sortKey === "round", sortDir);
-      thScore.textContent = sortLabel("Score", sortKey === "score", sortDir);
-      thCountry.textContent = sortLabel("Country", sortKey === "country", sortDir);
+      const dateTh = thBySort.get("date");
+      const roundTh = thBySort.get("round");
+      const scoreTh = thBySort.get("score");
+      const countryTh = thBySort.get("country");
+      if (dateTh) dateTh.textContent = sortLabel("Date", sortKey === "date", sortDir);
+      if (roundTh) roundTh.textContent = sortLabel("Round", sortKey === "round", sortDir);
+      if (scoreTh) scoreTh.textContent = sortLabel("Score", sortKey === "score", sortDir);
+      if (countryTh) countryTh.textContent = sortLabel("Country", sortKey === "country", sortDir);
     };
     let shown = 0;
     const pageSize = 60;
@@ -7090,54 +7158,14 @@
         const item = sorted[i];
         const tr = doc.createElement("tr");
         tr.style.borderBottom = `1px solid ${palette.border}`;
-        const dateTd = doc.createElement("td");
-        dateTd.textContent = formatDrilldownDate(item.ts);
-        dateTd.style.padding = "6px 8px";
-        tr.appendChild(dateTd);
-        const gameTd = doc.createElement("td");
-        gameTd.textContent = item.gameId;
-        gameTd.style.padding = "6px 8px";
-        tr.appendChild(gameTd);
-        const roundTd = doc.createElement("td");
-        roundTd.textContent = String(item.roundNumber);
-        roundTd.style.padding = "6px 8px";
-        tr.appendChild(roundTd);
-        const scoreTd = doc.createElement("td");
-        scoreTd.textContent = typeof item.score === "number" ? String(Math.round(item.score)) : "-";
-        scoreTd.style.padding = "6px 8px";
-        tr.appendChild(scoreTd);
-        const countryTd = doc.createElement("td");
-        countryTd.textContent = item.trueCountry || "-";
-        countryTd.style.padding = "6px 8px";
-        tr.appendChild(countryTd);
-        const mapsTd = doc.createElement("td");
-        mapsTd.style.padding = "6px 8px";
-        if (item.googleMapsUrl) {
-          const a = doc.createElement("a");
-          a.href = item.googleMapsUrl;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.textContent = "Open";
-          a.style.color = analysisSettings.accent;
-          mapsTd.appendChild(a);
-        } else {
-          mapsTd.textContent = "-";
+        for (const col of columns) {
+          const td = doc.createElement("td");
+          td.style.padding = "6px 8px";
+          if (col.width) td.style.minWidth = col.width;
+          if (col.muted) td.style.color = palette.textMuted;
+          td.appendChild(col.render(item));
+          tr.appendChild(td);
         }
-        tr.appendChild(mapsTd);
-        const svTd = doc.createElement("td");
-        svTd.style.padding = "6px 8px";
-        if (item.streetViewUrl) {
-          const a = doc.createElement("a");
-          a.href = item.streetViewUrl;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.textContent = "Open";
-          a.style.color = analysisSettings.accent;
-          svTd.appendChild(a);
-        } else {
-          svTd.textContent = "-";
-        }
-        tr.appendChild(svTd);
         tbody.appendChild(tr);
       }
       shown = next;
@@ -8044,12 +8072,18 @@
       shell.appendChild(modalBody);
       doc.body.appendChild(shell);
       modalClose.addEventListener("click", () => win.close());
+      const toMovementType = (value) => {
+        if (value === "moving" || value === "no_move" || value === "nmpz" || value === "unknown" || value === "all") {
+          return value;
+        }
+        return "all";
+      };
       applyBtn.addEventListener("click", () => {
         refreshAnalysisHandler?.({
           fromTs: parseDateInput(fromInput.value, false),
           toTs: parseDateInput(toInput.value, true),
           gameMode: modeSelect.value || "all",
-          movementType: movementSelect.value || "all",
+          movementType: toMovementType(movementSelect.value || "all"),
           teammateId: teammateSelect.value || "all",
           country: countrySelect.value || "all"
         });
@@ -10432,9 +10466,14 @@
     if (typeof lat !== "number" || typeof lng !== "number") return void 0;
     return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
   }
-  function toDrilldownFromRound(r, ts, score) {
+  function toDrilldownFromRound(r, ts, score, meta) {
+    const rr = asRecord(r);
     const trueLat = typeof r.trueLat === "number" ? r.trueLat : void 0;
     const trueLng = typeof r.trueLng === "number" ? r.trueLng : void 0;
+    const guessLat = getNumber(rr, "p1_guessLat") ?? getNumber(rr, "guessLat");
+    const guessLng = getNumber(rr, "p1_guessLng") ?? getNumber(rr, "guessLng");
+    const timeMs = extractTimeMs(r);
+    const damage = meta?.ownPlayerId ? getRoundDamageDiff(r, meta.ownPlayerId) : void 0;
     return {
       gameId: r.gameId,
       roundNumber: r.roundNumber,
@@ -10444,7 +10483,14 @@
       guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
       trueLat,
       trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(trueLat, trueLng),
+      guessLat,
+      guessLng,
+      guessDurationSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
+      movement: meta?.movementLabel,
+      gameMode: meta?.gameModeLabel,
+      teammate: meta?.teammateName,
+      damage,
+      googleMapsUrl: buildGoogleMapsUrl(guessLat, guessLng),
       streetViewUrl: buildStreetViewUrl(trueLat, trueLng)
     };
   }
@@ -10482,7 +10528,7 @@
     const maxScore = 5e3;
     const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
     const buckets = new Array(bucketCount).fill(0);
-    const drillByBucket = new Array(bucketCount).fill(null).map(() => []);
+    const drillByBucket = Array.from({ length: bucketCount }, () => []);
     for (const p of points) {
       const s = Math.max(0, Math.min(maxScore, p.score));
       const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
@@ -10769,6 +10815,22 @@
     }
     return map;
   }
+  function getTeammateNameForGame(detail, ownPlayerId, nameMap) {
+    const d = asRecord(detail);
+    if (getString(d, "modeFamily") !== "teamduels" || !ownPlayerId) return void 0;
+    const t1p1 = getString(d, "teamOnePlayerOneId");
+    const t1p2 = getString(d, "teamOnePlayerTwoId");
+    const t2p1 = getString(d, "teamTwoPlayerOneId");
+    const t2p2 = getString(d, "teamTwoPlayerTwoId");
+    let mateId;
+    if (ownPlayerId === t1p1) mateId = t1p2;
+    else if (ownPlayerId === t1p2) mateId = t1p1;
+    else if (ownPlayerId === t2p1) mateId = t2p2;
+    else if (ownPlayerId === t2p2) mateId = t2p1;
+    if (!mateId) return void 0;
+    const explicitName = (mateId === t1p1 ? getString(d, "teamOnePlayerOneName") : void 0) ?? (mateId === t1p2 ? getString(d, "teamOnePlayerTwoName") : void 0) ?? (mateId === t2p1 ? getString(d, "teamTwoPlayerOneName") : void 0) ?? (mateId === t2p2 ? getString(d, "teamTwoPlayerTwoName") : void 0);
+    return explicitName || nameMap.get(mateId) || mateId.slice(0, 8);
+  }
   function toCountsByDay(timestamps) {
     const map = /* @__PURE__ */ new Map();
     for (const ts of timestamps) {
@@ -10950,6 +11012,21 @@
     const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
     const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
     const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
+    const drilldownMetaByGameId = /* @__PURE__ */ new Map();
+    for (const g of teamGames) {
+      drilldownMetaByGameId.set(g.gameId, {
+        movementLabel: movementTypeLabel(movementByGameId.get(g.gameId) || "unknown"),
+        gameModeLabel: gameModeLabel(getGameMode(g)),
+        ownPlayerId
+      });
+    }
+    for (const d of teamDetails) {
+      const meta = drilldownMetaByGameId.get(d.gameId);
+      if (!meta) continue;
+      const teammateName = getTeammateNameForGame(d, ownPlayerId, nameMap);
+      if (teammateName) meta.teammateName = teammateName;
+    }
+    const toDrilldownItem = (r, ts, score) => toDrilldownFromRound(r, ts, score, drilldownMetaByGameId.get(r.gameId));
     const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
     const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
     const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
@@ -10981,6 +11058,7 @@
       const distMeters = extractDistanceMeters(r);
       if (ts === void 0 || typeof score !== "number") return void 0;
       const item = {
+        round: r,
         ts,
         day: startOfLocalDay(ts),
         gameId: r.gameId,
@@ -10997,50 +11075,10 @@
     }).filter((x) => x !== void 0);
     const fiveKCount = roundMetrics.filter((x) => x.score >= 5e3).length;
     const throwCount = roundMetrics.filter((x) => x.score < 50).length;
-    const perfectFiveKDrill = roundMetrics.filter((x) => x.score >= 5e3).map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
-    const nearPerfectDrill = roundMetrics.filter((x) => x.score >= 4500).map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
-    const lowScoreDrill = roundMetrics.filter((x) => x.score < 500).map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
-    const throwDrill = roundMetrics.filter((x) => x.score < 50).map((x) => ({
-      gameId: x.gameId,
-      roundNumber: x.roundNumber,
-      ts: x.ts,
-      score: x.score,
-      trueCountry: x.trueCountry,
-      trueLat: x.trueLat,
-      trueLng: x.trueLng,
-      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
-      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
-    }));
+    const perfectFiveKDrill = roundMetrics.filter((x) => x.score >= 5e3).map((x) => toDrilldownItem(x.round, x.ts, x.score));
+    const nearPerfectDrill = roundMetrics.filter((x) => x.score >= 4500).map((x) => toDrilldownItem(x.round, x.ts, x.score));
+    const lowScoreDrill = roundMetrics.filter((x) => x.score < 500).map((x) => toDrilldownItem(x.round, x.ts, x.score));
+    const throwDrill = roundMetrics.filter((x) => x.score < 50).map((x) => toDrilldownItem(x.round, x.ts, x.score));
     const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
     const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 0;
     const gamesPerDayPoints = buildOverviewGamesSeries(games.map((g) => g.playedAt), gameTimes[0], gameTimes[gameTimes.length - 1], overviewBucketMs);
@@ -11193,15 +11231,15 @@
     }
     const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const weekdayDrilldowns = wdNames.map(() => []);
-    const hourDrilldowns = new Array(24).fill(null).map(() => []);
+    const hourDrilldowns = Array.from({ length: 24 }, () => []);
     for (const r of rounds) {
       const ts = playedAtByGameId.get(r.gameId);
       if (typeof ts !== "number") continue;
       const d = new Date(ts);
       const wd = d.getDay();
       const hr = d.getHours();
-      weekdayDrilldowns[wd].push(toDrilldownFromRound(r, ts, extractScore(r)));
-      hourDrilldowns[hr].push(toDrilldownFromRound(r, ts, extractScore(r)));
+      weekdayDrilldowns[wd].push(toDrilldownItem(r, ts, extractScore(r)));
+      hourDrilldowns[hr].push(toDrilldownItem(r, ts, extractScore(r)));
     }
     const weekdayMetricOptions = [
       {
@@ -11354,18 +11392,7 @@
       if (typeof rm.timeSec === "number") cur.avgTimeSrc.push(rm.timeSec);
       sessionsAgg.set(idx, cur);
       const drill = sessionDrillByIdx.get(idx) || [];
-      drill.push({
-        gameId: rm.gameId,
-        roundNumber: rm.roundNumber,
-        ts: rm.ts,
-        score: rm.score,
-        trueCountry: rm.trueCountry,
-        guessCountry: rm.guessCountry,
-        trueLat: rm.trueLat,
-        trueLng: rm.trueLng,
-        googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
-        streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
-      });
+      drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
       sessionDrillByIdx.set(idx, drill);
     }
     const sessionRows = [...sessionsAgg.entries()].map(([idx, s]) => ({
@@ -11484,18 +11511,7 @@
       if (rm.score < 50) bucket.throws++;
       if (rm.score >= 5e3) bucket.fiveKs++;
       bucket.timeSum += t;
-      bucket.drilldown.push({
-        gameId: rm.gameId,
-        roundNumber: rm.roundNumber,
-        ts: rm.ts,
-        score: rm.score,
-        trueCountry: rm.trueCountry,
-        guessCountry: rm.guessCountry,
-        trueLat: rm.trueLat,
-        trueLng: rm.trueLng,
-        googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
-        streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
-      });
+      bucket.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
     }
     const timedRounds = roundMetrics.filter((r) => typeof r.timeSec === "number");
     const fastestGuess = timedRounds.slice().sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
@@ -11534,17 +11550,7 @@
     const scoreDistributionBars = buildSmoothedScoreDistributionWithDrilldown(
       roundMetrics.map((rm) => ({
         score: rm.score,
-        drill: {
-          gameId: rm.gameId,
-          roundNumber: rm.roundNumber,
-          ts: rm.ts,
-          score: rm.score,
-          trueCountry: rm.trueCountry,
-          trueLat: rm.trueLat,
-          trueLng: rm.trueLng,
-          googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
-          streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
-        }
+        drill: toDrilldownItem(rm.round, rm.ts, rm.score)
       }))
     );
     sections.push({
@@ -11578,7 +11584,7 @@
       if (!t) continue;
       const ts = teamPlayedAtByGameId.get(r.gameId);
       const sc = extractScore(r);
-      const drillItem = toDrilldownFromRound(r, ts, sc);
+      const drillItem = toDrilldownItem(r, ts, sc);
       if (!countryDrilldowns.has(t)) countryDrilldowns.set(t, []);
       countryDrilldowns.get(t).push(drillItem);
       const entry = countryAgg.get(t) || {
@@ -11989,17 +11995,7 @@
           score,
           guessCountry,
           trueCountry,
-          drill: {
-            gameId: r.gameId,
-            roundNumber: r.roundNumber,
-            ts,
-            score,
-            trueCountry,
-            trueLat: typeof r.trueLat === "number" ? r.trueLat : void 0,
-            trueLng: typeof r.trueLng === "number" ? r.trueLng : void 0,
-            googleMapsUrl: buildGoogleMapsUrl(r.trueLat, r.trueLng),
-            streetViewUrl: buildStreetViewUrl(r.trueLat, r.trueLng)
-          }
+          drill: toDrilldownItem(r, ts, score)
         };
       }).filter(
         (x) => x !== void 0
@@ -12015,8 +12011,10 @@
         spotlightCountry,
         ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
       ];
-      const spanStart = teamGames[0]?.playedAt ?? gameTimes[0];
-      const spanEnd = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
+      const spanStartRaw = teamGames[0]?.playedAt ?? gameTimes[0];
+      const spanEndRaw = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
+      const spanStart = typeof spanStartRaw === "number" && Number.isFinite(spanStartRaw) ? spanStartRaw : 0;
+      const spanEnd = typeof spanEndRaw === "number" && Number.isFinite(spanEndRaw) ? spanEndRaw : spanStart;
       const timelineBucketMs = pickOverviewBucketMs(Math.max(0, spanEnd - spanStart));
       const countryTimeline = /* @__PURE__ */ new Map();
       const totalDamageByBucket = /* @__PURE__ */ new Map();
@@ -33014,6 +33012,7 @@
         p1_playerId: r.p1_playerId ?? "",
         p1_guessLat: r.p1_guessLat ?? r.guessLat ?? "",
         p1_guessLng: r.p1_guessLng ?? r.guessLng ?? "",
+        p1_googleMaps_url: buildGoogleMapsUrl2(r.p1_guessLat ?? r.guessLat, r.p1_guessLng ?? r.guessLng),
         p1_guessCountry: p1Country,
         p1_distance_km: r.p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== void 0 ? (r.p1_distanceMeters ?? r.distanceMeters) / 1e3 : ""),
         p1_score: r.p1_score ?? r.score ?? "",
@@ -33022,6 +33021,7 @@
         p2_playerId: r.p2_playerId ?? "",
         p2_guessLat: r.p2_guessLat ?? "",
         p2_guessLng: r.p2_guessLng ?? "",
+        p2_googleMaps_url: buildGoogleMapsUrl2(r.p2_guessLat, r.p2_guessLng),
         p2_guessCountry: p2Country,
         p2_distance_km: r.p2_distanceKm ?? (r.p2_distanceMeters !== void 0 ? r.p2_distanceMeters / 1e3 : ""),
         p2_score: r.p2_score ?? "",
@@ -33038,6 +33038,7 @@
         rowBase.p3_teamId = r.p3_teamId ?? "";
         rowBase.p3_guessLat = r.p3_guessLat ?? "";
         rowBase.p3_guessLng = r.p3_guessLng ?? "";
+        rowBase.p3_googleMaps_url = buildGoogleMapsUrl2(r.p3_guessLat, r.p3_guessLng);
         rowBase.p3_guessCountry = p3Country;
         rowBase.p3_distance_km = r.p3_distanceKm ?? (r.p3_distanceMeters !== void 0 ? r.p3_distanceMeters / 1e3 : "");
         rowBase.p3_score = r.p3_score ?? "";
@@ -33047,6 +33048,7 @@
         rowBase.p4_teamId = r.p4_teamId ?? "";
         rowBase.p4_guessLat = r.p4_guessLat ?? "";
         rowBase.p4_guessLng = r.p4_guessLng ?? "";
+        rowBase.p4_googleMaps_url = buildGoogleMapsUrl2(r.p4_guessLat, r.p4_guessLng);
         rowBase.p4_guessCountry = p4Country;
         rowBase.p4_distance_km = r.p4_distanceKm ?? (r.p4_distanceMeters !== void 0 ? r.p4_distanceMeters / 1e3 : "");
         rowBase.p4_score = r.p4_score ?? "";
