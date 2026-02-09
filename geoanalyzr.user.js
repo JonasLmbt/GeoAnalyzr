@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.8
+// @version      1.4.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6985,7 +6985,7 @@
     overlay.style.alignItems = "flex-start";
     overlay.style.padding = "28px 16px";
     const card = doc.createElement("div");
-    card.style.width = "min(1500px, 98vw)";
+    card.style.width = "min(1840px, 99vw)";
     card.style.maxHeight = "90vh";
     card.style.overflow = "auto";
     card.style.background = palette.panel;
@@ -7025,7 +7025,13 @@
       date: "desc",
       round: "desc",
       score: "desc",
-      country: "asc"
+      country: "asc",
+      result: "desc",
+      duration: "desc",
+      damage: "desc",
+      movement: "asc",
+      game_mode: "asc",
+      mate: "asc"
     };
     const sortLabel = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
     let sortKey = "date";
@@ -7056,7 +7062,7 @@
       a.style.color = analysisSettings.accent;
       return a;
     };
-    const columns = [{ key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
+    const columns = [{ key: "date", label: "Date", sortKey: "date", width: "150px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
     if (hasOpponentItems) {
       columns.push({
         key: "opponent",
@@ -7076,15 +7082,7 @@
           return mkTextCell(name, !item.opponentName);
         }
       });
-      columns.push({
-        key: "result",
-        label: "Result",
-        width: "90px",
-        render: (item) => {
-          const txt = item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-";
-          return mkTextCell(txt, txt === "-");
-        }
-      });
+      columns.push({ key: "result", label: "Result", sortKey: "result", width: "80px", render: (item) => mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result) });
       columns.push({
         key: "matchups",
         label: "Match-ups",
@@ -7098,16 +7096,32 @@
         width: "160px",
         render: (item) => mkTextCell(item.opponentCountry || countryNameFromCode(item.trueCountry))
       });
-      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: "game_mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
     } else {
+      columns.push({ key: "result", label: "Result", sortKey: "result", width: "80px", render: (item) => mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result) });
       columns.push({ key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
       columns.push({ key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") });
       columns.push({ key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
-      if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
-      if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
-      if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
-      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-      if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+      if (showDuration) columns.push({ key: "duration", label: "Guess Duration", sortKey: "duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+      if (showDamage) {
+        columns.push({
+          key: "damage",
+          label: "Damage",
+          sortKey: "damage",
+          width: "90px",
+          render: (item) => {
+            const span = mkTextCell(formatDamageValue(item.damage), typeof item.damage !== "number");
+            if (typeof item.damage === "number" && Number.isFinite(item.damage)) {
+              span.style.fontWeight = "700";
+              span.style.color = item.damage > 0 ? "#22c55e" : item.damage < 0 ? "#ef4444" : palette.textMuted;
+            }
+            return span;
+          }
+        });
+      }
+      if (showMovement) columns.push({ key: "movement", label: "Movement", sortKey: "movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: "game_mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+      if (showMate) columns.push({ key: "mate", label: "Mate", sortKey: "mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
     }
     columns.push({
       key: "game",
@@ -7175,6 +7189,37 @@
           const bv2 = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
           return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
         }
+        if (sortKey === "result") {
+          const rv = (r) => r === "W" ? 3 : r === "T" ? 2 : r === "L" ? 1 : 0;
+          const av2 = rv(a.result);
+          const bv2 = rv(b.result);
+          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
+        }
+        if (sortKey === "duration") {
+          const av2 = typeof a.guessDurationSec === "number" ? a.guessDurationSec : Number.NEGATIVE_INFINITY;
+          const bv2 = typeof b.guessDurationSec === "number" ? b.guessDurationSec : Number.NEGATIVE_INFINITY;
+          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
+        }
+        if (sortKey === "damage") {
+          const av2 = typeof a.damage === "number" ? a.damage : Number.NEGATIVE_INFINITY;
+          const bv2 = typeof b.damage === "number" ? b.damage : Number.NEGATIVE_INFINITY;
+          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
+        }
+        if (sortKey === "movement") {
+          const av2 = (a.movement || "").toLowerCase();
+          const bv2 = (b.movement || "").toLowerCase();
+          return sortDir === "asc" ? av2.localeCompare(bv2) : bv2.localeCompare(av2);
+        }
+        if (sortKey === "game_mode") {
+          const av2 = (a.gameMode || "").toLowerCase();
+          const bv2 = (b.gameMode || "").toLowerCase();
+          return sortDir === "asc" ? av2.localeCompare(bv2) : bv2.localeCompare(av2);
+        }
+        if (sortKey === "mate") {
+          const av2 = (a.teammate || "").toLowerCase();
+          const bv2 = (b.teammate || "").toLowerCase();
+          return sortDir === "asc" ? av2.localeCompare(bv2) : bv2.localeCompare(av2);
+        }
         const av = (a.opponentCountry || countryNameFromCode(a.trueCountry)).toLowerCase();
         const bv = (b.opponentCountry || countryNameFromCode(b.trueCountry)).toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
@@ -7186,10 +7231,22 @@
       const roundTh = thBySort.get("round");
       const scoreTh = thBySort.get("score");
       const countryTh = thBySort.get("country");
+      const resultTh = thBySort.get("result");
+      const durationTh = thBySort.get("duration");
+      const damageTh = thBySort.get("damage");
+      const movementTh = thBySort.get("movement");
+      const gameModeTh = thBySort.get("game_mode");
+      const mateTh = thBySort.get("mate");
       if (dateTh) dateTh.textContent = sortLabel("Date", sortKey === "date", sortDir);
       if (roundTh) roundTh.textContent = sortLabel("Round", sortKey === "round", sortDir);
       if (scoreTh) scoreTh.textContent = sortLabel("Score", sortKey === "score", sortDir);
       if (countryTh) countryTh.textContent = sortLabel("Country", sortKey === "country", sortDir);
+      if (resultTh) resultTh.textContent = sortLabel("Result", sortKey === "result", sortDir);
+      if (durationTh) durationTh.textContent = sortLabel("Guess Duration", sortKey === "duration", sortDir);
+      if (damageTh) damageTh.textContent = sortLabel("Damage", sortKey === "damage", sortDir);
+      if (movementTh) movementTh.textContent = sortLabel("Movement", sortKey === "movement", sortDir);
+      if (gameModeTh) gameModeTh.textContent = sortLabel("Game Mode", sortKey === "game_mode", sortDir);
+      if (mateTh) mateTh.textContent = sortLabel("Mate", sortKey === "mate", sortDir);
     };
     let shown = 0;
     const pageSize = 60;
@@ -7200,7 +7257,8 @@
       for (let i = shown; i < next; i++) {
         const item = sorted[i];
         const tr = doc.createElement("tr");
-        tr.style.borderBottom = `1px solid ${palette.border}`;
+        const nextItem = sorted[i + 1];
+        tr.style.borderBottom = nextItem && nextItem.gameId === item.gameId ? "none" : `1px solid ${palette.border}`;
         for (const col of columns) {
           const td = doc.createElement("td");
           td.style.padding = "6px 8px";
@@ -10544,6 +10602,7 @@
       movement: meta?.movementLabel,
       gameMode: meta?.gameModeLabel,
       teammate: meta?.teammateName,
+      result: meta?.result,
       damage,
       googleMapsUrl: buildGoogleMapsUrl(guessLat, guessLng),
       streetViewUrl: buildStreetViewUrl(trueLat, trueLng)
@@ -11067,12 +11126,18 @@
     const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
     const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
     const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
+    const resultByGameId = /* @__PURE__ */ new Map();
+    for (const d of teamDetails) {
+      const res = getGameResult(d, ownPlayerId);
+      if (res) resultByGameId.set(d.gameId, res);
+    }
     const drilldownMetaByGameId = /* @__PURE__ */ new Map();
     for (const g of teamGames) {
       drilldownMetaByGameId.set(g.gameId, {
         movementLabel: movementTypeLabel(movementByGameId.get(g.gameId) || "unknown"),
         gameModeLabel: gameModeLabel(getGameMode(g)),
-        ownPlayerId
+        ownPlayerId,
+        result: resultByGameId.get(g.gameId)
       });
     }
     for (const d of teamDetails) {

@@ -399,7 +399,7 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   overlay.style.padding = "28px 16px";
 
   const card = doc.createElement("div");
-  card.style.width = "min(1500px, 98vw)";
+  card.style.width = "min(1840px, 99vw)";
   card.style.maxHeight = "90vh";
   card.style.overflow = "auto";
   card.style.background = palette.panel;
@@ -439,13 +439,19 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   table.style.fontSize = "12px";
   card.appendChild(table);
 
-  type SortKey = "date" | "round" | "score" | "country";
+  type SortKey = "date" | "round" | "score" | "country" | "result" | "duration" | "damage" | "movement" | "game_mode" | "mate";
   type SortDir = "asc" | "desc";
   const defaultSortDir: Record<SortKey, SortDir> = {
     date: "desc",
     round: "desc",
     score: "desc",
-    country: "asc"
+    country: "asc",
+    result: "desc",
+    duration: "desc",
+    damage: "desc",
+    movement: "asc",
+    game_mode: "asc",
+    mate: "asc"
   };
   const sortLabel = (label: string, active: boolean, dir: SortDir): string => (active ? `${label} ${dir === "asc" ? "^" : "v"}` : label);
   let sortKey: SortKey = "date";
@@ -489,7 +495,7 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     return a;
   };
 
-  const columns: DrillColumn[] = [{ key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
+  const columns: DrillColumn[] = [{ key: "date", label: "Date", sortKey: "date", width: "150px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
   if (hasOpponentItems) {
     columns.push({
       key: "opponent",
@@ -509,15 +515,7 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
         return mkTextCell(name, !item.opponentName);
       }
     });
-    columns.push({
-      key: "result",
-      label: "Result",
-      width: "90px",
-      render: (item) => {
-        const txt = item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-";
-        return mkTextCell(txt, txt === "-");
-      }
-    });
+    columns.push({ key: "result", label: "Result", sortKey: "result", width: "80px", render: (item) => mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result) });
     columns.push({
       key: "matchups",
       label: "Match-ups",
@@ -531,16 +529,32 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
       width: "160px",
       render: (item) => mkTextCell(item.opponentCountry || countryNameFromCode(item.trueCountry))
     });
-    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: "game_mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
   } else {
+    columns.push({ key: "result", label: "Result", sortKey: "result", width: "80px", render: (item) => mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result) });
     columns.push({ key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
     columns.push({ key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") });
     columns.push({ key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
-    if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
-    if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
-    if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
-    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-    if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+    if (showDuration) columns.push({ key: "duration", label: "Guess Duration", sortKey: "duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+    if (showDamage) {
+      columns.push({
+        key: "damage",
+        label: "Damage",
+        sortKey: "damage",
+        width: "90px",
+        render: (item) => {
+          const span = mkTextCell(formatDamageValue(item.damage), typeof item.damage !== "number");
+          if (typeof item.damage === "number" && Number.isFinite(item.damage)) {
+            span.style.fontWeight = "700";
+            span.style.color = item.damage > 0 ? "#22c55e" : item.damage < 0 ? "#ef4444" : palette.textMuted;
+          }
+          return span;
+        }
+      });
+    }
+    if (showMovement) columns.push({ key: "movement", label: "Movement", sortKey: "movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: "game_mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+    if (showMate) columns.push({ key: "mate", label: "Mate", sortKey: "mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
   }
   columns.push({
     key: "game",
@@ -610,6 +624,37 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
         const bv = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
         return sortDir === "asc" ? av - bv : bv - av;
       }
+      if (sortKey === "result") {
+        const rv = (r?: AnalysisDrilldownItem["result"]) => (r === "W" ? 3 : r === "T" ? 2 : r === "L" ? 1 : 0);
+        const av = rv(a.result);
+        const bv = rv(b.result);
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      if (sortKey === "duration") {
+        const av = typeof a.guessDurationSec === "number" ? a.guessDurationSec : Number.NEGATIVE_INFINITY;
+        const bv = typeof b.guessDurationSec === "number" ? b.guessDurationSec : Number.NEGATIVE_INFINITY;
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      if (sortKey === "damage") {
+        const av = typeof a.damage === "number" ? a.damage : Number.NEGATIVE_INFINITY;
+        const bv = typeof b.damage === "number" ? b.damage : Number.NEGATIVE_INFINITY;
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      if (sortKey === "movement") {
+        const av = (a.movement || "").toLowerCase();
+        const bv = (b.movement || "").toLowerCase();
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      if (sortKey === "game_mode") {
+        const av = (a.gameMode || "").toLowerCase();
+        const bv = (b.gameMode || "").toLowerCase();
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      if (sortKey === "mate") {
+        const av = (a.teammate || "").toLowerCase();
+        const bv = (b.teammate || "").toLowerCase();
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
       const av = (a.opponentCountry || countryNameFromCode(a.trueCountry)).toLowerCase();
       const bv = (b.opponentCountry || countryNameFromCode(b.trueCountry)).toLowerCase();
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
@@ -621,10 +666,22 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     const roundTh = thBySort.get("round");
     const scoreTh = thBySort.get("score");
     const countryTh = thBySort.get("country");
+    const resultTh = thBySort.get("result");
+    const durationTh = thBySort.get("duration");
+    const damageTh = thBySort.get("damage");
+    const movementTh = thBySort.get("movement");
+    const gameModeTh = thBySort.get("game_mode");
+    const mateTh = thBySort.get("mate");
     if (dateTh) dateTh.textContent = sortLabel("Date", sortKey === "date", sortDir);
     if (roundTh) roundTh.textContent = sortLabel("Round", sortKey === "round", sortDir);
     if (scoreTh) scoreTh.textContent = sortLabel("Score", sortKey === "score", sortDir);
     if (countryTh) countryTh.textContent = sortLabel("Country", sortKey === "country", sortDir);
+    if (resultTh) resultTh.textContent = sortLabel("Result", sortKey === "result", sortDir);
+    if (durationTh) durationTh.textContent = sortLabel("Guess Duration", sortKey === "duration", sortDir);
+    if (damageTh) damageTh.textContent = sortLabel("Damage", sortKey === "damage", sortDir);
+    if (movementTh) movementTh.textContent = sortLabel("Movement", sortKey === "movement", sortDir);
+    if (gameModeTh) gameModeTh.textContent = sortLabel("Game Mode", sortKey === "game_mode", sortDir);
+    if (mateTh) mateTh.textContent = sortLabel("Mate", sortKey === "mate", sortDir);
   };
   let shown = 0;
   const pageSize = 60;
@@ -635,7 +692,8 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     for (let i = shown; i < next; i++) {
       const item = sorted[i];
       const tr = doc.createElement("tr");
-      tr.style.borderBottom = `1px solid ${palette.border}`;
+      const nextItem = sorted[i + 1];
+      tr.style.borderBottom = nextItem && nextItem.gameId === item.gameId ? "none" : `1px solid ${palette.border}`;
       for (const col of columns) {
         const td = doc.createElement("td");
         td.style.padding = "6px 8px";

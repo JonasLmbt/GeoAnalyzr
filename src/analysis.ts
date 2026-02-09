@@ -70,6 +70,7 @@ type AnalysisDrilldownMeta = {
   gameModeLabel?: string;
   teammateName?: string;
   ownPlayerId?: string;
+  result?: GameResult;
 };
 
 function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number, meta?: AnalysisDrilldownMeta): AnalysisDrilldownItem {
@@ -99,6 +100,7 @@ function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number, meta?: A
     movement: meta?.movementLabel,
     gameMode: meta?.gameModeLabel,
     teammate: meta?.teammateName,
+    result: meta?.result,
     damage,
     googleMapsUrl: buildGoogleMapsUrl(guessLat, guessLng),
     streetViewUrl: buildStreetViewUrl(trueLat, trueLng)
@@ -986,12 +988,18 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
   const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
   const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
+  const resultByGameId = new Map<string, GameResult>();
+  for (const d of teamDetails) {
+    const res = getGameResult(d, ownPlayerId);
+    if (res) resultByGameId.set(d.gameId, res);
+  }
   const drilldownMetaByGameId = new Map<string, AnalysisDrilldownMeta>();
   for (const g of teamGames) {
     drilldownMetaByGameId.set(g.gameId, {
       movementLabel: movementTypeLabel(movementByGameId.get(g.gameId) || "unknown"),
       gameModeLabel: gameModeLabel(getGameMode(g)),
-      ownPlayerId
+      ownPlayerId,
+      result: resultByGameId.get(g.gameId)
     });
   }
   for (const d of teamDetails) {
