@@ -30,6 +30,16 @@ function sanitizeSheetName(name: string): string {
   return n.length > 31 ? n.slice(0, 31) : n;
 }
 
+function counterObjectToRows(
+  category: string,
+  counterLike: unknown
+): Array<{ category: string; key: string; count: number }> {
+  if (!counterLike || typeof counterLike !== "object") return [];
+  return Object.entries(counterLike as Record<string, unknown>)
+    .map(([key, value]) => ({ category, key, count: Number(value) || 0 }))
+    .sort((a, b) => b.count - a.count);
+}
+
 function normalizeIso2(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const x = v.trim().toLowerCase();
@@ -62,6 +72,13 @@ function exportModeSheetKey(gameMode: string | undefined, modeFamily: string | u
   if (family === "standard") return "standard";
   if (family === "streak") return "streak";
   return gameMode || "unknown";
+}
+
+function isDetailsExpected(modeFamily?: string, gameMode?: string): boolean {
+  const family = String(modeFamily || "").toLowerCase();
+  if (family === "duels" || family === "teamduels") return true;
+  const m = String(gameMode || "").toLowerCase();
+  return m.includes("duel");
 }
 
 async function resolveGuessCountryForExport(
@@ -116,6 +133,8 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
   const detailsByGame = new Map(details.map((d) => [d.gameId, d]));
   const gameById = new Map(games.map((g) => [g.gameId, g]));
   const metaByKey = new Map(metaRows.map((m) => [m.key, m.value as any]));
+  const roundsByGameCount = new Map<string, number>();
+  for (const r of rounds) roundsByGameCount.set(r.gameId, (roundsByGameCount.get(r.gameId) || 0) + 1);
 
   const gamesByMode = new Map<string, Array<any & { __playedAt?: number }>>();
   for (const g of games) {
@@ -311,14 +330,53 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     roundsByModeCounts.set(mode, (roundsByModeCounts.get(mode) || 0) + 1);
   }
   const gamesWithoutDetails = games.filter((g) => !detailsByGame.has(g.gameId)).length;
+  const expectedDetailGames = games.filter((g) => isDetailsExpected(g.modeFamily, g.gameMode || g.mode));
+  const expectedWithDetails = expectedDetailGames.filter((g) => detailsByGame.has(g.gameId));
+  const expectedWithoutDetails = expectedDetailGames.filter((g) => !detailsByGame.has(g.gameId));
+  const expectedStatusCounts = { ok: 0, missing: 0, error: 0, no_row: 0 };
+  for (const g of expectedDetailGames) {
+    const d = detailsByGame.get(g.gameId);
+    if (!d) {
+      expectedStatusCounts.no_row++;
+      continue;
+    }
+    if (d.status === "ok") expectedStatusCounts.ok++;
+    else if (d.status === "missing") expectedStatusCounts.missing++;
+    else if (d.status === "error") expectedStatusCounts.error++;
+    else expectedStatusCounts.no_row++;
+  }
   const roundsWithoutGame = rounds.filter((r) => !gameById.has(r.gameId)).length;
   const syncDebug = metaByKey.get("syncDebugLast") || {};
+  const syncPageDiagnosticsRaw = Array.isArray(syncDebug.pageDiagnostics) ? syncDebug.pageDiagnostics : [];
+  const syncDroppedSamplesRaw = Array.isArray(syncDebug.droppedEventSamples) ? syncDebug.droppedEventSamples : [];
+  const syncPageDiagnostics = syncPageDiagnosticsRaw.map((p: any) => ({
+    ...p,
+    newestPlayedAtIso: iso(p?.newestPlayedAt),
+    oldestPlayedAtIso: iso(p?.oldestPlayedAt)
+  }));
+  const syncDroppedSamples = syncDroppedSamplesRaw.map((r: any) => ({
+    ...r,
+    timeCandidateParsedIso: iso(toTsMaybe(r?.timeCandidate))
+  }));
+  const diagnosticsSyncCounters = [
+    ...counterObjectToRows("sync_id_source", syncDebug.idSourceCounts),
+    ...counterObjectToRows("sync_drop_reason", syncDebug.dropReasonCounts),
+    ...counterObjectToRows("sync_drop_type", syncDebug.dropTypeCounts)
+  ];
+
   const diagnosticsSummary = [
     { metric: "export_generated_at", value: new Date().toISOString() },
     { metric: "db_games_total", value: games.length },
     { metric: "db_rounds_total", value: rounds.length },
     { metric: "db_details_total", value: details.length },
     { metric: "games_without_details", value: gamesWithoutDetails },
+    { metric: "details_expected_games", value: expectedDetailGames.length },
+    { metric: "details_expected_with_row", value: expectedWithDetails.length },
+    { metric: "details_expected_without_row", value: expectedWithoutDetails.length },
+    { metric: "details_expected_status_ok", value: expectedStatusCounts.ok },
+    { metric: "details_expected_status_missing", value: expectedStatusCounts.missing },
+    { metric: "details_expected_status_error", value: expectedStatusCounts.error },
+    { metric: "details_expected_status_no_row", value: expectedStatusCounts.no_row },
     { metric: "rounds_without_game_row", value: roundsWithoutGame },
     { metric: "export_mode_sheet_count", value: gamesByMode.size },
     { metric: "sync_break_reason", value: syncDebug.breakReason ?? "" },
@@ -331,10 +389,18 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     { metric: "sync_inserted_rows", value: syncDebug.insertedRows ?? "" },
     { metric: "sync_total_games_after_sync", value: syncDebug.totalGamesAfterSync ?? "" },
     { metric: "sync_lastSeen_before_sync", value: syncDebug.lastSeenBeforeSync ?? "" },
+    { metric: "sync_elapsed_ms", value: syncDebug.elapsedMs ?? "" },
+    { metric: "sync_dropped_samples_exported", value: syncDroppedSamples.length },
+    { metric: "sync_pages_diagnostics_exported", value: syncPageDiagnostics.length },
     {
       metric: "hint",
       value:
-        "If db_games_total is much lower than expected, run Fetch Data again and check sync_break_reason/max_pages in this Diagnostics sheet."
+        "For missing games, inspect Diagnostics_SyncPages, Diagnostics_SyncCounters and Diagnostics_DroppedEvents."
+    },
+    {
+      metric: "hint",
+      value:
+        "If duel/teamduel details are missing, inspect Diagnostics_DetailCoverage for per-game reason/error/endpoint."
     }
   ];
   const diagnosticsModeRows = [
@@ -350,6 +416,60 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
   ];
   XLSX.utils.book_append_sheet(gamesWb, XLSX.utils.json_to_sheet(diagnosticsSummary), sanitizeSheetName("Diagnostics"));
   XLSX.utils.book_append_sheet(gamesWb, XLSX.utils.json_to_sheet(diagnosticsModeRows), sanitizeSheetName("Diagnostics_Modes"));
+  XLSX.utils.book_append_sheet(
+    gamesWb,
+    XLSX.utils.json_to_sheet(diagnosticsSyncCounters),
+    sanitizeSheetName("Diagnostics_SyncCounters")
+  );
+  XLSX.utils.book_append_sheet(
+    gamesWb,
+    XLSX.utils.json_to_sheet(syncPageDiagnostics),
+    sanitizeSheetName("Diagnostics_SyncPages")
+  );
+  XLSX.utils.book_append_sheet(
+    gamesWb,
+    XLSX.utils.json_to_sheet(syncDroppedSamples),
+    sanitizeSheetName("Diagnostics_DroppedEvents")
+  );
+
+  const diagnosticsDetailCoverage = games
+    .map((g) => {
+      const d = detailsByGame.get(g.gameId);
+      const expected = isDetailsExpected(g.modeFamily, g.gameMode || g.mode);
+      const status = d?.status || "no_row";
+      const reason = !expected
+        ? "details_not_applicable_for_mode"
+        : status === "ok"
+          ? "ok"
+          : status === "missing"
+            ? "marked_missing_by_fetcher"
+            : status === "error"
+              ? "fetch_or_parse_error"
+              : "details_row_not_created";
+      return {
+        gameId: g.gameId,
+        playedAt: iso(g.playedAt),
+        modeFamily: g.modeFamily || "",
+        gameMode: g.gameMode || g.mode || "",
+        detailsExpected: expected ? 1 : 0,
+        detailsStatus: status,
+        reason,
+        detailsFetchedAt: iso(d?.fetchedAt),
+        detailsEndpoint: d?.endpoint || "",
+        detailsError: d?.error || "",
+        roundsStored: roundsByGameCount.get(g.gameId) || 0
+      };
+    })
+    .sort((a, b) => {
+      if (a.detailsExpected !== b.detailsExpected) return b.detailsExpected - a.detailsExpected;
+      if (a.detailsStatus !== b.detailsStatus) return a.detailsStatus.localeCompare(b.detailsStatus);
+      return String(b.playedAt).localeCompare(String(a.playedAt));
+    });
+  XLSX.utils.book_append_sheet(
+    gamesWb,
+    XLSX.utils.json_to_sheet(diagnosticsDetailCoverage),
+    sanitizeSheetName("Diagnostics_DetailCoverage")
+  );
 
   const statsWb = XLSX.utils.book_new();
   for (const [mode, rows] of [...roundsByMode.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
@@ -371,6 +491,26 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
   }
   XLSX.utils.book_append_sheet(statsWb, XLSX.utils.json_to_sheet(diagnosticsSummary), sanitizeSheetName("Diagnostics"));
   XLSX.utils.book_append_sheet(statsWb, XLSX.utils.json_to_sheet(diagnosticsModeRows), sanitizeSheetName("Diagnostics_Modes"));
+  XLSX.utils.book_append_sheet(
+    statsWb,
+    XLSX.utils.json_to_sheet(diagnosticsSyncCounters),
+    sanitizeSheetName("Diagnostics_SyncCounters")
+  );
+  XLSX.utils.book_append_sheet(
+    statsWb,
+    XLSX.utils.json_to_sheet(syncPageDiagnostics),
+    sanitizeSheetName("Diagnostics_SyncPages")
+  );
+  XLSX.utils.book_append_sheet(
+    statsWb,
+    XLSX.utils.json_to_sheet(syncDroppedSamples),
+    sanitizeSheetName("Diagnostics_DroppedEvents")
+  );
+  XLSX.utils.book_append_sheet(
+    statsWb,
+    XLSX.utils.json_to_sheet(diagnosticsDetailCoverage),
+    sanitizeSheetName("Diagnostics_DetailCoverage")
+  );
 
   const now = new Date();
   const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;

@@ -89,14 +89,22 @@ function extractEvents(entry: any): any[] {
   return [];
 }
 
-function extractGameId(ev: any): string | undefined {
-  const id = pickFirst(ev, [
-    "payload.gameId",
-    "gameId",
-    "id",
-    "payload.id"
-  ]);
-  return typeof id === "string" && id.trim() ? id.trim() : undefined;
+const GAME_ID_PATHS = ["payload.gameId", "gameId", "id", "payload.id"] as const;
+
+function extractGameIdWithSource(ev: any): { gameId?: string; source: string } {
+  for (const path of GAME_ID_PATHS) {
+    const id = getByPath(ev, path);
+    if (typeof id === "string" && id.trim()) {
+      return { gameId: id.trim(), source: path };
+    }
+  }
+  return { source: "none" };
+}
+
+function typeHint(ev: any): string {
+  const hintRaw = pickFirst(ev, ["type", "__typename", "payload.type", "payload.__typename", "payload.gameType", "payload.mode"]);
+  const hint = String(hintRaw || "").trim();
+  return hint || "unknown";
 }
 
 function extractEventTimeMs(ev: any, entry: any): number {
@@ -148,6 +156,35 @@ export async function syncFeed(opts: {
   let dedupedRows = 0;
   let breakReason = "completed";
   let stoppedAtPage = 0;
+  const idSourceCounts = new Map<string, number>();
+  const dropReasonCounts = new Map<string, number>();
+  const dropTypeCounts = new Map<string, number>();
+  const droppedEventSamples: Array<{
+    page: number;
+    entryIndex: number;
+    eventIndex: number;
+    reason: string;
+    typeHint: string;
+    gameModeHint: string;
+    idSource: string;
+    idCandidate_payloadGameId: string;
+    idCandidate_gameId: string;
+    idCandidate_id: string;
+    idCandidate_payloadId: string;
+    timeCandidate: string;
+  }> = [];
+  const pageDiagnostics: Array<{
+    page: number;
+    entries: number;
+    events: number;
+    withGameId: number;
+    deduped: number;
+    inserted: number;
+    droppedNoGameId: number;
+    newestPlayedAt?: number;
+    oldestPlayedAt?: number;
+    hasPaginationToken: number;
+  }> = [];
 
   for (let page = 1; page <= maxPages; page++) {
     pagesFetched = page;
@@ -165,13 +202,50 @@ export async function syncFeed(opts: {
     }
 
     const pageRows: FeedGameRow[] = [];
-    for (const entry of entries) {
+    let pageEvents = 0;
+    let pageWithGameId = 0;
+    let pageDroppedNoGameId = 0;
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+      const entry = entries[entryIndex];
       const events = extractEvents(entry);
       eventsSeen += events.length;
-      for (const ev of events) {
-        const gameId = extractGameId(ev);
-        if (!gameId) continue;
+      pageEvents += events.length;
+      for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
+        const ev = events[eventIndex];
+        const extracted = extractGameIdWithSource(ev);
+        const gameId = extracted.gameId;
+        if (!gameId) {
+          pageDroppedNoGameId++;
+          dropReasonCounts.set("no_game_id", (dropReasonCounts.get("no_game_id") || 0) + 1);
+          const evType = typeHint(ev);
+          dropTypeCounts.set(evType, (dropTypeCounts.get(evType) || 0) + 1);
+          if (droppedEventSamples.length < 2000) {
+            const gameModeHint = String(
+              pickFirst(ev, ["payload.gameMode", "payload.competitiveGameMode", "gameMode", "competitiveGameMode", "mode"]) ||
+                ""
+            );
+            const tCandidate =
+              pickFirst(ev, ["time", "createdAt", "payload.time"]) ?? (entry && typeof entry === "object" ? entry.time : undefined);
+            droppedEventSamples.push({
+              page,
+              entryIndex,
+              eventIndex,
+              reason: "no_game_id",
+              typeHint: evType,
+              gameModeHint,
+              idSource: extracted.source,
+              idCandidate_payloadGameId: String(getByPath(ev, "payload.gameId") ?? ""),
+              idCandidate_gameId: String(getByPath(ev, "gameId") ?? ""),
+              idCandidate_id: String(getByPath(ev, "id") ?? ""),
+              idCandidate_payloadId: String(getByPath(ev, "payload.id") ?? ""),
+              timeCandidate: String(tCandidate ?? "")
+            });
+          }
+          continue;
+        }
         rowsWithGameId++;
+        pageWithGameId++;
+        idSourceCounts.set(extracted.source, (idSourceCounts.get(extracted.source) || 0) + 1);
         const playedAt = extractEventTimeMs(ev, entry);
         const gameMode = extractGameMode(ev, entry);
         const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
@@ -202,6 +276,18 @@ export async function syncFeed(opts: {
       await db.games.bulkPut(deduped);
       inserted += deduped.length;
     }
+    pageDiagnostics.push({
+      page,
+      entries: entries.length,
+      events: pageEvents,
+      withGameId: pageWithGameId,
+      deduped: deduped.length,
+      inserted: deduped.length,
+      droppedNoGameId: pageDroppedNoGameId,
+      newestPlayedAt: deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : undefined,
+      oldestPlayedAt: deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : undefined,
+      hasPaginationToken: typeof data?.paginationToken === "string" && data.paginationToken ? 1 : 0
+    });
 
     const newest = deduped.reduce((m, g) => Math.max(m, g.playedAt), lastSeen || 0);
     await db.meta.put({
@@ -263,6 +349,11 @@ export async function syncFeed(opts: {
     eventsSeen,
     rowsWithGameId,
     dedupedRows,
+    idSourceCounts: Object.fromEntries([...idSourceCounts.entries()].sort((a, b) => b[1] - a[1])),
+    dropReasonCounts: Object.fromEntries([...dropReasonCounts.entries()].sort((a, b) => b[1] - a[1])),
+    dropTypeCounts: Object.fromEntries([...dropTypeCounts.entries()].sort((a, b) => b[1] - a[1])),
+    droppedEventSamples,
+    pageDiagnostics,
     insertedRows: inserted,
     totalGamesAfterSync: total
   };

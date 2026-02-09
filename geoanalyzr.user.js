@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.13
+// @version      1.3.14
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -8395,14 +8395,20 @@
     if (entry && typeof entry === "object") return [entry];
     return [];
   }
-  function extractGameId(ev) {
-    const id = pickFirst(ev, [
-      "payload.gameId",
-      "gameId",
-      "id",
-      "payload.id"
-    ]);
-    return typeof id === "string" && id.trim() ? id.trim() : void 0;
+  var GAME_ID_PATHS = ["payload.gameId", "gameId", "id", "payload.id"];
+  function extractGameIdWithSource(ev) {
+    for (const path of GAME_ID_PATHS) {
+      const id = getByPath(ev, path);
+      if (typeof id === "string" && id.trim()) {
+        return { gameId: id.trim(), source: path };
+      }
+    }
+    return { source: "none" };
+  }
+  function typeHint(ev) {
+    const hintRaw = pickFirst(ev, ["type", "__typename", "payload.type", "payload.__typename", "payload.gameType", "payload.mode"]);
+    const hint = String(hintRaw || "").trim();
+    return hint || "unknown";
   }
   function extractEventTimeMs(ev, entry) {
     const timeCandidate = pickFirst(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
@@ -8443,6 +8449,11 @@
     let dedupedRows = 0;
     let breakReason = "completed";
     let stoppedAtPage = 0;
+    const idSourceCounts = /* @__PURE__ */ new Map();
+    const dropReasonCounts = /* @__PURE__ */ new Map();
+    const dropTypeCounts = /* @__PURE__ */ new Map();
+    const droppedEventSamples = [];
+    const pageDiagnostics = [];
     for (let page = 1; page <= maxPages; page++) {
       pagesFetched = page;
       const elapsed = Date.now() - startedAt;
@@ -8458,13 +8469,48 @@
         break;
       }
       const pageRows = [];
-      for (const entry of entries) {
+      let pageEvents = 0;
+      let pageWithGameId = 0;
+      let pageDroppedNoGameId = 0;
+      for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+        const entry = entries[entryIndex];
         const events = extractEvents(entry);
         eventsSeen += events.length;
-        for (const ev of events) {
-          const gameId = extractGameId(ev);
-          if (!gameId) continue;
+        pageEvents += events.length;
+        for (let eventIndex = 0; eventIndex < events.length; eventIndex++) {
+          const ev = events[eventIndex];
+          const extracted = extractGameIdWithSource(ev);
+          const gameId = extracted.gameId;
+          if (!gameId) {
+            pageDroppedNoGameId++;
+            dropReasonCounts.set("no_game_id", (dropReasonCounts.get("no_game_id") || 0) + 1);
+            const evType = typeHint(ev);
+            dropTypeCounts.set(evType, (dropTypeCounts.get(evType) || 0) + 1);
+            if (droppedEventSamples.length < 2e3) {
+              const gameModeHint = String(
+                pickFirst(ev, ["payload.gameMode", "payload.competitiveGameMode", "gameMode", "competitiveGameMode", "mode"]) || ""
+              );
+              const tCandidate = pickFirst(ev, ["time", "createdAt", "payload.time"]) ?? (entry && typeof entry === "object" ? entry.time : void 0);
+              droppedEventSamples.push({
+                page,
+                entryIndex,
+                eventIndex,
+                reason: "no_game_id",
+                typeHint: evType,
+                gameModeHint,
+                idSource: extracted.source,
+                idCandidate_payloadGameId: String(getByPath(ev, "payload.gameId") ?? ""),
+                idCandidate_gameId: String(getByPath(ev, "gameId") ?? ""),
+                idCandidate_id: String(getByPath(ev, "id") ?? ""),
+                idCandidate_payloadId: String(getByPath(ev, "payload.id") ?? ""),
+                timeCandidate: String(tCandidate ?? "")
+              });
+            }
+            continue;
+          }
           rowsWithGameId++;
+          pageWithGameId++;
+          idSourceCounts.set(extracted.source, (idSourceCounts.get(extracted.source) || 0) + 1);
           const playedAt = extractEventTimeMs(ev, entry);
           const gameMode = extractGameMode(ev, entry);
           const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
@@ -8491,6 +8537,18 @@
         await db.games.bulkPut(deduped);
         inserted += deduped.length;
       }
+      pageDiagnostics.push({
+        page,
+        entries: entries.length,
+        events: pageEvents,
+        withGameId: pageWithGameId,
+        deduped: deduped.length,
+        inserted: deduped.length,
+        droppedNoGameId: pageDroppedNoGameId,
+        newestPlayedAt: deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : void 0,
+        oldestPlayedAt: deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : void 0,
+        hasPaginationToken: typeof data?.paginationToken === "string" && data.paginationToken ? 1 : 0
+      });
       const newest = deduped.reduce((m, g) => Math.max(m, g.playedAt), lastSeen || 0);
       await db.meta.put({
         key: "sync",
@@ -8545,6 +8603,11 @@
       eventsSeen,
       rowsWithGameId,
       dedupedRows,
+      idSourceCounts: Object.fromEntries([...idSourceCounts.entries()].sort((a, b) => b[1] - a[1])),
+      dropReasonCounts: Object.fromEntries([...dropReasonCounts.entries()].sort((a, b) => b[1] - a[1])),
+      dropTypeCounts: Object.fromEntries([...dropTypeCounts.entries()].sort((a, b) => b[1] - a[1])),
+      droppedEventSamples,
+      pageDiagnostics,
       insertedRows: inserted,
       totalGamesAfterSync: total
     };
@@ -32109,6 +32172,10 @@
     const n = (name || "unknown").replace(/[\\/*?:[\]]/g, "_");
     return n.length > 31 ? n.slice(0, 31) : n;
   }
+  function counterObjectToRows(category, counterLike) {
+    if (!counterLike || typeof counterLike !== "object") return [];
+    return Object.entries(counterLike).map(([key, value]) => ({ category, key, count: Number(value) || 0 })).sort((a, b) => b.count - a.count);
+  }
   function normalizeIso23(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
@@ -32130,6 +32197,12 @@
     if (family === "standard") return "standard";
     if (family === "streak") return "streak";
     return gameMode || "unknown";
+  }
+  function isDetailsExpected(modeFamily, gameMode) {
+    const family = String(modeFamily || "").toLowerCase();
+    if (family === "duels" || family === "teamduels") return true;
+    const m = String(gameMode || "").toLowerCase();
+    return m.includes("duel");
   }
   async function resolveGuessCountryForExport(existing, lat, lng) {
     const direct = normalizeIso23(existing);
@@ -32174,6 +32247,8 @@
     const detailsByGame = new Map(details.map((d) => [d.gameId, d]));
     const gameById = new Map(games.map((g) => [g.gameId, g]));
     const metaByKey = new Map(metaRows.map((m) => [m.key, m.value]));
+    const roundsByGameCount = /* @__PURE__ */ new Map();
+    for (const r of rounds) roundsByGameCount.set(r.gameId, (roundsByGameCount.get(r.gameId) || 0) + 1);
     const gamesByMode = /* @__PURE__ */ new Map();
     for (const g of games) {
       const d = detailsByGame.get(g.gameId);
@@ -32364,14 +32439,52 @@
       roundsByModeCounts.set(mode, (roundsByModeCounts.get(mode) || 0) + 1);
     }
     const gamesWithoutDetails = games.filter((g) => !detailsByGame.has(g.gameId)).length;
+    const expectedDetailGames = games.filter((g) => isDetailsExpected(g.modeFamily, g.gameMode || g.mode));
+    const expectedWithDetails = expectedDetailGames.filter((g) => detailsByGame.has(g.gameId));
+    const expectedWithoutDetails = expectedDetailGames.filter((g) => !detailsByGame.has(g.gameId));
+    const expectedStatusCounts = { ok: 0, missing: 0, error: 0, no_row: 0 };
+    for (const g of expectedDetailGames) {
+      const d = detailsByGame.get(g.gameId);
+      if (!d) {
+        expectedStatusCounts.no_row++;
+        continue;
+      }
+      if (d.status === "ok") expectedStatusCounts.ok++;
+      else if (d.status === "missing") expectedStatusCounts.missing++;
+      else if (d.status === "error") expectedStatusCounts.error++;
+      else expectedStatusCounts.no_row++;
+    }
     const roundsWithoutGame = rounds.filter((r) => !gameById.has(r.gameId)).length;
     const syncDebug = metaByKey.get("syncDebugLast") || {};
+    const syncPageDiagnosticsRaw = Array.isArray(syncDebug.pageDiagnostics) ? syncDebug.pageDiagnostics : [];
+    const syncDroppedSamplesRaw = Array.isArray(syncDebug.droppedEventSamples) ? syncDebug.droppedEventSamples : [];
+    const syncPageDiagnostics = syncPageDiagnosticsRaw.map((p) => ({
+      ...p,
+      newestPlayedAtIso: iso(p?.newestPlayedAt),
+      oldestPlayedAtIso: iso(p?.oldestPlayedAt)
+    }));
+    const syncDroppedSamples = syncDroppedSamplesRaw.map((r) => ({
+      ...r,
+      timeCandidateParsedIso: iso(toTsMaybe(r?.timeCandidate))
+    }));
+    const diagnosticsSyncCounters = [
+      ...counterObjectToRows("sync_id_source", syncDebug.idSourceCounts),
+      ...counterObjectToRows("sync_drop_reason", syncDebug.dropReasonCounts),
+      ...counterObjectToRows("sync_drop_type", syncDebug.dropTypeCounts)
+    ];
     const diagnosticsSummary = [
       { metric: "export_generated_at", value: (/* @__PURE__ */ new Date()).toISOString() },
       { metric: "db_games_total", value: games.length },
       { metric: "db_rounds_total", value: rounds.length },
       { metric: "db_details_total", value: details.length },
       { metric: "games_without_details", value: gamesWithoutDetails },
+      { metric: "details_expected_games", value: expectedDetailGames.length },
+      { metric: "details_expected_with_row", value: expectedWithDetails.length },
+      { metric: "details_expected_without_row", value: expectedWithoutDetails.length },
+      { metric: "details_expected_status_ok", value: expectedStatusCounts.ok },
+      { metric: "details_expected_status_missing", value: expectedStatusCounts.missing },
+      { metric: "details_expected_status_error", value: expectedStatusCounts.error },
+      { metric: "details_expected_status_no_row", value: expectedStatusCounts.no_row },
       { metric: "rounds_without_game_row", value: roundsWithoutGame },
       { metric: "export_mode_sheet_count", value: gamesByMode.size },
       { metric: "sync_break_reason", value: syncDebug.breakReason ?? "" },
@@ -32384,9 +32497,16 @@
       { metric: "sync_inserted_rows", value: syncDebug.insertedRows ?? "" },
       { metric: "sync_total_games_after_sync", value: syncDebug.totalGamesAfterSync ?? "" },
       { metric: "sync_lastSeen_before_sync", value: syncDebug.lastSeenBeforeSync ?? "" },
+      { metric: "sync_elapsed_ms", value: syncDebug.elapsedMs ?? "" },
+      { metric: "sync_dropped_samples_exported", value: syncDroppedSamples.length },
+      { metric: "sync_pages_diagnostics_exported", value: syncPageDiagnostics.length },
       {
         metric: "hint",
-        value: "If db_games_total is much lower than expected, run Fetch Data again and check sync_break_reason/max_pages in this Diagnostics sheet."
+        value: "For missing games, inspect Diagnostics_SyncPages, Diagnostics_SyncCounters and Diagnostics_DroppedEvents."
+      },
+      {
+        metric: "hint",
+        value: "If duel/teamduel details are missing, inspect Diagnostics_DetailCoverage for per-game reason/error/endpoint."
       }
     ];
     const diagnosticsModeRows = [
@@ -32396,6 +32516,49 @@
     ];
     utils.book_append_sheet(gamesWb, utils.json_to_sheet(diagnosticsSummary), sanitizeSheetName("Diagnostics"));
     utils.book_append_sheet(gamesWb, utils.json_to_sheet(diagnosticsModeRows), sanitizeSheetName("Diagnostics_Modes"));
+    utils.book_append_sheet(
+      gamesWb,
+      utils.json_to_sheet(diagnosticsSyncCounters),
+      sanitizeSheetName("Diagnostics_SyncCounters")
+    );
+    utils.book_append_sheet(
+      gamesWb,
+      utils.json_to_sheet(syncPageDiagnostics),
+      sanitizeSheetName("Diagnostics_SyncPages")
+    );
+    utils.book_append_sheet(
+      gamesWb,
+      utils.json_to_sheet(syncDroppedSamples),
+      sanitizeSheetName("Diagnostics_DroppedEvents")
+    );
+    const diagnosticsDetailCoverage = games.map((g) => {
+      const d = detailsByGame.get(g.gameId);
+      const expected = isDetailsExpected(g.modeFamily, g.gameMode || g.mode);
+      const status = d?.status || "no_row";
+      const reason = !expected ? "details_not_applicable_for_mode" : status === "ok" ? "ok" : status === "missing" ? "marked_missing_by_fetcher" : status === "error" ? "fetch_or_parse_error" : "details_row_not_created";
+      return {
+        gameId: g.gameId,
+        playedAt: iso(g.playedAt),
+        modeFamily: g.modeFamily || "",
+        gameMode: g.gameMode || g.mode || "",
+        detailsExpected: expected ? 1 : 0,
+        detailsStatus: status,
+        reason,
+        detailsFetchedAt: iso(d?.fetchedAt),
+        detailsEndpoint: d?.endpoint || "",
+        detailsError: d?.error || "",
+        roundsStored: roundsByGameCount.get(g.gameId) || 0
+      };
+    }).sort((a, b) => {
+      if (a.detailsExpected !== b.detailsExpected) return b.detailsExpected - a.detailsExpected;
+      if (a.detailsStatus !== b.detailsStatus) return a.detailsStatus.localeCompare(b.detailsStatus);
+      return String(b.playedAt).localeCompare(String(a.playedAt));
+    });
+    utils.book_append_sheet(
+      gamesWb,
+      utils.json_to_sheet(diagnosticsDetailCoverage),
+      sanitizeSheetName("Diagnostics_DetailCoverage")
+    );
     const statsWb = utils.book_new();
     for (const [mode, rows] of [...roundsByMode.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
       const sortedRows = [...rows].sort((a, b) => {
@@ -32412,6 +32575,26 @@
     }
     utils.book_append_sheet(statsWb, utils.json_to_sheet(diagnosticsSummary), sanitizeSheetName("Diagnostics"));
     utils.book_append_sheet(statsWb, utils.json_to_sheet(diagnosticsModeRows), sanitizeSheetName("Diagnostics_Modes"));
+    utils.book_append_sheet(
+      statsWb,
+      utils.json_to_sheet(diagnosticsSyncCounters),
+      sanitizeSheetName("Diagnostics_SyncCounters")
+    );
+    utils.book_append_sheet(
+      statsWb,
+      utils.json_to_sheet(syncPageDiagnostics),
+      sanitizeSheetName("Diagnostics_SyncPages")
+    );
+    utils.book_append_sheet(
+      statsWb,
+      utils.json_to_sheet(syncDroppedSamples),
+      sanitizeSheetName("Diagnostics_DroppedEvents")
+    );
+    utils.book_append_sheet(
+      statsWb,
+      utils.json_to_sheet(diagnosticsDetailCoverage),
+      sanitizeSheetName("Diagnostics_DetailCoverage")
+    );
     const now = /* @__PURE__ */ new Date();
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
     await downloadWorkbook(gamesWb, `geoguessr_games_${stamp}.xlsx`);
@@ -32569,7 +32752,7 @@ ${NCFA_HELP_TEXT}`, "");
         }
         const res = await syncFeed({
           onStatus: (m) => ui.setStatus(m),
-          maxPages: 200,
+          maxPages: 5e3,
           delayMs: 200,
           ncfa
         });
