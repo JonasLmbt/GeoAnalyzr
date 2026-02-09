@@ -101,10 +101,11 @@ async function downloadWorkbook(wb: XLSX.WorkBook, filename: string): Promise<vo
 export async function exportExcel(onStatus: (msg: string) => void): Promise<void> {
   onStatus("Preparing export...");
 
-  const [games, rounds, details] = await Promise.all([
+  const [games, rounds, details, metaRows] = await Promise.all([
     db.games.orderBy("playedAt").reverse().toArray(),
     db.rounds.toArray(),
-    db.details.toArray()
+    db.details.toArray(),
+    db.meta.toArray()
   ]);
 
   if (games.length === 0) {
@@ -114,6 +115,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
 
   const detailsByGame = new Map(details.map((d) => [d.gameId, d]));
   const gameById = new Map(games.map((g) => [g.gameId, g]));
+  const metaByKey = new Map(metaRows.map((m) => [m.key, m.value as any]));
 
   const gamesByMode = new Map<string, Array<any & { __playedAt?: number }>>();
   for (const g of games) {
@@ -294,6 +296,61 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     XLSX.utils.book_append_sheet(gamesWb, XLSX.utils.json_to_sheet(modeRows), sanitizeSheetName(mode));
   }
 
+  const modeFamilyCounts = new Map<string, number>();
+  const exportModeCounts = new Map<string, number>();
+  for (const g of games) {
+    const family = String(g.modeFamily || "unknown");
+    modeFamilyCounts.set(family, (modeFamilyCounts.get(family) || 0) + 1);
+    const modeKey = exportModeSheetKey(g.gameMode || g.mode, g.modeFamily);
+    exportModeCounts.set(modeKey, (exportModeCounts.get(modeKey) || 0) + 1);
+  }
+  const roundsByModeCounts = new Map<string, number>();
+  for (const r of rounds) {
+    const g = gameById.get(r.gameId);
+    const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
+    roundsByModeCounts.set(mode, (roundsByModeCounts.get(mode) || 0) + 1);
+  }
+  const gamesWithoutDetails = games.filter((g) => !detailsByGame.has(g.gameId)).length;
+  const roundsWithoutGame = rounds.filter((r) => !gameById.has(r.gameId)).length;
+  const syncDebug = metaByKey.get("syncDebugLast") || {};
+  const diagnosticsSummary = [
+    { metric: "export_generated_at", value: new Date().toISOString() },
+    { metric: "db_games_total", value: games.length },
+    { metric: "db_rounds_total", value: rounds.length },
+    { metric: "db_details_total", value: details.length },
+    { metric: "games_without_details", value: gamesWithoutDetails },
+    { metric: "rounds_without_game_row", value: roundsWithoutGame },
+    { metric: "export_mode_sheet_count", value: gamesByMode.size },
+    { metric: "sync_break_reason", value: syncDebug.breakReason ?? "" },
+    { metric: "sync_pages_fetched", value: syncDebug.pagesFetched ?? "" },
+    { metric: "sync_max_pages", value: syncDebug.maxPages ?? "" },
+    { metric: "sync_entries_seen", value: syncDebug.entriesSeen ?? "" },
+    { metric: "sync_events_seen", value: syncDebug.eventsSeen ?? "" },
+    { metric: "sync_rows_with_gameId", value: syncDebug.rowsWithGameId ?? "" },
+    { metric: "sync_deduped_rows", value: syncDebug.dedupedRows ?? "" },
+    { metric: "sync_inserted_rows", value: syncDebug.insertedRows ?? "" },
+    { metric: "sync_total_games_after_sync", value: syncDebug.totalGamesAfterSync ?? "" },
+    { metric: "sync_lastSeen_before_sync", value: syncDebug.lastSeenBeforeSync ?? "" },
+    {
+      metric: "hint",
+      value:
+        "If db_games_total is much lower than expected, run Fetch Data again and check sync_break_reason/max_pages in this Diagnostics sheet."
+    }
+  ];
+  const diagnosticsModeRows = [
+    ...[...modeFamilyCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([modeFamily, count]) => ({ category: "mode_family", key: modeFamily, count })),
+    ...[...exportModeCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([mode, count]) => ({ category: "export_mode", key: mode, count })),
+    ...[...roundsByModeCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([mode, count]) => ({ category: "rounds_mode", key: mode, count }))
+  ];
+  XLSX.utils.book_append_sheet(gamesWb, XLSX.utils.json_to_sheet(diagnosticsSummary), sanitizeSheetName("Diagnostics"));
+  XLSX.utils.book_append_sheet(gamesWb, XLSX.utils.json_to_sheet(diagnosticsModeRows), sanitizeSheetName("Diagnostics_Modes"));
+
   const statsWb = XLSX.utils.book_new();
   for (const [mode, rows] of [...roundsByMode.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const sortedRows = [...rows].sort((a: any, b: any) => {
@@ -312,6 +369,8 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     for (const r of sortedRows) delete (r as any).__sortTs;
     XLSX.utils.book_append_sheet(statsWb, XLSX.utils.json_to_sheet(sortedRows), sanitizeSheetName(mode));
   }
+  XLSX.utils.book_append_sheet(statsWb, XLSX.utils.json_to_sheet(diagnosticsSummary), sanitizeSheetName("Diagnostics"));
+  XLSX.utils.book_append_sheet(statsWb, XLSX.utils.json_to_sheet(diagnosticsModeRows), sanitizeSheetName("Diagnostics_Modes"));
 
   const now = new Date();
   const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;

@@ -131,31 +131,47 @@ export async function syncFeed(opts: {
   delayMs?: number;
   ncfa?: string;
 }): Promise<{ inserted: number; total: number }> {
-  const maxPages = opts.maxPages ?? 120;
+  const maxPages = opts.maxPages ?? 5000;
   const delayMs = opts.delayMs ?? 150;
 
   const meta = await db.meta.get("sync");
   const lastSeen = (meta?.value as any)?.lastSeenTime as number | undefined;
 
   let paginationToken: string | undefined;
+  const seenPaginationTokens = new Set<string>();
   let inserted = 0;
   const startedAt = Date.now();
+  let pagesFetched = 0;
+  let entriesSeen = 0;
+  let eventsSeen = 0;
+  let rowsWithGameId = 0;
+  let dedupedRows = 0;
+  let breakReason = "completed";
+  let stoppedAtPage = 0;
 
   for (let page = 1; page <= maxPages; page++) {
+    pagesFetched = page;
     const elapsed = Date.now() - startedAt;
     const avgPerPage = elapsed / Math.max(1, page - 1);
     const etaMs = page > 1 ? avgPerPage * Math.max(0, maxPages - page + 1) : 0;
     opts.onStatus(`Feed page ${page}/${maxPages}... ETA ~${etaLabel(etaMs)}`);
     const data = await fetchFeedPage(paginationToken, opts.ncfa);
     const entries = Array.isArray(data?.entries) ? data.entries : [];
-    if (entries.length === 0) break;
+    entriesSeen += entries.length;
+    if (entries.length === 0) {
+      breakReason = "empty_page";
+      stoppedAtPage = page;
+      break;
+    }
 
     const pageRows: FeedGameRow[] = [];
     for (const entry of entries) {
       const events = extractEvents(entry);
+      eventsSeen += events.length;
       for (const ev of events) {
         const gameId = extractGameId(ev);
         if (!gameId) continue;
+        rowsWithGameId++;
         const playedAt = extractEventTimeMs(ev, entry);
         const gameMode = extractGameMode(ev, entry);
         const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
@@ -179,6 +195,7 @@ export async function syncFeed(opts: {
       if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
     }
     const deduped = [...byId.values()];
+    dedupedRows += deduped.length;
 
     // Insert / update rows in one bulkPut (covers older rows that gained mode info later).
     if (deduped.length > 0) {
@@ -199,22 +216,61 @@ export async function syncFeed(opts: {
     const etaMs2 = avgPerPage2 * Math.max(0, maxPages - page);
     opts.onStatus(`Synced ${inserted} games so far. ETA ~${etaLabel(etaMs2)}`);
 
-    if (!paginationToken) break;
+    if (!paginationToken) {
+      breakReason = "no_pagination_token";
+      stoppedAtPage = page;
+      break;
+    }
+    if (seenPaginationTokens.has(paginationToken)) {
+      breakReason = "repeated_pagination_token";
+      stoppedAtPage = page;
+      opts.onStatus("Stopped sync due to repeated pagination token (loop protection).");
+      break;
+    }
+    seenPaginationTokens.add(paginationToken);
 
-    // Stop once this page is fully at/older than lastSeen.
+    // Stop once this page has no data newer than lastSeen.
     if (lastSeen && deduped.length > 0) {
       const newestOnPage = deduped.reduce((m, g) => Math.max(m, g.playedAt), 0);
-      const oldestOnPage = deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY);
-      if (newestOnPage <= lastSeen || (Number.isFinite(oldestOnPage) && oldestOnPage <= lastSeen)) {
+      if (newestOnPage <= lastSeen) {
         opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
+        breakReason = "reached_last_seen";
+        stoppedAtPage = page;
         break;
       }
     }
 
     await new Promise((r) => setTimeout(r, delayMs));
   }
+  if (!stoppedAtPage) stoppedAtPage = pagesFetched;
+  if (pagesFetched >= maxPages && breakReason === "completed") {
+    breakReason = "max_pages_reached";
+  }
 
   const total = await db.games.count();
+  const elapsedMs = Date.now() - startedAt;
+  const syncDiag = {
+    startedAt,
+    finishedAt: Date.now(),
+    elapsedMs,
+    maxPages,
+    delayMs,
+    lastSeenBeforeSync: lastSeen || null,
+    breakReason,
+    stoppedAtPage,
+    pagesFetched,
+    entriesSeen,
+    eventsSeen,
+    rowsWithGameId,
+    dedupedRows,
+    insertedRows: inserted,
+    totalGamesAfterSync: total
+  };
+  await db.meta.put({
+    key: "syncDebugLast",
+    value: syncDiag,
+    updatedAt: Date.now()
+  });
   return { inserted, total };
 }
 
