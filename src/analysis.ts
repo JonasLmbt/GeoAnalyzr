@@ -60,6 +60,11 @@ function buildStreetViewUrl(lat?: number, lng?: number): string | undefined {
   return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
 }
 
+function buildUserProfileUrl(playerId?: string): string | undefined {
+  if (typeof playerId !== "string" || !playerId.trim()) return undefined;
+  return `https://www.geoguessr.com/user/${playerId}`;
+}
+
 type AnalysisDrilldownMeta = {
   movementLabel?: string;
   gameModeLabel?: string;
@@ -183,6 +188,12 @@ export interface AnalysisDrilldownItem {
   damage?: number;
   googleMapsUrl?: string;
   streetViewUrl?: string;
+  result?: GameResult;
+  matchups?: number;
+  opponentId?: string;
+  opponentName?: string;
+  opponentCountry?: string;
+  opponentProfileUrl?: string;
 }
 
 export interface AnalysisBarPoint {
@@ -785,6 +796,7 @@ export interface AnalysisSection {
   appliesFilters?: Array<"date" | "mode" | "gameMode" | "movement" | "teammate" | "country">;
   lines: string[];
   lineDrilldowns?: AnalysisLineDrilldown[];
+  lineLinks?: Array<{ lineLabel: string; url: string }>;
   chart?: AnalysisChart;
   charts?: AnalysisChart[];
 }
@@ -1982,11 +1994,25 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ]
   });
 
+  type OpponentEncounter = {
+    opponentId: string;
+    opponentName: string;
+    opponentCountry: string;
+    gameId: string;
+    ts?: number;
+    result?: GameResult;
+    gameMode?: string;
+  };
+
   const opponentCounts = new Map<string, { games: number; name?: string; country?: string }>();
+  const opponentEncounters: OpponentEncounter[] = [];
   for (const d of teamDetails) {
     const dd = asRecord(d);
     const ids: Array<{ id?: string; name?: string; country?: string }> = [];
     const modeFamily = getString(dd, "modeFamily");
+    const ts = teamPlayedAtByGameId.get(d.gameId);
+    const result = getGameResult(d, ownPlayerId);
+    const modeLabel = drilldownMetaByGameId.get(d.gameId)?.gameModeLabel;
     if (modeFamily === "duels") {
       ids.push({
         id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
@@ -2012,6 +2038,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       if (x.name) cur.name = x.name;
       if (x.country) cur.country = x.country;
       opponentCounts.set(x.id, cur);
+      opponentEncounters.push({
+        opponentId: x.id,
+        opponentName: x.name || nameMap.get(x.id) || x.id.slice(0, 8),
+        opponentCountry: x.country?.trim() || "Unknown",
+        gameId: d.gameId,
+        ts,
+        result,
+        gameMode: modeLabel
+      });
     }
   }
 
@@ -2021,6 +2056,41 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
     oppCountryCounts.set(c, (oppCountryCounts.get(c) || 0) + v.games);
   }
+  const drillForOpponent = (e: OpponentEncounter): AnalysisDrilldownItem => {
+    const count = opponentCounts.get(e.opponentId)?.games || 0;
+    return {
+      gameId: e.gameId,
+      roundNumber: 0,
+      ts: e.ts,
+      gameMode: e.gameMode,
+      result: e.result,
+      matchups: count,
+      opponentId: e.opponentId,
+      opponentName: e.opponentName,
+      opponentCountry: e.opponentCountry,
+      opponentProfileUrl: buildUserProfileUrl(e.opponentId)
+    };
+  };
+  const opponentDrilldowns = new Map<string, AnalysisDrilldownItem[]>();
+  const countryOpponentDrilldowns = new Map<string, AnalysisDrilldownItem[]>();
+  for (const e of opponentEncounters) {
+    const byOpponent = opponentDrilldowns.get(e.opponentId) || [];
+    byOpponent.push(drillForOpponent(e));
+    opponentDrilldowns.set(e.opponentId, byOpponent);
+    const c = e.opponentCountry?.trim() || "Unknown";
+    const byCountry = countryOpponentDrilldowns.get(c) || [];
+    byCountry.push(drillForOpponent(e));
+    countryOpponentDrilldowns.set(c, byCountry);
+  }
+  const top3LineEntries = topOpp.slice(0, 3).map(([id, v], i) => {
+    const displayName = v.name || id.slice(0, 8);
+    return {
+      lineLabel: `${i + 1}. ${displayName}`,
+      lineText: `${i + 1}. ${displayName}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`,
+      profileUrl: buildUserProfileUrl(id),
+      drill: opponentDrilldowns.get(id) || []
+    };
+  });
 
   sections.push({
     id: "opponents",
@@ -2030,15 +2100,22 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     lines: [
       selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
       "Top 3 opponents:",
-      ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`),
+      ...top3LineEntries.map((x) => x.lineText),
       "Scope:",
       `Unique opponents: ${opponentCounts.size}`,
       `Unique countries: ${oppCountryCounts.size}`
     ].filter((x) => x !== ""),
+    lineLinks: top3LineEntries
+      .filter((x) => typeof x.profileUrl === "string")
+      .map((x) => ({ lineLabel: x.lineLabel, url: x.profileUrl as string })),
+    lineDrilldowns: top3LineEntries.map((x) => ({ lineLabel: x.lineLabel, items: x.drill })),
     chart: {
       type: "bar",
       yLabel: "Match-ups by opponent country",
-      bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n }))
+      bars: [...oppCountryCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([c, n]) => ({ label: c, value: n, drilldown: countryOpponentDrilldowns.get(c) || [] }))
     }
   });
 

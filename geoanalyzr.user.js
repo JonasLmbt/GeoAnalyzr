@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.5
+// @version      1.4.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7030,6 +7030,7 @@
     const sortLabel = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
     let sortKey = "date";
     let sortDir = "desc";
+    const hasOpponentItems = drilldown.some((d) => typeof d.opponentId === "string" || typeof d.opponentName === "string");
     const movementValues = [...new Set(drilldown.map((d) => d.movement).filter((x) => typeof x === "string" && x.trim().length > 0))];
     const modeValues = [...new Set(drilldown.map((d) => d.gameMode).filter((x) => typeof x === "string" && x.trim().length > 0))];
     const showMovement = movementValues.length > 1;
@@ -7055,17 +7056,59 @@
       a.style.color = analysisSettings.accent;
       return a;
     };
-    const columns = [
-      { key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) },
-      { key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) },
-      { key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") },
-      { key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) }
-    ];
-    if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
-    if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
-    if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
-    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-    if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+    const columns = [{ key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
+    if (hasOpponentItems) {
+      columns.push({
+        key: "opponent",
+        label: "Opponent",
+        width: "180px",
+        render: (item) => {
+          const name = item.opponentName || (item.opponentId ? shortGameId(item.opponentId) : "-");
+          if (item.opponentProfileUrl) {
+            const a = doc.createElement("a");
+            a.href = item.opponentProfileUrl;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.textContent = name;
+            a.style.color = analysisSettings.accent;
+            return a;
+          }
+          return mkTextCell(name, !item.opponentName);
+        }
+      });
+      columns.push({
+        key: "result",
+        label: "Result",
+        width: "90px",
+        render: (item) => {
+          const txt = item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-";
+          return mkTextCell(txt, txt === "-");
+        }
+      });
+      columns.push({
+        key: "matchups",
+        label: "Match-ups",
+        width: "90px",
+        render: (item) => mkTextCell(typeof item.matchups === "number" ? String(item.matchups) : "-", typeof item.matchups !== "number")
+      });
+      columns.push({
+        key: "country",
+        label: "Country",
+        sortKey: "country",
+        width: "160px",
+        render: (item) => mkTextCell(item.opponentCountry || countryNameFromCode(item.trueCountry))
+      });
+      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+    } else {
+      columns.push({ key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
+      columns.push({ key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") });
+      columns.push({ key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
+      if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+      if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
+      if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+      if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+    }
     columns.push({
       key: "game",
       label: "Game",
@@ -7077,8 +7120,8 @@
         return span;
       }
     });
-    if (showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
-    if (showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
+    if (!hasOpponentItems && showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
+    if (!hasOpponentItems && showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
     const thead = doc.createElement("thead");
     const headRow = doc.createElement("tr");
     const thBySort = /* @__PURE__ */ new Map();
@@ -7132,8 +7175,8 @@
           const bv2 = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
           return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
         }
-        const av = countryNameFromCode(a.trueCountry).toLowerCase();
-        const bv = countryNameFromCode(b.trueCountry).toLowerCase();
+        const av = (a.opponentCountry || countryNameFromCode(a.trueCountry)).toLowerCase();
+        const bv = (b.opponentCountry || countryNameFromCode(b.trueCountry)).toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
       return items;
@@ -8215,6 +8258,7 @@
       body.style.marginBottom = "10px";
       body.style.marginTop = "2px";
       const lineDrillMap = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel, d.items]));
+      const lineLinkMap = new Map((section.lineLinks || []).map((d) => [d.lineLabel, d.url]));
       const createLineRow = (line) => {
         const row = doc.createElement("div");
         row.style.padding = "9px 11px";
@@ -8225,12 +8269,18 @@
         const sep = line.indexOf(":");
         if (sep > 0 && sep < line.length - 1) {
           const leftLabel = line.slice(0, sep).trim();
-          const left = doc.createElement("span");
+          const leftUrl = lineLinkMap.get(leftLabel);
+          const left = leftUrl ? doc.createElement("a") : doc.createElement("span");
           left.textContent = leftLabel;
           left.style.fontSize = "13px";
           left.style.fontWeight = "600";
-          left.style.color = palette.textMuted;
+          left.style.color = leftUrl ? analysisSettings.accent : palette.textMuted;
           left.style.letterSpacing = "0.15px";
+          if (leftUrl) {
+            left.href = leftUrl;
+            left.target = "_blank";
+            left.rel = "noopener noreferrer";
+          }
           const right = doc.createElement("span");
           right.textContent = line.slice(sep + 1).trim();
           right.style.fontSize = "14px";
@@ -10467,6 +10517,10 @@
     if (typeof lat !== "number" || typeof lng !== "number") return void 0;
     return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
   }
+  function buildUserProfileUrl(playerId) {
+    if (typeof playerId !== "string" || !playerId.trim()) return void 0;
+    return `https://www.geoguessr.com/user/${playerId}`;
+  }
   function toDrilldownFromRound(r, ts, score, meta) {
     const rr = asRecord(r);
     const trueLat = typeof r.trueLat === "number" ? r.trueLat : void 0;
@@ -11909,10 +11963,14 @@
       ]
     });
     const opponentCounts = /* @__PURE__ */ new Map();
+    const opponentEncounters = [];
     for (const d of teamDetails) {
       const dd = asRecord(d);
       const ids = [];
       const modeFamily = getString(dd, "modeFamily");
+      const ts = teamPlayedAtByGameId.get(d.gameId);
+      const result = getGameResult(d, ownPlayerId);
+      const modeLabel = drilldownMetaByGameId.get(d.gameId)?.gameModeLabel;
       if (modeFamily === "duels") {
         ids.push({
           id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
@@ -11938,6 +11996,15 @@
         if (x.name) cur.name = x.name;
         if (x.country) cur.country = x.country;
         opponentCounts.set(x.id, cur);
+        opponentEncounters.push({
+          opponentId: x.id,
+          opponentName: x.name || nameMap.get(x.id) || x.id.slice(0, 8),
+          opponentCountry: x.country?.trim() || "Unknown",
+          gameId: d.gameId,
+          ts,
+          result,
+          gameMode: modeLabel
+        });
       }
     }
     const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 20);
@@ -11946,6 +12013,41 @@
       const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
       oppCountryCounts.set(c, (oppCountryCounts.get(c) || 0) + v.games);
     }
+    const drillForOpponent = (e) => {
+      const count = opponentCounts.get(e.opponentId)?.games || 0;
+      return {
+        gameId: e.gameId,
+        roundNumber: 0,
+        ts: e.ts,
+        gameMode: e.gameMode,
+        result: e.result,
+        matchups: count,
+        opponentId: e.opponentId,
+        opponentName: e.opponentName,
+        opponentCountry: e.opponentCountry,
+        opponentProfileUrl: buildUserProfileUrl(e.opponentId)
+      };
+    };
+    const opponentDrilldowns = /* @__PURE__ */ new Map();
+    const countryOpponentDrilldowns = /* @__PURE__ */ new Map();
+    for (const e of opponentEncounters) {
+      const byOpponent = opponentDrilldowns.get(e.opponentId) || [];
+      byOpponent.push(drillForOpponent(e));
+      opponentDrilldowns.set(e.opponentId, byOpponent);
+      const c = e.opponentCountry?.trim() || "Unknown";
+      const byCountry = countryOpponentDrilldowns.get(c) || [];
+      byCountry.push(drillForOpponent(e));
+      countryOpponentDrilldowns.set(c, byCountry);
+    }
+    const top3LineEntries = topOpp.slice(0, 3).map(([id, v], i) => {
+      const displayName = v.name || id.slice(0, 8);
+      return {
+        lineLabel: `${i + 1}. ${displayName}`,
+        lineText: `${i + 1}. ${displayName}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`,
+        profileUrl: buildUserProfileUrl(id),
+        drill: opponentDrilldowns.get(id) || []
+      };
+    });
     sections.push({
       id: "opponents",
       title: "Opponents",
@@ -11954,15 +12056,17 @@
       lines: [
         selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
         "Top 3 opponents:",
-        ...topOpp.slice(0, 3).map(([id, v], i) => `${i + 1}. ${v.name || id.slice(0, 8)}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`),
+        ...top3LineEntries.map((x) => x.lineText),
         "Scope:",
         `Unique opponents: ${opponentCounts.size}`,
         `Unique countries: ${oppCountryCounts.size}`
       ].filter((x) => x !== ""),
+      lineLinks: top3LineEntries.filter((x) => typeof x.profileUrl === "string").map((x) => ({ lineLabel: x.lineLabel, url: x.profileUrl })),
+      lineDrilldowns: top3LineEntries.map((x) => ({ lineLabel: x.lineLabel, items: x.drill })),
       chart: {
         type: "bar",
         yLabel: "Match-ups by opponent country",
-        bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n }))
+        bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n, drilldown: countryOpponentDrilldowns.get(c) || [] }))
       }
     });
     const basePlayedAtByGameId = new Map(baseGames.map((g) => [g.gameId, g.playedAt]));

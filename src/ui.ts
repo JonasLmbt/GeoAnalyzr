@@ -451,6 +451,7 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   let sortKey: SortKey = "date";
   let sortDir: SortDir = "desc";
 
+  const hasOpponentItems = drilldown.some((d) => typeof d.opponentId === "string" || typeof d.opponentName === "string");
   const movementValues = [...new Set(drilldown.map((d) => d.movement).filter((x): x is string => typeof x === "string" && x.trim().length > 0))];
   const modeValues = [...new Set(drilldown.map((d) => d.gameMode).filter((x): x is string => typeof x === "string" && x.trim().length > 0))];
   const showMovement = movementValues.length > 1;
@@ -488,17 +489,59 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     return a;
   };
 
-  const columns: DrillColumn[] = [
-    { key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) },
-    { key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) },
-    { key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") },
-    { key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) }
-  ];
-  if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
-  if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
-  if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
-  if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-  if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+  const columns: DrillColumn[] = [{ key: "date", label: "Date", sortKey: "date", width: "160px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
+  if (hasOpponentItems) {
+    columns.push({
+      key: "opponent",
+      label: "Opponent",
+      width: "180px",
+      render: (item) => {
+        const name = item.opponentName || (item.opponentId ? shortGameId(item.opponentId) : "-");
+        if (item.opponentProfileUrl) {
+          const a = doc.createElement("a");
+          a.href = item.opponentProfileUrl;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = name;
+          a.style.color = analysisSettings.accent;
+          return a;
+        }
+        return mkTextCell(name, !item.opponentName);
+      }
+    });
+    columns.push({
+      key: "result",
+      label: "Result",
+      width: "90px",
+      render: (item) => {
+        const txt = item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-";
+        return mkTextCell(txt, txt === "-");
+      }
+    });
+    columns.push({
+      key: "matchups",
+      label: "Match-ups",
+      width: "90px",
+      render: (item) => mkTextCell(typeof item.matchups === "number" ? String(item.matchups) : "-", typeof item.matchups !== "number")
+    });
+    columns.push({
+      key: "country",
+      label: "Country",
+      sortKey: "country",
+      width: "160px",
+      render: (item) => mkTextCell(item.opponentCountry || countryNameFromCode(item.trueCountry))
+    });
+    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+  } else {
+    columns.push({ key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
+    columns.push({ key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") });
+    columns.push({ key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
+    if (showDuration) columns.push({ key: "duration", label: "Guess Duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+    if (showDamage) columns.push({ key: "damage", label: "Damage", width: "90px", render: (item) => mkTextCell(formatDamageValue(item.damage)) });
+    if (showMovement) columns.push({ key: "movement", label: "Movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+    if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+    if (showMate) columns.push({ key: "mate", label: "Mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+  }
   columns.push({
     key: "game",
     label: "Game",
@@ -510,8 +553,8 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
       return span;
     }
   });
-  if (showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
-  if (showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
+  if (!hasOpponentItems && showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
+  if (!hasOpponentItems && showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
 
   const thead = doc.createElement("thead");
   const headRow = doc.createElement("tr");
@@ -567,8 +610,8 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
         const bv = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
         return sortDir === "asc" ? av - bv : bv - av;
       }
-      const av = countryNameFromCode(a.trueCountry).toLowerCase();
-      const bv = countryNameFromCode(b.trueCountry).toLowerCase();
+      const av = (a.opponentCountry || countryNameFromCode(a.trueCountry)).toLowerCase();
+      const bv = (b.opponentCountry || countryNameFromCode(b.trueCountry)).toLowerCase();
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return items;
@@ -1791,6 +1834,7 @@ export function createUI(): UIHandle {
     body.style.marginBottom = "10px";
     body.style.marginTop = "2px";
     const lineDrillMap = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel, d.items]));
+    const lineLinkMap = new Map((section.lineLinks || []).map((d) => [d.lineLabel, d.url]));
     const createLineRow = (line: string): HTMLDivElement => {
       const row = doc.createElement("div");
       row.style.padding = "9px 11px";
@@ -1802,12 +1846,18 @@ export function createUI(): UIHandle {
       const sep = line.indexOf(":");
       if (sep > 0 && sep < line.length - 1) {
         const leftLabel = line.slice(0, sep).trim();
-        const left = doc.createElement("span");
+        const leftUrl = lineLinkMap.get(leftLabel);
+        const left = leftUrl ? doc.createElement("a") : doc.createElement("span");
         left.textContent = leftLabel;
         left.style.fontSize = "13px";
         left.style.fontWeight = "600";
-        left.style.color = palette.textMuted;
+        left.style.color = leftUrl ? analysisSettings.accent : palette.textMuted;
         left.style.letterSpacing = "0.15px";
+        if (leftUrl) {
+          (left as HTMLAnchorElement).href = leftUrl;
+          (left as HTMLAnchorElement).target = "_blank";
+          (left as HTMLAnchorElement).rel = "noopener noreferrer";
+        }
 
         const right = doc.createElement("span");
         right.textContent = line.slice(sep + 1).trim();
