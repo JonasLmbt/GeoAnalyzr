@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.9
+// @version      1.4.10
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7153,13 +7153,14 @@
       if (col.sortKey) {
         th.style.cursor = "pointer";
         th.style.userSelect = "none";
-        thBySort.set(col.sortKey, th);
+        const colSortKey = col.sortKey;
+        thBySort.set(colSortKey, th);
         th.addEventListener("click", () => {
-          if (sortKey === col.sortKey) {
+          if (sortKey === colSortKey) {
             sortDir = sortDir === "asc" ? "desc" : "asc";
           } else {
-            sortKey = col.sortKey;
-            sortDir = defaultSortDir[col.sortKey];
+            sortKey = colSortKey;
+            sortDir = defaultSortDir[colSortKey];
           }
           shown = 0;
           renderRows(true);
@@ -11701,7 +11702,7 @@
       const score = extractScore(r);
       const timeMs = extractTimeMs(r);
       const distMeters = extractDistanceMeters(r);
-      if (ts === void 0 || typeof score !== "number") return void 0;
+      if (ts === void 0 || typeof score !== "number") return null;
       return {
         round: r,
         ts,
@@ -11713,9 +11714,7 @@
         guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
         trueCountry: normalizeCountryCode(r.trueCountry)
       };
-    }).filter(
-      (x) => !!x
-    ).sort((a, b) => a.ts !== b.ts ? a.ts - b.ts : a.roundNumber - b.roundNumber);
+    }).filter((x) => x !== null).sort((a, b) => a.ts !== b.ts ? a.ts - b.ts : a.roundNumber - b.roundNumber);
     const roundBucketsByNumber = /* @__PURE__ */ new Map();
     for (const rm of roundMetricsForRoundSection) {
       const key = rm.roundNumber;
@@ -11840,7 +11839,11 @@
     const bestAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => b.avgScore - a.avgScore)[0];
     const worstAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => a.avgScore - b.avgScore)[0];
     const gameEntryDrill = (entry, enforceRoundCap = false) => entry ? entry.items.filter((r) => !enforceRoundCap || r.roundNumber <= entry.n).map((r) => toDrilldownItem(r.round, r.ts, r.score)) : [];
-    const gameDateLabel = (entry) => entry && entry.items.length > 0 ? formatShortDateTime(entry.items[0].ts) : "-";
+    const gameDateLabel = (entry) => {
+      if (!entry || entry.items.length === 0) return "-";
+      const first = entry.items[0];
+      return first ? formatShortDateTime(first.ts) : "-";
+    };
     sections.push({
       id: "rounds",
       title: "Rounds",
@@ -12413,7 +12416,7 @@
         const overall = countryAgg.get(country);
         const overallRounds = overall?.n || 0;
         const overallAvgScore = overall && overall.score.length > 0 ? overall.score.reduce((a, b) => a + b, 0) / overall.score.length : 0;
-        const overallHitRate = overallRounds > 0 ? overall.correct / overallRounds : 0;
+        const overallHitRate = overall && overallRounds > 0 ? overall.correct / overallRounds : 0;
         const overallThrowRate = overall && overall.score.length > 0 ? overall.throws / overall.score.length : 0;
         const overallFiveKRate = overall && overall.score.length > 0 ? overall.fiveKs / overall.score.length : 0;
         const overallAvgDamageDealt = overall && overallRounds > 0 ? overall.damageDealt / overallRounds : 0;

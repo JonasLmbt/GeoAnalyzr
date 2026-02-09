@@ -209,6 +209,18 @@ export interface AnalysisLineDrilldown {
   items: AnalysisDrilldownItem[];
 }
 
+type RoundSectionMetric = {
+  round: RoundRow;
+  ts: number;
+  gameId: string;
+  roundNumber: number;
+  score: number;
+  timeSec: number | undefined;
+  distKm: number | undefined;
+  guessCountry: string | undefined;
+  trueCountry: string | undefined;
+};
+
 function buildSmoothedScoreDistributionWithDrilldown(
   points: Array<{ score: number; drill: AnalysisDrilldownItem }>,
   bucketSize = 100
@@ -1627,13 +1639,13 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
   });
 
-  const roundMetricsForRoundSection = teamRounds
-    .map((r) => {
+  const roundMetricsForRoundSection: RoundSectionMetric[] = teamRounds
+    .map((r): RoundSectionMetric | null => {
       const ts = teamPlayedAtByGameId.get(r.gameId);
       const score = extractScore(r);
       const timeMs = extractTimeMs(r);
       const distMeters = extractDistanceMeters(r);
-      if (ts === undefined || typeof score !== "number") return undefined;
+      if (ts === undefined || typeof score !== "number") return null;
       return {
         round: r,
         ts,
@@ -1646,21 +1658,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         trueCountry: normalizeCountryCode(r.trueCountry)
       };
     })
-    .filter(
-      (
-        x
-      ): x is {
-        round: RoundRow;
-        ts: number;
-        gameId: string;
-        roundNumber: number;
-        score: number;
-        timeSec?: number;
-        distKm?: number;
-        guessCountry?: string;
-        trueCountry?: string;
-      } => !!x
-    )
+    .filter((x): x is RoundSectionMetric => x !== null)
     .sort((a, b) => (a.ts !== b.ts ? a.ts - b.ts : a.roundNumber - b.roundNumber));
 
   type RoundNumberBucket = {
@@ -1776,7 +1774,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
   ];
 
-  const roundsByGame = new Map<string, typeof roundMetricsForRoundSection[number][]>();
+  const roundsByGame = new Map<string, RoundSectionMetric[]>();
   for (const rm of roundMetricsForRoundSection) {
     if (!roundsByGame.has(rm.gameId)) roundsByGame.set(rm.gameId, []);
     roundsByGame.get(rm.gameId)!.push(rm);
@@ -1812,7 +1810,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const gameEntryDrill = (
     entry?: {
-      items: typeof roundMetricsForRoundSection;
+      items: RoundSectionMetric[];
       n: number;
     },
     enforceRoundCap = false
@@ -1822,8 +1820,11 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
           .filter((r) => !enforceRoundCap || r.roundNumber <= entry.n)
           .map((r) => toDrilldownItem(r.round, r.ts, r.score))
       : [];
-  const gameDateLabel = (entry?: { items: typeof roundMetricsForRoundSection }): string =>
-    entry && entry.items.length > 0 ? formatShortDateTime(entry.items[0].ts) : "-";
+  const gameDateLabel = (entry?: { items: RoundSectionMetric[] }): string => {
+    if (!entry || entry.items.length === 0) return "-";
+    const first = entry.items[0];
+    return first ? formatShortDateTime(first.ts) : "-";
+  };
 
   sections.push({
     id: "rounds",
@@ -2515,7 +2516,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         const overall = countryAgg.get(country);
         const overallRounds = overall?.n || 0;
         const overallAvgScore = overall && overall.score.length > 0 ? overall.score.reduce((a, b) => a + b, 0) / overall.score.length : 0;
-        const overallHitRate = overallRounds > 0 ? overall.correct / overallRounds : 0;
+        const overallHitRate = overall && overallRounds > 0 ? overall.correct / overallRounds : 0;
         const overallThrowRate = overall && overall.score.length > 0 ? overall.throws / overall.score.length : 0;
         const overallFiveKRate = overall && overall.score.length > 0 ? overall.fiveKs / overall.score.length : 0;
         const overallAvgDamageDealt = overall && overallRounds > 0 ? overall.damageDealt / overallRounds : 0;

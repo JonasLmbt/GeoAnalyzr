@@ -587,13 +587,14 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     if (col.sortKey) {
       th.style.cursor = "pointer";
       th.style.userSelect = "none";
-      thBySort.set(col.sortKey, th);
+      const colSortKey = col.sortKey;
+      thBySort.set(colSortKey, th);
       th.addEventListener("click", () => {
-        if (sortKey === col.sortKey) {
+        if (sortKey === colSortKey) {
           sortDir = sortDir === "asc" ? "desc" : "asc";
         } else {
-          sortKey = col.sortKey;
-          sortDir = defaultSortDir[col.sortKey];
+          sortKey = colSortKey;
+          sortDir = defaultSortDir[colSortKey];
         }
         shown = 0;
         renderRows(true);
