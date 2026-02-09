@@ -2180,6 +2180,13 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
 
     const sortedBuckets = [...bucketSet].sort((a, b) => a - b);
+    const MIN_BUCKET_ROUNDS_FOR_RATE = 5;
+    const PRIOR_STRENGTH = 12;
+    const smoothFraction = (success: number, total: number, prior: number, strength = PRIOR_STRENGTH): number => {
+      if (total <= 0) return prior;
+      const s = Math.max(0, Math.min(1, prior));
+      return (success + s * strength) / (total + strength);
+    };
     const makeCountrySeries = (
       metric:
         | "damage_dealt_share"
@@ -2194,6 +2201,17 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ) =>
       spotlightCandidates.map((country) => {
         const byBucket = countryTimeline.get(country) || new Map();
+        const overall = countryAgg.get(country);
+        const overallRounds = overall?.n || 0;
+        const overallAvgScore = overall && overall.score.length > 0 ? overall.score.reduce((a, b) => a + b, 0) / overall.score.length : 0;
+        const overallHitRate = overallRounds > 0 ? overall.correct / overallRounds : 0;
+        const overallThrowRate = overall && overall.score.length > 0 ? overall.throws / overall.score.length : 0;
+        const overallFiveKRate = overall && overall.score.length > 0 ? overall.fiveKs / overall.score.length : 0;
+        const overallAvgDamageDealt = overall && overallRounds > 0 ? overall.damageDealt / overallRounds : 0;
+        const overallAvgDamageTaken = overall && overallRounds > 0 ? overall.damageTaken / overallRounds : 0;
+        const overallDealtShare = totalDamageDealt > 0 && overall ? overall.damageDealt / totalDamageDealt : 0;
+        const overallTakenShare = totalDamageTaken > 0 && overall ? overall.damageTaken / totalDamageTaken : 0;
+        let lastY: number | undefined;
         const points = sortedBuckets.map((bucket) => {
           const v = byBucket.get(bucket) || {
             rounds: 0,
@@ -2205,16 +2223,63 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
             damageTaken: 0
           };
           const totals = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
-          let y = 0;
-          if (metric === "damage_dealt_share") y = totals.dealt > 0 ? (v.damageDealt / totals.dealt) * 100 : 0;
-          else if (metric === "damage_taken_share") y = totals.taken > 0 ? (v.damageTaken / totals.taken) * 100 : 0;
-          else if (metric === "avg_score") y = v.rounds > 0 ? v.scoreSum / v.rounds : 0;
-          else if (metric === "hit_rate") y = v.rounds > 0 ? (v.correct / v.rounds) * 100 : 0;
-          else if (metric === "throw_rate") y = v.rounds > 0 ? (v.throws / v.rounds) * 100 : 0;
-          else if (metric === "fivek_rate") y = v.rounds > 0 ? (v.fiveKs / v.rounds) * 100 : 0;
-          else if (metric === "avg_damage_dealt") y = v.rounds > 0 ? v.damageDealt / v.rounds : 0;
-          else if (metric === "avg_damage_taken") y = v.rounds > 0 ? v.damageTaken / v.rounds : 0;
-          else y = v.rounds;
+          let y: number | undefined;
+          if (metric === "rounds") {
+            y = v.rounds;
+          } else if (metric === "avg_score") {
+            y = v.rounds > 0 ? v.scoreSum / v.rounds : undefined;
+          } else if (metric === "avg_damage_dealt") {
+            y = v.rounds > 0 ? v.damageDealt / v.rounds : undefined;
+          } else if (metric === "avg_damage_taken") {
+            y = v.rounds > 0 ? v.damageTaken / v.rounds : undefined;
+          } else if (metric === "hit_rate") {
+            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE) {
+              y = smoothFraction(v.correct, v.rounds, overallHitRate) * 100;
+            }
+          } else if (metric === "throw_rate") {
+            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE) {
+              y = smoothFraction(v.throws, v.rounds, overallThrowRate) * 100;
+            }
+          } else if (metric === "fivek_rate") {
+            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE) {
+              y = smoothFraction(v.fiveKs, v.rounds, overallFiveKRate) * 100;
+            }
+          } else if (metric === "damage_dealt_share") {
+            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE && totals.dealt > 0) {
+              y = smoothFraction(v.damageDealt, totals.dealt, overallDealtShare) * 100;
+            }
+          } else if (metric === "damage_taken_share") {
+            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE && totals.taken > 0) {
+              y = smoothFraction(v.damageTaken, totals.taken, overallTakenShare) * 100;
+            }
+          }
+
+          if (y === undefined) {
+            if (lastY !== undefined) {
+              y = lastY;
+            } else if (metric === "rounds") {
+              y = 0;
+            } else if (metric === "avg_score") {
+              y = overallAvgScore;
+            } else if (metric === "avg_damage_dealt") {
+              y = overallAvgDamageDealt;
+            } else if (metric === "avg_damage_taken") {
+              y = overallAvgDamageTaken;
+            } else if (metric === "hit_rate") {
+              y = overallHitRate * 100;
+            } else if (metric === "throw_rate") {
+              y = overallThrowRate * 100;
+            } else if (metric === "fivek_rate") {
+              y = overallFiveKRate * 100;
+            } else if (metric === "damage_dealt_share") {
+              y = overallDealtShare * 100;
+            } else if (metric === "damage_taken_share") {
+              y = overallTakenShare * 100;
+            } else {
+              y = 0;
+            }
+          }
+          lastY = y;
           return { x: bucket, y, label: formatDay(bucket) };
         });
         return {
