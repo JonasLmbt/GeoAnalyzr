@@ -67,6 +67,29 @@ function toTsMaybe(isoMaybe: unknown): number | undefined {
   return Number.isFinite(t) ? t : undefined;
 }
 
+function asFiniteNumber(v: unknown): number | undefined {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
+function buildGoogleMapsUrl(lat?: number, lng?: number): string {
+  if (!isLatLngInRange(lat, lng)) return "";
+  return `https://www.google.com/maps?q=${lat},${lng}`;
+}
+
+function buildStreetViewUrl(lat?: number, lng?: number, heading?: number): string {
+  if (!isLatLngInRange(lat, lng)) return "";
+  const base = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+  if (typeof heading === "number" && Number.isFinite(heading)) {
+    return `${base}&heading=${heading}`;
+  }
+  return base;
+}
+
 function exportModeSheetKey(gameMode: string | undefined, modeFamily: string | undefined): string {
   const family = String(modeFamily || "").toLowerCase();
   if (family === "standard") return "standard";
@@ -247,6 +270,16 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     const p2Country = await resolveGuessCountryForExport(r.p2_guessCountry, r.p2_guessLat, r.p2_guessLng);
     const p3Country = await resolveGuessCountryForExport(r.p3_guessCountry, r.p3_guessLat, r.p3_guessLng);
     const p4Country = await resolveGuessCountryForExport(r.p4_guessCountry, r.p4_guessLat, r.p4_guessLng);
+    const trueHeading = asFiniteNumber(
+      pickFirst((r as any).raw, [
+        "panorama.heading",
+        "panorama.bearing",
+        "panorama.rotation",
+        "heading",
+        "bearing",
+        "rotation"
+      ])
+    );
     const rowBase: any = {
       gameId: r.gameId,
       roundNumber: r.roundNumber,
@@ -256,6 +289,9 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       true_country: r.trueCountry ?? "",
       true_lat: r.trueLat ?? "",
       true_lng: r.trueLng ?? "",
+      true_heading_deg: trueHeading ?? "",
+      true_googleMaps_url: buildGoogleMapsUrl(r.trueLat, r.trueLng),
+      true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, trueHeading),
       damage_multiplier: r.damageMultiplier ?? "",
       is_healing_round: r.isHealingRound ? 1 : 0,
       p1_playerId: r.p1_playerId ?? "",

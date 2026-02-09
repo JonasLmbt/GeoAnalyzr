@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.15
+// @version      1.3.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -32207,6 +32207,26 @@
     const t = Date.parse(isoMaybe);
     return Number.isFinite(t) ? t : void 0;
   }
+  function asFiniteNumber(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return void 0;
+  }
+  function buildGoogleMapsUrl(lat, lng) {
+    if (!isLatLngInRange2(lat, lng)) return "";
+    return `https://www.google.com/maps?q=${lat},${lng}`;
+  }
+  function buildStreetViewUrl(lat, lng, heading) {
+    if (!isLatLngInRange2(lat, lng)) return "";
+    const base = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+    if (typeof heading === "number" && Number.isFinite(heading)) {
+      return `${base}&heading=${heading}`;
+    }
+    return base;
+  }
   function exportModeSheetKey(gameMode, modeFamily) {
     const family = String(modeFamily || "").toLowerCase();
     if (family === "standard") return "standard";
@@ -32373,6 +32393,16 @@
       const p2Country = await resolveGuessCountryForExport(r.p2_guessCountry, r.p2_guessLat, r.p2_guessLng);
       const p3Country = await resolveGuessCountryForExport(r.p3_guessCountry, r.p3_guessLat, r.p3_guessLng);
       const p4Country = await resolveGuessCountryForExport(r.p4_guessCountry, r.p4_guessLat, r.p4_guessLng);
+      const trueHeading = asFiniteNumber(
+        pickFirst3(r.raw, [
+          "panorama.heading",
+          "panorama.bearing",
+          "panorama.rotation",
+          "heading",
+          "bearing",
+          "rotation"
+        ])
+      );
       const rowBase = {
         gameId: r.gameId,
         roundNumber: r.roundNumber,
@@ -32382,6 +32412,9 @@
         true_country: r.trueCountry ?? "",
         true_lat: r.trueLat ?? "",
         true_lng: r.trueLng ?? "",
+        true_heading_deg: trueHeading ?? "",
+        true_googleMaps_url: buildGoogleMapsUrl(r.trueLat, r.trueLng),
+        true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, trueHeading),
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
         p1_playerId: r.p1_playerId ?? "",
