@@ -404,11 +404,38 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   table.style.fontSize = "12px";
   card.appendChild(table);
 
+  type SortKey = "date" | "round" | "score" | "country";
+  type SortDir = "asc" | "desc";
+  const defaultSortDir: Record<SortKey, SortDir> = {
+    date: "desc",
+    round: "desc",
+    score: "desc",
+    country: "asc"
+  };
+  const sortLabel = (label: string, active: boolean, dir: SortDir): string => (active ? `${label} ${dir === "asc" ? "▲" : "▼"}` : label);
+  let sortKey: SortKey = "date";
+  let sortDir: SortDir = "desc";
+
   const thead = doc.createElement("thead");
   const headRow = doc.createElement("tr");
-  for (const h of ["Date", "Game", "Round", "Score", "Country", "Google Maps", "Street View"]) {
-    const th = doc.createElement("th");
-    th.textContent = h;
+  const thDate = doc.createElement("th");
+  const thGame = doc.createElement("th");
+  const thRound = doc.createElement("th");
+  const thScore = doc.createElement("th");
+  const thCountry = doc.createElement("th");
+  const thMaps = doc.createElement("th");
+  const thSv = doc.createElement("th");
+  const headers: Array<[HTMLTableCellElement, string, SortKey | null]> = [
+    [thDate, "Date", "date"],
+    [thGame, "Game", null],
+    [thRound, "Round", "round"],
+    [thScore, "Score", "score"],
+    [thCountry, "Country", "country"],
+    [thMaps, "Google Maps", null],
+    [thSv, "Street View", null]
+  ];
+  for (const [th, label, key] of headers) {
+    th.textContent = label;
     th.style.textAlign = "left";
     th.style.padding = "7px 8px";
     th.style.borderBottom = `1px solid ${palette.border}`;
@@ -416,6 +443,20 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
     th.style.position = "sticky";
     th.style.top = "0";
     th.style.background = palette.panel;
+    if (key) {
+      th.style.cursor = "pointer";
+      th.style.userSelect = "none";
+      th.addEventListener("click", () => {
+        if (sortKey === key) {
+          sortDir = sortDir === "asc" ? "desc" : "asc";
+        } else {
+          sortKey = key;
+          sortDir = defaultSortDir[key];
+        }
+        shown = 0;
+        renderRows(true);
+      });
+    }
     headRow.appendChild(th);
   }
   thead.appendChild(headRow);
@@ -424,12 +465,46 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   const tbody = doc.createElement("tbody");
   table.appendChild(tbody);
 
+  const getSortedItems = (): AnalysisDrilldownItem[] => {
+    const items = drilldown.slice();
+    items.sort((a, b) => {
+      if (sortKey === "date") {
+        const av = typeof a.ts === "number" ? a.ts : Number.NEGATIVE_INFINITY;
+        const bv = typeof b.ts === "number" ? b.ts : Number.NEGATIVE_INFINITY;
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      if (sortKey === "round") {
+        const av = Number.isFinite(a.roundNumber) ? a.roundNumber : Number.NEGATIVE_INFINITY;
+        const bv = Number.isFinite(b.roundNumber) ? b.roundNumber : Number.NEGATIVE_INFINITY;
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      if (sortKey === "score") {
+        const av = typeof a.score === "number" ? a.score : Number.NEGATIVE_INFINITY;
+        const bv = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
+        return sortDir === "asc" ? av - bv : bv - av;
+      }
+      const av = (a.trueCountry || "").toLowerCase();
+      const bv = (b.trueCountry || "").toLowerCase();
+      return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    return items;
+  };
+
+  const updateHeaderLabels = () => {
+    thDate.textContent = sortLabel("Date", sortKey === "date", sortDir);
+    thRound.textContent = sortLabel("Round", sortKey === "round", sortDir);
+    thScore.textContent = sortLabel("Score", sortKey === "score", sortDir);
+    thCountry.textContent = sortLabel("Country", sortKey === "country", sortDir);
+  };
+
   let shown = 0;
   const pageSize = 60;
-  const appendRows = () => {
-    const next = Math.min(drilldown.length, shown + pageSize);
+  const renderRows = (resetBody = false) => {
+    const sorted = getSortedItems();
+    if (resetBody) tbody.innerHTML = "";
+    const next = Math.min(sorted.length, shown + pageSize);
     for (let i = shown; i < next; i++) {
-      const item = drilldown[i];
+      const item = sorted[i];
       const tr = doc.createElement("tr");
       tr.style.borderBottom = `1px solid ${palette.border}`;
 
@@ -491,11 +566,13 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
       tbody.appendChild(tr);
     }
     shown = next;
-    if (shown >= drilldown.length) {
+    if (shown >= sorted.length) {
       moreBtn.remove();
     } else {
-      moreBtn.textContent = `Show more (${drilldown.length - shown} left)`;
+      if (!moreBtn.isConnected) card.appendChild(moreBtn);
+      moreBtn.textContent = `Show more (${sorted.length - shown} left)`;
     }
+    updateHeaderLabels();
   };
 
   const moreBtn = doc.createElement("button");
@@ -508,9 +585,9 @@ function openDrilldownOverlay(doc: Document, title: string, subtitle: string, dr
   moreBtn.style.padding = "5px 10px";
   moreBtn.style.cursor = "pointer";
   moreBtn.style.fontSize = "12px";
-  moreBtn.addEventListener("click", appendRows);
+  moreBtn.addEventListener("click", () => renderRows(false));
   card.appendChild(moreBtn);
-  appendRows();
+  renderRows(true);
 
   overlay.addEventListener("click", (ev) => {
     if (ev.target === overlay) overlay.remove();
