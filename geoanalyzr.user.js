@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.14
+// @version      1.3.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -8449,6 +8449,8 @@
     let dedupedRows = 0;
     let breakReason = "completed";
     let stoppedAtPage = 0;
+    let syncNewestObserved = lastSeen || 0;
+    let syncOldestObserved = Number.POSITIVE_INFINITY;
     const idSourceCounts = /* @__PURE__ */ new Map();
     const dropReasonCounts = /* @__PURE__ */ new Map();
     const dropTypeCounts = /* @__PURE__ */ new Map();
@@ -8456,10 +8458,7 @@
     const pageDiagnostics = [];
     for (let page = 1; page <= maxPages; page++) {
       pagesFetched = page;
-      const elapsed = Date.now() - startedAt;
-      const avgPerPage = elapsed / Math.max(1, page - 1);
-      const etaMs = page > 1 ? avgPerPage * Math.max(0, maxPages - page + 1) : 0;
-      opts.onStatus(`Feed page ${page}/${maxPages}... ETA ~${etaLabel(etaMs)}`);
+      opts.onStatus(`Feed page ${page}...`);
       const data = await fetchFeedPage(paginationToken, opts.ncfa);
       const entries = Array.isArray(data?.entries) ? data.entries : [];
       entriesSeen += entries.length;
@@ -8557,9 +8556,25 @@
       });
       paginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : void 0;
       const elapsed2 = Date.now() - startedAt;
-      const avgPerPage2 = elapsed2 / page;
-      const etaMs2 = avgPerPage2 * Math.max(0, maxPages - page);
-      opts.onStatus(`Synced ${inserted} games so far. ETA ~${etaLabel(etaMs2)}`);
+      let etaText = "ETA unknown";
+      let progressText = "";
+      if (deduped.length > 0) {
+        const newestOnPage = deduped.reduce((m, g) => Math.max(m, g.playedAt), 0);
+        const oldestOnPage = deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY);
+        if (newestOnPage > syncNewestObserved) syncNewestObserved = newestOnPage;
+        if (oldestOnPage < syncOldestObserved) syncOldestObserved = oldestOnPage;
+        if (lastSeen && syncNewestObserved > lastSeen && Number.isFinite(syncOldestObserved)) {
+          const covered = syncNewestObserved - syncOldestObserved;
+          const totalSpan = syncNewestObserved - lastSeen;
+          const progress = Math.max(0, Math.min(1, covered / totalSpan));
+          if (progress > 0) {
+            const etaMs2 = elapsed2 * ((1 - progress) / progress);
+            etaText = progress >= 0.999 ? "ETA ~0s" : `ETA ~${etaLabel(etaMs2)}`;
+            progressText = ` | progress ${(progress * 100).toFixed(1)}%`;
+          }
+        }
+      }
+      opts.onStatus(`Synced ${inserted} games so far.${progressText} ${etaText} (page ${page})`);
       if (!paginationToken) {
         breakReason = "no_pagination_token";
         stoppedAtPage = page;
