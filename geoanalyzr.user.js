@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.12
+// @version      1.3.13
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -32458,6 +32458,41 @@
       updatedAt: Date.now()
     });
   }
+  function basicNcfaFormatCheck(token) {
+    const clean = token.trim();
+    if (!clean) return { ok: false, reason: "Token is empty.", source: "format" };
+    if (clean.length < 20) return { ok: false, reason: "Token looks too short.", source: "format" };
+    if (/\s/.test(clean)) return { ok: false, reason: "Token must not contain whitespace.", source: "format" };
+    return void 0;
+  }
+  async function validateNcfaToken(token) {
+    const clean = typeof token === "string" ? token.trim() : "";
+    const basic = basicNcfaFormatCheck(clean);
+    if (basic) return basic;
+    try {
+      const res = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private", {
+        ncfa: clean,
+        forceGm: true
+      });
+      if (res.status >= 200 && res.status < 300) {
+        const hasEntries = Array.isArray(res.data?.entries);
+        return hasEntries ? { ok: true, status: res.status, reason: "Token accepted by private feed endpoint.", source: "api" } : { ok: true, status: res.status, reason: "Token accepted (response shape unexpected).", source: "api" };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, reason: "Token rejected (unauthorized).", source: "api" };
+      }
+      if (res.status === 429) {
+        return { ok: false, status: res.status, reason: "Rate-limited while validating token. Try again shortly.", source: "api" };
+      }
+      return { ok: false, status: res.status, reason: `Validation failed with HTTP ${res.status}.`, source: "api" };
+    } catch (e) {
+      return {
+        ok: false,
+        reason: `Validation request failed: ${e instanceof Error ? e.message : String(e)}`,
+        source: "network"
+      };
+    }
+  }
 
   // src/main.ts
   var NCFA_HELP_TEXT = "NCFA token setup:\n\n1) Open geoguessr.com and log in.\n2) Open browser DevTools (F12 / Ctrl+Shift+I).\n3) Go to Network tab.\n4) Reload the page.\n5) Use filter and search for 'stats'.\n6) Open a 'stats' request.\n7) In request headers, find the '_ncfa' cookie.\n8) Copy only the value after '=' up to ';' (without ';').";
@@ -32512,10 +32547,21 @@
 
 ${NCFA_HELP_TEXT}`, "");
             if (entered !== null) {
-              await setNcfaToken(entered);
-              resolved = await getResolvedNcfaToken();
-              ncfa = resolved.token;
-              ui.setStatus(ncfa ? "NCFA token saved. Continuing update..." : "No token saved. Continuing without NCFA...");
+              const clean = entered.trim();
+              if (clean) {
+                const check = await validateNcfaToken(clean);
+                if (check.ok) {
+                  await setNcfaToken(clean);
+                  resolved = await getResolvedNcfaToken();
+                  ncfa = resolved.token;
+                  ui.setStatus(`NCFA token saved and validated (HTTP ${check.status ?? "ok"}). Continuing update...`);
+                } else {
+                  ui.setStatus(`NCFA token not saved: ${check.reason} Continuing without NCFA...`);
+                }
+              } else {
+                await setNcfaToken("");
+                ui.setStatus("No token saved. Continuing without NCFA...");
+              }
             }
           }
         } else if (resolved.source === "cookie") {
@@ -32575,19 +32621,38 @@ ${NCFA_HELP_TEXT}`, "");
         helpText: NCFA_HELP_TEXT,
         repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
         onSave: async (token) => {
-          await setNcfaToken(token);
+          const clean = token.trim();
+          if (!clean) {
+            await setNcfaToken("");
+            const message2 = "NCFA token removed.";
+            ui.setStatus(message2);
+            return { saved: false, token: "", message: message2 };
+          }
+          const check = await validateNcfaToken(clean);
+          if (!check.ok) {
+            const message2 = `Token validation failed: ${check.reason}`;
+            ui.setStatus(message2);
+            return { saved: false, token: clean, message: message2 };
+          }
+          await setNcfaToken(clean);
           const now = await getNcfaToken();
-          const message = now ? "NCFA token saved." : "NCFA token removed.";
+          const message = `NCFA token saved and validated (HTTP ${check.status ?? "ok"}).`;
           ui.setStatus(message);
           return { saved: !!now, token: now, message };
         },
         onAutoDetect: async () => {
           const resolved = await getResolvedNcfaToken();
           if (resolved.token) {
-            await setNcfaToken(resolved.token);
-            const message2 = `Auto-detect successful (${resolved.source}). Token saved.`;
+            const check = await validateNcfaToken(resolved.token);
+            if (check.ok) {
+              await setNcfaToken(resolved.token);
+              const message3 = `Auto-detect successful (${resolved.source}). Token validated and saved.`;
+              ui.setStatus(message3);
+              return { detected: true, token: resolved.token, source: resolved.source, message: message3 };
+            }
+            const message2 = `Auto-detected token failed validation (${resolved.source}): ${check.reason}`;
             ui.setStatus(message2);
-            return { detected: true, token: resolved.token, source: resolved.source, message: message2 };
+            return { detected: false, token: resolved.token, source: resolved.source, message: message2 };
           }
           const sessionOk = await hasAuthenticatedSession();
           if (sessionOk) {

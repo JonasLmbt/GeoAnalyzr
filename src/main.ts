@@ -4,7 +4,7 @@ import { syncFeed } from "./sync";
 import { fetchMissingDuelsDetails } from "./details";
 import { getAnalysisWindowData } from "./analysis";
 import { exportExcel } from "./export";
-import { getNcfaToken, getResolvedNcfaToken, setNcfaToken } from "./auth";
+import { getNcfaToken, getResolvedNcfaToken, setNcfaToken, validateNcfaToken } from "./auth";
 
 const NCFA_HELP_TEXT =
   "NCFA token setup:\n\n" +
@@ -81,10 +81,21 @@ async function hasAuthenticatedSession(): Promise<boolean> {
         if (wantsSet) {
           const entered = prompt(`Paste _ncfa token here.\n\n${NCFA_HELP_TEXT}`, "");
           if (entered !== null) {
-            await setNcfaToken(entered);
-            resolved = await getResolvedNcfaToken();
-            ncfa = resolved.token;
-            ui.setStatus(ncfa ? "NCFA token saved. Continuing update..." : "No token saved. Continuing without NCFA...");
+            const clean = entered.trim();
+            if (clean) {
+              const check = await validateNcfaToken(clean);
+              if (check.ok) {
+                await setNcfaToken(clean);
+                resolved = await getResolvedNcfaToken();
+                ncfa = resolved.token;
+                ui.setStatus(`NCFA token saved and validated (HTTP ${check.status ?? "ok"}). Continuing update...`);
+              } else {
+                ui.setStatus(`NCFA token not saved: ${check.reason} Continuing without NCFA...`);
+              }
+            } else {
+              await setNcfaToken("");
+              ui.setStatus("No token saved. Continuing without NCFA...");
+            }
           }
         }
       } else if (resolved.source === "cookie") {
@@ -147,19 +158,38 @@ async function hasAuthenticatedSession(): Promise<boolean> {
       helpText: NCFA_HELP_TEXT,
       repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
       onSave: async (token) => {
-        await setNcfaToken(token);
+        const clean = token.trim();
+        if (!clean) {
+          await setNcfaToken("");
+          const message = "NCFA token removed.";
+          ui.setStatus(message);
+          return { saved: false, token: "", message };
+        }
+        const check = await validateNcfaToken(clean);
+        if (!check.ok) {
+          const message = `Token validation failed: ${check.reason}`;
+          ui.setStatus(message);
+          return { saved: false, token: clean, message };
+        }
+        await setNcfaToken(clean);
         const now = await getNcfaToken();
-        const message = now ? "NCFA token saved." : "NCFA token removed.";
+        const message = `NCFA token saved and validated (HTTP ${check.status ?? "ok"}).`;
         ui.setStatus(message);
         return { saved: !!now, token: now, message };
       },
       onAutoDetect: async () => {
         const resolved = await getResolvedNcfaToken();
         if (resolved.token) {
-          await setNcfaToken(resolved.token);
-          const message = `Auto-detect successful (${resolved.source}). Token saved.`;
+          const check = await validateNcfaToken(resolved.token);
+          if (check.ok) {
+            await setNcfaToken(resolved.token);
+            const message = `Auto-detect successful (${resolved.source}). Token validated and saved.`;
+            ui.setStatus(message);
+            return { detected: true, token: resolved.token, source: resolved.source, message };
+          }
+          const message = `Auto-detected token failed validation (${resolved.source}): ${check.reason}`;
           ui.setStatus(message);
-          return { detected: true, token: resolved.token, source: resolved.source, message };
+          return { detected: false, token: resolved.token, source: resolved.source, message };
         }
         const sessionOk = await hasAuthenticatedSession();
         if (sessionOk) {
