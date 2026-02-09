@@ -427,36 +427,74 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   chartHeading.style.margin = "2px 4px 6px";
   chartWrap.appendChild(chartHeading);
 
-  const points = aggregateLinePoints(chart.points);
+  const colorPalette = [
+    analysisSettings.accent,
+    "#ff6b6b",
+    "#22c55e",
+    "#f59e0b",
+    "#a78bfa",
+    "#06b6d4",
+    "#f97316",
+    "#84cc16",
+    "#e879f9",
+    "#60a5fa"
+  ];
+  const baseSeries =
+    chart.series && chart.series.length > 0
+      ? chart.series
+      : [{ key: "main", label: chart.yLabel || title, points: chart.points }];
+  const series = baseSeries
+    .map((s, idx) => ({
+      ...s,
+      color: colorPalette[idx % colorPalette.length],
+      points: aggregateLinePoints(s.points)
+    }))
+    .filter((s) => s.points.length > 1);
+  if (series.length === 0) return chartWrap;
+
+  const allPoints = series.flatMap((s) => s.points);
   const w = 1500;
   const h = 300;
   const ml = 60;
   const mr = 20;
   const mt = 16;
   const mb = 42;
-  const minX = points[0].x;
-  const maxX = points[points.length - 1].x;
-  const minY = Math.min(...points.map((p) => p.y));
-  const maxY = Math.max(...points.map((p) => p.y));
+  const minX = Math.min(...allPoints.map((p) => p.x));
+  const maxX = Math.max(...allPoints.map((p) => p.x));
+  const minY = Math.min(...allPoints.map((p) => p.y));
+  const maxY = Math.max(...allPoints.map((p) => p.y));
   const xSpan = Math.max(1, maxX - minX);
   const ySpan = Math.max(1, maxY - minY);
   const mapX = (x: number) => ml + ((x - minX) / xSpan) * (w - ml - mr);
   const mapY = (y: number) => h - mb - ((y - minY) / ySpan) * (h - mt - mb);
-  const poly = points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
-  const accent = analysisSettings.accent;
-  const pointMarkers = points
-    .map((p) => {
-      const x = mapX(p.x).toFixed(2);
-      const y = mapY(p.y).toFixed(2);
-      const label = p.label ? `${p.label} - ` : "";
-      const value = Number.isFinite(p.y) ? (Math.abs(p.y) >= 100 ? p.y.toFixed(1) : p.y.toFixed(2)) : String(p.y);
-      const tip = escapeSvgText(`${label}${value}`);
-      return `<circle class="ga-line-point" cx="${x}" cy="${y}" r="2.5" fill="${accent}"><title>${tip}</title></circle>`;
-    })
-    .join("");
+
+  let lineMarkup = "";
+  let pointMarkup = "";
+  for (let i = 0; i < series.length; i++) {
+    const s = series[i];
+    const poly = s.points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
+    lineMarkup += `<polyline class="ga-line-main ga-line-${i}" fill="none" stroke="${s.color}" stroke-width="${
+      series.length > 1 ? 2.4 : 3
+    }" points="${poly}"><title>${escapeSvgText(`${s.label} (${title})`)}</title></polyline>`;
+    pointMarkup += s.points
+      .map((p) => {
+        const x = mapX(p.x).toFixed(2);
+        const y = mapY(p.y).toFixed(2);
+        const label = p.label ? `${p.label} - ` : "";
+        const value = Number.isFinite(p.y) ? (Math.abs(p.y) >= 100 ? p.y.toFixed(1) : p.y.toFixed(2)) : String(p.y);
+        const tip = escapeSvgText(`${s.label}: ${label}${value}`);
+        return `<circle class="ga-line-point ga-line-point-${i}" cx="${x}" cy="${y}" r="${
+          series.length > 1 ? 2 : 2.5
+        }" fill="${s.color}"><title>${tip}</title></circle>`;
+      })
+      .join("");
+  }
+
   const yMid = (minY + maxY) / 2;
-  const xStartLabel = points[0].label || "";
-  const xEndLabel = points[points.length - 1].label || "";
+  const startCandidates = allPoints.filter((p) => p.x === minX);
+  const endCandidates = allPoints.filter((p) => p.x === maxX);
+  const xStartLabel = startCandidates.find((p) => p.label)?.label || "";
+  const xEndLabel = endCandidates.find((p) => p.label)?.label || "";
   const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("width", "100%");
@@ -470,10 +508,8 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
     </style>
     <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
     <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <polyline class="ga-line-main" fill="none" stroke="${accent}" stroke-width="3" points="${poly}">
-      <title>${escapeSvgText(`${title} (hover points for exact values)`)}</title>
-    </polyline>
-    ${pointMarkers}
+    ${lineMarkup}
+    ${pointMarkup}
     <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
     <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(yMid)}</text>
     <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(minY)}</text>
@@ -482,6 +518,30 @@ function renderLineChart(chart: Extract<AnalysisChart, { type: "line" }>, title:
   `;
   chartWrap.appendChild(createChartActions(svg, title));
   chartWrap.appendChild(svg);
+  if (series.length > 1) {
+    const legend = doc.createElement("div");
+    legend.style.display = "flex";
+    legend.style.flexWrap = "wrap";
+    legend.style.gap = "8px 12px";
+    legend.style.margin = "6px 4px 2px";
+    for (const s of series) {
+      const item = doc.createElement("div");
+      item.style.display = "inline-flex";
+      item.style.alignItems = "center";
+      item.style.gap = "6px";
+      item.style.fontSize = "11px";
+      item.style.color = palette.textMuted;
+      const swatch = doc.createElement("span");
+      swatch.style.width = "10px";
+      swatch.style.height = "10px";
+      swatch.style.borderRadius = "2px";
+      swatch.style.background = s.color;
+      item.appendChild(swatch);
+      item.appendChild(doc.createTextNode(s.label));
+      legend.appendChild(item);
+    }
+    chartWrap.appendChild(legend);
+  }
   return chartWrap;
 }
 
@@ -702,6 +762,103 @@ function renderSelectableBarChart(chart: Extract<AnalysisChart, { type: "selecta
 
   metricSelect.addEventListener("change", render);
   if (sortSelect) sortSelect.addEventListener("change", render);
+  render();
+  return wrap;
+}
+
+function renderSelectableLineChart(chart: Extract<AnalysisChart, { type: "selectableLine" }>, title: string, doc: Document): HTMLElement {
+  const palette = getThemePalette();
+  const maxCompare = Math.max(1, Math.min(chart.maxCompare ?? 4, 4));
+  const wrap = doc.createElement("div");
+  wrap.style.marginBottom = "8px";
+  wrap.style.border = `1px solid ${palette.border}`;
+  wrap.style.borderRadius = "8px";
+  wrap.style.background = palette.panelAlt;
+  wrap.style.padding = "6px";
+
+  const head = doc.createElement("div");
+  head.style.display = "flex";
+  head.style.flexWrap = "wrap";
+  head.style.alignItems = "center";
+  head.style.gap = "8px";
+  head.style.margin = "2px 4px 6px";
+  wrap.appendChild(head);
+
+  const heading = doc.createElement("div");
+  heading.textContent = title;
+  heading.style.fontSize = "12px";
+  heading.style.fontWeight = "700";
+  heading.style.color = palette.textMuted;
+  head.appendChild(heading);
+
+  const metricSelect = doc.createElement("select");
+  metricSelect.style.background = palette.buttonBg;
+  metricSelect.style.color = palette.buttonText;
+  metricSelect.style.border = `1px solid ${palette.border}`;
+  metricSelect.style.borderRadius = "7px";
+  metricSelect.style.padding = "2px 6px";
+  metricSelect.style.fontSize = "11px";
+  for (const o of chart.options) {
+    const opt = doc.createElement("option");
+    opt.value = o.key;
+    opt.textContent = o.label;
+    metricSelect.appendChild(opt);
+  }
+  metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
+  head.appendChild(metricSelect);
+
+  const compareSelectors: HTMLSelectElement[] = [];
+  const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
+  for (let i = 0; i < maxCompare; i++) {
+    const sel = doc.createElement("select");
+    sel.style.background = palette.buttonBg;
+    sel.style.color = palette.buttonText;
+    sel.style.border = `1px solid ${palette.border}`;
+    sel.style.borderRadius = "7px";
+    sel.style.padding = "2px 6px";
+    sel.style.fontSize = "11px";
+    const noneOpt = doc.createElement("option");
+    noneOpt.value = "";
+    noneOpt.textContent = i === 0 ? "Compare country" : `Compare country ${i + 1}`;
+    sel.appendChild(noneOpt);
+    for (const c of chart.compareCandidates) {
+      const opt = doc.createElement("option");
+      opt.value = c.key;
+      opt.textContent = c.label;
+      sel.appendChild(opt);
+    }
+    sel.value = defaultCompare[i] || "";
+    compareSelectors.push(sel);
+    head.appendChild(sel);
+  }
+
+  const content = doc.createElement("div");
+  wrap.appendChild(content);
+
+  const render = () => {
+    content.innerHTML = "";
+    const selectedMetric = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
+    if (!selectedMetric) return;
+    const keyOrder = [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
+    const uniqueKeys: string[] = [];
+    for (const key of keyOrder) {
+      if (!uniqueKeys.includes(key)) uniqueKeys.push(key);
+    }
+    const series = uniqueKeys
+      .map((key) => selectedMetric.series.find((s) => s.key === key))
+      .filter((s): s is NonNullable<typeof s> => !!s);
+    if (series.length === 0) return;
+    const lineChart: Extract<AnalysisChart, { type: "line" }> = {
+      type: "line",
+      yLabel: selectedMetric.label,
+      points: series[0].points,
+      series
+    };
+    content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc));
+  };
+
+  metricSelect.addEventListener("change", render);
+  for (const sel of compareSelectors) sel.addEventListener("change", render);
   render();
   return wrap;
 }
@@ -1422,6 +1579,9 @@ export function createUI(): UIHandle {
       }
       if (chart.type === "selectableBar" && chart.options.length > 0) {
         card.appendChild(renderSelectableBarChart(chart, chartTitle, doc));
+      }
+      if (chart.type === "selectableLine" && chart.options.length > 0) {
+        card.appendChild(renderSelectableLineChart(chart, chartTitle, doc));
       }
     }
     return card;

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.10
+// @version      1.3.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7014,34 +7014,60 @@
     chartHeading.style.color = palette.textMuted;
     chartHeading.style.margin = "2px 4px 6px";
     chartWrap.appendChild(chartHeading);
-    const points = aggregateLinePoints(chart.points);
+    const colorPalette = [
+      analysisSettings.accent,
+      "#ff6b6b",
+      "#22c55e",
+      "#f59e0b",
+      "#a78bfa",
+      "#06b6d4",
+      "#f97316",
+      "#84cc16",
+      "#e879f9",
+      "#60a5fa"
+    ];
+    const baseSeries = chart.series && chart.series.length > 0 ? chart.series : [{ key: "main", label: chart.yLabel || title, points: chart.points }];
+    const series = baseSeries.map((s, idx) => ({
+      ...s,
+      color: colorPalette[idx % colorPalette.length],
+      points: aggregateLinePoints(s.points)
+    })).filter((s) => s.points.length > 1);
+    if (series.length === 0) return chartWrap;
+    const allPoints = series.flatMap((s) => s.points);
     const w = 1500;
     const h = 300;
     const ml = 60;
     const mr = 20;
     const mt = 16;
     const mb = 42;
-    const minX = points[0].x;
-    const maxX = points[points.length - 1].x;
-    const minY = Math.min(...points.map((p) => p.y));
-    const maxY = Math.max(...points.map((p) => p.y));
+    const minX = Math.min(...allPoints.map((p) => p.x));
+    const maxX = Math.max(...allPoints.map((p) => p.x));
+    const minY = Math.min(...allPoints.map((p) => p.y));
+    const maxY = Math.max(...allPoints.map((p) => p.y));
     const xSpan = Math.max(1, maxX - minX);
     const ySpan = Math.max(1, maxY - minY);
     const mapX = (x) => ml + (x - minX) / xSpan * (w - ml - mr);
     const mapY = (y) => h - mb - (y - minY) / ySpan * (h - mt - mb);
-    const poly = points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
-    const accent = analysisSettings.accent;
-    const pointMarkers = points.map((p) => {
-      const x = mapX(p.x).toFixed(2);
-      const y = mapY(p.y).toFixed(2);
-      const label = p.label ? `${p.label} - ` : "";
-      const value = Number.isFinite(p.y) ? Math.abs(p.y) >= 100 ? p.y.toFixed(1) : p.y.toFixed(2) : String(p.y);
-      const tip = escapeSvgText(`${label}${value}`);
-      return `<circle class="ga-line-point" cx="${x}" cy="${y}" r="2.5" fill="${accent}"><title>${tip}</title></circle>`;
-    }).join("");
+    let lineMarkup = "";
+    let pointMarkup = "";
+    for (let i = 0; i < series.length; i++) {
+      const s = series[i];
+      const poly = s.points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
+      lineMarkup += `<polyline class="ga-line-main ga-line-${i}" fill="none" stroke="${s.color}" stroke-width="${series.length > 1 ? 2.4 : 3}" points="${poly}"><title>${escapeSvgText(`${s.label} (${title})`)}</title></polyline>`;
+      pointMarkup += s.points.map((p) => {
+        const x = mapX(p.x).toFixed(2);
+        const y = mapY(p.y).toFixed(2);
+        const label = p.label ? `${p.label} - ` : "";
+        const value = Number.isFinite(p.y) ? Math.abs(p.y) >= 100 ? p.y.toFixed(1) : p.y.toFixed(2) : String(p.y);
+        const tip = escapeSvgText(`${s.label}: ${label}${value}`);
+        return `<circle class="ga-line-point ga-line-point-${i}" cx="${x}" cy="${y}" r="${series.length > 1 ? 2 : 2.5}" fill="${s.color}"><title>${tip}</title></circle>`;
+      }).join("");
+    }
     const yMid = (minY + maxY) / 2;
-    const xStartLabel = points[0].label || "";
-    const xEndLabel = points[points.length - 1].label || "";
+    const startCandidates = allPoints.filter((p) => p.x === minX);
+    const endCandidates = allPoints.filter((p) => p.x === maxX);
+    const xStartLabel = startCandidates.find((p) => p.label)?.label || "";
+    const xEndLabel = endCandidates.find((p) => p.label)?.label || "";
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
@@ -7055,10 +7081,8 @@
     </style>
     <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
     <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <polyline class="ga-line-main" fill="none" stroke="${accent}" stroke-width="3" points="${poly}">
-      <title>${escapeSvgText(`${title} (hover points for exact values)`)}</title>
-    </polyline>
-    ${pointMarkers}
+    ${lineMarkup}
+    ${pointMarkup}
     <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
     <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(yMid)}</text>
     <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(minY)}</text>
@@ -7067,6 +7091,30 @@
   `;
     chartWrap.appendChild(createChartActions(svg, title));
     chartWrap.appendChild(svg);
+    if (series.length > 1) {
+      const legend = doc.createElement("div");
+      legend.style.display = "flex";
+      legend.style.flexWrap = "wrap";
+      legend.style.gap = "8px 12px";
+      legend.style.margin = "6px 4px 2px";
+      for (const s of series) {
+        const item = doc.createElement("div");
+        item.style.display = "inline-flex";
+        item.style.alignItems = "center";
+        item.style.gap = "6px";
+        item.style.fontSize = "11px";
+        item.style.color = palette.textMuted;
+        const swatch = doc.createElement("span");
+        swatch.style.width = "10px";
+        swatch.style.height = "10px";
+        swatch.style.borderRadius = "2px";
+        swatch.style.background = s.color;
+        item.appendChild(swatch);
+        item.appendChild(doc.createTextNode(s.label));
+        legend.appendChild(item);
+      }
+      chartWrap.appendChild(legend);
+    }
     return chartWrap;
   }
   function renderBarChart(chart, title, doc) {
@@ -7272,6 +7320,93 @@
     };
     metricSelect.addEventListener("change", render);
     if (sortSelect) sortSelect.addEventListener("change", render);
+    render();
+    return wrap;
+  }
+  function renderSelectableLineChart(chart, title, doc) {
+    const palette = getThemePalette();
+    const maxCompare = Math.max(1, Math.min(chart.maxCompare ?? 4, 4));
+    const wrap = doc.createElement("div");
+    wrap.style.marginBottom = "8px";
+    wrap.style.border = `1px solid ${palette.border}`;
+    wrap.style.borderRadius = "8px";
+    wrap.style.background = palette.panelAlt;
+    wrap.style.padding = "6px";
+    const head = doc.createElement("div");
+    head.style.display = "flex";
+    head.style.flexWrap = "wrap";
+    head.style.alignItems = "center";
+    head.style.gap = "8px";
+    head.style.margin = "2px 4px 6px";
+    wrap.appendChild(head);
+    const heading = doc.createElement("div");
+    heading.textContent = title;
+    heading.style.fontSize = "12px";
+    heading.style.fontWeight = "700";
+    heading.style.color = palette.textMuted;
+    head.appendChild(heading);
+    const metricSelect = doc.createElement("select");
+    metricSelect.style.background = palette.buttonBg;
+    metricSelect.style.color = palette.buttonText;
+    metricSelect.style.border = `1px solid ${palette.border}`;
+    metricSelect.style.borderRadius = "7px";
+    metricSelect.style.padding = "2px 6px";
+    metricSelect.style.fontSize = "11px";
+    for (const o of chart.options) {
+      const opt = doc.createElement("option");
+      opt.value = o.key;
+      opt.textContent = o.label;
+      metricSelect.appendChild(opt);
+    }
+    metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
+    head.appendChild(metricSelect);
+    const compareSelectors = [];
+    const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
+    for (let i = 0; i < maxCompare; i++) {
+      const sel = doc.createElement("select");
+      sel.style.background = palette.buttonBg;
+      sel.style.color = palette.buttonText;
+      sel.style.border = `1px solid ${palette.border}`;
+      sel.style.borderRadius = "7px";
+      sel.style.padding = "2px 6px";
+      sel.style.fontSize = "11px";
+      const noneOpt = doc.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = i === 0 ? "Compare country" : `Compare country ${i + 1}`;
+      sel.appendChild(noneOpt);
+      for (const c of chart.compareCandidates) {
+        const opt = doc.createElement("option");
+        opt.value = c.key;
+        opt.textContent = c.label;
+        sel.appendChild(opt);
+      }
+      sel.value = defaultCompare[i] || "";
+      compareSelectors.push(sel);
+      head.appendChild(sel);
+    }
+    const content = doc.createElement("div");
+    wrap.appendChild(content);
+    const render = () => {
+      content.innerHTML = "";
+      const selectedMetric = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
+      if (!selectedMetric) return;
+      const keyOrder = [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
+      const uniqueKeys = [];
+      for (const key of keyOrder) {
+        if (!uniqueKeys.includes(key)) uniqueKeys.push(key);
+      }
+      const series = uniqueKeys.map((key) => selectedMetric.series.find((s) => s.key === key)).filter((s) => !!s);
+      if (series.length === 0) return;
+      const lineChart = {
+        type: "line",
+        yLabel: selectedMetric.label,
+        points: series[0].points,
+        series
+      };
+      content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc));
+    };
+    metricSelect.addEventListener("change", render);
+    for (const sel of compareSelectors) sel.addEventListener("change", render);
     render();
     return wrap;
   }
@@ -7891,6 +8026,9 @@
         }
         if (chart.type === "selectableBar" && chart.options.length > 0) {
           card.appendChild(renderSelectableBarChart(chart, chartTitle, doc));
+        }
+        if (chart.type === "selectableLine" && chart.options.length > 0) {
+          card.appendChild(renderSelectableLineChart(chart, chartTitle, doc));
         }
       }
       return card;
@@ -10889,6 +11027,8 @@
       countryAgg.set(t, entry);
     }
     const topCountries = [...countryAgg.entries()].sort((a, b) => b[1].n - a[1].n);
+    const totalDamageDealt = topCountries.reduce((acc, [, v]) => acc + v.damageDealt, 0);
+    const totalDamageTaken = topCountries.reduce((acc, [, v]) => acc + v.damageTaken, 0);
     const countryMetricRows = topCountries.map(([c, v]) => ({
       country: c,
       n: v.n,
@@ -10899,7 +11039,9 @@
       throwRate: v.score.length > 0 ? v.throws / v.score.length : 0,
       fiveKRate: v.score.length > 0 ? v.fiveKs / v.score.length : 0,
       avgDamageDealt: v.damageN > 0 ? v.damageDealt / v.damageN : 0,
-      avgDamageTaken: v.damageN > 0 ? v.damageTaken / v.damageN : 0
+      avgDamageTaken: v.damageN > 0 ? v.damageTaken / v.damageN : 0,
+      damageDealtShare: totalDamageDealt > 0 ? v.damageDealt / totalDamageDealt * 100 : 0,
+      damageTakenShare: totalDamageTaken > 0 ? v.damageTaken / totalDamageTaken * 100 : 0
     }));
     const countryMetricOptions = [
       { key: "avg_score", label: "Avg score", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore })) },
@@ -10914,6 +11056,16 @@
       { key: "fivek_rate", label: "5k rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100 })) },
       { key: "damage_dealt", label: "Avg damage dealt", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageDealt })) },
       { key: "damage_taken", label: "Avg damage taken", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageTaken })) },
+      {
+        key: "damage_dealt_share",
+        label: "Damage dealt share (%)",
+        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageDealtShare }))
+      },
+      {
+        key: "damage_taken_share",
+        label: "Damage taken share (%)",
+        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageTakenShare }))
+      },
       { key: "rounds", label: "Rounds", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n })) }
     ];
     const confusionMap = /* @__PURE__ */ new Map();
@@ -11189,12 +11341,91 @@
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];
     if (spotlightCountry && countryAgg.has(spotlightCountry)) {
       const agg = countryAgg.get(spotlightCountry);
-      const countryRounds2 = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+      const countryRounds2 = teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
       const countryScores = countryRounds2.map(extractScore).filter((x) => typeof x === "number");
       const countryFiveK = countryScores.filter((s) => s >= 5e3).length;
       const countryThrows = countryScores.filter((s) => s < 50).length;
       const distributionAll = buildSmoothedScoreDistribution(countryScores);
       const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
+      const spotlightCandidates = [
+        spotlightCountry,
+        ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
+      ];
+      const spanStart = teamGames[0]?.playedAt ?? gameTimes[0];
+      const spanEnd = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
+      const timelineBucketMs = pickOverviewBucketMs(Math.max(0, spanEnd - spanStart));
+      const countryTimeline = /* @__PURE__ */ new Map();
+      const totalDamageByBucket = /* @__PURE__ */ new Map();
+      const bucketSet = /* @__PURE__ */ new Set();
+      for (const r of teamRounds) {
+        const ts = teamPlayedAtByGameId.get(r.gameId);
+        const country = normalizeCountryCode(r.trueCountry);
+        if (!ts || !country || !spotlightCandidates.includes(country)) continue;
+        const day = startOfLocalDay(ts);
+        const bucket = timelineBucketMs ? Math.floor(day / timelineBucketMs) * timelineBucketMs : day;
+        bucketSet.add(bucket);
+        if (!countryTimeline.has(country)) countryTimeline.set(country, /* @__PURE__ */ new Map());
+        const byBucket = countryTimeline.get(country);
+        const cur = byBucket.get(bucket) || { rounds: 0, scoreSum: 0, correct: 0, throws: 0, fiveKs: 0, damageDealt: 0, damageTaken: 0 };
+        cur.rounds += 1;
+        const sc = extractScore(r);
+        if (typeof sc === "number") {
+          cur.scoreSum += sc;
+          if (sc < 50) cur.throws += 1;
+          if (sc >= 5e3) cur.fiveKs += 1;
+        }
+        const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+        if (guess && guess === country) cur.correct += 1;
+        if (ownPlayerId) {
+          const diff = getRoundDamageDiff(r, ownPlayerId);
+          if (typeof diff === "number" && Number.isFinite(diff)) {
+            if (diff > 0) {
+              cur.damageDealt += diff;
+              const total = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
+              total.dealt += diff;
+              totalDamageByBucket.set(bucket, total);
+            } else if (diff < 0) {
+              cur.damageTaken += -diff;
+              const total = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
+              total.taken += -diff;
+              totalDamageByBucket.set(bucket, total);
+            }
+          }
+        }
+        byBucket.set(bucket, cur);
+      }
+      const sortedBuckets = [...bucketSet].sort((a, b) => a - b);
+      const makeCountrySeries = (metric) => spotlightCandidates.map((country) => {
+        const byBucket = countryTimeline.get(country) || /* @__PURE__ */ new Map();
+        const points = sortedBuckets.map((bucket) => {
+          const v = byBucket.get(bucket) || {
+            rounds: 0,
+            scoreSum: 0,
+            correct: 0,
+            throws: 0,
+            fiveKs: 0,
+            damageDealt: 0,
+            damageTaken: 0
+          };
+          const totals = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
+          let y = 0;
+          if (metric === "damage_dealt_share") y = totals.dealt > 0 ? v.damageDealt / totals.dealt * 100 : 0;
+          else if (metric === "damage_taken_share") y = totals.taken > 0 ? v.damageTaken / totals.taken * 100 : 0;
+          else if (metric === "avg_score") y = v.rounds > 0 ? v.scoreSum / v.rounds : 0;
+          else if (metric === "hit_rate") y = v.rounds > 0 ? v.correct / v.rounds * 100 : 0;
+          else if (metric === "throw_rate") y = v.rounds > 0 ? v.throws / v.rounds * 100 : 0;
+          else if (metric === "fivek_rate") y = v.rounds > 0 ? v.fiveKs / v.rounds * 100 : 0;
+          else if (metric === "avg_damage_dealt") y = v.rounds > 0 ? v.damageDealt / v.rounds : 0;
+          else if (metric === "avg_damage_taken") y = v.rounds > 0 ? v.damageTaken / v.rounds : 0;
+          else y = v.rounds;
+          return { x: bucket, y, label: formatDay(bucket) };
+        });
+        return {
+          key: country,
+          label: countryLabel(country),
+          points
+        };
+      });
       sections.push({
         id: "country_spotlight",
         title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
@@ -11219,6 +11450,26 @@
             options: [
               { key: "all_guesses", label: "All guesses", bars: distributionAll },
               { key: "correct_only", label: "Only correct-country guesses", bars: distributionCorrectOnly }
+            ]
+          },
+          {
+            type: "selectableLine",
+            yLabel: "Country trend comparison",
+            defaultMetricKey: "damage_dealt_share",
+            primaryKey: spotlightCountry,
+            maxCompare: 4,
+            compareCandidates: spotlightCandidates.filter((country) => country !== spotlightCountry).map((country) => ({ key: country, label: countryLabel(country) })),
+            defaultCompareKeys: spotlightCandidates.filter((country) => country !== spotlightCountry).slice(0, 4),
+            options: [
+              { key: "damage_dealt_share", label: "Damage dealt share (%)", series: makeCountrySeries("damage_dealt_share") },
+              { key: "damage_taken_share", label: "Damage taken share (%)", series: makeCountrySeries("damage_taken_share") },
+              { key: "avg_score", label: "Avg score", series: makeCountrySeries("avg_score") },
+              { key: "hit_rate", label: "Hit rate (%)", series: makeCountrySeries("hit_rate") },
+              { key: "throw_rate", label: "Throw rate (%)", series: makeCountrySeries("throw_rate") },
+              { key: "fivek_rate", label: "5k rate (%)", series: makeCountrySeries("fivek_rate") },
+              { key: "avg_damage_dealt", label: "Avg damage dealt", series: makeCountrySeries("avg_damage_dealt") },
+              { key: "avg_damage_taken", label: "Avg damage taken", series: makeCountrySeries("avg_damage_taken") },
+              { key: "rounds", label: "Rounds", series: makeCountrySeries("rounds") }
             ]
           }
         ]

@@ -587,6 +587,11 @@ export type AnalysisChart =
       type: "line";
       yLabel?: string;
       points: Array<{ x: number; y: number; label?: string }>;
+      series?: Array<{
+        key: string;
+        label: string;
+        points: Array<{ x: number; y: number; label?: string }>;
+      }>;
     }
   | {
       type: "bar";
@@ -609,6 +614,24 @@ export type AnalysisChart =
         key: string;
         label: string;
         bars: Array<{ label: string; value: number }>;
+      }>;
+    }
+  | {
+      type: "selectableLine";
+      yLabel?: string;
+      defaultMetricKey?: string;
+      maxCompare?: number;
+      primaryKey: string;
+      compareCandidates: Array<{ key: string; label: string }>;
+      defaultCompareKeys?: string[];
+      options: Array<{
+        key: string;
+        label: string;
+        series: Array<{
+          key: string;
+          label: string;
+          points: Array<{ x: number; y: number; label?: string }>;
+        }>;
       }>;
     };
 
@@ -1375,6 +1398,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   }
 
   const topCountries = [...countryAgg.entries()].sort((a, b) => b[1].n - a[1].n);
+  const totalDamageDealt = topCountries.reduce((acc, [, v]) => acc + v.damageDealt, 0);
+  const totalDamageTaken = topCountries.reduce((acc, [, v]) => acc + v.damageTaken, 0);
   const countryMetricRows = topCountries.map(([c, v]) => ({
       country: c,
       n: v.n,
@@ -1385,7 +1410,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       throwRate: v.score.length > 0 ? v.throws / v.score.length : 0,
       fiveKRate: v.score.length > 0 ? v.fiveKs / v.score.length : 0,
       avgDamageDealt: v.damageN > 0 ? v.damageDealt / v.damageN : 0,
-      avgDamageTaken: v.damageN > 0 ? v.damageTaken / v.damageN : 0
+      avgDamageTaken: v.damageN > 0 ? v.damageTaken / v.damageN : 0,
+      damageDealtShare: totalDamageDealt > 0 ? (v.damageDealt / totalDamageDealt) * 100 : 0,
+      damageTakenShare: totalDamageTaken > 0 ? (v.damageTaken / totalDamageTaken) * 100 : 0
     }));
   const countryMetricOptions: Array<{ key: string; label: string; bars: Array<{ label: string; value: number }> }> = [
     { key: "avg_score", label: "Avg score", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore })) },
@@ -1400,6 +1427,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     { key: "fivek_rate", label: "5k rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100 })) },
     { key: "damage_dealt", label: "Avg damage dealt", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageDealt })) },
     { key: "damage_taken", label: "Avg damage taken", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageTaken })) },
+    {
+      key: "damage_dealt_share",
+      label: "Damage dealt share (%)",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageDealtShare }))
+    },
+    {
+      key: "damage_taken_share",
+      label: "Damage taken share (%)",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageTakenShare }))
+    },
     { key: "rounds", label: "Rounds", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n })) }
   ];
   const confusionMap = new Map<string, number>();
@@ -1722,12 +1759,110 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   if (spotlightCountry && countryAgg.has(spotlightCountry)) {
     const agg = countryAgg.get(spotlightCountry)!;
 
-    const countryRounds = rounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+    const countryRounds = teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
     const countryScores = countryRounds.map(extractScore).filter((x): x is number => typeof x === "number");
     const countryFiveK = countryScores.filter((s) => s >= 5000).length;
     const countryThrows = countryScores.filter((s) => s < 50).length;
     const distributionAll = buildSmoothedScoreDistribution(countryScores);
     const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
+    const spotlightCandidates = [
+      spotlightCountry,
+      ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
+    ];
+
+    const spanStart = teamGames[0]?.playedAt ?? gameTimes[0];
+    const spanEnd = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
+    const timelineBucketMs = pickOverviewBucketMs(Math.max(0, spanEnd - spanStart));
+    const countryTimeline = new Map<
+      string,
+      Map<number, { rounds: number; scoreSum: number; correct: number; throws: number; fiveKs: number; damageDealt: number; damageTaken: number }>
+    >();
+    const totalDamageByBucket = new Map<number, { dealt: number; taken: number }>();
+    const bucketSet = new Set<number>();
+
+    for (const r of teamRounds) {
+      const ts = teamPlayedAtByGameId.get(r.gameId);
+      const country = normalizeCountryCode(r.trueCountry);
+      if (!ts || !country || !spotlightCandidates.includes(country)) continue;
+      const day = startOfLocalDay(ts);
+      const bucket = timelineBucketMs ? Math.floor(day / timelineBucketMs) * timelineBucketMs : day;
+      bucketSet.add(bucket);
+      if (!countryTimeline.has(country)) countryTimeline.set(country, new Map());
+      const byBucket = countryTimeline.get(country)!;
+      const cur = byBucket.get(bucket) || { rounds: 0, scoreSum: 0, correct: 0, throws: 0, fiveKs: 0, damageDealt: 0, damageTaken: 0 };
+      cur.rounds += 1;
+      const sc = extractScore(r);
+      if (typeof sc === "number") {
+        cur.scoreSum += sc;
+        if (sc < 50) cur.throws += 1;
+        if (sc >= 5000) cur.fiveKs += 1;
+      }
+      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      if (guess && guess === country) cur.correct += 1;
+      if (ownPlayerId) {
+        const diff = getRoundDamageDiff(r, ownPlayerId);
+        if (typeof diff === "number" && Number.isFinite(diff)) {
+          if (diff > 0) {
+            cur.damageDealt += diff;
+            const total = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
+            total.dealt += diff;
+            totalDamageByBucket.set(bucket, total);
+          } else if (diff < 0) {
+            cur.damageTaken += -diff;
+            const total = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
+            total.taken += -diff;
+            totalDamageByBucket.set(bucket, total);
+          }
+        }
+      }
+      byBucket.set(bucket, cur);
+    }
+
+    const sortedBuckets = [...bucketSet].sort((a, b) => a - b);
+    const makeCountrySeries = (
+      metric:
+        | "damage_dealt_share"
+        | "damage_taken_share"
+        | "avg_score"
+        | "hit_rate"
+        | "throw_rate"
+        | "fivek_rate"
+        | "rounds"
+        | "avg_damage_dealt"
+        | "avg_damage_taken"
+    ) =>
+      spotlightCandidates.map((country) => {
+        const byBucket = countryTimeline.get(country) || new Map();
+        const points = sortedBuckets.map((bucket) => {
+          const v = byBucket.get(bucket) || {
+            rounds: 0,
+            scoreSum: 0,
+            correct: 0,
+            throws: 0,
+            fiveKs: 0,
+            damageDealt: 0,
+            damageTaken: 0
+          };
+          const totals = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
+          let y = 0;
+          if (metric === "damage_dealt_share") y = totals.dealt > 0 ? (v.damageDealt / totals.dealt) * 100 : 0;
+          else if (metric === "damage_taken_share") y = totals.taken > 0 ? (v.damageTaken / totals.taken) * 100 : 0;
+          else if (metric === "avg_score") y = v.rounds > 0 ? v.scoreSum / v.rounds : 0;
+          else if (metric === "hit_rate") y = v.rounds > 0 ? (v.correct / v.rounds) * 100 : 0;
+          else if (metric === "throw_rate") y = v.rounds > 0 ? (v.throws / v.rounds) * 100 : 0;
+          else if (metric === "fivek_rate") y = v.rounds > 0 ? (v.fiveKs / v.rounds) * 100 : 0;
+          else if (metric === "avg_damage_dealt") y = v.rounds > 0 ? v.damageDealt / v.rounds : 0;
+          else if (metric === "avg_damage_taken") y = v.rounds > 0 ? v.damageTaken / v.rounds : 0;
+          else y = v.rounds;
+          return { x: bucket, y, label: formatDay(bucket) };
+        });
+        return {
+          key: country,
+          label: countryLabel(country),
+          points
+        };
+      });
+
     sections.push({
       id: "country_spotlight",
       title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
@@ -1752,6 +1887,28 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
           options: [
             { key: "all_guesses", label: "All guesses", bars: distributionAll },
             { key: "correct_only", label: "Only correct-country guesses", bars: distributionCorrectOnly }
+          ]
+        },
+        {
+          type: "selectableLine",
+          yLabel: "Country trend comparison",
+          defaultMetricKey: "damage_dealt_share",
+          primaryKey: spotlightCountry,
+          maxCompare: 4,
+          compareCandidates: spotlightCandidates
+            .filter((country) => country !== spotlightCountry)
+            .map((country) => ({ key: country, label: countryLabel(country) })),
+          defaultCompareKeys: spotlightCandidates.filter((country) => country !== spotlightCountry).slice(0, 4),
+          options: [
+            { key: "damage_dealt_share", label: "Damage dealt share (%)", series: makeCountrySeries("damage_dealt_share") },
+            { key: "damage_taken_share", label: "Damage taken share (%)", series: makeCountrySeries("damage_taken_share") },
+            { key: "avg_score", label: "Avg score", series: makeCountrySeries("avg_score") },
+            { key: "hit_rate", label: "Hit rate (%)", series: makeCountrySeries("hit_rate") },
+            { key: "throw_rate", label: "Throw rate (%)", series: makeCountrySeries("throw_rate") },
+            { key: "fivek_rate", label: "5k rate (%)", series: makeCountrySeries("fivek_rate") },
+            { key: "avg_damage_dealt", label: "Avg damage dealt", series: makeCountrySeries("avg_damage_dealt") },
+            { key: "avg_damage_taken", label: "Avg damage taken", series: makeCountrySeries("avg_damage_taken") },
+            { key: "rounds", label: "Rounds", series: makeCountrySeries("rounds") }
           ]
         }
       ]
