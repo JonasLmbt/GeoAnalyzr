@@ -50,6 +50,16 @@ function formatShortDateTime(ts: number): string {
   return `${day}/${m}/${y} ${hh}:${mm}`;
 }
 
+function buildGoogleMapsUrl(lat?: number, lng?: number): string | undefined {
+  if (typeof lat !== "number" || typeof lng !== "number") return undefined;
+  return `https://www.google.com/maps?q=${lat},${lng}`;
+}
+
+function buildStreetViewUrl(lat?: number, lng?: number): string | undefined {
+  if (typeof lat !== "number" || typeof lng !== "number") return undefined;
+  return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+}
+
 function sum(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
 }
@@ -112,6 +122,61 @@ function buildSmoothedScoreDistribution(scores: number[], bucketSize = 100): Arr
     const start = i * bucketSize;
     const end = Math.min(maxScore, start + bucketSize - 1);
     return { label: `${start}-${end}`, value: v };
+  });
+}
+
+export interface AnalysisDrilldownItem {
+  gameId: string;
+  roundNumber: number;
+  ts?: number;
+  score?: number;
+  trueCountry?: string;
+  trueLat?: number;
+  trueLng?: number;
+  googleMapsUrl?: string;
+  streetViewUrl?: string;
+}
+
+export interface AnalysisBarPoint {
+  label: string;
+  value: number;
+  drilldown?: AnalysisDrilldownItem[];
+}
+
+function buildSmoothedScoreDistributionWithDrilldown(
+  points: Array<{ score: number; drill: AnalysisDrilldownItem }>,
+  bucketSize = 100
+): AnalysisBarPoint[] {
+  if (points.length === 0) return [];
+  const maxScore = 5000;
+  const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
+  const buckets = new Array(bucketCount).fill(0);
+  const drillByBucket: AnalysisDrilldownItem[][] = new Array(bucketCount).fill(null).map(() => []);
+  for (const p of points) {
+    const s = Math.max(0, Math.min(maxScore, p.score));
+    const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
+    buckets[idx]++;
+    drillByBucket[idx].push(p.drill);
+  }
+  const weights = [1, 2, 3, 2, 1];
+  const radius = Math.floor(weights.length / 2);
+  return buckets.map((_, i) => {
+    let weighted = 0;
+    let weightSum = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const j = i + k;
+      if (j < 0 || j >= buckets.length) continue;
+      const w = weights[k + radius];
+      weighted += buckets[j] * w;
+      weightSum += w;
+    }
+    const start = i * bucketSize;
+    const end = Math.min(maxScore, start + bucketSize - 1);
+    return {
+      label: `${start}-${end}`,
+      value: weightSum ? weighted / weightSum : 0,
+      drilldown: drillByBucket[i]
+    };
   });
 }
 
@@ -599,7 +664,7 @@ export type AnalysisChart =
       initialBars?: number;
       orientation?: "vertical" | "horizontal";
       minHeight?: number;
-      bars: Array<{ label: string; value: number }>;
+      bars: AnalysisBarPoint[];
     }
   | {
       type: "selectableBar";
@@ -613,7 +678,7 @@ export type AnalysisChart =
       options: Array<{
         key: string;
         label: string;
-        bars: Array<{ label: string; value: number }>;
+        bars: AnalysisBarPoint[];
       }>;
     }
   | {
@@ -669,9 +734,15 @@ export interface AnalysisFilter {
 type RoundMetric = {
   ts: number;
   day: number;
+  gameId: string;
+  roundNumber: number;
   score: number;
   timeSec: number | undefined;
   distKm: number | undefined;
+  guessCountry?: string;
+  trueCountry?: string;
+  trueLat?: number;
+  trueLng?: number;
 };
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -870,9 +941,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       const item: RoundMetric = {
         ts,
         day: startOfLocalDay(ts),
+        gameId: r.gameId,
+        roundNumber: r.roundNumber,
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
-        distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined
+        distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined,
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        trueCountry: normalizeCountryCode(r.trueCountry),
+        trueLat: typeof r.trueLat === "number" ? r.trueLat : undefined,
+        trueLng: typeof r.trueLng === "number" ? r.trueLng : undefined
       };
       return item;
     })
@@ -1206,7 +1283,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         return { label: formatShortDateTime(s.start), value: rate };
       })
     : [];
-  const sessionMetricOptions: Array<{ key: string; label: string; bars: Array<{ label: string; value: number }> }> = [
+  const sessionMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
     { key: "avg_score", label: "Avg score", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore })) },
     { key: "throw_rate", label: "Throw rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate })) },
     { key: "fivek_rate", label: "5k rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate })) },
@@ -1275,7 +1352,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const slowestThrow = timedRounds
     .filter((r) => r.score < 50)
     .sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
-  const tempoMetricOptions: Array<{ key: string; label: string; bars: Array<{ label: string; value: number }> }> = [
+  const tempoMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
     { key: "avg_score", label: "Avg score", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0 })) },
     { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0 })) },
     { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0 })) },
@@ -1313,7 +1390,22 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
   const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;
-  const scoreDistributionBars = buildSmoothedScoreDistribution(scores);
+  const scoreDistributionBars = buildSmoothedScoreDistributionWithDrilldown(
+    roundMetrics.map((rm) => ({
+      score: rm.score,
+      drill: {
+        gameId: rm.gameId,
+        roundNumber: rm.roundNumber,
+        ts: rm.ts,
+        score: rm.score,
+        trueCountry: rm.trueCountry,
+        trueLat: rm.trueLat,
+        trueLng: rm.trueLng,
+        googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
+        streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
+      }
+    }))
+  );
   sections.push({
     id: "scores",
     title: "Scores",
@@ -1414,7 +1506,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       damageDealtShare: totalDamageDealt > 0 ? (v.damageDealt / totalDamageDealt) * 100 : 0,
       damageTakenShare: totalDamageTaken > 0 ? (v.damageTaken / totalDamageTaken) * 100 : 0
     }));
-  const countryMetricOptions: Array<{ key: string; label: string; bars: Array<{ label: string; value: number }> }> = [
+  const countryMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
     { key: "avg_score", label: "Avg score", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore })) },
     {
       key: "avg_score_correct_only",
@@ -1760,11 +1852,49 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const agg = countryAgg.get(spotlightCountry)!;
 
     const countryRounds = teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+    const countryRoundMetrics = countryRounds
+      .map((r) => {
+        const ts = teamPlayedAtByGameId.get(r.gameId);
+        const score = extractScore(r);
+        if (typeof ts !== "number" || typeof score !== "number") return undefined;
+        const guessCountry = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+        const trueCountry = normalizeCountryCode(r.trueCountry);
+        return {
+          score,
+          guessCountry,
+          trueCountry,
+          drill: {
+            gameId: r.gameId,
+            roundNumber: r.roundNumber,
+            ts,
+            score,
+            trueCountry,
+            trueLat: typeof r.trueLat === "number" ? r.trueLat : undefined,
+            trueLng: typeof r.trueLng === "number" ? r.trueLng : undefined,
+            googleMapsUrl: buildGoogleMapsUrl(r.trueLat, r.trueLng),
+            streetViewUrl: buildStreetViewUrl(r.trueLat, r.trueLng)
+          } as AnalysisDrilldownItem
+        };
+      })
+      .filter(
+        (
+          x
+        ): x is {
+          score: number;
+          guessCountry?: string;
+          trueCountry?: string;
+          drill: AnalysisDrilldownItem;
+        } => x !== undefined
+      );
     const countryScores = countryRounds.map(extractScore).filter((x): x is number => typeof x === "number");
     const countryFiveK = countryScores.filter((s) => s >= 5000).length;
     const countryThrows = countryScores.filter((s) => s < 50).length;
-    const distributionAll = buildSmoothedScoreDistribution(countryScores);
-    const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
+    const distributionAll = buildSmoothedScoreDistributionWithDrilldown(countryRoundMetrics.map((x) => ({ score: x.score, drill: x.drill })));
+    const distributionCorrectOnly = buildSmoothedScoreDistributionWithDrilldown(
+      countryRoundMetrics
+        .filter((x) => x.guessCountry && x.trueCountry && x.guessCountry === x.trueCountry)
+        .map((x) => ({ score: x.score, drill: x.drill }))
+    );
     const spotlightCandidates = [
       spotlightCountry,
       ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)

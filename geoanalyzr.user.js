@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.3.16
+// @version      1.4.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6935,6 +6935,170 @@
     overlay.appendChild(card);
     doc.body.appendChild(overlay);
   }
+  function formatDrilldownDate(ts) {
+    if (typeof ts !== "number" || !Number.isFinite(ts)) return "-";
+    const d = new Date(ts);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${month}/${year} ${hh}:${mm}`;
+  }
+  function openBarDrilldownOverlay(title, barLabel, bars, barIndex) {
+    const bar = bars[barIndex];
+    const drilldown = bar?.drilldown || [];
+    if (!bar || drilldown.length === 0) return;
+    const doc = document;
+    const palette = getThemePalette();
+    const overlay = doc.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(0,0,0,0.66)";
+    overlay.style.zIndex = "2147483647";
+    overlay.style.display = "flex";
+    overlay.style.justifyContent = "center";
+    overlay.style.alignItems = "flex-start";
+    overlay.style.padding = "28px 16px";
+    const card = doc.createElement("div");
+    card.style.width = "min(1400px, 98vw)";
+    card.style.maxHeight = "90vh";
+    card.style.overflow = "auto";
+    card.style.background = palette.panel;
+    card.style.color = palette.text;
+    card.style.border = `1px solid ${palette.border}`;
+    card.style.borderRadius = "10px";
+    card.style.boxShadow = "0 10px 30px rgba(0,0,0,.4)";
+    card.style.padding = "10px 10px 12px";
+    const header = doc.createElement("div");
+    header.style.display = "flex";
+    header.style.justifyContent = "space-between";
+    header.style.alignItems = "center";
+    header.style.marginBottom = "8px";
+    const headTitle = doc.createElement("div");
+    headTitle.style.fontWeight = "800";
+    headTitle.style.fontSize = "14px";
+    headTitle.textContent = `${title} - ${barLabel} (${drilldown.length})`;
+    header.appendChild(headTitle);
+    const closeBtn = doc.createElement("button");
+    closeBtn.textContent = "x";
+    closeBtn.style.background = "transparent";
+    closeBtn.style.color = palette.textMuted;
+    closeBtn.style.border = "none";
+    closeBtn.style.fontSize = "18px";
+    closeBtn.style.cursor = "pointer";
+    closeBtn.style.lineHeight = "1";
+    closeBtn.style.padding = "0 4px";
+    closeBtn.addEventListener("click", () => overlay.remove());
+    header.appendChild(closeBtn);
+    card.appendChild(header);
+    const table = doc.createElement("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+    table.style.fontSize = "12px";
+    card.appendChild(table);
+    const thead = doc.createElement("thead");
+    const headRow = doc.createElement("tr");
+    for (const h of ["Date", "Game", "Round", "Score", "Country", "Google Maps", "Street View"]) {
+      const th = doc.createElement("th");
+      th.textContent = h;
+      th.style.textAlign = "left";
+      th.style.padding = "7px 8px";
+      th.style.borderBottom = `1px solid ${palette.border}`;
+      th.style.color = palette.textMuted;
+      th.style.position = "sticky";
+      th.style.top = "0";
+      th.style.background = palette.panel;
+      headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = doc.createElement("tbody");
+    table.appendChild(tbody);
+    let shown = 0;
+    const pageSize = 60;
+    const appendRows = () => {
+      const next = Math.min(drilldown.length, shown + pageSize);
+      for (let i = shown; i < next; i++) {
+        const item = drilldown[i];
+        const tr = doc.createElement("tr");
+        tr.style.borderBottom = `1px solid ${palette.border}`;
+        const dateTd = doc.createElement("td");
+        dateTd.textContent = formatDrilldownDate(item.ts);
+        dateTd.style.padding = "6px 8px";
+        tr.appendChild(dateTd);
+        const gameTd = doc.createElement("td");
+        gameTd.textContent = item.gameId;
+        gameTd.style.padding = "6px 8px";
+        tr.appendChild(gameTd);
+        const roundTd = doc.createElement("td");
+        roundTd.textContent = String(item.roundNumber);
+        roundTd.style.padding = "6px 8px";
+        tr.appendChild(roundTd);
+        const scoreTd = doc.createElement("td");
+        scoreTd.textContent = typeof item.score === "number" ? String(Math.round(item.score)) : "-";
+        scoreTd.style.padding = "6px 8px";
+        tr.appendChild(scoreTd);
+        const countryTd = doc.createElement("td");
+        countryTd.textContent = item.trueCountry || "-";
+        countryTd.style.padding = "6px 8px";
+        tr.appendChild(countryTd);
+        const mapsTd = doc.createElement("td");
+        mapsTd.style.padding = "6px 8px";
+        if (item.googleMapsUrl) {
+          const a = doc.createElement("a");
+          a.href = item.googleMapsUrl;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = "Open";
+          a.style.color = analysisSettings.accent;
+          mapsTd.appendChild(a);
+        } else {
+          mapsTd.textContent = "-";
+        }
+        tr.appendChild(mapsTd);
+        const svTd = doc.createElement("td");
+        svTd.style.padding = "6px 8px";
+        if (item.streetViewUrl) {
+          const a = doc.createElement("a");
+          a.href = item.streetViewUrl;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = "Open";
+          a.style.color = analysisSettings.accent;
+          svTd.appendChild(a);
+        } else {
+          svTd.textContent = "-";
+        }
+        tr.appendChild(svTd);
+        tbody.appendChild(tr);
+      }
+      shown = next;
+      if (shown >= drilldown.length) {
+        moreBtn.remove();
+      } else {
+        moreBtn.textContent = `Show more (${drilldown.length - shown} left)`;
+      }
+    };
+    const moreBtn = doc.createElement("button");
+    moreBtn.textContent = "";
+    moreBtn.style.marginTop = "10px";
+    moreBtn.style.background = palette.buttonBg;
+    moreBtn.style.color = palette.buttonText;
+    moreBtn.style.border = `1px solid ${palette.border}`;
+    moreBtn.style.borderRadius = "6px";
+    moreBtn.style.padding = "5px 10px";
+    moreBtn.style.cursor = "pointer";
+    moreBtn.style.fontSize = "12px";
+    moreBtn.addEventListener("click", appendRows);
+    card.appendChild(moreBtn);
+    appendRows();
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) overlay.remove();
+    });
+    overlay.appendChild(card);
+    doc.body.appendChild(overlay);
+  }
   function createChartActions(svg, title) {
     const palette = getThemePalette();
     const doc = svg.ownerDocument;
@@ -7165,7 +7329,7 @@
           const tip = escapeSvgText(`${b.label}: ${Number.isFinite(b.value) ? b.value.toFixed(2) : b.value}`);
           return `
             <text x="${ml - 8}" y="${(y + barH / 2 + 3).toFixed(2)}" text-anchor="end" font-size="11" fill="${palette.textMuted}">${label}</text>
-            <rect class="ga-bar" x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85">
+            <rect class="ga-bar" data-bar-index="${i}" x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85">
               <title>${tip}</title>
             </rect>
           `;
@@ -7201,7 +7365,7 @@
           const label = isScoreDistribution ? i === 0 ? "0" : i === bars.length - 1 ? "5000" : "" : b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
           const tip = escapeSvgText(`${b.label}: ${Number.isFinite(b.value) ? b.value.toFixed(2) : b.value}`);
           return `
-            <rect class="ga-bar" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85">
+            <rect class="ga-bar" data-bar-index="${i}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85">
               <title>${tip}</title>
             </rect>
             <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
@@ -7240,6 +7404,14 @@
         content.appendChild(toggle);
       }
       content.appendChild(svg);
+      const clickableBars = svg.querySelectorAll(".ga-bar[data-bar-index]");
+      clickableBars.forEach((rect) => {
+        const idx = Number(rect.getAttribute("data-bar-index"));
+        const bar = bars[idx];
+        if (!Number.isFinite(idx) || !bar || !bar.drilldown || bar.drilldown.length === 0) return;
+        rect.style.cursor = "pointer";
+        rect.addEventListener("click", () => openBarDrilldownOverlay(title, bar.label, bars, idx));
+      });
     };
     render();
     return chartWrap;
@@ -10168,6 +10340,14 @@
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${day}/${m}/${y} ${hh}:${mm}`;
   }
+  function buildGoogleMapsUrl(lat, lng) {
+    if (typeof lat !== "number" || typeof lng !== "number") return void 0;
+    return `https://www.google.com/maps?q=${lat},${lng}`;
+  }
+  function buildStreetViewUrl(lat, lng) {
+    if (typeof lat !== "number" || typeof lng !== "number") return void 0;
+    return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+  }
   function sum(values) {
     return values.reduce((a, b) => a + b, 0);
   }
@@ -10197,19 +10377,21 @@
     if (hours > 0) return `${hours}h ${minutes}m`;
     return `${minutes}m`;
   }
-  function buildSmoothedScoreDistribution(scores, bucketSize = 100) {
-    if (scores.length === 0) return [];
+  function buildSmoothedScoreDistributionWithDrilldown(points, bucketSize = 100) {
+    if (points.length === 0) return [];
     const maxScore = 5e3;
     const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
     const buckets = new Array(bucketCount).fill(0);
-    for (const sRaw of scores) {
-      const s = Math.max(0, Math.min(maxScore, sRaw));
+    const drillByBucket = new Array(bucketCount).fill(null).map(() => []);
+    for (const p of points) {
+      const s = Math.max(0, Math.min(maxScore, p.score));
       const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
       buckets[idx]++;
+      drillByBucket[idx].push(p.drill);
     }
     const weights = [1, 2, 3, 2, 1];
     const radius = Math.floor(weights.length / 2);
-    const smoothed = buckets.map((_, i) => {
+    return buckets.map((_, i) => {
       let weighted = 0;
       let weightSum = 0;
       for (let k = -radius; k <= radius; k++) {
@@ -10219,12 +10401,13 @@
         weighted += buckets[j] * w;
         weightSum += w;
       }
-      return weightSum ? weighted / weightSum : 0;
-    });
-    return smoothed.map((v, i) => {
       const start = i * bucketSize;
       const end = Math.min(maxScore, start + bucketSize - 1);
-      return { label: `${start}-${end}`, value: v };
+      return {
+        label: `${start}-${end}`,
+        value: weightSum ? weighted / weightSum : 0,
+        drilldown: drillByBucket[i]
+      };
     });
   }
   function fmt(n, digits = 2) {
@@ -10700,9 +10883,15 @@
       const item = {
         ts,
         day: startOfLocalDay(ts),
+        gameId: r.gameId,
+        roundNumber: r.roundNumber,
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
-        distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0
+        distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0,
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        trueCountry: normalizeCountryCode(r.trueCountry),
+        trueLat: typeof r.trueLat === "number" ? r.trueLat : void 0,
+        trueLng: typeof r.trueLng === "number" ? r.trueLng : void 0
       };
       return item;
     }).filter((x) => x !== void 0);
@@ -11098,7 +11287,22 @@
     });
     const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
     const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;
-    const scoreDistributionBars = buildSmoothedScoreDistribution(scores);
+    const scoreDistributionBars = buildSmoothedScoreDistributionWithDrilldown(
+      roundMetrics.map((rm) => ({
+        score: rm.score,
+        drill: {
+          gameId: rm.gameId,
+          roundNumber: rm.roundNumber,
+          ts: rm.ts,
+          score: rm.score,
+          trueCountry: rm.trueCountry,
+          trueLat: rm.trueLat,
+          trueLng: rm.trueLng,
+          googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
+          streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
+        }
+      }))
+    );
     sections.push({
       id: "scores",
       title: "Scores",
@@ -11476,11 +11680,38 @@
     if (spotlightCountry && countryAgg.has(spotlightCountry)) {
       const agg = countryAgg.get(spotlightCountry);
       const countryRounds2 = teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
+      const countryRoundMetrics = countryRounds2.map((r) => {
+        const ts = teamPlayedAtByGameId.get(r.gameId);
+        const score = extractScore(r);
+        if (typeof ts !== "number" || typeof score !== "number") return void 0;
+        const guessCountry = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+        const trueCountry = normalizeCountryCode(r.trueCountry);
+        return {
+          score,
+          guessCountry,
+          trueCountry,
+          drill: {
+            gameId: r.gameId,
+            roundNumber: r.roundNumber,
+            ts,
+            score,
+            trueCountry,
+            trueLat: typeof r.trueLat === "number" ? r.trueLat : void 0,
+            trueLng: typeof r.trueLng === "number" ? r.trueLng : void 0,
+            googleMapsUrl: buildGoogleMapsUrl(r.trueLat, r.trueLng),
+            streetViewUrl: buildStreetViewUrl(r.trueLat, r.trueLng)
+          }
+        };
+      }).filter(
+        (x) => x !== void 0
+      );
       const countryScores = countryRounds2.map(extractScore).filter((x) => typeof x === "number");
       const countryFiveK = countryScores.filter((s) => s >= 5e3).length;
       const countryThrows = countryScores.filter((s) => s < 50).length;
-      const distributionAll = buildSmoothedScoreDistribution(countryScores);
-      const distributionCorrectOnly = buildSmoothedScoreDistribution(agg.scoreCorrectOnly);
+      const distributionAll = buildSmoothedScoreDistributionWithDrilldown(countryRoundMetrics.map((x) => ({ score: x.score, drill: x.drill })));
+      const distributionCorrectOnly = buildSmoothedScoreDistributionWithDrilldown(
+        countryRoundMetrics.filter((x) => x.guessCountry && x.trueCountry && x.guessCountry === x.trueCountry).map((x) => ({ score: x.score, drill: x.drill }))
+      );
       const spotlightCandidates = [
         spotlightCountry,
         ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
@@ -32215,11 +32446,11 @@
     }
     return void 0;
   }
-  function buildGoogleMapsUrl(lat, lng) {
+  function buildGoogleMapsUrl2(lat, lng) {
     if (!isLatLngInRange2(lat, lng)) return "";
     return `https://www.google.com/maps?q=${lat},${lng}`;
   }
-  function buildStreetViewUrl(lat, lng, heading) {
+  function buildStreetViewUrl2(lat, lng, heading) {
     if (!isLatLngInRange2(lat, lng)) return "";
     const base = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
     if (typeof heading === "number" && Number.isFinite(heading)) {
@@ -32413,8 +32644,8 @@
         true_lat: r.trueLat ?? "",
         true_lng: r.trueLng ?? "",
         true_heading_deg: trueHeading ?? "",
-        true_googleMaps_url: buildGoogleMapsUrl(r.trueLat, r.trueLng),
-        true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, trueHeading),
+        true_googleMaps_url: buildGoogleMapsUrl2(r.trueLat, r.trueLng),
+        true_streetView_url: buildStreetViewUrl2(r.trueLat, r.trueLng, trueHeading),
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
         p1_playerId: r.p1_playerId ?? "",
