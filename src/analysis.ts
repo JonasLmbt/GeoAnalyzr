@@ -212,6 +212,7 @@ export interface AnalysisLineDrilldown {
 type RoundSectionMetric = {
   round: RoundRow;
   ts: number;
+  eventTs: number;
   gameId: string;
   roundNumber: number;
   score: number;
@@ -1692,9 +1693,14 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       const timeMs = extractTimeMs(r);
       const distMeters = extractDistanceMeters(r);
       if (ts === undefined || typeof score !== "number") return null;
+      const eventTs =
+        (typeof r.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : undefined) ??
+        (typeof r.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : undefined) ??
+        ts;
       return {
         round: r,
         ts,
+        eventTs,
         gameId: r.gameId,
         roundNumber: r.roundNumber,
         score,
@@ -1706,7 +1712,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       };
     })
     .filter((x): x is RoundSectionMetric => x !== null)
-    .sort((a, b) => (a.ts !== b.ts ? a.ts - b.ts : a.roundNumber - b.roundNumber));
+    .sort((a, b) =>
+      a.eventTs !== b.eventTs
+        ? a.eventTs - b.eventTs
+        : a.ts !== b.ts
+          ? a.ts - b.ts
+          : a.gameId !== b.gameId
+            ? a.gameId.localeCompare(b.gameId)
+            : a.roundNumber - b.roundNumber
+    );
 
   type RoundNumberBucket = {
     roundNumber: number;
@@ -1836,7 +1850,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const minRoundsSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
   const minRounds = minRoundsSource.length > 0 ? Math.min(...minRoundsSource.map((x) => x.n)) : 0;
   const minRoundsEntries = minRoundsSource.filter((x) => x.n === minRounds);
-  const excludedFewestInconsistentGames = gameRoundEntries.filter((x) => x.n >= 2 && x.hasOutOfRangeRound).length;
   const maxSpreadEntry = gameRoundEntries
     .map((x) => {
       const scores = x.items.map((r) => r.score);
@@ -1853,15 +1866,21 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .sort((a, b) => a.avgScore - b.avgScore)[0];
 
   type RoundRun = { length: number; items: RoundSectionMetric[]; country?: string };
+  const isChronologicallyAdjacent = (prev: RoundSectionMetric, next: RoundSectionMetric): boolean => {
+    if (next.eventTs < prev.eventTs) return false;
+    if (next.gameId === prev.gameId) return next.roundNumber === prev.roundNumber + 1;
+    return next.roundNumber === 1;
+  };
   const bestBooleanRun = (pred: (x: RoundSectionMetric) => boolean): RoundRun => {
     let best: RoundRun = { length: 0, items: [] };
     let current: RoundSectionMetric[] = [];
     for (const rm of roundMetricsForRoundSection) {
-      if (pred(rm)) {
+      const last = current.length > 0 ? current[current.length - 1] : undefined;
+      if (pred(rm) && (!last || isChronologicallyAdjacent(last, rm))) {
         current.push(rm);
       } else {
         if (current.length > best.length) best = { length: current.length, items: current.slice() };
-        current = [];
+        current = pred(rm) ? [rm] : [];
       }
     }
     if (current.length > best.length) best = { length: current.length, items: current.slice() };
@@ -1872,6 +1891,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     let currentCountry: string | undefined;
     let current: RoundSectionMetric[] = [];
     for (const rm of roundMetricsForRoundSection) {
+      const last = current.length > 0 ? current[current.length - 1] : undefined;
       const c = rm.trueCountry;
       if (!c) {
         if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
@@ -1879,7 +1899,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         currentCountry = undefined;
         continue;
       }
-      if (c === currentCountry) {
+      if (c === currentCountry && (!last || isChronologicallyAdjacent(last, rm))) {
         current.push(rm);
       } else {
         if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
@@ -2032,9 +2052,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     lines: [
       `Game with most rounds: ${maxRoundsEntry ? `${maxRoundsEntry.n} rounds (${gameDateLabel(maxRoundsEntry)})` : "-"}`,
       `Games with fewest rounds: ${minRoundsEntries.length > 0 ? `${minRounds} rounds (${minRoundsEntries.length} game(s))` : "-"}`,
-      excludedFewestInconsistentGames > 0
-        ? `Excluded inconsistent games from fewest-rounds: ${excludedFewestInconsistentGames} (detected round number > game length)`
-        : `Excluded inconsistent games from fewest-rounds: 0`,
       `Largest score spread (max-min in one game): ${maxSpreadEntry ? `${fmt(maxSpreadEntry.spread, 0)} points (${gameDateLabel(maxSpreadEntry)})` : "-"}`,
       `Fastest round streak (<20s): ${fastestRoundRun.length} rounds${fastestRoundRun.length > 0 ? ` (${runDateLabel(fastestRoundRun)})` : ""}`,
       `Damage dealt streak: ${damageDealtRun.length} rounds in a row${damageDealtRun.length > 0 ? ` (${runDateLabel(damageDealtRun)})` : ""}`,
@@ -2446,6 +2463,15 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       : undefined;
   const ratingPoints = selectedTeammate ? teammateRatingTimeline : duelRatingTimeline;
   const ratingDelta = selectedTeammate ? teammateDelta : duelDelta;
+  const ratingScopeGameSet = new Set(
+    (selectedTeammate
+      ? baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(selectedTeammate)?.has(d.gameId) || false))
+      : baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels")
+    ).map((d) => d.gameId)
+  );
+  const ratingScopeRoundDrill = baseRounds
+    .filter((r) => ratingScopeGameSet.has(r.gameId))
+    .map((r) => toDrilldownItem(r, basePlayedAtByGameId.get(r.gameId), extractScore(r)));
   let bestGain: { delta: number; startTs: number; endTs: number } | undefined;
   let worstLoss: { delta: number; startTs: number; endTs: number } | undefined;
   if (ratingPoints.length > 1) {
@@ -2480,6 +2506,23 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         ? `Biggest session rating loss: ${worstLoss.delta >= 0 ? "+" : ""}${fmt(worstLoss.delta, 0)} (${formatShortDateTime(worstLoss.startTs)} -> ${formatShortDateTime(worstLoss.endTs)})`
         : "Biggest session rating loss: -"
     ],
+    lineDrilldowns: [
+      { lineLabel: "Trend", items: ratingScopeRoundDrill },
+      {
+        lineLabel: "Biggest session rating gain",
+        items:
+          bestGain !== undefined
+            ? ratingScopeRoundDrill.filter((x) => typeof x.ts === "number" && x.ts >= bestGain.startTs && x.ts <= bestGain.endTs)
+            : []
+      },
+      {
+        lineLabel: "Biggest session rating loss",
+        items:
+          worstLoss !== undefined
+            ? ratingScopeRoundDrill.filter((x) => typeof x.ts === "number" && x.ts >= worstLoss.startTs && x.ts <= worstLoss.endTs)
+            : []
+      }
+    ],
     charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : undefined
   });
 
@@ -2512,27 +2555,46 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     let mateFiveKs = 0;
     let myScored = 0;
     let mateScored = 0;
+    const closerDrill: AnalysisDrilldownItem[] = [];
+    const higherScoreDrill: AnalysisDrilldownItem[] = [];
+    const fewerThrowsDrill: AnalysisDrilldownItem[] = [];
+    const moreFiveKDrill: AnalysisDrilldownItem[] = [];
+    const roundsTogetherDrill: AnalysisDrilldownItem[] = [];
+    const timedRoundsTogetherDrill: AnalysisDrilldownItem[] = [];
 
     for (const r of compareRounds) {
       const mine = getPlayerStatFromRound(r, ownPlayerId)!;
       const mate = getPlayerStatFromRound(r, teammateToUse)!;
+      const ts = basePlayedAtByGameId.get(r.gameId);
+      const score = extractScore(r);
+      const baseDrill = toDrilldownItem(r, ts, score);
 
       if (typeof mine.score === "number" && typeof mate.score === "number") {
+        higherScoreDrill.push(baseDrill);
         if (mine.score > mate.score) myScoreWins++;
         else if (mine.score < mate.score) mateScoreWins++;
         else scoreTies++;
         if (mine.score < 50) myThrows++;
         if (mate.score < 50) mateThrows++;
+        if (mine.score < 50 || mate.score < 50) fewerThrowsDrill.push(baseDrill);
         if (mine.score >= 5000) myFiveKs++;
         if (mate.score >= 5000) mateFiveKs++;
+        if (mine.score >= 5000 || mate.score >= 5000) moreFiveKDrill.push(baseDrill);
         myScored++;
         mateScored++;
       }
       if (typeof mine.distanceKm === "number" && typeof mate.distanceKm === "number") {
+        closerDrill.push(baseDrill);
         if (mine.distanceKm < mate.distanceKm) myCloser++;
         else if (mine.distanceKm > mate.distanceKm) mateCloser++;
         else distanceTies++;
       }
+    }
+    for (const r of roundsTogether) {
+      const ts = basePlayedAtByGameId.get(r.gameId);
+      const item = toDrilldownItem(r, ts, extractScore(r));
+      roundsTogetherDrill.push(item);
+      if (typeof extractTimeMs(r) === "number") timedRoundsTogetherDrill.push(item);
     }
 
     const decideLeader = (youValue: number, mateValue: number, neutralLabel = "Tie"): string => {
@@ -2545,7 +2607,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       return `${leader} (${fmt(share, 1)}%)`;
     };
 
-    const pairTimes = gamesTogether.map((g) => g.playedAt);
+    const pairGames = gamesTogether.map((g) => ({ gameId: g.gameId, ts: g.playedAt }));
+    const pairTimes = pairGames.map((g) => g.ts);
     let firstTogether: number | undefined;
     let lastTogether: number | undefined;
     let longestPairSessionGames = 0;
@@ -2553,6 +2616,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     let longestPairSessionEnd: number | undefined;
     let avgPairGamesPerSession: number | undefined;
     let longestPairBreak: number | undefined;
+    let longestPairBreakPrevGameId: string | undefined;
+    let longestPairBreakNextGameId: string | undefined;
     if (pairTimes.length > 0) {
       firstTogether = pairTimes[0];
       lastTogether = pairTimes[pairTimes.length - 1];
@@ -2561,10 +2626,14 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       let gamesInSession = 1;
       let sessionCount = 0;
       let sessionTotalGames = 0;
-      for (let i = 1; i < pairTimes.length; i++) {
-        const ts = pairTimes[i];
+      for (let i = 1; i < pairGames.length; i++) {
+        const ts = pairGames[i].ts;
         const gap = ts - prev;
-        longestPairBreak = Math.max(longestPairBreak || 0, gap);
+        if ((longestPairBreak || 0) < gap) {
+          longestPairBreak = gap;
+          longestPairBreakPrevGameId = pairGames[i - 1].gameId;
+          longestPairBreakNextGameId = pairGames[i].gameId;
+        }
         if (gap > 45 * 60 * 1000) {
           sessionCount++;
           sessionTotalGames += gamesInSession;
@@ -2589,6 +2658,22 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       }
       avgPairGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : undefined;
     }
+    const firstTogetherDrill =
+      firstTogether !== undefined
+        ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts === firstTogether)
+        : [];
+    const lastTogetherDrill =
+      lastTogether !== undefined
+        ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts === lastTogether)
+        : [];
+    const longestSessionDrill =
+      longestPairSessionStart !== undefined && longestPairSessionEnd !== undefined
+        ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts >= longestPairSessionStart! && x.ts <= longestPairSessionEnd!)
+        : [];
+    const longestBreakDrill =
+      longestPairBreakPrevGameId && longestPairBreakNextGameId
+        ? roundsTogetherDrill.filter((x) => x.gameId === longestPairBreakPrevGameId || x.gameId === longestPairBreakNextGameId)
+        : [];
 
     sections.push({
       id: "teammate_battle",
@@ -2619,7 +2704,21 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         }`,
         `Avg games per session together: ${fmt(avgPairGamesPerSession, 1)}`,
         `Longest break between games together: ${longestPairBreak ? formatDurationHuman(longestPairBreak) : "-"}`
-      ].filter((x) => x !== "")
+      ].filter((x) => x !== ""),
+      lineDrilldowns: [
+        { lineLabel: "Closer guesses", items: closerDrill },
+        { lineLabel: "Higher score rounds", items: higherScoreDrill },
+        { lineLabel: "Fewer throws (<50)", items: fewerThrowsDrill },
+        { lineLabel: "More 5k rounds", items: moreFiveKDrill },
+        { lineLabel: "Games together", items: roundsTogetherDrill },
+        { lineLabel: "Rounds together", items: roundsTogetherDrill },
+        { lineLabel: "Time played together", items: timedRoundsTogetherDrill },
+        { lineLabel: "First game together", items: firstTogetherDrill },
+        { lineLabel: "Most recent game together", items: lastTogetherDrill },
+        { lineLabel: "Longest session together", items: longestSessionDrill },
+        { lineLabel: "Avg games per session together", items: roundsTogetherDrill },
+        { lineLabel: "Longest break between games together", items: longestBreakDrill }
+      ]
     });
   }
 
@@ -2880,6 +2979,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
 
   const scoresByDay = new Map<number, number[]>();
   const timesByDay = new Map<number, number[]>();
+  const recordsDrillByDay = new Map<number, AnalysisDrilldownItem[]>();
   for (const rm of roundMetrics) {
     const s = scoresByDay.get(rm.day) || [];
     s.push(rm.score);
@@ -2889,6 +2989,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       t.push(rm.timeSec);
       timesByDay.set(rm.day, t);
     }
+    const drill = recordsDrillByDay.get(rm.day) || [];
+    drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
+    recordsDrillByDay.set(rm.day, drill);
   }
   const dayRecords = [...scoresByDay.entries()].map(([day, vals]) => ({
     day,
@@ -2903,20 +3006,31 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const smoothedDaily = smoothDailyScoreRecords(dayRecords);
   let fivekStreak = 0;
   let bestFivekStreak = 0;
+  let bestFivekStreakItems: RoundMetric[] = [];
+  let currentFivekItems: RoundMetric[] = [];
   let throwStreak = 0;
   let worstThrowStreak = 0;
-  for (const s of roundMetrics.map((x) => x.score)) {
+  let worstThrowStreakItems: RoundMetric[] = [];
+  let currentThrowItems: RoundMetric[] = [];
+  for (const rm of roundMetrics) {
+    const s = rm.score;
     if (s >= 5000) {
       fivekStreak++;
+      currentFivekItems.push(rm);
       bestFivekStreak = Math.max(bestFivekStreak, fivekStreak);
+      if (currentFivekItems.length > bestFivekStreakItems.length) bestFivekStreakItems = currentFivekItems.slice();
     } else {
       fivekStreak = 0;
+      currentFivekItems = [];
     }
     if (s < 50) {
       throwStreak++;
+      currentThrowItems.push(rm);
       worstThrowStreak = Math.max(worstThrowStreak, throwStreak);
+      if (currentThrowItems.length > worstThrowStreakItems.length) worstThrowStreakItems = currentThrowItems.slice();
     } else {
       throwStreak = 0;
+      currentThrowItems = [];
     }
   }
   sections.push({
@@ -2935,8 +3049,14 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       `Worst throw streak (<50): ${worstThrowStreak} rounds in a row`
     ],
     lineDrilldowns: [
+      { lineLabel: "Best day", items: bestDay ? recordsDrillByDay.get(bestDay.day) || [] : [] },
+      { lineLabel: "Hardest day", items: worstDay ? recordsDrillByDay.get(worstDay.day) || [] : [] },
       { lineLabel: "Best avg score in a game", items: gameEntryDrill(bestAvgEntry) },
-      { lineLabel: "Worst avg score in a game", items: gameEntryDrill(worstAvgEntry) }
+      { lineLabel: "Worst avg score in a game", items: gameEntryDrill(worstAvgEntry) },
+      { lineLabel: "Fastest day", items: fastestDayRecord ? recordsDrillByDay.get(fastestDayRecord.day) || [] : [] },
+      { lineLabel: "Slowest day", items: slowestDayRecord ? recordsDrillByDay.get(slowestDayRecord.day) || [] : [] },
+      { lineLabel: "Best 5k streak", items: bestFivekStreakItems.map((x) => toDrilldownItem(x.round, x.ts, x.score)) },
+      { lineLabel: "Worst throw streak (<50)", items: worstThrowStreakItems.map((x) => toDrilldownItem(x.round, x.ts, x.score)) }
     ],
     chart: {
       type: "line",

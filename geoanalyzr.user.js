@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.11
+// @version      1.4.12
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -11746,9 +11746,11 @@
       const timeMs = extractTimeMs(r);
       const distMeters = extractDistanceMeters(r);
       if (ts === void 0 || typeof score !== "number") return null;
+      const eventTs = (typeof r.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : void 0) ?? (typeof r.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : void 0) ?? ts;
       return {
         round: r,
         ts,
+        eventTs,
         gameId: r.gameId,
         roundNumber: r.roundNumber,
         score,
@@ -11758,7 +11760,9 @@
         trueCountry: normalizeCountryCode(r.trueCountry),
         damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : void 0
       };
-    }).filter((x) => x !== null).sort((a, b) => a.ts !== b.ts ? a.ts - b.ts : a.roundNumber - b.roundNumber);
+    }).filter((x) => x !== null).sort(
+      (a, b) => a.eventTs !== b.eventTs ? a.eventTs - b.eventTs : a.ts !== b.ts ? a.ts - b.ts : a.gameId !== b.gameId ? a.gameId.localeCompare(b.gameId) : a.roundNumber - b.roundNumber
+    );
     const roundBucketsByNumber = /* @__PURE__ */ new Map();
     for (const rm of roundMetricsForRoundSection) {
       const key = rm.roundNumber;
@@ -11872,7 +11876,6 @@
     const minRoundsSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
     const minRounds = minRoundsSource.length > 0 ? Math.min(...minRoundsSource.map((x) => x.n)) : 0;
     const minRoundsEntries = minRoundsSource.filter((x) => x.n === minRounds);
-    const excludedFewestInconsistentGames = gameRoundEntries.filter((x) => x.n >= 2 && x.hasOutOfRangeRound).length;
     const maxSpreadEntry = gameRoundEntries.map((x) => {
       const scores2 = x.items.map((r) => r.score);
       const spread = scores2.length > 0 ? Math.max(...scores2) - Math.min(...scores2) : 0;
@@ -11881,15 +11884,21 @@
     const avgScoreSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
     const bestAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => b.avgScore - a.avgScore)[0];
     const worstAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => a.avgScore - b.avgScore)[0];
+    const isChronologicallyAdjacent = (prev, next) => {
+      if (next.eventTs < prev.eventTs) return false;
+      if (next.gameId === prev.gameId) return next.roundNumber === prev.roundNumber + 1;
+      return next.roundNumber === 1;
+    };
     const bestBooleanRun = (pred) => {
       let best = { length: 0, items: [] };
       let current = [];
       for (const rm of roundMetricsForRoundSection) {
-        if (pred(rm)) {
+        const last = current.length > 0 ? current[current.length - 1] : void 0;
+        if (pred(rm) && (!last || isChronologicallyAdjacent(last, rm))) {
           current.push(rm);
         } else {
           if (current.length > best.length) best = { length: current.length, items: current.slice() };
-          current = [];
+          current = pred(rm) ? [rm] : [];
         }
       }
       if (current.length > best.length) best = { length: current.length, items: current.slice() };
@@ -11900,6 +11909,7 @@
       let currentCountry;
       let current = [];
       for (const rm of roundMetricsForRoundSection) {
+        const last = current.length > 0 ? current[current.length - 1] : void 0;
         const c = rm.trueCountry;
         if (!c) {
           if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
@@ -11907,7 +11917,7 @@
           currentCountry = void 0;
           continue;
         }
-        if (c === currentCountry) {
+        if (c === currentCountry && (!last || isChronologicallyAdjacent(last, rm))) {
           current.push(rm);
         } else {
           if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
@@ -12026,7 +12036,6 @@
       lines: [
         `Game with most rounds: ${maxRoundsEntry ? `${maxRoundsEntry.n} rounds (${gameDateLabel(maxRoundsEntry)})` : "-"}`,
         `Games with fewest rounds: ${minRoundsEntries.length > 0 ? `${minRounds} rounds (${minRoundsEntries.length} game(s))` : "-"}`,
-        excludedFewestInconsistentGames > 0 ? `Excluded inconsistent games from fewest-rounds: ${excludedFewestInconsistentGames} (detected round number > game length)` : `Excluded inconsistent games from fewest-rounds: 0`,
         `Largest score spread (max-min in one game): ${maxSpreadEntry ? `${fmt(maxSpreadEntry.spread, 0)} points (${gameDateLabel(maxSpreadEntry)})` : "-"}`,
         `Fastest round streak (<20s): ${fastestRoundRun.length} rounds${fastestRoundRun.length > 0 ? ` (${runDateLabel(fastestRoundRun)})` : ""}`,
         `Damage dealt streak: ${damageDealtRun.length} rounds in a row${damageDealtRun.length > 0 ? ` (${runDateLabel(damageDealtRun)})` : ""}`,
@@ -12372,6 +12381,10 @@
     const teammateDelta = teammateRatingTimeline.length > 1 ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y : void 0;
     const ratingPoints = selectedTeammate ? teammateRatingTimeline : duelRatingTimeline;
     const ratingDelta = selectedTeammate ? teammateDelta : duelDelta;
+    const ratingScopeGameSet = new Set(
+      (selectedTeammate ? baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(selectedTeammate)?.has(d.gameId) || false)) : baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels")).map((d) => d.gameId)
+    );
+    const ratingScopeRoundDrill = baseRounds.filter((r) => ratingScopeGameSet.has(r.gameId)).map((r) => toDrilldownItem(r, basePlayedAtByGameId.get(r.gameId), extractScore(r)));
     let bestGain;
     let worstLoss;
     if (ratingPoints.length > 1) {
@@ -12402,6 +12415,17 @@
         bestGain ? `Biggest session rating gain: ${bestGain.delta >= 0 ? "+" : ""}${fmt(bestGain.delta, 0)} (${formatShortDateTime(bestGain.startTs)} -> ${formatShortDateTime(bestGain.endTs)})` : "Biggest session rating gain: -",
         worstLoss ? `Biggest session rating loss: ${worstLoss.delta >= 0 ? "+" : ""}${fmt(worstLoss.delta, 0)} (${formatShortDateTime(worstLoss.startTs)} -> ${formatShortDateTime(worstLoss.endTs)})` : "Biggest session rating loss: -"
       ],
+      lineDrilldowns: [
+        { lineLabel: "Trend", items: ratingScopeRoundDrill },
+        {
+          lineLabel: "Biggest session rating gain",
+          items: bestGain !== void 0 ? ratingScopeRoundDrill.filter((x) => typeof x.ts === "number" && x.ts >= bestGain.startTs && x.ts <= bestGain.endTs) : []
+        },
+        {
+          lineLabel: "Biggest session rating loss",
+          items: worstLoss !== void 0 ? ratingScopeRoundDrill.filter((x) => typeof x.ts === "number" && x.ts >= worstLoss.startTs && x.ts <= worstLoss.endTs) : []
+        }
+      ],
       charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : void 0
     });
     const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
@@ -12429,25 +12453,44 @@
       let mateFiveKs = 0;
       let myScored = 0;
       let mateScored = 0;
+      const closerDrill = [];
+      const higherScoreDrill = [];
+      const fewerThrowsDrill = [];
+      const moreFiveKDrill = [];
+      const roundsTogetherDrill = [];
+      const timedRoundsTogetherDrill = [];
       for (const r of compareRounds) {
         const mine = getPlayerStatFromRound(r, ownPlayerId);
         const mate = getPlayerStatFromRound(r, teammateToUse);
+        const ts = basePlayedAtByGameId.get(r.gameId);
+        const score = extractScore(r);
+        const baseDrill = toDrilldownItem(r, ts, score);
         if (typeof mine.score === "number" && typeof mate.score === "number") {
+          higherScoreDrill.push(baseDrill);
           if (mine.score > mate.score) myScoreWins++;
           else if (mine.score < mate.score) mateScoreWins++;
           else scoreTies++;
           if (mine.score < 50) myThrows++;
           if (mate.score < 50) mateThrows++;
+          if (mine.score < 50 || mate.score < 50) fewerThrowsDrill.push(baseDrill);
           if (mine.score >= 5e3) myFiveKs++;
           if (mate.score >= 5e3) mateFiveKs++;
+          if (mine.score >= 5e3 || mate.score >= 5e3) moreFiveKDrill.push(baseDrill);
           myScored++;
           mateScored++;
         }
         if (typeof mine.distanceKm === "number" && typeof mate.distanceKm === "number") {
+          closerDrill.push(baseDrill);
           if (mine.distanceKm < mate.distanceKm) myCloser++;
           else if (mine.distanceKm > mate.distanceKm) mateCloser++;
           else distanceTies++;
         }
+      }
+      for (const r of roundsTogether) {
+        const ts = basePlayedAtByGameId.get(r.gameId);
+        const item = toDrilldownItem(r, ts, extractScore(r));
+        roundsTogetherDrill.push(item);
+        if (typeof extractTimeMs(r) === "number") timedRoundsTogetherDrill.push(item);
       }
       const decideLeader = (youValue, mateValue, neutralLabel = "Tie") => {
         const decisive = youValue + mateValue;
@@ -12458,7 +12501,8 @@
         const share = youWin ? pct(youValue, decisive) : pct(mateValue, decisive);
         return `${leader} (${fmt(share, 1)}%)`;
       };
-      const pairTimes = gamesTogether.map((g) => g.playedAt);
+      const pairGames = gamesTogether.map((g) => ({ gameId: g.gameId, ts: g.playedAt }));
+      const pairTimes = pairGames.map((g) => g.ts);
       let firstTogether;
       let lastTogether;
       let longestPairSessionGames = 0;
@@ -12466,6 +12510,8 @@
       let longestPairSessionEnd;
       let avgPairGamesPerSession;
       let longestPairBreak;
+      let longestPairBreakPrevGameId;
+      let longestPairBreakNextGameId;
       if (pairTimes.length > 0) {
         firstTogether = pairTimes[0];
         lastTogether = pairTimes[pairTimes.length - 1];
@@ -12474,10 +12520,14 @@
         let gamesInSession = 1;
         let sessionCount = 0;
         let sessionTotalGames = 0;
-        for (let i = 1; i < pairTimes.length; i++) {
-          const ts = pairTimes[i];
+        for (let i = 1; i < pairGames.length; i++) {
+          const ts = pairGames[i].ts;
           const gap = ts - prev;
-          longestPairBreak = Math.max(longestPairBreak || 0, gap);
+          if ((longestPairBreak || 0) < gap) {
+            longestPairBreak = gap;
+            longestPairBreakPrevGameId = pairGames[i - 1].gameId;
+            longestPairBreakNextGameId = pairGames[i].gameId;
+          }
           if (gap > 45 * 60 * 1e3) {
             sessionCount++;
             sessionTotalGames += gamesInSession;
@@ -12502,6 +12552,10 @@
         }
         avgPairGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
       }
+      const firstTogetherDrill = firstTogether !== void 0 ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts === firstTogether) : [];
+      const lastTogetherDrill = lastTogether !== void 0 ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts === lastTogether) : [];
+      const longestSessionDrill = longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts >= longestPairSessionStart && x.ts <= longestPairSessionEnd) : [];
+      const longestBreakDrill = longestPairBreakPrevGameId && longestPairBreakNextGameId ? roundsTogetherDrill.filter((x) => x.gameId === longestPairBreakPrevGameId || x.gameId === longestPairBreakNextGameId) : [];
       sections.push({
         id: "teammate_battle",
         title: `Team: You + ${mateName}`,
@@ -12523,7 +12577,21 @@
           `Longest session together: ${longestPairSessionGames > 0 && longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? `${longestPairSessionGames} games (${formatShortDateTime(longestPairSessionStart)} -> ${formatShortDateTime(longestPairSessionEnd)})` : "-"}`,
           `Avg games per session together: ${fmt(avgPairGamesPerSession, 1)}`,
           `Longest break between games together: ${longestPairBreak ? formatDurationHuman(longestPairBreak) : "-"}`
-        ].filter((x) => x !== "")
+        ].filter((x) => x !== ""),
+        lineDrilldowns: [
+          { lineLabel: "Closer guesses", items: closerDrill },
+          { lineLabel: "Higher score rounds", items: higherScoreDrill },
+          { lineLabel: "Fewer throws (<50)", items: fewerThrowsDrill },
+          { lineLabel: "More 5k rounds", items: moreFiveKDrill },
+          { lineLabel: "Games together", items: roundsTogetherDrill },
+          { lineLabel: "Rounds together", items: roundsTogetherDrill },
+          { lineLabel: "Time played together", items: timedRoundsTogetherDrill },
+          { lineLabel: "First game together", items: firstTogetherDrill },
+          { lineLabel: "Most recent game together", items: lastTogetherDrill },
+          { lineLabel: "Longest session together", items: longestSessionDrill },
+          { lineLabel: "Avg games per session together", items: roundsTogetherDrill },
+          { lineLabel: "Longest break between games together", items: longestBreakDrill }
+        ]
       });
     }
     const spotlightCountry = selectedCountry || topCountries[0]?.[0];
@@ -12748,6 +12816,7 @@
     }
     const scoresByDay = /* @__PURE__ */ new Map();
     const timesByDay = /* @__PURE__ */ new Map();
+    const recordsDrillByDay = /* @__PURE__ */ new Map();
     for (const rm of roundMetrics) {
       const s = scoresByDay.get(rm.day) || [];
       s.push(rm.score);
@@ -12757,6 +12826,9 @@
         t.push(rm.timeSec);
         timesByDay.set(rm.day, t);
       }
+      const drill = recordsDrillByDay.get(rm.day) || [];
+      drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
+      recordsDrillByDay.set(rm.day, drill);
     }
     const dayRecords = [...scoresByDay.entries()].map(([day, vals]) => ({
       day,
@@ -12771,20 +12843,31 @@
     const smoothedDaily = smoothDailyScoreRecords(dayRecords);
     let fivekStreak = 0;
     let bestFivekStreak = 0;
+    let bestFivekStreakItems = [];
+    let currentFivekItems = [];
     let throwStreak = 0;
     let worstThrowStreak = 0;
-    for (const s of roundMetrics.map((x) => x.score)) {
+    let worstThrowStreakItems = [];
+    let currentThrowItems = [];
+    for (const rm of roundMetrics) {
+      const s = rm.score;
       if (s >= 5e3) {
         fivekStreak++;
+        currentFivekItems.push(rm);
         bestFivekStreak = Math.max(bestFivekStreak, fivekStreak);
+        if (currentFivekItems.length > bestFivekStreakItems.length) bestFivekStreakItems = currentFivekItems.slice();
       } else {
         fivekStreak = 0;
+        currentFivekItems = [];
       }
       if (s < 50) {
         throwStreak++;
+        currentThrowItems.push(rm);
         worstThrowStreak = Math.max(worstThrowStreak, throwStreak);
+        if (currentThrowItems.length > worstThrowStreakItems.length) worstThrowStreakItems = currentThrowItems.slice();
       } else {
         throwStreak = 0;
+        currentThrowItems = [];
       }
     }
     sections.push({
@@ -12803,8 +12886,14 @@
         `Worst throw streak (<50): ${worstThrowStreak} rounds in a row`
       ],
       lineDrilldowns: [
+        { lineLabel: "Best day", items: bestDay ? recordsDrillByDay.get(bestDay.day) || [] : [] },
+        { lineLabel: "Hardest day", items: worstDay ? recordsDrillByDay.get(worstDay.day) || [] : [] },
         { lineLabel: "Best avg score in a game", items: gameEntryDrill(bestAvgEntry) },
-        { lineLabel: "Worst avg score in a game", items: gameEntryDrill(worstAvgEntry) }
+        { lineLabel: "Worst avg score in a game", items: gameEntryDrill(worstAvgEntry) },
+        { lineLabel: "Fastest day", items: fastestDayRecord ? recordsDrillByDay.get(fastestDayRecord.day) || [] : [] },
+        { lineLabel: "Slowest day", items: slowestDayRecord ? recordsDrillByDay.get(slowestDayRecord.day) || [] : [] },
+        { lineLabel: "Best 5k streak", items: bestFivekStreakItems.map((x) => toDrilldownItem(x.round, x.ts, x.score)) },
+        { lineLabel: "Worst throw streak (<50)", items: worstThrowStreakItems.map((x) => toDrilldownItem(x.round, x.ts, x.score)) }
       ],
       chart: {
         type: "line",
