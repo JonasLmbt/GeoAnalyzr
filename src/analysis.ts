@@ -60,6 +60,23 @@ function buildStreetViewUrl(lat?: number, lng?: number): string | undefined {
   return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
 }
 
+function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number): AnalysisDrilldownItem {
+  const trueLat = typeof r.trueLat === "number" ? r.trueLat : undefined;
+  const trueLng = typeof r.trueLng === "number" ? r.trueLng : undefined;
+  return {
+    gameId: r.gameId,
+    roundNumber: r.roundNumber,
+    ts,
+    score,
+    trueCountry: normalizeCountryCode(r.trueCountry),
+    guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+    trueLat,
+    trueLng,
+    googleMapsUrl: buildGoogleMapsUrl(trueLat, trueLng),
+    streetViewUrl: buildStreetViewUrl(trueLat, trueLng)
+  };
+}
+
 function sum(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
 }
@@ -131,6 +148,7 @@ export interface AnalysisDrilldownItem {
   ts?: number;
   score?: number;
   trueCountry?: string;
+  guessCountry?: string;
   trueLat?: number;
   trueLng?: number;
   googleMapsUrl?: string;
@@ -141,6 +159,11 @@ export interface AnalysisBarPoint {
   label: string;
   value: number;
   drilldown?: AnalysisDrilldownItem[];
+}
+
+export interface AnalysisLineDrilldown {
+  lineLabel: string;
+  items: AnalysisDrilldownItem[];
 }
 
 function buildSmoothedScoreDistributionWithDrilldown(
@@ -706,6 +729,7 @@ export interface AnalysisSection {
   group?: "Overview" | "Performance" | "Countries" | "Opponents" | "Rating";
   appliesFilters?: Array<"date" | "mode" | "gameMode" | "movement" | "teammate" | "country">;
   lines: string[];
+  lineDrilldowns?: AnalysisLineDrilldown[];
   chart?: AnalysisChart;
   charts?: AnalysisChart[];
 }
@@ -956,6 +980,58 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((x): x is RoundMetric => x !== undefined);
   const fiveKCount = roundMetrics.filter((x) => x.score >= 5000).length;
   const throwCount = roundMetrics.filter((x) => x.score < 50).length;
+  const perfectFiveKDrill = roundMetrics
+    .filter((x) => x.score >= 5000)
+    .map((x) => ({
+      gameId: x.gameId,
+      roundNumber: x.roundNumber,
+      ts: x.ts,
+      score: x.score,
+      trueCountry: x.trueCountry,
+      trueLat: x.trueLat,
+      trueLng: x.trueLng,
+      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
+      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
+    }));
+  const nearPerfectDrill = roundMetrics
+    .filter((x) => x.score >= 4500)
+    .map((x) => ({
+      gameId: x.gameId,
+      roundNumber: x.roundNumber,
+      ts: x.ts,
+      score: x.score,
+      trueCountry: x.trueCountry,
+      trueLat: x.trueLat,
+      trueLng: x.trueLng,
+      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
+      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
+    }));
+  const lowScoreDrill = roundMetrics
+    .filter((x) => x.score < 500)
+    .map((x) => ({
+      gameId: x.gameId,
+      roundNumber: x.roundNumber,
+      ts: x.ts,
+      score: x.score,
+      trueCountry: x.trueCountry,
+      trueLat: x.trueLat,
+      trueLng: x.trueLng,
+      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
+      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
+    }));
+  const throwDrill = roundMetrics
+    .filter((x) => x.score < 50)
+    .map((x) => ({
+      gameId: x.gameId,
+      roundNumber: x.roundNumber,
+      ts: x.ts,
+      score: x.score,
+      trueCountry: x.trueCountry,
+      trueLat: x.trueLat,
+      trueLng: x.trueLng,
+      googleMapsUrl: buildGoogleMapsUrl(x.trueLat, x.trueLng),
+      streetViewUrl: buildStreetViewUrl(x.trueLat, x.trueLng)
+    }));
   const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
   const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 0;
   const gamesPerDayPoints = buildOverviewGamesSeries(games.map((g) => g.playedAt), gameTimes[0], gameTimes[gameTimes.length - 1], overviewBucketMs);
@@ -1028,7 +1104,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         `Time played: ${overviewTimedRounds > 0 ? formatDurationHuman(overviewTimePlayedMs) : "-"}${
           overviewTimedRounds > 0 && overviewTimedRounds < rounds.length ? ` (from ${overviewTimedRounds}/${rounds.length} rounds with time data)` : ""
         }`,
-        `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%) | Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
+        `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
+        `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
         `Longest win streak: ${bestWinStreak}`,
         `Longest loss streak: ${worstLossStreak}`
       ].filter((x) => x !== "")
@@ -1065,6 +1142,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     group: "Overview",
     appliesFilters: ["date", "mode", "movement", "teammate", "country"],
     lines: overviewLines,
+    lineDrilldowns: [
+      { lineLabel: "Perfect 5k rounds", items: perfectFiveKDrill },
+      { lineLabel: "Throws (<50)", items: throwDrill }
+    ],
     charts: overviewCharts
   });
 
@@ -1121,50 +1202,101 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
   }
   const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdayDrilldowns = wdNames.map<AnalysisDrilldownItem[]>(() => []);
+  const hourDrilldowns = new Array<AnalysisDrilldownItem[]>(24).fill(null).map(() => []);
+  for (const r of rounds) {
+    const ts = playedAtByGameId.get(r.gameId);
+    if (typeof ts !== "number") continue;
+    const d = new Date(ts);
+    const wd = d.getDay();
+    const hr = d.getHours();
+    weekdayDrilldowns[wd].push(toDrilldownFromRound(r, ts, extractScore(r)));
+    hourDrilldowns[hr].push(toDrilldownFromRound(r, ts, extractScore(r)));
+  }
   const weekdayMetricOptions = [
-    { key: "games", label: "Games", bars: weekday.map((v, i) => ({ label: wdNames[i], value: v })) },
+    {
+      key: "games",
+      label: "Games",
+      bars: weekday.map((v, i) => ({ label: wdNames[i], value: v, drilldown: weekdayDrilldowns[i] }))
+    },
     {
       key: "avg_score",
       label: "Avg score",
-      bars: wdNames.map((name, i) => ({ label: name, value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : 0 }))
+      bars: wdNames.map((name, i) => ({
+        label: name,
+        value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : 0,
+        drilldown: weekdayDrilldowns[i]
+      }))
     },
     {
       key: "avg_time",
       label: "Avg guess time (s)",
-      bars: wdNames.map((name, i) => ({ label: name, value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : 0 }))
+      bars: wdNames.map((name, i) => ({
+        label: name,
+        value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : 0,
+        drilldown: weekdayDrilldowns[i]
+      }))
     },
     {
       key: "throw_rate",
       label: "Throw rate (%)",
-      bars: wdNames.map((name, i) => ({ label: name, value: weekdayRounds[i] ? pct(weekdayThrows[i], weekdayRounds[i]) : 0 }))
+      bars: wdNames.map((name, i) => ({
+        label: name,
+        value: weekdayRounds[i] ? pct(weekdayThrows[i], weekdayRounds[i]) : 0,
+        drilldown: weekdayDrilldowns[i]
+      }))
     },
     {
       key: "fivek_rate",
       label: "5k rate (%)",
-      bars: wdNames.map((name, i) => ({ label: name, value: weekdayRounds[i] ? pct(weekdayFiveKs[i], weekdayRounds[i]) : 0 }))
+      bars: wdNames.map((name, i) => ({
+        label: name,
+        value: weekdayRounds[i] ? pct(weekdayFiveKs[i], weekdayRounds[i]) : 0,
+        drilldown: weekdayDrilldowns[i]
+      }))
     }
   ];
   const hourMetricOptions = [
-    { key: "games", label: "Games", bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v })) },
+    {
+      key: "games",
+      label: "Games",
+      bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v, drilldown: hourDrilldowns[h] }))
+    },
     {
       key: "avg_score",
       label: "Avg score",
-      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : 0 }))
+      bars: hour.map((_, h) => ({
+        label: String(h).padStart(2, "0"),
+        value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : 0,
+        drilldown: hourDrilldowns[h]
+      }))
     },
     {
       key: "avg_time",
       label: "Avg guess time (s)",
-      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : 0 }))
+      bars: hour.map((_, h) => ({
+        label: String(h).padStart(2, "0"),
+        value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : 0,
+        drilldown: hourDrilldowns[h]
+      }))
     },
     {
       key: "throw_rate",
       label: "Throw rate (%)",
-      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourRounds[h] ? pct(hourThrows[h], hourRounds[h]) : 0 }))
+      bars: hour.map((_, h) => ({
+        label: String(h).padStart(2, "0"),
+        value: hourRounds[h] ? pct(hourThrows[h], hourRounds[h]) : 0,
+        drilldown: hourDrilldowns[h]
+      }))
     },
     {
       key: "fivek_rate",
       label: "5k rate (%)",
-      bars: hour.map((_, h) => ({ label: String(h).padStart(2, "0"), value: hourRounds[h] ? pct(hourFiveKs[h], hourRounds[h]) : 0 }))
+      bars: hour.map((_, h) => ({
+        label: String(h).padStart(2, "0"),
+        value: hourRounds[h] ? pct(hourFiveKs[h], hourRounds[h]) : 0,
+        drilldown: hourDrilldowns[h]
+      }))
     }
   ];
   sections.push({
@@ -1222,6 +1354,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   }
 
   const sessionsAgg = new Map<number, { rounds: number; scores: number[]; fiveK: number; throws: number; avgTimeSrc: number[] }>();
+  const sessionDrillByIdx = new Map<number, AnalysisDrilldownItem[]>();
   for (const rm of roundMetrics) {
     const idx = gameSessionIndex.get(rm.ts);
     if (idx === undefined) continue;
@@ -1232,6 +1365,20 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (rm.score < 50) cur.throws++;
     if (typeof rm.timeSec === "number") cur.avgTimeSrc.push(rm.timeSec);
     sessionsAgg.set(idx, cur);
+    const drill = sessionDrillByIdx.get(idx) || [];
+    drill.push({
+      gameId: rm.gameId,
+      roundNumber: rm.roundNumber,
+      ts: rm.ts,
+      score: rm.score,
+      trueCountry: rm.trueCountry,
+      guessCountry: rm.guessCountry,
+      trueLat: rm.trueLat,
+      trueLng: rm.trueLng,
+      googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
+      streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
+    });
+    sessionDrillByIdx.set(idx, drill);
   }
   const sessionRows = [...sessionsAgg.entries()]
     .map(([idx, s]) => ({
@@ -1280,16 +1427,32 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         const res = sessionResultAgg.get(s.idx);
         const decisive = (res?.wins || 0) + (res?.losses || 0);
         const rate = decisive > 0 ? pct(res?.wins || 0, decisive) : 0;
-        return { label: formatShortDateTime(s.start), value: rate };
+        return { label: formatShortDateTime(s.start), value: rate, drilldown: sessionDrillByIdx.get(s.idx) || [] };
       })
     : [];
   const sessionMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
-    { key: "avg_score", label: "Avg score", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore })) },
-    { key: "throw_rate", label: "Throw rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate })) },
-    { key: "fivek_rate", label: "5k rate (%)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate })) },
-    { key: "avg_duration", label: "Avg duration (s)", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0 })) },
-    { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games })) },
-    { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds })) }
+    {
+      key: "avg_score",
+      label: "Avg score",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "throw_rate",
+      label: "Throw rate (%)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "fivek_rate",
+      label: "5k rate (%)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "avg_duration",
+      label: "Avg duration (s)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games, drilldown: sessionDrillByIdx.get(s.idx) || [] })) },
+    { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds, drilldown: sessionDrillByIdx.get(s.idx) || [] })) }
   ];
   if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
   sections.push({
@@ -1329,7 +1492,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     dist: [] as number[],
     throws: 0,
     fiveKs: 0,
-    timeSum: 0
+    timeSum: 0,
+    drilldown: [] as AnalysisDrilldownItem[]
   }));
   for (const rm of roundMetrics) {
     if (typeof rm.timeSec !== "number") continue;
@@ -1342,6 +1506,18 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     if (rm.score < 50) bucket.throws++;
     if (rm.score >= 5000) bucket.fiveKs++;
     bucket.timeSum += t;
+    bucket.drilldown.push({
+      gameId: rm.gameId,
+      roundNumber: rm.roundNumber,
+      ts: rm.ts,
+      score: rm.score,
+      trueCountry: rm.trueCountry,
+      guessCountry: rm.guessCountry,
+      trueLat: rm.trueLat,
+      trueLng: rm.trueLng,
+      googleMapsUrl: buildGoogleMapsUrl(rm.trueLat, rm.trueLng),
+      streetViewUrl: buildStreetViewUrl(rm.trueLat, rm.trueLng)
+    });
   }
   const timedRounds = roundMetrics.filter((r) => typeof r.timeSec === "number");
   const fastestGuess = timedRounds.slice().sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
@@ -1353,11 +1529,11 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((r) => r.score < 50)
     .sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
   const tempoMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
-    { key: "avg_score", label: "Avg score", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0 })) },
-    { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0 })) },
-    { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0 })) },
-    { key: "fivek_rate", label: "5k rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.fiveKs, b.n) : 0 })) },
-    { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n })) }
+    { key: "avg_score", label: "Avg score", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0, drilldown: b.drilldown })) },
+    { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0, drilldown: b.drilldown })) },
+    { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0, drilldown: b.drilldown })) },
+    { key: "fivek_rate", label: "5k rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.fiveKs, b.n) : 0, drilldown: b.drilldown })) },
+    { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n, drilldown: b.drilldown })) }
   ];
   sections.push({
     id: "tempo_vs_quality",
@@ -1417,6 +1593,12 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       `Low scores (<500): ${lowScoreCount} (${fmt(pct(lowScoreCount, roundMetrics.length), 1)}%)`,
       `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
     ],
+    lineDrilldowns: [
+      { lineLabel: "Perfect 5k", items: perfectFiveKDrill },
+      { lineLabel: "Near-perfect (>=4500)", items: nearPerfectDrill },
+      { lineLabel: "Low scores (<500)", items: lowScoreDrill },
+      { lineLabel: "Throws (<50)", items: throwDrill }
+    ],
     chart: {
       type: "bar",
       yLabel: "Score distribution (smoothed)",
@@ -1440,9 +1622,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       damageN: number;
     }
   >();
+  const countryDrilldowns = new Map<string, AnalysisDrilldownItem[]>();
+  const confusionDrilldowns = new Map<string, AnalysisDrilldownItem[]>();
   for (const r of teamRounds) {
     const t = normalizeCountryCode(r.trueCountry);
     if (!t) continue;
+    const ts = teamPlayedAtByGameId.get(r.gameId);
+    const sc = extractScore(r);
+    const drillItem = toDrilldownFromRound(r, ts, sc);
+    if (!countryDrilldowns.has(t)) countryDrilldowns.set(t, []);
+    countryDrilldowns.get(t)!.push(drillItem);
     const entry = countryAgg.get(t) || {
       n: 0,
       score: [],
@@ -1458,7 +1647,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     };
     entry.n++;
 
-    const sc = extractScore(r);
     if (typeof sc === "number") {
       entry.score.push(sc);
       if (sc < 50) entry.throws++;
@@ -1474,6 +1662,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       if (guess === t) {
         entry.correct++;
         if (typeof sc === "number") entry.scoreCorrectOnly.push(sc);
+      } else {
+        const cKey = `${t}|${guess}`;
+        if (!confusionDrilldowns.has(cKey)) confusionDrilldowns.set(cKey, []);
+        confusionDrilldowns.get(cKey)!.push(drillItem);
       }
     }
 
@@ -1507,29 +1699,67 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       damageTakenShare: totalDamageTaken > 0 ? (v.damageTaken / totalDamageTaken) * 100 : 0
     }));
   const countryMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
-    { key: "avg_score", label: "Avg score", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore })) },
+    {
+      key: "avg_score",
+      label: "Avg score",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
     {
       key: "avg_score_correct_only",
       label: "Avg score (correct guesses only)",
-      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScoreCorrectOnly }))
+      bars: countryMetricRows.map((x) => ({
+        label: countryLabel(x.country),
+        value: x.avgScoreCorrectOnly,
+        drilldown: (countryDrilldowns.get(x.country) || []).filter(
+          (d) => d.trueCountry && d.guessCountry && d.trueCountry === d.guessCountry
+        )
+      }))
     },
-    { key: "hit_rate", label: "Hit rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.hitRate * 100 })) },
-    { key: "avg_distance", label: "Avg distance (km)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDist || 0 })) },
-    { key: "throw_rate", label: "Throw rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.throwRate * 100 })) },
-    { key: "fivek_rate", label: "5k rate (%)", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100 })) },
-    { key: "damage_dealt", label: "Avg damage dealt", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageDealt })) },
-    { key: "damage_taken", label: "Avg damage taken", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageTaken })) },
+    {
+      key: "hit_rate",
+      label: "Hit rate (%)",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.hitRate * 100, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
+    {
+      key: "avg_distance",
+      label: "Avg distance (km)",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDist || 0, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
+    {
+      key: "throw_rate",
+      label: "Throw rate (%)",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.throwRate * 100, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
+    {
+      key: "fivek_rate",
+      label: "5k rate (%)",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
+    {
+      key: "damage_dealt",
+      label: "Avg damage dealt",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageDealt, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
+    {
+      key: "damage_taken",
+      label: "Avg damage taken",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageTaken, drilldown: countryDrilldowns.get(x.country) || [] }))
+    },
     {
       key: "damage_dealt_share",
       label: "Damage dealt share (%)",
-      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageDealtShare }))
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageDealtShare, drilldown: countryDrilldowns.get(x.country) || [] }))
     },
     {
       key: "damage_taken_share",
       label: "Damage taken share (%)",
-      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageTakenShare }))
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageTakenShare, drilldown: countryDrilldowns.get(x.country) || [] }))
     },
-    { key: "rounds", label: "Rounds", bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n })) }
+    {
+      key: "rounds",
+      label: "Rounds",
+      bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n, drilldown: countryDrilldowns.get(x.country) || [] }))
+    }
   ];
   const confusionMap = new Map<string, number>();
   for (const r of teamRounds) {
@@ -1572,7 +1802,8 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         orientation: "vertical",
         bars: confusions.slice(0, 24).map((x) => ({
           label: `${x.truth.toUpperCase()} -> ${x.guess.toUpperCase()}`,
-          value: x.n
+          value: x.n,
+          drilldown: confusionDrilldowns.get(`${x.truth}|${x.guess}`) || []
         }))
       }
     ]

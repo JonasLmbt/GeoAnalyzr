@@ -1,4 +1,4 @@
-import { AnalysisBarPoint, AnalysisChart, AnalysisSection, AnalysisWindowData } from "./analysis";
+import { AnalysisBarPoint, AnalysisChart, AnalysisDrilldownItem, AnalysisSection, AnalysisWindowData } from "./analysis";
 
 type AnalysisTheme = "dark" | "light";
 type AnalysisSettings = {
@@ -349,12 +349,8 @@ function formatDrilldownDate(ts?: number): string {
   return `${day}/${month}/${year} ${hh}:${mm}`;
 }
 
-function openBarDrilldownOverlay(title: string, barLabel: string, bars: AnalysisBarPoint[], barIndex: number): void {
-  const bar = bars[barIndex];
-  const drilldown = bar?.drilldown || [];
-  if (!bar || drilldown.length === 0) return;
-
-  const doc = document;
+function openDrilldownOverlay(doc: Document, title: string, subtitle: string, drilldown: AnalysisDrilldownItem[]): void {
+  if (drilldown.length === 0) return;
   const palette = getThemePalette();
   const overlay = doc.createElement("div");
   overlay.style.position = "fixed";
@@ -386,7 +382,7 @@ function openBarDrilldownOverlay(title: string, barLabel: string, bars: Analysis
   const headTitle = doc.createElement("div");
   headTitle.style.fontWeight = "800";
   headTitle.style.fontSize = "14px";
-  headTitle.textContent = `${title} - ${barLabel} (${drilldown.length})`;
+  headTitle.textContent = `${title} - ${subtitle} (${drilldown.length})`;
   header.appendChild(headTitle);
 
   const closeBtn = doc.createElement("button");
@@ -521,6 +517,13 @@ function openBarDrilldownOverlay(title: string, barLabel: string, bars: Analysis
   });
   overlay.appendChild(card);
   doc.body.appendChild(overlay);
+}
+
+function openBarDrilldownOverlay(doc: Document, title: string, barLabel: string, bars: AnalysisBarPoint[], barIndex: number): void {
+  const bar = bars[barIndex];
+  const drilldown = bar?.drilldown || [];
+  if (!bar || drilldown.length === 0) return;
+  openDrilldownOverlay(doc, title, barLabel, drilldown);
 }
 
 function createChartActions(svg: SVGSVGElement, title: string): HTMLElement {
@@ -865,7 +868,7 @@ function renderBarChart(chart: Extract<AnalysisChart, { type: "bar" }>, title: s
       const bar = bars[idx];
       if (!Number.isFinite(idx) || !bar || !bar.drilldown || bar.drilldown.length === 0) return;
       rect.style.cursor = "pointer";
-      rect.addEventListener("click", () => openBarDrilldownOverlay(title, bar.label, bars, idx));
+      rect.addEventListener("click", () => openBarDrilldownOverlay(doc, title, bar.label, bars, idx));
     });
   };
   render();
@@ -1667,6 +1670,7 @@ export function createUI(): UIHandle {
     body.style.gap = "8px";
     body.style.marginBottom = "10px";
     body.style.marginTop = "2px";
+    const lineDrillMap = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel, d.items]));
     const createLineRow = (line: string): HTMLDivElement => {
       const row = doc.createElement("div");
       row.style.padding = "9px 11px";
@@ -1677,8 +1681,9 @@ export function createUI(): UIHandle {
 
       const sep = line.indexOf(":");
       if (sep > 0 && sep < line.length - 1) {
+        const leftLabel = line.slice(0, sep).trim();
         const left = doc.createElement("span");
-        left.textContent = line.slice(0, sep).trim();
+        left.textContent = leftLabel;
         left.style.fontSize = "13px";
         left.style.fontWeight = "600";
         left.style.color = palette.textMuted;
@@ -1695,6 +1700,13 @@ export function createUI(): UIHandle {
         right.style.padding = "2px 8px";
         right.style.borderRadius = "999px";
         right.style.background = "rgba(255,255,255,0.08)";
+        const drillItems = lineDrillMap.get(leftLabel) || [];
+        if (drillItems.length > 0) {
+          right.style.cursor = "pointer";
+          right.style.textDecoration = "underline";
+          right.title = `Open ${drillItems.length} matching rounds`;
+          right.addEventListener("click", () => openDrilldownOverlay(doc, section.title, leftLabel, drillItems));
+        }
 
         row.appendChild(left);
         row.appendChild(right);
