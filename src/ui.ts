@@ -1348,6 +1348,7 @@ export function createUI(): UIHandle {
     else if (title.includes("time patterns")) wrap.innerHTML = svgBase('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/>');
     else if (title.includes("tempo")) wrap.innerHTML = svgBase('<path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><path d="M12 14h0"/>');
     else if (title.includes("scores")) wrap.innerHTML = svgBase('<path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-9"/><path d="M22 20v-6"/>');
+    else if (title.includes("rounds")) wrap.innerHTML = svgBase('<path d="M4 12h16"/><path d="M4 7h16"/><path d="M4 17h16"/><circle cx="7" cy="7" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="17" cy="17" r="1"/>');
     else if (title.includes("countries") || title.includes("country spotlight")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
     else if (title.includes("opponents")) wrap.innerHTML = svgBase('<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><path d="M3 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/><path d="M11 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/>');
     else if (title === "rating" || title.includes("rating")) wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
