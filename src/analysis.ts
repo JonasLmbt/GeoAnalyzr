@@ -1619,34 +1619,72 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
   });
 
-  const roundMetricsChrono = roundMetrics
-    .slice()
+  const roundMetricsForRoundSection = teamRounds
+    .map((r) => {
+      const ts = teamPlayedAtByGameId.get(r.gameId);
+      const score = extractScore(r);
+      const timeMs = extractTimeMs(r);
+      const distMeters = extractDistanceMeters(r);
+      if (ts === undefined || typeof score !== "number") return undefined;
+      return {
+        round: r,
+        ts,
+        gameId: r.gameId,
+        roundNumber: r.roundNumber,
+        score,
+        timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
+        distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined,
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        trueCountry: normalizeCountryCode(r.trueCountry)
+      };
+    })
+    .filter(
+      (
+        x
+      ): x is {
+        round: RoundRow;
+        ts: number;
+        gameId: string;
+        roundNumber: number;
+        score: number;
+        timeSec?: number;
+        distKm?: number;
+        guessCountry?: string;
+        trueCountry?: string;
+      } => !!x
+    )
     .sort((a, b) => (a.ts !== b.ts ? a.ts - b.ts : a.roundNumber - b.roundNumber));
-  const roundBucketCount =
-    roundMetricsChrono.length > 0 ? Math.max(10, Math.min(50, Math.ceil(Math.sqrt(roundMetricsChrono.length)))) : 0;
-  const roundBucketSize = roundBucketCount > 0 ? Math.max(1, Math.ceil(roundMetricsChrono.length / roundBucketCount)) : 1;
-  const roundBuckets = Array.from({ length: roundBucketCount }, (_, i) => ({
-    index: i,
-    start: i * roundBucketSize,
-    end: i * roundBucketSize,
-    n: 0,
-    scoreSum: 0,
-    hit: 0,
-    throws: 0,
-    fiveKs: 0,
-    distSum: 0,
-    distN: 0,
-    timeSum: 0,
-    timeN: 0,
-    drilldown: [] as AnalysisDrilldownItem[]
-  }));
 
-  for (let i = 0; i < roundMetricsChrono.length; i++) {
-    const rm = roundMetricsChrono[i];
-    const bucketIdx = roundBucketCount > 0 ? Math.min(roundBucketCount - 1, Math.floor(i / roundBucketSize)) : 0;
-    const b = roundBuckets[bucketIdx];
+  type RoundNumberBucket = {
+    roundNumber: number;
+    n: number;
+    scoreSum: number;
+    hit: number;
+    throws: number;
+    fiveKs: number;
+    distSum: number;
+    distN: number;
+    timeSum: number;
+    timeN: number;
+    drilldown: AnalysisDrilldownItem[];
+  };
+  const roundBucketsByNumber = new Map<number, RoundNumberBucket>();
+  for (const rm of roundMetricsForRoundSection) {
+    const key = rm.roundNumber;
+    const b = roundBucketsByNumber.get(key) || {
+        roundNumber: key,
+        n: 0,
+        scoreSum: 0,
+        hit: 0,
+        throws: 0,
+        fiveKs: 0,
+        distSum: 0,
+        distN: 0,
+        timeSum: 0,
+        timeN: 0,
+        drilldown: []
+      };
     b.n++;
-    b.end = i;
     b.scoreSum += rm.score;
     if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) b.hit++;
     if (rm.score < 50) b.throws++;
@@ -1660,14 +1698,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       b.timeN++;
     }
     b.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
+    roundBucketsByNumber.set(key, b);
   }
+  const roundBuckets = [...roundBucketsByNumber.values()].sort((a, b) => a.roundNumber - b.roundNumber);
 
   const roundProgressionOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
     {
       key: "avg_score",
       label: "Avg score",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.n > 0 ? b.scoreSum / b.n : 0,
         drilldown: b.drilldown
       }))
@@ -1676,7 +1716,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       key: "hit_rate",
       label: "Hit rate (%)",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.n > 0 ? (b.hit / b.n) * 100 : 0,
         drilldown: b.drilldown
       }))
@@ -1685,7 +1725,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       key: "throw_rate",
       label: "Throw rate (%)",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.n > 0 ? (b.throws / b.n) * 100 : 0,
         drilldown: b.drilldown
       }))
@@ -1694,7 +1734,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       key: "fivek_rate",
       label: "5k rate (%)",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.n > 0 ? (b.fiveKs / b.n) * 100 : 0,
         drilldown: b.drilldown
       }))
@@ -1703,7 +1743,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       key: "avg_distance",
       label: "Avg distance (km)",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.distN > 0 ? b.distSum / b.distN : 0,
         drilldown: b.drilldown
       }))
@@ -1712,7 +1752,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       key: "avg_time",
       label: "Avg guess time (s)",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.timeN > 0 ? b.timeSum / b.timeN : 0,
         drilldown: b.drilldown
       }))
@@ -1721,22 +1761,24 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       key: "rounds",
       label: "Rounds",
       bars: roundBuckets.map((b) => ({
-        label: `#${b.start + 1}-${b.end + 1}`,
+        label: `#${b.roundNumber}`,
         value: b.n,
         drilldown: b.drilldown
       }))
     }
   ];
 
-  const roundsByGame = new Map<string, RoundMetric[]>();
-  for (const rm of roundMetricsChrono) {
+  const roundsByGame = new Map<string, typeof roundMetricsForRoundSection[number][]>();
+  for (const rm of roundMetricsForRoundSection) {
     if (!roundsByGame.has(rm.gameId)) roundsByGame.set(rm.gameId, []);
     roundsByGame.get(rm.gameId)!.push(rm);
   }
   const gameRoundEntries = [...roundsByGame.entries()].map(([gameId, items]) => ({ gameId, items, n: items.length }));
   const maxRoundsEntry = gameRoundEntries.slice().sort((a, b) => b.n - a.n)[0];
-  const minRounds = gameRoundEntries.length > 0 ? Math.min(...gameRoundEntries.map((x) => x.n)) : 0;
-  const minRoundsEntries = gameRoundEntries.filter((x) => x.n === minRounds);
+  const minRoundsEligibleEntries = gameRoundEntries.filter((x) => x.n >= 2);
+  const minRoundsSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
+  const minRounds = minRoundsSource.length > 0 ? Math.min(...minRoundsSource.map((x) => x.n)) : 0;
+  const minRoundsEntries = minRoundsSource.filter((x) => x.n === minRounds);
   const maxSpreadEntry = gameRoundEntries
     .map((x) => {
       const scores = x.items.map((r) => r.score);
@@ -1747,9 +1789,13 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const maxThrowsEntry = gameRoundEntries
     .map((x) => ({ ...x, throws: x.items.filter((r) => r.score < 50).length }))
     .sort((a, b) => b.throws - a.throws)[0];
-  const bestAvgEntry = gameRoundEntries
+  const avgScoreSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
+  const bestAvgEntry = avgScoreSource
     .map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum, r) => sum + r.score, 0) / x.n : 0 }))
     .sort((a, b) => b.avgScore - a.avgScore)[0];
+  const worstAvgEntry = avgScoreSource
+    .map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum, r) => sum + r.score, 0) / x.n : 0 }))
+    .sort((a, b) => a.avgScore - b.avgScore)[0];
 
   const gameEntryDrill = (entry?: { items: RoundMetric[] }): AnalysisDrilldownItem[] =>
     entry ? entry.items.map((r) => toDrilldownItem(r.round, r.ts, r.score)) : [];
@@ -1760,28 +1806,25 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     id: "rounds",
     title: "Rounds",
     group: "Rounds",
-    appliesFilters: ["date", "mode", "teammate", "country"],
+    appliesFilters: ["date", "mode", "teammate"],
     lines: [
-      "Round facts:",
       `Game with most rounds: ${maxRoundsEntry ? `${maxRoundsEntry.n} rounds (${gameDateLabel(maxRoundsEntry)})` : "-"}`,
       `Games with fewest rounds: ${minRoundsEntries.length > 0 ? `${minRounds} rounds (${minRoundsEntries.length} game(s))` : "-"}`,
       `Largest score spread (max-min in one game): ${maxSpreadEntry ? `${fmt(maxSpreadEntry.spread, 0)} points (${gameDateLabel(maxSpreadEntry)})` : "-"}`,
-      `Most throws (<50) in one game: ${maxThrowsEntry ? `${maxThrowsEntry.throws} throws (${gameDateLabel(maxThrowsEntry)})` : "-"}`,
-      `Best avg score in a game: ${bestAvgEntry ? `${fmt(bestAvgEntry.avgScore, 1)} (${bestAvgEntry.n} rounds, ${gameDateLabel(bestAvgEntry)})` : "-"}`
+      `Most throws (<50) in one game: ${maxThrowsEntry ? `${maxThrowsEntry.throws} throws (${gameDateLabel(maxThrowsEntry)})` : "-"}`
     ],
     lineDrilldowns: [
       { lineLabel: "Game with most rounds", items: gameEntryDrill(maxRoundsEntry) },
       { lineLabel: "Games with fewest rounds", items: minRoundsEntries.flatMap((entry) => gameEntryDrill(entry)) },
       { lineLabel: "Largest score spread (max-min in one game)", items: gameEntryDrill(maxSpreadEntry) },
-      { lineLabel: "Most throws (<50) in one game", items: gameEntryDrill(maxThrowsEntry) },
-      { lineLabel: "Best avg score in a game", items: gameEntryDrill(bestAvgEntry) }
+      { lineLabel: "Most throws (<50) in one game", items: gameEntryDrill(maxThrowsEntry) }
     ],
     chart:
       roundProgressionOptions.length > 0
         ? {
             type: "selectableBar",
             yLabel: "Round progression metrics",
-            initialBars: roundBuckets.length,
+            initialBars: 50,
             orientation: "vertical",
             allowSort: false,
             defaultSort: "chronological",
@@ -2632,10 +2675,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     lines: [
       `Best day: ${bestDay ? `${formatDay(bestDay.day)} (avg ${fmt(bestDay.avgScore, 1)}, n=${bestDay.rounds})` : "-"}`,
       `Hardest day: ${worstDay ? `${formatDay(worstDay.day)} (avg ${fmt(worstDay.avgScore, 1)}, n=${worstDay.rounds})` : "-"}`,
+      `Best avg score in a game: ${bestAvgEntry ? `${fmt(bestAvgEntry.avgScore, 1)} (${bestAvgEntry.n} rounds, ${gameDateLabel(bestAvgEntry)})` : "-"}`,
+      `Worst avg score in a game: ${worstAvgEntry ? `${fmt(worstAvgEntry.avgScore, 1)} (${worstAvgEntry.n} rounds, ${gameDateLabel(worstAvgEntry)})` : "-"}`,
       `Fastest day: ${fastestDayRecord ? `${formatDay(fastestDayRecord.day)} (${fmt(fastestDayRecord.avgTime, 1)} s)` : "-"}`,
       `Slowest day: ${slowestDayRecord ? `${formatDay(slowestDayRecord.day)} (${fmt(slowestDayRecord.avgTime, 1)} s)` : "-"}`,
       `Best 5k streak: ${bestFivekStreak} rounds in a row`,
       `Worst throw streak (<50): ${worstThrowStreak} rounds in a row`
+    ],
+    lineDrilldowns: [
+      { lineLabel: "Best avg score in a game", items: gameEntryDrill(bestAvgEntry) },
+      { lineLabel: "Worst avg score in a game", items: gameEntryDrill(worstAvgEntry) }
     ],
     chart: {
       type: "line",
