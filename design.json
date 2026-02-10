@@ -433,7 +433,7 @@
       ],
       "layout": {
         "mode": "object_order",
-        "preserveUnmatched": true,
+        "preserveUnmatched": false,
         "order": [
           {
             "kind": "box",

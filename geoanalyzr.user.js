@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.9
+// @version      1.5.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7169,7 +7169,7 @@
         ],
         layout: {
           mode: "object_order",
-          preserveUnmatched: true,
+          preserveUnmatched: false,
           order: [
             {
               kind: "box",
@@ -9957,25 +9957,26 @@
     const buckets = /* @__PURE__ */ new Map();
     for (const p of sorted) {
       const key = Math.floor(p.x / bucketMs) * bucketMs;
-      const cur = buckets.get(key) || { sumY: 0, n: 0, x: p.x, label: p.label };
-      cur.sumY += p.y;
-      cur.n += 1;
+      const cur = buckets.get(key) || { y: p.y, x: p.x, label: p.label };
+      cur.y = p.y;
       cur.x = p.x;
       cur.label = p.label;
       buckets.set(key, cur);
     }
-    let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(
-      ([, v]) => v.label !== void 0 ? { x: v.x, y: v.sumY / Math.max(1, v.n), label: v.label } : { x: v.x, y: v.sumY / Math.max(1, v.n) }
-    );
+    let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v.label !== void 0 ? { x: v.x, y: v.y, label: v.label } : { x: v.x, y: v.y });
     const hardLimit = 180;
     if (out.length > hardLimit) {
       const stride = Math.ceil(out.length / hardLimit);
       const compressed = [];
       for (let i = 0; i < out.length; i += stride) {
         const chunk = out.slice(i, i + stride);
-        const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
         const last = chunk[chunk.length - 1];
-        compressed.push(last.label !== void 0 ? { x: last.x, y: avgY, label: last.label } : { x: last.x, y: avgY });
+        compressed.push(last.label !== void 0 ? { x: last.x, y: last.y, label: last.label } : { x: last.x, y: last.y });
+      }
+      const srcLast = out[out.length - 1];
+      const cmpLast = compressed[compressed.length - 1];
+      if (!cmpLast || cmpLast.x !== srcLast.x || cmpLast.y !== srcLast.y) {
+        compressed.push(srcLast);
       }
       out = compressed;
     }
