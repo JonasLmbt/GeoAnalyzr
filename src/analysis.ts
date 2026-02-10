@@ -1370,11 +1370,18 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     rows: OverviewDayAgg[],
     num: (x: OverviewDayAgg) => number,
     den: (x: OverviewDayAgg) => number
-  ): Array<{ x: number; y: number; label?: string }> =>
-    rows.map((r) => {
+  ): Array<{ x: number; y: number; label?: string }> => {
+    let lastValue = 0;
+    let hasLastValue = false;
+    return rows.map((r) => {
       const d = den(r);
-      return { x: r.day, y: d > 0 ? (num(r) / d) * 100 : 0, label: formatDay(r.day) };
+      if (d > 0) {
+        lastValue = (num(r) / d) * 100;
+        hasLastValue = true;
+      }
+      return { x: r.day, y: hasLastValue ? lastValue : 0, label: formatDay(r.day) };
     });
+  };
   const makeOverviewCumulativeRatioPoints = (
     rows: OverviewDayAgg[],
     num: (x: OverviewDayAgg) => number,
@@ -1392,11 +1399,18 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     rows: OverviewDayAgg[],
     sumFn: (x: OverviewDayAgg) => number,
     countFn: (x: OverviewDayAgg) => number
-  ): Array<{ x: number; y: number; label?: string }> =>
-    rows.map((r) => {
+  ): Array<{ x: number; y: number; label?: string }> => {
+    let lastValue = 0;
+    let hasLastValue = false;
+    return rows.map((r) => {
       const n = countFn(r);
-      return { x: r.day, y: n > 0 ? sumFn(r) / n : 0, label: formatDay(r.day) };
+      if (n > 0) {
+        lastValue = sumFn(r) / n;
+        hasLastValue = true;
+      }
+      return { x: r.day, y: hasLastValue ? lastValue : 0, label: formatDay(r.day) };
     });
+  };
   const makeOverviewCumulativeAveragePoints = (
     rows: OverviewDayAgg[],
     sumFn: (x: OverviewDayAgg) => number,

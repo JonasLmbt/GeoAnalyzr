@@ -15598,10 +15598,18 @@
         return { x: r.day, y: running, label: formatDay(r.day) };
       });
     };
-    const makeOverviewRatioPoints = (rows, num, den) => rows.map((r) => {
-      const d = den(r);
-      return { x: r.day, y: d > 0 ? num(r) / d * 100 : 0, label: formatDay(r.day) };
-    });
+    const makeOverviewRatioPoints = (rows, num, den) => {
+      let lastValue = 0;
+      let hasLastValue = false;
+      return rows.map((r) => {
+        const d = den(r);
+        if (d > 0) {
+          lastValue = num(r) / d * 100;
+          hasLastValue = true;
+        }
+        return { x: r.day, y: hasLastValue ? lastValue : 0, label: formatDay(r.day) };
+      });
+    };
     const makeOverviewCumulativeRatioPoints = (rows, num, den) => {
       let n = 0;
       let d = 0;
@@ -15611,10 +15619,18 @@
         return { x: r.day, y: d > 0 ? n / d * 100 : 0, label: formatDay(r.day) };
       });
     };
-    const makeOverviewAveragePoints = (rows, sumFn, countFn) => rows.map((r) => {
-      const n = countFn(r);
-      return { x: r.day, y: n > 0 ? sumFn(r) / n : 0, label: formatDay(r.day) };
-    });
+    const makeOverviewAveragePoints = (rows, sumFn, countFn) => {
+      let lastValue = 0;
+      let hasLastValue = false;
+      return rows.map((r) => {
+        const n = countFn(r);
+        if (n > 0) {
+          lastValue = sumFn(r) / n;
+          hasLastValue = true;
+        }
+        return { x: r.day, y: hasLastValue ? lastValue : 0, label: formatDay(r.day) };
+      });
+    };
     const makeOverviewCumulativeAveragePoints = (rows, sumFn, countFn) => {
       let s = 0;
       let n = 0;
