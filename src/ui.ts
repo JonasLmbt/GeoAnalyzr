@@ -3329,12 +3329,6 @@ export function createUI(): UIHandle {
               styleInput(orientationSelect);
               mkField("Orientation", orientationSelect);
 
-              const defaultMetricInput = doc.createElement("input");
-              defaultMetricInput.value = graphObj.defaultMetric || "";
-              defaultMetricInput.setAttribute("list", "ga-metric-suggestions");
-              styleInput(defaultMetricInput);
-              mkField("Default metric", defaultMetricInput);
-
               const metricsWrap = doc.createElement("div");
               metricsWrap.style.gridColumn = "1 / -1";
               metricsWrap.style.display = "grid";
@@ -3345,14 +3339,50 @@ export function createUI(): UIHandle {
               metricsTitle.style.color = palette.textMuted;
               metricsWrap.appendChild(metricsTitle);
               const selectedMetrics = new Set<string>((graphObj.metrics || []).filter((m) => !!m));
+              const defaultMetricSelect = doc.createElement("select");
+              styleInput(defaultMetricSelect);
+              const metricsHint = doc.createElement("div");
+              metricsHint.style.fontSize = "11px";
+              metricsHint.style.color = palette.textMuted;
+              const resolveAllowedMetrics = (): string[] => {
+                const contentKey = (contentInput.value || graphObj.content || "").trim();
+                const def = getGraphContentDefinition(contentKey);
+                const allowed = (def?.metrics || []).filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim());
+                if (allowed.length > 0) return Array.from(new Set(allowed));
+                return suggestionData.metrics;
+              };
               const metricsList = doc.createElement("div");
               metricsList.style.display = "grid";
               metricsList.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
               metricsList.style.gap = "4px 8px";
+              const renderDefaultMetricOptions = (allowed: string[]) => {
+                const prev = defaultMetricSelect.value || graphObj.defaultMetric || "";
+                defaultMetricSelect.innerHTML = "";
+                const auto = doc.createElement("option");
+                auto.value = "";
+                auto.textContent = "(auto)";
+                defaultMetricSelect.appendChild(auto);
+                for (const metric of allowed) {
+                  const opt = doc.createElement("option");
+                  opt.value = metric;
+                  opt.textContent = metric;
+                  defaultMetricSelect.appendChild(opt);
+                }
+                if ([...defaultMetricSelect.options].some((o) => o.value === prev)) {
+                  defaultMetricSelect.value = prev;
+                }
+              };
               const renderMetricChecklist = () => {
                 metricsList.innerHTML = "";
-                const allMetricOptions = Array.from(new Set([...suggestionData.metrics, ...Array.from(selectedMetrics)])).sort();
-                for (const metric of allMetricOptions) {
+                const allowedMetrics = resolveAllowedMetrics().sort();
+                metricsHint.textContent = (contentInput.value || graphObj.content || "").trim()
+                  ? `Allowed metrics for content "${(contentInput.value || graphObj.content || "").trim()}": ${allowedMetrics.length}`
+                  : `Allowed metrics: ${allowedMetrics.length}`;
+                for (const metric of Array.from(selectedMetrics)) {
+                  if (!allowedMetrics.includes(metric)) selectedMetrics.delete(metric);
+                }
+                renderDefaultMetricOptions(allowedMetrics);
+                for (const metric of allowedMetrics) {
                   const rowMetric = doc.createElement("label");
                   rowMetric.style.display = "inline-flex";
                   rowMetric.style.alignItems = "center";
@@ -3372,24 +3402,17 @@ export function createUI(): UIHandle {
                 }
               };
               renderMetricChecklist();
-              const customMetricRow = doc.createElement("div");
-              customMetricRow.style.display = "inline-flex";
-              customMetricRow.style.gap = "6px";
-              const customMetricInput = doc.createElement("input");
-              customMetricInput.placeholder = "custom_metric";
-              styleInput(customMetricInput);
-              const addCustomMetricBtn = doc.createElement("button");
-              addCustomMetricBtn.textContent = "Add metric";
-              styleActionBtn(addCustomMetricBtn);
-              addCustomMetricBtn.addEventListener("click", () => {
-                const m = customMetricInput.value.trim();
-                if (!m) return;
-                selectedMetrics.add(m);
-                customMetricInput.value = "";
-                renderMetricChecklist();
-              });
-              customMetricRow.append(customMetricInput, addCustomMetricBtn);
-              metricsWrap.append(metricsList, customMetricRow);
+              contentInput.addEventListener("input", () => renderMetricChecklist());
+              const defaultMetricWrap = doc.createElement("label");
+              defaultMetricWrap.style.display = "grid";
+              defaultMetricWrap.style.gap = "4px";
+              defaultMetricWrap.style.gridColumn = "1 / -1";
+              const defaultMetricText = doc.createElement("span");
+              defaultMetricText.textContent = "Default metric";
+              defaultMetricText.style.fontSize = "12px";
+              defaultMetricText.style.color = palette.textMuted;
+              defaultMetricWrap.append(defaultMetricText, defaultMetricSelect);
+              metricsWrap.append(metricsHint, metricsList, defaultMetricWrap);
               editor.appendChild(metricsWrap);
 
               const defaultSortSelect = doc.createElement("select");
@@ -3462,7 +3485,7 @@ export function createUI(): UIHandle {
                 graphObj.content = contentInput.value.trim() || undefined;
                 graphObj.type = (typeSelect.value || undefined) as DesignGraphTemplate["type"];
                 graphObj.orientation = (orientationSelect.value || undefined) as DesignGraphTemplate["orientation"];
-                graphObj.defaultMetric = defaultMetricInput.value.trim() || undefined;
+                graphObj.defaultMetric = defaultMetricSelect.value.trim() || undefined;
                 graphObj.metrics = Array.from(selectedMetrics);
                 graphObj.defaultSort = (defaultSortSelect.value || undefined) as DesignGraphTemplate["defaultSort"];
                 graphObj.sorts = parseCsv(sortsInput.value).filter(
