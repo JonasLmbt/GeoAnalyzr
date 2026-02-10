@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.4.12
+// @version      1.5.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6682,25 +6682,2479 @@
     }
   });
 
+  // node_modules/dexie/import-wrapper.mjs
+  var import_dexie = __toESM(require_dexie(), 1);
+  var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
+  var Dexie = globalThis[DexieSymbol] || (globalThis[DexieSymbol] = import_dexie.default);
+  if (import_dexie.default.semVer !== Dexie.semVer) {
+    throw new Error(`Two different versions of Dexie loaded in the same app: ${import_dexie.default.semVer} and ${Dexie.semVer}`);
+  }
+  var {
+    liveQuery,
+    mergeRanges,
+    rangesOverlap,
+    RangeSet,
+    cmp,
+    Entity,
+    PropModification,
+    replacePrefix,
+    add,
+    remove,
+    DexieYProvider
+  } = Dexie;
+  var import_wrapper_default = Dexie;
+
+  // src/db.ts
+  var GGDB = class extends import_wrapper_default {
+    games;
+    rounds;
+    details;
+    meta;
+    constructor() {
+      super("gg_analyzer_db");
+      this.version(1).stores({
+        games: "gameId, playedAt, type, mode",
+        rounds: "id, gameId, roundNumber",
+        meta: "key, updatedAt"
+      });
+      this.version(2).stores({
+        games: "gameId, playedAt, type, mode",
+        rounds: "id, gameId, roundNumber",
+        details: "gameId, status, fetchedAt",
+        meta: "key, updatedAt"
+      });
+      this.version(3).stores({
+        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+        rounds: "id, gameId, roundNumber, [gameId+roundNumber]",
+        details: "gameId, status, fetchedAt, modeFamily, isTeamDuels",
+        meta: "key, updatedAt"
+      });
+    }
+  };
+  var db = new GGDB();
+
+  // design.json
+  var design_default = {
+    $schema: "./design.schema.json",
+    schemaVersion: "1.0.0",
+    window: {
+      titleTemplate: "GeoAnalyzr - Full Analysis for {{playerName}}",
+      appearance: {
+        settingsStorageKey: "geoanalyzr:analysis:settings:v1",
+        defaults: {
+          theme: "dark",
+          accent: "#66a8ff"
+        },
+        themeOptions: [
+          "dark",
+          "light"
+        ],
+        accentFormat: "#RRGGBB"
+      },
+      filters: {
+        dateRange: {
+          fromTs: "number|undefined",
+          toTs: "number|undefined"
+        },
+        gameMode: {
+          key: "gameMode",
+          options: [
+            "all",
+            "duels",
+            "teamduels"
+          ],
+          labelMap: {
+            all: "all",
+            duels: "Duel",
+            teamduels: "Team Duel"
+          }
+        },
+        movementType: {
+          key: "movementType",
+          options: [
+            "all",
+            "moving",
+            "no_move",
+            "nmpz",
+            "unknown"
+          ],
+          displayOptions: "dynamic (unknown hidden unless implied by all)"
+        },
+        teammate: {
+          key: "teammateId",
+          options: "dynamic + all"
+        },
+        country: {
+          key: "country",
+          options: "dynamic + all (top countries)"
+        }
+      },
+      toc: {
+        source: "sections",
+        labelOverrides: {
+          teammate_battle: "Team",
+          country_spotlight: "Country Spotlight"
+        }
+      }
+    },
+    section_layout: {
+      order: [
+        "overview",
+        "personal_records",
+        "time_patterns",
+        "session_quality",
+        "tempo_vs_quality",
+        "scores",
+        "rounds",
+        "country_stats",
+        "opponents",
+        "rating_history",
+        "teammate_battle",
+        "country_spotlight"
+      ]
+    },
+    drilldownOverlay: {
+      triggerRules: {
+        lineValueClickable: "true if lineLabel exists in section.lineDrilldowns",
+        barClickable: "true if clicked bar has drilldown.length > 0"
+      },
+      sorting: {
+        keys: [
+          "date",
+          "round",
+          "score",
+          "country",
+          "result",
+          "duration",
+          "damage",
+          "movement",
+          "game_mode",
+          "mate"
+        ],
+        defaultDir: {
+          date: "desc",
+          round: "desc",
+          score: "desc",
+          country: "asc",
+          result: "desc",
+          duration: "desc",
+          damage: "desc",
+          movement: "asc",
+          game_mode: "asc",
+          mate: "asc"
+        },
+        toggleBehavior: "first click uses defaultDir[key], second click toggles"
+      },
+      columns: {
+        opponentMode: [
+          "Date(sortable)",
+          "Opponent(profile-link if available)",
+          "Result(sortable)",
+          "Match-ups",
+          "Country(sortable)",
+          "Game Mode(sortable, conditional)",
+          "Game (short id, tooltip full id)"
+        ],
+        roundMode: [
+          "Date(sortable)",
+          "Result(sortable)",
+          "Round(sortable)",
+          "Score(sortable)",
+          "Country(sortable, full English name)",
+          "Guess Duration(sortable, conditional)",
+          "Damage(sortable, conditional, green/red/gray)",
+          "Movement(sortable, conditional)",
+          "Game Mode(sortable, conditional)",
+          "Mate(sortable, conditional)",
+          "Game (short id, tooltip full id)",
+          "Guess Maps(link, conditional)",
+          "True Street View(link, conditional)"
+        ]
+      }
+    },
+    charts: {
+      types: [
+        "line",
+        "bar",
+        "selectableBar",
+        "selectableLine"
+      ],
+      commonActions: [
+        "Zoom",
+        "New Tab",
+        "Save SVG",
+        "Save PNG"
+      ],
+      selectableBarSortOptions: [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    graphContentDefinitions: {
+      overview_games_over_time: {
+        metrics: [
+          "games"
+        ],
+        defaultMetric: "games",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      overview_avg_score_over_time: {
+        metrics: [
+          "avg_score"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      time_patterns_weekday: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "fivek_rate"
+        ],
+        defaultMetric: "games",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      time_patterns_hour: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "fivek_rate"
+        ],
+        defaultMetric: "games",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      sessions: {
+        metrics: [
+          "avg_score",
+          "throw_rate",
+          "fivek_rate",
+          "avg_duration",
+          "games",
+          "rounds",
+          "win_rate"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "desc",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      tempo_buckets: {
+        metrics: [
+          "avg_score",
+          "avg_distance",
+          "throw_rate",
+          "fivek_rate",
+          "rounds"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      score_distribution: {
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      rounds_progression: {
+        metrics: [
+          "avg_score",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "fivek_rate",
+          "rounds",
+          "hit_rate"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      rounds_by_game_length: {
+        metrics: [
+          "win_rate_decisive",
+          "win_rate",
+          "avg_score",
+          "avg_distance",
+          "avg_time",
+          "games",
+          "rounds"
+        ],
+        defaultMetric: "win_rate_decisive",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      country_metrics: {
+        metrics: [
+          "rounds",
+          "hit_rate",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "throw_rate",
+          "fivek_rate",
+          "avg_damage_dealt",
+          "avg_damage_taken",
+          "damage_dealt_share",
+          "damage_taken_share"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "desc",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      country_confusion_matrix: {
+        defaultSort: "desc",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      opponents_country: {
+        defaultSort: "desc",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      rating_history: {
+        metrics: [
+          "rating"
+        ],
+        defaultMetric: "rating",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      spotlight_distribution: {
+        metrics: [
+          "all_guesses",
+          "correct_only"
+        ],
+        defaultMetric: "all_guesses",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      spotlight_trend: {
+        metrics: [
+          "damage_dealt_share",
+          "damage_taken_share",
+          "avg_score",
+          "hit_rate",
+          "throw_rate",
+          "fivek_rate",
+          "avg_damage_dealt",
+          "avg_damage_taken",
+          "rounds"
+        ],
+        defaultMetric: "damage_dealt_share",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      records_daily: {
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      }
+    },
+    sections: [
+      {
+        id: "overview",
+        title: "Overview",
+        group: "Overview",
+        appliesFilters: [
+          "date",
+          "mode",
+          "movement",
+          "teammate",
+          "country"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: true,
+          order: [
+            {
+              kind: "box",
+              id: "results_win_rate_streaks"
+            },
+            {
+              kind: "box",
+              id: "mode_breakdown"
+            },
+            {
+              kind: "box",
+              id: "movement_breakdown"
+            },
+            {
+              kind: "graph",
+              id: "overview_games_over_time"
+            },
+            {
+              kind: "graph",
+              id: "overview_avg_score_over_time"
+            }
+          ]
+        },
+        objects: {
+          singles: [],
+          boxes: [
+            {
+              id: "results_win_rate_streaks",
+              title: "Results, Win Rate & Streaks",
+              lines: [
+                {
+                  label: "Games with result data",
+                  type: "amount_games_with_result"
+                },
+                {
+                  label: "Wins",
+                  type: "wins"
+                },
+                {
+                  label: "Win rate (decisive)",
+                  type: "win_rate_decisive"
+                },
+                {
+                  label: "Win rate (all)",
+                  type: "win_rate_all"
+                },
+                {
+                  label: "Avg score",
+                  type: "avg_score"
+                },
+                {
+                  label: "Avg distance",
+                  type: "avg_distance"
+                },
+                {
+                  label: "Avg time",
+                  type: "avg_time"
+                },
+                {
+                  label: "Time played",
+                  type: "time_played"
+                },
+                {
+                  label: "Perfect 5k rounds",
+                  type: "perfect_5k"
+                },
+                {
+                  label: "Throws (<50)",
+                  type: "throws_lt_50"
+                },
+                {
+                  label: "Longest win streak",
+                  type: "longest_win_streak"
+                },
+                {
+                  label: "Longest loss streak",
+                  type: "longest_loss_streak"
+                }
+              ]
+            },
+            {
+              id: "mode_breakdown",
+              title: "Mode Breakdown",
+              lines: [
+                {
+                  label: "Duel",
+                  type: "amount_duels"
+                },
+                {
+                  label: "Team Duel",
+                  type: "amount_team_duels"
+                }
+              ]
+            },
+            {
+              id: "movement_breakdown",
+              title: "Movement Breakdown",
+              lines: [
+                {
+                  label: "Moving",
+                  type: "amount_moving_games"
+                },
+                {
+                  label: "No Move",
+                  type: "amount_no_move_games"
+                },
+                {
+                  label: "NMPZ",
+                  type: "amount_nmpz_games"
+                },
+                {
+                  label: "Unknown",
+                  type: "amount_unknown_games"
+                }
+              ]
+            }
+          ],
+          graphs: [
+            {
+              id: "overview_games_over_time",
+              sourceIndex: 0,
+              type: "line",
+              yLabel: "Games/day (or aggregated bucket)",
+              content: "overview_games_over_time",
+              hoverable: true,
+              clickable: false,
+              sortable: false,
+              sorts: [
+                "chronological"
+              ]
+            },
+            {
+              id: "overview_avg_score_over_time",
+              sourceIndex: 1,
+              type: "line",
+              yLabel: "Avg score/day (or aggregated bucket)",
+              content: "overview_avg_score_over_time",
+              hoverable: true,
+              clickable: false,
+              sortable: false,
+              sorts: [
+                "chronological"
+              ]
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "overview"
+        }
+      },
+      {
+        id: "time_patterns",
+        title: "Time Patterns",
+        group: "Overview",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: true,
+          order: [
+            {
+              kind: "graph",
+              id: "time_patterns_weekday"
+            },
+            {
+              kind: "graph",
+              id: "time_patterns_hour"
+            }
+          ]
+        },
+        objects: {
+          singles: [],
+          boxes: [],
+          graphs: [
+            {
+              id: "time_patterns_weekday",
+              sourceIndex: 0,
+              type: "selectableBar",
+              title: "Weekday patterns",
+              orientation: "horizontal",
+              initialBars: 7,
+              defaultMetric: "games",
+              defaultSort: "chronological",
+              metrics: [
+                "games",
+                "avg_score",
+                "avg_time",
+                "throw_rate",
+                "fivek_rate",
+                "amount_fivek"
+              ],
+              barClick: "opens matching rounds for that weekday",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "time_patterns_weekday",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            },
+            {
+              id: "time_patterns_hour",
+              sourceIndex: 1,
+              type: "selectableBar",
+              title: "Hour-of-day patterns",
+              orientation: "horizontal",
+              initialBars: 24,
+              defaultMetric: "games",
+              defaultSort: "chronological",
+              metrics: [
+                "games",
+                "avg_score",
+                "avg_time",
+                "throw_rate",
+                "fivek_rate"
+              ],
+              barClick: "opens matching rounds for that hour",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "time_patterns_hour",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "time_patterns"
+        }
+      },
+      {
+        id: "session_quality",
+        title: "Sessions",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate",
+          "country"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "sessions_detected_gap_45m"
+            },
+            {
+              kind: "single",
+              id: "longest_break_between_sessions"
+            },
+            {
+              kind: "single",
+              id: "avg_games_per_session"
+            },
+            {
+              kind: "graph",
+              id: "sessions"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "sessions_detected_gap_45m",
+              label: "Sessions detected (gap >45m)",
+              type: "sessions_detected_gap_45m"
+            },
+            {
+              id: "longest_break_between_sessions",
+              label: "Longest break between sessions",
+              type: "longest_break_between_sessions"
+            },
+            {
+              id: "avg_games_per_session",
+              label: "Avg games per session",
+              type: "avg_games_per_session"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "sessions",
+              sourceIndex: 0,
+              type: "selectableBar",
+              title: "Sessions",
+              orientation: "horizontal",
+              initialBars: 10,
+              defaultMetric: "avg_score",
+              defaultSort: "desc",
+              metrics: [
+                "avg_score",
+                "throw_rate",
+                "fivek_rate",
+                "avg_duration",
+                "games",
+                "rounds",
+                "win_rate"
+              ],
+              barClick: "opens all rounds in selected session",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "sessions",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "sessions"
+        }
+      },
+      {
+        id: "tempo_vs_quality",
+        title: "Tempo",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate",
+          "country"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "fastest_guess"
+            },
+            {
+              kind: "single",
+              id: "slowest_guess"
+            },
+            {
+              kind: "single",
+              id: "fastest_5k"
+            },
+            {
+              kind: "single",
+              id: "slowest_throw_50"
+            },
+            {
+              kind: "graph",
+              id: "tempo_buckets"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "fastest_guess",
+              label: "Fastest guess",
+              type: "fastest_guess"
+            },
+            {
+              id: "slowest_guess",
+              label: "Slowest guess",
+              type: "slowest_guess"
+            },
+            {
+              id: "fastest_5k",
+              label: "Fastest 5k",
+              type: "fastest_5k"
+            },
+            {
+              id: "slowest_throw_50",
+              label: "Slowest throw (<50)",
+              type: "slowest_throw_lt_50"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "tempo_buckets",
+              sourceIndex: 0,
+              type: "selectableBar",
+              title: "Time bucket metrics",
+              orientation: "horizontal",
+              defaultMetric: "avg_score",
+              defaultSort: "chronological",
+              buckets: [
+                "<20 sec",
+                "20-30 sec",
+                "30-45 sec",
+                "45-60 sec",
+                "60-90 sec",
+                "90-180 sec",
+                ">180 sec"
+              ],
+              metrics: [
+                "avg_score",
+                "avg_distance",
+                "throw_rate",
+                "fivek_rate",
+                "rounds"
+              ],
+              barClick: "opens matching rounds in this time bucket",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "tempo_buckets",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "tempo"
+        }
+      },
+      {
+        id: "scores",
+        title: "Scores",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate",
+          "country"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "perfect_5k"
+            },
+            {
+              kind: "single",
+              id: "near_perfect_4500"
+            },
+            {
+              kind: "single",
+              id: "low_scores_500"
+            },
+            {
+              kind: "single",
+              id: "throws_50"
+            },
+            {
+              kind: "graph",
+              id: "score_distribution"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "perfect_5k",
+              label: "Perfect 5k",
+              type: "scores_perfect_5k"
+            },
+            {
+              id: "near_perfect_4500",
+              label: "Near-perfect (>=4500)",
+              type: "scores_near_perfect_4500"
+            },
+            {
+              id: "low_scores_500",
+              label: "Low scores (<500)",
+              type: "scores_low_scores_500"
+            },
+            {
+              id: "throws_50",
+              label: "Throws (<50)",
+              type: "scores_throws_lt_50"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "score_distribution",
+              sourceIndex: 0,
+              type: "bar",
+              title: "Score distribution (smoothed)",
+              orientation: "vertical",
+              xRange: "0..5000 buckets",
+              barClick: "opens rounds in clicked score bucket",
+              content: "score_distribution",
+              hoverable: true,
+              clickable: true,
+              sortable: false,
+              sorts: [
+                "chronological"
+              ],
+              expandable: false,
+              initialBars: "max",
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "scores"
+        }
+      },
+      {
+        id: "rounds",
+        title: "Rounds",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "game_with_most_rounds"
+            },
+            {
+              kind: "single",
+              id: "games_with_fewest_rounds"
+            },
+            {
+              kind: "single",
+              id: "largest_score_spread_max_min_in_one_game"
+            },
+            {
+              kind: "single",
+              id: "fastest_round_streak_20s"
+            },
+            {
+              kind: "single",
+              id: "damage_dealt_streak"
+            },
+            {
+              kind: "single",
+              id: "damage_taken_streak"
+            },
+            {
+              kind: "single",
+              id: "longest_same_country_streak"
+            },
+            {
+              kind: "single",
+              id: "correct_country_streak"
+            },
+            {
+              kind: "graph",
+              id: "rounds_progression"
+            },
+            {
+              kind: "graph",
+              id: "rounds_by_game_length"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "game_with_most_rounds",
+              label: "Game with most rounds",
+              type: "rounds_game_with_most_rounds"
+            },
+            {
+              id: "games_with_fewest_rounds",
+              label: "Games with fewest rounds",
+              type: "rounds_games_with_fewest_rounds"
+            },
+            {
+              id: "largest_score_spread_max_min_in_one_game",
+              label: "Largest score spread (max-min in one game)",
+              type: "rounds_largest_score_spread"
+            },
+            {
+              id: "fastest_round_streak_20s",
+              label: "Fastest round streak (<20s)",
+              type: "rounds_fastest_round_streak"
+            },
+            {
+              id: "damage_dealt_streak",
+              label: "Damage dealt streak",
+              type: "rounds_damage_dealt_streak"
+            },
+            {
+              id: "damage_taken_streak",
+              label: "Damage taken streak",
+              type: "rounds_damage_taken_streak"
+            },
+            {
+              id: "longest_same_country_streak",
+              label: "Longest same-country streak",
+              type: "rounds_longest_same_country_streak"
+            },
+            {
+              id: "correct_country_streak",
+              label: "Correct-country streak",
+              type: "rounds_correct_country_streak"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "rounds_progression",
+              sourceIndex: 0,
+              type: "selectableBar",
+              title: "Round progression metrics",
+              orientation: "vertical",
+              defaultMetric: "avg_score",
+              defaultSort: "chronological",
+              allowSort: false,
+              metrics: [
+                "avg_score",
+                "hit_rate",
+                "throw_rate",
+                "fivek_rate",
+                "avg_distance",
+                "avg_time",
+                "rounds"
+              ],
+              x: "round number (#1, #2, ...)",
+              barClick: "opens rounds with this round number across all games",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "rounds_progression",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            },
+            {
+              id: "rounds_by_game_length",
+              sourceIndex: 1,
+              type: "selectableBar",
+              title: "Performance by game length (rounds per game, 2+)",
+              orientation: "vertical",
+              defaultMetric: "win_rate_decisive",
+              defaultSort: "chronological",
+              allowSort: false,
+              metrics: [
+                "games",
+                "win_rate_decisive",
+                "win_rate_all",
+                "avg_score",
+                "hit_rate",
+                "throw_rate",
+                "fivek_rate",
+                "avg_distance",
+                "avg_time"
+              ],
+              x: "game length (2,3,4... rounds)",
+              barClick: "opens rounds from games with this length",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "rounds_by_game_length",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "rounds"
+        }
+      },
+      {
+        id: "country_stats",
+        title: "Countries",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "graph",
+              id: "country_metrics"
+            },
+            {
+              kind: "graph",
+              id: "country_confusion_matrix"
+            }
+          ]
+        },
+        objects: {
+          singles: [],
+          boxes: [],
+          graphs: [
+            {
+              id: "country_metrics",
+              sourceIndex: 0,
+              type: "selectableBar",
+              title: "Country metrics",
+              orientation: "horizontal",
+              initialBars: 25,
+              defaultMetric: "avg_score",
+              defaultSort: "desc",
+              metrics: [
+                "avg_score",
+                "avg_score_correct_only",
+                "hit_rate",
+                "avg_distance",
+                "throw_rate",
+                "fivek_rate",
+                "damage_dealt",
+                "damage_taken",
+                "damage_dealt_share",
+                "damage_taken_share",
+                "rounds"
+              ],
+              barClick: "opens matching rounds for clicked country/metric subset",
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              content: "country_metrics",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              drilldownType: "rounds"
+            },
+            {
+              id: "country_confusion_matrix",
+              sourceIndex: 1,
+              type: "bar",
+              title: "Confusion matrix (top pairs)",
+              orientation: "vertical",
+              initialBars: 12,
+              barClick: "opens rounds for clicked confusion pair truth->guess",
+              content: "country_confusion_matrix",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "countries"
+        }
+      },
+      {
+        id: "opponents",
+        title: "Opponents",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "box",
+              id: "top_3_opponents"
+            },
+            {
+              kind: "box",
+              id: "scope"
+            },
+            {
+              kind: "graph",
+              id: "opponents_country"
+            }
+          ]
+        },
+        objects: {
+          singles: [],
+          boxes: [
+            {
+              id: "top_3_opponents",
+              title: "Top 3 opponents",
+              lines: []
+            },
+            {
+              id: "scope",
+              title: "Scope",
+              lines: [
+                {
+                  label: "Unique opponents",
+                  type: "opponents_unique_opponents"
+                },
+                {
+                  label: "Unique countries",
+                  type: "opponents_unique_countries"
+                }
+              ]
+            }
+          ],
+          graphs: [
+            {
+              id: "opponents_country",
+              sourceIndex: 0,
+              type: "bar",
+              title: "Match-ups by opponent country",
+              orientation: "vertical",
+              barClick: "opens opponent drilldown filtered to clicked country",
+              content: "opponents_country",
+              hoverable: true,
+              clickable: true,
+              sortable: true,
+              sorts: [
+                "chronological",
+                "desc",
+                "asc"
+              ],
+              drilldownType: "players"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "opponents"
+        }
+      },
+      {
+        id: "rating_history",
+        title: "Rating",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "trend"
+            },
+            {
+              kind: "single",
+              id: "biggest_session_rating_gain"
+            },
+            {
+              kind: "single",
+              id: "biggest_session_rating_loss"
+            },
+            {
+              kind: "graph",
+              id: "rating_history"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "trend",
+              label: "Trend",
+              type: "rating_trend"
+            },
+            {
+              id: "biggest_session_rating_gain",
+              label: "Biggest session rating gain",
+              type: "rating_biggest_session_gain"
+            },
+            {
+              id: "biggest_session_rating_loss",
+              label: "Biggest session rating loss",
+              type: "rating_biggest_session_loss"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "rating_history",
+              sourceIndex: 0,
+              type: "line",
+              title: "Rating",
+              if: "rating points > 1",
+              content: "rating_history",
+              hoverable: true,
+              clickable: false,
+              sortable: false,
+              sorts: [
+                "chronological"
+              ]
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "rating"
+        }
+      },
+      {
+        id: "teammate_battle",
+        titleTemplate: "Team: You + {{mateName}}",
+        tocTitle: "Team",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "box",
+              id: "head_to_head_questions"
+            },
+            {
+              kind: "box",
+              id: "team_facts"
+            }
+          ]
+        },
+        objects: {
+          singles: [],
+          boxes: [
+            {
+              id: "head_to_head_questions",
+              title: "Head-to-head questions",
+              lines: [
+                {
+                  label: "Closer guesses",
+                  type: "team_closer_guesses"
+                },
+                {
+                  label: "Higher score rounds",
+                  type: "team_higher_score_rounds"
+                },
+                {
+                  label: "Fewer throws (<50)",
+                  type: "team_fewer_throws_lt_50"
+                },
+                {
+                  label: "More 5k rounds",
+                  type: "team_more_5k_rounds"
+                }
+              ]
+            },
+            {
+              id: "team_facts",
+              title: "Team facts",
+              lines: [
+                {
+                  label: "Games together",
+                  type: "team_games_together"
+                },
+                {
+                  label: "Rounds together",
+                  type: "team_rounds_together"
+                },
+                {
+                  label: "Time played together",
+                  type: "team_time_played_together"
+                },
+                {
+                  label: "First game together",
+                  type: "team_first_game_together"
+                },
+                {
+                  label: "Most recent game together",
+                  type: "team_most_recent_game_together"
+                },
+                {
+                  label: "Longest session together",
+                  type: "team_longest_session_together"
+                },
+                {
+                  label: "Avg games per session together",
+                  type: "team_avg_games_per_session_together"
+                },
+                {
+                  label: "Longest break between games together",
+                  type: "team_longest_break_between_games_together"
+                }
+              ]
+            }
+          ],
+          graphs: []
+        },
+        tocIcon: {
+          enabled: true,
+          key: "team"
+        },
+        requiredFilters: {
+          teammate: {
+            enabled: true,
+            default: "top_games",
+            label: "Mate"
+          }
+        }
+      },
+      {
+        id: "country_spotlight",
+        titleTemplate: "Country Spotlight: {{countryName}}",
+        tocTitle: "Country Spotlight",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate",
+          "country"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "rounds"
+            },
+            {
+              kind: "single",
+              id: "hit_rate"
+            },
+            {
+              kind: "single",
+              id: "avg_score"
+            },
+            {
+              kind: "single",
+              id: "avg_distance"
+            },
+            {
+              kind: "single",
+              id: "perfect_5k_in_this_country"
+            },
+            {
+              kind: "single",
+              id: "throws_50_in_this_country"
+            },
+            {
+              kind: "graph",
+              id: "spotlight_distribution"
+            },
+            {
+              kind: "graph",
+              id: "spotlight_trend"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "rounds",
+              label: "Rounds",
+              type: "country_spotlight_rounds"
+            },
+            {
+              id: "hit_rate",
+              label: "Hit rate",
+              type: "country_spotlight_hit_rate"
+            },
+            {
+              id: "avg_score",
+              label: "Avg score",
+              type: "country_spotlight_avg_score"
+            },
+            {
+              id: "avg_distance",
+              label: "Avg distance",
+              type: "country_spotlight_avg_distance"
+            },
+            {
+              id: "perfect_5k_in_this_country",
+              label: "Perfect 5k in this country",
+              type: "country_spotlight_perfect_5k"
+            },
+            {
+              id: "throws_50_in_this_country",
+              label: "Throws (<50) in this country",
+              type: "country_spotlight_throws_lt_50"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "spotlight_distribution",
+              sourceIndex: 0,
+              type: "selectableBar",
+              title: "Score distribution (smoothed)",
+              orientation: "vertical",
+              allowSort: false,
+              defaultMetric: "all_guesses",
+              defaultSort: "chronological",
+              metrics: [
+                "all_guesses",
+                "correct_only"
+              ],
+              barClick: "opens rounds in clicked score bucket",
+              sorts: [
+                "chronological"
+              ],
+              content: "spotlight_distribution",
+              hoverable: true,
+              clickable: true,
+              sortable: false,
+              drilldownType: "rounds"
+            },
+            {
+              id: "spotlight_trend",
+              sourceIndex: 1,
+              type: "selectableLine",
+              title: "Country trend comparison",
+              defaultMetric: "damage_dealt_share",
+              primaryCountry: "{{selectedCountry}}",
+              maxCompare: 4,
+              metrics: [
+                "damage_dealt_share",
+                "damage_taken_share",
+                "avg_score",
+                "hit_rate",
+                "throw_rate",
+                "fivek_rate",
+                "avg_damage_dealt",
+                "avg_damage_taken",
+                "rounds"
+              ],
+              noDataBehavior: "carry forward previous value; if no previous value then fallback to overall baseline",
+              rateSmoothing: {
+                enabled: true,
+                method: "beta-like smoothing",
+                priorStrength: 12,
+                minBucketRoundsForRate: 5
+              },
+              content: "spotlight_trend",
+              hoverable: true,
+              clickable: false,
+              sortable: false,
+              sorts: [
+                "chronological"
+              ]
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "spotlight"
+        },
+        requiredFilters: {
+          country: {
+            enabled: true,
+            default: "top_rounds",
+            label: "Country"
+          }
+        }
+      },
+      {
+        id: "personal_records",
+        title: "Personal Records",
+        appliesFilters: [
+          "date",
+          "mode",
+          "teammate",
+          "country"
+        ],
+        layout: {
+          mode: "object_order",
+          preserveUnmatched: false,
+          order: [
+            {
+              kind: "single",
+              id: "best_day"
+            },
+            {
+              kind: "single",
+              id: "hardest_day"
+            },
+            {
+              kind: "single",
+              id: "best_avg_score_in_a_game"
+            },
+            {
+              kind: "single",
+              id: "worst_avg_score_in_a_game"
+            },
+            {
+              kind: "single",
+              id: "fastest_day"
+            },
+            {
+              kind: "single",
+              id: "slowest_day"
+            },
+            {
+              kind: "single",
+              id: "best_5k_streak"
+            },
+            {
+              kind: "single",
+              id: "worst_throw_streak_50"
+            },
+            {
+              kind: "graph",
+              id: "records_daily"
+            }
+          ]
+        },
+        objects: {
+          singles: [
+            {
+              id: "best_day",
+              label: "Best day",
+              type: "record_best_day"
+            },
+            {
+              id: "hardest_day",
+              label: "Hardest day",
+              type: "record_hardest_day"
+            },
+            {
+              id: "best_avg_score_in_a_game",
+              label: "Best avg score in a game",
+              type: "record_best_avg_score_in_game"
+            },
+            {
+              id: "worst_avg_score_in_a_game",
+              label: "Worst avg score in a game",
+              type: "record_worst_avg_score_in_game"
+            },
+            {
+              id: "fastest_day",
+              label: "Fastest day",
+              type: "record_fastest_day"
+            },
+            {
+              id: "slowest_day",
+              label: "Slowest day",
+              type: "record_slowest_day"
+            },
+            {
+              id: "best_5k_streak",
+              label: "Best 5k streak",
+              type: "record_best_5k_streak"
+            },
+            {
+              id: "worst_throw_streak_50",
+              label: "Worst throw streak (<50)",
+              type: "record_worst_throw_streak_lt_50"
+            }
+          ],
+          boxes: [],
+          graphs: [
+            {
+              id: "records_daily",
+              sourceIndex: 0,
+              type: "line",
+              title: "Avg daily score",
+              smoothing: "auto bucketed over long ranges",
+              content: "records_daily",
+              hoverable: true,
+              clickable: true,
+              sortable: false,
+              sorts: [
+                "chronological"
+              ],
+              drilldownType: "rounds"
+            }
+          ]
+        },
+        tocIcon: {
+          enabled: true,
+          key: "records"
+        }
+      }
+    ]
+  };
+
+  // design.schema.json
+  var design_schema_default = {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://geoanalyzr.local/design.schema.json",
+    title: "GeoAnalyzr Design Template",
+    type: "object",
+    required: ["sections"],
+    properties: {
+      $schema: { type: "string" },
+      schemaVersion: { type: "string" },
+      window: {
+        type: "object",
+        properties: {
+          titleTemplate: { type: "string" },
+          appearance: {
+            type: "object",
+            properties: {
+              defaults: {
+                type: "object",
+                properties: {
+                  theme: { enum: ["dark", "light"] },
+                  accent: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }
+                },
+                additionalProperties: true
+              }
+            },
+            additionalProperties: true
+          },
+          toc: {
+            type: "object",
+            properties: {
+              labelOverrides: {
+                type: "object",
+                additionalProperties: { type: "string" }
+              }
+            },
+            additionalProperties: true
+          }
+        },
+        additionalProperties: true
+      },
+      sections: {
+        type: "array",
+        items: { $ref: "#/$defs/section" }
+      },
+      graphContentDefinitions: {
+        type: "object",
+        additionalProperties: {
+          type: "object",
+          properties: {
+            metrics: {
+              type: "array",
+              items: { type: "string" }
+            },
+            defaultMetric: { type: "string" },
+            defaultSort: { enum: ["chronological", "desc", "asc"] },
+            sorts: {
+              type: "array",
+              items: { enum: ["chronological", "desc", "asc"] }
+            }
+          },
+          additionalProperties: true
+        }
+      },
+      section_layout: {
+        type: "object",
+        properties: {
+          order: {
+            type: "array",
+            items: { type: "string", minLength: 1 }
+          }
+        },
+        additionalProperties: true
+      }
+    },
+    $defs: {
+      lineRef: {
+        type: "object",
+        required: ["label"],
+        properties: {
+          label: { type: "string" }
+        },
+        additionalProperties: true
+      },
+      graphObject: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", minLength: 1 },
+          sourceIndex: { type: "integer", minimum: 0 },
+          type: { enum: ["line", "bar", "horizontalBar", "verticalBar", "selectableBar", "selectableLine"] },
+          title: { type: "string" },
+          yLabel: { type: "string" },
+          content: { type: "string" },
+          hoverable: { type: "boolean" },
+          clickable: { type: "boolean" },
+          metrics: {
+            type: "array",
+            items: { type: "string" }
+          },
+          defaultMetric: { type: "string" },
+          defaultSort: { enum: ["chronological", "desc", "asc"] },
+          sorts: {
+            type: "array",
+            items: { enum: ["chronological", "desc", "asc"] }
+          },
+          orientation: { enum: ["vertical", "horizontal"] },
+          sortable: { type: "boolean" },
+          allowSort: { type: "boolean" },
+          initialBars: {
+            oneOf: [
+              { type: "integer", minimum: 1 },
+              { const: "max" }
+            ]
+          },
+          expandable: { type: "boolean" },
+          maxCompare: { type: "integer", minimum: 1, maximum: 4 },
+          drilldownType: { enum: ["rounds", "players"] },
+          drilldownColumns: { type: "array", items: { type: "string" } },
+          drilldownColored: { type: "array", items: { type: "string" } },
+          drilldownClickable: { type: "array", items: { type: "string" } }
+        },
+        additionalProperties: true
+      },
+      section: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string", minLength: 1 },
+          sourceSectionId: { type: "string" },
+          tocLabel: { type: "string" },
+          tocTitle: { type: "string" },
+          tocIcon: {
+            type: "object",
+            properties: {
+              enabled: { type: "boolean" },
+              key: { enum: ["overview", "time_patterns", "sessions", "tempo", "scores", "rounds", "countries", "opponents", "rating", "team", "spotlight", "records", "default"] },
+              svg: { type: "string" }
+            },
+            additionalProperties: true
+          },
+          requiredFilters: {
+            type: "object",
+            properties: {
+              teammate: {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean" },
+                  default: { enum: ["top_games"] },
+                  label: { type: "string" }
+                },
+                additionalProperties: true
+              },
+              country: {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean" },
+                  default: { enum: ["top_rounds"] },
+                  label: { type: "string" }
+                },
+                additionalProperties: true
+              }
+            },
+            additionalProperties: true
+          },
+          title: { type: "string" },
+          titleTemplate: { type: "string" },
+          group: { enum: ["Overview", "Performance", "Rounds", "Countries", "Opponents", "Rating"] },
+          appliesFilters: {
+            type: "array",
+            items: { enum: ["date", "mode", "gameMode", "movement", "teammate", "country"] }
+          },
+          objects: {
+            type: "object",
+            properties: {
+              singles: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["id", "label"],
+                  properties: {
+                    id: { type: "string", minLength: 1 },
+                    label: { type: "string", minLength: 1 },
+                    type: { type: "string" },
+                    sourceSectionId: { type: "string" }
+                  },
+                  additionalProperties: true
+                }
+              },
+              boxes: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["id", "title"],
+                  properties: {
+                    id: { type: "string", minLength: 1 },
+                    title: { type: "string", minLength: 1 },
+                    lines: {
+                      type: "array",
+                      items: {
+                        allOf: [
+                          { $ref: "#/$defs/lineRef" },
+                          {
+                            type: "object",
+                            properties: {
+                              type: { type: "string" },
+                              sourceSectionId: { type: "string" }
+                            },
+                            additionalProperties: true
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  additionalProperties: true
+                }
+              },
+              graphs: {
+                type: "array",
+                items: { $ref: "#/$defs/graphObject" }
+              }
+            },
+            additionalProperties: true
+          },
+          layout: {
+            oneOf: [
+              {
+                type: "object",
+                required: ["mode", "order"],
+                properties: {
+                  mode: { const: "object_order" },
+                  preserveUnmatched: { type: "boolean" },
+                  order: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      required: ["kind", "id"],
+                      properties: {
+                        kind: { enum: ["single", "box", "graph"] },
+                        id: { type: "string", minLength: 1 }
+                      },
+                      additionalProperties: false
+                    }
+                  }
+                },
+                additionalProperties: true
+              },
+              {
+                type: "object",
+                required: ["mode"],
+                properties: {
+                  mode: { enum: ["legacy_colon", "header_blocks"] }
+                },
+                additionalProperties: true
+              }
+            ]
+          },
+          render: {
+            type: "object",
+            properties: {
+              chartIndices: { type: "array", items: { type: "integer", minimum: 0 } },
+              chartTitles: { type: "array", items: { type: "string" } },
+              includeLineLabels: { type: "array", items: { type: "string" } },
+              excludeLineLabels: { type: "array", items: { type: "string" } },
+              preserveUnmatchedLines: { type: "boolean" }
+            },
+            additionalProperties: true
+          }
+        },
+        additionalProperties: true
+      }
+    },
+    additionalProperties: true
+  };
+
   // src/ui.ts
+  var DEFAULT_ANALYSIS_DESIGN = typeof design_default === "object" && design_default ? design_default : {};
+  var analysisDesign = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
+  var ANALYSIS_TEMPLATE_META_KEY = "analysis:window-template:v1";
+  async function loadPersistedAnalysisDesign() {
+    try {
+      const row = await db.meta.get(ANALYSIS_TEMPLATE_META_KEY);
+      if (!row || !row.value || typeof row.value !== "object") return null;
+      return row.value;
+    } catch {
+      return null;
+    }
+  }
+  async function persistAnalysisDesign() {
+    try {
+      await db.meta.put({
+        key: ANALYSIS_TEMPLATE_META_KEY,
+        value: analysisDesign,
+        updatedAt: Date.now()
+      });
+    } catch {
+    }
+  }
+  function replaceAnalysisDesign(next) {
+    analysisDesign = next && typeof next === "object" ? next : JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
+    rebuildSectionTemplateCache();
+  }
+  function getDesignDefaultTheme() {
+    const fromWindow = analysisDesign.window?.appearance?.defaults?.theme;
+    if (fromWindow === "dark" || fromWindow === "light") return fromWindow;
+    const fromRoot = analysisDesign.appearance?.defaultTheme;
+    if (fromRoot === "dark" || fromRoot === "light") return fromRoot;
+    return "dark";
+  }
+  function getDesignDefaultAccent() {
+    const fromWindow = analysisDesign.window?.appearance?.defaults?.accent;
+    if (typeof fromWindow === "string") return fromWindow;
+    const fromRoot = analysisDesign.appearance?.defaultAccent;
+    if (typeof fromRoot === "string") return fromRoot;
+    return "#66a8ff";
+  }
+  function getDesignDefaultVisibleFilters() {
+    const visible = analysisDesign.window?.filters?.visible;
+    return {
+      date: visible?.date !== false,
+      mode: visible?.mode !== false,
+      movement: visible?.movement !== false,
+      teammate: visible?.teammate !== false,
+      country: visible?.country !== false
+    };
+  }
+  function normalizeSectionTemplate(raw) {
+    const normalizeGraphTemplate = (graphRaw) => {
+      if (!graphRaw || typeof graphRaw !== "object") return void 0;
+      const type = graphRaw.type;
+      const defaultSort = graphRaw.defaultSort;
+      const metrics = Array.isArray(graphRaw.metrics) ? graphRaw.metrics.map((m) => typeof m === "string" ? m.trim() : "").filter((m) => m.length > 0) : void 0;
+      const sorts = Array.isArray(graphRaw.sorts) ? graphRaw.sorts.filter((s) => s === "chronological" || s === "desc" || s === "asc") : void 0;
+      const mappedType = type === "line" || type === "selectableBar" || type === "selectableLine" ? type : type === "bar" || type === "verticalBar" || type === "horizontalBar" ? "bar" : void 0;
+      const mappedOrientation = type === "horizontalBar" ? "horizontal" : type === "verticalBar" ? "vertical" : graphRaw.orientation === "vertical" || graphRaw.orientation === "horizontal" ? graphRaw.orientation : void 0;
+      const drilldownType = graphRaw.drilldownType;
+      const toStringList = (v) => Array.isArray(v) ? v.map((x) => typeof x === "string" ? x.trim() : "").filter((x) => x.length > 0) : void 0;
+      return {
+        type: mappedType,
+        title: typeof graphRaw.title === "string" ? graphRaw.title : void 0,
+        yLabel: typeof graphRaw.yLabel === "string" ? graphRaw.yLabel : void 0,
+        content: typeof graphRaw.content === "string" ? graphRaw.content : void 0,
+        hoverable: typeof graphRaw.hoverable === "boolean" ? graphRaw.hoverable : void 0,
+        clickable: typeof graphRaw.clickable === "boolean" ? graphRaw.clickable : void 0,
+        metrics,
+        defaultMetric: typeof graphRaw.defaultMetric === "string" ? graphRaw.defaultMetric : void 0,
+        defaultSort: defaultSort === "chronological" || defaultSort === "desc" || defaultSort === "asc" ? defaultSort : void 0,
+        sorts: sorts && sorts.length > 0 ? sorts : void 0,
+        orientation: mappedOrientation,
+        sortable: typeof graphRaw.sortable === "boolean" ? graphRaw.sortable : void 0,
+        allowSort: typeof graphRaw.allowSort === "boolean" ? graphRaw.allowSort : void 0,
+        initialBars: typeof graphRaw.initialBars === "number" || graphRaw.initialBars === "max" ? graphRaw.initialBars : void 0,
+        expandable: typeof graphRaw.expandable === "boolean" ? graphRaw.expandable : void 0,
+        maxCompare: typeof graphRaw.maxCompare === "number" ? graphRaw.maxCompare : void 0,
+        drilldownType: drilldownType === "players" || drilldownType === "rounds" ? drilldownType : void 0,
+        drilldownColumns: toStringList(graphRaw.drilldownColumns),
+        drilldownColored: toStringList(graphRaw.drilldownColored),
+        drilldownClickable: toStringList(graphRaw.drilldownClickable)
+      };
+    };
+    const normalizeGraphTemplates = (items) => {
+      if (!Array.isArray(items) || items.length === 0) return void 0;
+      const list = items.map(normalizeGraphTemplate).filter((g) => !!g);
+      return list.length > 0 ? list : void 0;
+    };
+    const base = {
+      id: raw.id,
+      sourceSectionId: typeof raw.sourceSectionId === "string" ? raw.sourceSectionId : void 0,
+      tocLabel: raw.tocLabel ?? raw.tocTitle,
+      icon: raw.icon,
+      tocIcon: raw.tocIcon && typeof raw.tocIcon === "object" ? {
+        enabled: typeof raw.tocIcon.enabled === "boolean" ? raw.tocIcon.enabled : void 0,
+        key: raw.tocIcon.key === "overview" || raw.tocIcon.key === "time_patterns" || raw.tocIcon.key === "sessions" || raw.tocIcon.key === "tempo" || raw.tocIcon.key === "scores" || raw.tocIcon.key === "rounds" || raw.tocIcon.key === "countries" || raw.tocIcon.key === "opponents" || raw.tocIcon.key === "rating" || raw.tocIcon.key === "team" || raw.tocIcon.key === "spotlight" || raw.tocIcon.key === "records" || raw.tocIcon.key === "default" ? raw.tocIcon.key : void 0,
+        svg: typeof raw.tocIcon.svg === "string" ? raw.tocIcon.svg : void 0
+      } : void 0,
+      titleTemplate: typeof raw.titleTemplate === "string" ? raw.titleTemplate : void 0,
+      title: typeof raw.title === "string" ? raw.title : void 0,
+      group: raw.group,
+      appliesFilters: raw.appliesFilters,
+      static: raw.static,
+      render: raw.render,
+      graphTemplates: normalizeGraphTemplates(raw.graphTemplates),
+      objects: void 0,
+      requiredFilters: raw.requiredFilters && typeof raw.requiredFilters === "object" ? {
+        teammate: raw.requiredFilters.teammate && typeof raw.requiredFilters.teammate === "object" ? {
+          enabled: typeof raw.requiredFilters.teammate.enabled === "boolean" ? raw.requiredFilters.teammate.enabled : void 0,
+          default: raw.requiredFilters.teammate.default === "top_games" ? "top_games" : void 0,
+          label: typeof raw.requiredFilters.teammate.label === "string" ? raw.requiredFilters.teammate.label : void 0
+        } : void 0,
+        country: raw.requiredFilters.country && typeof raw.requiredFilters.country === "object" ? {
+          enabled: typeof raw.requiredFilters.country.enabled === "boolean" ? raw.requiredFilters.country.enabled : void 0,
+          default: raw.requiredFilters.country.default === "top_rounds" ? "top_rounds" : void 0,
+          label: typeof raw.requiredFilters.country.label === "string" ? raw.requiredFilters.country.label : void 0
+        } : void 0
+      } : void 0
+    };
+    const rawLayout = raw.layout;
+    const rawObjects = raw.objects;
+    if (rawObjects) {
+      const singles = (rawObjects.singles || []).map((s) => ({
+        id: typeof s?.id === "string" ? s.id : "",
+        label: typeof s?.label === "string" ? s.label : "",
+        type: typeof s?.type === "string" ? s.type : void 0,
+        sourceSectionId: typeof s?.sourceSectionId === "string" ? s.sourceSectionId : void 0
+      })).filter((s) => s.id && s.label);
+      const boxes = (rawObjects.boxes || []).map((b) => ({
+        id: typeof b?.id === "string" ? b.id : "",
+        title: typeof b?.title === "string" ? b.title : "",
+        lines: (b?.lines || []).map((l) => ({
+          label: typeof l?.label === "string" ? l.label : "",
+          type: typeof l?.type === "string" ? l.type : void 0,
+          sourceSectionId: typeof l?.sourceSectionId === "string" ? l.sourceSectionId : void 0
+        })).filter((l) => l.label)
+      })).filter((b) => b.id && b.title);
+      const graphs = normalizeGraphTemplates(rawObjects.graphs)?.map((g, idx) => ({
+        id: typeof rawObjects.graphs?.[idx]?.id === "string" ? rawObjects.graphs?.[idx]?.id : "",
+        ...g
+      })).filter((g) => g.id);
+      base.objects = {
+        singles,
+        boxes,
+        graphs
+      };
+    }
+    if (rawLayout?.mode) {
+      if (rawLayout.mode === "header_blocks") {
+        base.layout = {
+          mode: "header_blocks",
+          headers: rawLayout.headers || [],
+          preserveUnmatched: rawLayout.preserveUnmatched,
+          boxes: (rawLayout.boxes || []).map((b) => ({
+            title: typeof b?.title === "string" ? b.title : "",
+            lines: (b?.lines || []).map((l) => ({ label: typeof l?.label === "string" ? l.label : "" })).filter((l) => l.label)
+          })).filter((b) => b.title),
+          single: (rawLayout.single || []).map((s) => ({ label: typeof s?.label === "string" ? s.label : "" })).filter((s) => s.label),
+          graphs: normalizeGraphTemplates(rawLayout.graphs)
+        };
+      } else if (rawLayout.mode === "object_order") {
+        const order = (rawLayout.order || []).map((item) => ({
+          kind: item?.kind === "single" || item?.kind === "box" || item?.kind === "graph" ? item.kind : void 0,
+          id: typeof item?.id === "string" ? item.id : ""
+        })).filter((item) => !!item.kind && !!item.id);
+        base.layout = {
+          mode: "object_order",
+          order,
+          preserveUnmatched: rawLayout.preserveUnmatched
+        };
+      } else {
+        base.layout = { mode: "legacy_colon" };
+      }
+      if (!base.graphTemplates && base.layout.mode === "header_blocks") {
+        const headerLayout = base.layout;
+        base.graphTemplates = headerLayout.graphs;
+      }
+      return base;
+    }
+    if (base.objects) {
+      const order = [];
+      for (const s of base.objects.singles || []) order.push({ kind: "single", id: s.id });
+      for (const b of base.objects.boxes || []) order.push({ kind: "box", id: b.id });
+      for (const g of base.objects.graphs || []) order.push({ kind: "graph", id: g.id });
+      base.layout = { mode: "object_order", order, preserveUnmatched: true };
+      if (!base.graphTemplates && base.objects.graphs) base.graphTemplates = base.objects.graphs;
+      return base;
+    }
+    base.layout = { mode: "legacy_colon" };
+    if (!base.graphTemplates) base.graphTemplates = normalizeGraphTemplates(rawLayout?.graphs);
+    return base;
+  }
+  var sectionTemplateById = /* @__PURE__ */ new Map();
+  function rebuildSectionTemplateCache() {
+    sectionTemplateById = new Map(
+      (analysisDesign.sections || []).map((s) => [s.id, normalizeSectionTemplate(s)])
+    );
+  }
+  rebuildSectionTemplateCache();
+  function getSectionTemplate(section) {
+    return sectionTemplateById.get(section.id);
+  }
+  function getLineLabel(line) {
+    const idx = line.indexOf(":");
+    if (idx > 0) return line.slice(0, idx).trim();
+    return line.trim();
+  }
+  function matchesLineLabel(line, label) {
+    const want = label.trim().toLowerCase();
+    if (!want) return false;
+    return getLineLabel(line).toLowerCase() === want;
+  }
+  function buildDesignSourceLineLookup(sections) {
+    const lookup = /* @__PURE__ */ new Map();
+    for (const section of sections) {
+      const drillByLabel = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel.toLowerCase(), d.items]));
+      const linkByLabel = new Map((section.lineLinks || []).map((d) => [d.lineLabel.toLowerCase(), d.url]));
+      const byLabel = /* @__PURE__ */ new Map();
+      for (const line of section.lines || []) {
+        const sep = line.indexOf(":");
+        const label = (sep > 0 ? line.slice(0, sep) : line).trim();
+        const value = sep > 0 ? line.slice(sep + 1).trim() : "";
+        byLabel.set(label.toLowerCase(), {
+          line,
+          label,
+          value,
+          drilldown: drillByLabel.get(label.toLowerCase()),
+          link: linkByLabel.get(label.toLowerCase())
+        });
+      }
+      lookup.set(section.id, byLabel);
+    }
+    return lookup;
+  }
+  function materializeSections(data) {
+    const source = data.sections || [];
+    const sourceById = new Map(source.map((s) => [s.id, s]));
+    const sectionOrder = Array.isArray(analysisDesign.section_layout?.order) ? analysisDesign.section_layout?.order?.filter((x) => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()) : [];
+    const templateList = analysisDesign.sections || [];
+    const templateById = new Map(templateList.map((t) => [t.id, t]));
+    const orderedTemplates = sectionOrder.length > 0 ? [
+      ...sectionOrder.map((id) => templateById.get(id)).filter((t) => !!t),
+      ...templateList.filter((t) => !sectionOrder.includes(t.id))
+    ] : templateList;
+    if (orderedTemplates.length === 0) return source;
+    const out = [];
+    const usedSourceIds = /* @__PURE__ */ new Set();
+    const cloneSection = (section) => ({
+      ...section,
+      lines: section.lines.slice(),
+      lineDrilldowns: section.lineDrilldowns ? section.lineDrilldowns.map((d) => ({ lineLabel: d.lineLabel, items: d.items.slice() })) : void 0,
+      lineLinks: section.lineLinks ? section.lineLinks.map((d) => ({ lineLabel: d.lineLabel, url: d.url })) : void 0,
+      charts: section.charts ? section.charts.slice() : void 0
+    });
+    for (const templRaw of orderedTemplates) {
+      const templ = normalizeSectionTemplate(templRaw);
+      const sourceId = templ.sourceSectionId || templ.id;
+      const src = sourceById.get(sourceId);
+      if (!src) {
+        if (templ.static?.lines && templ.static.lines.length > 0) {
+          out.push({
+            id: templ.id,
+            title: templ.title || templ.id,
+            group: templ.group,
+            appliesFilters: templ.appliesFilters,
+            lines: templ.static.lines.slice()
+          });
+        }
+        continue;
+      }
+      usedSourceIds.add(sourceId);
+      const next = cloneSection(src);
+      next.id = templ.id;
+      if (templ.title) next.title = templ.title;
+      if (templ.group) next.group = templ.group;
+      if (templ.appliesFilters) next.appliesFilters = templ.appliesFilters;
+      const includeLabels = templ.render?.includeLineLabels || [];
+      const excludeLabels = templ.render?.excludeLineLabels || [];
+      if (includeLabels.length > 0 || excludeLabels.length > 0) {
+        const includeSet = includeLabels.map((l) => l.trim().toLowerCase()).filter(Boolean);
+        const excludeSet = new Set(excludeLabels.map((l) => l.trim().toLowerCase()).filter(Boolean));
+        next.lines = next.lines.filter((line) => {
+          const label = getLineLabel(line).toLowerCase();
+          if (excludeSet.has(label)) return false;
+          if (includeSet.length > 0) return includeSet.includes(label);
+          return true;
+        });
+        const keepLabel = (label) => next.lines.some((line) => matchesLineLabel(line, label));
+        if (next.lineDrilldowns) next.lineDrilldowns = next.lineDrilldowns.filter((d) => keepLabel(d.lineLabel));
+        if (next.lineLinks) next.lineLinks = next.lineLinks.filter((d) => keepLabel(d.lineLabel));
+      }
+      const allCharts = next.charts ? next.charts.slice() : next.chart ? [next.chart] : [];
+      if (templ.render?.chartIndices && templ.render.chartIndices.length > 0) {
+        const picked = templ.render.chartIndices.map((idx) => allCharts[idx]).filter((c) => !!c);
+        next.charts = picked;
+        if (picked.length === 1) next.chart = picked[0];
+        else next.chart = void 0;
+      } else if (templ.render?.chartTitles && templ.render.chartTitles.length > 0) {
+        const wanted = new Set(templ.render.chartTitles.map((t) => t.toLowerCase()));
+        const picked = allCharts.filter((c) => {
+          const yl = ("yLabel" in c && typeof c.yLabel === "string" ? c.yLabel : "") || "";
+          return wanted.has(yl.toLowerCase());
+        });
+        next.charts = picked;
+        if (picked.length === 1) next.chart = picked[0];
+        else next.chart = void 0;
+      }
+      out.push(next);
+    }
+    const appendUnspecified = analysisDesign.section_layout?.appendUnspecified !== false;
+    if (appendUnspecified) {
+      for (const src of source) {
+        if (usedSourceIds.has(src.id)) continue;
+        out.push(src);
+      }
+    }
+    return out;
+  }
+  function getSectionTocLabel(section) {
+    const templ = getSectionTemplate(section);
+    if (templ?.tocLabel) return templ.tocLabel;
+    const override = analysisDesign.window?.toc?.labelOverrides?.[section.id];
+    if (typeof override === "string" && override.trim()) return override.trim();
+    if (section.id === "teammate_battle") return "Team";
+    if (section.id === "country_spotlight") return "Country Spotlight";
+    return section.title;
+  }
+  function getSectionTemplateVars(section) {
+    const vars = {};
+    if (section.id === "teammate_battle") {
+      const m = /^Team:\s*You\s*\+\s*(.+)$/i.exec(section.title.trim());
+      if (m?.[1]) vars.mateName = m[1].trim();
+    }
+    if (section.id === "country_spotlight") {
+      const m = /^Country Spotlight:\s*(.+)$/i.exec(section.title.trim());
+      if (m?.[1]) vars.countryName = m[1].trim();
+    }
+    return vars;
+  }
+  function applyTemplate(input, vars) {
+    return input.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_full, key) => vars[key] ?? "");
+  }
+  function getGraphContentDefinition(content) {
+    if (!content) return void 0;
+    return analysisDesign.graphContentDefinitions?.[content];
+  }
+  function getSectionRenderTitle(section) {
+    const templ = getSectionTemplate(section);
+    if (!templ?.titleTemplate) return section.title;
+    const rendered = applyTemplate(templ.titleTemplate, getSectionTemplateVars(section)).trim();
+    return rendered || section.title;
+  }
+  function applyGraphTemplateToChart(chart, template) {
+    if (!template) return { chart };
+    const contentDef = getGraphContentDefinition(template.content);
+    if (template.type && template.type !== chart.type) return { chart };
+    if (template.yLabel && chart.yLabel && template.yLabel !== chart.yLabel) return { chart };
+    if (chart.type === "bar") {
+      const next = {
+        ...chart,
+        orientation: template.orientation || chart.orientation,
+        initialBars: typeof template.initialBars === "number" ? template.initialBars : chart.initialBars
+      };
+      return { chart: next, title: template.title };
+    }
+    if (chart.type === "selectableBar") {
+      const sourceOptions = chart.options.slice();
+      let options = sourceOptions;
+      const desiredMetricKeys = template.metrics && template.metrics.length > 0 ? template.metrics : contentDef?.metrics;
+      if (desiredMetricKeys && desiredMetricKeys.length > 0) {
+        const byKey = new Map(sourceOptions.map((o) => [o.key, o]));
+        const picked = desiredMetricKeys.map((k) => byKey.get(k)).filter((o) => !!o);
+        if (picked.length > 0) options = picked;
+      }
+      const wantedDefaultMetric = template.defaultMetric || contentDef?.defaultMetric;
+      const hasDefaultMetric = wantedDefaultMetric && options.some((o) => o.key === wantedDefaultMetric);
+      const next = {
+        ...chart,
+        options,
+        orientation: template.orientation || chart.orientation,
+        initialBars: typeof template.initialBars === "number" ? template.initialBars : chart.initialBars,
+        allowSort: typeof template.sortable === "boolean" ? template.sortable : typeof template.allowSort === "boolean" ? template.allowSort : chart.allowSort,
+        defaultSort: template.defaultSort || contentDef?.defaultSort || chart.defaultSort,
+        defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey
+      };
+      next.sorts = template.sorts || contentDef?.sorts;
+      return { chart: next, title: template.title };
+    }
+    if (chart.type === "selectableLine") {
+      const sourceOptions = chart.options.slice();
+      let options = sourceOptions;
+      const desiredMetricKeys = template.metrics && template.metrics.length > 0 ? template.metrics : contentDef?.metrics;
+      if (desiredMetricKeys && desiredMetricKeys.length > 0) {
+        const byKey = new Map(sourceOptions.map((o) => [o.key, o]));
+        const picked = desiredMetricKeys.map((k) => byKey.get(k)).filter((o) => !!o);
+        if (picked.length > 0) options = picked;
+      }
+      const wantedDefaultMetric = template.defaultMetric || contentDef?.defaultMetric;
+      const hasDefaultMetric = wantedDefaultMetric && options.some((o) => o.key === wantedDefaultMetric);
+      const next = {
+        ...chart,
+        options,
+        maxCompare: typeof template.maxCompare === "number" ? template.maxCompare : chart.maxCompare,
+        defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey
+      };
+      return { chart: next, title: template.title };
+    }
+    return { chart, title: template.title };
+  }
+  function getWindowRenderTitle(data) {
+    const tpl = analysisDesign.window?.titleTemplate;
+    if (typeof tpl === "string" && tpl.trim()) {
+      const rendered = applyTemplate(tpl, { playerName: data.playerName || "" }).trim();
+      if (rendered) return rendered;
+    }
+    return data.playerName ? `GeoAnalyzr - Full Analysis for ${data.playerName}` : "GeoAnalyzr - Full Analysis";
+  }
+  function resolveTypedLine(type, currentSectionId, sourceSectionId, fallbackLabel, lookup) {
+    if (!type) return void 0;
+    const sectionId = sourceSectionId || currentSectionId;
+    const label = fallbackLabel;
+    if (!sectionId || !label) return void 0;
+    const byLabel = lookup.get(sectionId);
+    const ref = byLabel?.get(label.toLowerCase());
+    if (!ref) return void 0;
+    return {
+      label: fallbackLabel || ref.label,
+      value: ref.value,
+      drilldown: ref.drilldown,
+      link: ref.link
+    };
+  }
   var ANALYSIS_SETTINGS_STORAGE_KEY = "geoanalyzr:analysis:settings:v1";
+  var ANALYSIS_UI_SETTINGS_META_KEY = "analysis:window-ui-settings:v1";
   var defaultAnalysisSettings = {
-    theme: "dark",
-    accent: "#66a8ff"
+    theme: getDesignDefaultTheme(),
+    accent: normalizeAccent(getDesignDefaultAccent()),
+    visibleFilters: getDesignDefaultVisibleFilters()
   };
   function normalizeAccent(value) {
-    if (typeof value !== "string") return defaultAnalysisSettings.accent;
+    if (typeof value !== "string") return "#66a8ff";
     const v = value.trim();
-    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : defaultAnalysisSettings.accent;
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#66a8ff";
   }
   function loadAnalysisSettings() {
+    const designVisible = analysisDesign.window?.filters?.visible;
     try {
       const raw = localStorage.getItem(ANALYSIS_SETTINGS_STORAGE_KEY);
       if (!raw) return { ...defaultAnalysisSettings };
       const parsed = JSON.parse(raw);
       const theme = parsed.theme === "light" ? "light" : "dark";
       const accent = normalizeAccent(parsed.accent);
-      return { theme, accent };
+      const visibleFilters = {
+        date: parsed.visibleFilters?.date ?? designVisible?.date ?? true,
+        mode: parsed.visibleFilters?.mode ?? designVisible?.mode ?? true,
+        movement: parsed.visibleFilters?.movement ?? designVisible?.movement ?? true,
+        teammate: parsed.visibleFilters?.teammate ?? designVisible?.teammate ?? true,
+        country: parsed.visibleFilters?.country ?? designVisible?.country ?? true
+      };
+      return { theme, accent, visibleFilters };
     } catch {
       return { ...defaultAnalysisSettings };
     }
@@ -6710,6 +9164,12 @@
       localStorage.setItem(ANALYSIS_SETTINGS_STORAGE_KEY, JSON.stringify(analysisSettings));
     } catch {
     }
+    void db.meta.put({
+      key: ANALYSIS_UI_SETTINGS_META_KEY,
+      value: analysisSettings,
+      updatedAt: Date.now()
+    }).catch(() => {
+    });
   }
   var analysisSettings = loadAnalysisSettings();
   function getThemePalette() {
@@ -6972,7 +9432,7 @@
     if (gameId.length <= 14) return gameId;
     return `${gameId.slice(0, 8)}...`;
   }
-  function openDrilldownOverlay(doc, title, subtitle, drilldown) {
+  function openDrilldownOverlay(doc, title, subtitle, drilldown, options) {
     if (drilldown.length === 0) return;
     const palette = getThemePalette();
     const overlay = doc.createElement("div");
@@ -7036,7 +9496,11 @@
     const sortLabel = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
     let sortKey = "date";
     let sortDir = "desc";
-    const hasOpponentItems = drilldown.some((d) => typeof d.opponentId === "string" || typeof d.opponentName === "string");
+    const sortable = options?.sortable !== false;
+    const selectedColumns = new Set((options?.columns || []).map((x) => x.trim().toLowerCase()).filter(Boolean));
+    const selectedColored = new Set((options?.colored || []).map((x) => x.trim().toLowerCase()).filter(Boolean));
+    const selectedClickable = new Set((options?.clickable || []).map((x) => x.trim().toLowerCase()).filter(Boolean));
+    const hasOpponentItems = options?.drilldownType ? options.drilldownType === "players" : drilldown.some((d) => typeof d.opponentId === "string" || typeof d.opponentName === "string");
     const movementValues = [...new Set(drilldown.map((d) => d.movement).filter((x) => typeof x === "string" && x.trim().length > 0))];
     const modeValues = [...new Set(drilldown.map((d) => d.gameMode).filter((x) => typeof x === "string" && x.trim().length > 0))];
     const showMovement = movementValues.length > 1;
@@ -7062,7 +9526,7 @@
       a.style.color = analysisSettings.accent;
       return a;
     };
-    const columns = [{ key: "date", label: "Date", sortKey: "date", width: "150px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
+    const columns = [{ key: "date", label: "Date", sortKey: sortable ? "date" : void 0, width: "150px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
     if (hasOpponentItems) {
       columns.push({
         key: "opponent",
@@ -7070,7 +9534,8 @@
         width: "180px",
         render: (item) => {
           const name = item.opponentName || (item.opponentId ? shortGameId(item.opponentId) : "-");
-          if (item.opponentProfileUrl) {
+          const canClickOpponent = selectedClickable.size === 0 || selectedClickable.has("opponent") || selectedClickable.has("player");
+          if (canClickOpponent && item.opponentProfileUrl) {
             const a = doc.createElement("a");
             a.href = item.opponentProfileUrl;
             a.target = "_blank";
@@ -7082,7 +9547,22 @@
           return mkTextCell(name, !item.opponentName);
         }
       });
-      columns.push({ key: "result", label: "Result", sortKey: "result", width: "80px", render: (item) => mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result) });
+      columns.push({
+        key: "result",
+        label: "Result",
+        sortKey: sortable ? "result" : void 0,
+        width: "80px",
+        render: (item) => {
+          const span = mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result);
+          if (selectedColored.has("result")) {
+            const val = item.result;
+            if (val === "W") span.style.color = "#22c55e";
+            else if (val === "L") span.style.color = "#ef4444";
+            else if (val === "T") span.style.color = palette.textMuted;
+          }
+          return span;
+        }
+      });
       columns.push({
         key: "matchups",
         label: "Match-ups",
@@ -7092,22 +9572,50 @@
       columns.push({
         key: "country",
         label: "Country",
-        sortKey: "country",
+        sortKey: sortable ? "country" : void 0,
         width: "160px",
         render: (item) => mkTextCell(item.opponentCountry || countryNameFromCode(item.trueCountry))
       });
-      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: "game_mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: sortable ? "game_mode" : void 0, width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
     } else {
-      columns.push({ key: "result", label: "Result", sortKey: "result", width: "80px", render: (item) => mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result) });
-      columns.push({ key: "round", label: "Round", sortKey: "round", width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
-      columns.push({ key: "score", label: "Score", sortKey: "score", width: "80px", render: (item) => mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-") });
-      columns.push({ key: "country", label: "Country", sortKey: "country", width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
-      if (showDuration) columns.push({ key: "duration", label: "Guess Duration", sortKey: "duration", width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
+      columns.push({
+        key: "result",
+        label: "Result",
+        sortKey: sortable ? "result" : void 0,
+        width: "80px",
+        render: (item) => {
+          const span = mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result);
+          if (selectedColored.has("result")) {
+            const val = item.result;
+            if (val === "W") span.style.color = "#22c55e";
+            else if (val === "L") span.style.color = "#ef4444";
+            else if (val === "T") span.style.color = palette.textMuted;
+          }
+          return span;
+        }
+      });
+      columns.push({ key: "round", label: "Round", sortKey: sortable ? "round" : void 0, width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
+      columns.push({
+        key: "score",
+        label: "Score",
+        sortKey: sortable ? "score" : void 0,
+        width: "80px",
+        render: (item) => {
+          const span = mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-");
+          if (selectedColored.has("score") && typeof item.score === "number") {
+            span.style.color = item.score >= 4500 ? "#22c55e" : item.score < 500 ? "#ef4444" : palette.text;
+            span.style.fontWeight = "700";
+          }
+          return span;
+        }
+      });
+      columns.push({ key: "country", label: "Country", sortKey: sortable ? "country" : void 0, width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
+      if (showDuration) columns.push({ key: "duration", label: "Guess Duration", sortKey: sortable ? "duration" : void 0, width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
       if (showDamage) {
         columns.push({
           key: "damage",
           label: "Damage",
-          sortKey: "damage",
+          sortKey: sortable ? "damage" : void 0,
           width: "90px",
           render: (item) => {
             const span = mkTextCell(formatDamageValue(item.damage), typeof item.damage !== "number");
@@ -7119,9 +9627,9 @@
           }
         });
       }
-      if (showMovement) columns.push({ key: "movement", label: "Movement", sortKey: "movement", width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
-      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: "game_mode", width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-      if (showMate) columns.push({ key: "mate", label: "Mate", sortKey: "mate", width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
+      if (showMovement) columns.push({ key: "movement", label: "Movement", sortKey: sortable ? "movement" : void 0, width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
+      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: sortable ? "game_mode" : void 0, width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
+      if (showMate) columns.push({ key: "mate", label: "Mate", sortKey: sortable ? "mate" : void 0, width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
     }
     columns.push({
       key: "game",
@@ -7136,10 +9644,11 @@
     });
     if (!hasOpponentItems && showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
     if (!hasOpponentItems && showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
+    const visibleColumns = selectedColumns.size > 0 ? columns.filter((c) => selectedColumns.has(c.key.toLowerCase())) : columns;
     const thead = doc.createElement("thead");
     const headRow = doc.createElement("tr");
     const thBySort = /* @__PURE__ */ new Map();
-    for (const col of columns) {
+    for (const col of visibleColumns) {
       const th = doc.createElement("th");
       th.textContent = col.label;
       th.style.textAlign = "left";
@@ -7150,7 +9659,7 @@
       th.style.top = "0";
       th.style.background = palette.panel;
       if (col.width) th.style.minWidth = col.width;
-      if (col.sortKey) {
+      if (col.sortKey && sortable) {
         th.style.cursor = "pointer";
         th.style.userSelect = "none";
         const colSortKey = col.sortKey;
@@ -7260,7 +9769,7 @@
         const tr = doc.createElement("tr");
         const nextItem = sorted[i + 1];
         tr.style.borderBottom = nextItem && nextItem.gameId === item.gameId ? "none" : `1px solid ${palette.border}`;
-        for (const col of columns) {
+        for (const col of visibleColumns) {
           const td = doc.createElement("td");
           td.style.padding = "6px 8px";
           if (col.width) td.style.minWidth = col.width;
@@ -7298,11 +9807,11 @@
     overlay.appendChild(card);
     doc.body.appendChild(overlay);
   }
-  function openBarDrilldownOverlay(doc, title, barLabel, bars, barIndex) {
+  function openBarDrilldownOverlay(doc, title, barLabel, bars, barIndex, options) {
     const bar = bars[barIndex];
     const drilldown = bar?.drilldown || [];
     if (!bar || drilldown.length === 0) return;
-    openDrilldownOverlay(doc, title, barLabel, drilldown);
+    openDrilldownOverlay(doc, title, barLabel, drilldown, options);
   }
   function createChartActions(svg, title) {
     const palette = getThemePalette();
@@ -7369,7 +9878,7 @@
     }
     return out.length > 1 ? out : points;
   }
-  function renderLineChart(chart, title, doc) {
+  function renderLineChart(chart, title, doc, graphCfg) {
     const palette = getThemePalette();
     const chartWrap = doc.createElement("div");
     chartWrap.style.marginBottom = "8px";
@@ -7441,12 +9950,14 @@
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "300");
+    const lineHoverCss = graphCfg?.hoverable === false ? "" : `.ga-line-main:hover { stroke-width: 4; opacity: 1; }`;
+    const pointHoverCss = graphCfg?.hoverable === false ? "" : `.ga-line-point:hover { r: 5; opacity: 1; }`;
     svg.innerHTML = `
     <style>
       .ga-line-main { transition: stroke-width .12s ease, opacity .12s ease; }
-      .ga-line-main:hover { stroke-width: 4; opacity: 1; }
+      ${lineHoverCss}
       .ga-line-point { transition: r .12s ease, opacity .12s ease; opacity: .72; }
-      .ga-line-point:hover { r: 5; opacity: 1; }
+      ${pointHoverCss}
     </style>
     <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
     <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
@@ -7486,7 +9997,7 @@
     }
     return chartWrap;
   }
-  function renderBarChart(chart, title, doc) {
+  function renderBarChart(chart, title, doc, graphCfg) {
     const palette = getThemePalette();
     const chartWrap = doc.createElement("div");
     chartWrap.style.marginBottom = "8px";
@@ -7502,8 +10013,10 @@
     chartWrap.appendChild(chartHeading);
     const allBars = chart.bars.slice(0, 240);
     const isScoreDistribution = /score distribution/i.test(title);
-    const initialBars = Math.max(1, Math.min(chart.initialBars ?? 40, allBars.length || 1));
+    const requestedInitial = graphCfg?.initialBars === "max" ? allBars.length : graphCfg?.initialBars;
+    const initialBars = Math.max(1, Math.min((typeof requestedInitial === "number" ? requestedInitial : chart.initialBars) ?? 40, allBars.length || 1));
     let expanded = isScoreDistribution ? true : allBars.length <= initialBars;
+    if (graphCfg?.expandable === false) expanded = true;
     const content = doc.createElement("div");
     chartWrap.appendChild(content);
     const render = () => {
@@ -7541,10 +10054,11 @@
         }).join("");
         svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
         svg.setAttribute("height", `${h}`);
+        const hoverCss = graphCfg?.hoverable === false ? "" : `.ga-bar:hover { opacity: 1; filter: brightness(1.15); }`;
         svg.innerHTML = `
         <style>
           .ga-bar { transition: opacity .12s ease, filter .12s ease; }
-          .ga-bar:hover { opacity: 1; filter: brightness(1.15); }
+          ${hoverCss}
         </style>
         <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
         <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
@@ -7578,10 +10092,11 @@
         }).join("");
         svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
         svg.setAttribute("height", "320");
+        const hoverCss = graphCfg?.hoverable === false ? "" : `.ga-bar:hover { opacity: 1; filter: brightness(1.15); }`;
         svg.innerHTML = `
         <style>
           .ga-bar { transition: opacity .12s ease, filter .12s ease; }
-          .ga-bar:hover { opacity: 1; filter: brightness(1.15); }
+          ${hoverCss}
         </style>
         <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
         <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
@@ -7591,7 +10106,7 @@
       `;
       }
       content.appendChild(createChartActions(svg, title));
-      if (!isScoreDistribution && allBars.length > initialBars) {
+      if (!isScoreDistribution && graphCfg?.expandable !== false && allBars.length > initialBars) {
         const toggle = doc.createElement("button");
         toggle.textContent = expanded ? "Show less" : `Show all (${allBars.length})`;
         toggle.style.background = palette.buttonBg;
@@ -7614,16 +10129,28 @@
         const idx = Number(rect.getAttribute("data-bar-index"));
         const bar = bars[idx];
         if (!Number.isFinite(idx) || !bar || !bar.drilldown || bar.drilldown.length === 0) return;
+        if (graphCfg?.clickable === false) return;
         rect.style.cursor = "pointer";
-        rect.addEventListener("click", () => openBarDrilldownOverlay(doc, title, bar.label, bars, idx));
+        rect.addEventListener(
+          "click",
+          () => openBarDrilldownOverlay(doc, title, bar.label, bars, idx, {
+            drilldownType: graphCfg?.drilldownType,
+            columns: graphCfg?.drilldownColumns,
+            colored: graphCfg?.drilldownColored,
+            clickable: graphCfg?.drilldownClickable,
+            sortable: graphCfg?.sortable !== false
+          })
+        );
       });
     };
     render();
     return chartWrap;
   }
-  function renderSelectableBarChart(chart, title, doc) {
+  function renderSelectableBarChart(chart, title, doc, graphCfg) {
     const palette = getThemePalette();
-    const allowSort = chart.allowSort !== false;
+    const allowSort = graphCfg?.sortable !== false && chart.allowSort !== false;
+    const configuredSorts = Array.isArray(chart.sorts) ? chart.sorts.filter((s) => s === "chronological" || s === "desc" || s === "asc") : ["chronological", "desc", "asc"];
+    const selectableSorts = configuredSorts.length > 0 ? configuredSorts : ["chronological", "desc", "asc"];
     const wrap = doc.createElement("div");
     wrap.style.marginBottom = "8px";
     wrap.style.border = `1px solid ${palette.border}`;
@@ -7667,7 +10194,7 @@
       sortSelect.style.borderRadius = "7px";
       sortSelect.style.padding = "2px 6px";
       sortSelect.style.fontSize = "11px";
-      for (const key of ["chronological", "desc", "asc"]) {
+      for (const key of selectableSorts) {
         const opt = doc.createElement("option");
         opt.value = key;
         opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
@@ -7688,19 +10215,19 @@
       const barChart = {
         type: "bar",
         yLabel: selected.label,
-        initialBars: chart.initialBars ?? 10,
-        orientation: chart.orientation || "horizontal",
+        initialBars: graphCfg?.initialBars ?? chart.initialBars ?? 10,
+        orientation: graphCfg?.orientation || chart.orientation || "horizontal",
         minHeight: chart.minHeight,
         bars
       };
-      content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc));
+      content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc, graphCfg));
     };
     metricSelect.addEventListener("change", render);
     if (sortSelect) sortSelect.addEventListener("change", render);
     render();
     return wrap;
   }
-  function renderSelectableLineChart(chart, title, doc) {
+  function renderSelectableLineChart(chart, title, doc, graphCfg) {
     const palette = getThemePalette();
     const maxCompare = Math.max(1, Math.min(chart.maxCompare ?? 4, 4));
     const wrap = doc.createElement("div");
@@ -7780,7 +10307,7 @@
         points: series[0].points,
         series
       };
-      content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc));
+      content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc, graphCfg));
     };
     metricSelect.addEventListener("change", render);
     for (const sel of compareSelectors) sel.addEventListener("change", render);
@@ -7881,6 +10408,32 @@
     const ANALYSIS_ROOT_ID = "geoanalyzr-analysis-root";
     let analysisWindow = null;
     let lastAnalysisData = null;
+    let designSourceLineLookup = /* @__PURE__ */ new Map();
+    loadPersistedAnalysisDesign().then((persisted) => {
+      if (!persisted) return;
+      replaceAnalysisDesign(persisted);
+      if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+    }).catch(() => {
+    });
+    db.meta.get(ANALYSIS_UI_SETTINGS_META_KEY).then((row) => {
+      if (!row || !row.value || typeof row.value !== "object") return;
+      const parsed = row.value;
+      analysisSettings.theme = parsed.theme === "light" ? "light" : "dark";
+      analysisSettings.accent = normalizeAccent(parsed.accent);
+      analysisSettings.visibleFilters = {
+        date: parsed.visibleFilters?.date !== false,
+        mode: parsed.visibleFilters?.mode !== false,
+        movement: parsed.visibleFilters?.movement !== false,
+        teammate: parsed.visibleFilters?.teammate !== false,
+        country: parsed.visibleFilters?.country !== false
+      };
+      if (analysisWindow) {
+        applyThemeToWindow(analysisWindow);
+        applyFilterVisibility(analysisWindow);
+        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+      }
+    }).catch(() => {
+    });
     function styleInput(el) {
       const palette = getThemePalette();
       el.style.background = palette.panelAlt;
@@ -7904,11 +10457,906 @@
       styleInput(refs.movementSelect);
       styleInput(refs.teammateSelect);
       styleInput(refs.countrySelect);
-      styleInput(refs.themeSelect);
-      refs.colorInput.style.border = `1px solid ${palette.border}`;
-      refs.colorInput.style.background = palette.panelAlt;
+      refs.settingsBtn.style.background = palette.buttonBg;
+      refs.settingsBtn.style.color = palette.buttonText;
+      refs.settingsBtn.style.border = `1px solid ${palette.border}`;
+    }
+    function applyFilterVisibility(refs) {
+      const visible = analysisSettings.visibleFilters;
+      refs.filterControlWrappers.date.style.display = visible.date ? "inline-flex" : "none";
+      refs.filterControlWrappers.mode.style.display = visible.mode ? "inline-flex" : "none";
+      refs.filterControlWrappers.movement.style.display = visible.movement ? "inline-flex" : "none";
+      refs.filterControlWrappers.teammate.style.display = visible.teammate ? "inline-flex" : "none";
+      refs.filterControlWrappers.country.style.display = visible.country ? "inline-flex" : "none";
+    }
+    function getActiveFilterPayload(refs) {
+      const movement = refs.movementSelect.value === "moving" || refs.movementSelect.value === "no_move" || refs.movementSelect.value === "nmpz" || refs.movementSelect.value === "unknown" ? refs.movementSelect.value : "all";
+      return {
+        fromTs: parseDateInput(refs.fromInput.value, false),
+        toTs: parseDateInput(refs.toInput.value, true),
+        gameMode: refs.modeSelect.value || "all",
+        movementType: movement,
+        teammateId: refs.teammateSelect.value || "all",
+        country: refs.countrySelect.value || "all"
+      };
+    }
+    function downloadJsonFile(doc, value, fileName) {
+      const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = doc.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+    }
+    function openSettingsOverlay(refs) {
+      const doc = refs.doc;
+      const palette = getThemePalette();
+      const overlay = refs.settingsOverlay;
+      overlay.innerHTML = "";
+      overlay.style.display = "flex";
+      const modal = doc.createElement("div");
+      modal.style.width = "min(1200px, 96vw)";
+      modal.style.maxHeight = "88vh";
+      modal.style.overflow = "auto";
+      modal.style.background = palette.panel;
+      modal.style.border = `1px solid ${palette.border}`;
+      modal.style.borderRadius = "12px";
+      modal.style.boxShadow = "0 14px 45px rgba(0,0,0,0.45)";
+      const head = doc.createElement("div");
+      head.style.display = "flex";
+      head.style.alignItems = "center";
+      head.style.justifyContent = "space-between";
+      head.style.padding = "10px 12px";
+      head.style.borderBottom = `1px solid ${palette.border}`;
+      const title2 = doc.createElement("div");
+      title2.textContent = "Analysis Settings";
+      title2.style.fontWeight = "700";
+      const closeBtn2 = doc.createElement("button");
+      closeBtn2.textContent = "Close";
+      closeBtn2.style.background = palette.buttonBg;
+      closeBtn2.style.color = palette.buttonText;
+      closeBtn2.style.border = `1px solid ${palette.border}`;
+      closeBtn2.style.borderRadius = "8px";
+      closeBtn2.style.padding = "5px 10px";
+      closeBtn2.style.cursor = "pointer";
+      closeBtn2.addEventListener("click", () => {
+        overlay.style.display = "none";
+      });
+      head.appendChild(title2);
+      head.appendChild(closeBtn2);
+      const tabBar = doc.createElement("div");
+      tabBar.style.display = "flex";
+      tabBar.style.gap = "8px";
+      tabBar.style.flexWrap = "wrap";
+      tabBar.style.padding = "10px 12px";
+      tabBar.style.borderBottom = `1px solid ${palette.border}`;
+      const body = doc.createElement("div");
+      body.style.padding = "12px";
+      body.style.display = "grid";
+      body.style.gap = "12px";
+      const mkTabButton = (label) => {
+        const b = doc.createElement("button");
+        b.textContent = label;
+        b.style.background = palette.buttonBg;
+        b.style.color = palette.buttonText;
+        b.style.border = `1px solid ${palette.border}`;
+        b.style.borderRadius = "999px";
+        b.style.padding = "5px 10px";
+        b.style.cursor = "pointer";
+        return b;
+      };
+      const appearanceBtn = mkTabButton("Appearance");
+      const filterBtn = mkTabButton("Filter");
+      const layoutBtn = mkTabButton("Layout");
+      const templateBtn = mkTabButton("Template");
+      tabBar.append(appearanceBtn, filterBtn, layoutBtn, templateBtn);
+      const tabContent = doc.createElement("div");
+      body.appendChild(tabContent);
+      const rerenderAll = () => {
+        saveAnalysisSettings();
+        applyThemeToWindow(refs);
+        applyFilterVisibility(refs);
+        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+      };
+      const mkFieldWrap = (labelText) => {
+        const wrap = doc.createElement("label");
+        wrap.style.display = "grid";
+        wrap.style.gap = "6px";
+        const lbl = doc.createElement("span");
+        lbl.textContent = labelText;
+        lbl.style.fontSize = "12px";
+        lbl.style.color = palette.textMuted;
+        wrap.appendChild(lbl);
+        return wrap;
+      };
+      const ensureSectionContainer = (sectionId) => {
+        let section = (analysisDesign.sections || []).find((s) => s.id === sectionId);
+        if (!section) {
+          section = {
+            id: sectionId,
+            sourceSectionId: sectionId,
+            title: sectionId,
+            tocLabel: sectionId,
+            objects: { singles: [], boxes: [], graphs: [] },
+            layout: { mode: "object_order", order: [], preserveUnmatched: false }
+          };
+          analysisDesign.sections = [...analysisDesign.sections || [], section];
+        }
+        if (!section.objects) section.objects = { singles: [], boxes: [], graphs: [] };
+        if (!section.objects.singles) section.objects.singles = [];
+        if (!section.objects.boxes) section.objects.boxes = [];
+        if (!section.objects.graphs) section.objects.graphs = [];
+        if (!section.layout || section.layout.mode !== "object_order") {
+          section.layout = { mode: "object_order", order: [], preserveUnmatched: false };
+        }
+        return section;
+      };
+      const renderAppearanceTab = () => {
+        tabContent.innerHTML = "";
+        const grid = doc.createElement("div");
+        grid.style.display = "grid";
+        grid.style.gridTemplateColumns = "repeat(auto-fit,minmax(220px,1fr))";
+        grid.style.gap = "10px";
+        const themeWrap = mkFieldWrap("Theme");
+        const themeSelect = doc.createElement("select");
+        styleInput(themeSelect);
+        themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
+        themeSelect.value = analysisSettings.theme;
+        themeSelect.addEventListener("change", () => {
+          analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
+          if (!analysisDesign.window) analysisDesign.window = {};
+          if (!analysisDesign.window.appearance) analysisDesign.window.appearance = {};
+          if (!analysisDesign.window.appearance.defaults) analysisDesign.window.appearance.defaults = {};
+          analysisDesign.window.appearance.defaults.theme = analysisSettings.theme;
+          persistAnalysisDesign();
+          rerenderAll();
+        });
+        themeWrap.appendChild(themeSelect);
+        const accentWrap = mkFieldWrap("Graph accent");
+        const accentInput = doc.createElement("input");
+        accentInput.type = "color";
+        accentInput.value = analysisSettings.accent;
+        accentInput.style.width = "56px";
+        accentInput.style.height = "34px";
+        accentInput.style.borderRadius = "8px";
+        accentInput.style.border = `1px solid ${palette.border}`;
+        accentInput.style.cursor = "pointer";
+        accentInput.addEventListener("input", () => {
+          analysisSettings.accent = normalizeAccent(accentInput.value);
+          if (!analysisDesign.window) analysisDesign.window = {};
+          if (!analysisDesign.window.appearance) analysisDesign.window.appearance = {};
+          if (!analysisDesign.window.appearance.defaults) analysisDesign.window.appearance.defaults = {};
+          analysisDesign.window.appearance.defaults.accent = analysisSettings.accent;
+          persistAnalysisDesign();
+          rerenderAll();
+        });
+        accentWrap.appendChild(accentInput);
+        grid.append(themeWrap, accentWrap);
+        tabContent.appendChild(grid);
+      };
+      const renderFilterTab = () => {
+        tabContent.innerHTML = "";
+        const keys2 = [
+          { key: "date", label: "Date (From/To)" },
+          { key: "mode", label: "Game mode" },
+          { key: "movement", label: "Movement" },
+          { key: "teammate", label: "Teammate" },
+          { key: "country", label: "Country" }
+        ];
+        const box = doc.createElement("div");
+        box.style.display = "grid";
+        box.style.gap = "8px";
+        for (const item of keys2) {
+          const row = doc.createElement("label");
+          row.style.display = "inline-flex";
+          row.style.alignItems = "center";
+          row.style.gap = "8px";
+          row.style.fontSize = "14px";
+          const input = doc.createElement("input");
+          input.type = "checkbox";
+          input.checked = analysisSettings.visibleFilters[item.key];
+          input.addEventListener("change", () => {
+            analysisSettings.visibleFilters[item.key] = input.checked;
+            if (!analysisDesign.window) analysisDesign.window = {};
+            const winAny = analysisDesign.window;
+            if (!winAny.filters) winAny.filters = {};
+            winAny.filters.visible = { ...analysisSettings.visibleFilters };
+            persistAnalysisDesign();
+            rerenderAll();
+          });
+          const text = doc.createElement("span");
+          text.textContent = item.label;
+          row.append(input, text);
+          box.appendChild(row);
+        }
+        tabContent.appendChild(box);
+      };
+      const renderLayoutTab = () => {
+        tabContent.innerHTML = "";
+        const wrapper = doc.createElement("div");
+        wrapper.style.display = "grid";
+        wrapper.style.gap = "14px";
+        const styleActionBtn = (b) => {
+          b.style.background = palette.buttonBg;
+          b.style.color = palette.buttonText;
+          b.style.border = `1px solid ${palette.border}`;
+          b.style.borderRadius = "8px";
+          b.style.padding = "5px 10px";
+          b.style.cursor = "pointer";
+        };
+        const parseCsv = (value) => value.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
+        const sections = analysisDesign.sections || [];
+        const currentOrder = Array.isArray(analysisDesign.section_layout?.order) ? analysisDesign.section_layout.order.slice() : sections.map((s) => s.id);
+        if (!analysisDesign.section_layout) analysisDesign.section_layout = {};
+        if (!analysisDesign.section_layout.order || analysisDesign.section_layout.order.length === 0) {
+          analysisDesign.section_layout.order = currentOrder.slice();
+        }
+        const orderTitle = doc.createElement("div");
+        orderTitle.textContent = "Sections order";
+        orderTitle.style.fontWeight = "700";
+        wrapper.appendChild(orderTitle);
+        const resetLayoutBtn = doc.createElement("button");
+        resetLayoutBtn.textContent = "Reset Layout";
+        styleActionBtn(resetLayoutBtn);
+        resetLayoutBtn.addEventListener("click", () => {
+          analysisDesign.sections = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN.sections || []));
+          analysisDesign.section_layout = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN.section_layout || {}));
+          rebuildSectionTemplateCache();
+          persistAnalysisDesign();
+          renderLayoutTab();
+          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+        });
+        wrapper.appendChild(resetLayoutBtn);
+        const orderList = doc.createElement("div");
+        orderList.style.display = "grid";
+        orderList.style.gap = "6px";
+        wrapper.appendChild(orderList);
+        const renderSectionOrderRows = () => {
+          orderList.innerHTML = "";
+          const order = analysisDesign.section_layout?.order || [];
+          for (let i = 0; i < order.length; i++) {
+            const sectionId = order[i];
+            const row = doc.createElement("div");
+            row.style.display = "grid";
+            row.style.gridTemplateColumns = "1fr auto auto auto";
+            row.style.gap = "6px";
+            row.style.alignItems = "center";
+            row.style.background = palette.panelAlt;
+            row.style.border = `1px solid ${palette.border}`;
+            row.style.borderRadius = "8px";
+            row.style.padding = "6px 8px";
+            const label = doc.createElement("div");
+            const section = sections.find((s) => s.id === sectionId);
+            label.textContent = section?.title || sectionId;
+            label.style.fontSize = "13px";
+            label.style.fontWeight = "600";
+            label.style.color = palette.text;
+            const upBtn = doc.createElement("button");
+            upBtn.textContent = "Up";
+            upBtn.disabled = i === 0;
+            const downBtn = doc.createElement("button");
+            downBtn.textContent = "Down";
+            downBtn.disabled = i === order.length - 1;
+            const removeBtn = doc.createElement("button");
+            removeBtn.textContent = "Hide";
+            for (const b of [upBtn, downBtn, removeBtn]) {
+              b.style.background = palette.buttonBg;
+              b.style.color = palette.buttonText;
+              b.style.border = `1px solid ${palette.border}`;
+              b.style.borderRadius = "6px";
+              b.style.padding = "3px 8px";
+              b.style.cursor = "pointer";
+            }
+            upBtn.addEventListener("click", () => {
+              const arr = analysisDesign.section_layout?.order || [];
+              [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
+              rebuildSectionTemplateCache();
+              persistAnalysisDesign();
+              renderSectionOrderRows();
+              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+            });
+            downBtn.addEventListener("click", () => {
+              const arr = analysisDesign.section_layout?.order || [];
+              [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
+              rebuildSectionTemplateCache();
+              persistAnalysisDesign();
+              renderSectionOrderRows();
+              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+            });
+            removeBtn.addEventListener("click", () => {
+              analysisDesign.section_layout.order = (analysisDesign.section_layout.order || []).filter((x) => x !== sectionId);
+              rebuildSectionTemplateCache();
+              persistAnalysisDesign();
+              renderSectionOrderRows();
+              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+            });
+            row.append(label, upBtn, downBtn, removeBtn);
+            orderList.appendChild(row);
+          }
+        };
+        renderSectionOrderRows();
+        const addWrap = doc.createElement("div");
+        addWrap.style.display = "inline-flex";
+        addWrap.style.gap = "8px";
+        addWrap.style.alignItems = "center";
+        const addSelect = doc.createElement("select");
+        styleInput(addSelect);
+        const hidden = sections.filter((s) => !(analysisDesign.section_layout?.order || []).includes(s.id));
+        for (const s of hidden) {
+          const opt = doc.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.title || s.id;
+          addSelect.appendChild(opt);
+        }
+        const addBtn = doc.createElement("button");
+        addBtn.textContent = "Add section";
+        addBtn.style.background = palette.buttonBg;
+        addBtn.style.color = palette.buttonText;
+        addBtn.style.border = `1px solid ${palette.border}`;
+        addBtn.style.borderRadius = "8px";
+        addBtn.style.padding = "5px 10px";
+        addBtn.style.cursor = "pointer";
+        addBtn.addEventListener("click", () => {
+          const id = addSelect.value;
+          if (!id) return;
+          const order = analysisDesign.section_layout?.order || [];
+          if (!order.includes(id)) order.push(id);
+          analysisDesign.section_layout.order = order;
+          rebuildSectionTemplateCache();
+          persistAnalysisDesign();
+          renderLayoutTab();
+          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+        });
+        addWrap.append(addSelect, addBtn);
+        wrapper.appendChild(addWrap);
+        const createWrap = doc.createElement("div");
+        createWrap.style.display = "inline-flex";
+        createWrap.style.flexWrap = "wrap";
+        createWrap.style.gap = "8px";
+        createWrap.style.alignItems = "center";
+        const newId = doc.createElement("input");
+        newId.placeholder = "new_section_id";
+        styleInput(newId);
+        const newTitle = doc.createElement("input");
+        newTitle.placeholder = "Section title";
+        styleInput(newTitle);
+        const sourceSelect = doc.createElement("select");
+        styleInput(sourceSelect);
+        const srcDefault = doc.createElement("option");
+        srcDefault.value = "";
+        srcDefault.textContent = "Source section (optional)";
+        sourceSelect.appendChild(srcDefault);
+        for (const s of sections) {
+          const opt = doc.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.title || s.id;
+          sourceSelect.appendChild(opt);
+        }
+        const createBtn = doc.createElement("button");
+        createBtn.textContent = "Create section";
+        createBtn.style.background = palette.buttonBg;
+        createBtn.style.color = palette.buttonText;
+        createBtn.style.border = `1px solid ${palette.border}`;
+        createBtn.style.borderRadius = "8px";
+        createBtn.style.padding = "5px 10px";
+        createBtn.style.cursor = "pointer";
+        createBtn.addEventListener("click", () => {
+          const id = newId.value.trim();
+          if (!id) return;
+          if ((analysisDesign.sections || []).some((s) => s.id === id)) return;
+          const created = {
+            id,
+            sourceSectionId: sourceSelect.value || void 0,
+            title: newTitle.value.trim() || id,
+            tocLabel: newTitle.value.trim() || id,
+            objects: { singles: [], boxes: [], graphs: [] },
+            layout: { mode: "object_order", order: [], preserveUnmatched: false }
+          };
+          analysisDesign.sections = [...analysisDesign.sections || [], created];
+          const order = analysisDesign.section_layout?.order || [];
+          order.push(id);
+          if (!analysisDesign.section_layout) analysisDesign.section_layout = {};
+          analysisDesign.section_layout.order = order;
+          newId.value = "";
+          newTitle.value = "";
+          sourceSelect.value = "";
+          rebuildSectionTemplateCache();
+          persistAnalysisDesign();
+          renderLayoutTab();
+          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+        });
+        createWrap.append(newId, newTitle, sourceSelect, createBtn);
+        wrapper.appendChild(createWrap);
+        const compTitle = doc.createElement("div");
+        compTitle.textContent = "Components by section";
+        compTitle.style.fontWeight = "700";
+        wrapper.appendChild(compTitle);
+        const detailsWrap = doc.createElement("div");
+        detailsWrap.style.display = "grid";
+        detailsWrap.style.gap = "8px";
+        wrapper.appendChild(detailsWrap);
+        for (const sectionId of analysisDesign.section_layout?.order || []) {
+          const section = ensureSectionContainer(sectionId);
+          const details = doc.createElement("details");
+          details.style.border = `1px solid ${palette.border}`;
+          details.style.borderRadius = "8px";
+          details.style.background = palette.panelAlt;
+          const summary = doc.createElement("summary");
+          summary.textContent = section.title || section.id;
+          summary.style.cursor = "pointer";
+          summary.style.padding = "8px";
+          summary.style.fontWeight = "600";
+          details.appendChild(summary);
+          const list = doc.createElement("div");
+          list.style.display = "grid";
+          list.style.gap = "6px";
+          list.style.padding = "8px";
+          details.appendChild(list);
+          const order = section.layout?.mode === "object_order" ? section.layout.order : [];
+          const renderComponentRows = () => {
+            list.innerHTML = "";
+            for (let i = 0; i < order.length; i++) {
+              const entry = order[i];
+              const row = doc.createElement("div");
+              row.style.display = "grid";
+              row.style.gridTemplateColumns = "1fr auto auto auto auto";
+              row.style.gap = "6px";
+              row.style.alignItems = "center";
+              row.style.background = palette.panel;
+              row.style.border = `1px solid ${palette.border}`;
+              row.style.borderRadius = "6px";
+              row.style.padding = "6px 8px";
+              const label = doc.createElement("div");
+              label.textContent = `${entry.kind}: ${entry.id}`;
+              label.style.fontSize = "12px";
+              label.style.fontWeight = "600";
+              const upBtn = doc.createElement("button");
+              upBtn.textContent = "Up";
+              upBtn.disabled = i === 0;
+              const downBtn = doc.createElement("button");
+              downBtn.textContent = "Down";
+              downBtn.disabled = i === order.length - 1;
+              const editBtn = doc.createElement("button");
+              editBtn.textContent = "Edit";
+              const delBtn = doc.createElement("button");
+              delBtn.textContent = "Remove";
+              for (const b of [upBtn, downBtn, editBtn, delBtn]) {
+                styleActionBtn(b);
+                b.style.padding = "3px 8px";
+              }
+              upBtn.addEventListener("click", () => {
+                [order[i - 1], order[i]] = [order[i], order[i - 1]];
+                rebuildSectionTemplateCache();
+                persistAnalysisDesign();
+                renderComponentRows();
+                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+              });
+              downBtn.addEventListener("click", () => {
+                [order[i + 1], order[i]] = [order[i], order[i + 1]];
+                rebuildSectionTemplateCache();
+                persistAnalysisDesign();
+                renderComponentRows();
+                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+              });
+              delBtn.addEventListener("click", () => {
+                order.splice(i, 1);
+                if (entry.kind === "single") section.objects.singles = (section.objects.singles || []).filter((x) => x.id !== entry.id);
+                if (entry.kind === "box") section.objects.boxes = (section.objects.boxes || []).filter((x) => x.id !== entry.id);
+                if (entry.kind === "graph") section.objects.graphs = (section.objects.graphs || []).filter((x) => x.id !== entry.id);
+                rebuildSectionTemplateCache();
+                persistAnalysisDesign();
+                renderComponentRows();
+                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+              });
+              row.append(label, upBtn, downBtn, editBtn, delBtn);
+              list.appendChild(row);
+              const findSingle = () => (section.objects?.singles || []).find((x) => x.id === entry.id);
+              const findBox = () => (section.objects?.boxes || []).find((x) => x.id === entry.id);
+              const findGraph = () => (section.objects?.graphs || []).find((x) => x.id === entry.id);
+              const editor = doc.createElement("div");
+              editor.style.display = "none";
+              editor.style.background = palette.panelAlt;
+              editor.style.border = `1px solid ${palette.border}`;
+              editor.style.borderRadius = "8px";
+              editor.style.padding = "8px";
+              editor.style.marginTop = "-2px";
+              editor.style.marginBottom = "6px";
+              editor.style.display = "none";
+              editor.style.gap = "8px";
+              editor.style.gridTemplateColumns = "minmax(180px, 1fr) minmax(180px, 1fr)";
+              list.appendChild(editor);
+              const closeEditor = () => {
+                editor.style.display = "none";
+                editor.innerHTML = "";
+              };
+              const saveAndRefresh = () => {
+                rebuildSectionTemplateCache();
+                persistAnalysisDesign();
+                renderComponentRows();
+                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+              };
+              editBtn.addEventListener("click", () => {
+                if (editor.style.display !== "none") {
+                  closeEditor();
+                  return;
+                }
+                editor.innerHTML = "";
+                editor.style.display = "grid";
+                const title3 = doc.createElement("div");
+                title3.textContent = `Edit ${entry.kind}: ${entry.id}`;
+                title3.style.gridColumn = "1 / -1";
+                title3.style.fontWeight = "700";
+                editor.appendChild(title3);
+                const mkField = (name, input, colSpan = false) => {
+                  const wrap = doc.createElement("label");
+                  wrap.style.display = "grid";
+                  wrap.style.gap = "4px";
+                  if (colSpan) wrap.style.gridColumn = "1 / -1";
+                  const n = doc.createElement("span");
+                  n.textContent = name;
+                  n.style.fontSize = "12px";
+                  n.style.color = palette.textMuted;
+                  wrap.append(n, input);
+                  editor.appendChild(wrap);
+                };
+                if (entry.kind === "single") {
+                  const single = findSingle();
+                  if (!single) return;
+                  const labelInput2 = doc.createElement("input");
+                  labelInput2.value = single.label || "";
+                  styleInput(labelInput2);
+                  mkField("Label", labelInput2, true);
+                  const saveBtn2 = doc.createElement("button");
+                  saveBtn2.textContent = "Save";
+                  styleActionBtn(saveBtn2);
+                  saveBtn2.style.gridColumn = "1 / -1";
+                  saveBtn2.addEventListener("click", () => {
+                    single.label = labelInput2.value.trim() || single.id;
+                    saveAndRefresh();
+                  });
+                  editor.appendChild(saveBtn2);
+                  return;
+                }
+                if (entry.kind === "box") {
+                  const boxObj = findBox();
+                  if (!boxObj) return;
+                  const titleInput2 = doc.createElement("input");
+                  titleInput2.value = boxObj.title || "";
+                  styleInput(titleInput2);
+                  mkField("Box title", titleInput2, true);
+                  const linesWrap = doc.createElement("div");
+                  linesWrap.style.gridColumn = "1 / -1";
+                  linesWrap.style.display = "grid";
+                  linesWrap.style.gap = "6px";
+                  const linesTitle = doc.createElement("div");
+                  linesTitle.textContent = "Lines";
+                  linesTitle.style.fontWeight = "600";
+                  linesWrap.appendChild(linesTitle);
+                  const lines = boxObj.lines || [];
+                  const renderLines = () => {
+                    while (linesWrap.children.length > 1) linesWrap.removeChild(linesWrap.lastChild);
+                    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+                      const line = lines[lineIdx];
+                      const row2 = doc.createElement("div");
+                      row2.style.display = "grid";
+                      row2.style.gridTemplateColumns = "1fr auto";
+                      row2.style.gap = "6px";
+                      const input = doc.createElement("input");
+                      input.value = line.label || "";
+                      styleInput(input);
+                      input.addEventListener("input", () => {
+                        line.label = input.value;
+                      });
+                      const rm = doc.createElement("button");
+                      rm.textContent = "Remove";
+                      styleActionBtn(rm);
+                      rm.addEventListener("click", () => {
+                        lines.splice(lineIdx, 1);
+                        renderLines();
+                      });
+                      row2.append(input, rm);
+                      linesWrap.appendChild(row2);
+                    }
+                    const addLineBtn = doc.createElement("button");
+                    addLineBtn.textContent = "Add line";
+                    styleActionBtn(addLineBtn);
+                    addLineBtn.addEventListener("click", () => {
+                      lines.push({ label: "New line" });
+                      renderLines();
+                    });
+                    linesWrap.appendChild(addLineBtn);
+                  };
+                  renderLines();
+                  editor.appendChild(linesWrap);
+                  const saveBtn2 = doc.createElement("button");
+                  saveBtn2.textContent = "Save";
+                  styleActionBtn(saveBtn2);
+                  saveBtn2.style.gridColumn = "1 / -1";
+                  saveBtn2.addEventListener("click", () => {
+                    boxObj.title = titleInput2.value.trim() || boxObj.id;
+                    for (const ln of lines) ln.label = (ln.label || "").trim() || "Line";
+                    boxObj.lines = lines;
+                    saveAndRefresh();
+                  });
+                  editor.appendChild(saveBtn2);
+                  return;
+                }
+                const graphObj = findGraph();
+                if (!graphObj) return;
+                const titleInput = doc.createElement("input");
+                titleInput.value = graphObj.title || "";
+                styleInput(titleInput);
+                mkField("Title", titleInput, true);
+                const contentInput = doc.createElement("input");
+                contentInput.value = graphObj.content || "";
+                styleInput(contentInput);
+                mkField("Content key", contentInput);
+                const typeSelect = doc.createElement("select");
+                typeSelect.innerHTML = `
+                <option value="">(auto)</option>
+                <option value="line">line</option>
+                <option value="bar">bar</option>
+                <option value="selectableLine">selectableLine</option>
+                <option value="selectableBar">selectableBar</option>
+                <option value="horizontalBar">horizontalBar</option>
+                <option value="verticalBar">verticalBar</option>`;
+                typeSelect.value = graphObj.type || "";
+                styleInput(typeSelect);
+                mkField("Type", typeSelect);
+                const orientationSelect = doc.createElement("select");
+                orientationSelect.innerHTML = `<option value="">(auto)</option><option value="horizontal">horizontal</option><option value="vertical">vertical</option>`;
+                orientationSelect.value = graphObj.orientation || "";
+                styleInput(orientationSelect);
+                mkField("Orientation", orientationSelect);
+                const defaultMetricInput = doc.createElement("input");
+                defaultMetricInput.value = graphObj.defaultMetric || "";
+                styleInput(defaultMetricInput);
+                mkField("Default metric", defaultMetricInput);
+                const metricsInput = doc.createElement("input");
+                metricsInput.value = (graphObj.metrics || []).join(", ");
+                styleInput(metricsInput);
+                mkField("Metrics (csv)", metricsInput, true);
+                const defaultSortSelect = doc.createElement("select");
+                defaultSortSelect.innerHTML = `<option value="">(auto)</option><option value="chronological">chronological</option><option value="desc">descending</option><option value="asc">ascending</option>`;
+                defaultSortSelect.value = graphObj.defaultSort || "";
+                styleInput(defaultSortSelect);
+                mkField("Default sort", defaultSortSelect);
+                const sortsInput = doc.createElement("input");
+                sortsInput.value = (graphObj.sorts || []).join(", ");
+                styleInput(sortsInput);
+                mkField("Sorts (csv)", sortsInput);
+                const defaultInitialBars = graphObj.initialBars === "max" ? "max" : String(graphObj.initialBars ?? "");
+                const initialBarsInput = doc.createElement("input");
+                initialBarsInput.value = defaultInitialBars;
+                initialBarsInput.placeholder = "number | max";
+                styleInput(initialBarsInput);
+                mkField("Initial bars", initialBarsInput);
+                const drilldownTypeSelect = doc.createElement("select");
+                drilldownTypeSelect.innerHTML = `<option value="">(none)</option><option value="rounds">rounds</option><option value="players">players</option>`;
+                drilldownTypeSelect.value = graphObj.drilldownType || "";
+                styleInput(drilldownTypeSelect);
+                mkField("Drilldown type", drilldownTypeSelect);
+                const drilldownColsInput = doc.createElement("input");
+                drilldownColsInput.value = (graphObj.drilldownColumns || []).join(", ");
+                styleInput(drilldownColsInput);
+                mkField("Drilldown columns (csv)", drilldownColsInput, true);
+                const drilldownColoredInput = doc.createElement("input");
+                drilldownColoredInput.value = (graphObj.drilldownColored || []).join(", ");
+                styleInput(drilldownColoredInput);
+                mkField("Colored columns (csv)", drilldownColoredInput);
+                const drilldownClickableInput = doc.createElement("input");
+                drilldownClickableInput.value = (graphObj.drilldownClickable || []).join(", ");
+                styleInput(drilldownClickableInput);
+                mkField("Clickable columns (csv)", drilldownClickableInput);
+                const mkCheck = (labelText, checked) => {
+                  const wrap = doc.createElement("label");
+                  wrap.style.display = "inline-flex";
+                  wrap.style.alignItems = "center";
+                  wrap.style.gap = "6px";
+                  const cb = doc.createElement("input");
+                  cb.type = "checkbox";
+                  cb.checked = checked;
+                  const t = doc.createElement("span");
+                  t.textContent = labelText;
+                  wrap.append(cb, t);
+                  return { wrap, cb };
+                };
+                const clickable = mkCheck("clickable", !!graphObj.clickable);
+                const hoverable = mkCheck("hoverable", !!graphObj.hoverable);
+                const sortable = mkCheck("sortable", graphObj.sortable !== false);
+                const expandable = mkCheck("expandable", !!graphObj.expandable);
+                for (const w of [clickable.wrap, hoverable.wrap, sortable.wrap, expandable.wrap]) {
+                  w.style.fontSize = "12px";
+                  editor.appendChild(w);
+                }
+                const saveBtn = doc.createElement("button");
+                saveBtn.textContent = "Save";
+                styleActionBtn(saveBtn);
+                saveBtn.style.gridColumn = "1 / -1";
+                saveBtn.addEventListener("click", () => {
+                  graphObj.title = titleInput.value.trim() || graphObj.id;
+                  graphObj.content = contentInput.value.trim() || void 0;
+                  graphObj.type = typeSelect.value || void 0;
+                  graphObj.orientation = orientationSelect.value || void 0;
+                  graphObj.defaultMetric = defaultMetricInput.value.trim() || void 0;
+                  graphObj.metrics = parseCsv(metricsInput.value);
+                  graphObj.defaultSort = defaultSortSelect.value || void 0;
+                  graphObj.sorts = parseCsv(sortsInput.value).filter(
+                    (s) => s === "chronological" || s === "desc" || s === "asc"
+                  );
+                  const ibRaw = initialBarsInput.value.trim().toLowerCase();
+                  if (!ibRaw) graphObj.initialBars = void 0;
+                  else if (ibRaw === "max") graphObj.initialBars = "max";
+                  else {
+                    const n = Number.parseInt(ibRaw, 10);
+                    graphObj.initialBars = Number.isFinite(n) ? n : void 0;
+                  }
+                  graphObj.drilldownType = drilldownTypeSelect.value || void 0;
+                  graphObj.drilldownColumns = parseCsv(drilldownColsInput.value);
+                  graphObj.drilldownColored = parseCsv(drilldownColoredInput.value);
+                  graphObj.drilldownClickable = parseCsv(drilldownClickableInput.value);
+                  graphObj.clickable = clickable.cb.checked;
+                  graphObj.hoverable = hoverable.cb.checked;
+                  graphObj.sortable = sortable.cb.checked;
+                  graphObj.expandable = expandable.cb.checked;
+                  saveAndRefresh();
+                });
+                editor.appendChild(saveBtn);
+              });
+            }
+          };
+          renderComponentRows();
+          const addRow = doc.createElement("div");
+          addRow.style.display = "inline-flex";
+          addRow.style.flexWrap = "wrap";
+          addRow.style.gap = "8px";
+          addRow.style.padding = "8px";
+          const kindSelect = doc.createElement("select");
+          kindSelect.innerHTML = `<option value="single">Single</option><option value="box">Box</option><option value="graph">Graph</option>`;
+          styleInput(kindSelect);
+          const idInput = doc.createElement("input");
+          idInput.placeholder = "component_id";
+          styleInput(idInput);
+          const labelInput = doc.createElement("input");
+          labelInput.placeholder = "label / title";
+          styleInput(labelInput);
+          const typeInput = doc.createElement("input");
+          typeInput.placeholder = "type (optional)";
+          styleInput(typeInput);
+          const addCompBtn = doc.createElement("button");
+          addCompBtn.textContent = "Add component";
+          addCompBtn.style.background = palette.buttonBg;
+          addCompBtn.style.color = palette.buttonText;
+          addCompBtn.style.border = `1px solid ${palette.border}`;
+          addCompBtn.style.borderRadius = "8px";
+          addCompBtn.style.padding = "5px 10px";
+          addCompBtn.style.cursor = "pointer";
+          addCompBtn.addEventListener("click", () => {
+            const kind = kindSelect.value || "single";
+            const id = idInput.value.trim();
+            if (!id) return;
+            const label = labelInput.value.trim() || id;
+            const type = typeInput.value.trim();
+            if (kind === "single") {
+              section.objects.singles.push({ id, label, type: type || void 0 });
+            } else if (kind === "box") {
+              section.objects.boxes.push({ id, title: label, lines: [] });
+            } else {
+              section.objects.graphs.push({ id, title: label, type });
+            }
+            order.push({ kind, id });
+            idInput.value = "";
+            labelInput.value = "";
+            typeInput.value = "";
+            rebuildSectionTemplateCache();
+            persistAnalysisDesign();
+            renderComponentRows();
+            if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+          });
+          addRow.append(kindSelect, idInput, labelInput, typeInput, addCompBtn);
+          details.appendChild(addRow);
+          detailsWrap.appendChild(details);
+        }
+        tabContent.appendChild(wrapper);
+      };
+      const renderTemplateTab = () => {
+        tabContent.innerHTML = "";
+        const box = doc.createElement("div");
+        box.style.display = "grid";
+        box.style.gap = "10px";
+        const downloadTemplateBtn = doc.createElement("button");
+        downloadTemplateBtn.textContent = "Download Current Template";
+        const downloadSchemaBtn = doc.createElement("button");
+        downloadSchemaBtn.textContent = "Download Schema";
+        const uploadWrap = doc.createElement("label");
+        uploadWrap.textContent = "Upload Template JSON";
+        uploadWrap.style.display = "grid";
+        uploadWrap.style.gap = "6px";
+        const uploadInput = doc.createElement("input");
+        uploadInput.type = "file";
+        uploadInput.accept = ".json,application/json";
+        uploadWrap.appendChild(uploadInput);
+        for (const b of [downloadTemplateBtn, downloadSchemaBtn]) {
+          b.style.background = palette.buttonBg;
+          b.style.color = palette.buttonText;
+          b.style.border = `1px solid ${palette.border}`;
+          b.style.borderRadius = "8px";
+          b.style.padding = "7px 10px";
+          b.style.cursor = "pointer";
+          b.style.width = "fit-content";
+        }
+        downloadTemplateBtn.addEventListener("click", () => {
+          const exportTemplate = {
+            ...analysisDesign,
+            $schema: "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/design.schema.json"
+          };
+          downloadJsonFile(doc, exportTemplate, "analysis-template.json");
+        });
+        downloadSchemaBtn.addEventListener("click", () => {
+          downloadJsonFile(doc, design_schema_default, "analysis-template.schema.json");
+        });
+        uploadInput.addEventListener("change", async () => {
+          const file = uploadInput.files?.[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            replaceAnalysisDesign(parsed);
+            await persistAnalysisDesign();
+            if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+            renderLayoutTab();
+          } catch (err) {
+            console.error("[GeoAnalyzr] Template import failed", err);
+          } finally {
+            uploadInput.value = "";
+          }
+        });
+        box.append(downloadTemplateBtn, downloadSchemaBtn, uploadWrap);
+        tabContent.appendChild(box);
+      };
+      const tabs = [
+        { button: appearanceBtn, render: renderAppearanceTab },
+        { button: filterBtn, render: renderFilterTab },
+        { button: layoutBtn, render: renderLayoutTab },
+        { button: templateBtn, render: renderTemplateTab }
+      ];
+      const activateTab = (target, render) => {
+        for (const tab of tabs) {
+          tab.button.style.outline = "none";
+          tab.button.style.boxShadow = "none";
+        }
+        target.style.boxShadow = `inset 0 0 0 2px ${analysisSettings.accent}`;
+        render();
+      };
+      for (const tab of tabs) {
+        tab.button.addEventListener("click", () => activateTab(tab.button, tab.render));
+      }
+      activateTab(appearanceBtn, renderAppearanceTab);
+      modal.append(head, tabBar, body);
+      overlay.appendChild(modal);
+    }
+    function resolveSectionIconKey(section) {
+      const templ = getSectionTemplate(section);
+      if (templ?.tocIcon?.key) return templ.tocIcon.key;
+      if (templ?.icon) return templ.icon;
+      const title2 = section.title.toLowerCase();
+      if (title2.includes("overview")) return "overview";
+      if (title2.includes("sessions")) return "sessions";
+      if (title2.includes("time patterns")) return "time_patterns";
+      if (title2.includes("tempo")) return "tempo";
+      if (title2.includes("scores")) return "scores";
+      if (title2.includes("rounds")) return "rounds";
+      if (title2.includes("countries") || title2.includes("country spotlight")) return "countries";
+      if (title2.includes("opponents")) return "opponents";
+      if (title2 === "rating" || title2.includes("rating")) return "rating";
+      if (title2.includes("team")) return "team";
+      if (title2.includes("personal records")) return "records";
+      return "default";
     }
     function createSectionIcon(section, doc) {
+      const templ = getSectionTemplate(section);
+      if (templ?.tocIcon?.enabled === false) return null;
       const palette = getThemePalette();
       const wrap = doc.createElement("span");
       wrap.style.display = "inline-flex";
@@ -7918,21 +11366,23 @@
       wrap.style.height = "14px";
       wrap.style.flex = "0 0 auto";
       const stroke = palette.buttonText;
-      const title2 = section.title.toLowerCase();
+      if (templ?.tocIcon?.svg && templ.tocIcon.svg.trim()) {
+        wrap.innerHTML = templ.tocIcon.svg;
+        return wrap;
+      }
+      const iconKey = resolveSectionIconKey(section);
       const svgBase = (paths) => `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-      if (title2.includes("overview")) wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
-      else if (title2.includes("mode") || title2.includes("movement")) wrap.innerHTML = svgBase('<path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/>');
-      else if (title2.includes("results")) wrap.innerHTML = svgBase('<path d="M3 17l6-6 4 4 8-8"/><path d="M18 7h3v3"/>');
-      else if (title2.includes("sessions")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="8"/><path d="M12 8v5"/><path d="M12 12l3 2"/>');
-      else if (title2.includes("time patterns")) wrap.innerHTML = svgBase('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/>');
-      else if (title2.includes("tempo")) wrap.innerHTML = svgBase('<path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><path d="M12 14h0"/>');
-      else if (title2.includes("scores")) wrap.innerHTML = svgBase('<path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-9"/><path d="M22 20v-6"/>');
-      else if (title2.includes("rounds")) wrap.innerHTML = svgBase('<path d="M4 12h16"/><path d="M4 7h16"/><path d="M4 17h16"/><circle cx="7" cy="7" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="17" cy="17" r="1"/>');
-      else if (title2.includes("countries") || title2.includes("country spotlight")) wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
-      else if (title2.includes("opponents")) wrap.innerHTML = svgBase('<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><path d="M3 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/><path d="M11 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/>');
-      else if (title2 === "rating" || title2.includes("rating")) wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
-      else if (title2.includes("team")) wrap.innerHTML = svgBase('<circle cx="9" cy="8" r="2.5"/><circle cx="15" cy="8" r="2.5"/><path d="M4 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/><path d="M10 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/>');
-      else if (title2.includes("personal records")) wrap.innerHTML = svgBase('<path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M10 14h4"/><path d="M9 18h6"/>');
+      if (iconKey === "overview") wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
+      else if (iconKey === "sessions") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="8"/><path d="M12 8v5"/><path d="M12 12l3 2"/>');
+      else if (iconKey === "time_patterns") wrap.innerHTML = svgBase('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/>');
+      else if (iconKey === "tempo") wrap.innerHTML = svgBase('<path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><path d="M12 14h0"/>');
+      else if (iconKey === "scores") wrap.innerHTML = svgBase('<path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-9"/><path d="M22 20v-6"/>');
+      else if (iconKey === "rounds") wrap.innerHTML = svgBase('<path d="M4 12h16"/><path d="M4 7h16"/><path d="M4 17h16"/><circle cx="7" cy="7" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="17" cy="17" r="1"/>');
+      else if (iconKey === "countries" || iconKey === "spotlight") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
+      else if (iconKey === "opponents") wrap.innerHTML = svgBase('<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><path d="M3 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/><path d="M11 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/>');
+      else if (iconKey === "rating") wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
+      else if (iconKey === "team") wrap.innerHTML = svgBase('<circle cx="9" cy="8" r="2.5"/><circle cx="15" cy="8" r="2.5"/><path d="M4 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/><path d="M10 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/>');
+      else if (iconKey === "records") wrap.innerHTML = svgBase('<path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M10 14h4"/><path d="M9 18h6"/>');
       else wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1"/>');
       return wrap;
     }
@@ -7940,9 +11390,10 @@
       const refs = analysisWindow;
       if (!refs || refs.win.closed) return;
       const palette = getThemePalette();
-      const windowTitle = data.playerName ? `GeoAnalyzr - Full Analysis for ${data.playerName}` : "GeoAnalyzr - Full Analysis";
+      const windowTitle = getWindowRenderTitle(data);
       refs.doc.title = windowTitle;
       refs.modalTitle.textContent = windowTitle;
+      designSourceLineLookup = buildDesignSourceLineLookup(data.sections || []);
       const { fromInput, toInput, modeSelect, movementSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
       if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
       if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
@@ -7982,8 +11433,9 @@
         countrySelect.appendChild(opt);
       }
       if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
+      const renderSections = materializeSections(data);
       tocWrap.innerHTML = "";
-      for (const section of data.sections) {
+      for (const section of renderSections) {
         const b = doc.createElement("button");
         b.style.background = palette.buttonBg;
         b.style.color = palette.buttonText;
@@ -7996,11 +11448,10 @@
         b.style.display = "inline-flex";
         b.style.alignItems = "center";
         b.style.gap = "6px";
-        b.appendChild(createSectionIcon(section, doc));
+        const iconEl = createSectionIcon(section, doc);
+        if (iconEl) b.appendChild(iconEl);
         const label = doc.createElement("span");
-        if (section.id === "teammate_battle") label.textContent = "Team";
-        else if (section.id === "country_spotlight") label.textContent = "Country Spotlight";
-        else label.textContent = section.title;
+        label.textContent = getSectionTocLabel(section);
         b.appendChild(label);
         b.addEventListener("click", () => {
           const id = `section-${section.id}`;
@@ -8010,7 +11461,7 @@
         tocWrap.appendChild(b);
       }
       modalBody.innerHTML = "";
-      for (const s of data.sections) modalBody.appendChild(renderSection(s, doc));
+      for (const s of renderSections) modalBody.appendChild(renderSection(s, doc, getSectionRenderTitle(s)));
     }
     function canAccessWindow(win) {
       if (!win) return false;
@@ -8050,7 +11501,7 @@
       doc.close();
       if (!doc.body) return null;
       const palette = getThemePalette();
-      doc.title = "GeoAnalyzr - Full Analysis";
+      doc.title = getWindowRenderTitle({ sections: [], availableGameModes: [], availableMovementTypes: [], availableTeammates: [], availableCountries: [] });
       doc.body.innerHTML = "";
       doc.body.style.margin = "0";
       doc.body.style.background = palette.bg;
@@ -8069,12 +11520,12 @@
       modalHead.style.borderBottom = `1px solid ${palette.border}`;
       const modalTitle = doc.createElement("div");
       modalTitle.style.fontWeight = "700";
-      modalTitle.textContent = "GeoAnalyzr - Full Analysis";
+      modalTitle.textContent = doc.title;
       modalHead.appendChild(modalTitle);
       const modalClose = doc.createElement("button");
       modalClose.textContent = "x";
       modalClose.style.background = "transparent";
-      modalClose.style.color = "white";
+      modalClose.style.color = palette.text;
       modalClose.style.border = "none";
       modalClose.style.cursor = "pointer";
       modalClose.style.fontSize = "18px";
@@ -8120,36 +11571,45 @@
       resetFilterBtn.style.borderRadius = "8px";
       resetFilterBtn.style.padding = "6px 10px";
       resetFilterBtn.style.cursor = "pointer";
-      const themeSelect = doc.createElement("select");
-      themeSelect.innerHTML = `
-      <option value="dark">Dark</option>
-      <option value="light">Light</option>
-    `;
-      themeSelect.value = analysisSettings.theme;
-      styleInput(themeSelect);
-      const colorInput = doc.createElement("input");
-      colorInput.type = "color";
-      colorInput.value = analysisSettings.accent;
-      colorInput.style.width = "44px";
-      colorInput.style.height = "32px";
-      colorInput.style.borderRadius = "8px";
-      colorInput.style.cursor = "pointer";
-      controls.appendChild(doc.createTextNode("From:"));
-      controls.appendChild(fromInput);
-      controls.appendChild(doc.createTextNode("To:"));
-      controls.appendChild(toInput);
-      controls.appendChild(doc.createTextNode("Game Mode:"));
-      controls.appendChild(modeSelect);
-      controls.appendChild(doc.createTextNode("Movement:"));
-      controls.appendChild(movementSelect);
-      controls.appendChild(doc.createTextNode("Teammate:"));
-      controls.appendChild(teammateSelect);
-      controls.appendChild(doc.createTextNode("Country:"));
-      controls.appendChild(countrySelect);
+      const settingsBtn = doc.createElement("button");
+      settingsBtn.textContent = "\u2699";
+      settingsBtn.title = "Analysis settings";
+      settingsBtn.style.borderRadius = "8px";
+      settingsBtn.style.padding = "5px 10px";
+      settingsBtn.style.cursor = "pointer";
+      settingsBtn.style.fontSize = "18px";
+      settingsBtn.style.lineHeight = "1";
+      const mkFilterControl = (key, labelText, inputEl, extra) => {
+        const wrap = doc.createElement("span");
+        wrap.dataset.filterKey = key;
+        wrap.style.display = "inline-flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "6px";
+        const label = doc.createElement("span");
+        label.textContent = labelText;
+        wrap.append(label, inputEl);
+        for (const e of extra || []) {
+          const l = doc.createElement("span");
+          l.textContent = e.label;
+          wrap.append(l, e.input);
+        }
+        return wrap;
+      };
+      const filterControlWrappers = {
+        date: mkFilterControl("date", "From:", fromInput, [{ label: "To:", input: toInput }]),
+        mode: mkFilterControl("mode", "Game Mode:", modeSelect),
+        movement: mkFilterControl("movement", "Movement:", movementSelect),
+        teammate: mkFilterControl("teammate", "Teammate:", teammateSelect),
+        country: mkFilterControl("country", "Country:", countrySelect)
+      };
+      controls.appendChild(filterControlWrappers.date);
+      controls.appendChild(filterControlWrappers.mode);
+      controls.appendChild(filterControlWrappers.movement);
+      controls.appendChild(filterControlWrappers.teammate);
+      controls.appendChild(filterControlWrappers.country);
       controls.appendChild(applyBtn);
       controls.appendChild(resetFilterBtn);
-      controls.appendChild(themeSelect);
-      controls.appendChild(colorInput);
+      controls.appendChild(settingsBtn);
       const tocWrap = doc.createElement("div");
       tocWrap.style.display = "flex";
       tocWrap.style.flexWrap = "wrap";
@@ -8169,11 +11629,24 @@
       modalBody.style.maxWidth = "1800px";
       modalBody.style.width = "100%";
       modalBody.style.margin = "0 auto";
+      const settingsOverlay = doc.createElement("div");
+      settingsOverlay.style.position = "fixed";
+      settingsOverlay.style.inset = "0";
+      settingsOverlay.style.background = "rgba(0,0,0,0.45)";
+      settingsOverlay.style.display = "none";
+      settingsOverlay.style.alignItems = "center";
+      settingsOverlay.style.justifyContent = "center";
+      settingsOverlay.style.padding = "18px";
+      settingsOverlay.style.zIndex = "50";
+      settingsOverlay.addEventListener("click", (ev) => {
+        if (ev.target === settingsOverlay) settingsOverlay.style.display = "none";
+      });
       shell.appendChild(modalHead);
       shell.appendChild(controls);
       shell.appendChild(tocWrap);
       shell.appendChild(modalBody);
       doc.body.appendChild(shell);
+      doc.body.appendChild(settingsOverlay);
       modalClose.addEventListener("click", () => win.close());
       const toMovementType = (value) => {
         if (value === "moving" || value === "no_move" || value === "nmpz" || value === "unknown" || value === "all") {
@@ -8200,18 +11673,8 @@
         countrySelect.value = "all";
         refreshAnalysisHandler?.({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
       });
-      themeSelect.addEventListener("change", () => {
-        analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
-        saveAnalysisSettings();
-        if (analysisWindow) {
-          applyThemeToWindow(analysisWindow);
-          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-        }
-      });
-      colorInput.addEventListener("input", () => {
-        analysisSettings.accent = normalizeAccent(colorInput.value);
-        saveAnalysisSettings();
-        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+      settingsBtn.addEventListener("click", () => {
+        if (analysisWindow) openSettingsOverlay(analysisWindow);
       });
       analysisWindow = {
         win,
@@ -8219,18 +11682,20 @@
         shell,
         modalTitle,
         controls,
+        filterControlWrappers,
         fromInput,
         toInput,
         modeSelect,
         movementSelect,
         teammateSelect,
         countrySelect,
-        themeSelect,
-        colorInput,
+        settingsBtn,
         tocWrap,
-        modalBody
+        modalBody,
+        settingsOverlay
       };
       applyThemeToWindow(analysisWindow);
+      applyFilterVisibility(analysisWindow);
       if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
       return analysisWindow;
     }
@@ -8266,7 +11731,7 @@
         console.error("[GeoAnalyzr] Failed to open analysis window", e);
       }
     });
-    function renderSection(section, doc) {
+    function renderSection(section, doc, renderTitle = section.title) {
       const palette = getThemePalette();
       const card = doc.createElement("div");
       card.id = `section-${section.id}`;
@@ -8281,18 +11746,6 @@
       topMeta.style.gap = "8px";
       topMeta.style.flexWrap = "wrap";
       topMeta.style.marginBottom = "6px";
-      if (section.group) {
-        const groupChip = doc.createElement("span");
-        groupChip.textContent = section.group;
-        groupChip.style.background = palette.chipBg;
-        groupChip.style.color = palette.chipText;
-        groupChip.style.border = `1px solid ${palette.border}`;
-        groupChip.style.borderRadius = "999px";
-        groupChip.style.padding = "2px 8px";
-        groupChip.style.fontSize = "11px";
-        groupChip.style.fontWeight = "700";
-        topMeta.appendChild(groupChip);
-      }
       if (section.appliesFilters && section.appliesFilters.length > 0) {
         const applies = doc.createElement("span");
         applies.textContent = `Filters: ${section.appliesFilters.join(", ")}`;
@@ -8304,8 +11757,105 @@
         applies.style.fontSize = "11px";
         topMeta.appendChild(applies);
       }
+      const sectionTemplate = getSectionTemplate(section);
+      const requiredFilters = sectionTemplate?.requiredFilters;
+      const requiredFilterRow = doc.createElement("div");
+      requiredFilterRow.style.display = "flex";
+      requiredFilterRow.style.flexWrap = "wrap";
+      requiredFilterRow.style.gap = "8px";
+      requiredFilterRow.style.alignItems = "center";
+      requiredFilterRow.style.marginBottom = "8px";
+      const addSectionFilterSelect = (labelText, options, selectedValue, onChange) => {
+        if (options.length === 0) return;
+        const label = doc.createElement("label");
+        label.style.display = "inline-flex";
+        label.style.alignItems = "center";
+        label.style.gap = "6px";
+        label.style.fontSize = "12px";
+        label.style.color = palette.textMuted;
+        label.style.background = palette.panelAlt;
+        label.style.border = `1px solid ${palette.border}`;
+        label.style.borderRadius = "999px";
+        label.style.padding = "3px 8px";
+        const text = doc.createElement("span");
+        text.textContent = labelText;
+        const select = doc.createElement("select");
+        select.style.background = palette.buttonBg;
+        select.style.color = palette.buttonText;
+        select.style.border = `1px solid ${palette.border}`;
+        select.style.borderRadius = "999px";
+        select.style.padding = "2px 8px";
+        select.style.fontSize = "12px";
+        for (const optIn of options) {
+          const opt = doc.createElement("option");
+          opt.value = optIn.value;
+          opt.textContent = optIn.label;
+          select.appendChild(opt);
+        }
+        if ([...select.options].some((o) => o.value === selectedValue)) select.value = selectedValue;
+        select.addEventListener("change", () => onChange(select.value));
+        label.appendChild(text);
+        label.appendChild(select);
+        requiredFilterRow.appendChild(label);
+      };
+      const refs = analysisWindow;
+      const data = lastAnalysisData;
+      if (refs && data && refreshAnalysisHandler) {
+        const currentFrom = parseDateInput(refs.fromInput.value, false);
+        const currentTo = parseDateInput(refs.toInput.value, true);
+        const currentMode = refs.modeSelect.value || "all";
+        const currentMovement = refs.movementSelect.value || "all";
+        const currentTeammate = refs.teammateSelect.value || "all";
+        const currentCountry = refs.countrySelect.value || "all";
+        if (requiredFilters?.teammate?.enabled && section.id === "teammate_battle") {
+          const opts = data.availableTeammates.filter((t) => t.id !== "all");
+          const defaultMate = opts[0]?.id;
+          const selectedMate = currentTeammate !== "all" ? currentTeammate : defaultMate;
+          if (selectedMate) {
+            addSectionFilterSelect(
+              requiredFilters.teammate.label || "Mate",
+              opts.map((t) => ({ value: t.id, label: t.label })),
+              selectedMate,
+              (nextMate) => {
+                if (!nextMate || nextMate === currentTeammate) return;
+                refreshAnalysisHandler?.({
+                  fromTs: currentFrom,
+                  toTs: currentTo,
+                  gameMode: currentMode,
+                  movementType: currentMovement,
+                  teammateId: nextMate,
+                  country: currentCountry
+                });
+              }
+            );
+          }
+        }
+        if (requiredFilters?.country?.enabled && section.id === "country_spotlight") {
+          const opts = data.availableCountries.filter((c) => c.code !== "all");
+          const defaultCountry = opts[0]?.code;
+          const selectedCountry = currentCountry !== "all" ? currentCountry : defaultCountry;
+          if (selectedCountry) {
+            addSectionFilterSelect(
+              requiredFilters.country.label || "Country",
+              opts.map((c) => ({ value: c.code, label: c.label })),
+              selectedCountry,
+              (nextCountry) => {
+                if (!nextCountry || nextCountry === currentCountry) return;
+                refreshAnalysisHandler?.({
+                  fromTs: currentFrom,
+                  toTs: currentTo,
+                  gameMode: currentMode,
+                  movementType: currentMovement,
+                  teammateId: currentTeammate,
+                  country: nextCountry
+                });
+              }
+            );
+          }
+        }
+      }
       const title2 = doc.createElement("div");
-      title2.textContent = section.title;
+      title2.textContent = renderTitle;
       title2.style.fontWeight = "700";
       title2.style.marginBottom = "8px";
       title2.style.fontSize = "19px";
@@ -8318,6 +11868,7 @@
       body.style.marginTop = "2px";
       const lineDrillMap = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel, d.items]));
       const lineLinkMap = new Map((section.lineLinks || []).map((d) => [d.lineLabel, d.url]));
+      const layoutMode = sectionTemplate?.layout?.mode || "legacy_colon";
       const createLineRow = (line) => {
         const row = doc.createElement("div");
         row.style.padding = "9px 11px";
@@ -8379,17 +11930,8 @@
         row.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
         return row;
       };
-      for (let i = 0; i < section.lines.length; i++) {
-        const line = section.lines[i];
-        const isGroupHeader = /:\s*$/.test(line);
-        if (!isGroupHeader || i === section.lines.length - 1) {
-          body.appendChild(createStandaloneCard(line));
-          continue;
-        }
-        let end = i + 1;
-        while (end < section.lines.length && !/:\s*$/.test(section.lines[end])) {
-          end++;
-        }
+      const appendGroupCard = (headerText, itemLines) => {
+        if (itemLines.length === 0) return;
         const groupCard = doc.createElement("div");
         groupCard.style.border = `1px solid ${palette.border}`;
         groupCard.style.background = palette.panelAlt;
@@ -8397,39 +11939,227 @@
         groupCard.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
         groupCard.style.overflow = "hidden";
         const header2 = doc.createElement("div");
-        header2.textContent = line;
+        header2.textContent = headerText;
         header2.style.padding = "9px 11px";
         header2.style.fontSize = "13px";
         header2.style.fontWeight = "700";
         header2.style.color = palette.text;
         groupCard.appendChild(header2);
-        for (let j = i + 1; j < end; j++) {
-          const itemRow = createLineRow(section.lines[j]);
+        for (const itemLine of itemLines) {
+          const itemRow = createLineRow(itemLine);
           itemRow.style.borderTop = `1px solid ${palette.border}`;
           groupCard.appendChild(itemRow);
         }
         body.appendChild(groupCard);
-        i = end - 1;
-      }
-      card.appendChild(topMeta);
-      card.appendChild(title2);
-      card.appendChild(body);
+      };
+      const renderLegacyColonLayout = () => {
+        for (let i = 0; i < section.lines.length; i++) {
+          const line = section.lines[i];
+          const isGroupHeader = /:\s*$/.test(line);
+          if (!isGroupHeader || i === section.lines.length - 1) {
+            body.appendChild(createStandaloneCard(line));
+            continue;
+          }
+          let end = i + 1;
+          while (end < section.lines.length && !/:\s*$/.test(section.lines[end])) {
+            end++;
+          }
+          appendGroupCard(line, section.lines.slice(i + 1, end));
+          i = end - 1;
+        }
+      };
       const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
-      for (let i = 0; i < charts.length; i++) {
-        const chart = charts[i];
-        const chartTitle = chart.yLabel ? `${section.title} - ${chart.yLabel}` : `${section.title} - Chart ${i + 1}`;
+      const graphTemplates = sectionTemplate?.graphTemplates || [];
+      const renderedChartIndices = /* @__PURE__ */ new Set();
+      const appendChartByIndex = (chartIndex, overrideTitle, overrideTemplate) => {
+        const srcChart = charts[chartIndex];
+        if (!srcChart) return;
+        const activeTemplate = overrideTemplate || graphTemplates[chartIndex];
+        const configured = applyGraphTemplateToChart(srcChart, activeTemplate);
+        const chart = configured.chart;
+        const baseChartTitle = chart.yLabel ? `${renderTitle} - ${chart.yLabel}` : `${renderTitle} - Chart ${chartIndex + 1}`;
+        const chartTitle = overrideTitle ? `${renderTitle} - ${overrideTitle}` : configured.title ? `${renderTitle} - ${configured.title}` : baseChartTitle;
         if (chart.type === "line" && chart.points.length > 1) {
-          card.appendChild(renderLineChart(chart, chartTitle, doc));
+          body.appendChild(renderLineChart(chart, chartTitle, doc, activeTemplate));
+          renderedChartIndices.add(chartIndex);
         }
         if (chart.type === "bar" && chart.bars.length > 0) {
-          card.appendChild(renderBarChart(chart, chartTitle, doc));
+          body.appendChild(renderBarChart(chart, chartTitle, doc, activeTemplate));
+          renderedChartIndices.add(chartIndex);
         }
         if (chart.type === "selectableBar" && chart.options.length > 0) {
-          card.appendChild(renderSelectableBarChart(chart, chartTitle, doc));
+          body.appendChild(renderSelectableBarChart(chart, chartTitle, doc, activeTemplate));
+          renderedChartIndices.add(chartIndex);
         }
         if (chart.type === "selectableLine" && chart.options.length > 0) {
-          card.appendChild(renderSelectableLineChart(chart, chartTitle, doc));
+          body.appendChild(renderSelectableLineChart(chart, chartTitle, doc, activeTemplate));
+          renderedChartIndices.add(chartIndex);
         }
+      };
+      if (layoutMode === "object_order") {
+        const layout = sectionTemplate?.layout?.mode === "object_order" ? sectionTemplate.layout : void 0;
+        const singles = new Map((sectionTemplate?.objects?.singles || []).map((s) => [s.id, s]));
+        const boxes = new Map((sectionTemplate?.objects?.boxes || []).map((b) => [b.id, b]));
+        const graphs = new Map((sectionTemplate?.objects?.graphs || []).map((g) => [g.id, g]));
+        const usedIndices = /* @__PURE__ */ new Set();
+        const consumeLineByLabel = (label) => {
+          for (let i = 0; i < section.lines.length; i++) {
+            if (usedIndices.has(i)) continue;
+            if (matchesLineLabel(section.lines[i], label)) {
+              usedIndices.add(i);
+              return section.lines[i];
+            }
+          }
+          return void 0;
+        };
+        let nextChartIndex = 0;
+        const consumeNextChartIndex = () => {
+          while (nextChartIndex < charts.length && renderedChartIndices.has(nextChartIndex)) nextChartIndex++;
+          if (nextChartIndex >= charts.length) return void 0;
+          const idx = nextChartIndex;
+          nextChartIndex++;
+          return idx;
+        };
+        for (const item of layout?.order || []) {
+          if (item.kind === "single") {
+            const single = singles.get(item.id);
+            if (!single) continue;
+            const typed = resolveTypedLine(single.type, section.id, single.sourceSectionId, single.label, designSourceLineLookup);
+            if (typed) {
+              consumeLineByLabel(single.label);
+              const lineText = `${single.label}: ${typed.value}`;
+              if (typed.drilldown) lineDrillMap.set(single.label, typed.drilldown);
+              if (typed.link) lineLinkMap.set(single.label, typed.link);
+              body.appendChild(createStandaloneCard(lineText));
+              continue;
+            }
+            const line = consumeLineByLabel(single.label);
+            if (line) body.appendChild(createStandaloneCard(line));
+            continue;
+          }
+          if (item.kind === "box") {
+            const box = boxes.get(item.id);
+            if (!box) continue;
+            consumeLineByLabel(box.title);
+            const itemLines = [];
+            const configuredLines = box.lines || [];
+            if (configuredLines.length > 0) {
+              for (const l of configuredLines) {
+                const typed = resolveTypedLine(l.type, section.id, l.sourceSectionId, l.label, designSourceLineLookup);
+                if (typed) {
+                  consumeLineByLabel(l.label);
+                  const lineText = `${l.label}: ${typed.value}`;
+                  if (typed.drilldown) lineDrillMap.set(l.label, typed.drilldown);
+                  if (typed.link) lineLinkMap.set(l.label, typed.link);
+                  itemLines.push(lineText);
+                  continue;
+                }
+                const line = consumeLineByLabel(l.label);
+                if (line) itemLines.push(line);
+              }
+            } else {
+              const headerIdx = section.lines.findIndex((line, i) => !usedIndices.has(i) && matchesLineLabel(line, box.title));
+              if (headerIdx >= 0) {
+                usedIndices.add(headerIdx);
+                let end = headerIdx + 1;
+                while (end < section.lines.length) {
+                  const nextTrim = section.lines[end].trim();
+                  if (/:\s*$/.test(nextTrim)) break;
+                  end++;
+                }
+                for (let i = headerIdx + 1; i < end; i++) {
+                  if (usedIndices.has(i)) continue;
+                  usedIndices.add(i);
+                  itemLines.push(section.lines[i]);
+                }
+              }
+            }
+            if (itemLines.length > 0) appendGroupCard(box.title.endsWith(":") ? box.title : `${box.title}:`, itemLines);
+            continue;
+          }
+          if (item.kind === "graph") {
+            const graph = graphs.get(item.id);
+            const idx = typeof graph?.sourceIndex === "number" ? graph.sourceIndex : consumeNextChartIndex();
+            if (typeof idx === "number") appendChartByIndex(idx, graph?.title, graph);
+          }
+        }
+        if (layout?.preserveUnmatched !== false || (sectionTemplate?.render?.preserveUnmatchedLines ?? true)) {
+          for (let i = 0; i < section.lines.length; i++) {
+            if (usedIndices.has(i)) continue;
+            body.appendChild(createStandaloneCard(section.lines[i]));
+          }
+        }
+      } else if (layoutMode === "header_blocks") {
+        const layout = sectionTemplate?.layout?.mode === "header_blocks" ? sectionTemplate.layout : void 0;
+        const headers = layout?.headers || [];
+        const boxes = layout?.boxes || [];
+        const singles = layout?.single || [];
+        const usedIndices = /* @__PURE__ */ new Set();
+        const consumeLineByLabel = (label) => {
+          for (let i = 0; i < section.lines.length; i++) {
+            if (usedIndices.has(i)) continue;
+            if (matchesLineLabel(section.lines[i], label)) {
+              usedIndices.add(i);
+              return section.lines[i];
+            }
+          }
+          return void 0;
+        };
+        if (boxes.length > 0 || singles.length > 0) {
+          for (const s of singles) {
+            const line = consumeLineByLabel(s.label);
+            if (line) body.appendChild(createStandaloneCard(line));
+          }
+          for (const b of boxes) {
+            const itemLines = [];
+            for (const l of b.lines || []) {
+              const line = consumeLineByLabel(l.label);
+              if (line) itemLines.push(line);
+            }
+            if (itemLines.length > 0) appendGroupCard(b.title.endsWith(":") ? b.title : `${b.title}:`, itemLines);
+          }
+        } else {
+          for (let i = 0; i < section.lines.length; i++) {
+            if (usedIndices.has(i)) continue;
+            const trimmed = section.lines[i].trim();
+            if (headers.some((h) => trimmed === `${h}:` || trimmed === h)) break;
+            body.appendChild(createStandaloneCard(section.lines[i]));
+            usedIndices.add(i);
+          }
+          for (const header2 of headers) {
+            const idx = section.lines.findIndex((line, i) => !usedIndices.has(i) && (line.trim() === `${header2}:` || line.trim() === header2));
+            if (idx < 0) continue;
+            usedIndices.add(idx);
+            let end = idx + 1;
+            while (end < section.lines.length) {
+              const nextTrim = section.lines[end].trim();
+              if (headers.some((h) => nextTrim === `${h}:` || nextTrim === h)) break;
+              end++;
+            }
+            const itemLines = [];
+            for (let i = idx + 1; i < end; i++) {
+              usedIndices.add(i);
+              itemLines.push(section.lines[i]);
+            }
+            appendGroupCard(section.lines[idx], itemLines);
+          }
+        }
+        if (layout?.preserveUnmatched !== false || (sectionTemplate?.render?.preserveUnmatchedLines ?? true)) {
+          for (let i = 0; i < section.lines.length; i++) {
+            if (usedIndices.has(i)) continue;
+            body.appendChild(createStandaloneCard(section.lines[i]));
+          }
+        }
+      } else {
+        renderLegacyColonLayout();
+      }
+      card.appendChild(topMeta);
+      if (requiredFilterRow.childElementCount > 0) card.appendChild(requiredFilterRow);
+      card.appendChild(title2);
+      card.appendChild(body);
+      for (let i = 0; i < charts.length; i++) {
+        if (renderedChartIndices.has(i)) continue;
+        appendChartByIndex(i);
       }
       return card;
     }
@@ -8607,57 +12337,6 @@
       }
     };
   }
-
-  // node_modules/dexie/import-wrapper.mjs
-  var import_dexie = __toESM(require_dexie(), 1);
-  var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
-  var Dexie = globalThis[DexieSymbol] || (globalThis[DexieSymbol] = import_dexie.default);
-  if (import_dexie.default.semVer !== Dexie.semVer) {
-    throw new Error(`Two different versions of Dexie loaded in the same app: ${import_dexie.default.semVer} and ${Dexie.semVer}`);
-  }
-  var {
-    liveQuery,
-    mergeRanges,
-    rangesOverlap,
-    RangeSet,
-    cmp,
-    Entity,
-    PropModification,
-    replacePrefix,
-    add,
-    remove,
-    DexieYProvider
-  } = Dexie;
-  var import_wrapper_default = Dexie;
-
-  // src/db.ts
-  var GGDB = class extends import_wrapper_default {
-    games;
-    rounds;
-    details;
-    meta;
-    constructor() {
-      super("gg_analyzer_db");
-      this.version(1).stores({
-        games: "gameId, playedAt, type, mode",
-        rounds: "id, gameId, roundNumber",
-        meta: "key, updatedAt"
-      });
-      this.version(2).stores({
-        games: "gameId, playedAt, type, mode",
-        rounds: "id, gameId, roundNumber",
-        details: "gameId, status, fetchedAt",
-        meta: "key, updatedAt"
-      });
-      this.version(3).stores({
-        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
-        rounds: "id, gameId, roundNumber, [gameId+roundNumber]",
-        details: "gameId, status, fetchedAt, modeFamily, isTeamDuels",
-        meta: "key, updatedAt"
-      });
-    }
-  };
-  var db = new GGDB();
 
   // src/http.ts
   function readNcfaFromDocumentCookie() {

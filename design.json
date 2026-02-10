@@ -1,0 +1,1683 @@
+{
+  "$schema": "./design.schema.json",
+  "schemaVersion": "1.0.0",
+  "window": {
+    "titleTemplate": "GeoAnalyzr - Full Analysis for {{playerName}}",
+    "appearance": {
+      "settingsStorageKey": "geoanalyzr:analysis:settings:v1",
+      "defaults": {
+        "theme": "dark",
+        "accent": "#66a8ff"
+      },
+      "themeOptions": [
+        "dark",
+        "light"
+      ],
+      "accentFormat": "#RRGGBB"
+    },
+    "filters": {
+      "dateRange": {
+        "fromTs": "number|undefined",
+        "toTs": "number|undefined"
+      },
+      "gameMode": {
+        "key": "gameMode",
+        "options": [
+          "all",
+          "duels",
+          "teamduels"
+        ],
+        "labelMap": {
+          "all": "all",
+          "duels": "Duel",
+          "teamduels": "Team Duel"
+        }
+      },
+      "movementType": {
+        "key": "movementType",
+        "options": [
+          "all",
+          "moving",
+          "no_move",
+          "nmpz",
+          "unknown"
+        ],
+        "displayOptions": "dynamic (unknown hidden unless implied by all)"
+      },
+      "teammate": {
+        "key": "teammateId",
+        "options": "dynamic + all"
+      },
+      "country": {
+        "key": "country",
+        "options": "dynamic + all (top countries)"
+      }
+    },
+    "toc": {
+      "source": "sections",
+      "labelOverrides": {
+        "teammate_battle": "Team",
+        "country_spotlight": "Country Spotlight"
+      }
+    }
+  },
+  "section_layout": {
+    "order": [
+      "overview",
+      "personal_records",
+      "time_patterns",
+      "session_quality",
+      "tempo_vs_quality",
+      "scores",
+      "rounds",
+      "country_stats",
+      "opponents",
+      "rating_history",
+      "teammate_battle",
+      "country_spotlight"
+    ]
+  },
+  "drilldownOverlay": {
+    "triggerRules": {
+      "lineValueClickable": "true if lineLabel exists in section.lineDrilldowns",
+      "barClickable": "true if clicked bar has drilldown.length > 0"
+    },
+    "sorting": {
+      "keys": [
+        "date",
+        "round",
+        "score",
+        "country",
+        "result",
+        "duration",
+        "damage",
+        "movement",
+        "game_mode",
+        "mate"
+      ],
+      "defaultDir": {
+        "date": "desc",
+        "round": "desc",
+        "score": "desc",
+        "country": "asc",
+        "result": "desc",
+        "duration": "desc",
+        "damage": "desc",
+        "movement": "asc",
+        "game_mode": "asc",
+        "mate": "asc"
+      },
+      "toggleBehavior": "first click uses defaultDir[key], second click toggles"
+    },
+    "columns": {
+      "opponentMode": [
+        "Date(sortable)",
+        "Opponent(profile-link if available)",
+        "Result(sortable)",
+        "Match-ups",
+        "Country(sortable)",
+        "Game Mode(sortable, conditional)",
+        "Game (short id, tooltip full id)"
+      ],
+      "roundMode": [
+        "Date(sortable)",
+        "Result(sortable)",
+        "Round(sortable)",
+        "Score(sortable)",
+        "Country(sortable, full English name)",
+        "Guess Duration(sortable, conditional)",
+        "Damage(sortable, conditional, green/red/gray)",
+        "Movement(sortable, conditional)",
+        "Game Mode(sortable, conditional)",
+        "Mate(sortable, conditional)",
+        "Game (short id, tooltip full id)",
+        "Guess Maps(link, conditional)",
+        "True Street View(link, conditional)"
+      ]
+    }
+  },
+  "charts": {
+    "types": [
+      "line",
+      "bar",
+      "selectableBar",
+      "selectableLine"
+    ],
+    "commonActions": [
+      "Zoom",
+      "New Tab",
+      "Save SVG",
+      "Save PNG"
+    ],
+    "selectableBarSortOptions": [
+      "chronological",
+      "desc",
+      "asc"
+    ]
+  },
+  "graphContentDefinitions": {
+    "overview_games_over_time": {
+      "metrics": [
+        "games"
+      ],
+      "defaultMetric": "games",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "overview_avg_score_over_time": {
+      "metrics": [
+        "avg_score"
+      ],
+      "defaultMetric": "avg_score",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "time_patterns_weekday": {
+      "metrics": [
+        "games",
+        "rounds",
+        "avg_score",
+        "avg_distance",
+        "avg_time",
+        "throw_rate",
+        "fivek_rate"
+      ],
+      "defaultMetric": "games",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "time_patterns_hour": {
+      "metrics": [
+        "games",
+        "rounds",
+        "avg_score",
+        "avg_distance",
+        "avg_time",
+        "throw_rate",
+        "fivek_rate"
+      ],
+      "defaultMetric": "games",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "sessions": {
+      "metrics": [
+        "avg_score",
+        "throw_rate",
+        "fivek_rate",
+        "avg_duration",
+        "games",
+        "rounds",
+        "win_rate"
+      ],
+      "defaultMetric": "avg_score",
+      "defaultSort": "desc",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "tempo_buckets": {
+      "metrics": [
+        "avg_score",
+        "avg_distance",
+        "throw_rate",
+        "fivek_rate",
+        "rounds"
+      ],
+      "defaultMetric": "avg_score",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "score_distribution": {
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "rounds_progression": {
+      "metrics": [
+        "avg_score",
+        "avg_distance",
+        "avg_time",
+        "throw_rate",
+        "fivek_rate",
+        "rounds",
+        "hit_rate"
+      ],
+      "defaultMetric": "avg_score",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "rounds_by_game_length": {
+      "metrics": [
+        "win_rate_decisive",
+        "win_rate",
+        "avg_score",
+        "avg_distance",
+        "avg_time",
+        "games",
+        "rounds"
+      ],
+      "defaultMetric": "win_rate_decisive",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "country_metrics": {
+      "metrics": [
+        "rounds",
+        "hit_rate",
+        "avg_score",
+        "avg_score_correct_only",
+        "avg_distance",
+        "throw_rate",
+        "fivek_rate",
+        "avg_damage_dealt",
+        "avg_damage_taken",
+        "damage_dealt_share",
+        "damage_taken_share"
+      ],
+      "defaultMetric": "avg_score",
+      "defaultSort": "desc",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "country_confusion_matrix": {
+      "defaultSort": "desc",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "opponents_country": {
+      "defaultSort": "desc",
+      "sorts": [
+        "chronological",
+        "desc",
+        "asc"
+      ]
+    },
+    "rating_history": {
+      "metrics": [
+        "rating"
+      ],
+      "defaultMetric": "rating",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "spotlight_distribution": {
+      "metrics": [
+        "all_guesses",
+        "correct_only"
+      ],
+      "defaultMetric": "all_guesses",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "spotlight_trend": {
+      "metrics": [
+        "damage_dealt_share",
+        "damage_taken_share",
+        "avg_score",
+        "hit_rate",
+        "throw_rate",
+        "fivek_rate",
+        "avg_damage_dealt",
+        "avg_damage_taken",
+        "rounds"
+      ],
+      "defaultMetric": "damage_dealt_share",
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "records_daily": {
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    }
+  },
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "group": "Overview",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "movement",
+        "teammate",
+        "country"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": true,
+        "order": [
+          {
+            "kind": "box",
+            "id": "results_win_rate_streaks"
+          },
+          {
+            "kind": "box",
+            "id": "mode_breakdown"
+          },
+          {
+            "kind": "box",
+            "id": "movement_breakdown"
+          },
+          {
+            "kind": "graph",
+            "id": "overview_games_over_time"
+          },
+          {
+            "kind": "graph",
+            "id": "overview_avg_score_over_time"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [],
+        "boxes": [
+          {
+            "id": "results_win_rate_streaks",
+            "title": "Results, Win Rate & Streaks",
+            "lines": [
+              {
+                "label": "Games with result data",
+                "type": "amount_games_with_result"
+              },
+              {
+                "label": "Wins",
+                "type": "wins"
+              },
+              {
+                "label": "Win rate (decisive)",
+                "type": "win_rate_decisive"
+              },
+              {
+                "label": "Win rate (all)",
+                "type": "win_rate_all"
+              },
+              {
+                "label": "Avg score",
+                "type": "avg_score"
+              },
+              {
+                "label": "Avg distance",
+                "type": "avg_distance"
+              },
+              {
+                "label": "Avg time",
+                "type": "avg_time"
+              },
+              {
+                "label": "Time played",
+                "type": "time_played"
+              },
+              {
+                "label": "Perfect 5k rounds",
+                "type": "perfect_5k"
+              },
+              {
+                "label": "Throws (<50)",
+                "type": "throws_lt_50"
+              },
+              {
+                "label": "Longest win streak",
+                "type": "longest_win_streak"
+              },
+              {
+                "label": "Longest loss streak",
+                "type": "longest_loss_streak"
+              }
+            ]
+          },
+          {
+            "id": "mode_breakdown",
+            "title": "Mode Breakdown",
+            "lines": [
+              {
+                "label": "Duel",
+                "type": "amount_duels"
+              },
+              {
+                "label": "Team Duel",
+                "type": "amount_team_duels"
+              }
+            ]
+          },
+          {
+            "id": "movement_breakdown",
+            "title": "Movement Breakdown",
+            "lines": [
+              {
+                "label": "Moving",
+                "type": "amount_moving_games"
+              },
+              {
+                "label": "No Move",
+                "type": "amount_no_move_games"
+              },
+              {
+                "label": "NMPZ",
+                "type": "amount_nmpz_games"
+              },
+              {
+                "label": "Unknown",
+                "type": "amount_unknown_games"
+              }
+            ]
+          }
+        ],
+        "graphs": [
+          {
+            "id": "overview_games_over_time",
+            "sourceIndex": 0,
+            "type": "line",
+            "yLabel": "Games/day (or aggregated bucket)",
+            "content": "overview_games_over_time",
+            "hoverable": true,
+            "clickable": false,
+            "sortable": false,
+            "sorts": [
+              "chronological"
+            ]
+          },
+          {
+            "id": "overview_avg_score_over_time",
+            "sourceIndex": 1,
+            "type": "line",
+            "yLabel": "Avg score/day (or aggregated bucket)",
+            "content": "overview_avg_score_over_time",
+            "hoverable": true,
+            "clickable": false,
+            "sortable": false,
+            "sorts": [
+              "chronological"
+            ]
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "overview"
+      }
+    },
+    {
+      "id": "time_patterns",
+      "title": "Time Patterns",
+      "group": "Overview",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": true,
+        "order": [
+          {
+            "kind": "graph",
+            "id": "time_patterns_weekday"
+          },
+          {
+            "kind": "graph",
+            "id": "time_patterns_hour"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "time_patterns_weekday",
+            "sourceIndex": 0,
+            "type": "selectableBar",
+            "title": "Weekday patterns",
+            "orientation": "horizontal",
+            "initialBars": 7,
+            "defaultMetric": "games",
+            "defaultSort": "chronological",
+            "metrics": [
+              "games",
+              "avg_score",
+              "avg_time",
+              "throw_rate",
+              "fivek_rate",
+              "amount_fivek"
+            ],
+            "barClick": "opens matching rounds for that weekday",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "time_patterns_weekday",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          },
+          {
+            "id": "time_patterns_hour",
+            "sourceIndex": 1,
+            "type": "selectableBar",
+            "title": "Hour-of-day patterns",
+            "orientation": "horizontal",
+            "initialBars": 24,
+            "defaultMetric": "games",
+            "defaultSort": "chronological",
+            "metrics": [
+              "games",
+              "avg_score",
+              "avg_time",
+              "throw_rate",
+              "fivek_rate"
+            ],
+            "barClick": "opens matching rounds for that hour",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "time_patterns_hour",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "time_patterns"
+      }
+    },
+    {
+      "id": "session_quality",
+      "title": "Sessions",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate",
+        "country"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "sessions_detected_gap_45m"
+          },
+          {
+            "kind": "single",
+            "id": "longest_break_between_sessions"
+          },
+          {
+            "kind": "single",
+            "id": "avg_games_per_session"
+          },
+          {
+            "kind": "graph",
+            "id": "sessions"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "sessions_detected_gap_45m",
+            "label": "Sessions detected (gap >45m)",
+            "type": "sessions_detected_gap_45m"
+          },
+          {
+            "id": "longest_break_between_sessions",
+            "label": "Longest break between sessions",
+            "type": "longest_break_between_sessions"
+          },
+          {
+            "id": "avg_games_per_session",
+            "label": "Avg games per session",
+            "type": "avg_games_per_session"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "sessions",
+            "sourceIndex": 0,
+            "type": "selectableBar",
+            "title": "Sessions",
+            "orientation": "horizontal",
+            "initialBars": 10,
+            "defaultMetric": "avg_score",
+            "defaultSort": "desc",
+            "metrics": [
+              "avg_score",
+              "throw_rate",
+              "fivek_rate",
+              "avg_duration",
+              "games",
+              "rounds",
+              "win_rate"
+            ],
+            "barClick": "opens all rounds in selected session",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "sessions",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "sessions"
+      }
+    },
+    {
+      "id": "tempo_vs_quality",
+      "title": "Tempo",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate",
+        "country"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "fastest_guess"
+          },
+          {
+            "kind": "single",
+            "id": "slowest_guess"
+          },
+          {
+            "kind": "single",
+            "id": "fastest_5k"
+          },
+          {
+            "kind": "single",
+            "id": "slowest_throw_50"
+          },
+          {
+            "kind": "graph",
+            "id": "tempo_buckets"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "fastest_guess",
+            "label": "Fastest guess",
+            "type": "fastest_guess"
+          },
+          {
+            "id": "slowest_guess",
+            "label": "Slowest guess",
+            "type": "slowest_guess"
+          },
+          {
+            "id": "fastest_5k",
+            "label": "Fastest 5k",
+            "type": "fastest_5k"
+          },
+          {
+            "id": "slowest_throw_50",
+            "label": "Slowest throw (<50)",
+            "type": "slowest_throw_lt_50"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "tempo_buckets",
+            "sourceIndex": 0,
+            "type": "selectableBar",
+            "title": "Time bucket metrics",
+            "orientation": "horizontal",
+            "defaultMetric": "avg_score",
+            "defaultSort": "chronological",
+            "buckets": [
+              "<20 sec",
+              "20-30 sec",
+              "30-45 sec",
+              "45-60 sec",
+              "60-90 sec",
+              "90-180 sec",
+              ">180 sec"
+            ],
+            "metrics": [
+              "avg_score",
+              "avg_distance",
+              "throw_rate",
+              "fivek_rate",
+              "rounds"
+            ],
+            "barClick": "opens matching rounds in this time bucket",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "tempo_buckets",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "tempo"
+      }
+    },
+    {
+      "id": "scores",
+      "title": "Scores",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate",
+        "country"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "perfect_5k"
+          },
+          {
+            "kind": "single",
+            "id": "near_perfect_4500"
+          },
+          {
+            "kind": "single",
+            "id": "low_scores_500"
+          },
+          {
+            "kind": "single",
+            "id": "throws_50"
+          },
+          {
+            "kind": "graph",
+            "id": "score_distribution"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "perfect_5k",
+            "label": "Perfect 5k",
+            "type": "scores_perfect_5k"
+          },
+          {
+            "id": "near_perfect_4500",
+            "label": "Near-perfect (>=4500)",
+            "type": "scores_near_perfect_4500"
+          },
+          {
+            "id": "low_scores_500",
+            "label": "Low scores (<500)",
+            "type": "scores_low_scores_500"
+          },
+          {
+            "id": "throws_50",
+            "label": "Throws (<50)",
+            "type": "scores_throws_lt_50"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "score_distribution",
+            "sourceIndex": 0,
+            "type": "bar",
+            "title": "Score distribution (smoothed)",
+            "orientation": "vertical",
+            "xRange": "0..5000 buckets",
+            "barClick": "opens rounds in clicked score bucket",
+            "content": "score_distribution",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": false,
+            "sorts": [
+              "chronological"
+            ],
+            "expandable": false,
+            "initialBars": "max",
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "scores"
+      }
+    },
+    {
+      "id": "rounds",
+      "title": "Rounds",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "game_with_most_rounds"
+          },
+          {
+            "kind": "single",
+            "id": "games_with_fewest_rounds"
+          },
+          {
+            "kind": "single",
+            "id": "largest_score_spread_max_min_in_one_game"
+          },
+          {
+            "kind": "single",
+            "id": "fastest_round_streak_20s"
+          },
+          {
+            "kind": "single",
+            "id": "damage_dealt_streak"
+          },
+          {
+            "kind": "single",
+            "id": "damage_taken_streak"
+          },
+          {
+            "kind": "single",
+            "id": "longest_same_country_streak"
+          },
+          {
+            "kind": "single",
+            "id": "correct_country_streak"
+          },
+          {
+            "kind": "graph",
+            "id": "rounds_progression"
+          },
+          {
+            "kind": "graph",
+            "id": "rounds_by_game_length"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "game_with_most_rounds",
+            "label": "Game with most rounds",
+            "type": "rounds_game_with_most_rounds"
+          },
+          {
+            "id": "games_with_fewest_rounds",
+            "label": "Games with fewest rounds",
+            "type": "rounds_games_with_fewest_rounds"
+          },
+          {
+            "id": "largest_score_spread_max_min_in_one_game",
+            "label": "Largest score spread (max-min in one game)",
+            "type": "rounds_largest_score_spread"
+          },
+          {
+            "id": "fastest_round_streak_20s",
+            "label": "Fastest round streak (<20s)",
+            "type": "rounds_fastest_round_streak"
+          },
+          {
+            "id": "damage_dealt_streak",
+            "label": "Damage dealt streak",
+            "type": "rounds_damage_dealt_streak"
+          },
+          {
+            "id": "damage_taken_streak",
+            "label": "Damage taken streak",
+            "type": "rounds_damage_taken_streak"
+          },
+          {
+            "id": "longest_same_country_streak",
+            "label": "Longest same-country streak",
+            "type": "rounds_longest_same_country_streak"
+          },
+          {
+            "id": "correct_country_streak",
+            "label": "Correct-country streak",
+            "type": "rounds_correct_country_streak"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "rounds_progression",
+            "sourceIndex": 0,
+            "type": "selectableBar",
+            "title": "Round progression metrics",
+            "orientation": "vertical",
+            "defaultMetric": "avg_score",
+            "defaultSort": "chronological",
+            "allowSort": false,
+            "metrics": [
+              "avg_score",
+              "hit_rate",
+              "throw_rate",
+              "fivek_rate",
+              "avg_distance",
+              "avg_time",
+              "rounds"
+            ],
+            "x": "round number (#1, #2, ...)",
+            "barClick": "opens rounds with this round number across all games",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "rounds_progression",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          },
+          {
+            "id": "rounds_by_game_length",
+            "sourceIndex": 1,
+            "type": "selectableBar",
+            "title": "Performance by game length (rounds per game, 2+)",
+            "orientation": "vertical",
+            "defaultMetric": "win_rate_decisive",
+            "defaultSort": "chronological",
+            "allowSort": false,
+            "metrics": [
+              "games",
+              "win_rate_decisive",
+              "win_rate_all",
+              "avg_score",
+              "hit_rate",
+              "throw_rate",
+              "fivek_rate",
+              "avg_distance",
+              "avg_time"
+            ],
+            "x": "game length (2,3,4... rounds)",
+            "barClick": "opens rounds from games with this length",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "rounds_by_game_length",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "rounds"
+      }
+    },
+    {
+      "id": "country_stats",
+      "title": "Countries",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "graph",
+            "id": "country_metrics"
+          },
+          {
+            "kind": "graph",
+            "id": "country_confusion_matrix"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "country_metrics",
+            "sourceIndex": 0,
+            "type": "selectableBar",
+            "title": "Country metrics",
+            "orientation": "horizontal",
+            "initialBars": 25,
+            "defaultMetric": "avg_score",
+            "defaultSort": "desc",
+            "metrics": [
+              "avg_score",
+              "avg_score_correct_only",
+              "hit_rate",
+              "avg_distance",
+              "throw_rate",
+              "fivek_rate",
+              "damage_dealt",
+              "damage_taken",
+              "damage_dealt_share",
+              "damage_taken_share",
+              "rounds"
+            ],
+            "barClick": "opens matching rounds for clicked country/metric subset",
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "content": "country_metrics",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "drilldownType": "rounds"
+          },
+          {
+            "id": "country_confusion_matrix",
+            "sourceIndex": 1,
+            "type": "bar",
+            "title": "Confusion matrix (top pairs)",
+            "orientation": "vertical",
+            "initialBars": 12,
+            "barClick": "opens rounds for clicked confusion pair truth->guess",
+            "content": "country_confusion_matrix",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "countries"
+      }
+    },
+    {
+      "id": "opponents",
+      "title": "Opponents",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "box",
+            "id": "top_3_opponents"
+          },
+          {
+            "kind": "box",
+            "id": "scope"
+          },
+          {
+            "kind": "graph",
+            "id": "opponents_country"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [],
+        "boxes": [
+          {
+            "id": "top_3_opponents",
+            "title": "Top 3 opponents",
+            "lines": []
+          },
+          {
+            "id": "scope",
+            "title": "Scope",
+            "lines": [
+              {
+                "label": "Unique opponents",
+                "type": "opponents_unique_opponents"
+              },
+              {
+                "label": "Unique countries",
+                "type": "opponents_unique_countries"
+              }
+            ]
+          }
+        ],
+        "graphs": [
+          {
+            "id": "opponents_country",
+            "sourceIndex": 0,
+            "type": "bar",
+            "title": "Match-ups by opponent country",
+            "orientation": "vertical",
+            "barClick": "opens opponent drilldown filtered to clicked country",
+            "content": "opponents_country",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": true,
+            "sorts": [
+              "chronological",
+              "desc",
+              "asc"
+            ],
+            "drilldownType": "players"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "opponents"
+      }
+    },
+    {
+      "id": "rating_history",
+      "title": "Rating",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "trend"
+          },
+          {
+            "kind": "single",
+            "id": "biggest_session_rating_gain"
+          },
+          {
+            "kind": "single",
+            "id": "biggest_session_rating_loss"
+          },
+          {
+            "kind": "graph",
+            "id": "rating_history"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "trend",
+            "label": "Trend",
+            "type": "rating_trend"
+          },
+          {
+            "id": "biggest_session_rating_gain",
+            "label": "Biggest session rating gain",
+            "type": "rating_biggest_session_gain"
+          },
+          {
+            "id": "biggest_session_rating_loss",
+            "label": "Biggest session rating loss",
+            "type": "rating_biggest_session_loss"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "rating_history",
+            "sourceIndex": 0,
+            "type": "line",
+            "title": "Rating",
+            "if": "rating points > 1",
+            "content": "rating_history",
+            "hoverable": true,
+            "clickable": false,
+            "sortable": false,
+            "sorts": [
+              "chronological"
+            ]
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "rating"
+      }
+    },
+    {
+      "id": "teammate_battle",
+      "titleTemplate": "Team: You + {{mateName}}",
+      "tocTitle": "Team",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "box",
+            "id": "head_to_head_questions"
+          },
+          {
+            "kind": "box",
+            "id": "team_facts"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [],
+        "boxes": [
+          {
+            "id": "head_to_head_questions",
+            "title": "Head-to-head questions",
+            "lines": [
+              {
+                "label": "Closer guesses",
+                "type": "team_closer_guesses"
+              },
+              {
+                "label": "Higher score rounds",
+                "type": "team_higher_score_rounds"
+              },
+              {
+                "label": "Fewer throws (<50)",
+                "type": "team_fewer_throws_lt_50"
+              },
+              {
+                "label": "More 5k rounds",
+                "type": "team_more_5k_rounds"
+              }
+            ]
+          },
+          {
+            "id": "team_facts",
+            "title": "Team facts",
+            "lines": [
+              {
+                "label": "Games together",
+                "type": "team_games_together"
+              },
+              {
+                "label": "Rounds together",
+                "type": "team_rounds_together"
+              },
+              {
+                "label": "Time played together",
+                "type": "team_time_played_together"
+              },
+              {
+                "label": "First game together",
+                "type": "team_first_game_together"
+              },
+              {
+                "label": "Most recent game together",
+                "type": "team_most_recent_game_together"
+              },
+              {
+                "label": "Longest session together",
+                "type": "team_longest_session_together"
+              },
+              {
+                "label": "Avg games per session together",
+                "type": "team_avg_games_per_session_together"
+              },
+              {
+                "label": "Longest break between games together",
+                "type": "team_longest_break_between_games_together"
+              }
+            ]
+          }
+        ],
+        "graphs": []
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "team"
+      },
+      "requiredFilters": {
+        "teammate": {
+          "enabled": true,
+          "default": "top_games",
+          "label": "Mate"
+        }
+      }
+    },
+    {
+      "id": "country_spotlight",
+      "titleTemplate": "Country Spotlight: {{countryName}}",
+      "tocTitle": "Country Spotlight",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate",
+        "country"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "rounds"
+          },
+          {
+            "kind": "single",
+            "id": "hit_rate"
+          },
+          {
+            "kind": "single",
+            "id": "avg_score"
+          },
+          {
+            "kind": "single",
+            "id": "avg_distance"
+          },
+          {
+            "kind": "single",
+            "id": "perfect_5k_in_this_country"
+          },
+          {
+            "kind": "single",
+            "id": "throws_50_in_this_country"
+          },
+          {
+            "kind": "graph",
+            "id": "spotlight_distribution"
+          },
+          {
+            "kind": "graph",
+            "id": "spotlight_trend"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "rounds",
+            "label": "Rounds",
+            "type": "country_spotlight_rounds"
+          },
+          {
+            "id": "hit_rate",
+            "label": "Hit rate",
+            "type": "country_spotlight_hit_rate"
+          },
+          {
+            "id": "avg_score",
+            "label": "Avg score",
+            "type": "country_spotlight_avg_score"
+          },
+          {
+            "id": "avg_distance",
+            "label": "Avg distance",
+            "type": "country_spotlight_avg_distance"
+          },
+          {
+            "id": "perfect_5k_in_this_country",
+            "label": "Perfect 5k in this country",
+            "type": "country_spotlight_perfect_5k"
+          },
+          {
+            "id": "throws_50_in_this_country",
+            "label": "Throws (<50) in this country",
+            "type": "country_spotlight_throws_lt_50"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "spotlight_distribution",
+            "sourceIndex": 0,
+            "type": "selectableBar",
+            "title": "Score distribution (smoothed)",
+            "orientation": "vertical",
+            "allowSort": false,
+            "defaultMetric": "all_guesses",
+            "defaultSort": "chronological",
+            "metrics": [
+              "all_guesses",
+              "correct_only"
+            ],
+            "barClick": "opens rounds in clicked score bucket",
+            "sorts": [
+              "chronological"
+            ],
+            "content": "spotlight_distribution",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": false,
+            "drilldownType": "rounds"
+          },
+          {
+            "id": "spotlight_trend",
+            "sourceIndex": 1,
+            "type": "selectableLine",
+            "title": "Country trend comparison",
+            "defaultMetric": "damage_dealt_share",
+            "primaryCountry": "{{selectedCountry}}",
+            "maxCompare": 4,
+            "metrics": [
+              "damage_dealt_share",
+              "damage_taken_share",
+              "avg_score",
+              "hit_rate",
+              "throw_rate",
+              "fivek_rate",
+              "avg_damage_dealt",
+              "avg_damage_taken",
+              "rounds"
+            ],
+            "noDataBehavior": "carry forward previous value; if no previous value then fallback to overall baseline",
+            "rateSmoothing": {
+              "enabled": true,
+              "method": "beta-like smoothing",
+              "priorStrength": 12,
+              "minBucketRoundsForRate": 5
+            },
+            "content": "spotlight_trend",
+            "hoverable": true,
+            "clickable": false,
+            "sortable": false,
+            "sorts": [
+              "chronological"
+            ]
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "spotlight"
+      },
+      "requiredFilters": {
+        "country": {
+          "enabled": true,
+          "default": "top_rounds",
+          "label": "Country"
+        }
+      }
+    },
+    {
+      "id": "personal_records",
+      "title": "Personal Records",
+      "appliesFilters": [
+        "date",
+        "mode",
+        "teammate",
+        "country"
+      ],
+      "layout": {
+        "mode": "object_order",
+        "preserveUnmatched": false,
+        "order": [
+          {
+            "kind": "single",
+            "id": "best_day"
+          },
+          {
+            "kind": "single",
+            "id": "hardest_day"
+          },
+          {
+            "kind": "single",
+            "id": "best_avg_score_in_a_game"
+          },
+          {
+            "kind": "single",
+            "id": "worst_avg_score_in_a_game"
+          },
+          {
+            "kind": "single",
+            "id": "fastest_day"
+          },
+          {
+            "kind": "single",
+            "id": "slowest_day"
+          },
+          {
+            "kind": "single",
+            "id": "best_5k_streak"
+          },
+          {
+            "kind": "single",
+            "id": "worst_throw_streak_50"
+          },
+          {
+            "kind": "graph",
+            "id": "records_daily"
+          }
+        ]
+      },
+      "objects": {
+        "singles": [
+          {
+            "id": "best_day",
+            "label": "Best day",
+            "type": "record_best_day"
+          },
+          {
+            "id": "hardest_day",
+            "label": "Hardest day",
+            "type": "record_hardest_day"
+          },
+          {
+            "id": "best_avg_score_in_a_game",
+            "label": "Best avg score in a game",
+            "type": "record_best_avg_score_in_game"
+          },
+          {
+            "id": "worst_avg_score_in_a_game",
+            "label": "Worst avg score in a game",
+            "type": "record_worst_avg_score_in_game"
+          },
+          {
+            "id": "fastest_day",
+            "label": "Fastest day",
+            "type": "record_fastest_day"
+          },
+          {
+            "id": "slowest_day",
+            "label": "Slowest day",
+            "type": "record_slowest_day"
+          },
+          {
+            "id": "best_5k_streak",
+            "label": "Best 5k streak",
+            "type": "record_best_5k_streak"
+          },
+          {
+            "id": "worst_throw_streak_50",
+            "label": "Worst throw streak (<50)",
+            "type": "record_worst_throw_streak_lt_50"
+          }
+        ],
+        "boxes": [],
+        "graphs": [
+          {
+            "id": "records_daily",
+            "sourceIndex": 0,
+            "type": "line",
+            "title": "Avg daily score",
+            "smoothing": "auto bucketed over long ranges",
+            "content": "records_daily",
+            "hoverable": true,
+            "clickable": true,
+            "sortable": false,
+            "sorts": [
+              "chronological"
+            ],
+            "drilldownType": "rounds"
+          }
+        ]
+      },
+      "tocIcon": {
+        "enabled": true,
+        "key": "records"
+      }
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://geoanalyzr.local/design.schema.json",
+  "title": "GeoAnalyzr Design Template",
+  "type": "object",
+  "required": ["sections"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string" },
+    "window": {
+      "type": "object",
+      "properties": {
+        "titleTemplate": { "type": "string" },
+        "appearance": {
+          "type": "object",
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "properties": {
+                "theme": { "enum": ["dark", "light"] },
+                "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "toc": {
+          "type": "object",
+          "properties": {
+            "labelOverrides": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "sections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "graphContentDefinitions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "defaultMetric": { "type": "string" },
+          "defaultSort": { "enum": ["chronological", "desc", "asc"] },
+          "sorts": {
+            "type": "array",
+            "items": { "enum": ["chronological", "desc", "asc"] }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "section_layout": {
+      "type": "object",
+      "properties": {
+        "order": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "lineRef": {
+      "type": "object",
+      "required": ["label"],
+      "properties": {
+        "label": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "graphObject": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceIndex": { "type": "integer", "minimum": 0 },
+        "type": { "enum": ["line", "bar", "horizontalBar", "verticalBar", "selectableBar", "selectableLine"] },
+        "title": { "type": "string" },
+        "yLabel": { "type": "string" },
+        "content": { "type": "string" },
+        "hoverable": { "type": "boolean" },
+        "clickable": { "type": "boolean" },
+        "metrics": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "defaultMetric": { "type": "string" },
+        "defaultSort": { "enum": ["chronological", "desc", "asc"] },
+        "sorts": {
+          "type": "array",
+          "items": { "enum": ["chronological", "desc", "asc"] }
+        },
+        "orientation": { "enum": ["vertical", "horizontal"] },
+        "sortable": { "type": "boolean" },
+        "allowSort": { "type": "boolean" },
+        "initialBars": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "const": "max" }
+          ]
+        },
+        "expandable": { "type": "boolean" },
+        "maxCompare": { "type": "integer", "minimum": 1, "maximum": 4 }
+        ,
+        "drilldownType": { "enum": ["rounds", "players"] },
+        "drilldownColumns": { "type": "array", "items": { "type": "string" } },
+        "drilldownColored": { "type": "array", "items": { "type": "string" } },
+        "drilldownClickable": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "section": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sourceSectionId": { "type": "string" },
+        "tocLabel": { "type": "string" },
+        "tocTitle": { "type": "string" },
+        "tocIcon": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "key": { "enum": ["overview", "time_patterns", "sessions", "tempo", "scores", "rounds", "countries", "opponents", "rating", "team", "spotlight", "records", "default"] },
+            "svg": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "requiredFilters": {
+          "type": "object",
+          "properties": {
+            "teammate": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "default": { "enum": ["top_games"] },
+                "label": { "type": "string" }
+              },
+              "additionalProperties": true
+            },
+            "country": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "default": { "enum": ["top_rounds"] },
+                "label": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "title": { "type": "string" },
+        "titleTemplate": { "type": "string" },
+        "group": { "enum": ["Overview", "Performance", "Rounds", "Countries", "Opponents", "Rating"] },
+        "appliesFilters": {
+          "type": "array",
+          "items": { "enum": ["date", "mode", "gameMode", "movement", "teammate", "country"] }
+        },
+        "objects": {
+          "type": "object",
+          "properties": {
+            "singles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "label"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                  "label": { "type": "string", "minLength": 1 },
+                  "type": { "type": "string" },
+                  "sourceSectionId": { "type": "string" }
+                },
+                "additionalProperties": true
+              }
+            },
+            "boxes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "title"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1 },
+                    "title": { "type": "string", "minLength": 1 },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          { "$ref": "#/$defs/lineRef" },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": { "type": "string" },
+                              "sourceSectionId": { "type": "string" }
+                            },
+                            "additionalProperties": true
+                          }
+                        ]
+                      }
+                    }
+                  },
+                "additionalProperties": true
+              }
+            },
+            "graphs": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/graphObject" }
+            }
+          },
+          "additionalProperties": true
+        },
+        "layout": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["mode", "order"],
+              "properties": {
+                "mode": { "const": "object_order" },
+                "preserveUnmatched": { "type": "boolean" },
+                "order": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["kind", "id"],
+                    "properties": {
+                      "kind": { "enum": ["single", "box", "graph"] },
+                      "id": { "type": "string", "minLength": 1 }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "required": ["mode"],
+              "properties": {
+                "mode": { "enum": ["legacy_colon", "header_blocks"] }
+              },
+              "additionalProperties": true
+            }
+          ]
+        },
+        "render": {
+          "type": "object",
+          "properties": {
+            "chartIndices": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+            "chartTitles": { "type": "array", "items": { "type": "string" } },
+            "includeLineLabels": { "type": "array", "items": { "type": "string" } },
+            "excludeLineLabels": { "type": "array", "items": { "type": "string" } },
+            "preserveUnmatchedLines": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
