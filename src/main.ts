@@ -1,21 +1,11 @@
-import { createUI } from "./ui";
+import { createUI } from "./ui.legacy";
+import { initAnalysisWindow } from "./ui";
 import { db } from "./db";
 import { syncFeed } from "./sync";
 import { fetchMissingDuelsDetails } from "./details";
 import { getAnalysisWindowData } from "./analysis";
 import { exportExcel } from "./export";
 import { getNcfaToken, getResolvedNcfaToken, setNcfaToken, validateNcfaToken } from "./auth";
-
-const NCFA_HELP_TEXT =
-  "NCFA token setup:\n\n" +
-  "1) Open geoguessr.com and log in.\n" +
-  "2) Open browser DevTools (F12 / Ctrl+Shift+I).\n" +
-  "3) Go to Network tab.\n" +
-  "4) Reload the page.\n" +
-  "5) Use filter and search for 'stats'.\n" +
-  "6) Open a 'stats' request.\n" +
-  "7) In request headers, find the '_ncfa' cookie.\n" +
-  "8) Copy only the value after '=' up to ';' (without ';').";
 
 function isInGame(): boolean {
   const p = location.pathname;
@@ -68,6 +58,10 @@ async function hasAuthenticatedSession(): Promise<boolean> {
   }
 }
 
+function buildSemanticTabUrl(): string {
+  return `${location.origin}${location.pathname}${location.search}#geoanalyzr-semantic`;
+}
+
 (async function boot() {
   const ui = createUI();
 
@@ -79,7 +73,7 @@ async function hasAuthenticatedSession(): Promise<boolean> {
       if (!ncfa) {
         const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
         if (wantsSet) {
-          const entered = prompt(`Paste _ncfa token here.\n\n${NCFA_HELP_TEXT}`, "");
+          const entered = prompt(`Paste _ncfa token here.`, "");
           if (entered !== null) {
             const clean = entered.trim();
             if (clean) {
@@ -155,7 +149,7 @@ async function hasAuthenticatedSession(): Promise<boolean> {
     const existing = await getNcfaToken();
     ui.openNcfaManager({
       initialToken: existing || "",
-      helpText: NCFA_HELP_TEXT,
+      helpText: "",
       repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
       onSave: async (token) => {
         const clean = token.trim();
@@ -221,6 +215,11 @@ async function hasAuthenticatedSession(): Promise<boolean> {
     try {
       ui.setStatus("Loading analysis...");
       await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
+      const opened = window.open(buildSemanticTabUrl(), "_blank", "noopener");
+      if (!opened) {
+        // Popup blocked fallback: still open experimental view in current tab.
+        await initAnalysisWindow();
+      }
       ui.setStatus("Analysis loaded.");
     } catch (e) {
       ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
@@ -239,10 +238,16 @@ async function hasAuthenticatedSession(): Promise<boolean> {
     }
   });
 
-
   await refreshUI(ui);
 
   watchRoutes(() => {
     ui.setVisible(!isInGame());
   });
+
+  // Open semantic dashboard directly when this tab was launched for it.
+  if (location.hash === "#geoanalyzr-semantic") {
+    initAnalysisWindow().catch((error) => {
+      console.error("Failed to initialize semantic dashboard tab", error);
+    });
+  }
 })();

@@ -1,0 +1,124 @@
+{
+  "$schema": "./chart.templates.schema.json",
+  "schemaVersion": "0.1.0",
+
+  "templates": [
+    {
+      "id": "t_games_by_weekday",
+      "title": "Games by weekday",
+      "spec": {
+        "grain": "game",
+        "type": "bar",
+        "x": { "dimension": "weekday" },
+        "y": { "measure": "games_count" },
+        "sort": { "mode": "chronological" },
+        "actions": {
+          "hover": true,
+          "click": {
+            "type": "drilldown",
+            "target": "players",
+            "columnsPreset": "opponentMode",
+            "filterFromPoint": true
+          }
+        }
+      }
+    },
+    {
+      "id": "t_games_by_hour",
+      "title": "Games by hour",
+      "spec": {
+        "grain": "game",
+        "type": "bar",
+        "x": { "dimension": "hour" },
+        "y": { "measure": "games_count" },
+        "sort": { "mode": "chronological" },
+        "actions": { "hover": true }
+      }
+    },
+    {
+      "id": "t_win_rate_by_mode",
+      "title": "Win rate by game mode",
+      "spec": {
+        "grain": "game",
+        "type": "bar",
+        "x": { "dimension": "game_mode" },
+        "y": { "measure": "win_rate" },
+        "sort": { "mode": "desc" },
+        "actions": { "hover": true }
+      }
+    },
+    {
+      "id": "t_end_rating_over_time",
+      "title": "End rating over time",
+      "spec": {
+        "grain": "game",
+        "type": "line",
+        "x": { "dimension": "time_day" },
+        "y": { "measure": "end_rating_avg" },
+        "actions": { "hover": true }
+      }
+    },
+
+    {
+      "id": "t_avg_score_over_time",
+      "title": "Avg score over time",
+      "spec": {
+        "grain": "round",
+        "type": "line",
+        "x": { "dimension": "time_day" },
+        "y": { "measure": "avg_score" },
+        "actions": { "hover": true }
+      }
+    },
+    {
+      "id": "t_avg_score_over_time_split_movement",
+      "title": "Avg score over time (split by movement)",
+      "spec": {
+        "grain": "round",
+        "type": "line",
+        "x": { "dimension": "time_day" },
+        "y": { "measure": "avg_score" },
+        "series": {
+          "dimension": "movement_type",
+          "selector": { "mode": "all", "maxSeries": 6 }
+        },
+        "actions": { "hover": true }
+      }
+    },
+    {
+      "id": "t_fivek_rate_selected_countries",
+      "title": "5k rate for selected countries",
+      "spec": {
+        "grain": "round",
+        "type": "bar",
+        "x": {
+          "dimension": "true_country",
+          "selector": { "mode": "selected", "values": ["DE", "FR", "IT", "ES", "US"] }
+        },
+        "y": { "measure": "fivek_rate" },
+        "sort": { "mode": "desc" },
+        "actions": {
+          "hover": true,
+          "click": {
+            "type": "drilldown",
+            "target": "rounds",
+            "columnsPreset": "roundMode",
+            "filterFromPoint": true
+          }
+        }
+      }
+    },
+    {
+      "id": "t_hit_rate_by_movement",
+      "title": "Hit rate by movement",
+      "spec": {
+        "grain": "round",
+        "type": "bar",
+        "x": { "dimension": "movement_type" },
+        "y": { "measure": "hit_rate" },
+        "sort": { "mode": "desc" },
+        "actions": { "hover": true }
+      }
+    }
+  ]
+}

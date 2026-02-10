@@ -1,0 +1,81 @@
+{
+  "$schema": "./dashboard.schema.json",
+  "schemaVersion": "0.1.0",
+  "dashboard": {
+    "id": "default",
+    "title": "GeoAnalyzr",
+    "sections": [
+      {
+        "id": "scores",
+        "title": "Scores",
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_scores_distribution",
+              "title": "Scores",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 12,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_scores_kpis",
+                    "type": "stat_list",
+                    "title": "Score KPIs",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 3 },
+                    "spec": {
+                      "rows": [
+                        {
+                          "label": "Perfect 5k",
+                          "measure": "fivek_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [
+                                { "dimension": "score_bucket", "op": "eq", "value": "5000" }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_score_distribution",
+                    "type": "chart",
+                    "title": "Score distribution (smoothed)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 3, "w": 12, "h": 9 },
+                    "spec": {
+                      "type": "bar",
+                      "x": { "dimension": "score_bucket" },
+                      "y": { "measure": "rounds_count" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

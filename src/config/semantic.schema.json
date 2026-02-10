@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "semantic.schema.json",
+  "title": "Semantic registry schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "grains", "datasets", "dimensions", "measures", "units", "drilldownPresets"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^0\\.1\\.0$"
+    },
+    "grains": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["session", "game", "round"] }
+    },
+    "datasets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session", "game", "round"],
+      "properties": {
+        "session": { "$ref": "#/$defs/datasetDef" },
+        "game": { "$ref": "#/$defs/datasetDef" },
+        "round": { "$ref": "#/$defs/datasetDef" }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionGapMinutesDefault": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/dimensionDef"
+      }
+    },
+    "measures": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/measureDef"
+      }
+    },
+    "units": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/unitDef"
+      }
+    },
+    "columnAliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string", "minLength": 1 }
+      }
+    },
+    "drilldownPresets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rounds", "players"],
+      "properties": {
+        "rounds": { "$ref": "#/$defs/drilldownPresetDef" },
+        "players": { "$ref": "#/$defs/drilldownPresetDef" }
+      }
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "E_GRAIN_MISMATCH": { "type": "string" },
+        "E_CHART_X_NOT_ORDERED": { "type": "string" },
+        "E_SELECTOR_REQUIRED": { "type": "string" },
+        "E_TOO_MANY_SERIES": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "grain": { "enum": ["session", "game", "round"] },
+    "chartType": { "enum": ["bar", "line"] },
+    "dimKind": { "enum": ["time", "category"] },
+
+    "datasetDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primaryKey", "timeField"],
+      "properties": {
+        "primaryKey": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "timeField": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "cardinalityDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "maxSeries"],
+      "properties": {
+        "policy": { "enum": ["small", "large"] },
+        "maxSeries": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "selectorRequired": { "type": "boolean" }
+      }
+    },
+
+    "dimensionDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "kind", "grain", "allowedCharts", "sortModes"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/dimKind" },
+        "grain": { "$ref": "#/$defs/grain" },
+        "ordered": { "type": "boolean" },
+        "allowedCharts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/chartType" }
+        },
+        "sortModes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["chronological", "asc", "desc"] }
+        },
+        "cardinality": { "$ref": "#/$defs/cardinalityDef" }
+      }
+    },
+
+    "measureDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "unit", "grain", "allowedCharts", "formulaId"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "unit": { "type": "string", "minLength": 1 },
+        "grain": { "$ref": "#/$defs/grain" },
+        "allowedCharts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/chartType" }
+        },
+        "formulaId": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "unitDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format"],
+      "properties": {
+        "format": { "enum": ["int", "float", "percent"] },
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 6 }
+      }
+    },
+
+    "drilldownPresetDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity", "columnsPresets", "defaultPreset"],
+      "properties": {
+        "entity": { "$ref": "#/$defs/grain" },
+        "columnsPresets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "defaultPreset": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

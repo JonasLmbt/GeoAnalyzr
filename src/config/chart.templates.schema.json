@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chart.templates.schema.json",
+  "title": "Chart templates schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "templates"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string", "pattern": "^0\\.1\\.0$" },
+    "templates": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/templateDef" }
+    }
+  },
+  "$defs": {
+    "grain": { "enum": ["session", "game", "round"] },
+    "chartType": { "enum": ["bar", "line"] },
+
+    "templateDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "spec"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_\\-]{3,64}$" },
+        "title": { "type": "string", "minLength": 1 },
+        "spec": { "$ref": "#/$defs/chartSpecDef" }
+      }
+    },
+
+    "chartSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grain", "type", "x", "y"],
+      "properties": {
+        "grain": { "$ref": "#/$defs/grain" },
+        "type": { "$ref": "#/$defs/chartType" },
+        "x": { "$ref": "#/$defs/xAxisDef" },
+        "y": { "$ref": "#/$defs/yAxisDef" },
+        "series": { "$ref": "#/$defs/seriesDef" },
+        "sort": { "$ref": "#/$defs/sortDef" },
+        "actions": { "$ref": "#/$defs/actionsDef" }
+      }
+    },
+
+    "xAxisDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension"],
+      "properties": {
+        "dimension": { "type": "string", "minLength": 1 },
+        "selector": { "$ref": "#/$defs/selectorDef" }
+      }
+    },
+
+    "yAxisDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measure"],
+      "properties": {
+        "measure": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "seriesDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "selector"],
+      "properties": {
+        "dimension": { "type": "string", "minLength": 1 },
+        "selector": { "$ref": "#/$defs/selectorDef" }
+      }
+    },
+
+    "selectorDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["all", "top_n", "selected"] },
+        "maxSeries": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "n": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "top_n" } } },
+          "then": { "required": ["n"] }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "selected" } } },
+          "then": { "required": ["values"] }
+        }
+      ]
+    },
+
+    "sortDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["chronological", "asc", "desc"] }
+      }
+    },
+
+    "actionsDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hover": { "type": "boolean" },
+        "click": { "$ref": "#/$defs/clickActionDef" }
+      }
+    },
+
+    "clickActionDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["drilldown"] },
+        "target": { "enum": ["rounds", "players"] },
+        "columnsPreset": { "type": "string", "minLength": 1 },
+        "filterFromPoint": { "type": "boolean" }
+      }
+    }
+  }
+}

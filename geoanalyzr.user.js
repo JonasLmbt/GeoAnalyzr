@@ -142,7 +142,7 @@
         function override(origFunc, overridedFactory) {
           return overridedFactory(origFunc);
         }
-        function assert(b) {
+        function assert2(b) {
           if (!b)
             throw new Error("Assertion Failed");
         }
@@ -186,7 +186,7 @@
           if ("isFrozen" in Object && Object.isFrozen(obj))
             return;
           if (typeof keyPath !== "string" && "length" in keyPath) {
-            assert(typeof value !== "string" && "length" in value);
+            assert2(typeof value !== "string" && "length" in value);
             for (var i = 0, l = keyPath.length; i < l; ++i) {
               setByKeyPath(obj, keyPath[i], value[i]);
             }
@@ -2835,14 +2835,14 @@
           function Transaction2() {
           }
           Transaction2.prototype._lock = function() {
-            assert(!PSD.global);
+            assert2(!PSD.global);
             ++this._reculock;
             if (this._reculock === 1 && !PSD.global)
               PSD.lockOwnerFor = this;
             return this;
           };
           Transaction2.prototype._unlock = function() {
-            assert(!PSD.global);
+            assert2(!PSD.global);
             if (--this._reculock === 0) {
               if (!PSD.global)
                 PSD.lockOwnerFor = null;
@@ -2865,7 +2865,7 @@
               return this;
             var idbdb = this.db.idbdb;
             var dbOpenError = this.db._state.dbOpenError;
-            assert(!this.idbtrans);
+            assert2(!this.idbtrans);
             if (!idbtrans && !idbdb) {
               switch (dbOpenError && dbOpenError.name) {
                 case "DatabaseClosedError":
@@ -2878,7 +2878,7 @@
             }
             if (!this.active)
               throw new exceptions.TransactionInactive();
-            assert(this._completion._state === null);
+            assert2(this._completion._state === null);
             idbtrans = this.idbtrans = idbtrans || (this.db.core ? this.db.core.transaction(this.storeNames, this.mode, { durability: this.chromeTransactionDurability }) : idbdb.transaction(this.storeNames, this.mode, { durability: this.chromeTransactionDurability }));
             idbtrans.onerror = wrap(function(ev) {
               preventDefault(ev);
@@ -6729,6 +6729,30 @@
         details: "gameId, status, fetchedAt, modeFamily, isTeamDuels",
         meta: "key, updatedAt"
       });
+      this.version(4).stores({
+        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+        rounds: [
+          "id",
+          "gameId",
+          "roundNumber",
+          "[gameId+roundNumber]",
+          "playedAt",
+          "trueCountry",
+          "movementType",
+          "player_self_score"
+        ].join(", "),
+        details: [
+          "gameId",
+          "status",
+          "fetchedAt",
+          "modeFamily",
+          "isTeamDuels",
+          "player_self_id",
+          "player_mate_id",
+          "player_opponent_country"
+        ].join(", "),
+        meta: "key, updatedAt"
+      });
     }
   };
   var db = new GGDB();
@@ -8572,7 +8596,7 @@
       "win_rate"
     ],
     graphContentDefinitions: {
-      time_patterns_weekday: {
+      weekdays: {
         title: "Weekday patterns",
         type: "bar",
         orientation: "horizontal",
@@ -8939,7 +8963,7 @@
     }
   };
 
-  // src/ui.ts
+  // src/ui.legacy.ts
   var DEFAULT_ANALYSIS_DESIGN = typeof design_default === "object" && design_default ? design_default : {};
   var ANALYSIS_CAPABILITIES = typeof design_capabilities_default === "object" && design_capabilities_default ? design_capabilities_default : {};
   var analysisDesign = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
@@ -13143,6 +13167,1125 @@
     };
   }
 
+  // src/engine/fieldAccess.ts
+  function getSelfScore(r) {
+    return r.player_self_score ?? r.p1_score ?? r.score;
+  }
+  function getPlayedAt(r) {
+    return r.playedAt;
+  }
+  function getTrueCountry(r) {
+    return r.trueCountry ?? r.true_country;
+  }
+  function getGuessCountrySelf(r) {
+    return r.player_self_guessCountry ?? r.p1_guessCountry;
+  }
+  function pick(obj, key) {
+    if (!obj) return void 0;
+    if (key in obj) return obj[key];
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    if (camel in obj) return obj[camel];
+    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    if (snake in obj) return obj[snake];
+    return void 0;
+  }
+  function pickWithAliases(obj, logicalKey, columnAliases) {
+    const aliases = columnAliases?.[logicalKey] ?? [];
+    const probeOrder = [logicalKey, ...aliases];
+    for (const candidate of probeOrder) {
+      const value = pick(obj, candidate);
+      if (value !== void 0 && value !== null) return value;
+    }
+    return void 0;
+  }
+
+  // src/ui/drilldownOverlay.ts
+  var DrilldownOverlay = class {
+    root;
+    modal;
+    constructor(root) {
+      this.root = root;
+      this.modal = document.createElement("div");
+      this.modal.className = "ga-drilldown-modal";
+      this.modal.style.display = "none";
+      this.root.appendChild(this.modal);
+    }
+    open(semantic, req) {
+      this.modal.innerHTML = "";
+      this.modal.style.display = "block";
+      const bg = document.createElement("div");
+      bg.className = "ga-drilldown-bg";
+      bg.addEventListener("click", () => this.close());
+      const panel = document.createElement("div");
+      panel.className = "ga-drilldown-panel";
+      const header = document.createElement("div");
+      header.className = "ga-drilldown-header";
+      const hTitle = document.createElement("div");
+      hTitle.className = "ga-drilldown-title";
+      hTitle.textContent = req.title;
+      const btn = document.createElement("button");
+      btn.className = "ga-drilldown-close";
+      btn.textContent = "Close";
+      btn.addEventListener("click", () => this.close());
+      header.appendChild(hTitle);
+      header.appendChild(btn);
+      const table = document.createElement("table");
+      table.className = "ga-drilldown-table";
+      const preset = semantic.drilldownPresets[req.target];
+      const cols = preset?.columnsPresets?.[req.columnsPreset] ?? [];
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+      for (const c of cols) {
+        const th = document.createElement("th");
+        th.textContent = c;
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+      const tbody = document.createElement("tbody");
+      for (const r of req.rows) {
+        const tr = document.createElement("tr");
+        for (const c of cols) {
+          const td = document.createElement("td");
+          const v = pickWithAliases(r, c, semantic.columnAliases);
+          td.textContent = v === void 0 || v === null ? "" : String(v);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      panel.appendChild(header);
+      panel.appendChild(table);
+      this.modal.appendChild(bg);
+      this.modal.appendChild(panel);
+    }
+    close() {
+      this.modal.style.display = "none";
+    }
+  };
+
+  // src/engine/queryEngine.ts
+  async function getRounds(_filters) {
+    const rows = await db.rounds.toArray();
+    const missingPlayedAt = rows.some((r) => typeof r.playedAt !== "number");
+    if (!missingPlayedAt) return rows;
+    const games = await db.games.toArray();
+    const playedAtByGame = /* @__PURE__ */ new Map();
+    for (const g of games) {
+      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
+    }
+    return rows.map((r) => {
+      if (typeof r.playedAt === "number") return r;
+      const gamePlayedAt = playedAtByGame.get(r.gameId);
+      if (typeof gamePlayedAt !== "number") return r;
+      return { ...r, playedAt: gamePlayedAt };
+    });
+  }
+
+  // src/engine/measures.ts
+  function is5k(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s >= 5e3;
+  }
+  function isHit(r) {
+    const truth = getTrueCountry(r);
+    if (!truth) return false;
+    const guess = getGuessCountrySelf(r);
+    return typeof guess === "string" && guess === truth;
+  }
+  function isThrowLt50(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s < 50;
+  }
+  var ROUND_MEASURES_BY_FORMULA_ID = {
+    count_rounds: (rows) => rows.length,
+    mean_p1_score: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const s = getSelfScore(r);
+        if (typeof s === "number") {
+          sum2 += s;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    rate_p1_score_eq_5000: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (is5k(r)) k++;
+      return k / n;
+    },
+    rate_true_country_hit: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isHit(r)) k++;
+      return k / n;
+    },
+    rate_throw_round: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isThrowLt50(r)) k++;
+      return k / n;
+    }
+  };
+
+  // src/engine/dimensions.ts
+  function scoreBucketKey(r) {
+    const s = getSelfScore(r);
+    if (typeof s !== "number") return null;
+    if (s >= 5e3) return "5000";
+    const lo = Math.max(0, Math.floor(s / 100) * 100);
+    const hi = lo + 99;
+    return `${lo}-${hi}`;
+  }
+  function timeDayKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function weekdayKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return names[new Date(ts).getDay()];
+  }
+  function hourKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    return String(new Date(ts).getHours()).padStart(2, "0");
+  }
+  function trueCountryKey(r) {
+    const c = getTrueCountry(r);
+    return typeof c === "string" && c.length ? c : null;
+  }
+  var ROUND_DIMENSION_EXTRACTORS = {
+    score_bucket: scoreBucketKey,
+    time_day: timeDayKey,
+    weekday: weekdayKey,
+    hour: hourKey,
+    true_country: trueCountryKey
+  };
+
+  // src/engine/filters.ts
+  function evalClause(value, clause) {
+    if (clause.op === "eq") return value === clause.value;
+    if (clause.op === "neq") return value !== clause.value;
+    if (clause.op === "in") return Array.isArray(clause.values) && clause.values.includes(value);
+    if (clause.op === "nin") return Array.isArray(clause.values) && !clause.values.includes(value);
+    return true;
+  }
+  function evalRowFilter(row, clause) {
+    const extractor = ROUND_DIMENSION_EXTRACTORS[clause.dimension];
+    if (extractor) {
+      return evalClause(extractor(row), clause);
+    }
+    const direct = row[clause.dimension];
+    return evalClause(direct, clause);
+  }
+  function applyFilters(rows, clauses) {
+    if (!clauses || clauses.length === 0) return rows;
+    return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause)));
+  }
+
+  // src/ui/widgets/statListWidget.ts
+  function formatValue(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      return `${(value * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    const decimals = unit.decimals ?? 1;
+    return value.toFixed(decimals);
+  }
+  async function computeMeasure(semantic, measureId, filters) {
+    const m = semantic.measures[measureId];
+    if (!m) return 0;
+    const rows = applyFilters(await getRounds({}), filters);
+    const fn = ROUND_MEASURES_BY_FORMULA_ID[m.formulaId];
+    if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
+    return fn(rows);
+  }
+  function attachClickIfAny(el, actions, overlay, semantic, title) {
+    const click = actions?.click;
+    if (!click) return;
+    el.style.cursor = "pointer";
+    el.addEventListener("click", async () => {
+      if (click.type === "drilldown") {
+        const rows = applyFilters(await getRounds({}), click.extraFilters);
+        overlay.open(semantic, {
+          title,
+          target: click.target,
+          columnsPreset: click.columnsPreset,
+          rows,
+          extraFilters: click.extraFilters
+        });
+      }
+    });
+  }
+  async function renderStatListWidget(semantic, widget, overlay) {
+    const spec = widget.spec;
+    const wrap = document.createElement("div");
+    wrap.className = "ga-widget ga-statlist";
+    const title = document.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = document.createElement("div");
+    box.className = "ga-statlist-box";
+    for (const row of spec.rows) {
+      const line = document.createElement("div");
+      line.className = "ga-statrow";
+      const left = document.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = row.label;
+      const right = document.createElement("div");
+      right.className = "ga-statrow-value";
+      right.textContent = "...";
+      const val = await computeMeasure(semantic, row.measure, row.filters);
+      right.textContent = formatValue(semantic, row.measure, val);
+      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`);
+      line.appendChild(left);
+      line.appendChild(right);
+      box.appendChild(line);
+    }
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/engine/aggregate.ts
+  function groupByKey(rows, keyFn) {
+    const m = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      if (!k) continue;
+      const arr = m.get(k);
+      if (arr) arr.push(r);
+      else m.set(k, [r]);
+    }
+    return m;
+  }
+
+  // src/ui/widgets/chartWidget.ts
+  function sortKeysChronological(keys2) {
+    const parseKey = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
+    return [...keys2].sort((a, b) => parseKey(a) - parseKey(b));
+  }
+  async function renderChartWidget(semantic, widget, overlay) {
+    const spec = widget.spec;
+    const wrap = document.createElement("div");
+    wrap.className = "ga-widget ga-chart";
+    const title = document.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = document.createElement("div");
+    box.className = "ga-chart-box";
+    const rows = await getRounds({});
+    const dimId = spec.x.dimension;
+    const measId = spec.y.measure;
+    const dimDef = semantic.dimensions[dimId];
+    const measDef = semantic.measures[measId];
+    if (!dimDef || !measDef) throw new Error(`Unknown dimension/measure in widget ${widget.widgetId}`);
+    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}'`);
+    const grouped = groupByKey(rows, keyFn);
+    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
+    if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
+    const keys2 = Array.from(grouped.keys());
+    const sortedKeys = spec.sort?.mode === "chronological" ? sortKeysChronological(keys2) : keys2;
+    const data = sortedKeys.map((k) => {
+      const g = grouped.get(k) ?? [];
+      return { x: k, y: measureFn(g), rows: g };
+    });
+    const W = 900;
+    const H = 260;
+    const PAD_L = 40;
+    const PAD_B = 30;
+    const PAD_T = 10;
+    const PAD_R = 10;
+    const maxY = Math.max(1, ...data.map((d) => d.y));
+    const innerW = W - PAD_L - PAD_R;
+    const innerH = H - PAD_T - PAD_B;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", String(H));
+    const axis = document.createElementNS(svg.namespaceURI, "line");
+    axis.setAttribute("x1", String(PAD_L));
+    axis.setAttribute("y1", String(PAD_T + innerH));
+    axis.setAttribute("x2", String(PAD_L + innerW));
+    axis.setAttribute("y2", String(PAD_T + innerH));
+    axis.setAttribute("stroke", "currentColor");
+    axis.setAttribute("opacity", "0.35");
+    svg.appendChild(axis);
+    const barW = innerW / Math.max(1, data.length);
+    data.forEach((d, i) => {
+      const x = PAD_L + i * barW;
+      const h = d.y / maxY * innerH;
+      const y = PAD_T + innerH - h;
+      const rect = document.createElementNS(svg.namespaceURI, "rect");
+      rect.setAttribute("x", String(x + 1));
+      rect.setAttribute("y", String(y));
+      rect.setAttribute("width", String(Math.max(1, barW - 2)));
+      rect.setAttribute("height", String(h));
+      rect.setAttribute("rx", "2");
+      rect.setAttribute("fill", "currentColor");
+      rect.setAttribute("opacity", "0.35");
+      const t = document.createElementNS(svg.namespaceURI, "title");
+      t.textContent = `${d.x}: ${d.y}`;
+      rect.appendChild(t);
+      const click = spec.actions?.click;
+      if (click?.type === "drilldown") {
+        rect.setAttribute("style", "cursor: pointer;");
+        rect.addEventListener("click", () => {
+          const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${d.x}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
+          });
+        });
+      }
+      svg.appendChild(rect);
+      if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
+        const tx = document.createElementNS(svg.namespaceURI, "text");
+        tx.setAttribute("x", String(x + barW / 2));
+        tx.setAttribute("y", String(PAD_T + innerH + 18));
+        tx.setAttribute("text-anchor", "middle");
+        tx.setAttribute("font-size", "10");
+        tx.setAttribute("opacity", "0.7");
+        tx.textContent = d.x === "5000" ? "5k" : d.x.split("-")[0];
+        svg.appendChild(tx);
+      }
+    });
+    box.appendChild(svg);
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/ui/widgets/breakdownWidget.ts
+  function sortRows(rows, mode) {
+    if (mode === "asc") return [...rows].sort((a, b) => a.value - b.value);
+    if (mode === "desc") return [...rows].sort((a, b) => b.value - a.value);
+    const scoreBucketStart = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
+    const isDate = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
+    return [...rows].sort((a, b) => {
+      if (isDate(a.key) && isDate(b.key)) return a.key.localeCompare(b.key);
+      const na = Number.isFinite(scoreBucketStart(a.key)) ? scoreBucketStart(a.key) : NaN;
+      const nb = Number.isFinite(scoreBucketStart(b.key)) ? scoreBucketStart(b.key) : NaN;
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return a.key.localeCompare(b.key);
+    });
+  }
+  function formatValue2(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      return `${(value * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    const decimals = unit.decimals ?? 1;
+    return value.toFixed(decimals);
+  }
+  async function renderBreakdownWidget(semantic, widget, overlay) {
+    const spec = widget.spec;
+    const wrap = document.createElement("div");
+    wrap.className = "ga-widget ga-breakdown";
+    const title = document.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = document.createElement("div");
+    box.className = "ga-breakdown-box";
+    const rowsAll = applyFilters(await getRounds({}), spec.filters);
+    const dimId = spec.dimension;
+    const measId = spec.measure;
+    const dimDef = semantic.dimensions[dimId];
+    const measDef = semantic.measures[measId];
+    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
+    if (!measDef) throw new Error(`Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
+    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
+    if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
+    const grouped = groupByKey(rowsAll, keyFn);
+    let rows = Array.from(grouped.entries()).map(([k, g]) => ({
+      key: k,
+      value: measureFn(g),
+      rows: g
+    }));
+    const sortMode = spec.sort?.mode ?? "desc";
+    rows = sortRows(rows, sortMode);
+    const limit = typeof spec.limit === "number" ? spec.limit : 12;
+    rows = rows.slice(0, limit);
+    const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
+    for (const r of rows) {
+      const line = document.createElement("div");
+      line.className = "ga-breakdown-row";
+      const left = document.createElement("div");
+      left.className = "ga-breakdown-label";
+      left.textContent = r.key;
+      const right = document.createElement("div");
+      right.className = "ga-breakdown-right";
+      const val = document.createElement("div");
+      val.className = "ga-breakdown-value";
+      val.textContent = formatValue2(semantic, measId, r.value);
+      const barWrap = document.createElement("div");
+      barWrap.className = "ga-breakdown-barwrap";
+      const bar = document.createElement("div");
+      bar.className = "ga-breakdown-bar";
+      bar.style.width = `${Math.max(2, r.value / maxVal * 100)}%`;
+      barWrap.appendChild(bar);
+      right.appendChild(val);
+      right.appendChild(barWrap);
+      line.appendChild(left);
+      line.appendChild(right);
+      const click = spec.actions?.click;
+      if (click?.type === "drilldown") {
+        line.style.cursor = "pointer";
+        line.addEventListener("click", () => {
+          const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${r.key}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
+          });
+        });
+      }
+      box.appendChild(line);
+    }
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/ui/dashboardRenderer.ts
+  async function renderDashboard(root, semantic, dashboard) {
+    root.innerHTML = "";
+    const overlay = new DrilldownOverlay(root);
+    const tabBar = document.createElement("div");
+    tabBar.className = "ga-tabs";
+    const content = document.createElement("div");
+    content.className = "ga-content";
+    root.appendChild(tabBar);
+    root.appendChild(content);
+    const sections = dashboard.dashboard.sections;
+    let active = sections[0]?.id ?? "";
+    function makeTab(secId, label) {
+      const btn = document.createElement("button");
+      btn.className = "ga-tab";
+      btn.textContent = label;
+      btn.addEventListener("click", async () => {
+        active = secId;
+        await renderActive();
+        highlight();
+      });
+      tabBar.appendChild(btn);
+    }
+    function highlight() {
+      const btns = Array.from(tabBar.querySelectorAll("button.ga-tab"));
+      btns.forEach((b, i) => {
+        b.classList.toggle("active", sections[i]?.id === active);
+      });
+    }
+    async function renderWidget(widget) {
+      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay);
+      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay);
+      if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
+      const ph = document.createElement("div");
+      ph.className = "ga-widget ga-placeholder";
+      ph.textContent = `Widget type '${widget.type}' not implemented yet`;
+      return ph;
+    }
+    async function renderActive() {
+      content.innerHTML = "";
+      const section = sections.find((s) => s.id === active);
+      if (!section) return;
+      const grid = document.createElement("div");
+      grid.className = "ga-grid";
+      grid.style.display = "grid";
+      grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
+      grid.style.gap = "12px";
+      for (const placed of section.layout.cards) {
+        const card = document.createElement("div");
+        card.className = "ga-card";
+        card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
+        card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
+        const header = document.createElement("div");
+        header.className = "ga-card-header";
+        header.textContent = placed.title;
+        const body = document.createElement("div");
+        body.className = "ga-card-body";
+        const inner = document.createElement("div");
+        inner.className = "ga-card-inner";
+        inner.style.display = "grid";
+        inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
+        inner.style.gap = "10px";
+        for (const w of placed.card.children) {
+          const container = document.createElement("div");
+          container.className = "ga-child";
+          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
+          container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
+          container.style.gridRow = `${p.y + 1} / span ${p.h}`;
+          container.appendChild(await renderWidget(w));
+          inner.appendChild(container);
+        }
+        body.appendChild(inner);
+        card.appendChild(header);
+        card.appendChild(body);
+        grid.appendChild(card);
+      }
+      content.appendChild(grid);
+    }
+    for (const s of sections) makeTab(s.id, s.title);
+    await renderActive();
+    highlight();
+  }
+
+  // src/engine/validate.ts
+  var ValidationError = class extends Error {
+    code;
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+    }
+  };
+  function assert(condition, code, msg) {
+    if (!condition) throw new ValidationError(code, msg);
+  }
+  function validateDashboardAgainstSemantic(semantic, dash) {
+    for (const section of dash.dashboard.sections) {
+      for (const placedCard of section.layout.cards) {
+        for (const widget of placedCard.card.children) {
+          validateWidget(semantic, widget);
+        }
+      }
+    }
+  }
+  function validateWidget(semantic, widget) {
+    assert(semantic.datasets[widget.grain] !== void 0, "E_UNKNOWN_GRAIN", `Unknown grain: ${widget.grain}`);
+    if (widget.type === "chart") {
+      const spec = widget.spec;
+      const xDimId = spec.x?.dimension;
+      const yMeasId = spec.y?.measure;
+      assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
+      assert(typeof yMeasId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure`);
+      const xDim = semantic.dimensions[xDimId];
+      const yMeas = semantic.measures[yMeasId];
+      assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
+      assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
+      assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
+      assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
+      assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
+      assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+      if (spec.type === "line") {
+        assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
+      }
+      if (xDim.cardinality?.selectorRequired) {
+        assert(!!spec.x.selector, "E_SELECTOR_REQUIRED", `Dimension '${xDimId}' requires selector`);
+      }
+      if (spec.series) {
+        const sDimId = spec.series.dimension;
+        const sDim = semantic.dimensions[sDimId];
+        assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
+        assert(sDim.grain === widget.grain, "E_GRAIN_MISMATCH", `series '${sDimId}' grain=${sDim.grain} but widget grain=${widget.grain}`);
+        assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
+        const maxSeries = sDim.cardinality?.maxSeries ?? 50;
+        const requested = spec.series.selector.mode === "selected" ? spec.series.selector.values?.length ?? 0 : spec.series.selector.mode === "top_n" ? spec.series.selector.n ?? 0 : spec.series.selector.maxSeries ?? maxSeries;
+        assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
+      }
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "stat_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `stat_list ${widget.widgetId} has no rows`);
+      for (const row of spec.rows) {
+        const meas = semantic.measures[row.measure];
+        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
+        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${row.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+        validateClickAction(semantic, widget.widgetId, row.actions?.click);
+      }
+    }
+    if (widget.type === "stat_value") {
+      const spec = widget.spec;
+      const meas = semantic.measures[spec.measure];
+      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
+      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "breakdown") {
+      const spec = widget.spec;
+      const dim = semantic.dimensions[spec.dimension];
+      const meas = semantic.measures[spec.measure];
+      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
+      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in breakdown ${widget.widgetId}`);
+      assert(dim.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
+      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure grain mismatch in ${widget.widgetId}`);
+      if (dim.cardinality?.selectorRequired) {
+        assert(
+          typeof spec.limit === "number" && spec.limit > 0,
+          "E_SELECTOR_REQUIRED",
+          `Breakdown '${spec.dimension}' requires a positive limit`
+        );
+      }
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+  }
+  function validateClickAction(semantic, widgetId, click) {
+    if (!click || click.type !== "drilldown") return;
+    const targetPreset = semantic.drilldownPresets[click.target];
+    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${click.target}' in widget ${widgetId}`);
+    const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
+    assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
+  }
+
+  // src/config/semantic.json
+  var semantic_default = {
+    $schema: "./semantic.schema.json",
+    schemaVersion: "0.1.0",
+    grains: ["session", "game", "round"],
+    datasets: {
+      session: {
+        primaryKey: ["sessionId"],
+        timeField: "sessionStartTs"
+      },
+      game: {
+        primaryKey: ["gameId"],
+        timeField: "ts"
+      },
+      round: {
+        primaryKey: ["gameId", "roundNumber"],
+        timeField: "ts"
+      }
+    },
+    settings: {
+      sessionGapMinutesDefault: 45
+    },
+    dimensions: {
+      time_day: {
+        label: "Date",
+        kind: "time",
+        grain: "game",
+        ordered: true,
+        allowedCharts: ["line", "bar"],
+        sortModes: ["chronological"]
+      },
+      weekday: {
+        label: "Weekday",
+        kind: "category",
+        grain: "game",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      hour: {
+        label: "Hour of day",
+        kind: "category",
+        grain: "game",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      session_index: {
+        label: "Session #",
+        kind: "category",
+        grain: "session",
+        ordered: true,
+        allowedCharts: ["bar", "line"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      game_mode: {
+        label: "Game mode",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 10 }
+      },
+      result: {
+        label: "Result",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 5 }
+      },
+      round_number: {
+        label: "Round #",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      },
+      true_country: {
+        label: "True country",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 12, selectorRequired: true }
+      },
+      movement_type: {
+        label: "Movement",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 8 }
+      },
+      duration_bucket: {
+        label: "Guess duration bucket",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      },
+      score_bucket: {
+        label: "Score bucket",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      }
+    },
+    measures: {
+      games_count: {
+        label: "Games",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games"
+      },
+      rounds_count: {
+        label: "Rounds",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_rounds"
+      },
+      avg_score: {
+        label: "Avg score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_p1_score"
+      },
+      fivek_rate: {
+        label: "5k rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_p1_score_eq_5000"
+      },
+      win_rate: {
+        label: "Win rate",
+        unit: "percent",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_p1_win"
+      },
+      end_rating_avg: {
+        label: "Avg end rating",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_p1_end_rating"
+      },
+      rating_delta_avg: {
+        label: "Avg rating delta",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_p1_rating_delta"
+      },
+      hit_rate: {
+        label: "Hit rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_true_country_hit"
+      },
+      throw_rate: {
+        label: "Throw rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_throw_round"
+      },
+      damage_dealt_avg: {
+        label: "Avg damage dealt",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_dealt"
+      },
+      damage_taken_avg: {
+        label: "Avg damage taken",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_taken"
+      }
+    },
+    units: {
+      count: { format: "int" },
+      points: { format: "float", decimals: 1 },
+      percent: { format: "percent", decimals: 1 },
+      seconds: { format: "float", decimals: 1 },
+      rating: { format: "float", decimals: 0 },
+      km: { format: "float", decimals: 1 }
+    },
+    columnAliases: {
+      ts: ["playedAt", "startTime"],
+      true_country: ["trueCountry", "true_country"],
+      p1_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
+      p1_score: ["player_self_score", "p1_score", "score"],
+      p2_score: ["player_opponent_score", "p2_score"],
+      distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
+      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"]
+    },
+    drilldownPresets: {
+      rounds: {
+        entity: "round",
+        columnsPresets: {
+          roundMode: [
+            "ts",
+            "gameId",
+            "roundNumber",
+            "true_country",
+            "p1_country",
+            "p1_score",
+            "p2_score",
+            "durationSeconds",
+            "distanceKm"
+          ]
+        },
+        defaultPreset: "roundMode"
+      },
+      players: {
+        entity: "game",
+        columnsPresets: {
+          opponentMode: [
+            "ts",
+            "gameId",
+            "opponentName",
+            "game_mode",
+            "p1_startRating",
+            "p1_endRating",
+            "result"
+          ]
+        },
+        defaultPreset: "opponentMode"
+      }
+    },
+    errors: {
+      E_GRAIN_MISMATCH: "Selected fields have incompatible grains.",
+      E_CHART_X_NOT_ORDERED: "Line charts require an ordered x-dimension.",
+      E_SELECTOR_REQUIRED: "This dimension requires a selector (Top-N or Selected).",
+      E_TOO_MANY_SERIES: "Too many series requested; reduce categories or use selector."
+    }
+  };
+
+  // src/config/dashboard.json
+  var dashboard_default = {
+    $schema: "./dashboard.schema.json",
+    schemaVersion: "0.1.0",
+    dashboard: {
+      id: "default",
+      title: "GeoAnalyzr",
+      sections: [
+        {
+          id: "scores",
+          title: "Scores",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_scores_distribution",
+                title: "Scores",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 12,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_scores_kpis",
+                      type: "stat_list",
+                      title: "Score KPIs",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 3 },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Perfect 5k",
+                            measure: "fivek_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  { dimension: "score_bucket", op: "eq", value: "5000" }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_score_distribution",
+                      type: "chart",
+                      title: "Score distribution (smoothed)",
+                      grain: "round",
+                      placement: { x: 0, y: 3, w: 12, h: 9 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "score_bucket" },
+                        y: { measure: "rounds_count" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  };
+
+  // src/ui.ts
+  function cloneTemplate(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function injectCssOnce() {
+    const id = "geoanalyzr-semantic-dashboard-css";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+    .ga-root { position: fixed; inset: 24px; z-index: 999999; background: #0f0f0f; color: #ddd; border: 1px solid #333; border-radius: 16px; overflow: hidden; }
+    .ga-topbar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #2a2a2a; background:#141414; }
+    .ga-title { font-weight: 700; }
+    .ga-close { background:#222; border:1px solid #333; color:#ddd; border-radius:10px; padding:6px 10px; cursor:pointer; }
+    .ga-body { height: calc(100% - 46px); overflow:auto; }
+    .ga-tabs { display:flex; gap:8px; padding:10px; }
+    .ga-tab { background:#222; color:#ddd; border:1px solid #333; padding:6px 10px; border-radius:10px; cursor:pointer; }
+    .ga-tab.active { background:#333; }
+    .ga-content { padding:10px; }
+    .ga-card { background:#161616; border:1px solid #2a2a2a; border-radius:14px; overflow:hidden; }
+    .ga-card-header { padding:10px 12px; border-bottom:1px solid #2a2a2a; font-weight:650; }
+    .ga-card-body { padding:12px; }
+    .ga-widget-title { font-size:12px; opacity:0.8; margin-bottom:6px; }
+    .ga-statlist-box { background:#101010; border:1px solid #2a2a2a; border-radius:12px; padding:10px; }
+    .ga-statrow { display:flex; justify-content:space-between; padding:6px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); }
+    .ga-statrow:last-child { border-bottom:none; }
+    .ga-chart-box { background:#101010; border:1px solid #2a2a2a; border-radius:12px; padding:10px; }
+    .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
+    .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
+    .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
+    .ga-breakdown-barwrap { flex:1; height:8px; background:#222; border-radius:999px; overflow:hidden; }
+    .ga-breakdown-bar { height:100%; background:#7eb6ff; border-radius:999px; }
+    .ga-drilldown-modal { position:fixed; inset:0; z-index:9999999; }
+    .ga-drilldown-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
+    .ga-drilldown-panel { position:absolute; top:6%; left:50%; transform:translateX(-50%); width:min(1100px, 92vw); max-height:88vh; overflow:auto; background:#151515; border:1px solid #333; border-radius:14px; }
+    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #2a2a2a; }
+    .ga-drilldown-close { background:#222; border:1px solid #333; color:#ddd; border-radius:10px; padding:6px 10px; cursor:pointer; }
+    .ga-drilldown-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .ga-drilldown-table th, .ga-drilldown-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.06); text-align:left; }
+  `;
+    document.head.appendChild(style);
+  }
+  async function initAnalysisWindow() {
+    injectCssOnce();
+    let root = document.getElementById("geoanalyzr-semantic-root");
+    let body;
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "geoanalyzr-semantic-root";
+      root.className = "ga-root";
+      const top = document.createElement("div");
+      top.className = "ga-topbar";
+      const title = document.createElement("div");
+      title.className = "ga-title";
+      title.textContent = "GeoAnalyzr (semantic/dashboard demo)";
+      const close = document.createElement("button");
+      close.className = "ga-close";
+      close.textContent = "Close";
+      close.addEventListener("click", () => {
+        root.style.display = "none";
+      });
+      top.appendChild(title);
+      top.appendChild(close);
+      body = document.createElement("div");
+      body.className = "ga-body";
+      root.appendChild(top);
+      root.appendChild(body);
+      document.body.appendChild(root);
+    } else {
+      root.style.display = "block";
+      const foundBody = root.querySelector(".ga-body");
+      if (!(foundBody instanceof HTMLDivElement)) {
+        throw new Error("Semantic root has no .ga-body container");
+      }
+      body = foundBody;
+      body.innerHTML = "";
+    }
+    try {
+      const semantic = cloneTemplate(semantic_default);
+      const dashboard = cloneTemplate(dashboard_default);
+      validateDashboardAgainstSemantic(semantic, dashboard);
+      await renderDashboard(body, semantic, dashboard);
+    } catch (error) {
+      body.innerHTML = "";
+      const pre = document.createElement("pre");
+      pre.style.margin = "12px";
+      pre.style.whiteSpace = "pre-wrap";
+      pre.style.color = "#ff9aa2";
+      pre.textContent = `Failed to render semantic dashboard:
+${error instanceof Error ? error.message : String(error)}`;
+      body.appendChild(pre);
+      throw error;
+    }
+  }
+
   // src/http.ts
   function readNcfaFromDocumentCookie() {
     if (typeof document === "undefined") return void 0;
@@ -15919,11 +17062,11 @@
       return [...rows.values()].sort((a, b) => a.day - b.day);
     };
     const overviewBuckets = buildOverviewBuckets();
-    const makeOverviewPoints = (rows, pick) => rows.map((r) => ({ x: r.day, y: pick(r), label: formatDay(r.day) }));
-    const makeOverviewCumulativePoints = (rows, pick) => {
+    const makeOverviewPoints = (rows, pick2) => rows.map((r) => ({ x: r.day, y: pick2(r), label: formatDay(r.day) }));
+    const makeOverviewCumulativePoints = (rows, pick2) => {
       let running = 0;
       return rows.map((r) => {
-        running += pick(r);
+        running += pick2(r);
         return { x: r.day, y: running, label: formatDay(r.day) };
       });
     };
@@ -16429,9 +17572,9 @@
     ];
     if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
     if (sessionAmountWinsBars.length > 0) sessionMetricOptions.push({ key: "amount_wins", label: "Wins", bars: sessionAmountWinsBars });
-    const toSessionSeries = (pick) => sortedSessions.map((s, idx) => ({
+    const toSessionSeries = (pick2) => sortedSessions.map((s, idx) => ({
       x: idx + 1,
-      y: pick(s),
+      y: pick2(s),
       label: `${idx + 1}. ${formatShortDateTime(s.start)}`
     }));
     const sessionLineMetricOptions = [
@@ -38893,7 +40036,6 @@
   }
 
   // src/main.ts
-  var NCFA_HELP_TEXT = "NCFA token setup:\n\n1) Open geoguessr.com and log in.\n2) Open browser DevTools (F12 / Ctrl+Shift+I).\n3) Go to Network tab.\n4) Reload the page.\n5) Use filter and search for 'stats'.\n6) Open a 'stats' request.\n7) In request headers, find the '_ncfa' cookie.\n8) Copy only the value after '=' up to ';' (without ';').";
   function isInGame() {
     const p = location.pathname;
     return p.startsWith("/game/") || p.startsWith("/challenge/") || p.startsWith("/duels/") || p.startsWith("/team-duels/") || p.startsWith("/battle-royale/") || p.startsWith("/live-challenge/");
@@ -38931,6 +40073,9 @@
       return false;
     }
   }
+  function buildSemanticTabUrl() {
+    return `${location.origin}${location.pathname}${location.search}#geoanalyzr-semantic`;
+  }
   (async function boot() {
     const ui = createUI();
     ui.onUpdateClick(async () => {
@@ -38941,9 +40086,7 @@
         if (!ncfa) {
           const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
           if (wantsSet) {
-            const entered = prompt(`Paste _ncfa token here.
-
-${NCFA_HELP_TEXT}`, "");
+            const entered = prompt(`Paste _ncfa token here.`, "");
             if (entered !== null) {
               const clean = entered.trim();
               if (clean) {
@@ -39016,7 +40159,7 @@ ${NCFA_HELP_TEXT}`, "");
       const existing = await getNcfaToken();
       ui.openNcfaManager({
         initialToken: existing || "",
-        helpText: NCFA_HELP_TEXT,
+        helpText: "",
         repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
         onSave: async (token) => {
           const clean = token.trim();
@@ -39072,6 +40215,10 @@ ${NCFA_HELP_TEXT}`, "");
       try {
         ui.setStatus("Loading analysis...");
         await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
+        const opened = window.open(buildSemanticTabUrl(), "_blank", "noopener");
+        if (!opened) {
+          await initAnalysisWindow();
+        }
         ui.setStatus("Analysis loaded.");
       } catch (e) {
         ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
@@ -39092,6 +40239,11 @@ ${NCFA_HELP_TEXT}`, "");
     watchRoutes(() => {
       ui.setVisible(!isInGame());
     });
+    if (location.hash === "#geoanalyzr-semantic") {
+      initAnalysisWindow().catch((error) => {
+        console.error("Failed to initialize semantic dashboard tab", error);
+      });
+    }
   })();
 })();
 /*! Bundled license information:

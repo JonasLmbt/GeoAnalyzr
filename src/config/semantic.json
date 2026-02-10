@@ -1,0 +1,261 @@
+{
+  "$schema": "./semantic.schema.json",
+  "schemaVersion": "0.1.0",
+
+  "grains": ["session", "game", "round"],
+
+  "datasets": {
+    "session": {
+      "primaryKey": ["sessionId"],
+      "timeField": "sessionStartTs"
+    },
+    "game": {
+      "primaryKey": ["gameId"],
+      "timeField": "ts"
+    },
+    "round": {
+      "primaryKey": ["gameId", "roundNumber"],
+      "timeField": "ts"
+    }
+  },
+
+  "settings": {
+    "sessionGapMinutesDefault": 45
+  },
+
+  "dimensions": {
+    "time_day": {
+      "label": "Date",
+      "kind": "time",
+      "grain": "game",
+      "ordered": true,
+      "allowedCharts": ["line", "bar"],
+      "sortModes": ["chronological"]
+    },
+    "weekday": {
+      "label": "Weekday",
+      "kind": "category",
+      "grain": "game",
+      "ordered": true,
+      "allowedCharts": ["bar"],
+      "sortModes": ["chronological", "asc", "desc"]
+    },
+    "hour": {
+      "label": "Hour of day",
+      "kind": "category",
+      "grain": "game",
+      "ordered": true,
+      "allowedCharts": ["bar"],
+      "sortModes": ["chronological", "asc", "desc"]
+    },
+    "session_index": {
+      "label": "Session #",
+      "kind": "category",
+      "grain": "session",
+      "ordered": true,
+      "allowedCharts": ["bar", "line"],
+      "sortModes": ["chronological", "asc", "desc"]
+    },
+    "game_mode": {
+      "label": "Game mode",
+      "kind": "category",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 10 }
+    },
+    "result": {
+      "label": "Result",
+      "kind": "category",
+      "grain": "game",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 5 }
+    },
+
+    "round_number": {
+      "label": "Round #",
+      "kind": "category",
+      "grain": "round",
+      "ordered": true,
+      "allowedCharts": ["bar"],
+      "sortModes": ["chronological"]
+    },
+    "true_country": {
+      "label": "True country",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 12, "selectorRequired": true }
+    },
+    "movement_type": {
+      "label": "Movement",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 8 }
+    },
+    "duration_bucket": {
+      "label": "Guess duration bucket",
+      "kind": "category",
+      "grain": "round",
+      "ordered": true,
+      "allowedCharts": ["bar"],
+      "sortModes": ["chronological"]
+    },
+    "score_bucket": {
+      "label": "Score bucket",
+      "kind": "category",
+      "grain": "round",
+      "ordered": true,
+      "allowedCharts": ["bar"],
+      "sortModes": ["chronological"]
+    }
+  },
+
+  "measures": {
+    "games_count": {
+      "label": "Games",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_games"
+    },
+    "rounds_count": {
+      "label": "Rounds",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_rounds"
+    },
+
+    "avg_score": {
+      "label": "Avg score",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_p1_score"
+    },
+    "fivek_rate": {
+      "label": "5k rate",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_p1_score_eq_5000"
+    },
+
+    "win_rate": {
+      "label": "Win rate",
+      "unit": "percent",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_p1_win"
+    },
+    "end_rating_avg": {
+      "label": "Avg end rating",
+      "unit": "rating",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_p1_end_rating"
+    },
+    "rating_delta_avg": {
+      "label": "Avg rating delta",
+      "unit": "rating",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_p1_rating_delta"
+    },
+
+    "hit_rate": {
+      "label": "Hit rate",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_true_country_hit"
+    },
+    "throw_rate": {
+      "label": "Throw rate",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_throw_round"
+    },
+
+    "damage_dealt_avg": {
+      "label": "Avg damage dealt",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_damage_dealt"
+    },
+    "damage_taken_avg": {
+      "label": "Avg damage taken",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_damage_taken"
+    }
+  },
+
+  "units": {
+    "count": { "format": "int" },
+    "points": { "format": "float", "decimals": 1 },
+    "percent": { "format": "percent", "decimals": 1 },
+    "seconds": { "format": "float", "decimals": 1 },
+    "rating": { "format": "float", "decimals": 0 },
+    "km": { "format": "float", "decimals": 1 }
+  },
+  "columnAliases": {
+    "ts": ["playedAt", "startTime"],
+    "true_country": ["trueCountry", "true_country"],
+    "p1_country": ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
+    "p1_score": ["player_self_score", "p1_score", "score"],
+    "p2_score": ["player_opponent_score", "p2_score"],
+    "distanceKm": ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
+    "durationSeconds": ["durationSeconds", "guessDurationSec", "timeSec"]
+  },
+
+  "drilldownPresets": {
+    "rounds": {
+      "entity": "round",
+      "columnsPresets": {
+        "roundMode": [
+          "ts",
+          "gameId",
+          "roundNumber",
+          "true_country",
+          "p1_country",
+          "p1_score",
+          "p2_score",
+          "durationSeconds",
+          "distanceKm"
+        ]
+      },
+      "defaultPreset": "roundMode"
+    },
+    "players": {
+      "entity": "game",
+      "columnsPresets": {
+        "opponentMode": [
+          "ts",
+          "gameId",
+          "opponentName",
+          "game_mode",
+          "p1_startRating",
+          "p1_endRating",
+          "result"
+        ]
+      },
+      "defaultPreset": "opponentMode"
+    }
+  },
+
+  "errors": {
+    "E_GRAIN_MISMATCH": "Selected fields have incompatible grains.",
+    "E_CHART_X_NOT_ORDERED": "Line charts require an ordered x-dimension.",
+    "E_SELECTOR_REQUIRED": "This dimension requires a selector (Top-N or Selected).",
+    "E_TOO_MANY_SERIES": "Too many series requested; reduce categories or use selector."
+  }
+}
