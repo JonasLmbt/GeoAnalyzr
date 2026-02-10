@@ -427,10 +427,8 @@
         "amount_wins",
         "avg_damage_dealt",
         "damage_dealt",
-        "damage_dealt_share",
         "avg_damage_taken",
         "damage_taken",
-        "damage_taken_share",
         "rating"
       ],
       "defaultMetric": "avg_score",
@@ -598,10 +596,8 @@
               "amount_wins",
               "avg_damage_dealt",
               "damage_dealt",
-              "damage_dealt_share",
               "avg_damage_taken",
               "damage_taken",
-              "damage_taken_share",
               "rating"
             ],
             "defaultMetric": "avg_score"

@@ -288,9 +288,9 @@ function normalizeSectionTemplate(
       ? graphRaw.sorts.filter((s): s is "chronological" | "desc" | "asc" => s === "chronological" || s === "desc" || s === "asc")
       : undefined;
     const mappedType =
-      type === "line" || type === "selectableBar" || type === "selectableLine"
-        ? type
-        : type === "bar" || type === "verticalBar" || type === "horizontalBar"
+      type === "line" || type === "selectableLine"
+        ? "line"
+        : type === "bar" || type === "verticalBar" || type === "horizontalBar" || type === "selectableBar"
           ? "bar"
           : undefined;
     const mappedOrientation =
@@ -727,7 +727,13 @@ function applyGraphTemplateToChart(
 ): { chart: AnalysisChart; title?: string } {
   if (!template) return { chart };
   const contentDef = getGraphContentDefinition(template.content);
-  if (template.type && template.type !== chart.type) return { chart };
+  if (template.type) {
+    const wantsLine = template.type === "line";
+    const wantsBar = template.type === "bar";
+    const isLineChart = chart.type === "line" || chart.type === "selectableLine";
+    const isBarChart = chart.type === "bar" || chart.type === "selectableBar";
+    if ((wantsLine && !isLineChart) || (wantsBar && !isBarChart)) return { chart };
+  }
   if (template.yLabel && chart.yLabel && template.yLabel !== chart.yLabel) return { chart };
 
   if (chart.type === "bar") {
@@ -3483,12 +3489,13 @@ export function createUI(): UIHandle {
               typeSelect.innerHTML = `
                 <option value="">(auto)</option>
                 <option value="line">line</option>
-                <option value="bar">bar</option>
-                <option value="selectableLine">selectableLine</option>
-                <option value="selectableBar">selectableBar</option>
-                <option value="horizontalBar">horizontalBar</option>
-                <option value="verticalBar">verticalBar</option>`;
-              typeSelect.value = graphObj.type || "";
+                <option value="bar">bar</option>`;
+              typeSelect.value =
+                graphObj.type === "line" || graphObj.type === "selectableLine"
+                  ? "line"
+                  : graphObj.type === "bar" || graphObj.type === "selectableBar" || graphObj.type === "horizontalBar" || graphObj.type === "verticalBar"
+                    ? "bar"
+                    : "";
               styleInput(typeSelect);
               mkField("Type", typeSelect);
 

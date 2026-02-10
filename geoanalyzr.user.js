@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.12
+// @version      1.5.13
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7163,10 +7163,8 @@
           "amount_wins",
           "avg_damage_dealt",
           "damage_dealt",
-          "damage_dealt_share",
           "avg_damage_taken",
           "damage_taken",
-          "damage_taken_share",
           "rating"
         ],
         defaultMetric: "avg_score",
@@ -7334,10 +7332,8 @@
                 "amount_wins",
                 "avg_damage_dealt",
                 "damage_dealt",
-                "damage_dealt_share",
                 "avg_damage_taken",
                 "damage_taken",
-                "damage_taken_share",
                 "rating"
               ],
               defaultMetric: "avg_score",
@@ -8642,7 +8638,7 @@
         properties: {
           id: { type: "string", minLength: 1 },
           sourceIndex: { type: "integer", minimum: 0 },
-          type: { enum: ["line", "bar", "horizontalBar", "verticalBar", "selectableBar", "selectableLine"] },
+          type: { enum: ["line", "bar"] },
           title: { type: "string" },
           yLabel: { type: "string" },
           content: { type: "string" },
@@ -8907,7 +8903,7 @@
       const defaultSort = graphRaw.defaultSort;
       const metrics = Array.isArray(graphRaw.metrics) ? graphRaw.metrics.map((m) => typeof m === "string" ? m.trim() : "").filter((m) => m.length > 0) : void 0;
       const sorts = Array.isArray(graphRaw.sorts) ? graphRaw.sorts.filter((s) => s === "chronological" || s === "desc" || s === "asc") : void 0;
-      const mappedType = type === "line" || type === "selectableBar" || type === "selectableLine" ? type : type === "bar" || type === "verticalBar" || type === "horizontalBar" ? "bar" : void 0;
+      const mappedType = type === "line" || type === "selectableLine" ? "line" : type === "bar" || type === "verticalBar" || type === "horizontalBar" || type === "selectableBar" ? "bar" : void 0;
       const mappedOrientation = type === "horizontalBar" ? "horizontal" : type === "verticalBar" ? "vertical" : graphRaw.orientation === "vertical" || graphRaw.orientation === "horizontal" ? graphRaw.orientation : void 0;
       const drilldownType = graphRaw.drilldownType;
       const toStringList = (v) => Array.isArray(v) ? v.map((x) => typeof x === "string" ? x.trim() : "").filter((x) => x.length > 0) : void 0;
@@ -9224,7 +9220,13 @@
   function applyGraphTemplateToChart(chart, template) {
     if (!template) return { chart };
     const contentDef = getGraphContentDefinition(template.content);
-    if (template.type && template.type !== chart.type) return { chart };
+    if (template.type) {
+      const wantsLine = template.type === "line";
+      const wantsBar = template.type === "bar";
+      const isLineChart = chart.type === "line" || chart.type === "selectableLine";
+      const isBarChart = chart.type === "bar" || chart.type === "selectableBar";
+      if (wantsLine && !isLineChart || wantsBar && !isBarChart) return { chart };
+    }
     if (template.yLabel && chart.yLabel && template.yLabel !== chart.yLabel) return { chart };
     if (chart.type === "bar") {
       const next = {
@@ -11597,12 +11599,8 @@
                 typeSelect.innerHTML = `
                 <option value="">(auto)</option>
                 <option value="line">line</option>
-                <option value="bar">bar</option>
-                <option value="selectableLine">selectableLine</option>
-                <option value="selectableBar">selectableBar</option>
-                <option value="horizontalBar">horizontalBar</option>
-                <option value="verticalBar">verticalBar</option>`;
-                typeSelect.value = graphObj.type || "";
+                <option value="bar">bar</option>`;
+                typeSelect.value = graphObj.type === "line" || graphObj.type === "selectableLine" ? "line" : graphObj.type === "bar" || graphObj.type === "selectableBar" || graphObj.type === "horizontalBar" || graphObj.type === "verticalBar" ? "bar" : "";
                 styleInput(typeSelect);
                 mkField("Type", typeSelect);
                 const orientationSelect = doc.createElement("select");

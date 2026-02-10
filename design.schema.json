@@ -96,7 +96,7 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "sourceIndex": { "type": "integer", "minimum": 0 },
-        "type": { "enum": ["line", "bar", "horizontalBar", "verticalBar", "selectableBar", "selectableLine"] },
+        "type": { "enum": ["line", "bar"] },
         "title": { "type": "string" },
         "yLabel": { "type": "string" },
         "content": { "type": "string" },
