@@ -2705,6 +2705,7 @@ export function createUI(): UIHandle {
           row.style.border = `1px solid ${palette.border}`;
           row.style.borderRadius = "8px";
           row.style.padding = "6px 8px";
+          row.style.cursor = "pointer";
           const label = doc.createElement("div");
           const section = sections.find((s) => s.id === sectionId);
           label.textContent = section?.title || sectionId;
@@ -2726,6 +2727,7 @@ export function createUI(): UIHandle {
             b.style.borderRadius = "6px";
             b.style.padding = "3px 8px";
             b.style.cursor = "pointer";
+            b.addEventListener("click", (ev) => ev.stopPropagation());
           }
           upBtn.addEventListener("click", () => {
             const arr = analysisDesign.section_layout?.order || [];
@@ -2752,6 +2754,184 @@ export function createUI(): UIHandle {
           });
           row.append(label, upBtn, downBtn, removeBtn);
           orderList.appendChild(row);
+
+          const editor = doc.createElement("div");
+          editor.style.display = "none";
+          editor.style.background = palette.panel;
+          editor.style.border = `1px solid ${palette.border}`;
+          editor.style.borderRadius = "8px";
+          editor.style.padding = "8px";
+          editor.style.marginTop = "-2px";
+          editor.style.marginBottom = "6px";
+          editor.style.display = "none";
+          editor.style.gap = "8px";
+          editor.style.gridTemplateColumns = "minmax(220px, 1fr) minmax(220px, 1fr)";
+          orderList.appendChild(editor);
+
+          const toggleEditor = () => {
+            if (editor.style.display !== "none") {
+              editor.style.display = "none";
+              editor.innerHTML = "";
+              return;
+            }
+            editor.innerHTML = "";
+            editor.style.display = "grid";
+
+            const currentSection = (analysisDesign.sections || []).find((s) => s.id === sectionId);
+            if (!currentSection) return;
+
+            const mkField = (name: string, input: HTMLInputElement | HTMLSelectElement, colSpan = false) => {
+              const wrap = doc.createElement("label");
+              wrap.style.display = "grid";
+              wrap.style.gap = "4px";
+              if (colSpan) wrap.style.gridColumn = "1 / -1";
+              const n = doc.createElement("span");
+              n.textContent = name;
+              n.style.fontSize = "12px";
+              n.style.color = palette.textMuted;
+              wrap.append(n, input);
+              editor.appendChild(wrap);
+            };
+            const mkCheck = (text: string, checked: boolean) => {
+              const wrap = doc.createElement("label");
+              wrap.style.display = "inline-flex";
+              wrap.style.alignItems = "center";
+              wrap.style.gap = "6px";
+              wrap.style.fontSize = "12px";
+              const cb = doc.createElement("input");
+              cb.type = "checkbox";
+              cb.checked = checked;
+              const t = doc.createElement("span");
+              t.textContent = text;
+              wrap.append(cb, t);
+              return { wrap, cb };
+            };
+
+            const idInput = doc.createElement("input");
+            idInput.value = currentSection.id;
+            styleInput(idInput);
+            mkField("Section id", idInput);
+
+            const titleInput = doc.createElement("input");
+            titleInput.value = currentSection.title || "";
+            styleInput(titleInput);
+            mkField("Label / title", titleInput);
+
+            const tocInput = doc.createElement("input");
+            tocInput.value = currentSection.tocLabel || "";
+            styleInput(tocInput);
+            mkField("TOC label", tocInput);
+
+            const sourceInput = doc.createElement("input");
+            sourceInput.value = currentSection.sourceSectionId || "";
+            sourceInput.placeholder = "(same as section id)";
+            styleInput(sourceInput);
+            mkField("Source section id", sourceInput);
+
+            const possibleFiltersInput = doc.createElement("input");
+            possibleFiltersInput.value = (currentSection.appliesFilters || []).join(", ");
+            possibleFiltersInput.placeholder = "date, mode, movement, teammate, country";
+            styleInput(possibleFiltersInput);
+            mkField("Possible filters (csv)", possibleFiltersInput, true);
+
+            const forcedWrap = doc.createElement("div");
+            forcedWrap.style.gridColumn = "1 / -1";
+            forcedWrap.style.display = "grid";
+            forcedWrap.style.gridTemplateColumns = "1fr 1fr";
+            forcedWrap.style.gap = "8px";
+            const forcedTitle = doc.createElement("div");
+            forcedTitle.textContent = "Forced filters";
+            forcedTitle.style.gridColumn = "1 / -1";
+            forcedTitle.style.fontWeight = "600";
+            forcedWrap.appendChild(forcedTitle);
+
+            const forcedTeammate = mkCheck("Force teammate selector", !!currentSection.requiredFilters?.teammate?.enabled);
+            const forcedCountry = mkCheck("Force country selector", !!currentSection.requiredFilters?.country?.enabled);
+            forcedWrap.append(forcedTeammate.wrap, forcedCountry.wrap);
+
+            const teammateLabelInput = doc.createElement("input");
+            teammateLabelInput.value = currentSection.requiredFilters?.teammate?.label || "Mate";
+            styleInput(teammateLabelInput);
+            const countryLabelInput = doc.createElement("input");
+            countryLabelInput.value = currentSection.requiredFilters?.country?.label || "Country";
+            styleInput(countryLabelInput);
+            const teammateLblWrap = doc.createElement("label");
+            teammateLblWrap.style.display = "grid";
+            teammateLblWrap.style.gap = "4px";
+            const teammateLblText = doc.createElement("span");
+            teammateLblText.textContent = "Forced teammate label";
+            teammateLblText.style.fontSize = "12px";
+            teammateLblText.style.color = palette.textMuted;
+            teammateLblWrap.append(teammateLblText, teammateLabelInput);
+            const countryLblWrap = doc.createElement("label");
+            countryLblWrap.style.display = "grid";
+            countryLblWrap.style.gap = "4px";
+            const countryLblText = doc.createElement("span");
+            countryLblText.textContent = "Forced country label";
+            countryLblText.style.fontSize = "12px";
+            countryLblText.style.color = palette.textMuted;
+            countryLblWrap.append(countryLblText, countryLabelInput);
+            forcedWrap.append(teammateLblWrap, countryLblWrap);
+            editor.appendChild(forcedWrap);
+
+            const saveBtn = doc.createElement("button");
+            saveBtn.textContent = "Save section";
+            styleActionBtn(saveBtn);
+            saveBtn.style.gridColumn = "1 / -1";
+            saveBtn.addEventListener("click", () => {
+              const nextId = idInput.value.trim();
+              if (!nextId) return;
+              if (nextId !== currentSection.id && (analysisDesign.sections || []).some((s) => s.id === nextId)) return;
+
+              const oldId = currentSection.id;
+              currentSection.id = nextId;
+              currentSection.title = titleInput.value.trim() || nextId;
+              currentSection.tocLabel = tocInput.value.trim() || undefined;
+              currentSection.sourceSectionId = sourceInput.value.trim() || undefined;
+              currentSection.appliesFilters = parseCsv(possibleFiltersInput.value) as Array<"date" | "mode" | "movement" | "teammate" | "country">;
+
+              currentSection.requiredFilters = {
+                teammate: {
+                  enabled: forcedTeammate.cb.checked,
+                  default: "top_games",
+                  label: teammateLabelInput.value.trim() || "Mate"
+                },
+                country: {
+                  enabled: forcedCountry.cb.checked,
+                  default: "top_rounds",
+                  label: countryLabelInput.value.trim() || "Country"
+                }
+              };
+
+              if (!currentSection.requiredFilters.teammate?.enabled) {
+                delete currentSection.requiredFilters.teammate;
+              }
+              if (!currentSection.requiredFilters.country?.enabled) {
+                delete currentSection.requiredFilters.country;
+              }
+              if (
+                !currentSection.requiredFilters.teammate &&
+                !currentSection.requiredFilters.country
+              ) {
+                currentSection.requiredFilters = undefined;
+              }
+
+              if (nextId !== oldId) {
+                const arr = analysisDesign.section_layout?.order || [];
+                for (let j = 0; j < arr.length; j++) {
+                  if (arr[j] === oldId) arr[j] = nextId;
+                }
+              }
+
+              rebuildSectionTemplateCache();
+              persistAnalysisDesign();
+              renderLayoutTab();
+              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
+            });
+            editor.appendChild(saveBtn);
+          };
+
+          row.addEventListener("click", toggleEditor);
         }
       };
 
