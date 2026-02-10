@@ -42,34 +42,6 @@
       "type": "array",
       "items": { "$ref": "#/$defs/section" }
     },
-    "graphContentDefinitions": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "metrics": {
-            "type": "array",
-            "items": { "type": "string" }
-          },
-          "defaultMetric": { "type": "string" },
-          "defaultSort": { "enum": ["chronological", "desc", "asc"] },
-          "sorts": {
-            "type": "array",
-            "items": { "enum": ["chronological", "desc", "asc"] }
-          },
-          "compareMode": { "enum": ["selectors", "period_to_date"] },
-          "compareModeOptions": {
-            "type": "array",
-            "items": { "enum": ["per_period", "to_date", "both"] }
-          },
-          "defaultCompareMode": { "enum": ["per_period", "to_date", "both"] }
-          ,
-          "xDomain": { "enum": ["time", "index"] },
-          "maxPoints": { "type": "integer", "minimum": 2 }
-        },
-        "additionalProperties": true
-      }
-    },
     "section_layout": {
       "type": "object",
       "properties": {

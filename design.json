@@ -155,296 +155,6 @@
       "asc"
     ]
   },
-  "graphContentDefinitions": {
-    "time_patterns_weekday": {
-      "metrics": [
-        "games",
-        "rounds",
-        "avg_score",
-        "avg_distance",
-        "avg_time",
-        "throw_rate",
-        "fivek_rate"
-      ],
-      "defaultMetric": "games",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "time_patterns_hour": {
-      "metrics": [
-        "games",
-        "rounds",
-        "avg_score",
-        "avg_distance",
-        "avg_time",
-        "throw_rate",
-        "fivek_rate"
-      ],
-      "defaultMetric": "games",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "sessions": {
-      "metrics": [
-        "games",
-        "rounds",
-        "avg_score",
-        "avg_score_correct_only",
-        "avg_distance",
-        "avg_time",
-        "avg_duration",
-        "throw_rate",
-        "amount_throws",
-        "fivek_rate",
-        "amount_fiveks",
-        "hit_rate",
-        "amount_hits",
-        "win_rate",
-        "amount_wins",
-        "avg_damage_dealt",
-        "damage_dealt",
-        "damage_dealt_share",
-        "avg_damage_taken",
-        "damage_taken",
-        "damage_taken_share"
-      ],
-      "defaultMetric": "avg_score",
-      "defaultSort": "desc",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "sessions_progression": {
-      "metrics": [
-        "games",
-        "rounds",
-        "avg_score",
-        "avg_score_correct_only",
-        "avg_distance",
-        "avg_time",
-        "avg_duration",
-        "throw_rate",
-        "amount_throws",
-        "fivek_rate",
-        "amount_fiveks",
-        "hit_rate",
-        "amount_hits",
-        "win_rate",
-        "amount_wins",
-        "avg_damage_dealt",
-        "damage_dealt",
-        "damage_dealt_share",
-        "avg_damage_taken",
-        "damage_taken",
-        "damage_taken_share"
-      ],
-      "defaultMetric": "avg_score",
-      "xDomain": "index",
-      "maxPoints": 50
-    },
-    "tempo_buckets": {
-      "metrics": [
-        "games",
-        "rounds",
-        "avg_score",
-        "avg_score_correct_only",
-        "avg_distance",
-        "avg_time",
-        "avg_duration",
-        "throw_rate",
-        "amount_throws",
-        "fivek_rate",
-        "amount_fiveks",
-        "hit_rate",
-        "amount_hits",
-        "avg_damage_dealt",
-        "damage_dealt",
-        "damage_dealt_share",
-        "avg_damage_taken",
-        "damage_taken",
-        "damage_taken_share"
-      ],
-      "defaultMetric": "avg_score",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "score_distribution": {
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "rounds_progression": {
-      "metrics": [
-        "avg_score",
-        "avg_score_correct_only",
-        "avg_distance",
-        "avg_time",
-        "avg_duration",
-        "throw_rate",
-        "fivek_rate",
-        "amount_throws",
-        "amount_fiveks",
-        "rounds",
-        "hit_rate",
-        "win_rate",
-        "avg_damage_dealt",
-        "damage_dealt_share",
-        "avg_damage_taken",
-        "damage_taken_share",
-        "games"
-      ],
-      "defaultMetric": "avg_score",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "rounds_by_game_length": {
-      "metrics": [
-        "win_rate",
-        "avg_score",
-        "avg_distance",
-        "avg_time",
-        "games",
-        "rounds"
-      ],
-      "defaultMetric": "win_rate",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "country_metrics": {
-      "metrics": [
-        "rounds",
-        "hit_rate",
-        "avg_score",
-        "avg_score_correct_only",
-        "avg_distance",
-        "throw_rate",
-        "fivek_rate",
-        "avg_damage_dealt",
-        "avg_damage_taken",
-        "damage_dealt_share",
-        "damage_taken_share"
-      ],
-      "defaultMetric": "avg_score",
-      "defaultSort": "desc",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "country_confusion_matrix": {
-      "defaultSort": "desc",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "opponents_country": {
-      "defaultSort": "desc",
-      "sorts": [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    "rating_history": {
-      "metrics": [
-        "rating"
-      ],
-      "defaultMetric": "rating",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "spotlight_distribution": {
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "spotlight_trend": {
-      "metrics": [
-        "damage_dealt_share",
-        "damage_taken_share",
-        "avg_score",
-        "hit_rate",
-        "throw_rate",
-        "fivek_rate",
-        "avg_damage_dealt",
-        "avg_damage_taken",
-        "rounds"
-      ],
-      "defaultMetric": "damage_dealt_share",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "records_daily": {
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "overview_time_progression": {
-      "metrics": [
-        "games",
-        "rounds",
-        "avg_score",
-        "avg_score_correct_only",
-        "avg_distance",
-        "avg_time",
-        "throw_rate",
-        "amount_throws",
-        "fivek_rate",
-        "amount_fiveks",
-        "hit_rate",
-        "amount_hits",
-        "win_rate",
-        "amount_wins",
-        "avg_damage_dealt",
-        "damage_dealt",
-        "avg_damage_taken",
-        "damage_taken",
-        "rating"
-      ],
-      "defaultMetric": "avg_score",
-      "compareMode": "period_to_date",
-      "compareModeOptions": [
-        "per_period",
-        "to_date",
-        "both"
-      ],
-      "defaultCompareMode": "to_date",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    }
-  },
   "sections": [
     {
       "id": "overview",
@@ -569,7 +279,7 @@
           {
             "id": "overview_time_progression",
             "sourceIndex": 0,
-            "type": "selectableLine",
+            "type": "line",
             "yLabel": "Games/day (or aggregated bucket)",
             "content": "overview_time_progression",
             "hoverable": true,
@@ -600,8 +310,7 @@
               "damage_taken",
               "rating"
             ],
-            "defaultMetric": "avg_score"
-            ,
+            "defaultMetric": "avg_score",
             "compareMode": "period_to_date",
             "compareModeOptions": [
               "per_period",
@@ -656,7 +365,7 @@
           {
             "id": "time_patterns_weekday",
             "sourceIndex": 0,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Weekday patterns",
             "orientation": "horizontal",
             "initialBars": 7,
@@ -685,7 +394,7 @@
           {
             "id": "time_patterns_hour",
             "sourceIndex": 1,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Hour-of-day patterns",
             "orientation": "horizontal",
             "initialBars": 24,
@@ -775,7 +484,7 @@
           {
             "id": "sessions",
             "sourceIndex": 0,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Sessions",
             "orientation": "horizontal",
             "initialBars": 10,
@@ -805,7 +514,7 @@
           {
             "id": "sessions_progression",
             "sourceIndex": 1,
-            "type": "selectableLine",
+            "type": "line",
             "title": "Sessions progression metrics",
             "defaultMetric": "avg_score",
             "metrics": [
@@ -908,7 +617,7 @@
           {
             "id": "tempo_buckets",
             "sourceIndex": 0,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Time bucket metrics",
             "orientation": "horizontal",
             "defaultMetric": "avg_score",
@@ -1136,7 +845,7 @@
           {
             "id": "rounds_progression",
             "sourceIndex": 0,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Round progression metrics",
             "orientation": "vertical",
             "defaultMetric": "avg_score",
@@ -1167,7 +876,7 @@
           {
             "id": "rounds_by_game_length",
             "sourceIndex": 1,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Performance by game length (rounds per game, 2+)",
             "orientation": "vertical",
             "defaultMetric": "win_rate",
@@ -1231,7 +940,7 @@
           {
             "id": "country_metrics",
             "sourceIndex": 0,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Country metrics",
             "orientation": "horizontal",
             "initialBars": 25,
@@ -1639,7 +1348,7 @@
           {
             "id": "spotlight_trend",
             "sourceIndex": 1,
-            "type": "selectableLine",
+            "type": "line",
             "title": "Country trend comparison",
             "defaultMetric": "damage_dealt_share",
             "primaryCountry": "{{selectedCountry}}",

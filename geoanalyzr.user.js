@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.13
+// @version      1.5.14
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6891,296 +6891,6 @@
         "asc"
       ]
     },
-    graphContentDefinitions: {
-      time_patterns_weekday: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_distance",
-          "avg_time",
-          "throw_rate",
-          "fivek_rate"
-        ],
-        defaultMetric: "games",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      time_patterns_hour: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_distance",
-          "avg_time",
-          "throw_rate",
-          "fivek_rate"
-        ],
-        defaultMetric: "games",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      sessions: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_time",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "damage_dealt_share",
-          "avg_damage_taken",
-          "damage_taken",
-          "damage_taken_share"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "desc",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      sessions_progression: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_time",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "damage_dealt_share",
-          "avg_damage_taken",
-          "damage_taken",
-          "damage_taken_share"
-        ],
-        defaultMetric: "avg_score",
-        xDomain: "index",
-        maxPoints: 50
-      },
-      tempo_buckets: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_time",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "damage_dealt_share",
-          "avg_damage_taken",
-          "damage_taken",
-          "damage_taken_share"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      score_distribution: {
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      rounds_progression: {
-        metrics: [
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_time",
-          "avg_duration",
-          "throw_rate",
-          "fivek_rate",
-          "amount_throws",
-          "amount_fiveks",
-          "rounds",
-          "hit_rate",
-          "win_rate",
-          "avg_damage_dealt",
-          "damage_dealt_share",
-          "avg_damage_taken",
-          "damage_taken_share",
-          "games"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      rounds_by_game_length: {
-        metrics: [
-          "win_rate",
-          "avg_score",
-          "avg_distance",
-          "avg_time",
-          "games",
-          "rounds"
-        ],
-        defaultMetric: "win_rate",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      country_metrics: {
-        metrics: [
-          "rounds",
-          "hit_rate",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "throw_rate",
-          "fivek_rate",
-          "avg_damage_dealt",
-          "avg_damage_taken",
-          "damage_dealt_share",
-          "damage_taken_share"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "desc",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      country_confusion_matrix: {
-        defaultSort: "desc",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      opponents_country: {
-        defaultSort: "desc",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      rating_history: {
-        metrics: [
-          "rating"
-        ],
-        defaultMetric: "rating",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      spotlight_distribution: {
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      spotlight_trend: {
-        metrics: [
-          "damage_dealt_share",
-          "damage_taken_share",
-          "avg_score",
-          "hit_rate",
-          "throw_rate",
-          "fivek_rate",
-          "avg_damage_dealt",
-          "avg_damage_taken",
-          "rounds"
-        ],
-        defaultMetric: "damage_dealt_share",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      records_daily: {
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      overview_time_progression: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_time",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken",
-          "rating"
-        ],
-        defaultMetric: "avg_score",
-        compareMode: "period_to_date",
-        compareModeOptions: [
-          "per_period",
-          "to_date",
-          "both"
-        ],
-        defaultCompareMode: "to_date",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      }
-    },
     sections: [
       {
         id: "overview",
@@ -8585,33 +8295,6 @@
         type: "array",
         items: { $ref: "#/$defs/section" }
       },
-      graphContentDefinitions: {
-        type: "object",
-        additionalProperties: {
-          type: "object",
-          properties: {
-            metrics: {
-              type: "array",
-              items: { type: "string" }
-            },
-            defaultMetric: { type: "string" },
-            defaultSort: { enum: ["chronological", "desc", "asc"] },
-            sorts: {
-              type: "array",
-              items: { enum: ["chronological", "desc", "asc"] }
-            },
-            compareMode: { enum: ["selectors", "period_to_date"] },
-            compareModeOptions: {
-              type: "array",
-              items: { enum: ["per_period", "to_date", "both"] }
-            },
-            defaultCompareMode: { enum: ["per_period", "to_date", "both"] },
-            xDomain: { enum: ["time", "index"] },
-            maxPoints: { type: "integer", minimum: 2 }
-          },
-          additionalProperties: true
-        }
-      },
       section_layout: {
         type: "object",
         properties: {
@@ -8845,8 +8528,381 @@
     additionalProperties: true
   };
 
+  // design.capabilities.json
+  var design_capabilities_default = {
+    $schema: "./design.capabilities.schema.json",
+    schemaVersion: "1.0",
+    graphTypes: [
+      "line",
+      "bar"
+    ],
+    metricSuggestions: [
+      "amount_fiveks",
+      "amount_hits",
+      "amount_throws",
+      "amount_wins",
+      "avg_damage_dealt",
+      "avg_damage_taken",
+      "avg_distance",
+      "avg_duration",
+      "avg_score",
+      "avg_score_correct_only",
+      "avg_time",
+      "damage_dealt",
+      "damage_dealt_share",
+      "damage_taken",
+      "damage_taken_share",
+      "fivek_rate",
+      "games",
+      "hit_rate",
+      "rating",
+      "rounds",
+      "throw_rate",
+      "win_rate"
+    ],
+    graphContentDefinitions: {
+      time_patterns_weekday: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken",
+          "rating"
+        ],
+        defaultMetric: "games",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      time_patterns_hour: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken",
+          "rating"
+        ],
+        defaultMetric: "games",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      sessions: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "desc",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      sessions_progression: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken",
+          "rating"
+        ],
+        defaultMetric: "avg_score",
+        xDomain: "index",
+        maxPoints: 50
+      },
+      tempo_buckets: {
+        metrics: [
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      score_distribution: {
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      rounds_progression: {
+        metrics: [
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      rounds_by_game_length: {
+        metrics: [
+          "games",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken"
+        ],
+        defaultMetric: "win_rate",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      country_metrics: {
+        metrics: [
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "damage_dealt_share",
+          "avg_damage_taken",
+          "damage_taken",
+          "damage_taken_share"
+        ],
+        defaultMetric: "avg_score",
+        defaultSort: "desc",
+        sorts: [
+          "chronological",
+          "desc",
+          "asc"
+        ]
+      },
+      country_confusion_matrix: {
+        defaultSort: "desc",
+        sorts: [
+          "desc",
+          "asc"
+        ]
+      },
+      opponents_country: {
+        defaultSort: "desc",
+        sorts: [
+          "desc",
+          "asc"
+        ]
+      },
+      rating_history: {
+        metrics: [
+          "rating"
+        ],
+        defaultMetric: "rating",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      spotlight_distribution: {
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      spotlight_trend: {
+        metrics: [
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "damage_dealt_share",
+          "avg_damage_taken",
+          "damage_taken",
+          "damage_taken_share"
+        ],
+        defaultMetric: "avg_score",
+        compareMode: "period_to_date",
+        compareModeOptions: [
+          "per_period",
+          "to_date",
+          "both"
+        ],
+        defaultCompareMode: "to_date",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      records_daily: {
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      },
+      overview_time_progression: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "avg_damage_taken",
+          "damage_taken",
+          "rating"
+        ],
+        defaultMetric: "avg_score",
+        compareMode: "period_to_date",
+        compareModeOptions: [
+          "per_period",
+          "to_date",
+          "both"
+        ],
+        defaultCompareMode: "to_date",
+        defaultSort: "chronological",
+        sorts: [
+          "chronological"
+        ]
+      }
+    }
+  };
+
   // src/ui.ts
   var DEFAULT_ANALYSIS_DESIGN = typeof design_default === "object" && design_default ? design_default : {};
+  var ANALYSIS_CAPABILITIES = typeof design_capabilities_default === "object" && design_capabilities_default ? design_capabilities_default : {};
   var analysisDesign = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
   var ANALYSIS_TEMPLATE_META_KEY = "analysis:window-template:v1";
   async function loadPersistedAnalysisDesign() {
@@ -9054,7 +9110,9 @@
       return base;
     }
     base.layout = { mode: "legacy_colon" };
-    if (!base.graphTemplates) base.graphTemplates = normalizeGraphTemplates(rawLayout?.graphs);
+    if (!base.graphTemplates && rawLayout?.mode === "header_blocks") {
+      base.graphTemplates = normalizeGraphTemplates(rawLayout?.graphs);
+    }
     return base;
   }
   var sectionTemplateById = /* @__PURE__ */ new Map();
@@ -9209,7 +9267,15 @@
   }
   function getGraphContentDefinition(content) {
     if (!content) return void 0;
-    return analysisDesign.graphContentDefinitions?.[content];
+    return ANALYSIS_CAPABILITIES.graphContentDefinitions?.[content] || analysisDesign.graphContentDefinitions?.[content];
+  }
+  function prettifyMetricKey(metricKey) {
+    return metricKey.replace(/_/g, " ").replace(/\bavg\b/gi, "Avg").replace(/\bfivek\b/gi, "5k").replace(/\brate\b/gi, "rate").replace(/\bkm\b/gi, "km").replace(/\bsec\b/gi, "sec").replace(/\bto\b/gi, "to").replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  }
+  function getMetricLabel(metricKey) {
+    const explicit = ANALYSIS_CAPABILITIES.metricLabels?.[metricKey];
+    if (typeof explicit === "string" && explicit.trim().length > 0) return explicit.trim();
+    return prettifyMetricKey(metricKey);
   }
   function getSectionRenderTitle(section) {
     const templ = getSectionTemplate(section);
@@ -10963,13 +11029,15 @@
           };
           walkSections(DEFAULT_ANALYSIS_DESIGN.sections);
           walkSections(analysisDesign.sections);
-          for (const [contentKey, def] of Object.entries(analysisDesign.graphContentDefinitions || {})) {
+          for (const s of ANALYSIS_CAPABILITIES.singleTypeSuggestions || []) {
+            addType(s);
+          }
+          for (const [contentKey, def] of Object.entries(ANALYSIS_CAPABILITIES.graphContentDefinitions || {})) {
             graphContents.add(contentKey);
             for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
           }
-          for (const [contentKey, def] of Object.entries(DEFAULT_ANALYSIS_DESIGN.graphContentDefinitions || {})) {
-            graphContents.add(contentKey);
-            for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
+          for (const m of ANALYSIS_CAPABILITIES.metricSuggestions || []) {
+            if (typeof m === "string" && m.trim()) metrics.add(m.trim());
           }
           return {
             singleTypes: Array.from(singleTypes).sort(),
@@ -11596,10 +11664,8 @@
                 styleInput(contentInput);
                 mkField("Content key", contentInput);
                 const typeSelect = doc.createElement("select");
-                typeSelect.innerHTML = `
-                <option value="">(auto)</option>
-                <option value="line">line</option>
-                <option value="bar">bar</option>`;
+                const graphTypeOptions = ANALYSIS_CAPABILITIES.graphTypes && ANALYSIS_CAPABILITIES.graphTypes.length > 0 ? ANALYSIS_CAPABILITIES.graphTypes : ["line", "bar"];
+                typeSelect.innerHTML = `<option value="">(auto)</option>${graphTypeOptions.map((t) => `<option value="${t}">${t}</option>`).join("")}`;
                 typeSelect.value = graphObj.type === "line" || graphObj.type === "selectableLine" ? "line" : graphObj.type === "bar" || graphObj.type === "selectableBar" || graphObj.type === "horizontalBar" || graphObj.type === "verticalBar" ? "bar" : "";
                 styleInput(typeSelect);
                 mkField("Type", typeSelect);
@@ -11664,7 +11730,7 @@
                   for (const metric of allowed) {
                     const opt = doc.createElement("option");
                     opt.value = metric;
-                    opt.textContent = metric;
+                    opt.textContent = getMetricLabel(metric);
                     defaultMetricSelect.appendChild(opt);
                   }
                   if ([...defaultMetricSelect.options].some((o) => o.value === prev)) {
@@ -11695,7 +11761,8 @@
                     const isActive = selectedMetrics.has(metric);
                     const rowMetric = doc.createElement("button");
                     rowMetric.type = "button";
-                    rowMetric.textContent = metric;
+                    const metricLabel = getMetricLabel(metric);
+                    rowMetric.textContent = metricLabel === metric ? metricLabel : `${metricLabel} (${metric})`;
                     rowMetric.style.textAlign = "left";
                     rowMetric.style.fontSize = "12px";
                     rowMetric.style.padding = "6px 8px";
@@ -11716,7 +11783,7 @@
                     metricsList.appendChild(rowMetric);
                   }
                   const selectedSorted = Array.from(selectedMetrics).sort();
-                  metricsSummary.textContent = selectedSorted.length > 0 ? `Metrics (${selectedSorted.length}): ${selectedSorted.join(", ")}` : "Metrics (0): click to select";
+                  metricsSummary.textContent = selectedSorted.length > 0 ? `Metrics (${selectedSorted.length}): ${selectedSorted.map(getMetricLabel).join(", ")}` : "Metrics (0): click to select";
                 };
                 renderMetricChecklist();
                 contentInput.addEventListener("input", () => renderMetricChecklist());

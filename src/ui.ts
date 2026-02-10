@@ -2,6 +2,7 @@ import { AnalysisBarPoint, AnalysisChart, AnalysisDrilldownItem, AnalysisSection
 import { db } from "./db";
 import designTemplateJson from "../design.json";
 import designSchemaJson from "../design.schema.json";
+import designCapabilitiesJson from "../design.capabilities.json";
 
 type AnalysisTheme = "dark" | "light";
 type AnalysisSettings = {
@@ -194,8 +195,19 @@ type AnalysisDesignTemplate = {
   >;
 };
 
+type AnalysisDesignCapabilities = {
+  graphTypes?: Array<"line" | "bar">;
+  singleTypeSuggestions?: string[];
+  metricSuggestions?: string[];
+  metricLabels?: Record<string, string>;
+  graphContentDefinitions?: Record<string, GraphContentDefinition>;
+};
+
 const DEFAULT_ANALYSIS_DESIGN: AnalysisDesignTemplate = typeof designTemplateJson === "object" && designTemplateJson
   ? (designTemplateJson as AnalysisDesignTemplate)
+  : {};
+const ANALYSIS_CAPABILITIES: AnalysisDesignCapabilities = typeof designCapabilitiesJson === "object" && designCapabilitiesJson
+  ? (designCapabilitiesJson as AnalysisDesignCapabilities)
   : {};
 let analysisDesign: AnalysisDesignTemplate = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
 
@@ -516,7 +528,9 @@ function normalizeSectionTemplate(
     return base;
   }
   base.layout = { mode: "legacy_colon" };
-  if (!base.graphTemplates) base.graphTemplates = normalizeGraphTemplates(rawLayout?.graphs);
+  if (!base.graphTemplates && rawLayout?.mode === "header_blocks") {
+    base.graphTemplates = normalizeGraphTemplates((rawLayout as Extract<DesignSectionLayout, { mode: "header_blocks" }> | undefined)?.graphs);
+  }
   return base;
 }
 
@@ -711,7 +725,28 @@ function applyTemplate(input: string, vars: Record<string, string>): string {
 
 function getGraphContentDefinition(content: string | undefined): GraphContentDefinition | undefined {
   if (!content) return undefined;
-  return analysisDesign.graphContentDefinitions?.[content];
+  return (
+    ANALYSIS_CAPABILITIES.graphContentDefinitions?.[content] ||
+    analysisDesign.graphContentDefinitions?.[content]
+  );
+}
+
+function prettifyMetricKey(metricKey: string): string {
+  return metricKey
+    .replace(/_/g, " ")
+    .replace(/\bavg\b/gi, "Avg")
+    .replace(/\bfivek\b/gi, "5k")
+    .replace(/\brate\b/gi, "rate")
+    .replace(/\bkm\b/gi, "km")
+    .replace(/\bsec\b/gi, "sec")
+    .replace(/\bto\b/gi, "to")
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase());
+}
+
+function getMetricLabel(metricKey: string): string {
+  const explicit = ANALYSIS_CAPABILITIES.metricLabels?.[metricKey];
+  if (typeof explicit === "string" && explicit.trim().length > 0) return explicit.trim();
+  return prettifyMetricKey(metricKey);
 }
 
 function getSectionRenderTitle(section: AnalysisSection): string {
@@ -2805,13 +2840,15 @@ export function createUI(): UIHandle {
         };
         walkSections(DEFAULT_ANALYSIS_DESIGN.sections);
         walkSections(analysisDesign.sections);
-        for (const [contentKey, def] of Object.entries(analysisDesign.graphContentDefinitions || {})) {
+        for (const s of ANALYSIS_CAPABILITIES.singleTypeSuggestions || []) {
+          addType(s);
+        }
+        for (const [contentKey, def] of Object.entries(ANALYSIS_CAPABILITIES.graphContentDefinitions || {})) {
           graphContents.add(contentKey);
           for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
         }
-        for (const [contentKey, def] of Object.entries(DEFAULT_ANALYSIS_DESIGN.graphContentDefinitions || {})) {
-          graphContents.add(contentKey);
-          for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
+        for (const m of ANALYSIS_CAPABILITIES.metricSuggestions || []) {
+          if (typeof m === "string" && m.trim()) metrics.add(m.trim());
         }
         return {
           singleTypes: Array.from(singleTypes).sort(),
@@ -3486,10 +3523,10 @@ export function createUI(): UIHandle {
               mkField("Content key", contentInput);
 
               const typeSelect = doc.createElement("select");
-              typeSelect.innerHTML = `
-                <option value="">(auto)</option>
-                <option value="line">line</option>
-                <option value="bar">bar</option>`;
+              const graphTypeOptions = (ANALYSIS_CAPABILITIES.graphTypes && ANALYSIS_CAPABILITIES.graphTypes.length > 0)
+                ? ANALYSIS_CAPABILITIES.graphTypes
+                : (["line", "bar"] as Array<"line" | "bar">);
+              typeSelect.innerHTML = `<option value="">(auto)</option>${graphTypeOptions.map((t) => `<option value="${t}">${t}</option>`).join("")}`;
               typeSelect.value =
                 graphObj.type === "line" || graphObj.type === "selectableLine"
                   ? "line"
@@ -3562,7 +3599,7 @@ export function createUI(): UIHandle {
                 for (const metric of allowed) {
                   const opt = doc.createElement("option");
                   opt.value = metric;
-                  opt.textContent = metric;
+                  opt.textContent = getMetricLabel(metric);
                   defaultMetricSelect.appendChild(opt);
                 }
                 if ([...defaultMetricSelect.options].some((o) => o.value === prev)) {
@@ -3599,7 +3636,8 @@ export function createUI(): UIHandle {
                   const isActive = selectedMetrics.has(metric);
                   const rowMetric = doc.createElement("button");
                   rowMetric.type = "button";
-                  rowMetric.textContent = metric;
+                  const metricLabel = getMetricLabel(metric);
+                  rowMetric.textContent = metricLabel === metric ? metricLabel : `${metricLabel} (${metric})`;
                   rowMetric.style.textAlign = "left";
                   rowMetric.style.fontSize = "12px";
                   rowMetric.style.padding = "6px 8px";
@@ -3621,7 +3659,7 @@ export function createUI(): UIHandle {
                 }
                 const selectedSorted = Array.from(selectedMetrics).sort();
                 metricsSummary.textContent = selectedSorted.length > 0
-                  ? `Metrics (${selectedSorted.length}): ${selectedSorted.join(", ")}`
+                  ? `Metrics (${selectedSorted.length}): ${selectedSorted.map(getMetricLabel).join(", ")}`
                   : "Metrics (0): click to select";
               };
               renderMetricChecklist();
@@ -5069,4 +5107,3 @@ export function createUI(): UIHandle {
     }
   };
 }
-

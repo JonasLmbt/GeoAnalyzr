@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://geoanalyzr.local/design.capabilities.schema.json",
+  "title": "GeoAnalyzr Design Capabilities",
+  "type": "object",
+  "required": ["graphContentDefinitions"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string" },
+    "graphTypes": {
+      "type": "array",
+      "items": { "enum": ["line", "bar"] }
+    },
+    "singleTypeSuggestions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "metricSuggestions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "metricLabels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "graphContentDefinitions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "defaultMetric": { "type": "string" },
+          "defaultSort": { "enum": ["chronological", "desc", "asc"] },
+          "sorts": {
+            "type": "array",
+            "items": { "enum": ["chronological", "desc", "asc"] }
+          },
+          "compareMode": { "enum": ["selectors", "period_to_date"] },
+          "compareModeOptions": {
+            "type": "array",
+            "items": { "enum": ["per_period", "to_date", "both"] }
+          },
+          "defaultCompareMode": { "enum": ["per_period", "to_date", "both"] },
+          "xDomain": { "enum": ["time", "index"] },
+          "maxPoints": { "type": "integer", "minimum": 2 }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
