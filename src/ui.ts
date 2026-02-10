@@ -2609,6 +2609,55 @@ export function createUI(): UIHandle {
           .split(",")
           .map((v) => v.trim())
           .filter((v) => v.length > 0);
+      const collectSuggestions = () => {
+        const singleTypes = new Set<string>();
+        const graphContents = new Set<string>();
+        const metrics = new Set<string>();
+        const addType = (t: unknown) => {
+          if (typeof t === "string" && t.trim()) singleTypes.add(t.trim());
+        };
+        const walkSections = (list: AnalysisDesignTemplate["sections"] | undefined) => {
+          for (const sec of list || []) {
+            for (const s of sec.objects?.singles || []) addType(s.type);
+            for (const b of sec.objects?.boxes || []) {
+              for (const ln of b.lines || []) addType((ln as { type?: string }).type);
+            }
+            for (const g of sec.objects?.graphs || []) {
+              if (typeof g.content === "string" && g.content.trim()) graphContents.add(g.content.trim());
+              for (const m of g.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
+            }
+          }
+        };
+        walkSections(DEFAULT_ANALYSIS_DESIGN.sections);
+        walkSections(analysisDesign.sections);
+        for (const [contentKey, def] of Object.entries(analysisDesign.graphContentDefinitions || {})) {
+          graphContents.add(contentKey);
+          for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
+        }
+        for (const [contentKey, def] of Object.entries(DEFAULT_ANALYSIS_DESIGN.graphContentDefinitions || {})) {
+          graphContents.add(contentKey);
+          for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
+        }
+        return {
+          singleTypes: Array.from(singleTypes).sort(),
+          graphContents: Array.from(graphContents).sort(),
+          metrics: Array.from(metrics).sort()
+        };
+      };
+      const suggestionData = collectSuggestions();
+      const createDataList = (id: string, values: string[]) => {
+        const dl = doc.createElement("datalist");
+        dl.id = id;
+        for (const v of values) {
+          const opt = doc.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        }
+        wrapper.appendChild(dl);
+      };
+      createDataList("ga-single-type-suggestions", suggestionData.singleTypes);
+      createDataList("ga-graph-content-suggestions", suggestionData.graphContents);
+      createDataList("ga-metric-suggestions", suggestionData.metrics);
 
       const sections = analysisDesign.sections || [];
       const currentOrder = Array.isArray(analysisDesign.section_layout?.order)
@@ -2838,13 +2887,14 @@ export function createUI(): UIHandle {
             const entry = order[i];
             const row = doc.createElement("div");
             row.style.display = "grid";
-            row.style.gridTemplateColumns = "1fr auto auto auto auto";
+            row.style.gridTemplateColumns = "1fr auto auto auto";
             row.style.gap = "6px";
             row.style.alignItems = "center";
             row.style.background = palette.panel;
             row.style.border = `1px solid ${palette.border}`;
             row.style.borderRadius = "6px";
             row.style.padding = "6px 8px";
+            row.style.cursor = "pointer";
             const label = doc.createElement("div");
             label.textContent = `${entry.kind}: ${entry.id}`;
             label.style.fontSize = "12px";
@@ -2855,13 +2905,12 @@ export function createUI(): UIHandle {
             const downBtn = doc.createElement("button");
             downBtn.textContent = "Down";
             downBtn.disabled = i === order.length - 1;
-            const editBtn = doc.createElement("button");
-            editBtn.textContent = "Edit";
             const delBtn = doc.createElement("button");
             delBtn.textContent = "Remove";
-            for (const b of [upBtn, downBtn, editBtn, delBtn]) {
+            for (const b of [upBtn, downBtn, delBtn]) {
               styleActionBtn(b);
               b.style.padding = "3px 8px";
+              b.addEventListener("click", (ev) => ev.stopPropagation());
             }
             upBtn.addEventListener("click", () => {
               [order[i - 1], order[i]] = [order[i], order[i - 1]];
@@ -2887,7 +2936,7 @@ export function createUI(): UIHandle {
               renderComponentRows();
               if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
             });
-            row.append(label, upBtn, downBtn, editBtn, delBtn);
+            row.append(label, upBtn, downBtn, delBtn);
             list.appendChild(row);
 
             const findSingle = () => (section.objects?.singles || []).find((x) => x.id === entry.id);
@@ -2919,7 +2968,7 @@ export function createUI(): UIHandle {
               if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
             };
 
-            editBtn.addEventListener("click", () => {
+            row.addEventListener("click", () => {
               if (editor.style.display !== "none") {
                 closeEditor();
                 return;
@@ -2951,13 +3000,20 @@ export function createUI(): UIHandle {
                 const labelInput = doc.createElement("input");
                 labelInput.value = single.label || "";
                 styleInput(labelInput);
-                mkField("Label", labelInput, true);
+                mkField("Label", labelInput);
+                const typeInputSingle = doc.createElement("input");
+                typeInputSingle.value = single.type || "";
+                typeInputSingle.placeholder = "type (optional)";
+                typeInputSingle.setAttribute("list", "ga-single-type-suggestions");
+                styleInput(typeInputSingle);
+                mkField("Type", typeInputSingle);
                 const saveBtn = doc.createElement("button");
                 saveBtn.textContent = "Save";
                 styleActionBtn(saveBtn);
                 saveBtn.style.gridColumn = "1 / -1";
                 saveBtn.addEventListener("click", () => {
                   single.label = labelInput.value.trim() || single.id;
+                  single.type = typeInputSingle.value.trim() || undefined;
                   saveAndRefresh();
                 });
                 editor.appendChild(saveBtn);
@@ -2974,10 +3030,11 @@ export function createUI(): UIHandle {
                 const linesWrap = doc.createElement("div");
                 linesWrap.style.gridColumn = "1 / -1";
                 linesWrap.style.display = "grid";
-                linesWrap.style.gap = "6px";
+                linesWrap.style.gap = "0";
                 const linesTitle = doc.createElement("div");
                 linesTitle.textContent = "Lines";
                 linesTitle.style.fontWeight = "600";
+                linesTitle.style.marginBottom = "4px";
                 linesWrap.appendChild(linesTitle);
                 const lines = boxObj.lines || [];
                 const renderLines = () => {
@@ -2986,13 +3043,22 @@ export function createUI(): UIHandle {
                     const line = lines[lineIdx];
                     const row2 = doc.createElement("div");
                     row2.style.display = "grid";
-                    row2.style.gridTemplateColumns = "1fr auto";
+                    row2.style.gridTemplateColumns = "1fr 1fr auto";
                     row2.style.gap = "6px";
+                    row2.style.padding = "4px 0";
                     const input = doc.createElement("input");
                     input.value = line.label || "";
                     styleInput(input);
                     input.addEventListener("input", () => {
                       line.label = input.value;
+                    });
+                    const typeInputLine = doc.createElement("input");
+                    typeInputLine.value = ((line as { type?: string }).type || "");
+                    typeInputLine.placeholder = "type (optional)";
+                    typeInputLine.setAttribute("list", "ga-single-type-suggestions");
+                    styleInput(typeInputLine);
+                    typeInputLine.addEventListener("input", () => {
+                      (line as { type?: string }).type = typeInputLine.value;
                     });
                     const rm = doc.createElement("button");
                     rm.textContent = "Remove";
@@ -3001,14 +3067,14 @@ export function createUI(): UIHandle {
                       lines.splice(lineIdx, 1);
                       renderLines();
                     });
-                    row2.append(input, rm);
+                    row2.append(input, typeInputLine, rm);
                     linesWrap.appendChild(row2);
                   }
                   const addLineBtn = doc.createElement("button");
                   addLineBtn.textContent = "Add line";
                   styleActionBtn(addLineBtn);
                   addLineBtn.addEventListener("click", () => {
-                    lines.push({ label: "New line" });
+                    lines.push({ label: "New line", type: undefined } as { label: string; type?: string });
                     renderLines();
                   });
                   linesWrap.appendChild(addLineBtn);
@@ -3021,7 +3087,11 @@ export function createUI(): UIHandle {
                 saveBtn.style.gridColumn = "1 / -1";
                 saveBtn.addEventListener("click", () => {
                   boxObj.title = titleInput.value.trim() || boxObj.id;
-                  for (const ln of lines) ln.label = (ln.label || "").trim() || "Line";
+                  for (const ln of lines) {
+                    ln.label = (ln.label || "").trim() || "Line";
+                    const lnt = ln as { type?: string };
+                    lnt.type = lnt.type?.trim() || undefined;
+                  }
                   boxObj.lines = lines;
                   saveAndRefresh();
                 });
@@ -3038,6 +3108,7 @@ export function createUI(): UIHandle {
 
               const contentInput = doc.createElement("input");
               contentInput.value = graphObj.content || "";
+              contentInput.setAttribute("list", "ga-graph-content-suggestions");
               styleInput(contentInput);
               mkField("Content key", contentInput);
 
@@ -3062,11 +3133,13 @@ export function createUI(): UIHandle {
 
               const defaultMetricInput = doc.createElement("input");
               defaultMetricInput.value = graphObj.defaultMetric || "";
+              defaultMetricInput.setAttribute("list", "ga-metric-suggestions");
               styleInput(defaultMetricInput);
               mkField("Default metric", defaultMetricInput);
 
               const metricsInput = doc.createElement("input");
               metricsInput.value = (graphObj.metrics || []).join(", ");
+              metricsInput.setAttribute("list", "ga-metric-suggestions");
               styleInput(metricsInput);
               mkField("Metrics (csv)", metricsInput, true);
 
@@ -3186,6 +3259,7 @@ export function createUI(): UIHandle {
         styleInput(labelInput);
         const typeInput = doc.createElement("input");
         typeInput.placeholder = "type (optional)";
+        typeInput.setAttribute("list", "ga-single-type-suggestions");
         styleInput(typeInput);
         const addCompBtn = doc.createElement("button");
         addCompBtn.textContent = "Add component";
