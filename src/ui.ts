@@ -2863,6 +2863,23 @@ export function createUI(): UIHandle {
 
       for (const sectionId of analysisDesign.section_layout?.order || []) {
         const section = ensureSectionContainer(sectionId);
+        const inferBoxLinesFromSource = (boxObj: { title: string; lines?: Array<{ label: string; type?: string; sourceSectionId?: string }> }) => {
+          if ((boxObj.lines || []).length > 0) return;
+          const sourceId = boxObj.lines?.[0]?.sourceSectionId || section.sourceSectionId || section.id;
+          const sourceSection = (lastAnalysisData?.sections || []).find((s) => s.id === sourceId);
+          if (!sourceSection || !sourceSection.lines || sourceSection.lines.length === 0) return;
+          const headerIdx = sourceSection.lines.findIndex((line) => matchesLineLabel(line, boxObj.title));
+          if (headerIdx < 0) return;
+          const inferred: Array<{ label: string; type?: string; sourceSectionId?: string }> = [];
+          for (let i = headerIdx + 1; i < sourceSection.lines.length; i++) {
+            const raw = sourceSection.lines[i];
+            if (/:\s*$/.test(raw.trim())) break;
+            const label = getLineLabel(raw);
+            if (!label) continue;
+            inferred.push({ label, sourceSectionId: sourceId });
+          }
+          if (inferred.length > 0) boxObj.lines = inferred;
+        };
         const details = doc.createElement("details");
         details.style.border = `1px solid ${palette.border}`;
         details.style.borderRadius = "8px";
@@ -3023,6 +3040,7 @@ export function createUI(): UIHandle {
               if (entry.kind === "box") {
                 const boxObj = findBox();
                 if (!boxObj) return;
+                inferBoxLinesFromSource(boxObj);
                 const titleInput = doc.createElement("input");
                 titleInput.value = boxObj.title || "";
                 styleInput(titleInput);
@@ -3137,11 +3155,62 @@ export function createUI(): UIHandle {
               styleInput(defaultMetricInput);
               mkField("Default metric", defaultMetricInput);
 
-              const metricsInput = doc.createElement("input");
-              metricsInput.value = (graphObj.metrics || []).join(", ");
-              metricsInput.setAttribute("list", "ga-metric-suggestions");
-              styleInput(metricsInput);
-              mkField("Metrics (csv)", metricsInput, true);
+              const metricsWrap = doc.createElement("div");
+              metricsWrap.style.gridColumn = "1 / -1";
+              metricsWrap.style.display = "grid";
+              metricsWrap.style.gap = "6px";
+              const metricsTitle = doc.createElement("div");
+              metricsTitle.textContent = "Metrics";
+              metricsTitle.style.fontSize = "12px";
+              metricsTitle.style.color = palette.textMuted;
+              metricsWrap.appendChild(metricsTitle);
+              const selectedMetrics = new Set<string>((graphObj.metrics || []).filter((m) => !!m));
+              const metricsList = doc.createElement("div");
+              metricsList.style.display = "grid";
+              metricsList.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
+              metricsList.style.gap = "4px 8px";
+              const renderMetricChecklist = () => {
+                metricsList.innerHTML = "";
+                const allMetricOptions = Array.from(new Set([...suggestionData.metrics, ...Array.from(selectedMetrics)])).sort();
+                for (const metric of allMetricOptions) {
+                  const rowMetric = doc.createElement("label");
+                  rowMetric.style.display = "inline-flex";
+                  rowMetric.style.alignItems = "center";
+                  rowMetric.style.gap = "6px";
+                  rowMetric.style.fontSize = "12px";
+                  const cb = doc.createElement("input");
+                  cb.type = "checkbox";
+                  cb.checked = selectedMetrics.has(metric);
+                  cb.addEventListener("change", () => {
+                    if (cb.checked) selectedMetrics.add(metric);
+                    else selectedMetrics.delete(metric);
+                  });
+                  const text = doc.createElement("span");
+                  text.textContent = metric;
+                  rowMetric.append(cb, text);
+                  metricsList.appendChild(rowMetric);
+                }
+              };
+              renderMetricChecklist();
+              const customMetricRow = doc.createElement("div");
+              customMetricRow.style.display = "inline-flex";
+              customMetricRow.style.gap = "6px";
+              const customMetricInput = doc.createElement("input");
+              customMetricInput.placeholder = "custom_metric";
+              styleInput(customMetricInput);
+              const addCustomMetricBtn = doc.createElement("button");
+              addCustomMetricBtn.textContent = "Add metric";
+              styleActionBtn(addCustomMetricBtn);
+              addCustomMetricBtn.addEventListener("click", () => {
+                const m = customMetricInput.value.trim();
+                if (!m) return;
+                selectedMetrics.add(m);
+                customMetricInput.value = "";
+                renderMetricChecklist();
+              });
+              customMetricRow.append(customMetricInput, addCustomMetricBtn);
+              metricsWrap.append(metricsList, customMetricRow);
+              editor.appendChild(metricsWrap);
 
               const defaultSortSelect = doc.createElement("select");
               defaultSortSelect.innerHTML = `<option value="">(auto)</option><option value="chronological">chronological</option><option value="desc">descending</option><option value="asc">ascending</option>`;
@@ -3214,7 +3283,7 @@ export function createUI(): UIHandle {
                 graphObj.type = (typeSelect.value || undefined) as DesignGraphTemplate["type"];
                 graphObj.orientation = (orientationSelect.value || undefined) as DesignGraphTemplate["orientation"];
                 graphObj.defaultMetric = defaultMetricInput.value.trim() || undefined;
-                graphObj.metrics = parseCsv(metricsInput.value);
+                graphObj.metrics = Array.from(selectedMetrics);
                 graphObj.defaultSort = (defaultSortSelect.value || undefined) as DesignGraphTemplate["defaultSort"];
                 graphObj.sorts = parseCsv(sortsInput.value).filter(
                   (s): s is "chronological" | "desc" | "asc" => s === "chronological" || s === "desc" || s === "asc"

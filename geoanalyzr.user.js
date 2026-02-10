@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.1
+// @version      1.5.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10927,6 +10927,23 @@
         wrapper.appendChild(detailsWrap);
         for (const sectionId of analysisDesign.section_layout?.order || []) {
           const section = ensureSectionContainer(sectionId);
+          const inferBoxLinesFromSource = (boxObj) => {
+            if ((boxObj.lines || []).length > 0) return;
+            const sourceId = boxObj.lines?.[0]?.sourceSectionId || section.sourceSectionId || section.id;
+            const sourceSection = (lastAnalysisData?.sections || []).find((s) => s.id === sourceId);
+            if (!sourceSection || !sourceSection.lines || sourceSection.lines.length === 0) return;
+            const headerIdx = sourceSection.lines.findIndex((line) => matchesLineLabel(line, boxObj.title));
+            if (headerIdx < 0) return;
+            const inferred = [];
+            for (let i = headerIdx + 1; i < sourceSection.lines.length; i++) {
+              const raw = sourceSection.lines[i];
+              if (/:\s*$/.test(raw.trim())) break;
+              const label = getLineLabel(raw);
+              if (!label) continue;
+              inferred.push({ label, sourceSectionId: sourceId });
+            }
+            if (inferred.length > 0) boxObj.lines = inferred;
+          };
           const details = doc.createElement("details");
           details.style.border = `1px solid ${palette.border}`;
           details.style.borderRadius = "8px";
@@ -11077,6 +11094,7 @@
                 if (entry.kind === "box") {
                   const boxObj = findBox();
                   if (!boxObj) return;
+                  inferBoxLinesFromSource(boxObj);
                   const titleInput2 = doc.createElement("input");
                   titleInput2.value = boxObj.title || "";
                   styleInput(titleInput2);
@@ -11185,11 +11203,62 @@
                 defaultMetricInput.setAttribute("list", "ga-metric-suggestions");
                 styleInput(defaultMetricInput);
                 mkField("Default metric", defaultMetricInput);
-                const metricsInput = doc.createElement("input");
-                metricsInput.value = (graphObj.metrics || []).join(", ");
-                metricsInput.setAttribute("list", "ga-metric-suggestions");
-                styleInput(metricsInput);
-                mkField("Metrics (csv)", metricsInput, true);
+                const metricsWrap = doc.createElement("div");
+                metricsWrap.style.gridColumn = "1 / -1";
+                metricsWrap.style.display = "grid";
+                metricsWrap.style.gap = "6px";
+                const metricsTitle = doc.createElement("div");
+                metricsTitle.textContent = "Metrics";
+                metricsTitle.style.fontSize = "12px";
+                metricsTitle.style.color = palette.textMuted;
+                metricsWrap.appendChild(metricsTitle);
+                const selectedMetrics = new Set((graphObj.metrics || []).filter((m) => !!m));
+                const metricsList = doc.createElement("div");
+                metricsList.style.display = "grid";
+                metricsList.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
+                metricsList.style.gap = "4px 8px";
+                const renderMetricChecklist = () => {
+                  metricsList.innerHTML = "";
+                  const allMetricOptions = Array.from(/* @__PURE__ */ new Set([...suggestionData.metrics, ...Array.from(selectedMetrics)])).sort();
+                  for (const metric of allMetricOptions) {
+                    const rowMetric = doc.createElement("label");
+                    rowMetric.style.display = "inline-flex";
+                    rowMetric.style.alignItems = "center";
+                    rowMetric.style.gap = "6px";
+                    rowMetric.style.fontSize = "12px";
+                    const cb = doc.createElement("input");
+                    cb.type = "checkbox";
+                    cb.checked = selectedMetrics.has(metric);
+                    cb.addEventListener("change", () => {
+                      if (cb.checked) selectedMetrics.add(metric);
+                      else selectedMetrics.delete(metric);
+                    });
+                    const text = doc.createElement("span");
+                    text.textContent = metric;
+                    rowMetric.append(cb, text);
+                    metricsList.appendChild(rowMetric);
+                  }
+                };
+                renderMetricChecklist();
+                const customMetricRow = doc.createElement("div");
+                customMetricRow.style.display = "inline-flex";
+                customMetricRow.style.gap = "6px";
+                const customMetricInput = doc.createElement("input");
+                customMetricInput.placeholder = "custom_metric";
+                styleInput(customMetricInput);
+                const addCustomMetricBtn = doc.createElement("button");
+                addCustomMetricBtn.textContent = "Add metric";
+                styleActionBtn(addCustomMetricBtn);
+                addCustomMetricBtn.addEventListener("click", () => {
+                  const m = customMetricInput.value.trim();
+                  if (!m) return;
+                  selectedMetrics.add(m);
+                  customMetricInput.value = "";
+                  renderMetricChecklist();
+                });
+                customMetricRow.append(customMetricInput, addCustomMetricBtn);
+                metricsWrap.append(metricsList, customMetricRow);
+                editor.appendChild(metricsWrap);
                 const defaultSortSelect = doc.createElement("select");
                 defaultSortSelect.innerHTML = `<option value="">(auto)</option><option value="chronological">chronological</option><option value="desc">descending</option><option value="asc">ascending</option>`;
                 defaultSortSelect.value = graphObj.defaultSort || "";
@@ -11253,7 +11322,7 @@
                   graphObj.type = typeSelect.value || void 0;
                   graphObj.orientation = orientationSelect.value || void 0;
                   graphObj.defaultMetric = defaultMetricInput.value.trim() || void 0;
-                  graphObj.metrics = parseCsv(metricsInput.value);
+                  graphObj.metrics = Array.from(selectedMetrics);
                   graphObj.defaultSort = defaultSortSelect.value || void 0;
                   graphObj.sorts = parseCsv(sortsInput.value).filter(
                     (s) => s === "chronological" || s === "desc" || s === "asc"
