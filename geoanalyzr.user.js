@@ -40212,14 +40212,11 @@ ${error instanceof Error ? error.message : String(error)}`;
       ui.setAnalysisWindowData(data);
     }
     ui.onOpenAnalysisClick(async () => {
+      const semanticTab = window.open(buildSemanticTabUrl(), "_blank", "noopener");
       try {
         ui.setStatus("Loading analysis...");
         await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
-        const opened = window.open(buildSemanticTabUrl(), "_blank", "noopener");
-        if (!opened) {
-          await initAnalysisWindow();
-        }
-        ui.setStatus("Analysis loaded.");
+        ui.setStatus(semanticTab ? "Analysis loaded." : "Analysis loaded. Semantic tab was blocked by popup protection.");
       } catch (e) {
         ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
         console.error(e);

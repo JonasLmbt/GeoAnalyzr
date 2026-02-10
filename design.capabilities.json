@@ -29,7 +29,7 @@
     "win_rate"
   ],
   "graphContentDefinitions": {
-    "time_patterns_weekday": {
+    "weekdays": {
       "title": "Weekday patterns",
       "type": "bar",
       "orientation": "horizontal",

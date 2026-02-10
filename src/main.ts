@@ -212,15 +212,11 @@ function buildSemanticTabUrl(): string {
   }
 
   ui.onOpenAnalysisClick(async () => {
+    const semanticTab = window.open(buildSemanticTabUrl(), "_blank", "noopener");
     try {
       ui.setStatus("Loading analysis...");
       await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
-      const opened = window.open(buildSemanticTabUrl(), "_blank", "noopener");
-      if (!opened) {
-        // Popup blocked fallback: still open experimental view in current tab.
-        await initAnalysisWindow();
-      }
-      ui.setStatus("Analysis loaded.");
+      ui.setStatus(semanticTab ? "Analysis loaded." : "Analysis loaded. Semantic tab was blocked by popup protection.");
     } catch (e) {
       ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
       console.error(e);

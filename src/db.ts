@@ -14,10 +14,15 @@ export interface FeedGameRow {
   raw?: unknown;
 }
 
+// Add to RoundRowBase (recommended)
 interface RoundRowBase {
-  id: string;         // PK = `${gameId}:${roundNumber}`
-  gameId: string;     // indexed
+  id: string;
+  gameId: string;
   roundNumber: number;
+
+  playedAt?: number; // copied from FeedGameRow.playedAt
+  movementType?: "moving" | "no_move" | "nmpz" | "unknown";
+
   durationSeconds?: number;
   damageMultiplier?: number;
   isHealingRound?: boolean;
@@ -28,6 +33,7 @@ interface RoundRowBase {
   endTime?: number;
   raw?: unknown;
 }
+
 
 export interface RoundRowDuel extends RoundRowBase {
   modeFamily?: "duels";
@@ -404,6 +410,32 @@ export class GGDB extends Dexie {
       games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
       rounds: "id, gameId, roundNumber, [gameId+roundNumber]",
       details: "gameId, status, fetchedAt, modeFamily, isTeamDuels",
+      meta: "key, updatedAt"
+    });
+
+    // In GGDB constructor:
+    this.version(4).stores({
+      games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+      rounds: [
+        "id",
+        "gameId",
+        "roundNumber",
+        "[gameId+roundNumber]",
+        "playedAt",
+        "trueCountry",
+        "movementType",
+        "player_self_score"
+      ].join(", "),
+      details: [
+        "gameId",
+        "status",
+        "fetchedAt",
+        "modeFamily",
+        "isTeamDuels",
+        "player_self_id",
+        "player_mate_id",
+        "player_opponent_country"
+      ].join(", "),
       meta: "key, updatedAt"
     });
   }
