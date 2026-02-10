@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.14
+// @version      1.5.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7015,7 +7015,7 @@
             {
               id: "overview_time_progression",
               sourceIndex: 0,
-              type: "selectableLine",
+              type: "line",
               yLabel: "Games/day (or aggregated bucket)",
               content: "overview_time_progression",
               hoverable: true,
@@ -7101,7 +7101,7 @@
             {
               id: "time_patterns_weekday",
               sourceIndex: 0,
-              type: "selectableBar",
+              type: "bar",
               title: "Weekday patterns",
               orientation: "horizontal",
               initialBars: 7,
@@ -7130,7 +7130,7 @@
             {
               id: "time_patterns_hour",
               sourceIndex: 1,
-              type: "selectableBar",
+              type: "bar",
               title: "Hour-of-day patterns",
               orientation: "horizontal",
               initialBars: 24,
@@ -7220,7 +7220,7 @@
             {
               id: "sessions",
               sourceIndex: 0,
-              type: "selectableBar",
+              type: "bar",
               title: "Sessions",
               orientation: "horizontal",
               initialBars: 10,
@@ -7250,7 +7250,7 @@
             {
               id: "sessions_progression",
               sourceIndex: 1,
-              type: "selectableLine",
+              type: "line",
               title: "Sessions progression metrics",
               defaultMetric: "avg_score",
               metrics: [
@@ -7353,7 +7353,7 @@
             {
               id: "tempo_buckets",
               sourceIndex: 0,
-              type: "selectableBar",
+              type: "bar",
               title: "Time bucket metrics",
               orientation: "horizontal",
               defaultMetric: "avg_score",
@@ -7581,7 +7581,7 @@
             {
               id: "rounds_progression",
               sourceIndex: 0,
-              type: "selectableBar",
+              type: "bar",
               title: "Round progression metrics",
               orientation: "vertical",
               defaultMetric: "avg_score",
@@ -7612,7 +7612,7 @@
             {
               id: "rounds_by_game_length",
               sourceIndex: 1,
-              type: "selectableBar",
+              type: "bar",
               title: "Performance by game length (rounds per game, 2+)",
               orientation: "vertical",
               defaultMetric: "win_rate",
@@ -7676,7 +7676,7 @@
             {
               id: "country_metrics",
               sourceIndex: 0,
-              type: "selectableBar",
+              type: "bar",
               title: "Country metrics",
               orientation: "horizontal",
               initialBars: 25,
@@ -8084,7 +8084,7 @@
             {
               id: "spotlight_trend",
               sourceIndex: 1,
-              type: "selectableLine",
+              type: "line",
               title: "Country trend comparison",
               defaultMetric: "damage_dealt_share",
               primaryCountry: "{{selectedCountry}}",
@@ -8547,7 +8547,6 @@
       "avg_duration",
       "avg_score",
       "avg_score_correct_only",
-      "avg_time",
       "damage_dealt",
       "damage_dealt_share",
       "damage_taken",
@@ -8568,7 +8567,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8580,8 +8579,7 @@
           "avg_damage_dealt",
           "damage_dealt",
           "avg_damage_taken",
-          "damage_taken",
-          "rating"
+          "damage_taken"
         ],
         defaultMetric: "games",
         defaultSort: "chronological",
@@ -8598,7 +8596,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8610,8 +8608,7 @@
           "avg_damage_dealt",
           "damage_dealt",
           "avg_damage_taken",
-          "damage_taken",
-          "rating"
+          "damage_taken"
         ],
         defaultMetric: "games",
         defaultSort: "chronological",
@@ -8628,7 +8625,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8657,7 +8654,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8682,7 +8679,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8715,7 +8712,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8739,7 +8736,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8767,7 +8764,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8827,7 +8824,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -8869,7 +8866,7 @@
           "avg_score",
           "avg_score_correct_only",
           "avg_distance",
-          "avg_time",
+          "avg_duration",
           "throw_rate",
           "amount_throws",
           "fivek_rate",
@@ -9110,8 +9107,9 @@
       return base;
     }
     base.layout = { mode: "legacy_colon" };
-    if (!base.graphTemplates && rawLayout?.mode === "header_blocks") {
-      base.graphTemplates = normalizeGraphTemplates(rawLayout?.graphs);
+    const headerLayoutRaw = rawLayout;
+    if (!base.graphTemplates && headerLayoutRaw?.mode === "header_blocks") {
+      base.graphTemplates = normalizeGraphTemplates(headerLayoutRaw.graphs);
     }
     return base;
   }
@@ -11688,6 +11686,8 @@
                 metricsTitle.style.fontSize = "12px";
                 metricsTitle.style.color = palette.textMuted;
                 metricsWrap.appendChild(metricsTitle);
+                const hasExplicitMetrics = Array.isArray(graphObj.metrics) && graphObj.metrics.length > 0;
+                let metricsTouched = false;
                 const selectedMetrics = new Set((graphObj.metrics || []).filter((m) => !!m));
                 const defaultMetricSelect = doc.createElement("select");
                 styleInput(defaultMetricSelect);
@@ -11752,6 +11752,10 @@
                   for (const metric of Array.from(selectedMetrics)) {
                     if (!allowedMetrics.includes(metric)) selectedMetrics.delete(metric);
                   }
+                  if (!hasExplicitMetrics && !metricsTouched && allowedMetrics.length > 0) {
+                    selectedMetrics.clear();
+                    for (const metric of allowedMetrics) selectedMetrics.add(metric);
+                  }
                   const defaultPool = selectedMetrics.size > 0 ? allowedMetrics.filter((m) => selectedMetrics.has(m)) : allowedMetrics;
                   renderDefaultMetricOptions(defaultPool.length > 0 ? defaultPool : allowedMetrics);
                   const allMetrics = Array.from(/* @__PURE__ */ new Set([...suggestionData.metrics, ...allowedMetrics, ...Array.from(selectedMetrics)])).sort();
@@ -11775,6 +11779,7 @@
                     rowMetric.title = isAllowed ? "Click to toggle metric" : "Metric not available for selected content";
                     if (isAllowed) {
                       rowMetric.addEventListener("click", () => {
+                        metricsTouched = true;
                         if (selectedMetrics.has(metric)) selectedMetrics.delete(metric);
                         else selectedMetrics.add(metric);
                         renderMetricChecklist();
@@ -11783,7 +11788,7 @@
                     metricsList.appendChild(rowMetric);
                   }
                   const selectedSorted = Array.from(selectedMetrics).sort();
-                  metricsSummary.textContent = selectedSorted.length > 0 ? `Metrics (${selectedSorted.length}): ${selectedSorted.map(getMetricLabel).join(", ")}` : "Metrics (0): click to select";
+                  metricsSummary.textContent = selectedSorted.length > 0 ? `Metrics (${selectedSorted.length}): ${selectedSorted.map(getMetricLabel).join(", ")}` : "Metrics (0): defaulting to all allowed from capabilities";
                 };
                 renderMetricChecklist();
                 contentInput.addEventListener("input", () => renderMetricChecklist());
@@ -11896,7 +11901,13 @@
                   graphObj.orientation = orientationSelect.value || void 0;
                   graphObj.xDomain = xDomainSelect.value || void 0;
                   graphObj.defaultMetric = defaultMetricSelect.value.trim() || void 0;
-                  graphObj.metrics = Array.from(selectedMetrics);
+                  const allowedMetrics = resolveAllowedMetrics().sort();
+                  const allAllowedSelected = allowedMetrics.length > 0 && selectedMetrics.size === allowedMetrics.length && allowedMetrics.every((m) => selectedMetrics.has(m));
+                  if (!hasExplicitMetrics && !metricsTouched || allAllowedSelected || selectedMetrics.size === 0) {
+                    graphObj.metrics = void 0;
+                  } else {
+                    graphObj.metrics = Array.from(selectedMetrics);
+                  }
                   graphObj.defaultSort = defaultSortSelect.value || void 0;
                   graphObj.sorts = parseCsv(sortsInput.value).filter(
                     (s) => s === "chronological" || s === "desc" || s === "asc"

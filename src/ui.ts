@@ -528,8 +528,9 @@ function normalizeSectionTemplate(
     return base;
   }
   base.layout = { mode: "legacy_colon" };
-  if (!base.graphTemplates && rawLayout?.mode === "header_blocks") {
-    base.graphTemplates = normalizeGraphTemplates((rawLayout as Extract<DesignSectionLayout, { mode: "header_blocks" }> | undefined)?.graphs);
+  const headerLayoutRaw = rawLayout as Extract<DesignSectionLayout, { mode: "header_blocks" }> | undefined;
+  if (!base.graphTemplates && headerLayoutRaw?.mode === "header_blocks") {
+    base.graphTemplates = normalizeGraphTemplates(headerLayoutRaw.graphs);
   }
   return base;
 }
@@ -3557,6 +3558,8 @@ export function createUI(): UIHandle {
               metricsTitle.style.fontSize = "12px";
               metricsTitle.style.color = palette.textMuted;
               metricsWrap.appendChild(metricsTitle);
+              const hasExplicitMetrics = Array.isArray(graphObj.metrics) && graphObj.metrics.length > 0;
+              let metricsTouched = false;
               const selectedMetrics = new Set<string>((graphObj.metrics || []).filter((m) => !!m));
               const defaultMetricSelect = doc.createElement("select");
               styleInput(defaultMetricSelect);
@@ -3625,6 +3628,10 @@ export function createUI(): UIHandle {
                 for (const metric of Array.from(selectedMetrics)) {
                   if (!allowedMetrics.includes(metric)) selectedMetrics.delete(metric);
                 }
+                if (!hasExplicitMetrics && !metricsTouched && allowedMetrics.length > 0) {
+                  selectedMetrics.clear();
+                  for (const metric of allowedMetrics) selectedMetrics.add(metric);
+                }
                 const defaultPool = selectedMetrics.size > 0
                   ? allowedMetrics.filter((m) => selectedMetrics.has(m))
                   : allowedMetrics;
@@ -3650,6 +3657,7 @@ export function createUI(): UIHandle {
                   rowMetric.title = isAllowed ? "Click to toggle metric" : "Metric not available for selected content";
                   if (isAllowed) {
                     rowMetric.addEventListener("click", () => {
+                      metricsTouched = true;
                       if (selectedMetrics.has(metric)) selectedMetrics.delete(metric);
                       else selectedMetrics.add(metric);
                       renderMetricChecklist();
@@ -3660,7 +3668,7 @@ export function createUI(): UIHandle {
                 const selectedSorted = Array.from(selectedMetrics).sort();
                 metricsSummary.textContent = selectedSorted.length > 0
                   ? `Metrics (${selectedSorted.length}): ${selectedSorted.map(getMetricLabel).join(", ")}`
-                  : "Metrics (0): click to select";
+                  : "Metrics (0): defaulting to all allowed from capabilities";
               };
               renderMetricChecklist();
               contentInput.addEventListener("input", () => renderMetricChecklist());
@@ -3789,7 +3797,15 @@ export function createUI(): UIHandle {
                 graphObj.orientation = (orientationSelect.value || undefined) as DesignGraphTemplate["orientation"];
                 graphObj.xDomain = (xDomainSelect.value || undefined) as DesignGraphTemplate["xDomain"];
                 graphObj.defaultMetric = defaultMetricSelect.value.trim() || undefined;
-                graphObj.metrics = Array.from(selectedMetrics);
+                const allowedMetrics = resolveAllowedMetrics().sort();
+                const allAllowedSelected = allowedMetrics.length > 0 &&
+                  selectedMetrics.size === allowedMetrics.length &&
+                  allowedMetrics.every((m) => selectedMetrics.has(m));
+                if ((!hasExplicitMetrics && !metricsTouched) || allAllowedSelected || selectedMetrics.size === 0) {
+                  graphObj.metrics = undefined;
+                } else {
+                  graphObj.metrics = Array.from(selectedMetrics);
+                }
                 graphObj.defaultSort = (defaultSortSelect.value || undefined) as DesignGraphTemplate["defaultSort"];
                 graphObj.sorts = parseCsv(sortsInput.value).filter(
                   (s): s is "chronological" | "desc" | "asc" => s === "chronological" || s === "desc" || s === "asc"
