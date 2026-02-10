@@ -31,6 +31,24 @@ interface RoundRowBase {
 
 export interface RoundRowDuel extends RoundRowBase {
   modeFamily?: "duels";
+  // role-based aliases (preferred)
+  player_self_playerId?: string;
+  player_self_guessLat?: number;
+  player_self_guessLng?: number;
+  player_self_guessCountry?: string;
+  player_self_distanceKm?: number;
+  player_self_score?: number;
+  player_self_healthAfter?: number;
+
+  player_opponent_playerId?: string;
+  player_opponent_guessLat?: number;
+  player_opponent_guessLng?: number;
+  player_opponent_guessCountry?: string;
+  player_opponent_distanceKm?: number;
+  player_opponent_score?: number;
+  player_opponent_healthAfter?: number;
+
+  // legacy positional fields
   p1_playerId?: string;
   p1_guessLat?: number;
   p1_guessLng?: number;
@@ -58,6 +76,48 @@ export interface RoundRowDuel extends RoundRowBase {
 
 export interface RoundRowTeamDuel extends RoundRowBase {
   modeFamily?: "teamduels";
+  // role-based aliases (preferred)
+  player_self_playerId?: string;
+  player_self_teamId?: string;
+  player_self_guessLat?: number;
+  player_self_guessLng?: number;
+  player_self_guessCountry?: string;
+  player_self_distanceKm?: number;
+  player_self_score?: number;
+  player_self_healthAfter?: number;
+  player_self_isBestGuess?: boolean;
+
+  player_mate_playerId?: string;
+  player_mate_teamId?: string;
+  player_mate_guessLat?: number;
+  player_mate_guessLng?: number;
+  player_mate_guessCountry?: string;
+  player_mate_distanceKm?: number;
+  player_mate_score?: number;
+  player_mate_healthAfter?: number;
+  player_mate_isBestGuess?: boolean;
+
+  player_opponent_playerId?: string;
+  player_opponent_teamId?: string;
+  player_opponent_guessLat?: number;
+  player_opponent_guessLng?: number;
+  player_opponent_guessCountry?: string;
+  player_opponent_distanceKm?: number;
+  player_opponent_score?: number;
+  player_opponent_healthAfter?: number;
+  player_opponent_isBestGuess?: boolean;
+
+  player_opponent_mate_playerId?: string;
+  player_opponent_mate_teamId?: string;
+  player_opponent_mate_guessLat?: number;
+  player_opponent_mate_guessLng?: number;
+  player_opponent_mate_guessCountry?: string;
+  player_opponent_mate_distanceKm?: number;
+  player_opponent_mate_score?: number;
+  player_opponent_mate_healthAfter?: number;
+  player_opponent_mate_isBestGuess?: boolean;
+
+  // legacy positional fields
   p1_playerId?: string;
   p1_teamId?: string;
   p1_guessLat?: number;
@@ -131,6 +191,22 @@ export interface GameRowDuel extends GameRowBase {
   time?: string;
   gameModeSimple?: string;
 
+  // role-based aliases (preferred)
+  player_self_id?: string;
+  player_self_name?: string;
+  player_self_country?: string;
+  player_self_victory?: boolean;
+  player_self_finalHealth?: number;
+  player_self_startRating?: number;
+  player_self_endRating?: number;
+  player_opponent_id?: string;
+  player_opponent_name?: string;
+  player_opponent_country?: string;
+  player_opponent_victory?: boolean;
+  player_opponent_finalHealth?: number;
+  player_opponent_startRating?: number;
+  player_opponent_endRating?: number;
+
   playerOneId?: string;
   playerOneName?: string;
   playerOneCountry?: string;
@@ -153,6 +229,28 @@ export interface GameRowTeamDuel extends GameRowBase {
   date?: string;
   time?: string;
   gameModeSimple?: string;
+
+  // role-based aliases (preferred)
+  player_self_id?: string;
+  player_self_name?: string;
+  player_self_country?: string;
+  player_self_startRating?: number;
+  player_self_endRating?: number;
+  player_mate_id?: string;
+  player_mate_name?: string;
+  player_mate_country?: string;
+  player_mate_startRating?: number;
+  player_mate_endRating?: number;
+  player_opponent_id?: string;
+  player_opponent_name?: string;
+  player_opponent_country?: string;
+  player_opponent_startRating?: number;
+  player_opponent_endRating?: number;
+  player_opponent_mate_id?: string;
+  player_opponent_mate_name?: string;
+  player_opponent_mate_country?: string;
+  player_opponent_mate_startRating?: number;
+  player_opponent_mate_endRating?: number;
 
   teamOneId?: string;
   teamOneVictory?: boolean;

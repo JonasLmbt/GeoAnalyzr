@@ -517,6 +517,27 @@ async function normalizeGameAndRounds(
       date: toIsoDate(startTime),
       time: toIsoTime(startTime),
       gameModeSimple: detectSimpleGameMode(gameData?.movementOptions),
+      // role-based aliases
+      player_self_id: p1Id,
+      player_self_name: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
+      player_self_country: p1Id ? profiles.get(p1Id)?.countryName : undefined,
+      player_self_startRating: p1Rc.before,
+      player_self_endRating: p1Rc.after,
+      player_mate_id: p2Id,
+      player_mate_name: (p2Id ? profiles.get(p2Id)?.nick : undefined) ?? (typeof p2?.nick === "string" ? p2.nick : undefined),
+      player_mate_country: p2Id ? profiles.get(p2Id)?.countryName : undefined,
+      player_mate_startRating: p2Rc.before,
+      player_mate_endRating: p2Rc.after,
+      player_opponent_id: p3Id,
+      player_opponent_name: (p3Id ? profiles.get(p3Id)?.nick : undefined) ?? (typeof p3?.nick === "string" ? p3.nick : undefined),
+      player_opponent_country: p3Id ? profiles.get(p3Id)?.countryName : undefined,
+      player_opponent_startRating: p3Rc.before,
+      player_opponent_endRating: p3Rc.after,
+      player_opponent_mate_id: p4Id,
+      player_opponent_mate_name: (p4Id ? profiles.get(p4Id)?.nick : undefined) ?? (typeof p4?.nick === "string" ? p4.nick : undefined),
+      player_opponent_mate_country: p4Id ? profiles.get(p4Id)?.countryName : undefined,
+      player_opponent_mate_startRating: p4Rc.before,
+      player_opponent_mate_endRating: p4Rc.after,
       teamOneId: String(teamOne?.id || ""),
       teamOneVictory: winningTeamId ? String(teamOne?.id || "") === winningTeamId : undefined,
       teamOneFinalHealth: asNum(teamOne?.health),
@@ -564,6 +585,21 @@ async function normalizeGameAndRounds(
       date: toIsoDate(startTime),
       time: toIsoTime(startTime),
       gameModeSimple: detectSimpleGameMode(gameData?.movementOptions),
+      // role-based aliases
+      player_self_id: p1Id,
+      player_self_name: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
+      player_self_country: p1Id ? profiles.get(p1Id)?.countryName : undefined,
+      player_self_victory: winningTeamId ? String(teamOne?.id || "") === winningTeamId : undefined,
+      player_self_finalHealth: asNum(teamOne?.health),
+      player_self_startRating: p1Rc.before,
+      player_self_endRating: p1Rc.after,
+      player_opponent_id: p2Id,
+      player_opponent_name: (p2Id ? profiles.get(p2Id)?.nick : undefined) ?? (typeof p2?.nick === "string" ? p2.nick : undefined),
+      player_opponent_country: p2Id ? profiles.get(p2Id)?.countryName : undefined,
+      player_opponent_victory: winningTeamId ? String(teamTwo?.id || "") === winningTeamId : undefined,
+      player_opponent_finalHealth: asNum(teamTwo?.health),
+      player_opponent_startRating: p2Rc.before,
+      player_opponent_endRating: p2Rc.after,
       playerOneId: p1Id,
       playerOneName: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
       playerOneCountry: p1Id ? profiles.get(p1Id)?.countryName : undefined,
@@ -629,6 +665,29 @@ async function normalizeGameAndRounds(
         (round as any)[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
         (round as any)[`p${playerIndex}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
       }
+      const roleByPos: Record<number, string> = {
+        1: "player_self",
+        2: "player_mate",
+        3: "player_opponent",
+        4: "player_opponent_mate"
+      };
+      const suffixes = [
+        "playerId",
+        "teamId",
+        "guessLat",
+        "guessLng",
+        "guessCountry",
+        "distanceKm",
+        "score",
+        "healthAfter",
+        "isBestGuess"
+      ];
+      for (let pos = 1; pos <= 4; pos++) {
+        const role = roleByPos[pos];
+        for (const s of suffixes) {
+          (round as any)[`${role}_${s}`] = (round as any)[`p${pos}_${s}`];
+        }
+      }
       normalizedRounds.push(round);
     } else {
       const round: RoundRowDuel = { ...roundBase, modeFamily: "duels" };
@@ -654,6 +713,22 @@ async function normalizeGameAndRounds(
       if (typeof round.p1_healthAfter === "number" && typeof round.p2_healthAfter === "number") {
         round.healthDiffAfter = round.p1_healthAfter - round.p2_healthAfter;
       }
+
+      (round as any).player_self_playerId = round.p1_playerId;
+      (round as any).player_self_guessLat = round.p1_guessLat;
+      (round as any).player_self_guessLng = round.p1_guessLng;
+      (round as any).player_self_guessCountry = round.p1_guessCountry;
+      (round as any).player_self_distanceKm = round.p1_distanceKm;
+      (round as any).player_self_score = round.p1_score;
+      (round as any).player_self_healthAfter = round.p1_healthAfter;
+
+      (round as any).player_opponent_playerId = round.p2_playerId;
+      (round as any).player_opponent_guessLat = round.p2_guessLat;
+      (round as any).player_opponent_guessLng = round.p2_guessLng;
+      (round as any).player_opponent_guessCountry = round.p2_guessCountry;
+      (round as any).player_opponent_distanceKm = round.p2_distanceKm;
+      (round as any).player_opponent_score = round.p2_score;
+      (round as any).player_opponent_healthAfter = round.p2_healthAfter;
 
       // legacy compatibility
       const selfGuess = guessMaps[0]?.get(rn);

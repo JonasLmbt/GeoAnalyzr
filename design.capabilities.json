@@ -67,6 +67,14 @@
       "defaultSort": "chronological"
     },
     "time_patterns_hour": {
+      "title": "Hour-of-day patterns",
+      "type": "bar",
+      "orientation": "horizontal",
+      "initialBars": 24,
+      "hoverable": true,
+      "clickable": true,
+      "sortable": true,
+      "drilldownType": "rounds",
       "metrics": [
         "games",
         "rounds",
@@ -88,14 +96,22 @@
         "damage_taken"
       ],
       "defaultMetric": "games",
-      "defaultSort": "chronological",
       "sorts": [
         "chronological",
         "desc",
         "asc"
-      ]
+      ],
+      "defaultSort": "chronological"
     },
     "sessions": {
+      "title": "Sessions",
+      "type": "bar",
+      "orientation": "horizontal",
+      "initialBars": 10,
+      "hoverable": true,
+      "clickable": true,
+      "sortable": true,
+      "drilldownType": "rounds",
       "metrics": [
         "games",
         "rounds",
@@ -117,14 +133,20 @@
         "damage_taken"
       ],
       "defaultMetric": "avg_score",
-      "defaultSort": "desc",
       "sorts": [
         "chronological",
         "desc",
         "asc"
-      ]
+      ],
+      "defaultSort": "chronological"
     },
     "sessions_progression": {
+      "title": "Sessions progression metrics",
+      "type": "line",
+      "initialBars": 10,
+      "hoverable": true,
+      "clickable": true,
+      "sortable": true,
       "metrics": [
         "games",
         "rounds",

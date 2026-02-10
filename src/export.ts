@@ -212,20 +212,26 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       detailsError: d?.status === "error" ? (d?.error || "") : ""
     };
     if (!isTeam) {
-      base.playerOneId = (d as any)?.playerOneId ?? (d as any)?.p1_playerId ?? "";
-      base.playerOneName = (d as any)?.playerOneName ?? (d as any)?.p1_playerName ?? "";
-      base.playerOneCountry = (d as any)?.playerOneCountry ?? "";
-      base.playerOneVictory = (d as any)?.playerOneVictory === undefined ? "" : (d as any)?.playerOneVictory;
-      base.playerOneFinalHealth = (d as any)?.playerOneFinalHealth ?? "";
-      base.playerOneStartRating = (d as any)?.playerOneStartRating ?? (d as any)?.p1_ratingBefore ?? "";
-      base.playerOneEndRating = (d as any)?.playerOneEndRating ?? (d as any)?.p1_ratingAfter ?? "";
-      base.playerTwoId = (d as any)?.playerTwoId ?? (d as any)?.p2_playerId ?? "";
-      base.playerTwoName = (d as any)?.playerTwoName ?? (d as any)?.p2_playerName ?? "";
-      base.playerTwoCountry = (d as any)?.playerTwoCountry ?? "";
-      base.playerTwoVictory = (d as any)?.playerTwoVictory === undefined ? "" : (d as any)?.playerTwoVictory;
-      base.playerTwoFinalHealth = (d as any)?.playerTwoFinalHealth ?? "";
-      base.playerTwoStartRating = (d as any)?.playerTwoStartRating ?? (d as any)?.p2_ratingBefore ?? "";
-      base.playerTwoEndRating = (d as any)?.playerTwoEndRating ?? (d as any)?.p2_ratingAfter ?? "";
+      base.player_self_id = (d as any)?.player_self_id ?? (d as any)?.playerOneId ?? (d as any)?.p1_playerId ?? "";
+      base.player_self_name = (d as any)?.player_self_name ?? (d as any)?.playerOneName ?? (d as any)?.p1_playerName ?? "";
+      base.player_self_country = (d as any)?.player_self_country ?? (d as any)?.playerOneCountry ?? "";
+      base.player_self_victory =
+        (d as any)?.player_self_victory ?? ((d as any)?.playerOneVictory === undefined ? "" : (d as any)?.playerOneVictory);
+      base.player_self_finalHealth = (d as any)?.player_self_finalHealth ?? (d as any)?.playerOneFinalHealth ?? "";
+      base.player_self_startRating =
+        (d as any)?.player_self_startRating ?? (d as any)?.playerOneStartRating ?? (d as any)?.p1_ratingBefore ?? "";
+      base.player_self_endRating =
+        (d as any)?.player_self_endRating ?? (d as any)?.playerOneEndRating ?? (d as any)?.p1_ratingAfter ?? "";
+      base.player_opponent_id = (d as any)?.player_opponent_id ?? (d as any)?.playerTwoId ?? (d as any)?.p2_playerId ?? "";
+      base.player_opponent_name = (d as any)?.player_opponent_name ?? (d as any)?.playerTwoName ?? (d as any)?.p2_playerName ?? "";
+      base.player_opponent_country = (d as any)?.player_opponent_country ?? (d as any)?.playerTwoCountry ?? "";
+      base.player_opponent_victory =
+        (d as any)?.player_opponent_victory ?? ((d as any)?.playerTwoVictory === undefined ? "" : (d as any)?.playerTwoVictory);
+      base.player_opponent_finalHealth = (d as any)?.player_opponent_finalHealth ?? (d as any)?.playerTwoFinalHealth ?? "";
+      base.player_opponent_startRating =
+        (d as any)?.player_opponent_startRating ?? (d as any)?.playerTwoStartRating ?? (d as any)?.p2_ratingBefore ?? "";
+      base.player_opponent_endRating =
+        (d as any)?.player_opponent_endRating ?? (d as any)?.playerTwoEndRating ?? (d as any)?.p2_ratingAfter ?? "";
       base.totalRounds = d?.totalRounds ?? "";
       base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
       base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -252,6 +258,26 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       base.teamTwoPlayerTwoId = (d as any)?.teamTwoPlayerTwoId ?? "";
       base.teamTwoPlayerTwoName = (d as any)?.teamTwoPlayerTwoName ?? "";
       base.teamTwoPlayerTwoCountry = (d as any)?.teamTwoPlayerTwoCountry ?? "";
+      base.player_self_id = (d as any)?.player_self_id ?? (d as any)?.teamOnePlayerOneId ?? "";
+      base.player_self_name = (d as any)?.player_self_name ?? (d as any)?.teamOnePlayerOneName ?? "";
+      base.player_self_country = (d as any)?.player_self_country ?? (d as any)?.teamOnePlayerOneCountry ?? "";
+      base.player_self_startRating = (d as any)?.player_self_startRating ?? "";
+      base.player_self_endRating = (d as any)?.player_self_endRating ?? "";
+      base.player_mate_id = (d as any)?.player_mate_id ?? (d as any)?.teamOnePlayerTwoId ?? "";
+      base.player_mate_name = (d as any)?.player_mate_name ?? (d as any)?.teamOnePlayerTwoName ?? "";
+      base.player_mate_country = (d as any)?.player_mate_country ?? (d as any)?.teamOnePlayerTwoCountry ?? "";
+      base.player_mate_startRating = (d as any)?.player_mate_startRating ?? "";
+      base.player_mate_endRating = (d as any)?.player_mate_endRating ?? "";
+      base.player_opponent_id = (d as any)?.player_opponent_id ?? (d as any)?.teamTwoPlayerOneId ?? "";
+      base.player_opponent_name = (d as any)?.player_opponent_name ?? (d as any)?.teamTwoPlayerOneName ?? "";
+      base.player_opponent_country = (d as any)?.player_opponent_country ?? (d as any)?.teamTwoPlayerOneCountry ?? "";
+      base.player_opponent_startRating = (d as any)?.player_opponent_startRating ?? "";
+      base.player_opponent_endRating = (d as any)?.player_opponent_endRating ?? "";
+      base.player_opponent_mate_id = (d as any)?.player_opponent_mate_id ?? (d as any)?.teamTwoPlayerTwoId ?? "";
+      base.player_opponent_mate_name = (d as any)?.player_opponent_mate_name ?? (d as any)?.teamTwoPlayerTwoName ?? "";
+      base.player_opponent_mate_country = (d as any)?.player_opponent_mate_country ?? (d as any)?.teamTwoPlayerTwoCountry ?? "";
+      base.player_opponent_mate_startRating = (d as any)?.player_opponent_mate_startRating ?? "";
+      base.player_opponent_mate_endRating = (d as any)?.player_opponent_mate_endRating ?? "";
       base.totalRounds = d?.totalRounds ?? "";
       base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
       base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -264,12 +290,12 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     const g = gameById.get(r.gameId);
     const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
     if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
-    const p1Lat = r.p1_guessLat ?? r.guessLat;
-    const p1Lng = r.p1_guessLng ?? r.guessLng;
-    const p1Country = await resolveGuessCountryForExport(r.p1_guessCountry, p1Lat, p1Lng);
-    const p2Country = await resolveGuessCountryForExport(r.p2_guessCountry, r.p2_guessLat, r.p2_guessLng);
-    const p3Country = await resolveGuessCountryForExport(r.p3_guessCountry, r.p3_guessLat, r.p3_guessLng);
-    const p4Country = await resolveGuessCountryForExport(r.p4_guessCountry, r.p4_guessLat, r.p4_guessLng);
+    const selfLat = (r as any).player_self_guessLat ?? r.p1_guessLat ?? r.guessLat;
+    const selfLng = (r as any).player_self_guessLng ?? r.p1_guessLng ?? r.guessLng;
+    const selfCountry = await resolveGuessCountryForExport((r as any).player_self_guessCountry ?? r.p1_guessCountry, selfLat, selfLng);
+    const mateCountry = await resolveGuessCountryForExport((r as any).player_mate_guessCountry ?? r.p2_guessCountry, (r as any).player_mate_guessLat ?? r.p2_guessLat, (r as any).player_mate_guessLng ?? r.p2_guessLng);
+    const oppCountry = await resolveGuessCountryForExport((r as any).player_opponent_guessCountry ?? r.p3_guessCountry, (r as any).player_opponent_guessLat ?? r.p3_guessLat, (r as any).player_opponent_guessLng ?? r.p3_guessLng);
+    const oppMateCountry = await resolveGuessCountryForExport((r as any).player_opponent_mate_guessCountry ?? r.p4_guessCountry, (r as any).player_opponent_mate_guessLat ?? r.p4_guessLat, (r as any).player_opponent_mate_guessLng ?? r.p4_guessLng);
     const trueHeading = asFiniteNumber(
       pickFirst((r as any).raw, [
         "panorama.heading",
@@ -294,51 +320,64 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, trueHeading),
       damage_multiplier: r.damageMultiplier ?? "",
       is_healing_round: r.isHealingRound ? 1 : 0,
-      p1_playerId: r.p1_playerId ?? "",
-      p1_guessLat: r.p1_guessLat ?? r.guessLat ?? "",
-      p1_guessLng: r.p1_guessLng ?? r.guessLng ?? "",
-      p1_googleMaps_url: buildGoogleMapsUrl(r.p1_guessLat ?? r.guessLat, r.p1_guessLng ?? r.guessLng),
-      p1_guessCountry: p1Country,
-      p1_distance_km: (r as any).p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== undefined ? (r.p1_distanceMeters ?? r.distanceMeters)! / 1e3 : ""),
-      p1_score: r.p1_score ?? r.score ?? "",
-      p1_healthAfter: r.p1_healthAfter ?? "",
-      p1_isBestGuess: r.p1_isBestGuess ? 1 : 0,
-      p2_playerId: r.p2_playerId ?? "",
-      p2_guessLat: r.p2_guessLat ?? "",
-      p2_guessLng: r.p2_guessLng ?? "",
-      p2_googleMaps_url: buildGoogleMapsUrl(r.p2_guessLat, r.p2_guessLng),
-      p2_guessCountry: p2Country,
-      p2_distance_km: (r as any).p2_distanceKm ?? (r.p2_distanceMeters !== undefined ? r.p2_distanceMeters / 1e3 : ""),
-      p2_score: r.p2_score ?? "",
-      p2_healthAfter: r.p2_healthAfter ?? "",
-      p2_isBestGuess: r.p2_isBestGuess ? 1 : 0,
+      player_self_playerId: (r as any).player_self_playerId ?? r.p1_playerId ?? "",
+      player_self_guessLat: selfLat ?? "",
+      player_self_guessLng: selfLng ?? "",
+      player_self_googleMaps_url: buildGoogleMapsUrl(selfLat, selfLng),
+      player_self_guessCountry: selfCountry,
+      player_self_distance_km: (r as any).player_self_distanceKm ?? (r as any).p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== undefined ? (r.p1_distanceMeters ?? r.distanceMeters)! / 1e3 : ""),
+      player_self_score: (r as any).player_self_score ?? r.p1_score ?? r.score ?? "",
+      player_self_healthAfter: (r as any).player_self_healthAfter ?? r.p1_healthAfter ?? "",
+      player_self_isBestGuess: (r as any).player_self_isBestGuess || r.p1_isBestGuess ? 1 : 0,
+      player_opponent_playerId: (r as any).player_opponent_playerId ?? r.p2_playerId ?? "",
+      player_opponent_guessLat: (r as any).player_opponent_guessLat ?? r.p2_guessLat ?? "",
+      player_opponent_guessLng: (r as any).player_opponent_guessLng ?? r.p2_guessLng ?? "",
+      player_opponent_googleMaps_url: buildGoogleMapsUrl((r as any).player_opponent_guessLat ?? r.p2_guessLat, (r as any).player_opponent_guessLng ?? r.p2_guessLng),
+      player_opponent_guessCountry: await resolveGuessCountryForExport(
+        (r as any).player_opponent_guessCountry ?? r.p2_guessCountry,
+        (r as any).player_opponent_guessLat ?? r.p2_guessLat,
+        (r as any).player_opponent_guessLng ?? r.p2_guessLng
+      ),
+      player_opponent_distance_km: (r as any).player_opponent_distanceKm ?? (r as any).p2_distanceKm ?? (r.p2_distanceMeters !== undefined ? r.p2_distanceMeters / 1e3 : ""),
+      player_opponent_score: (r as any).player_opponent_score ?? r.p2_score ?? "",
+      player_opponent_healthAfter: (r as any).player_opponent_healthAfter ?? r.p2_healthAfter ?? "",
+      player_opponent_isBestGuess: (r as any).player_opponent_isBestGuess || r.p2_isBestGuess ? 1 : 0,
       healthDiffAfter: (r as any).healthDiffAfter ?? "",
       __sortTs: r.startTime ?? g?.playedAt ?? 0
     };
     const isTeamMode = (mode || "").toLowerCase().includes("team");
     if (isTeamMode) {
-      rowBase.p1_teamId = r.p1_teamId ?? "";
-      rowBase.p2_teamId = r.p2_teamId ?? "";
-      rowBase.p3_playerId = r.p3_playerId ?? "";
-      rowBase.p3_teamId = r.p3_teamId ?? "";
-      rowBase.p3_guessLat = r.p3_guessLat ?? "";
-      rowBase.p3_guessLng = r.p3_guessLng ?? "";
-      rowBase.p3_googleMaps_url = buildGoogleMapsUrl(r.p3_guessLat, r.p3_guessLng);
-      rowBase.p3_guessCountry = p3Country;
-      rowBase.p3_distance_km = (r as any).p3_distanceKm ?? (r.p3_distanceMeters !== undefined ? r.p3_distanceMeters / 1e3 : "");
-      rowBase.p3_score = r.p3_score ?? "";
-      rowBase.p3_healthAfter = r.p3_healthAfter ?? "";
-      rowBase.p3_isBestGuess = r.p3_isBestGuess ? 1 : 0;
-      rowBase.p4_playerId = r.p4_playerId ?? "";
-      rowBase.p4_teamId = r.p4_teamId ?? "";
-      rowBase.p4_guessLat = r.p4_guessLat ?? "";
-      rowBase.p4_guessLng = r.p4_guessLng ?? "";
-      rowBase.p4_googleMaps_url = buildGoogleMapsUrl(r.p4_guessLat, r.p4_guessLng);
-      rowBase.p4_guessCountry = p4Country;
-      rowBase.p4_distance_km = (r as any).p4_distanceKm ?? (r.p4_distanceMeters !== undefined ? r.p4_distanceMeters / 1e3 : "");
-      rowBase.p4_score = r.p4_score ?? "";
-      rowBase.p4_healthAfter = r.p4_healthAfter ?? "";
-      rowBase.p4_isBestGuess = r.p4_isBestGuess ? 1 : 0;
+      rowBase.player_self_teamId = (r as any).player_self_teamId ?? r.p1_teamId ?? "";
+      rowBase.player_mate_playerId = (r as any).player_mate_playerId ?? r.p2_playerId ?? "";
+      rowBase.player_mate_teamId = (r as any).player_mate_teamId ?? r.p2_teamId ?? "";
+      rowBase.player_mate_guessLat = (r as any).player_mate_guessLat ?? r.p2_guessLat ?? "";
+      rowBase.player_mate_guessLng = (r as any).player_mate_guessLng ?? r.p2_guessLng ?? "";
+      rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl((r as any).player_mate_guessLat ?? r.p2_guessLat, (r as any).player_mate_guessLng ?? r.p2_guessLng);
+      rowBase.player_mate_guessCountry = mateCountry;
+      rowBase.player_mate_distance_km = (r as any).player_mate_distanceKm ?? (r as any).p2_distanceKm ?? (r.p2_distanceMeters !== undefined ? r.p2_distanceMeters / 1e3 : "");
+      rowBase.player_mate_score = (r as any).player_mate_score ?? r.p2_score ?? "";
+      rowBase.player_mate_healthAfter = (r as any).player_mate_healthAfter ?? r.p2_healthAfter ?? "";
+      rowBase.player_mate_isBestGuess = (r as any).player_mate_isBestGuess || r.p2_isBestGuess ? 1 : 0;
+      rowBase.player_opponent_playerId = (r as any).player_opponent_playerId ?? r.p3_playerId ?? "";
+      rowBase.player_opponent_teamId = (r as any).player_opponent_teamId ?? r.p3_teamId ?? "";
+      rowBase.player_opponent_guessLat = (r as any).player_opponent_guessLat ?? r.p3_guessLat ?? "";
+      rowBase.player_opponent_guessLng = (r as any).player_opponent_guessLng ?? r.p3_guessLng ?? "";
+      rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl((r as any).player_opponent_guessLat ?? r.p3_guessLat, (r as any).player_opponent_guessLng ?? r.p3_guessLng);
+      rowBase.player_opponent_guessCountry = oppCountry;
+      rowBase.player_opponent_distance_km = (r as any).player_opponent_distanceKm ?? (r as any).p3_distanceKm ?? (r.p3_distanceMeters !== undefined ? r.p3_distanceMeters / 1e3 : "");
+      rowBase.player_opponent_score = (r as any).player_opponent_score ?? r.p3_score ?? "";
+      rowBase.player_opponent_healthAfter = (r as any).player_opponent_healthAfter ?? r.p3_healthAfter ?? "";
+      rowBase.player_opponent_isBestGuess = (r as any).player_opponent_isBestGuess || r.p3_isBestGuess ? 1 : 0;
+      rowBase.player_opponent_mate_playerId = (r as any).player_opponent_mate_playerId ?? r.p4_playerId ?? "";
+      rowBase.player_opponent_mate_teamId = (r as any).player_opponent_mate_teamId ?? r.p4_teamId ?? "";
+      rowBase.player_opponent_mate_guessLat = (r as any).player_opponent_mate_guessLat ?? r.p4_guessLat ?? "";
+      rowBase.player_opponent_mate_guessLng = (r as any).player_opponent_mate_guessLng ?? r.p4_guessLng ?? "";
+      rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl((r as any).player_opponent_mate_guessLat ?? r.p4_guessLat, (r as any).player_opponent_mate_guessLng ?? r.p4_guessLng);
+      rowBase.player_opponent_mate_guessCountry = oppMateCountry;
+      rowBase.player_opponent_mate_distance_km = (r as any).player_opponent_mate_distanceKm ?? (r as any).p4_distanceKm ?? (r.p4_distanceMeters !== undefined ? r.p4_distanceMeters / 1e3 : "");
+      rowBase.player_opponent_mate_score = (r as any).player_opponent_mate_score ?? r.p4_score ?? "";
+      rowBase.player_opponent_mate_healthAfter = (r as any).player_opponent_mate_healthAfter ?? r.p4_healthAfter ?? "";
+      rowBase.player_opponent_mate_isBestGuess = (r as any).player_opponent_mate_isBestGuess || r.p4_isBestGuess ? 1 : 0;
     }
     roundsByMode.get(mode)!.push(rowBase);
   }
