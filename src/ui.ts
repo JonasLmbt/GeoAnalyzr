@@ -87,6 +87,11 @@ type DesignGraphTemplate = {
   initialBars?: number | "max";
   expandable?: boolean;
   maxCompare?: number;
+  compareMode?: "selectors" | "period_to_date";
+  compareModeOptions?: Array<"per_period" | "to_date" | "both">;
+  defaultCompareMode?: "per_period" | "to_date" | "both";
+  compareCandidates?: Array<{ key: string; label: string }>;
+  defaultCompareKeys?: string[];
   drilldownType?: "rounds" | "players";
   drilldownColumns?: string[];
   drilldownColored?: string[];
@@ -98,6 +103,9 @@ type GraphContentDefinition = {
   defaultMetric?: string;
   defaultSort?: "chronological" | "desc" | "asc";
   sorts?: Array<"chronological" | "desc" | "asc">;
+  compareMode?: "selectors" | "period_to_date";
+  compareModeOptions?: Array<"per_period" | "to_date" | "both">;
+  defaultCompareMode?: "per_period" | "to_date" | "both";
 };
 
 type DesignSectionTemplate = {
@@ -123,6 +131,7 @@ type DesignSectionTemplate = {
     includeLineLabels?: string[];
     excludeLineLabels?: string[];
     preserveUnmatchedLines?: boolean;
+    preserveUnmatchedCharts?: boolean;
   };
   graphTemplates?: DesignGraphTemplate[];
   objects?: {
@@ -293,6 +302,28 @@ function normalizeSectionTemplate(
       Array.isArray(v)
         ? v.map((x) => (typeof x === "string" ? x.trim() : "")).filter((x) => x.length > 0)
         : undefined;
+    const compareMode =
+      graphRaw.compareMode === "selectors" || graphRaw.compareMode === "period_to_date"
+        ? graphRaw.compareMode
+        : undefined;
+    const compareModeOptions = Array.isArray(graphRaw.compareModeOptions)
+      ? graphRaw.compareModeOptions.filter(
+          (m): m is "per_period" | "to_date" | "both" => m === "per_period" || m === "to_date" || m === "both"
+        )
+      : undefined;
+    const defaultCompareMode =
+      graphRaw.defaultCompareMode === "per_period" || graphRaw.defaultCompareMode === "to_date" || graphRaw.defaultCompareMode === "both"
+        ? graphRaw.defaultCompareMode
+        : undefined;
+    const compareCandidates = Array.isArray(graphRaw.compareCandidates)
+      ? graphRaw.compareCandidates
+          .map((c) => ({
+            key: typeof c?.key === "string" ? c.key.trim() : "",
+            label: typeof c?.label === "string" ? c.label.trim() : ""
+          }))
+          .filter((c) => c.key.length > 0)
+          .map((c) => ({ key: c.key, label: c.label || c.key }))
+      : undefined;
     return {
       type: mappedType,
       title: typeof graphRaw.title === "string" ? graphRaw.title : undefined,
@@ -309,8 +340,12 @@ function normalizeSectionTemplate(
       allowSort: typeof graphRaw.allowSort === "boolean" ? graphRaw.allowSort : undefined,
       initialBars: typeof graphRaw.initialBars === "number" || graphRaw.initialBars === "max" ? graphRaw.initialBars : undefined,
       expandable: typeof graphRaw.expandable === "boolean" ? graphRaw.expandable : undefined,
-      maxCompare: typeof graphRaw.maxCompare === "number" ? graphRaw.maxCompare : undefined
-      ,
+      maxCompare: typeof graphRaw.maxCompare === "number" ? graphRaw.maxCompare : undefined,
+      compareMode,
+      compareModeOptions: compareModeOptions && compareModeOptions.length > 0 ? compareModeOptions : undefined,
+      defaultCompareMode,
+      compareCandidates: compareCandidates && compareCandidates.length > 0 ? compareCandidates : undefined,
+      defaultCompareKeys: toStringList(graphRaw.defaultCompareKeys),
       drilldownType: drilldownType === "players" || drilldownType === "rounds" ? drilldownType : undefined,
       drilldownColumns: toStringList(graphRaw.drilldownColumns),
       drilldownColored: toStringList(graphRaw.drilldownColored),
@@ -738,7 +773,23 @@ function applyGraphTemplateToChart(
       ...chart,
       options,
       maxCompare: typeof template.maxCompare === "number" ? template.maxCompare : chart.maxCompare,
-      defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey
+      defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey,
+      compareMode: template.compareMode || contentDef?.compareMode || chart.compareMode,
+      compareModeOptions:
+        template.compareModeOptions && template.compareModeOptions.length > 0
+          ? template.compareModeOptions
+          : contentDef?.compareModeOptions && contentDef.compareModeOptions.length > 0
+            ? contentDef.compareModeOptions
+            : chart.compareModeOptions,
+      defaultCompareMode: template.defaultCompareMode || contentDef?.defaultCompareMode || chart.defaultCompareMode,
+      compareCandidates:
+        template.compareCandidates && template.compareCandidates.length > 0
+          ? template.compareCandidates
+          : chart.compareCandidates,
+      defaultCompareKeys:
+        template.defaultCompareKeys && template.defaultCompareKeys.length > 0
+          ? template.defaultCompareKeys
+          : chart.defaultCompareKeys
     };
     return { chart: next, title: template.title };
   }
@@ -2067,6 +2118,17 @@ function renderSelectableLineChart(
 ): HTMLElement {
   const palette = getThemePalette();
   const maxCompare = Math.max(1, Math.min(chart.maxCompare ?? 4, 4));
+  const cumulativeKey = chart.compareCandidates.find((c) => c.key === "cumulative")?.key || chart.compareCandidates[0]?.key;
+  const compareMode = chart.compareMode || "selectors";
+  const compareModeOptions = (chart.compareModeOptions && chart.compareModeOptions.length > 0
+    ? chart.compareModeOptions
+    : ["per_period", "to_date", "both"]) as Array<"per_period" | "to_date" | "both">;
+  const compareModeLabel: Record<"per_period" | "to_date" | "both", string> = {
+    per_period: "Per period",
+    to_date: "To date",
+    both: "Both"
+  };
+  const supportsModeSelect = compareMode === "period_to_date" && !!cumulativeKey;
   const wrap = doc.createElement("div");
   wrap.style.marginBottom = "8px";
   wrap.style.border = `1px solid ${palette.border}`;
@@ -2106,28 +2168,51 @@ function renderSelectableLineChart(
   head.appendChild(metricSelect);
 
   const compareSelectors: HTMLSelectElement[] = [];
-  const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
-  for (let i = 0; i < maxCompare; i++) {
-    const sel = doc.createElement("select");
-    sel.style.background = palette.buttonBg;
-    sel.style.color = palette.buttonText;
-    sel.style.border = `1px solid ${palette.border}`;
-    sel.style.borderRadius = "7px";
-    sel.style.padding = "2px 6px";
-    sel.style.fontSize = "11px";
-    const noneOpt = doc.createElement("option");
-    noneOpt.value = "";
-    noneOpt.textContent = i === 0 ? "Compare country" : `Compare country ${i + 1}`;
-    sel.appendChild(noneOpt);
-    for (const c of chart.compareCandidates) {
+  let compareModeSelect: HTMLSelectElement | null = null;
+  if (supportsModeSelect) {
+    compareModeSelect = doc.createElement("select");
+    compareModeSelect.style.background = palette.buttonBg;
+    compareModeSelect.style.color = palette.buttonText;
+    compareModeSelect.style.border = `1px solid ${palette.border}`;
+    compareModeSelect.style.borderRadius = "7px";
+    compareModeSelect.style.padding = "2px 6px";
+    compareModeSelect.style.fontSize = "11px";
+    for (const mode of compareModeOptions) {
       const opt = doc.createElement("option");
-      opt.value = c.key;
-      opt.textContent = c.label;
-      sel.appendChild(opt);
+      opt.value = mode;
+      opt.textContent = compareModeLabel[mode];
+      compareModeSelect.appendChild(opt);
     }
-    sel.value = defaultCompare[i] || "";
-    compareSelectors.push(sel);
-    head.appendChild(sel);
+    compareModeSelect.value = chart.defaultCompareMode && compareModeOptions.includes(chart.defaultCompareMode)
+      ? chart.defaultCompareMode
+      : compareModeOptions.includes("to_date")
+        ? "to_date"
+        : compareModeOptions[0];
+    head.appendChild(compareModeSelect);
+  } else {
+    const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
+    for (let i = 0; i < maxCompare; i++) {
+      const sel = doc.createElement("select");
+      sel.style.background = palette.buttonBg;
+      sel.style.color = palette.buttonText;
+      sel.style.border = `1px solid ${palette.border}`;
+      sel.style.borderRadius = "7px";
+      sel.style.padding = "2px 6px";
+      sel.style.fontSize = "11px";
+      const noneOpt = doc.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = i === 0 ? "Compare series" : `Compare series ${i + 1}`;
+      sel.appendChild(noneOpt);
+      for (const c of chart.compareCandidates) {
+        const opt = doc.createElement("option");
+        opt.value = c.key;
+        opt.textContent = c.label;
+        sel.appendChild(opt);
+      }
+      sel.value = defaultCompare[i] || "";
+      compareSelectors.push(sel);
+      head.appendChild(sel);
+    }
   }
 
   const content = doc.createElement("div");
@@ -2137,7 +2222,14 @@ function renderSelectableLineChart(
     content.innerHTML = "";
     const selectedMetric = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
     if (!selectedMetric) return;
-    const keyOrder = [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
+    const keyOrder = supportsModeSelect
+      ? (() => {
+          const mode = (compareModeSelect?.value || "to_date") as "per_period" | "to_date" | "both";
+          if (mode === "per_period") return [chart.primaryKey];
+          if (mode === "to_date") return cumulativeKey ? [cumulativeKey] : [chart.primaryKey];
+          return cumulativeKey ? [chart.primaryKey, cumulativeKey] : [chart.primaryKey];
+        })()
+      : [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
     const uniqueKeys: string[] = [];
     for (const key of keyOrder) {
       if (!uniqueKeys.includes(key)) uniqueKeys.push(key);
@@ -2157,6 +2249,7 @@ function renderSelectableLineChart(
 
   metricSelect.addEventListener("change", render);
   for (const sel of compareSelectors) sel.addEventListener("change", render);
+  compareModeSelect?.addEventListener("change", render);
   render();
   return wrap;
 }
@@ -3474,6 +3567,41 @@ export function createUI(): UIHandle {
               styleInput(initialBarsInput);
               mkField("Initial bars", initialBarsInput);
 
+              const maxCompareInput = doc.createElement("input");
+              maxCompareInput.value = typeof graphObj.maxCompare === "number" ? String(graphObj.maxCompare) : "";
+              maxCompareInput.placeholder = "1..4 (optional)";
+              styleInput(maxCompareInput);
+              mkField("Max compare", maxCompareInput);
+
+              const compareModeSelect = doc.createElement("select");
+              compareModeSelect.innerHTML = `<option value="">(auto)</option><option value="selectors">selectors</option><option value="period_to_date">period_to_date</option>`;
+              compareModeSelect.value = graphObj.compareMode || "";
+              styleInput(compareModeSelect);
+              mkField("Compare mode", compareModeSelect);
+
+              const compareModeOptionsInput = doc.createElement("input");
+              compareModeOptionsInput.value = (graphObj.compareModeOptions || []).join(", ");
+              compareModeOptionsInput.placeholder = "per_period, to_date, both";
+              styleInput(compareModeOptionsInput);
+              mkField("Compare mode options (csv)", compareModeOptionsInput);
+
+              const defaultCompareModeSelect = doc.createElement("select");
+              defaultCompareModeSelect.innerHTML = `<option value="">(auto)</option><option value="per_period">per_period</option><option value="to_date">to_date</option><option value="both">both</option>`;
+              defaultCompareModeSelect.value = graphObj.defaultCompareMode || "";
+              styleInput(defaultCompareModeSelect);
+              mkField("Default compare mode", defaultCompareModeSelect);
+
+              const compareCandidatesInput = doc.createElement("input");
+              compareCandidatesInput.value = (graphObj.compareCandidates || []).map((c) => `${c.key}:${c.label}`).join(", ");
+              compareCandidatesInput.placeholder = "key:label, key2:label2";
+              styleInput(compareCandidatesInput);
+              mkField("Compare candidates (csv)", compareCandidatesInput, true);
+
+              const defaultCompareKeysInput = doc.createElement("input");
+              defaultCompareKeysInput.value = (graphObj.defaultCompareKeys || []).join(", ");
+              styleInput(defaultCompareKeysInput);
+              mkField("Default compare keys (csv)", defaultCompareKeysInput, true);
+
               const drilldownTypeSelect = doc.createElement("select");
               drilldownTypeSelect.innerHTML = `<option value="">(none)</option><option value="rounds">rounds</option><option value="players">players</option>`;
               drilldownTypeSelect.value = graphObj.drilldownType || "";
@@ -3539,6 +3667,30 @@ export function createUI(): UIHandle {
                   const n = Number.parseInt(ibRaw, 10);
                   graphObj.initialBars = Number.isFinite(n) ? n : undefined;
                 }
+                const maxCompareRaw = Number.parseInt(maxCompareInput.value.trim(), 10);
+                graphObj.maxCompare = Number.isFinite(maxCompareRaw) ? Math.max(1, Math.min(4, maxCompareRaw)) : undefined;
+                graphObj.compareMode = (compareModeSelect.value || undefined) as DesignGraphTemplate["compareMode"];
+                graphObj.compareModeOptions = parseCsv(compareModeOptionsInput.value).filter(
+                  (x): x is "per_period" | "to_date" | "both" => x === "per_period" || x === "to_date" || x === "both"
+                );
+                if (!graphObj.compareModeOptions || graphObj.compareModeOptions.length === 0) graphObj.compareModeOptions = undefined;
+                graphObj.defaultCompareMode = (defaultCompareModeSelect.value || undefined) as DesignGraphTemplate["defaultCompareMode"];
+                graphObj.compareCandidates = parseCsv(compareCandidatesInput.value)
+                  .map((entry) => {
+                    const idx = entry.indexOf(":");
+                    if (idx <= 0) {
+                      const key = entry.trim();
+                      return key ? { key, label: key } : undefined;
+                    }
+                    const key = entry.slice(0, idx).trim();
+                    const label = entry.slice(idx + 1).trim();
+                    if (!key) return undefined;
+                    return { key, label: label || key };
+                  })
+                  .filter((x): x is { key: string; label: string } => !!x);
+                if (!graphObj.compareCandidates || graphObj.compareCandidates.length === 0) graphObj.compareCandidates = undefined;
+                graphObj.defaultCompareKeys = parseCsv(defaultCompareKeysInput.value);
+                if (!graphObj.defaultCompareKeys || graphObj.defaultCompareKeys.length === 0) graphObj.defaultCompareKeys = undefined;
                 graphObj.drilldownType = (drilldownTypeSelect.value || undefined) as DesignGraphTemplate["drilldownType"];
                 graphObj.drilldownColumns = parseCsv(drilldownColsInput.value);
                 graphObj.drilldownColored = parseCsv(drilldownColoredInput.value);
@@ -4602,9 +4754,15 @@ export function createUI(): UIHandle {
     card.appendChild(title2);
     card.appendChild(body);
 
-    for (let i = 0; i < charts.length; i++) {
-      if (renderedChartIndices.has(i)) continue;
-      appendChartByIndex(i);
+    const preserveUnmatchedCharts =
+      sectionTemplate?.render && "preserveUnmatchedCharts" in sectionTemplate.render
+        ? (sectionTemplate.render as unknown as { preserveUnmatchedCharts?: boolean }).preserveUnmatchedCharts !== false
+        : layoutMode !== "object_order";
+    if (preserveUnmatchedCharts) {
+      for (let i = 0; i < charts.length; i++) {
+        if (renderedChartIndices.has(i)) continue;
+        appendChartByIndex(i);
+      }
     }
     return card;
   }

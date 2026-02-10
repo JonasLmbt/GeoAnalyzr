@@ -406,6 +406,13 @@
         "rating"
       ],
       "defaultMetric": "avg_score",
+      "compareMode": "period_to_date",
+      "compareModeOptions": [
+        "per_period",
+        "to_date",
+        "both"
+      ],
+      "defaultCompareMode": "to_date",
       "defaultSort": "chronological",
       "sorts": [
         "chronological"
@@ -570,6 +577,23 @@
               "rating"
             ],
             "defaultMetric": "avg_score"
+            ,
+            "compareMode": "period_to_date",
+            "compareModeOptions": [
+              "per_period",
+              "to_date",
+              "both"
+            ],
+            "defaultCompareMode": "to_date",
+            "compareCandidates": [
+              {
+                "key": "cumulative",
+                "label": "To date"
+              }
+            ],
+            "defaultCompareKeys": [
+              "cumulative"
+            ]
           }
         ]
       },

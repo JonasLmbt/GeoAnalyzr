@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.6
+// @version      1.5.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7142,6 +7142,13 @@
           "rating"
         ],
         defaultMetric: "avg_score",
+        compareMode: "period_to_date",
+        compareModeOptions: [
+          "per_period",
+          "to_date",
+          "both"
+        ],
+        defaultCompareMode: "to_date",
         defaultSort: "chronological",
         sorts: [
           "chronological"
@@ -7305,7 +7312,23 @@
                 "damage_taken_share",
                 "rating"
               ],
-              defaultMetric: "avg_score"
+              defaultMetric: "avg_score",
+              compareMode: "period_to_date",
+              compareModeOptions: [
+                "per_period",
+                "to_date",
+                "both"
+              ],
+              defaultCompareMode: "to_date",
+              compareCandidates: [
+                {
+                  key: "cumulative",
+                  label: "To date"
+                }
+              ],
+              defaultCompareKeys: [
+                "cumulative"
+              ]
             }
           ]
         },
@@ -8512,7 +8535,13 @@
             sorts: {
               type: "array",
               items: { enum: ["chronological", "desc", "asc"] }
-            }
+            },
+            compareMode: { enum: ["selectors", "period_to_date"] },
+            compareModeOptions: {
+              type: "array",
+              items: { enum: ["per_period", "to_date", "both"] }
+            },
+            defaultCompareMode: { enum: ["per_period", "to_date", "both"] }
           },
           additionalProperties: true
         }
@@ -8570,6 +8599,25 @@
           },
           expandable: { type: "boolean" },
           maxCompare: { type: "integer", minimum: 1, maximum: 4 },
+          compareMode: { enum: ["selectors", "period_to_date"] },
+          compareModeOptions: {
+            type: "array",
+            items: { enum: ["per_period", "to_date", "both"] }
+          },
+          defaultCompareMode: { enum: ["per_period", "to_date", "both"] },
+          compareCandidates: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["key", "label"],
+              properties: {
+                key: { type: "string", minLength: 1 },
+                label: { type: "string", minLength: 1 }
+              },
+              additionalProperties: false
+            }
+          },
+          defaultCompareKeys: { type: "array", items: { type: "string" } },
           drilldownType: { enum: ["rounds", "players"] },
           drilldownColumns: { type: "array", items: { type: "string" } },
           drilldownColored: { type: "array", items: { type: "string" } },
@@ -8717,7 +8765,8 @@
               chartTitles: { type: "array", items: { type: "string" } },
               includeLineLabels: { type: "array", items: { type: "string" } },
               excludeLineLabels: { type: "array", items: { type: "string" } },
-              preserveUnmatchedLines: { type: "boolean" }
+              preserveUnmatchedLines: { type: "boolean" },
+              preserveUnmatchedCharts: { type: "boolean" }
             },
             additionalProperties: true
           }
@@ -8790,6 +8839,15 @@
       const mappedOrientation = type === "horizontalBar" ? "horizontal" : type === "verticalBar" ? "vertical" : graphRaw.orientation === "vertical" || graphRaw.orientation === "horizontal" ? graphRaw.orientation : void 0;
       const drilldownType = graphRaw.drilldownType;
       const toStringList = (v) => Array.isArray(v) ? v.map((x) => typeof x === "string" ? x.trim() : "").filter((x) => x.length > 0) : void 0;
+      const compareMode = graphRaw.compareMode === "selectors" || graphRaw.compareMode === "period_to_date" ? graphRaw.compareMode : void 0;
+      const compareModeOptions = Array.isArray(graphRaw.compareModeOptions) ? graphRaw.compareModeOptions.filter(
+        (m) => m === "per_period" || m === "to_date" || m === "both"
+      ) : void 0;
+      const defaultCompareMode = graphRaw.defaultCompareMode === "per_period" || graphRaw.defaultCompareMode === "to_date" || graphRaw.defaultCompareMode === "both" ? graphRaw.defaultCompareMode : void 0;
+      const compareCandidates = Array.isArray(graphRaw.compareCandidates) ? graphRaw.compareCandidates.map((c) => ({
+        key: typeof c?.key === "string" ? c.key.trim() : "",
+        label: typeof c?.label === "string" ? c.label.trim() : ""
+      })).filter((c) => c.key.length > 0).map((c) => ({ key: c.key, label: c.label || c.key })) : void 0;
       return {
         type: mappedType,
         title: typeof graphRaw.title === "string" ? graphRaw.title : void 0,
@@ -8807,6 +8865,11 @@
         initialBars: typeof graphRaw.initialBars === "number" || graphRaw.initialBars === "max" ? graphRaw.initialBars : void 0,
         expandable: typeof graphRaw.expandable === "boolean" ? graphRaw.expandable : void 0,
         maxCompare: typeof graphRaw.maxCompare === "number" ? graphRaw.maxCompare : void 0,
+        compareMode,
+        compareModeOptions: compareModeOptions && compareModeOptions.length > 0 ? compareModeOptions : void 0,
+        defaultCompareMode,
+        compareCandidates: compareCandidates && compareCandidates.length > 0 ? compareCandidates : void 0,
+        defaultCompareKeys: toStringList(graphRaw.defaultCompareKeys),
         drilldownType: drilldownType === "players" || drilldownType === "rounds" ? drilldownType : void 0,
         drilldownColumns: toStringList(graphRaw.drilldownColumns),
         drilldownColored: toStringList(graphRaw.drilldownColored),
@@ -9133,7 +9196,12 @@
         ...chart,
         options,
         maxCompare: typeof template.maxCompare === "number" ? template.maxCompare : chart.maxCompare,
-        defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey
+        defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey,
+        compareMode: template.compareMode || contentDef?.compareMode || chart.compareMode,
+        compareModeOptions: template.compareModeOptions && template.compareModeOptions.length > 0 ? template.compareModeOptions : contentDef?.compareModeOptions && contentDef.compareModeOptions.length > 0 ? contentDef.compareModeOptions : chart.compareModeOptions,
+        defaultCompareMode: template.defaultCompareMode || contentDef?.defaultCompareMode || chart.defaultCompareMode,
+        compareCandidates: template.compareCandidates && template.compareCandidates.length > 0 ? template.compareCandidates : chart.compareCandidates,
+        defaultCompareKeys: template.defaultCompareKeys && template.defaultCompareKeys.length > 0 ? template.defaultCompareKeys : chart.defaultCompareKeys
       };
       return { chart: next, title: template.title };
     }
@@ -10265,6 +10333,15 @@
   function renderSelectableLineChart(chart, title, doc, graphCfg) {
     const palette = getThemePalette();
     const maxCompare = Math.max(1, Math.min(chart.maxCompare ?? 4, 4));
+    const cumulativeKey = chart.compareCandidates.find((c) => c.key === "cumulative")?.key || chart.compareCandidates[0]?.key;
+    const compareMode = chart.compareMode || "selectors";
+    const compareModeOptions = chart.compareModeOptions && chart.compareModeOptions.length > 0 ? chart.compareModeOptions : ["per_period", "to_date", "both"];
+    const compareModeLabel = {
+      per_period: "Per period",
+      to_date: "To date",
+      both: "Both"
+    };
+    const supportsModeSelect = compareMode === "period_to_date" && !!cumulativeKey;
     const wrap = doc.createElement("div");
     wrap.style.marginBottom = "8px";
     wrap.style.border = `1px solid ${palette.border}`;
@@ -10300,28 +10377,47 @@
     metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
     head.appendChild(metricSelect);
     const compareSelectors = [];
-    const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
-    for (let i = 0; i < maxCompare; i++) {
-      const sel = doc.createElement("select");
-      sel.style.background = palette.buttonBg;
-      sel.style.color = palette.buttonText;
-      sel.style.border = `1px solid ${palette.border}`;
-      sel.style.borderRadius = "7px";
-      sel.style.padding = "2px 6px";
-      sel.style.fontSize = "11px";
-      const noneOpt = doc.createElement("option");
-      noneOpt.value = "";
-      noneOpt.textContent = i === 0 ? "Compare country" : `Compare country ${i + 1}`;
-      sel.appendChild(noneOpt);
-      for (const c of chart.compareCandidates) {
+    let compareModeSelect = null;
+    if (supportsModeSelect) {
+      compareModeSelect = doc.createElement("select");
+      compareModeSelect.style.background = palette.buttonBg;
+      compareModeSelect.style.color = palette.buttonText;
+      compareModeSelect.style.border = `1px solid ${palette.border}`;
+      compareModeSelect.style.borderRadius = "7px";
+      compareModeSelect.style.padding = "2px 6px";
+      compareModeSelect.style.fontSize = "11px";
+      for (const mode of compareModeOptions) {
         const opt = doc.createElement("option");
-        opt.value = c.key;
-        opt.textContent = c.label;
-        sel.appendChild(opt);
+        opt.value = mode;
+        opt.textContent = compareModeLabel[mode];
+        compareModeSelect.appendChild(opt);
       }
-      sel.value = defaultCompare[i] || "";
-      compareSelectors.push(sel);
-      head.appendChild(sel);
+      compareModeSelect.value = chart.defaultCompareMode && compareModeOptions.includes(chart.defaultCompareMode) ? chart.defaultCompareMode : compareModeOptions.includes("to_date") ? "to_date" : compareModeOptions[0];
+      head.appendChild(compareModeSelect);
+    } else {
+      const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
+      for (let i = 0; i < maxCompare; i++) {
+        const sel = doc.createElement("select");
+        sel.style.background = palette.buttonBg;
+        sel.style.color = palette.buttonText;
+        sel.style.border = `1px solid ${palette.border}`;
+        sel.style.borderRadius = "7px";
+        sel.style.padding = "2px 6px";
+        sel.style.fontSize = "11px";
+        const noneOpt = doc.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = i === 0 ? "Compare series" : `Compare series ${i + 1}`;
+        sel.appendChild(noneOpt);
+        for (const c of chart.compareCandidates) {
+          const opt = doc.createElement("option");
+          opt.value = c.key;
+          opt.textContent = c.label;
+          sel.appendChild(opt);
+        }
+        sel.value = defaultCompare[i] || "";
+        compareSelectors.push(sel);
+        head.appendChild(sel);
+      }
     }
     const content = doc.createElement("div");
     wrap.appendChild(content);
@@ -10329,7 +10425,12 @@
       content.innerHTML = "";
       const selectedMetric = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
       if (!selectedMetric) return;
-      const keyOrder = [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
+      const keyOrder = supportsModeSelect ? (() => {
+        const mode = compareModeSelect?.value || "to_date";
+        if (mode === "per_period") return [chart.primaryKey];
+        if (mode === "to_date") return cumulativeKey ? [cumulativeKey] : [chart.primaryKey];
+        return cumulativeKey ? [chart.primaryKey, cumulativeKey] : [chart.primaryKey];
+      })() : [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
       const uniqueKeys = [];
       for (const key of keyOrder) {
         if (!uniqueKeys.includes(key)) uniqueKeys.push(key);
@@ -10346,6 +10447,7 @@
     };
     metricSelect.addEventListener("change", render);
     for (const sel of compareSelectors) sel.addEventListener("change", render);
+    compareModeSelect?.addEventListener("change", render);
     render();
     return wrap;
   }
@@ -11524,6 +11626,35 @@
                 initialBarsInput.placeholder = "number | max";
                 styleInput(initialBarsInput);
                 mkField("Initial bars", initialBarsInput);
+                const maxCompareInput = doc.createElement("input");
+                maxCompareInput.value = typeof graphObj.maxCompare === "number" ? String(graphObj.maxCompare) : "";
+                maxCompareInput.placeholder = "1..4 (optional)";
+                styleInput(maxCompareInput);
+                mkField("Max compare", maxCompareInput);
+                const compareModeSelect = doc.createElement("select");
+                compareModeSelect.innerHTML = `<option value="">(auto)</option><option value="selectors">selectors</option><option value="period_to_date">period_to_date</option>`;
+                compareModeSelect.value = graphObj.compareMode || "";
+                styleInput(compareModeSelect);
+                mkField("Compare mode", compareModeSelect);
+                const compareModeOptionsInput = doc.createElement("input");
+                compareModeOptionsInput.value = (graphObj.compareModeOptions || []).join(", ");
+                compareModeOptionsInput.placeholder = "per_period, to_date, both";
+                styleInput(compareModeOptionsInput);
+                mkField("Compare mode options (csv)", compareModeOptionsInput);
+                const defaultCompareModeSelect = doc.createElement("select");
+                defaultCompareModeSelect.innerHTML = `<option value="">(auto)</option><option value="per_period">per_period</option><option value="to_date">to_date</option><option value="both">both</option>`;
+                defaultCompareModeSelect.value = graphObj.defaultCompareMode || "";
+                styleInput(defaultCompareModeSelect);
+                mkField("Default compare mode", defaultCompareModeSelect);
+                const compareCandidatesInput = doc.createElement("input");
+                compareCandidatesInput.value = (graphObj.compareCandidates || []).map((c) => `${c.key}:${c.label}`).join(", ");
+                compareCandidatesInput.placeholder = "key:label, key2:label2";
+                styleInput(compareCandidatesInput);
+                mkField("Compare candidates (csv)", compareCandidatesInput, true);
+                const defaultCompareKeysInput = doc.createElement("input");
+                defaultCompareKeysInput.value = (graphObj.defaultCompareKeys || []).join(", ");
+                styleInput(defaultCompareKeysInput);
+                mkField("Default compare keys (csv)", defaultCompareKeysInput, true);
                 const drilldownTypeSelect = doc.createElement("select");
                 drilldownTypeSelect.innerHTML = `<option value="">(none)</option><option value="rounds">rounds</option><option value="players">players</option>`;
                 drilldownTypeSelect.value = graphObj.drilldownType || "";
@@ -11584,6 +11715,28 @@
                     const n = Number.parseInt(ibRaw, 10);
                     graphObj.initialBars = Number.isFinite(n) ? n : void 0;
                   }
+                  const maxCompareRaw = Number.parseInt(maxCompareInput.value.trim(), 10);
+                  graphObj.maxCompare = Number.isFinite(maxCompareRaw) ? Math.max(1, Math.min(4, maxCompareRaw)) : void 0;
+                  graphObj.compareMode = compareModeSelect.value || void 0;
+                  graphObj.compareModeOptions = parseCsv(compareModeOptionsInput.value).filter(
+                    (x) => x === "per_period" || x === "to_date" || x === "both"
+                  );
+                  if (!graphObj.compareModeOptions || graphObj.compareModeOptions.length === 0) graphObj.compareModeOptions = void 0;
+                  graphObj.defaultCompareMode = defaultCompareModeSelect.value || void 0;
+                  graphObj.compareCandidates = parseCsv(compareCandidatesInput.value).map((entry2) => {
+                    const idx = entry2.indexOf(":");
+                    if (idx <= 0) {
+                      const key2 = entry2.trim();
+                      return key2 ? { key: key2, label: key2 } : void 0;
+                    }
+                    const key = entry2.slice(0, idx).trim();
+                    const label2 = entry2.slice(idx + 1).trim();
+                    if (!key) return void 0;
+                    return { key, label: label2 || key };
+                  }).filter((x) => !!x);
+                  if (!graphObj.compareCandidates || graphObj.compareCandidates.length === 0) graphObj.compareCandidates = void 0;
+                  graphObj.defaultCompareKeys = parseCsv(defaultCompareKeysInput.value);
+                  if (!graphObj.defaultCompareKeys || graphObj.defaultCompareKeys.length === 0) graphObj.defaultCompareKeys = void 0;
                   graphObj.drilldownType = drilldownTypeSelect.value || void 0;
                   graphObj.drilldownColumns = parseCsv(drilldownColsInput.value);
                   graphObj.drilldownColored = parseCsv(drilldownColoredInput.value);
@@ -12550,9 +12703,12 @@
       if (requiredFilterRow.childElementCount > 0) card.appendChild(requiredFilterRow);
       card.appendChild(title2);
       card.appendChild(body);
-      for (let i = 0; i < charts.length; i++) {
-        if (renderedChartIndices.has(i)) continue;
-        appendChartByIndex(i);
+      const preserveUnmatchedCharts = sectionTemplate?.render && "preserveUnmatchedCharts" in sectionTemplate.render ? sectionTemplate.render.preserveUnmatchedCharts !== false : layoutMode !== "object_order";
+      if (preserveUnmatchedCharts) {
+        for (let i = 0; i < charts.length; i++) {
+          if (renderedChartIndices.has(i)) continue;
+          appendChartByIndex(i);
+        }
       }
       return card;
     }
@@ -15504,6 +15660,9 @@
         defaultMetricKey: "avg_score",
         primaryKey: trendPrimaryKey,
         maxCompare: 1,
+        compareMode: "period_to_date",
+        compareModeOptions: ["per_period", "to_date", "both"],
+        defaultCompareMode: "to_date",
         compareCandidates: [{ key: "cumulative", label: "To date" }],
         defaultCompareKeys: ["cumulative"],
         options: overviewTrendMetricOptions

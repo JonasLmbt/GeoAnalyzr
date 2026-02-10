@@ -791,6 +791,9 @@ export type AnalysisChart =
       yLabel?: string;
       defaultMetricKey?: string;
       maxCompare?: number;
+      compareMode?: "selectors" | "period_to_date";
+      compareModeOptions?: Array<"per_period" | "to_date" | "both">;
+      defaultCompareMode?: "per_period" | "to_date" | "both";
       primaryKey: string;
       compareCandidates: Array<{ key: string; label: string }>;
       defaultCompareKeys?: string[];
@@ -1452,6 +1455,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       defaultMetricKey: "avg_score",
       primaryKey: trendPrimaryKey,
       maxCompare: 1,
+      compareMode: "period_to_date",
+      compareModeOptions: ["per_period", "to_date", "both"],
+      defaultCompareMode: "to_date",
       compareCandidates: [{ key: "cumulative", label: "To date" }],
       defaultCompareKeys: ["cumulative"],
       options: overviewTrendMetricOptions

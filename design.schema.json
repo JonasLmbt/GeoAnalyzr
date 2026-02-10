@@ -56,7 +56,13 @@
           "sorts": {
             "type": "array",
             "items": { "enum": ["chronological", "desc", "asc"] }
-          }
+          },
+          "compareMode": { "enum": ["selectors", "period_to_date"] },
+          "compareModeOptions": {
+            "type": "array",
+            "items": { "enum": ["per_period", "to_date", "both"] }
+          },
+          "defaultCompareMode": { "enum": ["per_period", "to_date", "both"] }
         },
         "additionalProperties": true
       }
@@ -113,7 +119,26 @@
           ]
         },
         "expandable": { "type": "boolean" },
-        "maxCompare": { "type": "integer", "minimum": 1, "maximum": 4 }
+        "maxCompare": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "compareMode": { "enum": ["selectors", "period_to_date"] },
+        "compareModeOptions": {
+          "type": "array",
+          "items": { "enum": ["per_period", "to_date", "both"] }
+        },
+        "defaultCompareMode": { "enum": ["per_period", "to_date", "both"] },
+        "compareCandidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "label"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "label": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "defaultCompareKeys": { "type": "array", "items": { "type": "string" } }
         ,
         "drilldownType": { "enum": ["rounds", "players"] },
         "drilldownColumns": { "type": "array", "items": { "type": "string" } },
@@ -262,7 +287,8 @@
             "chartTitles": { "type": "array", "items": { "type": "string" } },
             "includeLineLabels": { "type": "array", "items": { "type": "string" } },
             "excludeLineLabels": { "type": "array", "items": { "type": "string" } },
-            "preserveUnmatchedLines": { "type": "boolean" }
+            "preserveUnmatchedLines": { "type": "boolean" },
+            "preserveUnmatchedCharts": { "type": "boolean" }
           },
           "additionalProperties": true
         }
