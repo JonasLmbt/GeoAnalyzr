@@ -92,6 +92,8 @@ type DesignGraphTemplate = {
   defaultCompareMode?: "per_period" | "to_date" | "both";
   compareCandidates?: Array<{ key: string; label: string }>;
   defaultCompareKeys?: string[];
+  xDomain?: "time" | "index";
+  maxPoints?: number;
   drilldownType?: "rounds" | "players";
   drilldownColumns?: string[];
   drilldownColored?: string[];
@@ -106,6 +108,8 @@ type GraphContentDefinition = {
   compareMode?: "selectors" | "period_to_date";
   compareModeOptions?: Array<"per_period" | "to_date" | "both">;
   defaultCompareMode?: "per_period" | "to_date" | "both";
+  xDomain?: "time" | "index";
+  maxPoints?: number;
 };
 
 type DesignSectionTemplate = {
@@ -315,6 +319,10 @@ function normalizeSectionTemplate(
       graphRaw.defaultCompareMode === "per_period" || graphRaw.defaultCompareMode === "to_date" || graphRaw.defaultCompareMode === "both"
         ? graphRaw.defaultCompareMode
         : undefined;
+    const xDomain = graphRaw.xDomain === "time" || graphRaw.xDomain === "index" ? graphRaw.xDomain : undefined;
+    const maxPoints = typeof graphRaw.maxPoints === "number" && Number.isFinite(graphRaw.maxPoints) && graphRaw.maxPoints > 1
+      ? Math.floor(graphRaw.maxPoints)
+      : undefined;
     const compareCandidates = Array.isArray(graphRaw.compareCandidates)
       ? graphRaw.compareCandidates
           .map((c) => ({
@@ -344,6 +352,8 @@ function normalizeSectionTemplate(
       compareMode,
       compareModeOptions: compareModeOptions && compareModeOptions.length > 0 ? compareModeOptions : undefined,
       defaultCompareMode,
+      xDomain,
+      maxPoints,
       compareCandidates: compareCandidates && compareCandidates.length > 0 ? compareCandidates : undefined,
       defaultCompareKeys: toStringList(graphRaw.defaultCompareKeys),
       drilldownType: drilldownType === "players" || drilldownType === "rounds" ? drilldownType : undefined,
@@ -729,6 +739,20 @@ function applyGraphTemplateToChart(
     return { chart: next, title: template.title };
   }
 
+  if (chart.type === "line") {
+    const next: Extract<AnalysisChart, { type: "line" }> = {
+      ...chart,
+      xDomain: template.xDomain || contentDef?.xDomain || chart.xDomain,
+      maxPoints:
+        typeof template.maxPoints === "number"
+          ? template.maxPoints
+          : typeof contentDef?.maxPoints === "number"
+            ? contentDef.maxPoints
+            : chart.maxPoints
+    };
+    return { chart: next, title: template.title };
+  }
+
   if (chart.type === "selectableBar") {
     const sourceOptions = chart.options.slice();
     let options = sourceOptions;
@@ -772,6 +796,13 @@ function applyGraphTemplateToChart(
     const next: Extract<AnalysisChart, { type: "selectableLine" }> = {
       ...chart,
       options,
+      xDomain: template.xDomain || contentDef?.xDomain || chart.xDomain,
+      maxPoints:
+        typeof template.maxPoints === "number"
+          ? template.maxPoints
+          : typeof contentDef?.maxPoints === "number"
+            ? contentDef.maxPoints
+            : chart.maxPoints,
       maxCompare: typeof template.maxCompare === "number" ? template.maxCompare : chart.maxCompare,
       defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey,
       compareMode: template.compareMode || contentDef?.compareMode || chart.compareMode,
@@ -1670,9 +1701,30 @@ function createChartActions(svg: SVGSVGElement, title: string): HTMLElement {
   return row;
 }
 
-function aggregateLinePoints(points: Array<{ x: number; y: number; label?: string }>): Array<{ x: number; y: number; label?: string }> {
-  if (points.length <= 120) return points;
+function aggregateLinePoints(
+  points: Array<{ x: number; y: number; label?: string }>,
+  opts?: { xDomain?: "time" | "index"; maxPoints?: number }
+): Array<{ x: number; y: number; label?: string }> {
+  const xDomain = opts?.xDomain === "index" ? "index" : "time";
+  const maxPoints = typeof opts?.maxPoints === "number" && Number.isFinite(opts.maxPoints)
+    ? Math.max(2, Math.floor(opts.maxPoints))
+    : 120;
+  if (points.length <= maxPoints) return points;
   const sorted = points.slice().sort((a, b) => a.x - b.x);
+  if (xDomain === "index") {
+    const stride = Math.ceil(sorted.length / maxPoints);
+    const compressed: Array<{ x: number; y: number; label?: string }> = [];
+    for (let i = 0; i < sorted.length; i += stride) {
+      const chunk = sorted.slice(i, i + stride);
+      const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
+      const last = chunk[chunk.length - 1];
+      compressed.push(last.label !== undefined ? { x: last.x, y: avgY, label: last.label } : { x: last.x, y: avgY });
+    }
+    const srcLast = sorted[sorted.length - 1];
+    const cmpLast = compressed[compressed.length - 1];
+    if (!cmpLast || cmpLast.x !== srcLast.x || cmpLast.y !== srcLast.y) compressed.push(srcLast);
+    return compressed;
+  }
   const span = Math.max(1, sorted[sorted.length - 1].x - sorted[0].x);
   const spanDays = span / (24 * 60 * 60 * 1000);
   let bucketMs = 24 * 60 * 60 * 1000;
@@ -1697,7 +1749,7 @@ function aggregateLinePoints(points: Array<{ x: number; y: number; label?: strin
     .sort((a, b) => a[0] - b[0])
     .map(([, v]) => (v.label !== undefined ? { x: v.x, y: v.y, label: v.label } : { x: v.x, y: v.y }));
 
-  const hardLimit = 180;
+  const hardLimit = maxPoints;
   if (out.length > hardLimit) {
     const stride = Math.ceil(out.length / hardLimit);
     const compressed: Array<{ x: number; y: number; label?: string }> = [];
@@ -1756,7 +1808,17 @@ function renderLineChart(
     .map((s, idx) => ({
       ...s,
       color: colorPalette[idx % colorPalette.length],
-      points: aggregateLinePoints(s.points)
+      points: aggregateLinePoints(s.points, {
+        xDomain:
+          chart.xDomain ||
+          (graphCfg?.xDomain === "index" || graphCfg?.xDomain === "time" ? graphCfg.xDomain : undefined),
+        maxPoints:
+          typeof graphCfg?.maxPoints === "number"
+            ? graphCfg.maxPoints
+            : typeof chart.maxPoints === "number"
+              ? chart.maxPoints
+              : undefined
+      })
     }))
     .filter((s) => s.points.length > 1);
   if (series.length === 0) return chartWrap;
@@ -2244,6 +2306,8 @@ function renderSelectableLineChart(
     const lineChart: Extract<AnalysisChart, { type: "line" }> = {
       type: "line",
       yLabel: selectedMetric.label,
+      xDomain: chart.xDomain,
+      maxPoints: chart.maxPoints,
       points: series[0].points,
       series
     };
@@ -2692,6 +2756,15 @@ export function createUI(): UIHandle {
       const wrapper = doc.createElement("div");
       wrapper.style.display = "grid";
       wrapper.style.gap = "14px";
+      const betaNote = doc.createElement("div");
+      betaNote.textContent = "Beta feature: Layout editing can create invalid templates. Please change carefully.";
+      betaNote.style.fontSize = "12px";
+      betaNote.style.color = palette.textMuted;
+      betaNote.style.background = palette.panelAlt;
+      betaNote.style.border = `1px solid ${palette.border}`;
+      betaNote.style.borderRadius = "8px";
+      betaNote.style.padding = "8px 10px";
+      wrapper.appendChild(betaNote);
       const styleActionBtn = (b: HTMLButtonElement) => {
         b.style.background = palette.buttonBg;
         b.style.color = palette.buttonText;
@@ -3425,6 +3498,12 @@ export function createUI(): UIHandle {
               styleInput(orientationSelect);
               mkField("Orientation", orientationSelect);
 
+              const xDomainSelect = doc.createElement("select");
+              xDomainSelect.innerHTML = `<option value="">(auto)</option><option value="time">time</option><option value="index">index</option>`;
+              xDomainSelect.value = graphObj.xDomain || "";
+              styleInput(xDomainSelect);
+              mkField("X domain", xDomainSelect);
+
               const metricsWrap = doc.createElement("div");
               metricsWrap.style.gridColumn = "1 / -1";
               metricsWrap.style.display = "grid";
@@ -3570,6 +3649,12 @@ export function createUI(): UIHandle {
               styleInput(initialBarsInput);
               mkField("Initial bars", initialBarsInput);
 
+              const maxPointsInput = doc.createElement("input");
+              maxPointsInput.value = typeof graphObj.maxPoints === "number" ? String(graphObj.maxPoints) : "";
+              maxPointsInput.placeholder = "line max points";
+              styleInput(maxPointsInput);
+              mkField("Max points", maxPointsInput);
+
               const maxCompareInput = doc.createElement("input");
               maxCompareInput.value = typeof graphObj.maxCompare === "number" ? String(graphObj.maxCompare) : "";
               maxCompareInput.placeholder = "1..4 (optional)";
@@ -3657,6 +3742,7 @@ export function createUI(): UIHandle {
                 graphObj.content = contentInput.value.trim() || undefined;
                 graphObj.type = (typeSelect.value || undefined) as DesignGraphTemplate["type"];
                 graphObj.orientation = (orientationSelect.value || undefined) as DesignGraphTemplate["orientation"];
+                graphObj.xDomain = (xDomainSelect.value || undefined) as DesignGraphTemplate["xDomain"];
                 graphObj.defaultMetric = defaultMetricSelect.value.trim() || undefined;
                 graphObj.metrics = Array.from(selectedMetrics);
                 graphObj.defaultSort = (defaultSortSelect.value || undefined) as DesignGraphTemplate["defaultSort"];
@@ -3672,6 +3758,8 @@ export function createUI(): UIHandle {
                 }
                 const maxCompareRaw = Number.parseInt(maxCompareInput.value.trim(), 10);
                 graphObj.maxCompare = Number.isFinite(maxCompareRaw) ? Math.max(1, Math.min(4, maxCompareRaw)) : undefined;
+                const maxPointsRaw = Number.parseInt(maxPointsInput.value.trim(), 10);
+                graphObj.maxPoints = Number.isFinite(maxPointsRaw) ? Math.max(2, maxPointsRaw) : undefined;
                 graphObj.compareMode = (compareModeSelect.value || undefined) as DesignGraphTemplate["compareMode"];
                 graphObj.compareModeOptions = parseCsv(compareModeOptionsInput.value).filter(
                   (x): x is "per_period" | "to_date" | "both" => x === "per_period" || x === "to_date" || x === "both"
@@ -3773,6 +3861,15 @@ export function createUI(): UIHandle {
       const box = doc.createElement("div");
       box.style.display = "grid";
       box.style.gap = "10px";
+      const betaNote = doc.createElement("div");
+      betaNote.textContent = "Beta feature: Template import/export may break layout if fields are invalid. Keep backups.";
+      betaNote.style.fontSize = "12px";
+      betaNote.style.color = palette.textMuted;
+      betaNote.style.background = palette.panelAlt;
+      betaNote.style.border = `1px solid ${palette.border}`;
+      betaNote.style.borderRadius = "8px";
+      betaNote.style.padding = "8px 10px";
+      box.appendChild(betaNote);
 
       const downloadTemplateBtn = doc.createElement("button");
       downloadTemplateBtn.textContent = "Download Current Template";

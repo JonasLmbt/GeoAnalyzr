@@ -224,6 +224,34 @@
         "asc"
       ]
     },
+    "sessions_progression": {
+      "metrics": [
+        "games",
+        "rounds",
+        "avg_score",
+        "avg_score_correct_only",
+        "avg_distance",
+        "avg_time",
+        "avg_duration",
+        "throw_rate",
+        "amount_throws",
+        "fivek_rate",
+        "amount_fiveks",
+        "hit_rate",
+        "amount_hits",
+        "win_rate",
+        "amount_wins",
+        "avg_damage_dealt",
+        "damage_dealt",
+        "damage_dealt_share",
+        "avg_damage_taken",
+        "damage_taken",
+        "damage_taken_share"
+      ],
+      "defaultMetric": "avg_score",
+      "xDomain": "index",
+      "maxPoints": 50
+    },
     "tempo_buckets": {
       "metrics": [
         "games",
@@ -721,6 +749,10 @@
           {
             "kind": "graph",
             "id": "sessions"
+          },
+          {
+            "kind": "graph",
+            "id": "sessions_progression"
           }
         ]
       },
@@ -773,6 +805,42 @@
             "clickable": true,
             "sortable": true,
             "drilldownType": "rounds"
+          },
+          {
+            "id": "sessions_progression",
+            "sourceIndex": 1,
+            "type": "selectableLine",
+            "title": "Sessions progression metrics",
+            "defaultMetric": "avg_score",
+            "metrics": [
+              "games",
+              "rounds",
+              "avg_score",
+              "avg_score_correct_only",
+              "avg_distance",
+              "avg_time",
+              "avg_duration",
+              "throw_rate",
+              "amount_throws",
+              "fivek_rate",
+              "amount_fiveks",
+              "hit_rate",
+              "amount_hits",
+              "win_rate",
+              "amount_wins",
+              "avg_damage_dealt",
+              "damage_dealt",
+              "damage_dealt_share",
+              "avg_damage_taken",
+              "damage_taken",
+              "damage_taken_share"
+            ],
+            "content": "sessions_progression",
+            "xDomain": "index",
+            "maxPoints": 50,
+            "hoverable": true,
+            "clickable": false,
+            "sortable": false
           }
         ]
       },

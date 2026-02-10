@@ -63,6 +63,9 @@
             "items": { "enum": ["per_period", "to_date", "both"] }
           },
           "defaultCompareMode": { "enum": ["per_period", "to_date", "both"] }
+          ,
+          "xDomain": { "enum": ["time", "index"] },
+          "maxPoints": { "type": "integer", "minimum": 2 }
         },
         "additionalProperties": true
       }
@@ -140,6 +143,8 @@
         },
         "defaultCompareKeys": { "type": "array", "items": { "type": "string" } }
         ,
+        "xDomain": { "enum": ["time", "index"] },
+        "maxPoints": { "type": "integer", "minimum": 2 },
         "drilldownType": { "enum": ["rounds", "players"] },
         "drilldownColumns": { "type": "array", "items": { "type": "string" } },
         "drilldownColored": { "type": "array", "items": { "type": "string" } },

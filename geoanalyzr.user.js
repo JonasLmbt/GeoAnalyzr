@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.11
+// @version      1.5.12
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6960,6 +6960,34 @@
           "asc"
         ]
       },
+      sessions_progression: {
+        metrics: [
+          "games",
+          "rounds",
+          "avg_score",
+          "avg_score_correct_only",
+          "avg_distance",
+          "avg_time",
+          "avg_duration",
+          "throw_rate",
+          "amount_throws",
+          "fivek_rate",
+          "amount_fiveks",
+          "hit_rate",
+          "amount_hits",
+          "win_rate",
+          "amount_wins",
+          "avg_damage_dealt",
+          "damage_dealt",
+          "damage_dealt_share",
+          "avg_damage_taken",
+          "damage_taken",
+          "damage_taken_share"
+        ],
+        defaultMetric: "avg_score",
+        xDomain: "index",
+        maxPoints: 50
+      },
       tempo_buckets: {
         metrics: [
           "games",
@@ -7456,6 +7484,10 @@
             {
               kind: "graph",
               id: "sessions"
+            },
+            {
+              kind: "graph",
+              id: "sessions_progression"
             }
           ]
         },
@@ -7508,6 +7540,42 @@
               clickable: true,
               sortable: true,
               drilldownType: "rounds"
+            },
+            {
+              id: "sessions_progression",
+              sourceIndex: 1,
+              type: "selectableLine",
+              title: "Sessions progression metrics",
+              defaultMetric: "avg_score",
+              metrics: [
+                "games",
+                "rounds",
+                "avg_score",
+                "avg_score_correct_only",
+                "avg_distance",
+                "avg_time",
+                "avg_duration",
+                "throw_rate",
+                "amount_throws",
+                "fivek_rate",
+                "amount_fiveks",
+                "hit_rate",
+                "amount_hits",
+                "win_rate",
+                "amount_wins",
+                "avg_damage_dealt",
+                "damage_dealt",
+                "damage_dealt_share",
+                "avg_damage_taken",
+                "damage_taken",
+                "damage_taken_share"
+              ],
+              content: "sessions_progression",
+              xDomain: "index",
+              maxPoints: 50,
+              hoverable: true,
+              clickable: false,
+              sortable: false
             }
           ]
         },
@@ -8541,7 +8609,9 @@
               type: "array",
               items: { enum: ["per_period", "to_date", "both"] }
             },
-            defaultCompareMode: { enum: ["per_period", "to_date", "both"] }
+            defaultCompareMode: { enum: ["per_period", "to_date", "both"] },
+            xDomain: { enum: ["time", "index"] },
+            maxPoints: { type: "integer", minimum: 2 }
           },
           additionalProperties: true
         }
@@ -8618,6 +8688,8 @@
             }
           },
           defaultCompareKeys: { type: "array", items: { type: "string" } },
+          xDomain: { enum: ["time", "index"] },
+          maxPoints: { type: "integer", minimum: 2 },
           drilldownType: { enum: ["rounds", "players"] },
           drilldownColumns: { type: "array", items: { type: "string" } },
           drilldownColored: { type: "array", items: { type: "string" } },
@@ -8844,6 +8916,8 @@
         (m) => m === "per_period" || m === "to_date" || m === "both"
       ) : void 0;
       const defaultCompareMode = graphRaw.defaultCompareMode === "per_period" || graphRaw.defaultCompareMode === "to_date" || graphRaw.defaultCompareMode === "both" ? graphRaw.defaultCompareMode : void 0;
+      const xDomain = graphRaw.xDomain === "time" || graphRaw.xDomain === "index" ? graphRaw.xDomain : void 0;
+      const maxPoints = typeof graphRaw.maxPoints === "number" && Number.isFinite(graphRaw.maxPoints) && graphRaw.maxPoints > 1 ? Math.floor(graphRaw.maxPoints) : void 0;
       const compareCandidates = Array.isArray(graphRaw.compareCandidates) ? graphRaw.compareCandidates.map((c) => ({
         key: typeof c?.key === "string" ? c.key.trim() : "",
         label: typeof c?.label === "string" ? c.label.trim() : ""
@@ -8868,6 +8942,8 @@
         compareMode,
         compareModeOptions: compareModeOptions && compareModeOptions.length > 0 ? compareModeOptions : void 0,
         defaultCompareMode,
+        xDomain,
+        maxPoints,
         compareCandidates: compareCandidates && compareCandidates.length > 0 ? compareCandidates : void 0,
         defaultCompareKeys: toStringList(graphRaw.defaultCompareKeys),
         drilldownType: drilldownType === "players" || drilldownType === "rounds" ? drilldownType : void 0,
@@ -9158,6 +9234,14 @@
       };
       return { chart: next, title: template.title };
     }
+    if (chart.type === "line") {
+      const next = {
+        ...chart,
+        xDomain: template.xDomain || contentDef?.xDomain || chart.xDomain,
+        maxPoints: typeof template.maxPoints === "number" ? template.maxPoints : typeof contentDef?.maxPoints === "number" ? contentDef.maxPoints : chart.maxPoints
+      };
+      return { chart: next, title: template.title };
+    }
     if (chart.type === "selectableBar") {
       const sourceOptions = chart.options.slice();
       let options = sourceOptions;
@@ -9195,6 +9279,8 @@
       const next = {
         ...chart,
         options,
+        xDomain: template.xDomain || contentDef?.xDomain || chart.xDomain,
+        maxPoints: typeof template.maxPoints === "number" ? template.maxPoints : typeof contentDef?.maxPoints === "number" ? contentDef.maxPoints : chart.maxPoints,
         maxCompare: typeof template.maxCompare === "number" ? template.maxCompare : chart.maxCompare,
         defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey,
         compareMode: template.compareMode || contentDef?.compareMode || chart.compareMode,
@@ -9944,9 +10030,25 @@
     row.appendChild(mkBtn("Save PNG", () => void downloadPng(svg, title)));
     return row;
   }
-  function aggregateLinePoints(points) {
-    if (points.length <= 120) return points;
+  function aggregateLinePoints(points, opts) {
+    const xDomain = opts?.xDomain === "index" ? "index" : "time";
+    const maxPoints = typeof opts?.maxPoints === "number" && Number.isFinite(opts.maxPoints) ? Math.max(2, Math.floor(opts.maxPoints)) : 120;
+    if (points.length <= maxPoints) return points;
     const sorted = points.slice().sort((a, b) => a.x - b.x);
+    if (xDomain === "index") {
+      const stride = Math.ceil(sorted.length / maxPoints);
+      const compressed = [];
+      for (let i = 0; i < sorted.length; i += stride) {
+        const chunk = sorted.slice(i, i + stride);
+        const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
+        const last = chunk[chunk.length - 1];
+        compressed.push(last.label !== void 0 ? { x: last.x, y: avgY, label: last.label } : { x: last.x, y: avgY });
+      }
+      const srcLast = sorted[sorted.length - 1];
+      const cmpLast = compressed[compressed.length - 1];
+      if (!cmpLast || cmpLast.x !== srcLast.x || cmpLast.y !== srcLast.y) compressed.push(srcLast);
+      return compressed;
+    }
     const span = Math.max(1, sorted[sorted.length - 1].x - sorted[0].x);
     const spanDays = span / (24 * 60 * 60 * 1e3);
     let bucketMs = 24 * 60 * 60 * 1e3;
@@ -9964,7 +10066,7 @@
       buckets.set(key, cur);
     }
     let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v.label !== void 0 ? { x: v.x, y: v.y, label: v.label } : { x: v.x, y: v.y });
-    const hardLimit = 180;
+    const hardLimit = maxPoints;
     if (out.length > hardLimit) {
       const stride = Math.ceil(out.length / hardLimit);
       const compressed = [];
@@ -10012,7 +10114,10 @@
     const series = baseSeries.map((s, idx) => ({
       ...s,
       color: colorPalette[idx % colorPalette.length],
-      points: aggregateLinePoints(s.points)
+      points: aggregateLinePoints(s.points, {
+        xDomain: chart.xDomain || (graphCfg?.xDomain === "index" || graphCfg?.xDomain === "time" ? graphCfg.xDomain : void 0),
+        maxPoints: typeof graphCfg?.maxPoints === "number" ? graphCfg.maxPoints : typeof chart.maxPoints === "number" ? chart.maxPoints : void 0
+      })
     })).filter((s) => s.points.length > 1);
     if (series.length === 0) return chartWrap;
     const allPoints = series.flatMap((s) => s.points);
@@ -10441,6 +10546,8 @@
       const lineChart = {
         type: "line",
         yLabel: selectedMetric.label,
+        xDomain: chart.xDomain,
+        maxPoints: chart.maxPoints,
         points: series[0].points,
         series
       };
@@ -10815,6 +10922,15 @@
         const wrapper = doc.createElement("div");
         wrapper.style.display = "grid";
         wrapper.style.gap = "14px";
+        const betaNote = doc.createElement("div");
+        betaNote.textContent = "Beta feature: Layout editing can create invalid templates. Please change carefully.";
+        betaNote.style.fontSize = "12px";
+        betaNote.style.color = palette.textMuted;
+        betaNote.style.background = palette.panelAlt;
+        betaNote.style.border = `1px solid ${palette.border}`;
+        betaNote.style.borderRadius = "8px";
+        betaNote.style.padding = "8px 10px";
+        wrapper.appendChild(betaNote);
         const styleActionBtn = (b) => {
           b.style.background = palette.buttonBg;
           b.style.color = palette.buttonText;
@@ -11494,6 +11610,11 @@
                 orientationSelect.value = graphObj.orientation || "";
                 styleInput(orientationSelect);
                 mkField("Orientation", orientationSelect);
+                const xDomainSelect = doc.createElement("select");
+                xDomainSelect.innerHTML = `<option value="">(auto)</option><option value="time">time</option><option value="index">index</option>`;
+                xDomainSelect.value = graphObj.xDomain || "";
+                styleInput(xDomainSelect);
+                mkField("X domain", xDomainSelect);
                 const metricsWrap = doc.createElement("div");
                 metricsWrap.style.gridColumn = "1 / -1";
                 metricsWrap.style.display = "grid";
@@ -11627,6 +11748,11 @@
                 initialBarsInput.placeholder = "number | max";
                 styleInput(initialBarsInput);
                 mkField("Initial bars", initialBarsInput);
+                const maxPointsInput = doc.createElement("input");
+                maxPointsInput.value = typeof graphObj.maxPoints === "number" ? String(graphObj.maxPoints) : "";
+                maxPointsInput.placeholder = "line max points";
+                styleInput(maxPointsInput);
+                mkField("Max points", maxPointsInput);
                 const maxCompareInput = doc.createElement("input");
                 maxCompareInput.value = typeof graphObj.maxCompare === "number" ? String(graphObj.maxCompare) : "";
                 maxCompareInput.placeholder = "1..4 (optional)";
@@ -11703,6 +11829,7 @@
                   graphObj.content = contentInput.value.trim() || void 0;
                   graphObj.type = typeSelect.value || void 0;
                   graphObj.orientation = orientationSelect.value || void 0;
+                  graphObj.xDomain = xDomainSelect.value || void 0;
                   graphObj.defaultMetric = defaultMetricSelect.value.trim() || void 0;
                   graphObj.metrics = Array.from(selectedMetrics);
                   graphObj.defaultSort = defaultSortSelect.value || void 0;
@@ -11718,6 +11845,8 @@
                   }
                   const maxCompareRaw = Number.parseInt(maxCompareInput.value.trim(), 10);
                   graphObj.maxCompare = Number.isFinite(maxCompareRaw) ? Math.max(1, Math.min(4, maxCompareRaw)) : void 0;
+                  const maxPointsRaw = Number.parseInt(maxPointsInput.value.trim(), 10);
+                  graphObj.maxPoints = Number.isFinite(maxPointsRaw) ? Math.max(2, maxPointsRaw) : void 0;
                   graphObj.compareMode = compareModeSelect.value || void 0;
                   graphObj.compareModeOptions = parseCsv(compareModeOptionsInput.value).filter(
                     (x) => x === "per_period" || x === "to_date" || x === "both"
@@ -11812,6 +11941,15 @@
         const box = doc.createElement("div");
         box.style.display = "grid";
         box.style.gap = "10px";
+        const betaNote = doc.createElement("div");
+        betaNote.textContent = "Beta feature: Template import/export may break layout if fields are invalid. Keep backups.";
+        betaNote.style.fontSize = "12px";
+        betaNote.style.color = palette.textMuted;
+        betaNote.style.background = palette.panelAlt;
+        betaNote.style.border = `1px solid ${palette.border}`;
+        betaNote.style.borderRadius = "8px";
+        betaNote.style.padding = "8px 10px";
+        box.appendChild(betaNote);
         const downloadTemplateBtn = doc.createElement("button");
         downloadTemplateBtn.textContent = "Download Current Template";
         const downloadSchemaBtn = doc.createElement("button");
@@ -16101,6 +16239,78 @@
     ];
     if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
     if (sessionAmountWinsBars.length > 0) sessionMetricOptions.push({ key: "amount_wins", label: "Wins", bars: sessionAmountWinsBars });
+    const toSessionSeries = (pick) => sortedSessions.map((s, idx) => ({
+      x: idx + 1,
+      y: pick(s),
+      label: `${idx + 1}. ${formatShortDateTime(s.start)}`
+    }));
+    const sessionLineMetricOptions = [
+      { key: "games", label: "Games", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.games) }] },
+      { key: "rounds", label: "Rounds", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.rounds) }] },
+      { key: "avg_score", label: "Avg score", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgScore) }] },
+      {
+        key: "avg_score_correct_only",
+        label: "Avg score (correct only)",
+        series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgScoreCorrectOnly) }]
+      },
+      { key: "avg_distance", label: "Avg distance (km)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDistance || 0) }] },
+      { key: "avg_time", label: "Avg guess time (s)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgTime || 0) }] },
+      { key: "avg_duration", label: "Avg duration (s)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgTime || 0) }] },
+      { key: "throw_rate", label: "Throw rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.throwRate) }] },
+      { key: "amount_throws", label: "Throws", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountThrows) }] },
+      { key: "fivek_rate", label: "5k rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.fiveKRate) }] },
+      { key: "amount_fiveks", label: "5k rounds", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountFiveKs) }] },
+      { key: "hit_rate", label: "Hit rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.hitRate) }] },
+      { key: "amount_hits", label: "Hits", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountHits) }] },
+      { key: "avg_damage_dealt", label: "Avg damage dealt", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDamageDealt) }] },
+      { key: "damage_dealt", label: "Damage dealt", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt) }] },
+      {
+        key: "damage_dealt_share",
+        label: "Damage dealt share (%)",
+        series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt + s.damageTaken > 0 ? pct(s.damageDealt, s.damageDealt + s.damageTaken) : 0) }]
+      },
+      { key: "avg_damage_taken", label: "Avg damage taken", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDamageTaken) }] },
+      { key: "damage_taken", label: "Damage taken", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageTaken) }] },
+      {
+        key: "damage_taken_share",
+        label: "Damage taken share (%)",
+        series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt + s.damageTaken > 0 ? pct(s.damageTaken, s.damageDealt + s.damageTaken) : 0) }]
+      }
+    ];
+    if (sessionWinRateBars.length > 0) {
+      sessionLineMetricOptions.push({
+        key: "win_rate",
+        label: "Win rate (%)",
+        series: [{
+          key: "period",
+          label: "Per session",
+          points: sortedSessions.map((s, idx) => {
+            const res = sessionResultAgg.get(s.idx);
+            const decisive = (res?.wins || 0) + (res?.losses || 0);
+            return {
+              x: idx + 1,
+              y: decisive > 0 ? pct(res?.wins || 0, decisive) : 0,
+              label: `${idx + 1}. ${formatShortDateTime(s.start)}`
+            };
+          })
+        }]
+      });
+    }
+    if (sessionAmountWinsBars.length > 0) {
+      sessionLineMetricOptions.push({
+        key: "amount_wins",
+        label: "Wins",
+        series: [{
+          key: "period",
+          label: "Per session",
+          points: sortedSessions.map((s, idx) => ({
+            x: idx + 1,
+            y: sessionResultAgg.get(s.idx)?.wins || 0,
+            label: `${idx + 1}. ${formatShortDateTime(s.start)}`
+          }))
+        }]
+      });
+    }
     sections.push({
       id: "session_quality",
       title: "Sessions",
@@ -16111,15 +16321,25 @@
         `Longest break between sessions: ${longestSessionBreakLabel}`,
         `Avg games per session: ${fmt(avgGamesPerSession, 2)}`
       ],
-      chart: {
-        type: "selectableBar",
-        yLabel: "Sessions",
-        orientation: "horizontal",
-        initialBars: 10,
-        defaultMetricKey: "avg_score",
-        defaultSort: "desc",
-        options: sessionMetricOptions
-      }
+      charts: [
+        {
+          type: "selectableBar",
+          yLabel: "Sessions",
+          orientation: "horizontal",
+          initialBars: 10,
+          defaultMetricKey: "avg_score",
+          defaultSort: "desc",
+          options: sessionMetricOptions
+        },
+        {
+          type: "selectableLine",
+          yLabel: "Sessions progression metrics",
+          defaultMetricKey: "avg_score",
+          primaryKey: "period",
+          compareCandidates: [],
+          options: sessionLineMetricOptions
+        }
+      ]
     });
     const tempoBuckets = [
       { name: "<20 sec", min: 0, max: 20 },

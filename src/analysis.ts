@@ -756,6 +756,8 @@ export type AnalysisChart =
   | {
       type: "line";
       yLabel?: string;
+      xDomain?: "time" | "index";
+      maxPoints?: number;
       points: Array<{ x: number; y: number; label?: string }>;
       series?: Array<{
         key: string;
@@ -789,6 +791,8 @@ export type AnalysisChart =
   | {
       type: "selectableLine";
       yLabel?: string;
+      xDomain?: "time" | "index";
+      maxPoints?: number;
       defaultMetricKey?: string;
       maxCompare?: number;
       compareMode?: "selectors" | "period_to_date";
@@ -1923,6 +1927,79 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   ];
   if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
   if (sessionAmountWinsBars.length > 0) sessionMetricOptions.push({ key: "amount_wins", label: "Wins", bars: sessionAmountWinsBars });
+  const toSessionSeries = (pick: (s: (typeof sortedSessions)[number]) => number) =>
+    sortedSessions.map((s, idx) => ({
+      x: idx + 1,
+      y: pick(s),
+      label: `${idx + 1}. ${formatShortDateTime(s.start)}`
+    }));
+  const sessionLineMetricOptions: Extract<AnalysisChart, { type: "selectableLine" }>["options"] = [
+    { key: "games", label: "Games", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.games) }] },
+    { key: "rounds", label: "Rounds", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.rounds) }] },
+    { key: "avg_score", label: "Avg score", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgScore) }] },
+    {
+      key: "avg_score_correct_only",
+      label: "Avg score (correct only)",
+      series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgScoreCorrectOnly) }]
+    },
+    { key: "avg_distance", label: "Avg distance (km)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDistance || 0) }] },
+    { key: "avg_time", label: "Avg guess time (s)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgTime || 0) }] },
+    { key: "avg_duration", label: "Avg duration (s)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgTime || 0) }] },
+    { key: "throw_rate", label: "Throw rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.throwRate) }] },
+    { key: "amount_throws", label: "Throws", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountThrows) }] },
+    { key: "fivek_rate", label: "5k rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.fiveKRate) }] },
+    { key: "amount_fiveks", label: "5k rounds", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountFiveKs) }] },
+    { key: "hit_rate", label: "Hit rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.hitRate) }] },
+    { key: "amount_hits", label: "Hits", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountHits) }] },
+    { key: "avg_damage_dealt", label: "Avg damage dealt", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDamageDealt) }] },
+    { key: "damage_dealt", label: "Damage dealt", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt) }] },
+    {
+      key: "damage_dealt_share",
+      label: "Damage dealt share (%)",
+      series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => (s.damageDealt + s.damageTaken > 0 ? pct(s.damageDealt, s.damageDealt + s.damageTaken) : 0)) }]
+    },
+    { key: "avg_damage_taken", label: "Avg damage taken", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDamageTaken) }] },
+    { key: "damage_taken", label: "Damage taken", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageTaken) }] },
+    {
+      key: "damage_taken_share",
+      label: "Damage taken share (%)",
+      series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => (s.damageDealt + s.damageTaken > 0 ? pct(s.damageTaken, s.damageDealt + s.damageTaken) : 0)) }]
+    }
+  ];
+  if (sessionWinRateBars.length > 0) {
+    sessionLineMetricOptions.push({
+      key: "win_rate",
+      label: "Win rate (%)",
+      series: [{
+        key: "period",
+        label: "Per session",
+        points: sortedSessions.map((s, idx) => {
+          const res = sessionResultAgg.get(s.idx);
+          const decisive = (res?.wins || 0) + (res?.losses || 0);
+          return {
+            x: idx + 1,
+            y: decisive > 0 ? pct(res?.wins || 0, decisive) : 0,
+            label: `${idx + 1}. ${formatShortDateTime(s.start)}`
+          };
+        })
+      }]
+    });
+  }
+  if (sessionAmountWinsBars.length > 0) {
+    sessionLineMetricOptions.push({
+      key: "amount_wins",
+      label: "Wins",
+      series: [{
+        key: "period",
+        label: "Per session",
+        points: sortedSessions.map((s, idx) => ({
+          x: idx + 1,
+          y: sessionResultAgg.get(s.idx)?.wins || 0,
+          label: `${idx + 1}. ${formatShortDateTime(s.start)}`
+        }))
+      }]
+    });
+  }
   sections.push({
     id: "session_quality",
     title: "Sessions",
@@ -1933,15 +2010,25 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       `Longest break between sessions: ${longestSessionBreakLabel}`,
       `Avg games per session: ${fmt(avgGamesPerSession, 2)}`
     ],
-    chart: {
-      type: "selectableBar",
-      yLabel: "Sessions",
-      orientation: "horizontal",
-      initialBars: 10,
-      defaultMetricKey: "avg_score",
-      defaultSort: "desc",
-      options: sessionMetricOptions
-    }
+    charts: [
+      {
+        type: "selectableBar",
+        yLabel: "Sessions",
+        orientation: "horizontal",
+        initialBars: 10,
+        defaultMetricKey: "avg_score",
+        defaultSort: "desc",
+        options: sessionMetricOptions
+      },
+      {
+        type: "selectableLine",
+        yLabel: "Sessions progression metrics",
+        defaultMetricKey: "avg_score",
+        primaryKey: "period",
+        compareCandidates: [],
+        options: sessionLineMetricOptions
+      }
+    ]
   });
 
   const tempoBuckets = [
