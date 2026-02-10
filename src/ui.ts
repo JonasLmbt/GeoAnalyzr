@@ -3344,6 +3344,7 @@ export function createUI(): UIHandle {
               const metricsHint = doc.createElement("div");
               metricsHint.style.fontSize = "11px";
               metricsHint.style.color = palette.textMuted;
+              const metricsAccent = normalizeAccent(analysisSettings.accent);
               const resolveAllowedMetrics = (): string[] => {
                 const contentKey = (contentInput.value || graphObj.content || "").trim();
                 const def = getGraphContentDefinition(contentKey);
@@ -3351,10 +3352,24 @@ export function createUI(): UIHandle {
                 if (allowed.length > 0) return Array.from(new Set(allowed));
                 return suggestionData.metrics;
               };
+              const metricsDetails = doc.createElement("details");
+              metricsDetails.style.border = `1px solid ${palette.border}`;
+              metricsDetails.style.borderRadius = "8px";
+              metricsDetails.style.background = palette.panelAlt;
+              const metricsSummary = doc.createElement("summary");
+              metricsSummary.style.cursor = "pointer";
+              metricsSummary.style.padding = "8px 10px";
+              metricsSummary.style.fontSize = "12px";
+              metricsSummary.style.userSelect = "none";
               const metricsList = doc.createElement("div");
               metricsList.style.display = "grid";
               metricsList.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
-              metricsList.style.gap = "4px 8px";
+              metricsList.style.gap = "6px";
+              metricsList.style.padding = "8px";
+              metricsList.style.borderTop = `1px solid ${palette.border}`;
+              metricsList.style.maxHeight = "260px";
+              metricsList.style.overflowY = "auto";
+              metricsDetails.append(metricsSummary, metricsList);
               const renderDefaultMetricOptions = (allowed: string[]) => {
                 const prev = defaultMetricSelect.value || graphObj.defaultMetric || "";
                 defaultMetricSelect.innerHTML = "";
@@ -3372,34 +3387,60 @@ export function createUI(): UIHandle {
                   defaultMetricSelect.value = prev;
                 }
               };
+              const makeMetricPillBg = () => {
+                const r = Number.parseInt(metricsAccent.slice(1, 3), 16);
+                const g = Number.parseInt(metricsAccent.slice(3, 5), 16);
+                const b = Number.parseInt(metricsAccent.slice(5, 7), 16);
+                return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)
+                  ? `rgba(${r}, ${g}, ${b}, 0.22)`
+                  : palette.buttonBg;
+              };
               const renderMetricChecklist = () => {
                 metricsList.innerHTML = "";
                 const allowedMetrics = resolveAllowedMetrics().sort();
-                metricsHint.textContent = (contentInput.value || graphObj.content || "").trim()
-                  ? `Allowed metrics for content "${(contentInput.value || graphObj.content || "").trim()}": ${allowedMetrics.length}`
-                  : `Allowed metrics: ${allowedMetrics.length}`;
+                const allowedSet = new Set(allowedMetrics);
+                const contentKey = (contentInput.value || graphObj.content || "").trim();
+                metricsHint.textContent = contentKey
+                  ? `Content "${contentKey}": ${allowedMetrics.length} metrics available`
+                  : `Metrics available: ${allowedMetrics.length}`;
                 for (const metric of Array.from(selectedMetrics)) {
                   if (!allowedMetrics.includes(metric)) selectedMetrics.delete(metric);
                 }
-                renderDefaultMetricOptions(allowedMetrics);
-                for (const metric of allowedMetrics) {
-                  const rowMetric = doc.createElement("label");
-                  rowMetric.style.display = "inline-flex";
-                  rowMetric.style.alignItems = "center";
-                  rowMetric.style.gap = "6px";
+                const defaultPool = selectedMetrics.size > 0
+                  ? allowedMetrics.filter((m) => selectedMetrics.has(m))
+                  : allowedMetrics;
+                renderDefaultMetricOptions(defaultPool.length > 0 ? defaultPool : allowedMetrics);
+                const allMetrics = Array.from(new Set([...suggestionData.metrics, ...allowedMetrics, ...Array.from(selectedMetrics)])).sort();
+                const activeBg = makeMetricPillBg();
+                for (const metric of allMetrics) {
+                  const isAllowed = allowedSet.has(metric);
+                  const isActive = selectedMetrics.has(metric);
+                  const rowMetric = doc.createElement("button");
+                  rowMetric.type = "button";
+                  rowMetric.textContent = metric;
+                  rowMetric.style.textAlign = "left";
                   rowMetric.style.fontSize = "12px";
-                  const cb = doc.createElement("input");
-                  cb.type = "checkbox";
-                  cb.checked = selectedMetrics.has(metric);
-                  cb.addEventListener("change", () => {
-                    if (cb.checked) selectedMetrics.add(metric);
-                    else selectedMetrics.delete(metric);
-                  });
-                  const text = doc.createElement("span");
-                  text.textContent = metric;
-                  rowMetric.append(cb, text);
+                  rowMetric.style.padding = "6px 8px";
+                  rowMetric.style.borderRadius = "8px";
+                  rowMetric.style.border = `1px solid ${palette.border}`;
+                  rowMetric.style.background = isActive ? activeBg : palette.panel;
+                  rowMetric.style.color = isAllowed ? palette.text : palette.textMuted;
+                  rowMetric.style.opacity = isAllowed ? "1" : "0.5";
+                  rowMetric.style.cursor = isAllowed ? "pointer" : "not-allowed";
+                  rowMetric.title = isAllowed ? "Click to toggle metric" : "Metric not available for selected content";
+                  if (isAllowed) {
+                    rowMetric.addEventListener("click", () => {
+                      if (selectedMetrics.has(metric)) selectedMetrics.delete(metric);
+                      else selectedMetrics.add(metric);
+                      renderMetricChecklist();
+                    });
+                  }
                   metricsList.appendChild(rowMetric);
                 }
+                const selectedSorted = Array.from(selectedMetrics).sort();
+                metricsSummary.textContent = selectedSorted.length > 0
+                  ? `Metrics (${selectedSorted.length}): ${selectedSorted.join(", ")}`
+                  : "Metrics (0): click to select";
               };
               renderMetricChecklist();
               contentInput.addEventListener("input", () => renderMetricChecklist());
@@ -3412,7 +3453,7 @@ export function createUI(): UIHandle {
               defaultMetricText.style.fontSize = "12px";
               defaultMetricText.style.color = palette.textMuted;
               defaultMetricWrap.append(defaultMetricText, defaultMetricSelect);
-              metricsWrap.append(metricsHint, metricsList, defaultMetricWrap);
+              metricsWrap.append(metricsHint, metricsDetails, defaultMetricWrap);
               editor.appendChild(metricsWrap);
 
               const defaultSortSelect = doc.createElement("select");
