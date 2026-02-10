@@ -156,26 +156,6 @@
     ]
   },
   "graphContentDefinitions": {
-    "overview_games_over_time": {
-      "metrics": [
-        "games"
-      ],
-      "defaultMetric": "games",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
-    "overview_avg_score_over_time": {
-      "metrics": [
-        "avg_score"
-      ],
-      "defaultMetric": "avg_score",
-      "defaultSort": "chronological",
-      "sorts": [
-        "chronological"
-      ]
-    },
     "time_patterns_weekday": {
       "metrics": [
         "games",
@@ -222,16 +202,18 @@
         "avg_time",
         "avg_duration",
         "throw_rate",
-        "fivek_rate",
         "amount_throws",
-        "amount_fivek",
+        "fivek_rate",
+        "amount_fiveks",
         "hit_rate",
+        "amount_hits",
         "win_rate",
-        "win_rate_all",
-        "win_rate_decisive",
+        "amount_wins",
         "avg_damage_dealt",
+        "damage_dealt",
         "damage_dealt_share",
         "avg_damage_taken",
+        "damage_taken",
         "damage_taken_share"
       ],
       "defaultMetric": "avg_score",
@@ -244,25 +226,25 @@
     },
     "tempo_buckets": {
       "metrics": [
+        "games",
+        "rounds",
         "avg_score",
         "avg_score_correct_only",
         "avg_distance",
         "avg_time",
         "avg_duration",
         "throw_rate",
-        "fivek_rate",
         "amount_throws",
-        "amount_fivek",
+        "fivek_rate",
+        "amount_fiveks",
         "hit_rate",
-        "win_rate",
-        "win_rate_all",
-        "win_rate_decisive",
+        "amount_hits",
         "avg_damage_dealt",
+        "damage_dealt",
         "damage_dealt_share",
         "avg_damage_taken",
-        "damage_taken_share",
-        "games",
-        "rounds"
+        "damage_taken",
+        "damage_taken_share"
       ],
       "defaultMetric": "avg_score",
       "defaultSort": "chronological",
@@ -288,12 +270,10 @@
         "throw_rate",
         "fivek_rate",
         "amount_throws",
-        "amount_fivek",
+        "amount_fiveks",
         "rounds",
         "hit_rate",
         "win_rate",
-        "win_rate_all",
-        "win_rate_decisive",
         "avg_damage_dealt",
         "damage_dealt_share",
         "avg_damage_taken",
@@ -308,7 +288,6 @@
     },
     "rounds_by_game_length": {
       "metrics": [
-        "win_rate_decisive",
         "win_rate",
         "avg_score",
         "avg_distance",
@@ -316,7 +295,7 @@
         "games",
         "rounds"
       ],
-      "defaultMetric": "win_rate_decisive",
+      "defaultMetric": "win_rate",
       "defaultSort": "chronological",
       "sorts": [
         "chronological",
@@ -373,11 +352,6 @@
       ]
     },
     "spotlight_distribution": {
-      "metrics": [
-        "all_guesses",
-        "correct_only"
-      ],
-      "defaultMetric": "all_guesses",
       "defaultSort": "chronological",
       "sorts": [
         "chronological"
@@ -402,6 +376,36 @@
       ]
     },
     "records_daily": {
+      "defaultSort": "chronological",
+      "sorts": [
+        "chronological"
+      ]
+    },
+    "overview_time_progression": {
+      "metrics": [
+        "games",
+        "rounds",
+        "avg_score",
+        "avg_score_correct_only",
+        "avg_distance",
+        "avg_time",
+        "throw_rate",
+        "amount_throws",
+        "fivek_rate",
+        "amount_fiveks",
+        "hit_rate",
+        "amount_hits",
+        "win_rate",
+        "amount_wins",
+        "avg_damage_dealt",
+        "damage_dealt",
+        "damage_dealt_share",
+        "avg_damage_taken",
+        "damage_taken",
+        "damage_taken_share",
+        "rating"
+      ],
+      "defaultMetric": "avg_score",
       "defaultSort": "chronological",
       "sorts": [
         "chronological"
@@ -438,11 +442,7 @@
           },
           {
             "kind": "graph",
-            "id": "overview_games_over_time"
-          },
-          {
-            "kind": "graph",
-            "id": "overview_avg_score_over_time"
+            "id": "overview_time_progression"
           }
         ]
       },
@@ -460,14 +460,6 @@
               {
                 "label": "Wins",
                 "type": "wins"
-              },
-              {
-                "label": "Win rate (decisive)",
-                "type": "win_rate_decisive"
-              },
-              {
-                "label": "Win rate (all)",
-                "type": "win_rate_all"
               },
               {
                 "label": "Avg score",
@@ -542,30 +534,42 @@
         ],
         "graphs": [
           {
-            "id": "overview_games_over_time",
+            "id": "overview_time_progression",
             "sourceIndex": 0,
-            "type": "line",
+            "type": "selectableLine",
             "yLabel": "Games/day (or aggregated bucket)",
-            "content": "overview_games_over_time",
+            "content": "overview_time_progression",
             "hoverable": true,
-            "clickable": false,
+            "clickable": true,
             "sortable": false,
             "sorts": [
               "chronological"
-            ]
-          },
-          {
-            "id": "overview_avg_score_over_time",
-            "sourceIndex": 1,
-            "type": "line",
-            "yLabel": "Avg score/day (or aggregated bucket)",
-            "content": "overview_avg_score_over_time",
-            "hoverable": true,
-            "clickable": false,
-            "sortable": false,
-            "sorts": [
-              "chronological"
-            ]
+            ],
+            "title": "Time progression metrics",
+            "metrics": [
+              "games",
+              "rounds",
+              "avg_score",
+              "avg_score_correct_only",
+              "avg_distance",
+              "avg_time",
+              "throw_rate",
+              "amount_throws",
+              "fivek_rate",
+              "amount_fiveks",
+              "hit_rate",
+              "amount_hits",
+              "win_rate",
+              "amount_wins",
+              "avg_damage_dealt",
+              "damage_dealt",
+              "damage_dealt_share",
+              "avg_damage_taken",
+              "damage_taken",
+              "damage_taken_share",
+              "rating"
+            ],
+            "defaultMetric": "avg_score"
           }
         ]
       },
@@ -616,7 +620,7 @@
               "avg_time",
               "throw_rate",
               "fivek_rate",
-              "amount_fivek"
+              "amount_fiveks"
             ],
             "barClick": "opens matching rounds for that weekday",
             "sorts": [
@@ -1078,13 +1082,11 @@
             "type": "selectableBar",
             "title": "Performance by game length (rounds per game, 2+)",
             "orientation": "vertical",
-            "defaultMetric": "win_rate_decisive",
+            "defaultMetric": "win_rate",
             "defaultSort": "chronological",
             "allowSort": false,
             "metrics": [
               "games",
-              "win_rate_decisive",
-              "win_rate_all",
               "avg_score",
               "hit_rate",
               "throw_rate",
@@ -1531,16 +1533,11 @@
           {
             "id": "spotlight_distribution",
             "sourceIndex": 0,
-            "type": "selectableBar",
+            "type": "bar",
             "title": "Score distribution (smoothed)",
             "orientation": "vertical",
             "allowSort": false,
-            "defaultMetric": "all_guesses",
             "defaultSort": "chronological",
-            "metrics": [
-              "all_guesses",
-              "correct_only"
-            ],
             "barClick": "opens rounds in clicked score bucket",
             "sorts": [
               "chronological"

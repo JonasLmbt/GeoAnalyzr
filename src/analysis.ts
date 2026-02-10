@@ -847,6 +847,7 @@ type RoundMetric = {
   score: number;
   timeSec: number | undefined;
   distKm: number | undefined;
+  damage?: number;
   guessCountry?: string;
   trueCountry?: string;
   trueLat?: number;
@@ -1077,6 +1078,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined,
+        damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : undefined,
         guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
         trueCountry: normalizeCountryCode(r.trueCountry),
         trueLat: typeof r.trueLat === "number" ? r.trueLat : undefined,
@@ -1100,28 +1102,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((x) => x.score < 50)
     .map((x) => toDrilldownItem(x.round, x.ts, x.score));
   const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
-  const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 0;
-  const gamesPerDayPoints = buildOverviewGamesSeries(games.map((g) => g.playedAt), gameTimes[0], gameTimes[gameTimes.length - 1], overviewBucketMs);
-  const avgScorePerDayPoints = buildOverviewAvgScoreSeries(
-    rounds
-      .map((r) => ({ ts: playedAtByGameId.get(r.gameId) || 0, value: extractScore(r) }))
-      .filter((x): x is { ts: number; value: number } => x.ts > 0 && typeof x.value === "number"),
-    overviewBucketMs
-  );
+  const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 1;
 
   const overviewLines: string[] = [];
-  const overviewCharts: AnalysisChart[] = [
-    {
-      type: "line",
-      yLabel: overviewBucketMs ? `Games/day (${overviewBucketDays}d aggregated)` : "Games/day",
-      points: gamesPerDayPoints
-    },
-    {
-      type: "line",
-      yLabel: overviewBucketMs ? `Avg score/day (${overviewBucketDays}d aggregated)` : "Avg score/day",
-      points: avgScorePerDayPoints
-    }
-  ];
+  const overviewCharts: AnalysisChart[] = [];
 
   const outcomeTimeline = ownPlayerId
     ? teamDetails
@@ -1188,8 +1172,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         selectedCountry ? "Country filter is ignored here (game-level results)." : "",
         `Games with result data: ${totalResultGames}`,
         `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
-        `Win rate (decisive): ${fmt(pct(winCount, decisiveGames), 1)}%`,
-        `Win rate (all): ${fmt(pct(winCount, totalResultGames), 1)}%`,
+        `Win rate: ${fmt(pct(winCount, decisiveGames), 1)}%`,
         `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
         `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
         `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
@@ -1234,6 +1217,246 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     "Movement Breakdown:",
     ...movementBars.map((b) => `${b.label}: ${b.value}`)
   ];
+
+  type OverviewDayAgg = {
+    day: number;
+    games: number;
+    rounds: number;
+    scoreSum: number;
+    scoreCorrectSum: number;
+    hits: number;
+    distSum: number;
+    distN: number;
+    timeSum: number;
+    timeN: number;
+    throws: number;
+    fiveks: number;
+    wins: number;
+    damageDealt: number;
+    damageTaken: number;
+    rating?: number;
+  };
+  const overviewByDay = new Map<number, OverviewDayAgg>();
+  const ensureOverviewDay = (day: number): OverviewDayAgg => {
+    let agg = overviewByDay.get(day);
+    if (!agg) {
+      agg = {
+        day,
+        games: 0,
+        rounds: 0,
+        scoreSum: 0,
+        scoreCorrectSum: 0,
+        hits: 0,
+        distSum: 0,
+        distN: 0,
+        timeSum: 0,
+        timeN: 0,
+        throws: 0,
+        fiveks: 0,
+        wins: 0,
+        damageDealt: 0,
+        damageTaken: 0
+      };
+      overviewByDay.set(day, agg);
+    }
+    return agg;
+  };
+  for (const g of games) {
+    ensureOverviewDay(startOfLocalDay(g.playedAt)).games++;
+  }
+  for (const rm of roundMetrics) {
+    const agg = ensureOverviewDay(rm.day);
+    agg.rounds++;
+    agg.scoreSum += rm.score;
+    if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) {
+      agg.hits++;
+      agg.scoreCorrectSum += rm.score;
+    }
+    if (typeof rm.distKm === "number" && Number.isFinite(rm.distKm)) {
+      agg.distSum += rm.distKm;
+      agg.distN++;
+    }
+    if (typeof rm.timeSec === "number" && Number.isFinite(rm.timeSec)) {
+      agg.timeSum += rm.timeSec;
+      agg.timeN++;
+    }
+    if (rm.score < 50) agg.throws++;
+    if (rm.score >= 5000) agg.fiveks++;
+    if (typeof rm.damage === "number" && Number.isFinite(rm.damage)) {
+      if (rm.damage > 0) agg.damageDealt += rm.damage;
+      else if (rm.damage < 0) agg.damageTaken += Math.abs(rm.damage);
+    }
+  }
+  for (const x of outcomeTimeline) {
+    if (x.result !== "W") continue;
+    ensureOverviewDay(startOfLocalDay(x.ts)).wins++;
+  }
+  const overviewRatingTimeline = (selectedTeammate
+    ? teamDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels")
+    : teamDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels")
+  )
+    .map((d) => {
+      const ts = teamPlayedAtByGameId.get(d.gameId);
+      const rating = selectedTeammate ? extractOwnTeamRating(d, ownPlayerId)?.end : extractOwnDuelRating(d, ownPlayerId)?.end;
+      return ts && typeof rating === "number" ? { day: startOfLocalDay(ts), rating } : undefined;
+    })
+    .filter((x): x is { day: number; rating: number } => !!x)
+    .sort((a, b) => a.day - b.day);
+  for (const rp of overviewRatingTimeline) {
+    ensureOverviewDay(rp.day).rating = rp.rating;
+  }
+  const startDay = startOfLocalDay(gameTimes[0]);
+  const endDay = startOfLocalDay(gameTimes[gameTimes.length - 1]);
+  const allOverviewDays: OverviewDayAgg[] = [];
+  for (let day = startDay; day <= endDay; day += DAY_MS) {
+    allOverviewDays.push(ensureOverviewDay(day));
+  }
+  const buildOverviewBuckets = (): OverviewDayAgg[] => {
+    if (!overviewBucketMs) return allOverviewDays.slice().sort((a, b) => a.day - b.day);
+    const rows = new Map<number, OverviewDayAgg>();
+    for (const d of allOverviewDays) {
+      const key = Math.floor(d.day / overviewBucketMs) * overviewBucketMs;
+      const cur = rows.get(key) || {
+        day: d.day,
+        games: 0,
+        rounds: 0,
+        scoreSum: 0,
+        scoreCorrectSum: 0,
+        hits: 0,
+        distSum: 0,
+        distN: 0,
+        timeSum: 0,
+        timeN: 0,
+        throws: 0,
+        fiveks: 0,
+        wins: 0,
+        damageDealt: 0,
+        damageTaken: 0
+      };
+      cur.day = d.day;
+      cur.games += d.games;
+      cur.rounds += d.rounds;
+      cur.scoreSum += d.scoreSum;
+      cur.scoreCorrectSum += d.scoreCorrectSum;
+      cur.hits += d.hits;
+      cur.distSum += d.distSum;
+      cur.distN += d.distN;
+      cur.timeSum += d.timeSum;
+      cur.timeN += d.timeN;
+      cur.throws += d.throws;
+      cur.fiveks += d.fiveks;
+      cur.wins += d.wins;
+      cur.damageDealt += d.damageDealt;
+      cur.damageTaken += d.damageTaken;
+      if (typeof d.rating === "number") cur.rating = d.rating;
+      rows.set(key, cur);
+    }
+    return [...rows.values()].sort((a, b) => a.day - b.day);
+  };
+  const overviewBuckets = buildOverviewBuckets();
+  const makeOverviewPoints = (rows: OverviewDayAgg[], pick: (x: OverviewDayAgg) => number): Array<{ x: number; y: number; label?: string }> =>
+    rows.map((r) => ({ x: r.day, y: pick(r), label: formatDay(r.day) }));
+  const makeOverviewCumulativePoints = (rows: OverviewDayAgg[], pick: (x: OverviewDayAgg) => number): Array<{ x: number; y: number; label?: string }> => {
+    let running = 0;
+    return rows.map((r) => {
+      running += pick(r);
+      return { x: r.day, y: running, label: formatDay(r.day) };
+    });
+  };
+  const makeOverviewRatioPoints = (
+    rows: OverviewDayAgg[],
+    num: (x: OverviewDayAgg) => number,
+    den: (x: OverviewDayAgg) => number
+  ): Array<{ x: number; y: number; label?: string }> =>
+    rows.map((r) => {
+      const d = den(r);
+      return { x: r.day, y: d > 0 ? (num(r) / d) * 100 : 0, label: formatDay(r.day) };
+    });
+  const makeOverviewCumulativeRatioPoints = (
+    rows: OverviewDayAgg[],
+    num: (x: OverviewDayAgg) => number,
+    den: (x: OverviewDayAgg) => number
+  ): Array<{ x: number; y: number; label?: string }> => {
+    let n = 0;
+    let d = 0;
+    return rows.map((r) => {
+      n += num(r);
+      d += den(r);
+      return { x: r.day, y: d > 0 ? (n / d) * 100 : 0, label: formatDay(r.day) };
+    });
+  };
+  const makeOverviewAveragePoints = (
+    rows: OverviewDayAgg[],
+    sumFn: (x: OverviewDayAgg) => number,
+    countFn: (x: OverviewDayAgg) => number
+  ): Array<{ x: number; y: number; label?: string }> =>
+    rows.map((r) => {
+      const n = countFn(r);
+      return { x: r.day, y: n > 0 ? sumFn(r) / n : 0, label: formatDay(r.day) };
+    });
+  const makeOverviewCumulativeAveragePoints = (
+    rows: OverviewDayAgg[],
+    sumFn: (x: OverviewDayAgg) => number,
+    countFn: (x: OverviewDayAgg) => number
+  ): Array<{ x: number; y: number; label?: string }> => {
+    let s = 0;
+    let n = 0;
+    return rows.map((r) => {
+      s += sumFn(r);
+      n += countFn(r);
+      return { x: r.day, y: n > 0 ? s / n : 0, label: formatDay(r.day) };
+    });
+  };
+  const trendPrimaryKey = "period";
+  const overviewTrendMetricOptions: Array<{
+    key: string;
+    label: string;
+    series: Array<{ key: string; label: string; points: Array<{ x: number; y: number; label?: string }> }>;
+  }> = [];
+  const addTrendMetric = (
+    key: string,
+    label: string,
+    periodPoints: Array<{ x: number; y: number; label?: string }>,
+    toDatePoints?: Array<{ x: number; y: number; label?: string }>
+  ) => {
+    const series = [{ key: trendPrimaryKey, label: "Per period", points: periodPoints }];
+    if (toDatePoints) series.push({ key: "cumulative", label: "To date", points: toDatePoints });
+    overviewTrendMetricOptions.push({ key, label, series });
+  };
+  addTrendMetric("games", "Games", makeOverviewPoints(overviewBuckets, (x) => x.games), makeOverviewCumulativePoints(overviewBuckets, (x) => x.games));
+  addTrendMetric("rounds", "Rounds", makeOverviewPoints(overviewBuckets, (x) => x.rounds), makeOverviewCumulativePoints(overviewBuckets, (x) => x.rounds));
+  addTrendMetric("avg_score", "Avg score", makeOverviewAveragePoints(overviewBuckets, (x) => x.scoreSum, (x) => x.rounds), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.scoreSum, (x) => x.rounds));
+  addTrendMetric("avg_score_correct_only", "Avg score (correct only)", makeOverviewAveragePoints(overviewBuckets, (x) => x.scoreCorrectSum, (x) => x.hits), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.scoreCorrectSum, (x) => x.hits));
+  addTrendMetric("avg_distance", "Avg distance (km)", makeOverviewAveragePoints(overviewBuckets, (x) => x.distSum, (x) => x.distN), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.distSum, (x) => x.distN));
+  addTrendMetric("avg_time", "Avg guess time (s)", makeOverviewAveragePoints(overviewBuckets, (x) => x.timeSum, (x) => x.timeN), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.timeSum, (x) => x.timeN));
+  addTrendMetric("throw_rate", "Throw rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.throws, (x) => x.rounds), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.throws, (x) => x.rounds));
+  addTrendMetric("amount_throws", "Throws", makeOverviewPoints(overviewBuckets, (x) => x.throws), makeOverviewCumulativePoints(overviewBuckets, (x) => x.throws));
+  addTrendMetric("fivek_rate", "5k rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.fiveks, (x) => x.rounds), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.fiveks, (x) => x.rounds));
+  addTrendMetric("amount_fiveks", "5k rounds", makeOverviewPoints(overviewBuckets, (x) => x.fiveks), makeOverviewCumulativePoints(overviewBuckets, (x) => x.fiveks));
+  addTrendMetric("hit_rate", "Hit rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.hits, (x) => x.rounds), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.hits, (x) => x.rounds));
+  addTrendMetric("amount_hits", "Hits", makeOverviewPoints(overviewBuckets, (x) => x.hits), makeOverviewCumulativePoints(overviewBuckets, (x) => x.hits));
+  addTrendMetric("win_rate", "Win rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.wins, (x) => x.games), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.wins, (x) => x.games));
+  addTrendMetric("amount_wins", "Wins", makeOverviewPoints(overviewBuckets, (x) => x.wins), makeOverviewCumulativePoints(overviewBuckets, (x) => x.wins));
+  addTrendMetric("avg_damage_dealt", "Avg damage dealt", makeOverviewAveragePoints(overviewBuckets, (x) => x.damageDealt, (x) => x.rounds), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.damageDealt, (x) => x.rounds));
+  addTrendMetric("damage_dealt", "Damage dealt", makeOverviewPoints(overviewBuckets, (x) => x.damageDealt), makeOverviewCumulativePoints(overviewBuckets, (x) => x.damageDealt));
+  addTrendMetric("damage_dealt_share", "Damage dealt share (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.damageDealt, (x) => x.damageDealt + x.damageTaken), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.damageDealt, (x) => x.damageDealt + x.damageTaken));
+  addTrendMetric("avg_damage_taken", "Avg damage taken", makeOverviewAveragePoints(overviewBuckets, (x) => x.damageTaken, (x) => x.rounds), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.damageTaken, (x) => x.rounds));
+  addTrendMetric("damage_taken", "Damage taken", makeOverviewPoints(overviewBuckets, (x) => x.damageTaken), makeOverviewCumulativePoints(overviewBuckets, (x) => x.damageTaken));
+  addTrendMetric("damage_taken_share", "Damage taken share (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.damageTaken, (x) => x.damageDealt + x.damageTaken), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.damageTaken, (x) => x.damageDealt + x.damageTaken));
+  const ratingRows = overviewBuckets.filter((x) => typeof x.rating === "number");
+  addTrendMetric("rating", "Rating", makeOverviewPoints(ratingRows, (x) => x.rating || 0));
+  if (overviewTrendMetricOptions.length > 0) {
+    overviewCharts.push({
+      type: "selectableLine",
+      yLabel: overviewBucketMs ? `Time progression metrics (${overviewBucketDays}d aggregated)` : "Time progression metrics",
+      defaultMetricKey: "avg_score",
+      primaryKey: trendPrimaryKey,
+      maxCompare: 1,
+      compareCandidates: [{ key: "cumulative", label: "To date" }],
+      defaultCompareKeys: ["cumulative"],
+      options: overviewTrendMetricOptions
+    });
+  }
 
   overviewLines.push("Results, Win Rate & Streaks:");
   overviewLines.push(...resultLines);
@@ -1465,17 +1688,51 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     }
   }
 
-  const sessionsAgg = new Map<number, { rounds: number; scores: number[]; fiveK: number; throws: number; avgTimeSrc: number[] }>();
+  const sessionsAgg = new Map<
+    number,
+    {
+      rounds: number;
+      scores: number[];
+      scoreCorrectOnly: number[];
+      fiveK: number;
+      throws: number;
+      hits: number;
+      avgTimeSrc: number[];
+      distSrc: number[];
+      damageDealt: number;
+      damageTaken: number;
+    }
+  >();
   const sessionDrillByIdx = new Map<number, AnalysisDrilldownItem[]>();
   for (const rm of roundMetrics) {
     const idx = gameSessionIndex.get(rm.ts);
     if (idx === undefined) continue;
-    const cur = sessionsAgg.get(idx) || { rounds: 0, scores: [], fiveK: 0, throws: 0, avgTimeSrc: [] };
+    const cur = sessionsAgg.get(idx) || {
+      rounds: 0,
+      scores: [],
+      scoreCorrectOnly: [],
+      fiveK: 0,
+      throws: 0,
+      hits: 0,
+      avgTimeSrc: [],
+      distSrc: [],
+      damageDealt: 0,
+      damageTaken: 0
+    };
     cur.rounds++;
     cur.scores.push(rm.score);
+    if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) {
+      cur.hits++;
+      cur.scoreCorrectOnly.push(rm.score);
+    }
     if (rm.score >= 5000) cur.fiveK++;
     if (rm.score < 50) cur.throws++;
     if (typeof rm.timeSec === "number") cur.avgTimeSrc.push(rm.timeSec);
+    if (typeof rm.distKm === "number") cur.distSrc.push(rm.distKm);
+    if (typeof rm.damage === "number" && Number.isFinite(rm.damage)) {
+      if (rm.damage > 0) cur.damageDealt += rm.damage;
+      else if (rm.damage < 0) cur.damageTaken += Math.abs(rm.damage);
+    }
     sessionsAgg.set(idx, cur);
     const drill = sessionDrillByIdx.get(idx) || [];
     drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
@@ -1489,9 +1746,19 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       games: sessionBounds.get(idx)?.games || 0,
       rounds: s.rounds,
       avgScore: avg(s.scores) || 0,
+      avgScoreCorrectOnly: avg(s.scoreCorrectOnly) || 0,
       fiveKRate: pct(s.fiveK, s.rounds),
       throwRate: pct(s.throws, s.rounds),
+      hitRate: pct(s.hits, s.rounds),
+      amountFiveKs: s.fiveK,
+      amountThrows: s.throws,
+      amountHits: s.hits,
       avgTime: avg(s.avgTimeSrc),
+      avgDistance: avg(s.distSrc),
+      avgDamageDealt: s.rounds > 0 ? s.damageDealt / s.rounds : 0,
+      avgDamageTaken: s.rounds > 0 ? s.damageTaken / s.rounds : 0,
+      damageDealt: s.damageDealt,
+      damageTaken: s.damageTaken,
       label: sessionBounds.get(idx)
         ? `${formatShortDateTime(sessionBounds.get(idx)!.start)} -> ${formatShortDateTime(sessionBounds.get(idx)!.end)}`
         : `Session ${idx + 1}`
@@ -1531,11 +1798,34 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         return { label: formatShortDateTime(s.start), value: rate, drilldown: sessionDrillByIdx.get(s.idx) || [] };
       })
     : [];
+  const sessionAmountWinsBars = ownPlayerId
+    ? sessionRows.map((s) => {
+        const res = sessionResultAgg.get(s.idx);
+        return { label: formatShortDateTime(s.start), value: res?.wins || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] };
+      })
+    : [];
   const sessionMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
+    { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games, drilldown: sessionDrillByIdx.get(s.idx) || [] })) },
+    { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds, drilldown: sessionDrillByIdx.get(s.idx) || [] })) },
     {
       key: "avg_score",
       label: "Avg score",
       bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "avg_score_correct_only",
+      label: "Avg score (correct only)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScoreCorrectOnly, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "avg_distance",
+      label: "Avg distance (km)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgDistance || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "avg_time",
+      label: "Avg guess time (s)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
     },
     {
       key: "throw_rate",
@@ -1548,14 +1838,71 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
     },
     {
+      key: "amount_throws",
+      label: "Throws",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.amountThrows, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "amount_fiveks",
+      label: "5k rounds",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.amountFiveKs, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "hit_rate",
+      label: "Hit rate (%)",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.hitRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "amount_hits",
+      label: "Hits",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.amountHits, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "avg_damage_dealt",
+      label: "Avg damage dealt",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgDamageDealt, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "damage_dealt",
+      label: "Damage dealt",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.damageDealt, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "damage_dealt_share",
+      label: "Damage dealt share (%)",
+      bars: sessionRows.map((s) => ({
+        label: formatShortDateTime(s.start),
+        value: s.damageDealt + s.damageTaken > 0 ? pct(s.damageDealt, s.damageDealt + s.damageTaken) : 0,
+        drilldown: sessionDrillByIdx.get(s.idx) || []
+      }))
+    },
+    {
+      key: "avg_damage_taken",
+      label: "Avg damage taken",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgDamageTaken, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "damage_taken",
+      label: "Damage taken",
+      bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.damageTaken, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
+    },
+    {
+      key: "damage_taken_share",
+      label: "Damage taken share (%)",
+      bars: sessionRows.map((s) => ({
+        label: formatShortDateTime(s.start),
+        value: s.damageDealt + s.damageTaken > 0 ? pct(s.damageTaken, s.damageDealt + s.damageTaken) : 0,
+        drilldown: sessionDrillByIdx.get(s.idx) || []
+      }))
+    },
+    {
       key: "avg_duration",
       label: "Avg duration (s)",
       bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-    },
-    { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games, drilldown: sessionDrillByIdx.get(s.idx) || [] })) },
-    { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds, drilldown: sessionDrillByIdx.get(s.idx) || [] })) }
+    }
   ];
   if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
+  if (sessionAmountWinsBars.length > 0) sessionMetricOptions.push({ key: "amount_wins", label: "Wins", bars: sessionAmountWinsBars });
   sections.push({
     id: "session_quality",
     title: "Sessions",
@@ -1590,9 +1937,13 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     ...b,
     n: 0,
     scores: [] as number[],
+    scoreCorrectOnly: [] as number[],
     dist: [] as number[],
     throws: 0,
     fiveKs: 0,
+    hits: 0,
+    damageDealt: 0,
+    damageTaken: 0,
     timeSum: 0,
     drilldown: [] as AnalysisDrilldownItem[]
   }));
@@ -1604,8 +1955,16 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     bucket.n++;
     bucket.scores.push(rm.score);
     if (typeof rm.distKm === "number") bucket.dist.push(rm.distKm);
+    if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) {
+      bucket.hits++;
+      bucket.scoreCorrectOnly.push(rm.score);
+    }
     if (rm.score < 50) bucket.throws++;
     if (rm.score >= 5000) bucket.fiveKs++;
+    if (typeof rm.damage === "number" && Number.isFinite(rm.damage)) {
+      if (rm.damage > 0) bucket.damageDealt += rm.damage;
+      else if (rm.damage < 0) bucket.damageTaken += Math.abs(rm.damage);
+    }
     bucket.timeSum += t;
     bucket.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
   }
@@ -1619,10 +1978,24 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     .filter((r) => r.score < 50)
     .sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
   const tempoMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
+    { key: "games", label: "Games", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n > 0 ? b.drilldown.map((d) => d.gameId).filter((v, i, a) => a.indexOf(v) === i).length : 0, drilldown: b.drilldown })) },
     { key: "avg_score", label: "Avg score", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0, drilldown: b.drilldown })) },
+    { key: "avg_score_correct_only", label: "Avg score (correct only)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scoreCorrectOnly) || 0, drilldown: b.drilldown })) },
     { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0, drilldown: b.drilldown })) },
+    { key: "avg_time", label: "Avg guess time (s)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.timeSum / b.n : 0, drilldown: b.drilldown })) },
+    { key: "avg_duration", label: "Avg duration (s)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.timeSum / b.n : 0, drilldown: b.drilldown })) },
     { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0, drilldown: b.drilldown })) },
     { key: "fivek_rate", label: "5k rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.fiveKs, b.n) : 0, drilldown: b.drilldown })) },
+    { key: "amount_throws", label: "Throws", bars: tempoAgg.map((b) => ({ label: b.name, value: b.throws, drilldown: b.drilldown })) },
+    { key: "amount_fiveks", label: "5k rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.fiveKs, drilldown: b.drilldown })) },
+    { key: "hit_rate", label: "Hit rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.hits, b.n) : 0, drilldown: b.drilldown })) },
+    { key: "amount_hits", label: "Hits", bars: tempoAgg.map((b) => ({ label: b.name, value: b.hits, drilldown: b.drilldown })) },
+    { key: "avg_damage_dealt", label: "Avg damage dealt", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.damageDealt / b.n : 0, drilldown: b.drilldown })) },
+    { key: "damage_dealt", label: "Damage dealt", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageDealt, drilldown: b.drilldown })) },
+    { key: "damage_dealt_share", label: "Damage dealt share (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageDealt + b.damageTaken > 0 ? pct(b.damageDealt, b.damageDealt + b.damageTaken) : 0, drilldown: b.drilldown })) },
+    { key: "avg_damage_taken", label: "Avg damage taken", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.damageTaken / b.n : 0, drilldown: b.drilldown })) },
+    { key: "damage_taken", label: "Damage taken", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageTaken, drilldown: b.drilldown })) },
+    { key: "damage_taken_share", label: "Damage taken share (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageDealt + b.damageTaken > 0 ? pct(b.damageTaken, b.damageDealt + b.damageTaken) : 0, drilldown: b.drilldown })) },
     { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n, drilldown: b.drilldown })) }
   ];
   sections.push({
@@ -2003,14 +2376,9 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const lengthMetricOptions: Array<{ key: string; label: string; bars: AnalysisBarPoint[] }> = [
     { key: "games", label: "Games", bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.games, drilldown: x.drilldown })) },
     {
-      key: "win_rate_decisive",
-      label: "Win rate (decisive, %)",
+      key: "win_rate",
+      label: "Win rate (%)",
       bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.wins + x.losses > 0 ? pct(x.wins, x.wins + x.losses) : 0, drilldown: x.drilldown }))
-    },
-    {
-      key: "win_rate_all",
-      label: "Win rate (all, %)",
-      bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.games > 0 ? pct(x.wins, x.games) : 0, drilldown: x.drilldown }))
     },
     {
       key: "avg_score",
@@ -2095,7 +2463,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
               orientation: "vertical" as const,
               allowSort: false,
               defaultSort: "chronological" as const,
-              defaultMetricKey: "win_rate_decisive",
+              defaultMetricKey: "win_rate",
               options: lengthMetricOptions
             }
           ]
@@ -2755,11 +3123,6 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const countryFiveK = countryScores.filter((s) => s >= 5000).length;
     const countryThrows = countryScores.filter((s) => s < 50).length;
     const distributionAll = buildSmoothedScoreDistributionWithDrilldown(countryRoundMetrics.map((x) => ({ score: x.score, drill: x.drill })));
-    const distributionCorrectOnly = buildSmoothedScoreDistributionWithDrilldown(
-      countryRoundMetrics
-        .filter((x) => x.guessCountry && x.trueCountry && x.guessCountry === x.trueCountry)
-        .map((x) => ({ score: x.score, drill: x.drill }))
-    );
     const spotlightCandidates: string[] = [
       spotlightCountry,
       ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
@@ -2940,16 +3303,10 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
       ],
       charts: [
         {
-          type: "selectableBar",
+          type: "bar",
           yLabel: "Score distribution (smoothed)",
           orientation: "vertical",
-          allowSort: false,
-          defaultMetricKey: "all_guesses",
-          defaultSort: "chronological",
-          options: [
-            { key: "all_guesses", label: "All guesses", bars: distributionAll },
-            { key: "correct_only", label: "Only correct-country guesses", bars: distributionCorrectOnly }
-          ]
+          bars: distributionAll
         },
         {
           type: "selectableLine",
