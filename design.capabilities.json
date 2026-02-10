@@ -31,6 +31,13 @@
   "graphContentDefinitions": {
     "time_patterns_weekday": {
       "title": "Weekday patterns",
+      "type": "bar",
+      "orientation": "horizontal",
+      "initialBars": 7,
+      "hoverable": true,
+      "clickable": true,
+      "sortable": true,
+      "drilldownType": "rounds",
       "metrics": [
         "games",
         "rounds",

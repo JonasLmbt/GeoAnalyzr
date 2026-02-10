@@ -373,11 +373,23 @@
             "defaultSort": "chronological",
             "metrics": [
               "games",
+              "rounds",
               "avg_score",
-              "avg_time",
+              "avg_score_correct_only",
+              "avg_distance",
+              "avg_duration",
               "throw_rate",
+              "amount_throws",
               "fivek_rate",
-              "amount_fiveks"
+              "amount_fiveks",
+              "hit_rate",
+              "amount_hits",
+              "win_rate",
+              "amount_wins",
+              "avg_damage_dealt",
+              "damage_dealt",
+              "avg_damage_taken",
+              "damage_taken"
             ],
             "barClick": "opens matching rounds for that weekday",
             "sorts": [

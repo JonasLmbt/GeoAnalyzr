@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.5.15
+// @version      1.5.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -7109,11 +7109,23 @@
               defaultSort: "chronological",
               metrics: [
                 "games",
+                "rounds",
                 "avg_score",
-                "avg_time",
+                "avg_score_correct_only",
+                "avg_distance",
+                "avg_duration",
                 "throw_rate",
+                "amount_throws",
                 "fivek_rate",
-                "amount_fiveks"
+                "amount_fiveks",
+                "hit_rate",
+                "amount_hits",
+                "win_rate",
+                "amount_wins",
+                "avg_damage_dealt",
+                "damage_dealt",
+                "avg_damage_taken",
+                "damage_taken"
               ],
               barClick: "opens matching rounds for that weekday",
               sorts: [
@@ -8561,6 +8573,14 @@
     ],
     graphContentDefinitions: {
       time_patterns_weekday: {
+        title: "Weekday patterns",
+        type: "bar",
+        orientation: "horizontal",
+        initialBars: 7,
+        hoverable: true,
+        clickable: true,
+        sortable: true,
+        drilldownType: "rounds",
         metrics: [
           "games",
           "rounds",
@@ -8582,12 +8602,12 @@
           "damage_taken"
         ],
         defaultMetric: "games",
-        defaultSort: "chronological",
         sorts: [
           "chronological",
           "desc",
           "asc"
-        ]
+        ],
+        defaultSort: "chronological"
       },
       time_patterns_hour: {
         metrics: [
@@ -11021,7 +11041,6 @@
               }
               for (const g of sec.objects?.graphs || []) {
                 if (typeof g.content === "string" && g.content.trim()) graphContents.add(g.content.trim());
-                for (const m of g.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
               }
             }
           };
@@ -11758,7 +11777,7 @@
                   }
                   const defaultPool = selectedMetrics.size > 0 ? allowedMetrics.filter((m) => selectedMetrics.has(m)) : allowedMetrics;
                   renderDefaultMetricOptions(defaultPool.length > 0 ? defaultPool : allowedMetrics);
-                  const allMetrics = Array.from(/* @__PURE__ */ new Set([...suggestionData.metrics, ...allowedMetrics, ...Array.from(selectedMetrics)])).sort();
+                  const allMetrics = allowedMetrics;
                   const activeBg = makeMetricPillBg();
                   for (const metric of allMetrics) {
                     const isAllowed = allowedSet.has(metric);

@@ -2835,7 +2835,6 @@ export function createUI(): UIHandle {
             }
             for (const g of sec.objects?.graphs || []) {
               if (typeof g.content === "string" && g.content.trim()) graphContents.add(g.content.trim());
-              for (const m of g.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
             }
           }
         };
@@ -3636,7 +3635,7 @@ export function createUI(): UIHandle {
                   ? allowedMetrics.filter((m) => selectedMetrics.has(m))
                   : allowedMetrics;
                 renderDefaultMetricOptions(defaultPool.length > 0 ? defaultPool : allowedMetrics);
-                const allMetrics = Array.from(new Set([...suggestionData.metrics, ...allowedMetrics, ...Array.from(selectedMetrics)])).sort();
+                const allMetrics = allowedMetrics;
                 const activeBg = makeMetricPillBg();
                 for (const metric of allMetrics) {
                   const isAllowed = allowedSet.has(metric);
