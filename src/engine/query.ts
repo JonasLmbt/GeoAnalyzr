@@ -67,7 +67,10 @@ export async function getFilteredRounds(ctx: QueryContext): Promise<RoundRow[]> 
     const d = detailsByGameId.get(r.gameId);
     if (!d) return false;
 
-    const mateId = (d as any).player_mate_id;
+    const mateId =
+      (d as any).player_mate_id ??
+      (d as any).teamOnePlayerTwoId ??
+      (d as any).p2_id;
     return mateId === f.teammateId;
   });
 }

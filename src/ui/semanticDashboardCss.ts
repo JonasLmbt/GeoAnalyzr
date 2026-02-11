@@ -90,6 +90,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     }
     .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
     .ga-card-body { padding:12px; }
+    .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }
     .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
     .ga-statlist-box {
       background: var(--ga-card-2);
@@ -110,6 +111,40 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border-radius:12px;
       padding:10px;
       color: var(--ga-text);
+      width: 100%;
+      overflow: hidden;
+    }
+    .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
+    .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-chart-actions { display:flex; gap:8px; align-items:center; }
+    .ga-chart-actions button {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:8px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .ga-chart-host { width:100%; }
+    .ga-chart-svg { width:100%; max-width:100%; display:block; }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
+      transform-origin: center bottom;
+      transform-box: fill-box;
+      transform: scaleY(0);
+      opacity: 0.25;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-bar {
+      transform: none !important;
+      opacity: 0.72 !important;
+      animation: none !important;
+    }
+    @keyframes ga-bar-rise {
+      from { transform: scaleY(0); opacity: 0.25; }
+      to { transform: scaleY(1); opacity: 0.72; }
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-bar {
+      animation: ga-bar-rise 420ms ease-out both;
     }
     .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
     .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }

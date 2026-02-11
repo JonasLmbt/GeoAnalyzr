@@ -40,6 +40,7 @@ export interface Actions {
 
 export interface ChartSpec {
   type: ChartType;
+  color?: string;
   limit?: number;
   x: {
     dimension: string;
@@ -76,6 +77,7 @@ export interface StatValueSpec {
 }
 
 export interface BreakdownSpec {
+  color?: string;
   dimension: string;
   measure: string;
   sort?: SortDef;

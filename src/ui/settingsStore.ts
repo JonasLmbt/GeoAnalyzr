@@ -7,6 +7,7 @@ export type SemanticDashboardSettings = {
   appearance: {
     theme: ThemeMode;
     graphColor: string;
+    chartAnimations: boolean;
   };
   standards: {
     dateFormat: DateFormatMode;
@@ -20,7 +21,8 @@ const DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
 export const DEFAULT_SETTINGS: SemanticDashboardSettings = {
   appearance: {
     theme: "dark",
-    graphColor: "#7eb6ff"
+    graphColor: "#7eb6ff",
+    chartAnimations: true
   },
   standards: {
     dateFormat: "dd/mm/yyyy",
@@ -44,6 +46,11 @@ export function normalizeTheme(value: unknown): ThemeMode {
   return value === "light" ? "light" : "dark";
 }
 
+function normalizeBool(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
 export function normalizeDateFormat(value: unknown): DateFormatMode {
   return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
 }
@@ -56,7 +63,8 @@ function normalizeSettings(raw: unknown): SemanticDashboardSettings {
   return {
     appearance: {
       theme: normalizeTheme(appearance.theme),
-      graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor)
+      graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor),
+      chartAnimations: normalizeBool(appearance.chartAnimations, DEFAULT_SETTINGS.appearance.chartAnimations)
     },
     standards: {
       dateFormat: normalizeDateFormat(standards.dateFormat),
@@ -119,6 +127,7 @@ export function saveDashboardTemplate(doc: Document, dashboard: DashboardDoc): v
 
 export function applySettingsToRoot(root: HTMLDivElement, settings: SemanticDashboardSettings): void {
   root.dataset.gaTheme = settings.appearance.theme;
+  root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
   root.dataset.gaDateFormat = settings.standards.dateFormat;
   root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
   root.style.setProperty("--ga-graph-color", settings.appearance.graphColor);

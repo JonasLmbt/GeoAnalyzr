@@ -2,6 +2,77 @@ import * as XLSX from "xlsx";
 import { db } from "./db";
 import { resolveCountryCodeByLatLng } from "./countries";
 
+const LEGACY_KEY_ALIASES: Record<string, string[]> = {
+  player_self_id: ["playerOneId", "p1_id"],
+  player_self_name: ["playerOneName", "p1_name"],
+  player_self_country: ["playerOneCountry", "p1_country"],
+  player_self_victory: ["playerOneVictory", "p1_victory"],
+  player_self_finalHealth: ["playerOneFinalHealth", "p1_finalHealth"],
+  player_self_startRating: ["playerOneStartRating", "p1_startRating"],
+  player_self_endRating: ["playerOneEndRating", "p1_endRating"],
+  player_mate_id: ["teamOnePlayerTwoId", "p2_id"],
+  player_mate_name: ["teamOnePlayerTwoName", "p2_name"],
+  player_mate_country: ["teamOnePlayerTwoCountry", "p2_country"],
+  player_mate_startRating: ["p2_startRating"],
+  player_mate_endRating: ["p2_endRating"],
+  player_opponent_id: ["playerTwoId", "teamTwoPlayerOneId", "p3_id", "p2_id"],
+  player_opponent_name: ["playerTwoName", "teamTwoPlayerOneName", "p3_name", "p2_name"],
+  player_opponent_country: ["playerTwoCountry", "teamTwoPlayerOneCountry", "p3_country", "p2_country"],
+  player_opponent_victory: ["playerTwoVictory", "p2_victory"],
+  player_opponent_finalHealth: ["playerTwoFinalHealth", "p2_finalHealth"],
+  player_opponent_startRating: ["playerTwoStartRating", "p3_startRating", "p2_startRating"],
+  player_opponent_endRating: ["playerTwoEndRating", "p3_endRating", "p2_endRating"],
+  player_opponent_mate_id: ["teamTwoPlayerTwoId", "p4_id"],
+  player_opponent_mate_name: ["teamTwoPlayerTwoName", "p4_name"],
+  player_opponent_mate_country: ["teamTwoPlayerTwoCountry", "p4_country"],
+  player_opponent_mate_startRating: ["p4_startRating"],
+  player_opponent_mate_endRating: ["p4_endRating"],
+  player_self_playerId: ["p1_playerId"],
+  player_self_teamId: ["p1_teamId"],
+  player_self_guessLat: ["p1_guessLat"],
+  player_self_guessLng: ["p1_guessLng"],
+  player_self_guessCountry: ["p1_guessCountry", "guessCountry"],
+  player_self_distanceKm: ["p1_distanceKm"],
+  player_self_score: ["p1_score", "score"],
+  player_self_healthAfter: ["p1_healthAfter"],
+  player_self_isBestGuess: ["p1_isBestGuess"],
+  player_mate_playerId: ["p2_playerId"],
+  player_mate_teamId: ["p2_teamId"],
+  player_mate_guessLat: ["p2_guessLat"],
+  player_mate_guessLng: ["p2_guessLng"],
+  player_mate_guessCountry: ["p2_guessCountry"],
+  player_mate_distanceKm: ["p2_distanceKm"],
+  player_mate_score: ["p2_score"],
+  player_mate_healthAfter: ["p2_healthAfter"],
+  player_mate_isBestGuess: ["p2_isBestGuess"],
+  player_opponent_playerId: ["p3_playerId", "p2_playerId"],
+  player_opponent_teamId: ["p3_teamId", "p2_teamId"],
+  player_opponent_guessLat: ["p3_guessLat", "p2_guessLat"],
+  player_opponent_guessLng: ["p3_guessLng", "p2_guessLng"],
+  player_opponent_guessCountry: ["p3_guessCountry", "p2_guessCountry"],
+  player_opponent_distanceKm: ["p3_distanceKm", "p2_distanceKm"],
+  player_opponent_score: ["p3_score", "p2_score"],
+  player_opponent_healthAfter: ["p3_healthAfter", "p2_healthAfter"],
+  player_opponent_isBestGuess: ["p3_isBestGuess", "p2_isBestGuess"],
+  player_opponent_mate_playerId: ["p4_playerId"],
+  player_opponent_mate_teamId: ["p4_teamId"],
+  player_opponent_mate_guessLat: ["p4_guessLat"],
+  player_opponent_mate_guessLng: ["p4_guessLng"],
+  player_opponent_mate_guessCountry: ["p4_guessCountry"],
+  player_opponent_mate_distanceKm: ["p4_distanceKm"],
+  player_opponent_mate_score: ["p4_score"],
+  player_opponent_mate_healthAfter: ["p4_healthAfter"],
+  player_opponent_mate_isBestGuess: ["p4_isBestGuess"]
+};
+
+function pickWithAliases(obj: any, key: string): any {
+  if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
+  for (const alias of LEGACY_KEY_ALIASES[key] || []) {
+    if (obj && obj[alias] !== undefined && obj[alias] !== null) return obj[alias];
+  }
+  return undefined;
+}
+
 function getByPath(obj: any, path: string): any {
   const parts = path.split(".");
   let cur = obj;
@@ -212,26 +283,22 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       detailsError: d?.status === "error" ? (d?.error || "") : ""
     };
     if (!isTeam) {
-      base.player_self_id = (d as any)?.player_self_id ?? (d as any)?.playerOneId ?? "";
-      base.player_self_name = (d as any)?.player_self_name ?? (d as any)?.playerOneName ?? "";
-      base.player_self_country = (d as any)?.player_self_country ?? (d as any)?.playerOneCountry ?? "";
+      base.player_self_id = pickWithAliases(d, "player_self_id") ?? "";
+      base.player_self_name = pickWithAliases(d, "player_self_name") ?? "";
+      base.player_self_country = pickWithAliases(d, "player_self_country") ?? "";
       base.player_self_victory =
-        (d as any)?.player_self_victory ?? ((d as any)?.playerOneVictory === undefined ? "" : (d as any)?.playerOneVictory);
-      base.player_self_finalHealth = (d as any)?.player_self_finalHealth ?? (d as any)?.playerOneFinalHealth ?? "";
-      base.player_self_startRating =
-        (d as any)?.player_self_startRating ?? (d as any)?.playerOneStartRating ?? "";
-      base.player_self_endRating =
-        (d as any)?.player_self_endRating ?? (d as any)?.playerOneEndRating ?? "";
-      base.player_opponent_id = (d as any)?.player_opponent_id ?? (d as any)?.playerTwoId ?? "";
-      base.player_opponent_name = (d as any)?.player_opponent_name ?? (d as any)?.playerTwoName ?? "";
-      base.player_opponent_country = (d as any)?.player_opponent_country ?? (d as any)?.playerTwoCountry ?? "";
+        pickWithAliases(d, "player_self_victory") ?? ((d as any)?.playerOneVictory === undefined ? "" : (d as any)?.playerOneVictory);
+      base.player_self_finalHealth = pickWithAliases(d, "player_self_finalHealth") ?? "";
+      base.player_self_startRating = pickWithAliases(d, "player_self_startRating") ?? "";
+      base.player_self_endRating = pickWithAliases(d, "player_self_endRating") ?? "";
+      base.player_opponent_id = pickWithAliases(d, "player_opponent_id") ?? "";
+      base.player_opponent_name = pickWithAliases(d, "player_opponent_name") ?? "";
+      base.player_opponent_country = pickWithAliases(d, "player_opponent_country") ?? "";
       base.player_opponent_victory =
-        (d as any)?.player_opponent_victory ?? ((d as any)?.playerTwoVictory === undefined ? "" : (d as any)?.playerTwoVictory);
-      base.player_opponent_finalHealth = (d as any)?.player_opponent_finalHealth ?? (d as any)?.playerTwoFinalHealth ?? "";
-      base.player_opponent_startRating =
-        (d as any)?.player_opponent_startRating ?? (d as any)?.playerTwoStartRating ?? "";
-      base.player_opponent_endRating =
-        (d as any)?.player_opponent_endRating ?? (d as any)?.playerTwoEndRating ?? "";
+        pickWithAliases(d, "player_opponent_victory") ?? ((d as any)?.playerTwoVictory === undefined ? "" : (d as any)?.playerTwoVictory);
+      base.player_opponent_finalHealth = pickWithAliases(d, "player_opponent_finalHealth") ?? "";
+      base.player_opponent_startRating = pickWithAliases(d, "player_opponent_startRating") ?? "";
+      base.player_opponent_endRating = pickWithAliases(d, "player_opponent_endRating") ?? "";
       base.totalRounds = d?.totalRounds ?? "";
       base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
       base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -258,26 +325,26 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       base.teamTwoPlayerTwoId = (d as any)?.teamTwoPlayerTwoId ?? "";
       base.teamTwoPlayerTwoName = (d as any)?.teamTwoPlayerTwoName ?? "";
       base.teamTwoPlayerTwoCountry = (d as any)?.teamTwoPlayerTwoCountry ?? "";
-      base.player_self_id = (d as any)?.player_self_id ?? (d as any)?.teamOnePlayerOneId ?? "";
-      base.player_self_name = (d as any)?.player_self_name ?? (d as any)?.teamOnePlayerOneName ?? "";
-      base.player_self_country = (d as any)?.player_self_country ?? (d as any)?.teamOnePlayerOneCountry ?? "";
-      base.player_self_startRating = (d as any)?.player_self_startRating ?? "";
-      base.player_self_endRating = (d as any)?.player_self_endRating ?? "";
-      base.player_mate_id = (d as any)?.player_mate_id ?? (d as any)?.teamOnePlayerTwoId ?? "";
-      base.player_mate_name = (d as any)?.player_mate_name ?? (d as any)?.teamOnePlayerTwoName ?? "";
-      base.player_mate_country = (d as any)?.player_mate_country ?? (d as any)?.teamOnePlayerTwoCountry ?? "";
-      base.player_mate_startRating = (d as any)?.player_mate_startRating ?? "";
-      base.player_mate_endRating = (d as any)?.player_mate_endRating ?? "";
-      base.player_opponent_id = (d as any)?.player_opponent_id ?? (d as any)?.teamTwoPlayerOneId ?? "";
-      base.player_opponent_name = (d as any)?.player_opponent_name ?? (d as any)?.teamTwoPlayerOneName ?? "";
-      base.player_opponent_country = (d as any)?.player_opponent_country ?? (d as any)?.teamTwoPlayerOneCountry ?? "";
-      base.player_opponent_startRating = (d as any)?.player_opponent_startRating ?? "";
-      base.player_opponent_endRating = (d as any)?.player_opponent_endRating ?? "";
-      base.player_opponent_mate_id = (d as any)?.player_opponent_mate_id ?? (d as any)?.teamTwoPlayerTwoId ?? "";
-      base.player_opponent_mate_name = (d as any)?.player_opponent_mate_name ?? (d as any)?.teamTwoPlayerTwoName ?? "";
-      base.player_opponent_mate_country = (d as any)?.player_opponent_mate_country ?? (d as any)?.teamTwoPlayerTwoCountry ?? "";
-      base.player_opponent_mate_startRating = (d as any)?.player_opponent_mate_startRating ?? "";
-      base.player_opponent_mate_endRating = (d as any)?.player_opponent_mate_endRating ?? "";
+      base.player_self_id = pickWithAliases(d, "player_self_id") ?? "";
+      base.player_self_name = pickWithAliases(d, "player_self_name") ?? "";
+      base.player_self_country = pickWithAliases(d, "player_self_country") ?? "";
+      base.player_self_startRating = pickWithAliases(d, "player_self_startRating") ?? "";
+      base.player_self_endRating = pickWithAliases(d, "player_self_endRating") ?? "";
+      base.player_mate_id = pickWithAliases(d, "player_mate_id") ?? "";
+      base.player_mate_name = pickWithAliases(d, "player_mate_name") ?? "";
+      base.player_mate_country = pickWithAliases(d, "player_mate_country") ?? "";
+      base.player_mate_startRating = pickWithAliases(d, "player_mate_startRating") ?? "";
+      base.player_mate_endRating = pickWithAliases(d, "player_mate_endRating") ?? "";
+      base.player_opponent_id = pickWithAliases(d, "player_opponent_id") ?? "";
+      base.player_opponent_name = pickWithAliases(d, "player_opponent_name") ?? "";
+      base.player_opponent_country = pickWithAliases(d, "player_opponent_country") ?? "";
+      base.player_opponent_startRating = pickWithAliases(d, "player_opponent_startRating") ?? "";
+      base.player_opponent_endRating = pickWithAliases(d, "player_opponent_endRating") ?? "";
+      base.player_opponent_mate_id = pickWithAliases(d, "player_opponent_mate_id") ?? "";
+      base.player_opponent_mate_name = pickWithAliases(d, "player_opponent_mate_name") ?? "";
+      base.player_opponent_mate_country = pickWithAliases(d, "player_opponent_mate_country") ?? "";
+      base.player_opponent_mate_startRating = pickWithAliases(d, "player_opponent_mate_startRating") ?? "";
+      base.player_opponent_mate_endRating = pickWithAliases(d, "player_opponent_mate_endRating") ?? "";
       base.totalRounds = d?.totalRounds ?? "";
       base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
       base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -290,12 +357,24 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     const g = gameById.get(r.gameId);
     const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
     if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
-    const selfLat = (r as any).player_self_guessLat;
-    const selfLng = (r as any).player_self_guessLng;
-    const selfCountry = await resolveGuessCountryForExport((r as any).player_self_guessCountry, selfLat, selfLng);
-    const mateCountry = await resolveGuessCountryForExport((r as any).player_mate_guessCountry, (r as any).player_mate_guessLat, (r as any).player_mate_guessLng);
-    const oppCountry = await resolveGuessCountryForExport((r as any).player_opponent_guessCountry, (r as any).player_opponent_guessLat, (r as any).player_opponent_guessLng);
-    const oppMateCountry = await resolveGuessCountryForExport((r as any).player_opponent_mate_guessCountry, (r as any).player_opponent_mate_guessLat, (r as any).player_opponent_mate_guessLng);
+    const selfLat = pickWithAliases(r, "player_self_guessLat");
+    const selfLng = pickWithAliases(r, "player_self_guessLng");
+    const selfCountry = await resolveGuessCountryForExport(pickWithAliases(r, "player_self_guessCountry"), selfLat, selfLng);
+    const mateCountry = await resolveGuessCountryForExport(
+      pickWithAliases(r, "player_mate_guessCountry"),
+      pickWithAliases(r, "player_mate_guessLat"),
+      pickWithAliases(r, "player_mate_guessLng")
+    );
+    const oppCountry = await resolveGuessCountryForExport(
+      pickWithAliases(r, "player_opponent_guessCountry"),
+      pickWithAliases(r, "player_opponent_guessLat"),
+      pickWithAliases(r, "player_opponent_guessLng")
+    );
+    const oppMateCountry = await resolveGuessCountryForExport(
+      pickWithAliases(r, "player_opponent_mate_guessCountry"),
+      pickWithAliases(r, "player_opponent_mate_guessLat"),
+      pickWithAliases(r, "player_opponent_mate_guessLng")
+    );
     const trueHeading = asFiniteNumber(
       pickFirst((r as any).raw, [
         "panorama.heading",
@@ -320,64 +399,67 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, trueHeading),
       damage_multiplier: r.damageMultiplier ?? "",
       is_healing_round: r.isHealingRound ? 1 : 0,
-      player_self_playerId: (r as any).player_self_playerId ?? "",
+      player_self_playerId: pickWithAliases(r, "player_self_playerId") ?? "",
       player_self_guessLat: selfLat ?? "",
       player_self_guessLng: selfLng ?? "",
       player_self_googleMaps_url: buildGoogleMapsUrl(selfLat, selfLng),
       player_self_guessCountry: selfCountry,
-      player_self_distance_km: (r as any).player_self_distanceKm ?? "",
-      player_self_score: (r as any).player_self_score ?? "",
-      player_self_healthAfter: (r as any).player_self_healthAfter ?? "",
-      player_self_isBestGuess: (r as any).player_self_isBestGuess ? 1 : 0,
-      player_opponent_playerId: (r as any).player_opponent_playerId ?? "",
-      player_opponent_guessLat: (r as any).player_opponent_guessLat ?? "",
-      player_opponent_guessLng: (r as any).player_opponent_guessLng ?? "",
-      player_opponent_googleMaps_url: buildGoogleMapsUrl((r as any).player_opponent_guessLat, (r as any).player_opponent_guessLng),
+      player_self_distance_km: pickWithAliases(r, "player_self_distanceKm") ?? "",
+      player_self_score: pickWithAliases(r, "player_self_score") ?? "",
+      player_self_healthAfter: pickWithAliases(r, "player_self_healthAfter") ?? "",
+      player_self_isBestGuess: pickWithAliases(r, "player_self_isBestGuess") ? 1 : 0,
+      player_opponent_playerId: pickWithAliases(r, "player_opponent_playerId") ?? "",
+      player_opponent_guessLat: pickWithAliases(r, "player_opponent_guessLat") ?? "",
+      player_opponent_guessLng: pickWithAliases(r, "player_opponent_guessLng") ?? "",
+      player_opponent_googleMaps_url: buildGoogleMapsUrl(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng")),
       player_opponent_guessCountry: await resolveGuessCountryForExport(
-        (r as any).player_opponent_guessCountry,
-        (r as any).player_opponent_guessLat,
-        (r as any).player_opponent_guessLng
+        pickWithAliases(r, "player_opponent_guessCountry"),
+        pickWithAliases(r, "player_opponent_guessLat"),
+        pickWithAliases(r, "player_opponent_guessLng")
       ),
-      player_opponent_distance_km: (r as any).player_opponent_distanceKm ?? "",
-      player_opponent_score: (r as any).player_opponent_score ?? "",
-      player_opponent_healthAfter: (r as any).player_opponent_healthAfter ?? "",
-      player_opponent_isBestGuess: (r as any).player_opponent_isBestGuess ? 1 : 0,
+      player_opponent_distance_km: pickWithAliases(r, "player_opponent_distanceKm") ?? "",
+      player_opponent_score: pickWithAliases(r, "player_opponent_score") ?? "",
+      player_opponent_healthAfter: pickWithAliases(r, "player_opponent_healthAfter") ?? "",
+      player_opponent_isBestGuess: pickWithAliases(r, "player_opponent_isBestGuess") ? 1 : 0,
       healthDiffAfter: (r as any).healthDiffAfter ?? "",
       __sortTs: r.startTime ?? g?.playedAt ?? 0
     };
     const isTeamMode = (mode || "").toLowerCase().includes("team");
     if (isTeamMode) {
-      rowBase.player_self_teamId = (r as any).player_self_teamId ?? "";
-      rowBase.player_mate_playerId = (r as any).player_mate_playerId ?? "";
-      rowBase.player_mate_teamId = (r as any).player_mate_teamId ?? "";
-      rowBase.player_mate_guessLat = (r as any).player_mate_guessLat ?? "";
-      rowBase.player_mate_guessLng = (r as any).player_mate_guessLng ?? "";
-      rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl((r as any).player_mate_guessLat, (r as any).player_mate_guessLng);
+      rowBase.player_self_teamId = pickWithAliases(r, "player_self_teamId") ?? "";
+      rowBase.player_mate_playerId = pickWithAliases(r, "player_mate_playerId") ?? "";
+      rowBase.player_mate_teamId = pickWithAliases(r, "player_mate_teamId") ?? "";
+      rowBase.player_mate_guessLat = pickWithAliases(r, "player_mate_guessLat") ?? "";
+      rowBase.player_mate_guessLng = pickWithAliases(r, "player_mate_guessLng") ?? "";
+      rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl(pickWithAliases(r, "player_mate_guessLat"), pickWithAliases(r, "player_mate_guessLng"));
       rowBase.player_mate_guessCountry = mateCountry;
-      rowBase.player_mate_distance_km = (r as any).player_mate_distanceKm ?? "";
-      rowBase.player_mate_score = (r as any).player_mate_score ?? "";
-      rowBase.player_mate_healthAfter = (r as any).player_mate_healthAfter ?? "";
-      rowBase.player_mate_isBestGuess = (r as any).player_mate_isBestGuess ? 1 : 0;
-      rowBase.player_opponent_playerId = (r as any).player_opponent_playerId ?? "";
-      rowBase.player_opponent_teamId = (r as any).player_opponent_teamId ?? "";
-      rowBase.player_opponent_guessLat = (r as any).player_opponent_guessLat ?? "";
-      rowBase.player_opponent_guessLng = (r as any).player_opponent_guessLng ?? "";
-      rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl((r as any).player_opponent_guessLat, (r as any).player_opponent_guessLng);
+      rowBase.player_mate_distance_km = pickWithAliases(r, "player_mate_distanceKm") ?? "";
+      rowBase.player_mate_score = pickWithAliases(r, "player_mate_score") ?? "";
+      rowBase.player_mate_healthAfter = pickWithAliases(r, "player_mate_healthAfter") ?? "";
+      rowBase.player_mate_isBestGuess = pickWithAliases(r, "player_mate_isBestGuess") ? 1 : 0;
+      rowBase.player_opponent_playerId = pickWithAliases(r, "player_opponent_playerId") ?? "";
+      rowBase.player_opponent_teamId = pickWithAliases(r, "player_opponent_teamId") ?? "";
+      rowBase.player_opponent_guessLat = pickWithAliases(r, "player_opponent_guessLat") ?? "";
+      rowBase.player_opponent_guessLng = pickWithAliases(r, "player_opponent_guessLng") ?? "";
+      rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng"));
       rowBase.player_opponent_guessCountry = oppCountry;
-      rowBase.player_opponent_distance_km = (r as any).player_opponent_distanceKm ?? "";
-      rowBase.player_opponent_score = (r as any).player_opponent_score ?? "";
-      rowBase.player_opponent_healthAfter = (r as any).player_opponent_healthAfter ?? "";
-      rowBase.player_opponent_isBestGuess = (r as any).player_opponent_isBestGuess ? 1 : 0;
-      rowBase.player_opponent_mate_playerId = (r as any).player_opponent_mate_playerId ?? "";
-      rowBase.player_opponent_mate_teamId = (r as any).player_opponent_mate_teamId ?? "";
-      rowBase.player_opponent_mate_guessLat = (r as any).player_opponent_mate_guessLat ?? "";
-      rowBase.player_opponent_mate_guessLng = (r as any).player_opponent_mate_guessLng ?? "";
-      rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl((r as any).player_opponent_mate_guessLat, (r as any).player_opponent_mate_guessLng);
+      rowBase.player_opponent_distance_km = pickWithAliases(r, "player_opponent_distanceKm") ?? "";
+      rowBase.player_opponent_score = pickWithAliases(r, "player_opponent_score") ?? "";
+      rowBase.player_opponent_healthAfter = pickWithAliases(r, "player_opponent_healthAfter") ?? "";
+      rowBase.player_opponent_isBestGuess = pickWithAliases(r, "player_opponent_isBestGuess") ? 1 : 0;
+      rowBase.player_opponent_mate_playerId = pickWithAliases(r, "player_opponent_mate_playerId") ?? "";
+      rowBase.player_opponent_mate_teamId = pickWithAliases(r, "player_opponent_mate_teamId") ?? "";
+      rowBase.player_opponent_mate_guessLat = pickWithAliases(r, "player_opponent_mate_guessLat") ?? "";
+      rowBase.player_opponent_mate_guessLng = pickWithAliases(r, "player_opponent_mate_guessLng") ?? "";
+      rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl(
+        pickWithAliases(r, "player_opponent_mate_guessLat"),
+        pickWithAliases(r, "player_opponent_mate_guessLng")
+      );
       rowBase.player_opponent_mate_guessCountry = oppMateCountry;
-      rowBase.player_opponent_mate_distance_km = (r as any).player_opponent_mate_distanceKm ?? "";
-      rowBase.player_opponent_mate_score = (r as any).player_opponent_mate_score ?? "";
-      rowBase.player_opponent_mate_healthAfter = (r as any).player_opponent_mate_healthAfter ?? "";
-      rowBase.player_opponent_mate_isBestGuess = (r as any).player_opponent_mate_isBestGuess ? 1 : 0;
+      rowBase.player_opponent_mate_distance_km = pickWithAliases(r, "player_opponent_mate_distanceKm") ?? "";
+      rowBase.player_opponent_mate_score = pickWithAliases(r, "player_opponent_mate_score") ?? "";
+      rowBase.player_opponent_mate_healthAfter = pickWithAliases(r, "player_opponent_mate_healthAfter") ?? "";
+      rowBase.player_opponent_mate_isBestGuess = pickWithAliases(r, "player_opponent_mate_isBestGuess") ? 1 : 0;
     }
     roundsByMode.get(mode)!.push(rowBase);
   }

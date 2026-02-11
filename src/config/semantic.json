@@ -210,10 +210,10 @@
   "columnAliases": {
     "ts": ["playedAt", "startTime"],
     "true_country": ["trueCountry", "true_country"],
-    "player_self_country": ["player_self_guessCountry"],
-    "player_self_score": ["player_self_score"],
-    "player_opponent_score": ["player_opponent_score"],
-    "distanceKm": ["player_self_distanceKm"],
+    "player_self_country": ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
+    "player_self_score": ["player_self_score", "p1_score", "score"],
+    "player_opponent_score": ["player_opponent_score", "p3_score", "p2_score"],
+    "distanceKm": ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
     "durationSeconds": ["durationSeconds", "guessDurationSec", "timeSec"]
   },
 

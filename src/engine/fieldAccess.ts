@@ -1,8 +1,16 @@
 // src/engine/fieldAccess.ts
 import type { RoundRow } from "../db";
 
+function legacy(obj: any, ...keys: string[]): any {
+  for (const key of keys) {
+    if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
+  }
+  return undefined;
+}
+
 export function getSelfScore(r: RoundRow): number | undefined {
-  return (r as any).player_self_score;
+  const v = legacy(r, "player_self_score", "p1_score", "score");
+  return typeof v === "number" ? v : undefined;
 }
 
 export function getPlayedAt(r: RoundRow): number | undefined {
@@ -15,7 +23,8 @@ export function getTrueCountry(r: RoundRow): string | undefined {
 }
 
 export function getGuessCountrySelf(r: RoundRow): string | undefined {
-  return (r as any).player_self_guessCountry;
+  const v = legacy(r, "player_self_guessCountry", "p1_guessCountry", "guessCountry");
+  return typeof v === "string" ? v : undefined;
 }
 
 export function pick(obj: any, key: string): any {

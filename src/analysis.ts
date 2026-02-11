@@ -7,18 +7,89 @@ function asRecord(v: unknown): UnknownRecord {
   return typeof v === "object" && v !== null ? (v as UnknownRecord) : {};
 }
 
+const LEGACY_KEY_ALIASES: Record<string, string[]> = {
+  player_self_id: ["playerOneId", "p1_id"],
+  player_self_name: ["playerOneName", "p1_name"],
+  player_self_country: ["playerOneCountry", "p1_country"],
+  player_self_victory: ["playerOneVictory", "p1_victory"],
+  player_self_finalHealth: ["playerOneFinalHealth", "p1_finalHealth"],
+  player_self_startRating: ["playerOneStartRating", "p1_startRating"],
+  player_self_endRating: ["playerOneEndRating", "p1_endRating"],
+  player_opponent_id: ["playerTwoId", "teamTwoPlayerOneId", "p3_id", "p2_id"],
+  player_opponent_name: ["playerTwoName", "teamTwoPlayerOneName", "p3_name", "p2_name"],
+  player_opponent_country: ["playerTwoCountry", "teamTwoPlayerOneCountry", "p3_country", "p2_country"],
+  player_opponent_victory: ["playerTwoVictory", "p2_victory"],
+  player_opponent_finalHealth: ["playerTwoFinalHealth", "p2_finalHealth"],
+  player_opponent_startRating: ["playerTwoStartRating", "p3_startRating", "p2_startRating"],
+  player_opponent_endRating: ["playerTwoEndRating", "p3_endRating", "p2_endRating"],
+  player_mate_id: ["teamOnePlayerTwoId", "p2_id"],
+  player_mate_name: ["teamOnePlayerTwoName", "p2_name"],
+  player_mate_country: ["teamOnePlayerTwoCountry", "p2_country"],
+  player_mate_startRating: ["p2_startRating"],
+  player_mate_endRating: ["p2_endRating"],
+  player_opponent_mate_id: ["teamTwoPlayerTwoId", "p4_id"],
+  player_opponent_mate_name: ["teamTwoPlayerTwoName", "p4_name"],
+  player_opponent_mate_country: ["teamTwoPlayerTwoCountry", "p4_country"],
+  player_opponent_mate_startRating: ["p4_startRating"],
+  player_opponent_mate_endRating: ["p4_endRating"],
+  player_self_playerId: ["p1_playerId"],
+  player_self_teamId: ["p1_teamId"],
+  player_self_guessLat: ["p1_guessLat"],
+  player_self_guessLng: ["p1_guessLng"],
+  player_self_guessCountry: ["p1_guessCountry", "guessCountry"],
+  player_self_distanceKm: ["p1_distanceKm"],
+  player_self_score: ["p1_score", "score"],
+  player_self_healthAfter: ["p1_healthAfter"],
+  player_self_isBestGuess: ["p1_isBestGuess"],
+  player_mate_playerId: ["p2_playerId"],
+  player_mate_teamId: ["p2_teamId"],
+  player_mate_guessLat: ["p2_guessLat"],
+  player_mate_guessLng: ["p2_guessLng"],
+  player_mate_guessCountry: ["p2_guessCountry"],
+  player_mate_distanceKm: ["p2_distanceKm"],
+  player_mate_score: ["p2_score"],
+  player_mate_healthAfter: ["p2_healthAfter"],
+  player_mate_isBestGuess: ["p2_isBestGuess"],
+  player_opponent_playerId: ["p3_playerId", "p2_playerId"],
+  player_opponent_teamId: ["p3_teamId", "p2_teamId"],
+  player_opponent_guessLat: ["p3_guessLat", "p2_guessLat"],
+  player_opponent_guessLng: ["p3_guessLng", "p2_guessLng"],
+  player_opponent_guessCountry: ["p3_guessCountry", "p2_guessCountry"],
+  player_opponent_distanceKm: ["p3_distanceKm", "p2_distanceKm"],
+  player_opponent_score: ["p3_score", "p2_score"],
+  player_opponent_healthAfter: ["p3_healthAfter", "p2_healthAfter"],
+  player_opponent_isBestGuess: ["p3_isBestGuess", "p2_isBestGuess"],
+  player_opponent_mate_playerId: ["p4_playerId"],
+  player_opponent_mate_teamId: ["p4_teamId"],
+  player_opponent_mate_guessLat: ["p4_guessLat"],
+  player_opponent_mate_guessLng: ["p4_guessLng"],
+  player_opponent_mate_guessCountry: ["p4_guessCountry"],
+  player_opponent_mate_distanceKm: ["p4_distanceKm"],
+  player_opponent_mate_score: ["p4_score"],
+  player_opponent_mate_healthAfter: ["p4_healthAfter"],
+  player_opponent_mate_isBestGuess: ["p4_isBestGuess"]
+};
+
+function pickWithLegacyAliases(rec: UnknownRecord, key: string): unknown {
+  if (key in rec && rec[key] !== undefined && rec[key] !== null) return rec[key];
+  for (const alias of LEGACY_KEY_ALIASES[key] || []) {
+    if (alias in rec && rec[alias] !== undefined && rec[alias] !== null) return rec[alias];
+  }
+  return undefined;
+}
+
 function getString(rec: UnknownRecord, key: string): string | undefined {
-  const v = rec[key];
+  const v = pickWithLegacyAliases(rec, key);
   return typeof v === "string" ? v : undefined;
 }
 
 function getNumber(rec: UnknownRecord, key: string): number | undefined {
-  const v = rec[key];
+  const v = pickWithLegacyAliases(rec, key);
   return typeof v === "number" ? v : undefined;
 }
 
 function getBoolean(rec: UnknownRecord, key: string): boolean | undefined {
-  const v = rec[key];
+  const v = pickWithLegacyAliases(rec, key);
   return typeof v === "boolean" ? v : undefined;
 }
 

@@ -14,7 +14,11 @@ function playedAt(r: RoundRow): number | undefined {
 }
 
 function scoreOfSelf(r: RoundRow): number | undefined {
-  return (r as any).player_self_score;
+  const rr = r as any;
+  if (typeof rr.player_self_score === "number") return rr.player_self_score;
+  if (typeof rr.p1_score === "number") return rr.p1_score;
+  if (typeof rr.score === "number") return rr.score;
+  return undefined;
 }
 
 export const DIMENSIONS: Record<DimensionId, (r: RoundRow) => GroupKey | null> = {

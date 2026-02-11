@@ -104,8 +104,19 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     colorField.appendChild(colorLabel);
     colorField.appendChild(colorInput);
 
+    const animField = doc.createElement("div");
+    animField.className = "ga-settings-field";
+    const animLabel = doc.createElement("label");
+    animLabel.textContent = "Chart animations";
+    const animSelect = doc.createElement("select");
+    animSelect.innerHTML = `<option value="on">On</option><option value="off">Off</option>`;
+    animSelect.value = settings.appearance.chartAnimations ? "on" : "off";
+    animField.appendChild(animLabel);
+    animField.appendChild(animSelect);
+
     appearanceGrid.appendChild(themeField);
     appearanceGrid.appendChild(colorField);
+    appearanceGrid.appendChild(animField);
     appearancePane.appendChild(appearanceGrid);
 
     const standardsPane = doc.createElement("div");
@@ -185,7 +196,8 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       const next: SemanticDashboardSettings = {
         appearance: {
           theme: normalizeTheme(themeSelect.value),
-          graphColor: normalizeColor(colorInput.value, DEFAULT_SETTINGS.appearance.graphColor)
+          graphColor: normalizeColor(colorInput.value, DEFAULT_SETTINGS.appearance.graphColor),
+          chartAnimations: animSelect.value !== "off"
         },
         standards: {
           dateFormat: normalizeDateFormat(dateSelect.value),
@@ -202,6 +214,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       void persistSettings();
     });
     colorInput.addEventListener("input", () => {
+      void persistSettings();
+    });
+    animSelect.addEventListener("change", () => {
       void persistSettings();
     });
     dateSelect.addEventListener("change", () => {

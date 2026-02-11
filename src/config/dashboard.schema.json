@@ -196,6 +196,7 @@
       "required": ["type", "x", "y"],
       "properties": {
         "type": { "$ref": "#/$defs/chartType" },
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
         "x": { "$ref": "#/$defs/xAxisDef" },
         "y": { "$ref": "#/$defs/yAxisDef" },
@@ -288,6 +289,7 @@
       "additionalProperties": false,
       "required": ["dimension", "measure"],
       "properties": {
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "dimension": { "type": "string", "minLength": 1 },
         "measure": { "type": "string", "minLength": 1 },
         "sort": { "$ref": "#/$defs/sortDef" },

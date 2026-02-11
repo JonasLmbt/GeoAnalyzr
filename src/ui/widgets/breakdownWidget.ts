@@ -13,6 +13,12 @@ type Row = {
   rows: any[];
 };
 
+function normalizeHexColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : undefined;
+}
+
 function sortRows(rows: Row[], mode: "chronological" | "asc" | "desc"): Row[] {
   if (mode === "asc") return [...rows].sort((a, b) => a.value - b.value);
   if (mode === "desc") return [...rows].sort((a, b) => b.value - a.value);
@@ -77,6 +83,7 @@ export async function renderBreakdownWidget(
   if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
 
   const grouped = groupByKey(rowsAll, keyFn);
+  const colorOverride = normalizeHexColor(spec.color);
 
   let rows: Row[] = Array.from(grouped.entries()).map(([k, g]) => ({
     key: k,
@@ -113,6 +120,7 @@ export async function renderBreakdownWidget(
     const bar = doc.createElement("div");
     bar.className = "ga-breakdown-bar";
     bar.style.width = `${Math.max(2, (r.value / maxVal) * 100)}%`;
+    if (colorOverride) bar.style.background = colorOverride;
 
     barWrap.appendChild(bar);
     right.appendChild(val);

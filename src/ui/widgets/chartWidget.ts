@@ -7,7 +7,7 @@ import { ROUND_MEASURES_BY_FORMULA_ID } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
-type BarDatum = { x: string; y: number; rows: any[] };
+type Datum = { x: string; y: number; rows: any[] };
 
 function sortKeysChronological(keys: string[]): string[] {
   const parseKey = (k: string): number | undefined => {
@@ -25,7 +25,7 @@ function sortKeysChronological(keys: string[]): string[] {
   });
 }
 
-function sortData(data: BarDatum[], mode: "chronological" | "asc" | "desc" | undefined): BarDatum[] {
+function sortData(data: Datum[], mode: "chronological" | "asc" | "desc" | undefined): Datum[] {
   if (mode === "chronological") {
     const keys = sortKeysChronological(data.map((d) => d.x));
     const rank = new Map(keys.map((k, i) => [k, i]));
@@ -69,6 +69,101 @@ function niceUpperBound(maxValue: number): number {
   return nice * base;
 }
 
+function normalizeHexColor(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : undefined;
+}
+
+function isAnimationsEnabled(doc: Document): boolean {
+  const root = doc.getElementById("geoanalyzr-semantic-root");
+  return root?.getAttribute("data-ga-chart-animations") !== "off";
+}
+
+function sanitizeFileName(name: string): string {
+  const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
+  return out.length > 0 ? out : "chart";
+}
+
+function triggerDownload(doc: Document, blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = doc.createElement("a");
+  a.href = url;
+  a.download = filename;
+  doc.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function serializeSvg(svg: SVGSVGElement): { text: string; width: number; height: number } {
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.removeAttribute("data-anim-state");
+  const vb = clone.getAttribute("viewBox")?.trim().split(/\s+/).map(Number) ?? [];
+  const width = Number.isFinite(vb[2]) && vb[2] > 0 ? vb[2] : 1200;
+  const height = Number.isFinite(vb[3]) && vb[3] > 0 ? vb[3] : 360;
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
+  return { text: new XMLSerializer().serializeToString(clone), width, height };
+}
+
+async function downloadSvg(doc: Document, svg: SVGSVGElement, title: string): Promise<void> {
+  const { text } = serializeSvg(svg);
+  const blob = new Blob([text], { type: "image/svg+xml;charset=utf-8" });
+  triggerDownload(doc, blob, `${sanitizeFileName(title)}.svg`);
+}
+
+async function downloadPng(doc: Document, svg: SVGSVGElement, title: string): Promise<void> {
+  const prepared = serializeSvg(svg);
+  const svgBlob = new Blob([prepared.text], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  try {
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Could not render chart image."));
+      img.src = url;
+    });
+    const canvas = doc.createElement("canvas");
+    canvas.width = prepared.width;
+    canvas.height = prepared.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas context unavailable.");
+    ctx.drawImage(img, 0, 0, prepared.width, prepared.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (blob) {
+      triggerDownload(doc, blob, `${sanitizeFileName(title)}.png`);
+      return;
+    }
+    const dataUrl = canvas.toDataURL("image/png");
+    const fallbackBlob = await (await fetch(dataUrl)).blob();
+    triggerDownload(doc, fallbackBlob, `${sanitizeFileName(title)}.png`);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function maybeAnimateBars(svg: SVGSVGElement, doc: Document): void {
+  if (!isAnimationsEnabled(doc)) {
+    svg.setAttribute("data-anim-state", "off");
+    return;
+  }
+  svg.setAttribute("data-anim-state", "pending");
+  const obs = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        svg.setAttribute("data-anim-state", "run");
+        obs.disconnect();
+        return;
+      }
+    },
+    { threshold: 0.15 }
+  );
+  obs.observe(svg);
+}
+
 export async function renderChartWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
@@ -85,15 +180,21 @@ export async function renderChartWidget(
   title.textContent = widget.title;
 
   const controls = doc.createElement("div");
-  controls.style.display = "flex";
-  controls.style.gap = "8px";
-  controls.style.alignItems = "center";
-  controls.style.marginBottom = "8px";
+  controls.className = "ga-chart-controls";
+
+  const controlsLeft = doc.createElement("div");
+  controlsLeft.className = "ga-chart-controls-left";
+  controls.appendChild(controlsLeft);
+
+  const actionsRight = doc.createElement("div");
+  actionsRight.className = "ga-chart-actions";
+  controls.appendChild(actionsRight);
 
   const box = doc.createElement("div");
   box.className = "ga-chart-box";
 
   const chartHost = doc.createElement("div");
+  chartHost.className = "ga-chart-host";
   box.appendChild(chartHost);
 
   const rows = await getRounds({});
@@ -118,11 +219,12 @@ export async function renderChartWidget(
 
   const grouped = groupByKey(rows, keyFn);
   const keys = Array.from(grouped.keys());
+  const colorOverride = normalizeHexColor(spec.color);
 
-  const buildDataForMeasure = (measureId: string): BarDatum[] => {
+  const buildDataForMeasure = (measureId: string): Datum[] => {
     const measureFn = measureFnById.get(measureId);
     if (!measureFn) return [];
-    const baseData: BarDatum[] = keys.map((k) => {
+    const baseData: Datum[] = keys.map((k) => {
       const g = grouped.get(k) ?? [];
       return { x: k, y: measureFn(g), rows: g };
     });
@@ -136,8 +238,30 @@ export async function renderChartWidget(
     ? (spec.y.activeMeasure as string)
     : measureIds[0];
 
+  let currentSvg: SVGSVGElement | null = null;
+
+  const mkActionBtn = (label: string, onClick: () => void): HTMLButtonElement => {
+    const btn = doc.createElement("button");
+    btn.type = "button";
+    btn.textContent = label;
+    btn.addEventListener("click", onClick);
+    return btn;
+  };
+
+  actionsRight.appendChild(
+    mkActionBtn("Save PNG", () => {
+      if (currentSvg) void downloadPng(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+    })
+  );
+  actionsRight.appendChild(
+    mkActionBtn("Save SVG", () => {
+      if (currentSvg) void downloadSvg(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+    })
+  );
+
   const render = (): void => {
     chartHost.innerHTML = "";
+    currentSvg = null;
     const measureDef = semantic.measures[activeMeasure];
     const data = buildDataForMeasure(activeMeasure);
     if (!measureDef || data.length === 0) {
@@ -149,12 +273,12 @@ export async function renderChartWidget(
       return;
     }
 
-    const W = 920;
-    const H = 320;
+    const W = 1200;
+    const H = 360;
     const PAD_L = 72;
     const PAD_B = 58;
     const PAD_T = 16;
-    const PAD_R = 16;
+    const PAD_R = 20;
     const innerW = W - PAD_L - PAD_R;
     const innerH = H - PAD_T - PAD_B;
 
@@ -162,9 +286,8 @@ export async function renderChartWidget(
     const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
 
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("ga-chart-svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("height", String(H));
 
     const axisX = doc.createElementNS(svg.namespaceURI, "line");
     axisX.setAttribute("x1", String(PAD_L));
@@ -230,56 +353,104 @@ export async function renderChartWidget(
     yAxisLabel.textContent = measureDef.label;
     svg.appendChild(yAxisLabel);
 
-    const barW = innerW / Math.max(1, data.length);
-    data.forEach((d, i) => {
-      const x = PAD_L + i * barW;
-      const h = (d.y / maxY) * innerH;
-      const y = PAD_T + innerH - h;
-
-      const rect = doc.createElementNS(svg.namespaceURI, "rect");
-      rect.setAttribute("x", String(x + 1));
-      rect.setAttribute("y", String(y));
-      rect.setAttribute("width", String(Math.max(1, barW - 2)));
-      rect.setAttribute("height", String(Math.max(0, h)));
-      rect.setAttribute("rx", "2");
-      rect.setAttribute("fill", "var(--ga-graph-color)");
-      rect.setAttribute("opacity", "0.72");
-
-      const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-      tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
-      rect.appendChild(tooltip);
-
-      const click = spec.actions?.click;
-      if (click?.type === "drilldown") {
-        rect.setAttribute("style", "cursor: pointer;");
-        rect.addEventListener("click", () => {
-          const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-          overlay.open(semantic, {
-            title: `${widget.title} - ${d.x}`,
-            target: click.target,
-            columnsPreset: click.columnsPreset,
-            rows: filteredRows,
-            extraFilters: click.extraFilters
+    if (spec.type === "line") {
+      const points = data.map((d, i) => {
+        const x = PAD_L + (i / Math.max(1, data.length - 1)) * innerW;
+        const y = PAD_T + innerH - (d.y / maxY) * innerH;
+        return { x, y, d };
+      });
+      const path = doc.createElementNS(svg.namespaceURI, "path");
+      const dPath = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+      path.setAttribute("d", dPath);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", colorOverride ?? "var(--ga-graph-color)");
+      path.setAttribute("stroke-width", "2.5");
+      path.setAttribute("opacity", "0.9");
+      svg.appendChild(path);
+      for (const p of points) {
+        const dot = doc.createElementNS(svg.namespaceURI, "circle");
+        dot.setAttribute("cx", String(p.x));
+        dot.setAttribute("cy", String(p.y));
+        dot.setAttribute("r", "3");
+        dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
+        dot.setAttribute("opacity", "0.95");
+        const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+        tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, p.d.y)}`;
+        dot.appendChild(tooltip);
+        const click = spec.actions?.click;
+        if (click?.type === "drilldown") {
+          dot.setAttribute("style", "cursor: pointer;");
+          dot.addEventListener("click", () => {
+            const rowsFromPoint = click.filterFromPoint ? p.d.rows : rows;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+            overlay.open(semantic, {
+              title: `${widget.title} - ${p.d.x}`,
+              target: click.target,
+              columnsPreset: click.columnsPreset,
+              rows: filteredRows,
+              extraFilters: click.extraFilters
+            });
           });
-        });
+        }
+        svg.appendChild(dot);
       }
-      svg.appendChild(rect);
+    } else {
+      const barW = innerW / Math.max(1, data.length);
+      data.forEach((d, i) => {
+        const x = PAD_L + i * barW;
+        const h = (d.y / maxY) * innerH;
+        const y = PAD_T + innerH - h;
 
-      if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
-        const tx = doc.createElementNS(svg.namespaceURI, "text");
-        tx.setAttribute("x", String(x + barW / 2));
-        tx.setAttribute("y", String(PAD_T + innerH + 16));
-        tx.setAttribute("text-anchor", "middle");
-        tx.setAttribute("font-size", "10");
-        tx.setAttribute("fill", "var(--ga-axis-text)");
-        tx.setAttribute("opacity", "0.95");
-        tx.textContent = d.x;
-        svg.appendChild(tx);
-      }
-    });
+        const rect = doc.createElementNS(svg.namespaceURI, "rect");
+        rect.classList.add("ga-chart-bar");
+        rect.style.setProperty("--ga-bar-index", String(i));
+        rect.setAttribute("x", String(x + 1));
+        rect.setAttribute("y", String(y));
+        rect.setAttribute("width", String(Math.max(1, barW - 2)));
+        rect.setAttribute("height", String(Math.max(0, h)));
+        rect.setAttribute("rx", "2");
+        rect.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
+        rect.setAttribute("opacity", "0.72");
+        rect.style.animationDelay = `${Math.min(i * 18, 320)}ms`;
+
+        const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+        tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
+        rect.appendChild(tooltip);
+
+        const click = spec.actions?.click;
+        if (click?.type === "drilldown") {
+          rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
+          rect.addEventListener("click", () => {
+            const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+            overlay.open(semantic, {
+              title: `${widget.title} - ${d.x}`,
+              target: click.target,
+              columnsPreset: click.columnsPreset,
+              rows: filteredRows,
+              extraFilters: click.extraFilters
+            });
+          });
+        }
+        svg.appendChild(rect);
+
+        if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
+          const tx = doc.createElementNS(svg.namespaceURI, "text");
+          tx.setAttribute("x", String(x + barW / 2));
+          tx.setAttribute("y", String(PAD_T + innerH + 16));
+          tx.setAttribute("text-anchor", "middle");
+          tx.setAttribute("font-size", "10");
+          tx.setAttribute("fill", "var(--ga-axis-text)");
+          tx.setAttribute("opacity", "0.95");
+          tx.textContent = d.x;
+          svg.appendChild(tx);
+        }
+      });
+      maybeAnimateBars(svg, doc);
+    }
 
     chartHost.appendChild(svg);
+    currentSvg = svg;
   };
 
   if (measureIds.length > 1) {
@@ -306,14 +477,14 @@ export async function renderChartWidget(
       render();
     });
 
-    controls.appendChild(label);
-    controls.appendChild(select);
+    controlsLeft.appendChild(label);
+    controlsLeft.appendChild(select);
   }
 
   render();
 
   wrap.appendChild(title);
-  if (controls.childElementCount > 0) wrap.appendChild(controls);
+  wrap.appendChild(controls);
   wrap.appendChild(box);
   return wrap;
 }
