@@ -16,6 +16,12 @@ function assert(condition: unknown, code: string, msg: string): asserts conditio
 }
 
 export function validateDashboardAgainstSemantic(semantic: SemanticRegistry, dash: DashboardDoc): void {
+  if (dash.dashboard.globalFilters) {
+    assert(Array.isArray(dash.dashboard.globalFilters), "E_BAD_SPEC", "dashboard.globalFilters must be an array");
+    for (const clause of dash.dashboard.globalFilters as any[]) {
+      validateFilterClause(semantic, clause);
+    }
+  }
   for (const section of dash.dashboard.sections) {
     for (const placedCard of section.layout.cards) {
       for (const widget of placedCard.card.children) {
@@ -139,6 +145,22 @@ function validateClickAction(semantic: SemanticRegistry, widgetId: string, click
   assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
   const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
   assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
+}
+
+function validateFilterClause(semantic: SemanticRegistry, clause: any): void {
+  assert(!!clause && typeof clause === "object", "E_BAD_SPEC", "FilterClause must be an object");
+  assert(typeof clause.dimension === "string" && clause.dimension.trim().length > 0, "E_BAD_SPEC", "FilterClause.dimension must be a string");
+  assert(clause.op === "eq" || clause.op === "neq" || clause.op === "in" || clause.op === "nin", "E_BAD_SPEC", "FilterClause.op invalid");
+  if (clause.op === "in" || clause.op === "nin") {
+    assert(Array.isArray(clause.values), "E_BAD_SPEC", "FilterClause.values must be an array for in/nin");
+  }
+
+  const dimId = String(clause.dimension);
+  const dim = semantic.dimensions[dimId];
+  // If the dimension exists in semantic registry, global filters should be round-grain compatible.
+  if (dim) {
+    assert(dim.grain === "round", "E_GRAIN_MISMATCH", `Global filter dimension '${dimId}' grain=${dim.grain} but expected round`);
+  }
 }
 
 function getChartMeasureIds(spec: any): string[] {

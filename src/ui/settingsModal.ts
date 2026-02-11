@@ -1,5 +1,4 @@
-import type { DashboardDoc } from "../config/dashboard.types";
-import type { FilterClause } from "../config/dashboard.types";
+import type { DashboardDoc, FilterClause } from "../config/dashboard.types";
 import type { SemanticRegistry } from "../config/semantic.types";
 import { validateDashboardAgainstSemantic } from "../engine/validate";
 import {
@@ -20,8 +19,6 @@ type SettingsModalOptions = {
   applyDashboard: (next: DashboardDoc) => Promise<void>;
   getSettings: () => SemanticDashboardSettings;
   applySettings: (next: SemanticDashboardSettings) => Promise<void> | void;
-  getGlobalFilters: () => FilterClause[];
-  applyGlobalFilters: (next: FilterClause[]) => Promise<void> | void;
 };
 
 export function attachSettingsModal(opts: SettingsModalOptions): void {
@@ -34,10 +31,13 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     getDashboard,
     applyDashboard,
     getSettings,
-    applySettings,
-    getGlobalFilters,
-    applyGlobalFilters
+    applySettings
   } = opts;
+
+  const cloneDashboard = (value: DashboardDoc): DashboardDoc => {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value)) as DashboardDoc;
+  };
 
   const normalizeClauses = (raw: unknown): FilterClause[] => {
     if (!Array.isArray(raw)) return [];
@@ -49,8 +49,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       const op = r.op;
       if (!dimension) continue;
       if (op !== "eq" && op !== "neq" && op !== "in" && op !== "nin") continue;
-      // Keep only clauses that reference known semantic dimensions for stability.
-      if (!semantic.dimensions[dimension]) continue;
+      const dim = semantic.dimensions[dimension];
+      // If this references a semantic dimension, enforce round-grain to match current global filter application.
+      if (dim && dim.grain !== "round") continue;
 
       const clause: FilterClause = { dimension, op };
       if ("value" in r) clause.value = r.value;
@@ -224,7 +225,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const filtersLabel = doc.createElement("label");
     filtersLabel.textContent = "Global filters (FilterClause[] JSON)";
     const filtersEditor = doc.createElement("textarea");
-    filtersEditor.value = JSON.stringify(getGlobalFilters(), null, 2);
+    filtersEditor.value = JSON.stringify(getDashboard().dashboard.globalFilters ?? [], null, 2);
     const filtersStatus = doc.createElement("div");
     filtersStatus.className = "ga-settings-status";
 
@@ -327,7 +328,14 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       try {
         const parsed = JSON.parse(filtersEditor.value) as unknown;
         const clauses = normalizeClauses(parsed);
-        await applyGlobalFilters(clauses);
+        const next = cloneDashboard(getDashboard());
+        if (!next.dashboard.globalFilters || next.dashboard.globalFilters.length !== clauses.length) {
+          next.dashboard.globalFilters = clauses;
+        } else {
+          next.dashboard.globalFilters = clauses;
+        }
+        validateDashboardAgainstSemantic(semantic, next);
+        await applyDashboard(next);
         filtersStatus.textContent = "Filters applied.";
         filtersStatus.classList.add("ok");
       } catch (error) {

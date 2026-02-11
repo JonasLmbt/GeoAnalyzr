@@ -134,6 +134,7 @@ export interface DashboardDoc {
   dashboard: {
     id: string;
     title: string;
+    globalFilters?: FilterClause[];
     sections: SectionDef[];
   };
 }

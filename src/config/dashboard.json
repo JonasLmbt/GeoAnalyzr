@@ -4,6 +4,7 @@
   "dashboard": {
     "id": "default",
     "title": "GeoAnalyzr",
+    "globalFilters": [],
     "sections": [
       {
         "id": "scores",

@@ -14,8 +14,6 @@ import {
   type SemanticDashboardSettings
 } from "./ui/settingsStore";
 import { attachSettingsModal } from "./ui/settingsModal";
-import type { FilterClause } from "./config/dashboard.types";
-import { loadGlobalFilters, saveGlobalFilters } from "./ui/globalFiltersStore";
 import { getRounds } from "./engine/queryEngine";
 import { applyFilters } from "./engine/filters";
 
@@ -43,7 +41,6 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   const semantic = cloneTemplate(semanticTemplate) as SemanticRegistry;
   let dashboard = loadDashboardTemplate(doc, cloneTemplate(dashboardTemplate) as DashboardDoc);
   let settings = loadSettings(doc);
-  let globalFilters: FilterClause[] = loadGlobalFilters(doc);
 
   let root = doc.getElementById("geoanalyzr-semantic-root") as HTMLDivElement | null;
   let body: HTMLDivElement;
@@ -52,7 +49,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     body.innerHTML = "";
     validateDashboardAgainstSemantic(semantic, dashboard);
     const rowsAll = await getRounds({});
-    const rows = applyFilters(rowsAll, globalFilters);
+    const rows = applyFilters(rowsAll, dashboard.dashboard.globalFilters);
     await renderDashboard(body, semantic, dashboard, { rows });
   };
 
@@ -112,12 +109,6 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
         settings = next;
         applySettingsToRoot(root, settings);
         saveSettings(doc, settings);
-      },
-      getGlobalFilters: () => globalFilters,
-      applyGlobalFilters: async (next: FilterClause[]) => {
-        globalFilters = next;
-        saveGlobalFilters(doc, globalFilters);
-        await renderNow();
       }
     });
   } else {
