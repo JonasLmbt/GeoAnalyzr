@@ -16,18 +16,55 @@ function assert(condition: unknown, code: string, msg: string): asserts conditio
 }
 
 export function validateDashboardAgainstSemantic(semantic: SemanticRegistry, dash: DashboardDoc): void {
-  if (dash.dashboard.globalFilters) {
-    assert(Array.isArray(dash.dashboard.globalFilters), "E_BAD_SPEC", "dashboard.globalFilters must be an array");
-    for (const clause of dash.dashboard.globalFilters as any[]) {
-      validateFilterClause(semantic, clause);
-    }
-  }
+  if (dash.dashboard.globalFilters) validateGlobalFiltersSpec(semantic, dash);
   for (const section of dash.dashboard.sections) {
     for (const placedCard of section.layout.cards) {
       for (const widget of placedCard.card.children) {
         validateWidget(semantic, widget);
       }
     }
+  }
+}
+
+function validateGlobalFiltersSpec(semantic: SemanticRegistry, dash: DashboardDoc): void {
+  const gf: any = (dash.dashboard as any).globalFilters;
+  assert(!!gf && typeof gf === "object", "E_BAD_SPEC", "dashboard.globalFilters must be an object");
+  assert(typeof gf.enabled === "boolean", "E_BAD_SPEC", "dashboard.globalFilters.enabled must be boolean");
+  assert(Array.isArray(gf.controls), "E_BAD_SPEC", "dashboard.globalFilters.controls must be an array");
+
+  const ids = new Set<string>();
+  for (const c of gf.controls as any[]) {
+    assert(!!c && typeof c === "object", "E_BAD_SPEC", "Global filter control must be an object");
+    assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", "Global filter control id must be a string");
+    assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate global filter control id '${c.id}'`);
+    ids.add(c.id);
+    assert(typeof c.type === "string", "E_BAD_SPEC", `Global filter control '${c.id}' missing type`);
+    assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' missing label`);
+    assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' appliesTo must be a non-empty array`);
+
+    if (c.type === "date_range") {
+      assert(!!c.default && typeof c.default === "object", "E_BAD_SPEC", `date_range '${c.id}' default must be an object`);
+      const fromTs = (c.default as any).fromTs;
+      const toTs = (c.default as any).toTs;
+      assert(fromTs === null || typeof fromTs === "number", "E_BAD_SPEC", `date_range '${c.id}' default.fromTs must be number|null`);
+      assert(toTs === null || typeof toTs === "number", "E_BAD_SPEC", `date_range '${c.id}' default.toTs must be number|null`);
+      continue;
+    }
+
+    if (c.type === "select") {
+      assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
+      assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
+      assert(c.options === "auto_distinct", "E_BAD_SPEC", `select '${c.id}' options must be 'auto_distinct'`);
+      assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
+
+      const dimId = String(c.dimension);
+      const dim = semantic.dimensions[dimId];
+      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in global filter '${c.id}'`);
+      assert(c.appliesTo.includes(dim.grain), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo missing dimension grain '${dim.grain}'`);
+      continue;
+    }
+
+    throw new ValidationError("E_BAD_SPEC", `Unknown global filter control type '${c.type}'`);
   }
 }
 
