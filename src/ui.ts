@@ -1,6 +1,5 @@
 import type { SemanticRegistry } from "./config/semantic.types";
 import type { DashboardDoc } from "./config/dashboard.types";
-import { renderDashboard } from "./ui/dashboardRenderer";
 import { validateDashboardAgainstSemantic } from "./engine/validate";
 import semanticTemplate from "./config/semantic.json";
 import dashboardTemplate from "./config/dashboard.json";
@@ -14,8 +13,7 @@ import {
   type SemanticDashboardSettings
 } from "./ui/settingsStore";
 import { attachSettingsModal } from "./ui/settingsModal";
-import { getRounds } from "./engine/queryEngine";
-import { applyFilters } from "./engine/filters";
+import { renderAnalysisApp } from "./ui/analysisRenderer";
 
 function cloneTemplate<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -48,9 +46,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   const renderNow = async (): Promise<void> => {
     body.innerHTML = "";
     validateDashboardAgainstSemantic(semantic, dashboard);
-    const rowsAll = await getRounds({});
-    const rows = applyFilters(rowsAll, dashboard.dashboard.globalFilters);
-    await renderDashboard(body, semantic, dashboard, { rows });
+    await renderAnalysisApp({ root, body, semantic, dashboard });
   };
 
   if (!root) {

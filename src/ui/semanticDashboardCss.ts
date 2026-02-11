@@ -71,6 +71,46 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       cursor:pointer;
     }
     .ga-body { padding: 8px 12px 16px; }
+    .ga-filters {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px 0;
+      flex-wrap:wrap;
+    }
+    .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+    .ga-filters-right { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+    .ga-filter {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:8px 10px;
+      background: var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      min-width: 200px;
+    }
+    .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-filter-row { display:flex; gap:8px; align-items:center; }
+    .ga-filter select, .ga-filter input[type="date"] {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:6px 8px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .ga-filter-btn {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:10px;
+      padding:7px 10px;
+      cursor:pointer;
+      font-size:12px;
+      height: 34px;
+    }
     .ga-tabs { display:flex; gap:8px; padding:10px; }
     .ga-tab {
       background:var(--ga-control-bg);
