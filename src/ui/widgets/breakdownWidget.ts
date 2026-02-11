@@ -26,9 +26,23 @@ function sortRows(rows: Row[], mode: "chronological" | "asc" | "desc"): Row[] {
 
   const scoreBucketStart = (k: string) => (k === "5000" ? 5000 : parseInt(k.split("-")[0] ?? "0", 10));
   const isDate = (k: string) => /^\d{4}-\d{2}-\d{2}$/.test(k);
+  const weekdayRank = (k: string): number | undefined => {
+    const v = k.trim().toLowerCase();
+    if (v === "mon") return 0;
+    if (v === "tue") return 1;
+    if (v === "wed") return 2;
+    if (v === "thu") return 3;
+    if (v === "fri") return 4;
+    if (v === "sat") return 5;
+    if (v === "sun") return 6;
+    return undefined;
+  };
 
   return [...rows].sort((a, b) => {
     if (isDate(a.key) && isDate(b.key)) return a.key.localeCompare(b.key);
+    const wa = weekdayRank(a.key);
+    const wb = weekdayRank(b.key);
+    if (wa !== undefined && wb !== undefined) return wa - wb;
     const na = Number.isFinite(scoreBucketStart(a.key)) ? scoreBucketStart(a.key) : NaN;
     const nb = Number.isFinite(scoreBucketStart(b.key)) ? scoreBucketStart(b.key) : NaN;
     if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;

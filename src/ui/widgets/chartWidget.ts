@@ -11,6 +11,23 @@ import { DrilldownOverlay } from "../drilldownOverlay";
 type Datum = { x: string; y: number; rows: any[] };
 
 function sortKeysChronological(keys: string[]): string[] {
+  const weekdayRank = (k: string): number | undefined => {
+    const v = k.trim().toLowerCase();
+    // We prefer Mon..Sun as "chronological" for week-based charts.
+    if (v === "mon") return 0;
+    if (v === "tue") return 1;
+    if (v === "wed") return 2;
+    if (v === "thu") return 3;
+    if (v === "fri") return 4;
+    if (v === "sat") return 5;
+    if (v === "sun") return 6;
+    return undefined;
+  };
+  const weekdayKeys = keys.map((k) => weekdayRank(k));
+  if (weekdayKeys.every((r) => r !== undefined)) {
+    return [...keys].sort((a, b) => (weekdayRank(a) ?? 0) - (weekdayRank(b) ?? 0));
+  }
+
   const parseKey = (k: string): number | undefined => {
     const first = k.split("-")[0] ?? k;
     const parsed = Number(first);
