@@ -13,25 +13,27 @@
           "columns": 12,
           "cards": [
             {
-              "cardId": "card_scores_distribution",
-              "title": "Scores",
+              "cardId": "card_scores_kpis",
+              "title": "Score KPIs",
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 12,
+              "h": 6,
               "card": {
                 "type": "composite",
                 "children": [
                   {
                     "widgetId": "w_scores_kpis",
                     "type": "stat_list",
-                    "title": "Score KPIs",
+                    "title": "KPIs (round-grain)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 3 },
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
                     "spec": {
                       "rows": [
+                        { "label": "Rounds", "measure": "rounds_count" },
+                        { "label": "Avg score", "measure": "avg_score" },
                         {
-                          "label": "Perfect 5k",
+                          "label": "5k rate",
                           "measure": "fivek_rate",
                           "actions": {
                             "click": {
@@ -44,21 +46,240 @@
                               ]
                             }
                           }
-                        }
+                        },
+                        { "label": "Hit rate", "measure": "hit_rate" },
+                        { "label": "Throw rate (<50)", "measure": "throw_rate" }
                       ]
                     }
-                  },
+                  }
+                ]
+              }
+            },
+
+            {
+              "cardId": "card_score_distribution",
+              "title": "Score Distribution",
+              "x": 0,
+              "y": 6,
+              "w": 12,
+              "h": 12,
+              "card": {
+                "type": "composite",
+                "children": [
                   {
                     "widgetId": "w_score_distribution",
                     "type": "chart",
-                    "title": "Score distribution (smoothed)",
+                    "title": "Score bucket distribution (click = drilldown rounds)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 3, "w": 12, "h": 9 },
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 12 },
                     "spec": {
                       "type": "bar",
                       "x": { "dimension": "score_bucket" },
                       "y": { "measure": "rounds_count" },
                       "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "time_patterns",
+        "title": "Time Patterns",
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_by_weekday",
+              "title": "By weekday",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_avg_score_weekday",
+                    "type": "chart",
+                    "title": "Avg score by weekday",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "bar",
+                      "x": { "dimension": "weekday" },
+                      "y": { "measure": "avg_score" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+
+            {
+              "cardId": "card_by_hour",
+              "title": "By hour",
+              "x": 0,
+              "y": 10,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_fivek_rate_hour",
+                    "type": "chart",
+                    "title": "Rate by hour",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "bar",
+                      "x": { "dimension": "hour" },
+                      "y": {
+                        "measures": ["fivek_rate", "throw_rate", "hit_rate"],
+                        "activeMeasure": "fivek_rate"
+                      },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+
+            {
+              "cardId": "card_by_day",
+              "title": "Daily progression",
+              "x": 0,
+              "y": 20,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_avg_score_day",
+                    "type": "chart",
+                    "title": "Avg score by day (bar)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "bar",
+                      "x": { "dimension": "time_day" },
+                      "y": { "measure": "avg_score" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+
+      {
+        "id": "countries",
+        "title": "Countries",
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_countries_breakdown",
+              "title": "True country breakdown",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_country_rounds_top",
+                    "type": "breakdown",
+                    "title": "Top countries by rounds (click = drilldown rounds)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "dimension": "true_country",
+                      "measure": "rounds_count",
+                      "sort": { "mode": "desc" },
+                      "limit": 15,
+                      "actions": {
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+
+            {
+              "cardId": "card_country_quality",
+              "title": "Quality by country",
+              "x": 0,
+              "y": 10,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_country_avg_score",
+                    "type": "chart",
+                    "title": "Avg score by country (top-ish)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "bar",
+                      "limit": 12,
+                      "x": { "dimension": "true_country" },
+                      "y": { "measure": "avg_score" },
+                      "sort": { "mode": "desc" },
                       "actions": {
                         "hover": true,
                         "click": {

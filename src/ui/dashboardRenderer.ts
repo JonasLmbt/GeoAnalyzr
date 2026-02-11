@@ -13,13 +13,14 @@ export async function renderDashboard(
   dashboard: DashboardDoc
 ): Promise<void> {
   root.innerHTML = "";
+  const doc = root.ownerDocument;
 
   const overlay = new DrilldownOverlay(root);
 
-  const tabBar = document.createElement("div");
+  const tabBar = doc.createElement("div");
   tabBar.className = "ga-tabs";
 
-  const content = document.createElement("div");
+  const content = doc.createElement("div");
   content.className = "ga-content";
 
   root.appendChild(tabBar);
@@ -29,7 +30,7 @@ export async function renderDashboard(
   let active = sections[0]?.id ?? "";
 
   function makeTab(secId: string, label: string) {
-    const btn = document.createElement("button");
+    const btn = doc.createElement("button");
     btn.className = "ga-tab";
     btn.textContent = label;
     btn.addEventListener("click", async () => {
@@ -53,7 +54,7 @@ export async function renderDashboard(
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
 
     // placeholders for the next iterations
-    const ph = document.createElement("div");
+    const ph = doc.createElement("div");
     ph.className = "ga-widget ga-placeholder";
     ph.textContent = `Widget type '${widget.type}' not implemented yet`;
     return ph;
@@ -64,33 +65,33 @@ export async function renderDashboard(
     const section = sections.find((s) => s.id === active);
     if (!section) return;
 
-    const grid = document.createElement("div");
+    const grid = doc.createElement("div");
     grid.className = "ga-grid";
     grid.style.display = "grid";
     grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
     grid.style.gap = "12px";
 
     for (const placed of section.layout.cards) {
-      const card = document.createElement("div");
+      const card = doc.createElement("div");
       card.className = "ga-card";
       card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
       card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
 
-      const header = document.createElement("div");
+      const header = doc.createElement("div");
       header.className = "ga-card-header";
       header.textContent = placed.title;
 
-      const body = document.createElement("div");
+      const body = doc.createElement("div");
       body.className = "ga-card-body";
 
-      const inner = document.createElement("div");
+      const inner = doc.createElement("div");
       inner.className = "ga-card-inner";
       inner.style.display = "grid";
       inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
       inner.style.gap = "10px";
 
       for (const w of placed.card.children) {
-        const container = document.createElement("div");
+        const container = doc.createElement("div");
         container.className = "ga-child";
 
         const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };

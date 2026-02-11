@@ -37,7 +37,6 @@ interface RoundRowBase {
 
 export interface RoundRowDuel extends RoundRowBase {
   modeFamily?: "duels";
-  // role-based aliases (preferred)
   player_self_playerId?: string;
   player_self_guessLat?: number;
   player_self_guessLng?: number;
@@ -54,35 +53,11 @@ export interface RoundRowDuel extends RoundRowBase {
   player_opponent_score?: number;
   player_opponent_healthAfter?: number;
 
-  // legacy positional fields
-  p1_playerId?: string;
-  p1_guessLat?: number;
-  p1_guessLng?: number;
-  p1_guessCountry?: string;
-  p1_distanceKm?: number;
-  p1_score?: number;
-  p1_healthAfter?: number;
-
-  p2_playerId?: string;
-  p2_guessLat?: number;
-  p2_guessLng?: number;
-  p2_guessCountry?: string;
-  p2_distanceKm?: number;
-  p2_score?: number;
-  p2_healthAfter?: number;
-
   healthDiffAfter?: number;
-  // legacy fields kept for compatibility
-  guessLat?: number;
-  guessLng?: number;
-  score?: number;
-  distanceMeters?: number;
-  timeMs?: number;
 }
 
 export interface RoundRowTeamDuel extends RoundRowBase {
   modeFamily?: "teamduels";
-  // role-based aliases (preferred)
   player_self_playerId?: string;
   player_self_teamId?: string;
   player_self_guessLat?: number;
@@ -122,51 +97,6 @@ export interface RoundRowTeamDuel extends RoundRowBase {
   player_opponent_mate_score?: number;
   player_opponent_mate_healthAfter?: number;
   player_opponent_mate_isBestGuess?: boolean;
-
-  // legacy positional fields
-  p1_playerId?: string;
-  p1_teamId?: string;
-  p1_guessLat?: number;
-  p1_guessLng?: number;
-  p1_guessCountry?: string;
-  p1_distanceKm?: number;
-  p1_distanceMeters?: number; // legacy compatibility
-  p1_score?: number;
-  p1_healthAfter?: number;
-  p1_isBestGuess?: boolean;
-
-  p2_playerId?: string;
-  p2_teamId?: string;
-  p2_guessLat?: number;
-  p2_guessLng?: number;
-  p2_guessCountry?: string;
-  p2_distanceKm?: number;
-  p2_distanceMeters?: number; // legacy compatibility
-  p2_score?: number;
-  p2_healthAfter?: number;
-  p2_isBestGuess?: boolean;
-
-  p3_playerId?: string;
-  p3_teamId?: string;
-  p3_guessLat?: number;
-  p3_guessLng?: number;
-  p3_guessCountry?: string;
-  p3_distanceKm?: number;
-  p3_distanceMeters?: number; // legacy compatibility
-  p3_score?: number;
-  p3_healthAfter?: number;
-  p3_isBestGuess?: boolean;
-
-  p4_playerId?: string;
-  p4_teamId?: string;
-  p4_guessLat?: number;
-  p4_guessLng?: number;
-  p4_guessCountry?: string;
-  p4_distanceKm?: number;
-  p4_distanceMeters?: number; // legacy compatibility
-  p4_score?: number;
-  p4_healthAfter?: number;
-  p4_isBestGuess?: boolean;
 }
 
 export interface RoundRowOther extends RoundRowBase {
@@ -305,23 +235,6 @@ export interface GameRowOther extends GameRowBase {
   modeFamily?: "other";
   isTeamDuels?: boolean;
   startTime?: number;
-  // legacy fields kept for compatibility during migration
-  p1_playerId?: string;
-  p1_playerName?: string;
-  p1_ratingBefore?: number;
-  p1_ratingAfter?: number;
-  p2_playerId?: string;
-  p2_playerName?: string;
-  p2_ratingBefore?: number;
-  p2_ratingAfter?: number;
-  p3_playerId?: string;
-  p3_playerName?: string;
-  p3_ratingBefore?: number;
-  p3_ratingAfter?: number;
-  p4_playerId?: string;
-  p4_playerName?: string;
-  p4_ratingBefore?: number;
-  p4_ratingAfter?: number;
   playerOneVictory?: boolean;
   playerOneFinalHealth?: number;
   playerTwoVictory?: boolean;
@@ -349,22 +262,6 @@ export interface LegacyDetailsRowCompat {
   mapSlug?: string;
   totalRounds?: number;
   startTime?: number;
-  p1_playerId?: string;
-  p1_playerName?: string;
-  p1_ratingBefore?: number;
-  p1_ratingAfter?: number;
-  p2_playerId?: string;
-  p2_playerName?: string;
-  p2_ratingBefore?: number;
-  p2_ratingAfter?: number;
-  p3_playerId?: string;
-  p3_playerName?: string;
-  p3_ratingBefore?: number;
-  p3_ratingAfter?: number;
-  p4_playerId?: string;
-  p4_playerName?: string;
-  p4_ratingBefore?: number;
-  p4_ratingAfter?: number;
   playerOneVictory?: boolean;
   playerOneFinalHealth?: number;
   playerTwoVictory?: boolean;

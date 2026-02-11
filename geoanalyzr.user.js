@@ -13202,52 +13202,58 @@
   // src/ui/drilldownOverlay.ts
   var DrilldownOverlay = class {
     root;
+    doc;
     modal;
     constructor(root) {
       this.root = root;
-      this.modal = document.createElement("div");
+      this.doc = root.ownerDocument;
+      this.modal = this.doc.createElement("div");
       this.modal.className = "ga-drilldown-modal";
       this.modal.style.display = "none";
       this.root.appendChild(this.modal);
     }
+    getDocument() {
+      return this.doc;
+    }
     open(semantic, req) {
       this.modal.innerHTML = "";
       this.modal.style.display = "block";
-      const bg = document.createElement("div");
+      const bg = this.doc.createElement("div");
       bg.className = "ga-drilldown-bg";
       bg.addEventListener("click", () => this.close());
-      const panel = document.createElement("div");
+      const panel = this.doc.createElement("div");
       panel.className = "ga-drilldown-panel";
-      const header = document.createElement("div");
+      const header = this.doc.createElement("div");
       header.className = "ga-drilldown-header";
-      const hTitle = document.createElement("div");
+      const hTitle = this.doc.createElement("div");
       hTitle.className = "ga-drilldown-title";
       hTitle.textContent = req.title;
-      const btn = document.createElement("button");
+      const btn = this.doc.createElement("button");
       btn.className = "ga-drilldown-close";
       btn.textContent = "Close";
       btn.addEventListener("click", () => this.close());
       header.appendChild(hTitle);
       header.appendChild(btn);
-      const table = document.createElement("table");
+      const table = this.doc.createElement("table");
       table.className = "ga-drilldown-table";
       const preset = semantic.drilldownPresets[req.target];
       const cols = preset?.columnsPresets?.[req.columnsPreset] ?? [];
-      const thead = document.createElement("thead");
-      const trh = document.createElement("tr");
+      const thead = this.doc.createElement("thead");
+      const trh = this.doc.createElement("tr");
       for (const c of cols) {
-        const th = document.createElement("th");
+        const th = this.doc.createElement("th");
         th.textContent = c;
         trh.appendChild(th);
       }
       thead.appendChild(trh);
-      const tbody = document.createElement("tbody");
+      const tbody = this.doc.createElement("tbody");
+      const dateFormat = this.readDateFormatMode();
       for (const r of req.rows) {
-        const tr = document.createElement("tr");
+        const tr = this.doc.createElement("tr");
         for (const c of cols) {
-          const td = document.createElement("td");
+          const td = this.doc.createElement("td");
           const v = pickWithAliases(r, c, semantic.columnAliases);
-          td.textContent = v === void 0 || v === null ? "" : String(v);
+          td.textContent = this.formatCellValue(v, c, dateFormat);
           tr.appendChild(td);
         }
         tbody.appendChild(tr);
@@ -13261,6 +13267,45 @@
     }
     close() {
       this.modal.style.display = "none";
+    }
+    readDateFormatMode() {
+      const root = this.root;
+      const mode = root.dataset?.gaDateFormat;
+      return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+    }
+    formatDate(ts, mode) {
+      const d = new Date(ts);
+      if (!Number.isFinite(d.getTime())) return String(ts);
+      if (mode === "locale") return d.toLocaleString();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+      if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+      return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+    }
+    formatCellValue(value, columnName, dateMode) {
+      if (value === void 0 || value === null) return "";
+      const col = columnName.toLowerCase();
+      const looksLikeDateColumn = col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
+      if (typeof value === "number" && Number.isFinite(value)) {
+        if (looksLikeDateColumn && value > 9466848e5 && value < 41024448e5) {
+          return this.formatDate(value, dateMode);
+        }
+        return String(value);
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (looksLikeDateColumn) {
+          const parsed = Date.parse(trimmed);
+          if (Number.isFinite(parsed)) return this.formatDate(parsed, dateMode);
+        }
+        return value;
+      }
+      return String(value);
     }
   };
 
@@ -13433,20 +13478,21 @@
   }
   async function renderStatListWidget(semantic, widget, overlay) {
     const spec = widget.spec;
-    const wrap = document.createElement("div");
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
     wrap.className = "ga-widget ga-statlist";
-    const title = document.createElement("div");
+    const title = doc.createElement("div");
     title.className = "ga-widget-title";
     title.textContent = widget.title;
-    const box = document.createElement("div");
+    const box = doc.createElement("div");
     box.className = "ga-statlist-box";
     for (const row of spec.rows) {
-      const line = document.createElement("div");
+      const line = doc.createElement("div");
       line.className = "ga-statrow";
-      const left = document.createElement("div");
+      const left = doc.createElement("div");
       left.className = "ga-statrow-label";
       left.textContent = row.label;
-      const right = document.createElement("div");
+      const right = doc.createElement("div");
       right.className = "ga-statrow-value";
       right.textContent = "...";
       const val = await computeMeasure(semantic, row.measure, row.filters);
@@ -13476,101 +13522,263 @@
 
   // src/ui/widgets/chartWidget.ts
   function sortKeysChronological(keys2) {
-    const parseKey = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
-    return [...keys2].sort((a, b) => parseKey(a) - parseKey(b));
+    const parseKey = (k) => {
+      const first = k.split("-")[0] ?? k;
+      const parsed = Number(first);
+      return Number.isFinite(parsed) ? parsed : void 0;
+    };
+    return [...keys2].sort((a, b) => {
+      const na = parseKey(a);
+      const nb = parseKey(b);
+      if (na !== void 0 && nb !== void 0) return na - nb;
+      if (na !== void 0) return -1;
+      if (nb !== void 0) return 1;
+      return a.localeCompare(b);
+    });
+  }
+  function sortData(data, mode) {
+    if (mode === "chronological") {
+      const keys2 = sortKeysChronological(data.map((d) => d.x));
+      const rank = new Map(keys2.map((k, i) => [k, i]));
+      return [...data].sort((a, b) => (rank.get(a.x) ?? 0) - (rank.get(b.x) ?? 0));
+    }
+    if (mode === "asc") return [...data].sort((a, b) => a.y - b.y);
+    if (mode === "desc") return [...data].sort((a, b) => b.y - a.y);
+    return data;
+  }
+  function getMeasureIds(spec) {
+    const out = [];
+    const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
+    if (single) out.push(single);
+    if (Array.isArray(spec.y.measures)) {
+      for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || out.includes(clean)) continue;
+        out.push(clean);
+      }
+    }
+    return out;
+  }
+  function formatMeasureValue(semantic, measureId, value) {
+    const measure = semantic.measures[measureId];
+    const unit = measure ? semantic.units[measure.unit] : void 0;
+    if (!unit) return `${value}`;
+    if (unit.format === "percent") return `${(value * 100).toFixed(unit.decimals ?? 1)}%`;
+    if (unit.format === "int") return `${Math.round(value)}`;
+    return value.toFixed(unit.decimals ?? 1);
+  }
+  function niceUpperBound(maxValue) {
+    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
+    const exp = Math.floor(Math.log10(maxValue));
+    const base = 10 ** exp;
+    const n = maxValue / base;
+    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+    return nice * base;
   }
   async function renderChartWidget(semantic, widget, overlay) {
     const spec = widget.spec;
-    const wrap = document.createElement("div");
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
     wrap.className = "ga-widget ga-chart";
-    const title = document.createElement("div");
+    const title = doc.createElement("div");
     title.className = "ga-widget-title";
     title.textContent = widget.title;
-    const box = document.createElement("div");
+    const controls = doc.createElement("div");
+    controls.style.display = "flex";
+    controls.style.gap = "8px";
+    controls.style.alignItems = "center";
+    controls.style.marginBottom = "8px";
+    const box = doc.createElement("div");
     box.className = "ga-chart-box";
+    const chartHost = doc.createElement("div");
+    box.appendChild(chartHost);
     const rows = await getRounds({});
     const dimId = spec.x.dimension;
-    const measId = spec.y.measure;
     const dimDef = semantic.dimensions[dimId];
-    const measDef = semantic.measures[measId];
-    if (!dimDef || !measDef) throw new Error(`Unknown dimension/measure in widget ${widget.widgetId}`);
+    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in widget ${widget.widgetId}`);
     const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}'`);
+    const measureIds = getMeasureIds(spec);
+    if (measureIds.length === 0) throw new Error(`Widget ${widget.widgetId} has no y.measure or y.measures`);
+    const measureFnById = /* @__PURE__ */ new Map();
+    for (const measureId of measureIds) {
+      const measDef = semantic.measures[measureId];
+      if (!measDef) throw new Error(`Unknown measure '${measureId}' in widget ${widget.widgetId}`);
+      const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
+      if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
+      measureFnById.set(measureId, measureFn);
+    }
     const grouped = groupByKey(rows, keyFn);
-    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
-    if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
     const keys2 = Array.from(grouped.keys());
-    const sortedKeys = spec.sort?.mode === "chronological" ? sortKeysChronological(keys2) : keys2;
-    const data = sortedKeys.map((k) => {
-      const g = grouped.get(k) ?? [];
-      return { x: k, y: measureFn(g), rows: g };
-    });
-    const W = 900;
-    const H = 260;
-    const PAD_L = 40;
-    const PAD_B = 30;
-    const PAD_T = 10;
-    const PAD_R = 10;
-    const maxY = Math.max(1, ...data.map((d) => d.y));
-    const innerW = W - PAD_L - PAD_R;
-    const innerH = H - PAD_T - PAD_B;
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("height", String(H));
-    const axis = document.createElementNS(svg.namespaceURI, "line");
-    axis.setAttribute("x1", String(PAD_L));
-    axis.setAttribute("y1", String(PAD_T + innerH));
-    axis.setAttribute("x2", String(PAD_L + innerW));
-    axis.setAttribute("y2", String(PAD_T + innerH));
-    axis.setAttribute("stroke", "currentColor");
-    axis.setAttribute("opacity", "0.35");
-    svg.appendChild(axis);
-    const barW = innerW / Math.max(1, data.length);
-    data.forEach((d, i) => {
-      const x = PAD_L + i * barW;
-      const h = d.y / maxY * innerH;
-      const y = PAD_T + innerH - h;
-      const rect = document.createElementNS(svg.namespaceURI, "rect");
-      rect.setAttribute("x", String(x + 1));
-      rect.setAttribute("y", String(y));
-      rect.setAttribute("width", String(Math.max(1, barW - 2)));
-      rect.setAttribute("height", String(h));
-      rect.setAttribute("rx", "2");
-      rect.setAttribute("fill", "currentColor");
-      rect.setAttribute("opacity", "0.35");
-      const t = document.createElementNS(svg.namespaceURI, "title");
-      t.textContent = `${d.x}: ${d.y}`;
-      rect.appendChild(t);
-      const click = spec.actions?.click;
-      if (click?.type === "drilldown") {
-        rect.setAttribute("style", "cursor: pointer;");
-        rect.addEventListener("click", () => {
-          const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-          overlay.open(semantic, {
-            title: `${widget.title} - ${d.x}`,
-            target: click.target,
-            columnsPreset: click.columnsPreset,
-            rows: filteredRows,
-            extraFilters: click.extraFilters
+    const buildDataForMeasure = (measureId) => {
+      const measureFn = measureFnById.get(measureId);
+      if (!measureFn) return [];
+      const baseData = keys2.map((k) => {
+        const g = grouped.get(k) ?? [];
+        return { x: k, y: measureFn(g), rows: g };
+      });
+      const sortedData = sortData(baseData, spec.sort?.mode);
+      return typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0 ? sortedData.slice(0, Math.floor(spec.limit)) : sortedData;
+    };
+    let activeMeasure = measureIds.includes(spec.y.activeMeasure || "") ? spec.y.activeMeasure : measureIds[0];
+    const render = () => {
+      chartHost.innerHTML = "";
+      const measureDef = semantic.measures[activeMeasure];
+      const data = buildDataForMeasure(activeMeasure);
+      if (!measureDef || data.length === 0) {
+        const empty = doc.createElement("div");
+        empty.style.fontSize = "12px";
+        empty.style.opacity = "0.75";
+        empty.textContent = "No chart data available for current selection.";
+        chartHost.appendChild(empty);
+        return;
+      }
+      const W = 920;
+      const H = 320;
+      const PAD_L = 72;
+      const PAD_B = 58;
+      const PAD_T = 16;
+      const PAD_R = 16;
+      const innerW = W - PAD_L - PAD_R;
+      const innerH = H - PAD_T - PAD_B;
+      const dataMax = Math.max(0, ...data.map((d) => d.y));
+      const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("width", "100%");
+      svg.setAttribute("height", String(H));
+      const axisX = doc.createElementNS(svg.namespaceURI, "line");
+      axisX.setAttribute("x1", String(PAD_L));
+      axisX.setAttribute("y1", String(PAD_T + innerH));
+      axisX.setAttribute("x2", String(PAD_L + innerW));
+      axisX.setAttribute("y2", String(PAD_T + innerH));
+      axisX.setAttribute("stroke", "var(--ga-axis-color)");
+      axisX.setAttribute("opacity", "0.7");
+      svg.appendChild(axisX);
+      const axisY = doc.createElementNS(svg.namespaceURI, "line");
+      axisY.setAttribute("x1", String(PAD_L));
+      axisY.setAttribute("y1", String(PAD_T));
+      axisY.setAttribute("x2", String(PAD_L));
+      axisY.setAttribute("y2", String(PAD_T + innerH));
+      axisY.setAttribute("stroke", "var(--ga-axis-color)");
+      axisY.setAttribute("opacity", "0.7");
+      svg.appendChild(axisY);
+      const tickCount = 5;
+      for (let i = 0; i <= tickCount; i++) {
+        const yVal = maxY * i / tickCount;
+        const yPos = PAD_T + innerH - yVal / maxY * innerH;
+        const grid = doc.createElementNS(svg.namespaceURI, "line");
+        grid.setAttribute("x1", String(PAD_L));
+        grid.setAttribute("y1", String(yPos));
+        grid.setAttribute("x2", String(PAD_L + innerW));
+        grid.setAttribute("y2", String(yPos));
+        grid.setAttribute("stroke", "var(--ga-axis-grid)");
+        grid.setAttribute("opacity", i === 0 ? "0.8" : "0.45");
+        svg.appendChild(grid);
+        const yTick = doc.createElementNS(svg.namespaceURI, "text");
+        yTick.setAttribute("x", String(PAD_L - 8));
+        yTick.setAttribute("y", String(yPos + 3));
+        yTick.setAttribute("text-anchor", "end");
+        yTick.setAttribute("font-size", "10");
+        yTick.setAttribute("fill", "var(--ga-axis-text)");
+        yTick.setAttribute("opacity", "0.95");
+        yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
+        svg.appendChild(yTick);
+      }
+      const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+      xAxisLabel.setAttribute("x", String(PAD_L + innerW / 2));
+      xAxisLabel.setAttribute("y", String(H - 8));
+      xAxisLabel.setAttribute("text-anchor", "middle");
+      xAxisLabel.setAttribute("font-size", "12");
+      xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
+      xAxisLabel.setAttribute("opacity", "0.95");
+      xAxisLabel.textContent = dimDef.label;
+      svg.appendChild(xAxisLabel);
+      const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+      yAxisLabel.setAttribute("x", "16");
+      yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
+      yAxisLabel.setAttribute("text-anchor", "middle");
+      yAxisLabel.setAttribute("font-size", "12");
+      yAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
+      yAxisLabel.setAttribute("opacity", "0.95");
+      yAxisLabel.setAttribute("transform", `rotate(-90 16 ${PAD_T + innerH / 2})`);
+      yAxisLabel.textContent = measureDef.label;
+      svg.appendChild(yAxisLabel);
+      const barW = innerW / Math.max(1, data.length);
+      data.forEach((d, i) => {
+        const x = PAD_L + i * barW;
+        const h = d.y / maxY * innerH;
+        const y = PAD_T + innerH - h;
+        const rect = doc.createElementNS(svg.namespaceURI, "rect");
+        rect.setAttribute("x", String(x + 1));
+        rect.setAttribute("y", String(y));
+        rect.setAttribute("width", String(Math.max(1, barW - 2)));
+        rect.setAttribute("height", String(Math.max(0, h)));
+        rect.setAttribute("rx", "2");
+        rect.setAttribute("fill", "var(--ga-graph-color)");
+        rect.setAttribute("opacity", "0.72");
+        const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+        tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
+        rect.appendChild(tooltip);
+        const click = spec.actions?.click;
+        if (click?.type === "drilldown") {
+          rect.setAttribute("style", "cursor: pointer;");
+          rect.addEventListener("click", () => {
+            const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+            overlay.open(semantic, {
+              title: `${widget.title} - ${d.x}`,
+              target: click.target,
+              columnsPreset: click.columnsPreset,
+              rows: filteredRows,
+              extraFilters: click.extraFilters
+            });
           });
-        });
+        }
+        svg.appendChild(rect);
+        if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
+          const tx = doc.createElementNS(svg.namespaceURI, "text");
+          tx.setAttribute("x", String(x + barW / 2));
+          tx.setAttribute("y", String(PAD_T + innerH + 16));
+          tx.setAttribute("text-anchor", "middle");
+          tx.setAttribute("font-size", "10");
+          tx.setAttribute("fill", "var(--ga-axis-text)");
+          tx.setAttribute("opacity", "0.95");
+          tx.textContent = d.x;
+          svg.appendChild(tx);
+        }
+      });
+      chartHost.appendChild(svg);
+    };
+    if (measureIds.length > 1) {
+      const label = doc.createElement("label");
+      label.style.fontSize = "12px";
+      label.style.opacity = "0.9";
+      label.textContent = "Measure:";
+      const select = doc.createElement("select");
+      select.style.background = "var(--ga-control-bg)";
+      select.style.color = "var(--ga-control-text)";
+      select.style.border = "1px solid var(--ga-control-border)";
+      select.style.borderRadius = "8px";
+      select.style.padding = "4px 8px";
+      for (const measureId of measureIds) {
+        const option = doc.createElement("option");
+        option.value = measureId;
+        option.textContent = semantic.measures[measureId]?.label || measureId;
+        if (measureId === activeMeasure) option.selected = true;
+        select.appendChild(option);
       }
-      svg.appendChild(rect);
-      if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
-        const tx = document.createElementNS(svg.namespaceURI, "text");
-        tx.setAttribute("x", String(x + barW / 2));
-        tx.setAttribute("y", String(PAD_T + innerH + 18));
-        tx.setAttribute("text-anchor", "middle");
-        tx.setAttribute("font-size", "10");
-        tx.setAttribute("opacity", "0.7");
-        tx.textContent = d.x === "5000" ? "5k" : d.x.split("-")[0];
-        svg.appendChild(tx);
-      }
-    });
-    box.appendChild(svg);
+      select.addEventListener("change", () => {
+        activeMeasure = select.value;
+        render();
+      });
+      controls.appendChild(label);
+      controls.appendChild(select);
+    }
+    render();
     wrap.appendChild(title);
+    if (controls.childElementCount > 0) wrap.appendChild(controls);
     wrap.appendChild(box);
     return wrap;
   }
@@ -13603,12 +13811,13 @@
   }
   async function renderBreakdownWidget(semantic, widget, overlay) {
     const spec = widget.spec;
-    const wrap = document.createElement("div");
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
     wrap.className = "ga-widget ga-breakdown";
-    const title = document.createElement("div");
+    const title = doc.createElement("div");
     title.className = "ga-widget-title";
     title.textContent = widget.title;
-    const box = document.createElement("div");
+    const box = doc.createElement("div");
     box.className = "ga-breakdown-box";
     const rowsAll = applyFilters(await getRounds({}), spec.filters);
     const dimId = spec.dimension;
@@ -13633,19 +13842,19 @@
     rows = rows.slice(0, limit);
     const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
     for (const r of rows) {
-      const line = document.createElement("div");
+      const line = doc.createElement("div");
       line.className = "ga-breakdown-row";
-      const left = document.createElement("div");
+      const left = doc.createElement("div");
       left.className = "ga-breakdown-label";
       left.textContent = r.key;
-      const right = document.createElement("div");
+      const right = doc.createElement("div");
       right.className = "ga-breakdown-right";
-      const val = document.createElement("div");
+      const val = doc.createElement("div");
       val.className = "ga-breakdown-value";
       val.textContent = formatValue2(semantic, measId, r.value);
-      const barWrap = document.createElement("div");
+      const barWrap = doc.createElement("div");
       barWrap.className = "ga-breakdown-barwrap";
-      const bar = document.createElement("div");
+      const bar = doc.createElement("div");
       bar.className = "ga-breakdown-bar";
       bar.style.width = `${Math.max(2, r.value / maxVal * 100)}%`;
       barWrap.appendChild(bar);
@@ -13678,17 +13887,18 @@
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard) {
     root.innerHTML = "";
+    const doc = root.ownerDocument;
     const overlay = new DrilldownOverlay(root);
-    const tabBar = document.createElement("div");
+    const tabBar = doc.createElement("div");
     tabBar.className = "ga-tabs";
-    const content = document.createElement("div");
+    const content = doc.createElement("div");
     content.className = "ga-content";
     root.appendChild(tabBar);
     root.appendChild(content);
     const sections = dashboard.dashboard.sections;
     let active = sections[0]?.id ?? "";
     function makeTab(secId, label) {
-      const btn = document.createElement("button");
+      const btn = doc.createElement("button");
       btn.className = "ga-tab";
       btn.textContent = label;
       btn.addEventListener("click", async () => {
@@ -13708,7 +13918,7 @@
       if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay);
       if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
-      const ph = document.createElement("div");
+      const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
       return ph;
@@ -13717,28 +13927,28 @@
       content.innerHTML = "";
       const section = sections.find((s) => s.id === active);
       if (!section) return;
-      const grid = document.createElement("div");
+      const grid = doc.createElement("div");
       grid.className = "ga-grid";
       grid.style.display = "grid";
       grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
       grid.style.gap = "12px";
       for (const placed of section.layout.cards) {
-        const card = document.createElement("div");
+        const card = doc.createElement("div");
         card.className = "ga-card";
         card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
         card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
-        const header = document.createElement("div");
+        const header = doc.createElement("div");
         header.className = "ga-card-header";
         header.textContent = placed.title;
-        const body = document.createElement("div");
+        const body = doc.createElement("div");
         body.className = "ga-card-body";
-        const inner = document.createElement("div");
+        const inner = doc.createElement("div");
         inner.className = "ga-card-inner";
         inner.style.display = "grid";
         inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
         inner.style.gap = "10px";
         for (const w of placed.card.children) {
-          const container = document.createElement("div");
+          const container = doc.createElement("div");
           container.className = "ga-child";
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
           container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
@@ -13783,22 +13993,38 @@
     if (widget.type === "chart") {
       const spec = widget.spec;
       const xDimId = spec.x?.dimension;
-      const yMeasId = spec.y?.measure;
       assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
-      assert(typeof yMeasId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure`);
+      const yMeasureIds = getChartMeasureIds(spec);
+      assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
       const xDim = semantic.dimensions[xDimId];
-      const yMeas = semantic.measures[yMeasId];
       assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
-      assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
       assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
-      assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
       assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
-      assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+      if (spec.sort?.mode) {
+        assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
+      }
+      for (const yMeasId of yMeasureIds) {
+        const yMeas = semantic.measures[yMeasId];
+        assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
+        assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
+        assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+      }
+      const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : void 0;
+      if (activeMeasure) {
+        assert(yMeasureIds.includes(activeMeasure), "E_BAD_SPEC", `activeMeasure '${activeMeasure}' is not listed in y.measures`);
+      }
       if (spec.type === "line") {
         assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
       }
       if (xDim.cardinality?.selectorRequired) {
-        assert(!!spec.x.selector, "E_SELECTOR_REQUIRED", `Dimension '${xDimId}' requires selector`);
+        const hasTopN = typeof spec.limit === "number" && spec.limit > 0;
+        const selectorMode = spec.x?.selector?.mode;
+        const hasSelector = selectorMode === "top_n" || selectorMode === "selected";
+        assert(
+          hasTopN || hasSelector,
+          "E_SELECTOR_REQUIRED",
+          `Dimension '${xDimId}' requires selector; set chart.limit or x.selector`
+        );
       }
       if (spec.series) {
         const sDimId = spec.series.dimension;
@@ -13849,10 +14075,25 @@
   }
   function validateClickAction(semantic, widgetId, click) {
     if (!click || click.type !== "drilldown") return;
-    const targetPreset = semantic.drilldownPresets[click.target];
-    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${click.target}' in widget ${widgetId}`);
+    const target = click.target;
+    const targetPreset = semantic.drilldownPresets[target];
+    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
     const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
     assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
+  }
+  function getChartMeasureIds(spec) {
+    const result = [];
+    const single = typeof spec?.y?.measure === "string" ? spec.y.measure.trim() : "";
+    if (single) result.push(single);
+    if (Array.isArray(spec?.y?.measures)) {
+      for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || result.includes(clean)) continue;
+        result.push(clean);
+      }
+    }
+    return result;
   }
 
   // src/config/semantic.json
@@ -13881,7 +14122,7 @@
       time_day: {
         label: "Date",
         kind: "time",
-        grain: "game",
+        grain: "round",
         ordered: true,
         allowedCharts: ["line", "bar"],
         sortModes: ["chronological"]
@@ -13889,7 +14130,7 @@
       weekday: {
         label: "Weekday",
         kind: "category",
-        grain: "game",
+        grain: "round",
         ordered: true,
         allowedCharts: ["bar"],
         sortModes: ["chronological", "asc", "desc"]
@@ -13897,7 +14138,7 @@
       hour: {
         label: "Hour of day",
         kind: "category",
-        grain: "game",
+        grain: "round",
         ordered: true,
         allowedCharts: ["bar"],
         sortModes: ["chronological", "asc", "desc"]
@@ -14121,25 +14362,27 @@
             columns: 12,
             cards: [
               {
-                cardId: "card_scores_distribution",
-                title: "Scores",
+                cardId: "card_scores_kpis",
+                title: "Score KPIs",
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 12,
+                h: 6,
                 card: {
                   type: "composite",
                   children: [
                     {
                       widgetId: "w_scores_kpis",
                       type: "stat_list",
-                      title: "Score KPIs",
+                      title: "KPIs (round-grain)",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 3 },
+                      placement: { x: 0, y: 0, w: 12, h: 6 },
                       spec: {
                         rows: [
+                          { label: "Rounds", measure: "rounds_count" },
+                          { label: "Avg score", measure: "avg_score" },
                           {
-                            label: "Perfect 5k",
+                            label: "5k rate",
                             measure: "fivek_rate",
                             actions: {
                               click: {
@@ -14152,16 +14395,31 @@
                                 ]
                               }
                             }
-                          }
+                          },
+                          { label: "Hit rate", measure: "hit_rate" },
+                          { label: "Throw rate (<50)", measure: "throw_rate" }
                         ]
                       }
-                    },
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_score_distribution",
+                title: "Score Distribution",
+                x: 0,
+                y: 6,
+                w: 12,
+                h: 12,
+                card: {
+                  type: "composite",
+                  children: [
                     {
                       widgetId: "w_score_distribution",
                       type: "chart",
-                      title: "Score distribution (smoothed)",
+                      title: "Score bucket distribution (click = drilldown rounds)",
                       grain: "round",
-                      placement: { x: 0, y: 3, w: 12, h: 9 },
+                      placement: { x: 0, y: 0, w: 12, h: 12 },
                       spec: {
                         type: "bar",
                         x: { dimension: "score_bucket" },
@@ -14183,99 +14441,803 @@
               }
             ]
           }
+        },
+        {
+          id: "time_patterns",
+          title: "Time Patterns",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_by_weekday",
+                title: "By weekday",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_avg_score_weekday",
+                      type: "chart",
+                      title: "Avg score by weekday",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "weekday" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_by_hour",
+                title: "By hour",
+                x: 0,
+                y: 10,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_fivek_rate_hour",
+                      type: "chart",
+                      title: "Rate by hour",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "hour" },
+                        y: {
+                          measures: ["fivek_rate", "throw_rate", "hit_rate"],
+                          activeMeasure: "fivek_rate"
+                        },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_by_day",
+                title: "Daily progression",
+                x: 0,
+                y: 20,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_avg_score_day",
+                      type: "chart",
+                      title: "Avg score by day (bar)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "time_day" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "countries",
+          title: "Countries",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_countries_breakdown",
+                title: "True country breakdown",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_rounds_top",
+                      type: "breakdown",
+                      title: "Top countries by rounds (click = drilldown rounds)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        dimension: "true_country",
+                        measure: "rounds_count",
+                        sort: { mode: "desc" },
+                        limit: 15,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_country_quality",
+                title: "Quality by country",
+                x: 0,
+                y: 10,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_avg_score",
+                      type: "chart",
+                      title: "Avg score by country (top-ish)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        limit: 12,
+                        x: { dimension: "true_country" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "desc" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       ]
     }
   };
 
-  // src/ui.ts
-  function cloneTemplate(value) {
-    if (typeof structuredClone === "function") return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-  }
-  function injectCssOnce() {
+  // src/ui/semanticDashboardCss.ts
+  function injectSemanticDashboardCssOnce(doc) {
     const id = "geoanalyzr-semantic-dashboard-css";
-    if (document.getElementById(id)) return;
-    const style = document.createElement("style");
+    if (doc.getElementById(id)) return;
+    const style = doc.createElement("style");
     style.id = id;
     style.textContent = `
-    .ga-root { position: fixed; inset: 24px; z-index: 999999; background: #0f0f0f; color: #ddd; border: 1px solid #333; border-radius: 16px; overflow: hidden; }
-    .ga-topbar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #2a2a2a; background:#141414; }
+    html.ga-semantic-page, body.ga-semantic-page {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      background: var(--ga-bg);
+      color: var(--ga-text);
+    }
+    .ga-root {
+      --ga-bg: #0f1115;
+      --ga-surface: #15181e;
+      --ga-surface-2: #171b22;
+      --ga-card: #12161d;
+      --ga-card-2: #10141b;
+      --ga-text: #d7deea;
+      --ga-text-muted: #9aa5b6;
+      --ga-border: #2b3340;
+      --ga-control-bg: #161b23;
+      --ga-control-text: #d7deea;
+      --ga-control-border: #3a4352;
+      --ga-axis-color: #7f8ca2;
+      --ga-axis-grid: #3c4555;
+      --ga-axis-text: #c7d2e4;
+      --ga-graph-color: #7eb6ff;
+      min-height: 100vh;
+      background: var(--ga-bg);
+      color: var(--ga-text);
+    }
+    .ga-root[data-ga-theme="light"] {
+      --ga-bg: #f4f7fc;
+      --ga-surface: #ffffff;
+      --ga-surface-2: #f9fbff;
+      --ga-card: #ffffff;
+      --ga-card-2: #f8fbff;
+      --ga-text: #1f2a38;
+      --ga-text-muted: #4b5d74;
+      --ga-border: #c8d5e6;
+      --ga-control-bg: #ffffff;
+      --ga-control-text: #1f2a38;
+      --ga-control-border: #b7c7dd;
+      --ga-axis-color: #51647e;
+      --ga-axis-grid: #c2cfdf;
+      --ga-axis-text: #2b3d56;
+    }
+    .ga-topbar {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 14px;
+      border-bottom:1px solid var(--ga-border);
+      background: var(--ga-surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
     .ga-title { font-weight: 700; }
-    .ga-close { background:#222; border:1px solid #333; color:#ddd; border-radius:10px; padding:6px 10px; cursor:pointer; }
-    .ga-body { height: calc(100% - 46px); overflow:auto; }
+    .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
+    .ga-close, .ga-gear {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color:var(--ga-control-text);
+      border-radius:10px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-body { padding: 8px 12px 16px; }
     .ga-tabs { display:flex; gap:8px; padding:10px; }
-    .ga-tab { background:#222; color:#ddd; border:1px solid #333; padding:6px 10px; border-radius:10px; cursor:pointer; }
-    .ga-tab.active { background:#333; }
+    .ga-tab {
+      background:var(--ga-control-bg);
+      color:var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+    }
+    .ga-tab.active { background: var(--ga-surface-2); }
     .ga-content { padding:10px; }
-    .ga-card { background:#161616; border:1px solid #2a2a2a; border-radius:14px; overflow:hidden; }
-    .ga-card-header { padding:10px 12px; border-bottom:1px solid #2a2a2a; font-weight:650; }
+    .ga-card {
+      background: var(--ga-card);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
     .ga-card-body { padding:12px; }
-    .ga-widget-title { font-size:12px; opacity:0.8; margin-bottom:6px; }
-    .ga-statlist-box { background:#101010; border:1px solid #2a2a2a; border-radius:12px; padding:10px; }
-    .ga-statrow { display:flex; justify-content:space-between; padding:6px 2px; border-bottom:1px dashed rgba(255,255,255,0.06); }
+    .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
+    .ga-statlist-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-statrow {
+      display:flex;
+      justify-content:space-between;
+      padding:6px 2px;
+      border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
+    }
     .ga-statrow:last-child { border-bottom:none; }
-    .ga-chart-box { background:#101010; border:1px solid #2a2a2a; border-radius:12px; padding:10px; }
+    .ga-chart-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+      color: var(--ga-text);
+    }
     .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
     .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
     .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
     .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
-    .ga-breakdown-barwrap { flex:1; height:8px; background:#222; border-radius:999px; overflow:hidden; }
-    .ga-breakdown-bar { height:100%; background:#7eb6ff; border-radius:999px; }
-    .ga-drilldown-modal { position:fixed; inset:0; z-index:9999999; }
-    .ga-drilldown-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
-    .ga-drilldown-panel { position:absolute; top:6%; left:50%; transform:translateX(-50%); width:min(1100px, 92vw); max-height:88vh; overflow:auto; background:#151515; border:1px solid #333; border-radius:14px; }
-    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #2a2a2a; }
-    .ga-drilldown-close { background:#222; border:1px solid #333; color:#ddd; border-radius:10px; padding:6px 10px; cursor:pointer; }
+    .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
+    .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
+    .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
+    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
+    .ga-drilldown-panel {
+      position:absolute;
+      top:6%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(1100px, 92vw);
+      max-height:88vh;
+      overflow:auto;
+      background:var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+    }
+    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--ga-border); }
+    .ga-drilldown-close {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:10px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
     .ga-drilldown-table { width:100%; border-collapse:collapse; font-size:12px; }
-    .ga-drilldown-table th, .ga-drilldown-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.06); text-align:left; }
+    .ga-drilldown-table th, .ga-drilldown-table td {
+      padding:8px 10px;
+      border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
+      text-align:left;
+    }
+    .ga-settings-panel {
+      position:absolute;
+      top:8%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(980px, 94vw);
+      max-height:84vh;
+      overflow:auto;
+      background: var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+    }
+    .ga-settings-header {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid var(--ga-border);
+    }
+    .ga-settings-body { padding: 12px; }
+    .ga-settings-tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .ga-settings-tab {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-settings-tab.active { background: var(--ga-surface-2); }
+    .ga-settings-pane { display:none; }
+    .ga-settings-pane.active { display:block; }
+    .ga-settings-grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .ga-settings-field { display:flex; flex-direction:column; gap:6px; }
+    .ga-settings-field label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-settings-field input, .ga-settings-field select, .ga-settings-field textarea {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:8px;
+      font: inherit;
+    }
+    .ga-settings-field textarea {
+      min-height: 340px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre;
+    }
+    .ga-settings-note { font-size:12px; color: var(--ga-text-muted); }
+    .ga-settings-status { margin-top: 8px; font-size:12px; }
+    .ga-settings-status.error { color: #ff8f8f; }
+    .ga-settings-status.ok { color: #8fe3a1; }
   `;
-    document.head.appendChild(style);
+    doc.head.appendChild(style);
   }
-  async function initAnalysisWindow() {
-    injectCssOnce();
-    let root = document.getElementById("geoanalyzr-semantic-root");
+
+  // src/ui/settingsStore.ts
+  var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
+  var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
+  var DEFAULT_SETTINGS = {
+    appearance: {
+      theme: "dark",
+      graphColor: "#7eb6ff"
+    },
+    standards: {
+      dateFormat: "dd/mm/yyyy",
+      sessionGapMinutes: 45
+    }
+  };
+  function cloneTemplate(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function normalizeColor(value, fallback) {
+    if (typeof value !== "string") return fallback;
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
+    return fallback;
+  }
+  function normalizeTheme(value) {
+    return value === "light" ? "light" : "dark";
+  }
+  function normalizeDateFormat(value) {
+    return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
+  }
+  function normalizeSettings(raw) {
+    const r = typeof raw === "object" && raw ? raw : {};
+    const appearance = typeof r.appearance === "object" && r.appearance ? r.appearance : {};
+    const standards = typeof r.standards === "object" && r.standards ? r.standards : {};
+    const sessionGapRaw = Number(standards.sessionGapMinutes);
+    return {
+      appearance: {
+        theme: normalizeTheme(appearance.theme),
+        graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor)
+      },
+      standards: {
+        dateFormat: normalizeDateFormat(standards.dateFormat),
+        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes
+      }
+    };
+  }
+  function getStorage(doc) {
+    try {
+      return doc.defaultView?.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function loadSettings(doc) {
+    const storage = getStorage(doc);
+    if (!storage) return cloneTemplate(DEFAULT_SETTINGS);
+    try {
+      const raw = storage.getItem(SETTINGS_KEY);
+      if (!raw) return cloneTemplate(DEFAULT_SETTINGS);
+      return normalizeSettings(JSON.parse(raw));
+    } catch {
+      return cloneTemplate(DEFAULT_SETTINGS);
+    }
+  }
+  function saveSettings(doc, settings) {
+    const storage = getStorage(doc);
+    if (!storage) return;
+    try {
+      storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+    }
+  }
+  function loadDashboardTemplate(doc, fallback) {
+    const storage = getStorage(doc);
+    if (!storage) return cloneTemplate(fallback);
+    try {
+      const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
+      if (!raw) return cloneTemplate(fallback);
+      return JSON.parse(raw);
+    } catch {
+      return cloneTemplate(fallback);
+    }
+  }
+  function saveDashboardTemplate(doc, dashboard) {
+    const storage = getStorage(doc);
+    if (!storage) return;
+    try {
+      storage.setItem(DASHBOARD_TEMPLATE_KEY, JSON.stringify(dashboard, null, 2));
+    } catch {
+    }
+  }
+  function applySettingsToRoot(root, settings) {
+    root.dataset.gaTheme = settings.appearance.theme;
+    root.dataset.gaDateFormat = settings.standards.dateFormat;
+    root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
+    root.style.setProperty("--ga-graph-color", settings.appearance.graphColor);
+  }
+
+  // src/ui/settingsModal.ts
+  function attachSettingsModal(opts) {
+    const { doc, targetWindow, root, openButton, semantic, getDashboard, applyDashboard, getSettings, applySettings } = opts;
+    const settingsModal = doc.createElement("div");
+    settingsModal.className = "ga-settings-modal";
+    settingsModal.style.display = "none";
+    root.appendChild(settingsModal);
+    const openSettings = async () => {
+      settingsModal.innerHTML = "";
+      settingsModal.style.display = "block";
+      const bg = doc.createElement("div");
+      bg.className = "ga-settings-bg";
+      bg.addEventListener("click", () => {
+        settingsModal.style.display = "none";
+      });
+      const panel = doc.createElement("div");
+      panel.className = "ga-settings-panel";
+      const header = doc.createElement("div");
+      header.className = "ga-settings-header";
+      const headerTitle = doc.createElement("div");
+      headerTitle.textContent = "Dashboard Settings";
+      const headerClose = doc.createElement("button");
+      headerClose.className = "ga-close";
+      headerClose.textContent = "Close";
+      headerClose.addEventListener("click", () => {
+        settingsModal.style.display = "none";
+      });
+      header.appendChild(headerTitle);
+      header.appendChild(headerClose);
+      const bodyEl = doc.createElement("div");
+      bodyEl.className = "ga-settings-body";
+      const tabs = doc.createElement("div");
+      tabs.className = "ga-settings-tabs";
+      const panes = doc.createElement("div");
+      const appearanceTab = doc.createElement("button");
+      appearanceTab.className = "ga-settings-tab active";
+      appearanceTab.textContent = "Appearance";
+      const standardsTab = doc.createElement("button");
+      standardsTab.className = "ga-settings-tab";
+      standardsTab.textContent = "Standards";
+      const templateTab = doc.createElement("button");
+      templateTab.className = "ga-settings-tab";
+      templateTab.textContent = "Template";
+      tabs.appendChild(appearanceTab);
+      tabs.appendChild(standardsTab);
+      tabs.appendChild(templateTab);
+      const settings = getSettings();
+      const dashboard = getDashboard();
+      const appearancePane = doc.createElement("div");
+      appearancePane.className = "ga-settings-pane active";
+      const appearanceGrid = doc.createElement("div");
+      appearanceGrid.className = "ga-settings-grid";
+      const themeField = doc.createElement("div");
+      themeField.className = "ga-settings-field";
+      const themeLabel = doc.createElement("label");
+      themeLabel.textContent = "Theme";
+      const themeSelect = doc.createElement("select");
+      themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
+      themeSelect.value = settings.appearance.theme;
+      themeField.appendChild(themeLabel);
+      themeField.appendChild(themeSelect);
+      const colorField = doc.createElement("div");
+      colorField.className = "ga-settings-field";
+      const colorLabel = doc.createElement("label");
+      colorLabel.textContent = "Graph color";
+      const colorInput = doc.createElement("input");
+      colorInput.type = "color";
+      colorInput.value = normalizeColor(settings.appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor);
+      colorField.appendChild(colorLabel);
+      colorField.appendChild(colorInput);
+      appearanceGrid.appendChild(themeField);
+      appearanceGrid.appendChild(colorField);
+      appearancePane.appendChild(appearanceGrid);
+      const standardsPane = doc.createElement("div");
+      standardsPane.className = "ga-settings-pane";
+      const standardsGrid = doc.createElement("div");
+      standardsGrid.className = "ga-settings-grid";
+      const dateField = doc.createElement("div");
+      dateField.className = "ga-settings-field";
+      const dateLabel = doc.createElement("label");
+      dateLabel.textContent = "Date format";
+      const dateSelect = doc.createElement("select");
+      dateSelect.innerHTML = `
+      <option value="dd/mm/yyyy">DD/MM/YYYY</option>
+      <option value="mm/dd/yyyy">MM/DD/YYYY</option>
+      <option value="yyyy-mm-dd">YYYY-MM-DD</option>
+      <option value="locale">Locale</option>
+    `;
+      dateSelect.value = settings.standards.dateFormat;
+      dateField.appendChild(dateLabel);
+      dateField.appendChild(dateSelect);
+      const sessionField = doc.createElement("div");
+      sessionField.className = "ga-settings-field";
+      const sessionLabel = doc.createElement("label");
+      sessionLabel.textContent = "New session gap (minutes)";
+      const sessionInput = doc.createElement("input");
+      sessionInput.type = "number";
+      sessionInput.min = "1";
+      sessionInput.max = "360";
+      sessionInput.step = "1";
+      sessionInput.value = String(settings.standards.sessionGapMinutes);
+      sessionField.appendChild(sessionLabel);
+      sessionField.appendChild(sessionInput);
+      standardsGrid.appendChild(dateField);
+      standardsGrid.appendChild(sessionField);
+      standardsPane.appendChild(standardsGrid);
+      const standardsNote = doc.createElement("div");
+      standardsNote.className = "ga-settings-note";
+      standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views.";
+      standardsPane.appendChild(standardsNote);
+      const templatePane = doc.createElement("div");
+      templatePane.className = "ga-settings-pane";
+      const templateField = doc.createElement("div");
+      templateField.className = "ga-settings-field";
+      const templateLabel = doc.createElement("label");
+      templateLabel.textContent = "Live dashboard JSON template";
+      const templateEditor = doc.createElement("textarea");
+      templateEditor.value = JSON.stringify(dashboard, null, 2);
+      const templateStatus = doc.createElement("div");
+      templateStatus.className = "ga-settings-status";
+      templateField.appendChild(templateLabel);
+      templateField.appendChild(templateEditor);
+      templatePane.appendChild(templateField);
+      templatePane.appendChild(templateStatus);
+      panes.appendChild(appearancePane);
+      panes.appendChild(standardsPane);
+      panes.appendChild(templatePane);
+      const setActiveTab = (idx) => {
+        const tabButtons = [appearanceTab, standardsTab, templateTab];
+        const tabPanes = [appearancePane, standardsPane, templatePane];
+        tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
+        tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
+      };
+      appearanceTab.addEventListener("click", () => setActiveTab(0));
+      standardsTab.addEventListener("click", () => setActiveTab(1));
+      templateTab.addEventListener("click", () => setActiveTab(2));
+      const persistSettings = async () => {
+        const next = {
+          appearance: {
+            theme: normalizeTheme(themeSelect.value),
+            graphColor: normalizeColor(colorInput.value, DEFAULT_SETTINGS.appearance.graphColor)
+          },
+          standards: {
+            dateFormat: normalizeDateFormat(dateSelect.value),
+            sessionGapMinutes: (() => {
+              const raw = Number(sessionInput.value);
+              return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes;
+            })()
+          }
+        };
+        await applySettings(next);
+      };
+      themeSelect.addEventListener("change", () => {
+        void persistSettings();
+      });
+      colorInput.addEventListener("input", () => {
+        void persistSettings();
+      });
+      dateSelect.addEventListener("change", () => {
+        void persistSettings();
+      });
+      sessionInput.addEventListener("change", () => {
+        void persistSettings();
+      });
+      let templateDebounce = null;
+      const tryApplyTemplate = async () => {
+        templateStatus.textContent = "";
+        templateStatus.className = "ga-settings-status";
+        try {
+          const parsed = JSON.parse(templateEditor.value);
+          validateDashboardAgainstSemantic(semantic, parsed);
+          await applyDashboard(parsed);
+          templateStatus.textContent = "Template applied.";
+          templateStatus.classList.add("ok");
+        } catch (error) {
+          templateStatus.textContent = error instanceof Error ? error.message : String(error);
+          templateStatus.classList.add("error");
+        }
+      };
+      templateEditor.addEventListener("input", () => {
+        if (templateDebounce !== null) {
+          targetWindow.clearTimeout(templateDebounce);
+        }
+        templateDebounce = targetWindow.setTimeout(() => {
+          void tryApplyTemplate();
+        }, 280);
+      });
+      bodyEl.appendChild(tabs);
+      bodyEl.appendChild(panes);
+      panel.appendChild(header);
+      panel.appendChild(bodyEl);
+      settingsModal.appendChild(bg);
+      settingsModal.appendChild(panel);
+    };
+    openButton.addEventListener("click", () => {
+      void openSettings();
+    });
+  }
+
+  // src/ui.ts
+  function cloneTemplate2(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  async function initAnalysisWindow(opts) {
+    const targetWindow = opts?.targetWindow ?? window;
+    if (!targetWindow || targetWindow.closed) {
+      throw new Error("Semantic dashboard target window is unavailable.");
+    }
+    const doc = targetWindow.document;
+    if (!doc.body || !doc.head) {
+      throw new Error("Semantic dashboard target document is not ready.");
+    }
+    doc.title = "GeoAnalyzr - Semantic Dashboard";
+    doc.documentElement.classList.add("ga-semantic-page");
+    doc.body.classList.add("ga-semantic-page");
+    injectSemanticDashboardCssOnce(doc);
+    const semantic = cloneTemplate2(semantic_default);
+    let dashboard = loadDashboardTemplate(doc, cloneTemplate2(dashboard_default));
+    let settings = loadSettings(doc);
+    let root = doc.getElementById("geoanalyzr-semantic-root");
     let body;
+    const renderNow = async () => {
+      body.innerHTML = "";
+      validateDashboardAgainstSemantic(semantic, dashboard);
+      await renderDashboard(body, semantic, dashboard);
+    };
     if (!root) {
-      root = document.createElement("div");
+      root = doc.createElement("div");
       root.id = "geoanalyzr-semantic-root";
       root.className = "ga-root";
-      const top = document.createElement("div");
+      const top = doc.createElement("div");
       top.className = "ga-topbar";
-      const title = document.createElement("div");
+      const title = doc.createElement("div");
       title.className = "ga-title";
-      title.textContent = "GeoAnalyzr (semantic/dashboard demo)";
-      const close = document.createElement("button");
+      title.textContent = "GeoAnalyzr - Semantic Dashboard";
+      const actions = doc.createElement("div");
+      actions.className = "ga-topbar-actions";
+      const settingsBtn = doc.createElement("button");
+      settingsBtn.className = "ga-gear";
+      settingsBtn.textContent = "Settings";
+      settingsBtn.title = "Settings";
+      const close = doc.createElement("button");
       close.className = "ga-close";
       close.textContent = "Close";
       close.addEventListener("click", () => {
-        root.style.display = "none";
+        targetWindow.close();
       });
+      actions.appendChild(settingsBtn);
+      actions.appendChild(close);
       top.appendChild(title);
-      top.appendChild(close);
-      body = document.createElement("div");
+      top.appendChild(actions);
+      body = doc.createElement("div");
       body.className = "ga-body";
       root.appendChild(top);
       root.appendChild(body);
-      document.body.appendChild(root);
+      doc.body.appendChild(root);
+      attachSettingsModal({
+        doc,
+        targetWindow,
+        root,
+        openButton: settingsBtn,
+        semantic,
+        getDashboard: () => dashboard,
+        applyDashboard: async (next) => {
+          dashboard = next;
+          saveDashboardTemplate(doc, dashboard);
+          await renderNow();
+        },
+        getSettings: () => settings,
+        applySettings: async (next) => {
+          settings = next;
+          applySettingsToRoot(root, settings);
+          saveSettings(doc, settings);
+        }
+      });
     } else {
-      root.style.display = "block";
       const foundBody = root.querySelector(".ga-body");
       if (!(foundBody instanceof HTMLDivElement)) {
         throw new Error("Semantic root has no .ga-body container");
       }
       body = foundBody;
-      body.innerHTML = "";
     }
+    applySettingsToRoot(root, settings);
     try {
-      const semantic = cloneTemplate(semantic_default);
-      const dashboard = cloneTemplate(dashboard_default);
-      validateDashboardAgainstSemantic(semantic, dashboard);
-      await renderDashboard(body, semantic, dashboard);
+      await renderNow();
     } catch (error) {
       body.innerHTML = "";
-      const pre = document.createElement("pre");
+      const pre = doc.createElement("pre");
       pre.style.margin = "12px";
       pre.style.whiteSpace = "pre-wrap";
       pre.style.color = "#ff9aa2";
@@ -40073,9 +41035,6 @@ ${error instanceof Error ? error.message : String(error)}`;
       return false;
     }
   }
-  function buildSemanticTabUrl() {
-    return `${location.origin}${location.pathname}${location.search}#geoanalyzr-semantic`;
-  }
   (async function boot() {
     const ui = createUI();
     ui.onUpdateClick(async () => {
@@ -40212,11 +41171,22 @@ ${error instanceof Error ? error.message : String(error)}`;
       ui.setAnalysisWindowData(data);
     }
     ui.onOpenAnalysisClick(async () => {
-      const semanticTab = window.open(buildSemanticTabUrl(), "_blank", "noopener");
+      let semanticStatus = "";
       try {
         ui.setStatus("Loading analysis...");
+        const semanticTab = window.open("about:blank", "_blank");
+        if (!semanticTab) {
+          semanticStatus = " Semantic dashboard popup was blocked.";
+        } else {
+          try {
+            await initAnalysisWindow({ targetWindow: semanticTab });
+          } catch (semanticError) {
+            semanticStatus = " Semantic dashboard failed to render.";
+            console.error("Failed to initialize semantic dashboard tab", semanticError);
+          }
+        }
         await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
-        ui.setStatus(semanticTab ? "Analysis loaded." : "Analysis loaded. Semantic tab was blocked by popup protection.");
+        ui.setStatus(`Analysis loaded.${semanticStatus}`);
       } catch (e) {
         ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
         console.error(e);
@@ -40236,11 +41206,6 @@ ${error instanceof Error ? error.message : String(error)}`;
     watchRoutes(() => {
       ui.setVisible(!isInGame());
     });
-    if (location.hash === "#geoanalyzr-semantic") {
-      initAnalysisWindow().catch((error) => {
-        console.error("Failed to initialize semantic dashboard tab", error);
-      });
-    }
   })();
 })();
 /*! Bundled license information:

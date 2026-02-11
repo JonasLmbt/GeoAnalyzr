@@ -2,7 +2,7 @@
 import type { RoundRow } from "../db";
 
 export function getSelfScore(r: RoundRow): number | undefined {
-  return (r as any).player_self_score ?? (r as any).p1_score ?? (r as any).score;
+  return (r as any).player_self_score;
 }
 
 export function getPlayedAt(r: RoundRow): number | undefined {
@@ -15,7 +15,7 @@ export function getTrueCountry(r: RoundRow): string | undefined {
 }
 
 export function getGuessCountrySelf(r: RoundRow): string | undefined {
-  return (r as any).player_self_guessCountry ?? (r as any).p1_guessCountry;
+  return (r as any).player_self_guessCountry;
 }
 
 export function pick(obj: any, key: string): any {

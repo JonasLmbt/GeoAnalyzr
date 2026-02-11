@@ -14,7 +14,7 @@ function playedAt(r: RoundRow): number | undefined {
 }
 
 function scoreOfSelf(r: RoundRow): number | undefined {
-  return (r as any).player_self_score ?? (r as any).p1_score ?? (r as any).score;
+  return (r as any).player_self_score;
 }
 
 export const DIMENSIONS: Record<DimensionId, (r: RoundRow) => GroupKey | null> = {

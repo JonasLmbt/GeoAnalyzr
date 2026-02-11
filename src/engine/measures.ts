@@ -24,7 +24,7 @@ function isThrowLt50(r: RoundRow): boolean {
 export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, MeasureFn> = {
   count_rounds: (rows) => rows.length,
 
-  mean_p1_score: (rows) => {
+  mean_player_self_score: (rows) => {
     let sum = 0;
     let n = 0;
     for (const r of rows) {
@@ -37,7 +37,7 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, MeasureFn> = {
     return n ? sum / n : 0;
   },
 
-  rate_p1_score_eq_5000: (rows) => {
+  rate_player_self_score_eq_5000: (rows) => {
     const n = rows.length;
     if (!n) return 0;
     let k = 0;

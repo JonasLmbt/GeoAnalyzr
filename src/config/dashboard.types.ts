@@ -40,12 +40,15 @@ export interface Actions {
 
 export interface ChartSpec {
   type: ChartType;
+  limit?: number;
   x: {
     dimension: string;
     selector?: SelectorDef;
   };
   y: {
-    measure: string;
+    measure?: string;
+    measures?: string[];
+    activeMeasure?: string;
   };
   series?: {
     dimension: string;

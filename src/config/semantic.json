@@ -27,7 +27,7 @@
     "time_day": {
       "label": "Date",
       "kind": "time",
-      "grain": "game",
+      "grain": "round",
       "ordered": true,
       "allowedCharts": ["line", "bar"],
       "sortModes": ["chronological"]
@@ -35,7 +35,7 @@
     "weekday": {
       "label": "Weekday",
       "kind": "category",
-      "grain": "game",
+      "grain": "round",
       "ordered": true,
       "allowedCharts": ["bar"],
       "sortModes": ["chronological", "asc", "desc"]
@@ -43,7 +43,7 @@
     "hour": {
       "label": "Hour of day",
       "kind": "category",
-      "grain": "game",
+      "grain": "round",
       "ordered": true,
       "allowedCharts": ["bar"],
       "sortModes": ["chronological", "asc", "desc"]
@@ -136,14 +136,14 @@
       "unit": "points",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_p1_score"
+      "formulaId": "mean_player_self_score"
     },
     "fivek_rate": {
       "label": "5k rate",
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_p1_score_eq_5000"
+      "formulaId": "rate_player_self_score_eq_5000"
     },
 
     "win_rate": {
@@ -151,21 +151,21 @@
       "unit": "percent",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_p1_win"
+      "formulaId": "rate_player_self_win"
     },
     "end_rating_avg": {
       "label": "Avg end rating",
       "unit": "rating",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_p1_end_rating"
+      "formulaId": "mean_player_self_end_rating"
     },
     "rating_delta_avg": {
       "label": "Avg rating delta",
       "unit": "rating",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_p1_rating_delta"
+      "formulaId": "mean_player_self_rating_delta"
     },
 
     "hit_rate": {
@@ -210,10 +210,10 @@
   "columnAliases": {
     "ts": ["playedAt", "startTime"],
     "true_country": ["trueCountry", "true_country"],
-    "p1_country": ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
-    "p1_score": ["player_self_score", "p1_score", "score"],
-    "p2_score": ["player_opponent_score", "p2_score"],
-    "distanceKm": ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
+    "player_self_country": ["player_self_guessCountry"],
+    "player_self_score": ["player_self_score"],
+    "player_opponent_score": ["player_opponent_score"],
+    "distanceKm": ["player_self_distanceKm"],
     "durationSeconds": ["durationSeconds", "guessDurationSec", "timeSec"]
   },
 
@@ -226,9 +226,9 @@
           "gameId",
           "roundNumber",
           "true_country",
-          "p1_country",
-          "p1_score",
-          "p2_score",
+          "player_self_country",
+          "player_self_score",
+          "player_opponent_score",
           "durationSeconds",
           "distanceKm"
         ]
@@ -243,8 +243,8 @@
           "gameId",
           "opponentName",
           "game_mode",
-          "p1_startRating",
-          "p1_endRating",
+          "player_self_startRating",
+          "player_self_endRating",
           "result"
         ]
       },

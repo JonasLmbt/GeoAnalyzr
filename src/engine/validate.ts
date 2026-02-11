@@ -33,22 +33,29 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     // Narrow the spec safely
     const spec: any = widget.spec;
     const xDimId = spec.x?.dimension;
-    const yMeasId = spec.y?.measure;
     assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
-    assert(typeof yMeasId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure`);
+    const yMeasureIds = getChartMeasureIds(spec);
+    assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
 
     const xDim = semantic.dimensions[xDimId];
-    const yMeas = semantic.measures[yMeasId];
-
     assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
-    assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
-
     assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
-    assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
 
     // chart type constraints
     assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
-    assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+    if (spec.sort?.mode) {
+      assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
+    }
+    for (const yMeasId of yMeasureIds) {
+      const yMeas = semantic.measures[yMeasId];
+      assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
+      assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
+      assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+    }
+    const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : undefined;
+    if (activeMeasure) {
+      assert(yMeasureIds.includes(activeMeasure), "E_BAD_SPEC", `activeMeasure '${activeMeasure}' is not listed in y.measures`);
+    }
 
     if (spec.type === "line") {
       assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
@@ -56,8 +63,16 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
 
     // selectorRequired dimensions (e.g. true_country)
     if (xDim.cardinality?.selectorRequired) {
-      assert(!!spec.x.selector, "E_SELECTOR_REQUIRED", `Dimension '${xDimId}' requires selector`);
+      const hasTopN = typeof spec.limit === "number" && spec.limit > 0;
+      const selectorMode = spec.x?.selector?.mode;
+      const hasSelector = selectorMode === "top_n" || selectorMode === "selected";
+      assert(
+        hasTopN || hasSelector,
+        "E_SELECTOR_REQUIRED",
+        `Dimension '${xDimId}' requires selector; set chart.limit or x.selector`
+      );
     }
+
 
     // series validation
     if (spec.series) {
@@ -119,8 +134,24 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
 
 function validateClickAction(semantic: SemanticRegistry, widgetId: string, click: any): void {
   if (!click || click.type !== "drilldown") return;
-  const targetPreset = semantic.drilldownPresets[click.target];
-  assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${click.target}' in widget ${widgetId}`);
+  const target = click.target as string;
+  const targetPreset = semantic.drilldownPresets[target as keyof typeof semantic.drilldownPresets];
+  assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
   const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
   assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
+}
+
+function getChartMeasureIds(spec: any): string[] {
+  const result: string[] = [];
+  const single = typeof spec?.y?.measure === "string" ? spec.y.measure.trim() : "";
+  if (single) result.push(single);
+  if (Array.isArray(spec?.y?.measures)) {
+    for (const m of spec.y.measures) {
+      if (typeof m !== "string") continue;
+      const clean = m.trim();
+      if (!clean || result.includes(clean)) continue;
+      result.push(clean);
+    }
+  }
+  return result;
 }

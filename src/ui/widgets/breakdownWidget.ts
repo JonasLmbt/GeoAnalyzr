@@ -49,15 +49,16 @@ export async function renderBreakdownWidget(
   overlay: DrilldownOverlay
 ): Promise<HTMLElement> {
   const spec = widget.spec as BreakdownSpec;
+  const doc = overlay.getDocument();
 
-  const wrap = document.createElement("div");
+  const wrap = doc.createElement("div");
   wrap.className = "ga-widget ga-breakdown";
 
-  const title = document.createElement("div");
+  const title = doc.createElement("div");
   title.className = "ga-widget-title";
   title.textContent = widget.title;
 
-  const box = document.createElement("div");
+  const box = doc.createElement("div");
   box.className = "ga-breakdown-box";
 
   const rowsAll = applyFilters(await getRounds({}), spec.filters);
@@ -92,24 +93,24 @@ export async function renderBreakdownWidget(
   const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
 
   for (const r of rows) {
-    const line = document.createElement("div");
+    const line = doc.createElement("div");
     line.className = "ga-breakdown-row";
 
-    const left = document.createElement("div");
+    const left = doc.createElement("div");
     left.className = "ga-breakdown-label";
     left.textContent = r.key;
 
-    const right = document.createElement("div");
+    const right = doc.createElement("div");
     right.className = "ga-breakdown-right";
 
-    const val = document.createElement("div");
+    const val = doc.createElement("div");
     val.className = "ga-breakdown-value";
     val.textContent = formatValue(semantic, measId, r.value);
 
-    const barWrap = document.createElement("div");
+    const barWrap = doc.createElement("div");
     barWrap.className = "ga-breakdown-barwrap";
 
-    const bar = document.createElement("div");
+    const bar = doc.createElement("div");
     bar.className = "ga-breakdown-bar";
     bar.style.width = `${Math.max(2, (r.value / maxVal) * 100)}%`;
 

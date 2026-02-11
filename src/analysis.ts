@@ -77,12 +77,8 @@ function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number, meta?: A
   const rr = asRecord(r);
   const trueLat = typeof r.trueLat === "number" ? r.trueLat : undefined;
   const trueLng = typeof r.trueLng === "number" ? r.trueLng : undefined;
-  const guessLat =
-    getNumber(rr, "p1_guessLat") ??
-    getNumber(rr, "guessLat");
-  const guessLng =
-    getNumber(rr, "p1_guessLng") ??
-    getNumber(rr, "guessLng");
+  const guessLat = getNumber(rr, "player_self_guessLat");
+  const guessLng = getNumber(rr, "player_self_guessLng");
   const timeMs = extractTimeMs(r);
   const damage = meta?.ownPlayerId ? getRoundDamageDiff(r, meta.ownPlayerId) : undefined;
   return {
@@ -91,7 +87,7 @@ function toDrilldownFromRound(r: RoundRow, ts?: number, score?: number, meta?: A
     ts,
     score,
     trueCountry: normalizeCountryCode(r.trueCountry),
-    guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+    guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
     trueLat,
     trueLng,
     guessLat,
@@ -272,28 +268,17 @@ function pct(part: number, total: number): number {
 
 function extractScore(r: RoundRow): number | undefined {
   const rr = asRecord(r);
-  const p1Score = getNumber(rr, "p1_score");
-  if (typeof p1Score === "number") return p1Score;
-  const legacyScore = getNumber(rr, "score");
-  if (typeof legacyScore === "number") return legacyScore;
-  return undefined;
+  return getNumber(rr, "player_self_score");
 }
 
 function extractDistanceMeters(r: RoundRow): number | undefined {
   const rr = asRecord(r);
-  const p1DistanceKm = getNumber(rr, "p1_distanceKm");
-  if (typeof p1DistanceKm === "number") return p1DistanceKm * 1e3;
-  const p1DistanceMeters = getNumber(rr, "p1_distanceMeters");
-  if (typeof p1DistanceMeters === "number") return p1DistanceMeters;
-  const legacyDistanceMeters = getNumber(rr, "distanceMeters");
-  if (typeof legacyDistanceMeters === "number") return legacyDistanceMeters;
+  const selfDistanceKm = getNumber(rr, "player_self_distanceKm");
+  if (typeof selfDistanceKm === "number") return selfDistanceKm * 1e3;
   return undefined;
 }
 
 function extractTimeMs(r: RoundRow): number | undefined {
-  const rr = asRecord(r);
-  const legacyTimeMs = getNumber(rr, "timeMs");
-  if (typeof legacyTimeMs === "number") return legacyTimeMs;
   if (typeof r.durationSeconds === "number") return r.durationSeconds * 1e3;
   return undefined;
 }
@@ -408,17 +393,17 @@ function countryFlagEmoji(code?: string): string {
 
 function extractOwnDuelRating(detail: GameRow, ownPlayerId?: string): { start?: number; end?: number } | undefined {
   const d = asRecord(detail);
-  const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
-  const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
-  if (ownPlayerId && ownPlayerId === p2) {
+  const selfId = getString(d, "player_self_id");
+  const opponentId = getString(d, "player_opponent_id");
+  if (ownPlayerId && ownPlayerId === opponentId && ownPlayerId !== selfId) {
     return {
-      start: getNumber(d, "playerTwoStartRating") ?? getNumber(d, "p2_ratingBefore"),
-      end: getNumber(d, "playerTwoEndRating") ?? getNumber(d, "p2_ratingAfter")
+      start: getNumber(d, "player_opponent_startRating"),
+      end: getNumber(d, "player_opponent_endRating")
     };
   }
   return {
-    start: getNumber(d, "playerOneStartRating") ?? getNumber(d, "p1_ratingBefore"),
-    end: getNumber(d, "playerOneEndRating") ?? getNumber(d, "p1_ratingAfter")
+    start: getNumber(d, "player_self_startRating"),
+    end: getNumber(d, "player_self_endRating")
   };
 }
 
@@ -440,25 +425,16 @@ function extractOwnTeamRating(detail: GameRow, ownPlayerId?: string): { start?: 
   };
 }
 
-function playerSlots(round: RoundRow): Array<1 | 2 | 3 | 4> {
-  const out: Array<1 | 2 | 3 | 4> = [];
-  const rr = asRecord(round);
-  for (const slot of [1, 2, 3, 4] as const) {
-    const id = getString(rr, `p${slot}_playerId`);
-    if (typeof id === "string" && id.trim()) out.push(slot);
-  }
-  return out;
-}
-
 function getPlayerStatFromRound(round: RoundRow, playerId: string): { score?: number; distanceKm?: number; teamId?: string } | undefined {
   const rr = asRecord(round);
-  for (const slot of playerSlots(round)) {
-    const pid = getString(rr, `p${slot}_playerId`);
+  const roles = ["player_self", "player_mate", "player_opponent", "player_opponent_mate"] as const;
+  for (const role of roles) {
+    const pid = getString(rr, `${role}_playerId`);
     if (pid !== playerId) continue;
     return {
-      score: getNumber(rr, `p${slot}_score`),
-      distanceKm: getNumber(rr, `p${slot}_distanceKm`),
-      teamId: getString(rr, `p${slot}_teamId`)
+      score: getNumber(rr, `${role}_score`),
+      distanceKm: getNumber(rr, `${role}_distanceKm`),
+      teamId: getString(rr, `${role}_teamId`)
     };
   }
   return undefined;
@@ -471,13 +447,13 @@ function getRoundDamageDiff(round: RoundRow, ownPlayerId: string): number | unde
   const modeFamily = getString(rr, "modeFamily");
 
   if (modeFamily === "duels") {
-    const p1 = getString(rr, "p1_playerId");
-    const p2 = getString(rr, "p2_playerId");
-    const p1Score = getNumber(rr, "p1_score");
-    const p2Score = getNumber(rr, "p2_score");
-    if (typeof p1Score !== "number" || typeof p2Score !== "number") return undefined;
-    if (ownPlayerId === p2) return p2Score - p1Score;
-    if (ownPlayerId === p1 || !p1 || !p2) return p1Score - p2Score;
+    const selfId = getString(rr, "player_self_playerId");
+    const opponentId = getString(rr, "player_opponent_playerId");
+    const selfScore = getNumber(rr, "player_self_score");
+    const opponentScore = getNumber(rr, "player_opponent_score");
+    if (typeof selfScore !== "number" || typeof opponentScore !== "number") return undefined;
+    if (ownPlayerId === opponentId && ownPlayerId !== selfId) return opponentScore - selfScore;
+    if (ownPlayerId === selfId || !selfId || !opponentId) return selfScore - opponentScore;
     return undefined;
   }
 
@@ -488,11 +464,12 @@ function getRoundDamageDiff(round: RoundRow, ownPlayerId: string): number | unde
     let ownTeamN = 0;
     let oppTeamScore = 0;
     let oppTeamN = 0;
-    for (const slot of playerSlots(round)) {
-      const pid = getString(rr, `p${slot}_playerId`);
+    const roles = ["player_self", "player_mate", "player_opponent", "player_opponent_mate"] as const;
+    for (const role of roles) {
+      const pid = getString(rr, `${role}_playerId`);
       if (!pid) continue;
-      const teamId = getString(rr, `p${slot}_teamId`);
-      const score = getNumber(rr, `p${slot}_score`);
+      const teamId = getString(rr, `${role}_teamId`);
+      const score = getNumber(rr, `${role}_score`);
       if (typeof score !== "number" || !teamId) continue;
       if (teamId === own.teamId) {
         ownTeamScore += score;
@@ -514,24 +491,24 @@ function getGameResult(detail: GameRow, ownPlayerId?: string): GameResult | unde
   const modeFamily = getString(d, "modeFamily");
 
   if (modeFamily === "duels") {
-    const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
-    const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
-    const ownIsP2 = ownPlayerId && ownPlayerId === p2;
-    const ownWin = ownIsP2 ? getBoolean(d, "playerTwoVictory") : getBoolean(d, "playerOneVictory");
-    const oppWin = ownIsP2 ? getBoolean(d, "playerOneVictory") : getBoolean(d, "playerTwoVictory");
+    const selfId = getString(d, "player_self_id");
+    const opponentId = getString(d, "player_opponent_id");
+    const ownIsOpponent = ownPlayerId && ownPlayerId === opponentId && ownPlayerId !== selfId;
+    const ownWin = ownIsOpponent ? getBoolean(d, "player_opponent_victory") : getBoolean(d, "player_self_victory");
+    const oppWin = ownIsOpponent ? getBoolean(d, "player_self_victory") : getBoolean(d, "player_opponent_victory");
     if (typeof ownWin === "boolean") return ownWin ? "W" : "L";
     if (typeof oppWin === "boolean") return oppWin ? "L" : "W";
 
-    const p1Hp = getNumber(d, "playerOneFinalHealth");
-    const p2Hp = getNumber(d, "playerTwoFinalHealth");
-    if (typeof p1Hp === "number" && typeof p2Hp === "number") {
-      const ownHp = ownIsP2 ? p2Hp : p1Hp;
-      const oppHp = ownIsP2 ? p1Hp : p2Hp;
+    const selfHp = getNumber(d, "player_self_finalHealth");
+    const opponentHp = getNumber(d, "player_opponent_finalHealth");
+    if (typeof selfHp === "number" && typeof opponentHp === "number") {
+      const ownHp = ownIsOpponent ? opponentHp : selfHp;
+      const oppHp = ownIsOpponent ? selfHp : opponentHp;
       if (ownHp > oppHp) return "W";
       if (ownHp < oppHp) return "L";
       return "T";
     }
-    if (!ownPlayerId && (p1 || p2)) return "T";
+    if (!ownPlayerId && (selfId || opponentId)) return "T";
     return undefined;
   }
 
@@ -563,9 +540,9 @@ function getGameResult(detail: GameRow, ownPlayerId?: string): GameResult | unde
 function inferOwnPlayerId(rounds: RoundRow[]): string | undefined {
   const counts = new Map<string, number>();
   for (const r of rounds) {
-    const p1PlayerId = getString(asRecord(r), "p1_playerId");
-    if (typeof p1PlayerId === "string" && p1PlayerId.trim()) {
-      counts.set(p1PlayerId, (counts.get(p1PlayerId) || 0) + 1);
+    const selfPlayerId = getString(asRecord(r), "player_self_playerId");
+    if (typeof selfPlayerId === "string" && selfPlayerId.trim()) {
+      counts.set(selfPlayerId, (counts.get(selfPlayerId) || 0) + 1);
     }
   }
   const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -577,8 +554,10 @@ function collectPlayerNames(details: GameRow[]): Map<string, string> {
   for (const d of details) {
     const dd = asRecord(d);
     const pairs: Array<[string | undefined, string | undefined]> = [
-      [getString(dd, "playerOneId") ?? getString(dd, "p1_playerId"), getString(dd, "playerOneName") ?? getString(dd, "p1_playerName")],
-      [getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"), getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName")],
+      [getString(dd, "player_self_id"), getString(dd, "player_self_name")],
+      [getString(dd, "player_mate_id"), getString(dd, "player_mate_name")],
+      [getString(dd, "player_opponent_id"), getString(dd, "player_opponent_name")],
+      [getString(dd, "player_opponent_mate_id"), getString(dd, "player_opponent_mate_name")],
       [getString(dd, "teamOnePlayerOneId"), getString(dd, "teamOnePlayerOneName")],
       [getString(dd, "teamOnePlayerTwoId"), getString(dd, "teamOnePlayerTwoName")],
       [getString(dd, "teamTwoPlayerOneId"), getString(dd, "teamTwoPlayerOneName")],
@@ -1086,7 +1065,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined,
         damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : undefined,
-        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
         trueCountry: normalizeCountryCode(r.trueCountry),
         trueLat: typeof r.trueLat === "number" ? r.trueLat : undefined,
         trueLng: typeof r.trueLng === "number" ? r.trueLng : undefined
@@ -2186,7 +2165,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : undefined,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : undefined,
-        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
         trueCountry: normalizeCountryCode(r.trueCountry),
         damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : undefined
       };
@@ -2628,7 +2607,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const dm = extractDistanceMeters(r);
     if (typeof dm === "number") entry.dist.push(dm / 1e3);
 
-    const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+    const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
     if (guess) {
       entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
       if (guess === t) {
@@ -2736,7 +2715,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
   const confusionMap = new Map<string, number>();
   for (const r of teamRounds) {
     const truth = normalizeCountryCode(r.trueCountry);
-    const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+    const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
     if (!truth || !guess || truth === guess) continue;
     const key = `${truth}|${guess}`;
     confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
@@ -2802,20 +2781,20 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
     const modeLabel = drilldownMetaByGameId.get(d.gameId)?.gameModeLabel;
     if (modeFamily === "duels") {
       ids.push({
-        id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
-        name: getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName"),
-        country: getString(dd, "playerTwoCountry")
+        id: getString(dd, "player_opponent_id") ?? getString(dd, "playerTwoId"),
+        name: getString(dd, "player_opponent_name") ?? getString(dd, "playerTwoName"),
+        country: getString(dd, "player_opponent_country") ?? getString(dd, "playerTwoCountry")
       });
     } else if (modeFamily === "teamduels") {
       ids.push({
-        id: getString(dd, "p3_playerId") ?? getString(dd, "teamTwoPlayerOneId"),
-        name: getString(dd, "p3_playerName") ?? getString(dd, "teamTwoPlayerOneName"),
-        country: getString(dd, "teamTwoPlayerOneCountry")
+        id: getString(dd, "player_opponent_id") ?? getString(dd, "teamTwoPlayerOneId"),
+        name: getString(dd, "player_opponent_name") ?? getString(dd, "teamTwoPlayerOneName"),
+        country: getString(dd, "player_opponent_country") ?? getString(dd, "teamTwoPlayerOneCountry")
       });
       ids.push({
-        id: getString(dd, "p4_playerId") ?? getString(dd, "teamTwoPlayerTwoId"),
-        name: getString(dd, "p4_playerName") ?? getString(dd, "teamTwoPlayerTwoName"),
-        country: getString(dd, "teamTwoPlayerTwoCountry")
+        id: getString(dd, "player_opponent_mate_id") ?? getString(dd, "teamTwoPlayerTwoId"),
+        name: getString(dd, "player_opponent_mate_name") ?? getString(dd, "teamTwoPlayerTwoName"),
+        country: getString(dd, "player_opponent_mate_country") ?? getString(dd, "teamTwoPlayerTwoCountry")
       });
     }
     for (const x of ids) {
@@ -3207,7 +3186,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         const ts = teamPlayedAtByGameId.get(r.gameId);
         const score = extractScore(r);
         if (typeof ts !== "number" || typeof score !== "number") return undefined;
-        const guessCountry = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+        const guessCountry = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
         const trueCountry = normalizeCountryCode(r.trueCountry);
         return {
           score,
@@ -3264,7 +3243,7 @@ export async function getAnalysisWindowData(filter?: AnalysisFilter): Promise<An
         if (sc < 50) cur.throws += 1;
         if (sc >= 5000) cur.fiveKs += 1;
       }
-      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
       if (guess && guess === country) cur.correct += 1;
       if (ownPlayerId) {
         const diff = getRoundDamageDiff(r, ownPlayerId);

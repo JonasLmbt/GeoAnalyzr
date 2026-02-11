@@ -65,26 +65,27 @@ export async function renderStatListWidget(
   overlay: DrilldownOverlay
 ): Promise<HTMLElement> {
   const spec = widget.spec as StatListSpec;
+  const doc = overlay.getDocument();
 
-  const wrap = document.createElement("div");
+  const wrap = doc.createElement("div");
   wrap.className = "ga-widget ga-statlist";
 
-  const title = document.createElement("div");
+  const title = doc.createElement("div");
   title.className = "ga-widget-title";
   title.textContent = widget.title;
 
-  const box = document.createElement("div");
+  const box = doc.createElement("div");
   box.className = "ga-statlist-box";
 
   for (const row of spec.rows) {
-    const line = document.createElement("div");
+    const line = doc.createElement("div");
     line.className = "ga-statrow";
 
-    const left = document.createElement("div");
+    const left = doc.createElement("div");
     left.className = "ga-statrow-label";
     left.textContent = row.label;
 
-    const right = document.createElement("div");
+    const right = doc.createElement("div");
     right.className = "ga-statrow-value";
     right.textContent = "...";
 

@@ -383,15 +383,15 @@ async function backfillMissingGuessCountries(
     let changed = false;
     const next: any = { ...r };
 
-    for (const slot of [1, 2, 3, 4] as const) {
-      const countryKey = `p${slot}_guessCountry`;
-      const latKey = `p${slot}_guessLat`;
-      const lngKey = `p${slot}_guessLng`;
+    for (const role of ["player_self", "player_mate", "player_opponent", "player_opponent_mate"] as const) {
+      const countryKey = `${role}_guessCountry`;
+      const latKey = `${role}_guessLat`;
+      const lngKey = `${role}_guessLng`;
       const currentCountry = normalizeIso2(next[countryKey]);
       if (currentCountry) continue;
 
-      const lat = asNum(slot === 1 ? (next[latKey] ?? next.guessLat) : next[latKey]);
-      const lng = asNum(slot === 1 ? (next[lngKey] ?? next.guessLng) : next[lngKey]);
+      const lat = asNum(next[latKey]);
+      const lng = asNum(next[lngKey]);
       if (lat === undefined || lng === undefined) {
         noLatLng++;
         continue;
@@ -644,55 +644,38 @@ async function normalizeGameAndRounds(
 
     if (family === "teamduels") {
       const round: RoundRowTeamDuel = { ...roundBase, modeFamily: "teamduels" };
+      const roleByPos: Record<number, "player_self" | "player_mate" | "player_opponent" | "player_opponent_mate"> = {
+        1: "player_self",
+        2: "player_mate",
+        3: "player_opponent",
+        4: "player_opponent_mate"
+      };
       for (let p = 0; p < Math.min(players.length, 4); p++) {
         const playerIndex = p + 1 as 1 | 2 | 3 | 4;
         const { teamId, player, healthMap } = players[p];
+        const role = roleByPos[playerIndex];
         const guess = guessMaps[p].get(rn);
         const guessPos = extractGuessLatLng(guess);
         const guessLat = guessPos.lat;
         const guessLng = guessPos.lng;
         const distanceMeters = asNum(guess?.distance);
 
-        (round as any)[`p${playerIndex}_playerId`] = typeof player?.playerId === "string" ? player.playerId : undefined;
-        (round as any)[`p${playerIndex}_teamId`] = teamId || undefined;
-        (round as any)[`p${playerIndex}_guessLat`] = guessLat;
-        (round as any)[`p${playerIndex}_guessLng`] = guessLng;
-        (round as any)[`p${playerIndex}_distanceMeters`] = distanceMeters;
-        (round as any)[`p${playerIndex}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
-        (round as any)[`p${playerIndex}_guessCountry`] =
+        (round as any)[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : undefined;
+        (round as any)[`${role}_teamId`] = teamId || undefined;
+        (round as any)[`${role}_guessLat`] = guessLat;
+        (round as any)[`${role}_guessLng`] = guessLng;
+        (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
+        (round as any)[`${role}_guessCountry`] =
           extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
-        (round as any)[`p${playerIndex}_score`] = asNum(guess?.score);
-        (round as any)[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
-        (round as any)[`p${playerIndex}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
-      }
-      const roleByPos: Record<number, string> = {
-        1: "player_self",
-        2: "player_mate",
-        3: "player_opponent",
-        4: "player_opponent_mate"
-      };
-      const suffixes = [
-        "playerId",
-        "teamId",
-        "guessLat",
-        "guessLng",
-        "guessCountry",
-        "distanceKm",
-        "score",
-        "healthAfter",
-        "isBestGuess"
-      ];
-      for (let pos = 1; pos <= 4; pos++) {
-        const role = roleByPos[pos];
-        for (const s of suffixes) {
-          (round as any)[`${role}_${s}`] = (round as any)[`p${pos}_${s}`];
-        }
+        (round as any)[`${role}_score`] = asNum(guess?.score);
+        (round as any)[`${role}_healthAfter`] = healthMap.get(rn);
+        (round as any)[`${role}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
       }
       normalizedRounds.push(round);
     } else {
       const round: RoundRowDuel = { ...roundBase, modeFamily: "duels" };
       for (let p = 0; p < Math.min(players.length, 2); p++) {
-        const playerIndex = p + 1 as 1 | 2;
+        const role = p === 0 ? "player_self" : "player_opponent";
         const { player, healthMap } = players[p];
         const guess = guessMaps[p].get(rn);
         const guessPos = extractGuessLatLng(guess);
@@ -700,47 +683,19 @@ async function normalizeGameAndRounds(
         const guessLng = guessPos.lng;
         const distanceMeters = asNum(guess?.distance);
 
-        (round as any)[`p${playerIndex}_playerId`] = typeof player?.playerId === "string" ? player.playerId : undefined;
-        (round as any)[`p${playerIndex}_guessLat`] = guessLat;
-        (round as any)[`p${playerIndex}_guessLng`] = guessLng;
-        (round as any)[`p${playerIndex}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
-        (round as any)[`p${playerIndex}_guessCountry`] =
+        (round as any)[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : undefined;
+        (round as any)[`${role}_guessLat`] = guessLat;
+        (round as any)[`${role}_guessLng`] = guessLng;
+        (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
+        (round as any)[`${role}_guessCountry`] =
           extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
-        (round as any)[`p${playerIndex}_score`] = asNum(guess?.score);
-        (round as any)[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
+        (round as any)[`${role}_score`] = asNum(guess?.score);
+        (round as any)[`${role}_healthAfter`] = healthMap.get(rn);
       }
 
-      if (typeof round.p1_healthAfter === "number" && typeof round.p2_healthAfter === "number") {
-        round.healthDiffAfter = round.p1_healthAfter - round.p2_healthAfter;
+      if (typeof round.player_self_healthAfter === "number" && typeof round.player_opponent_healthAfter === "number") {
+        round.healthDiffAfter = round.player_self_healthAfter - round.player_opponent_healthAfter;
       }
-
-      (round as any).player_self_playerId = round.p1_playerId;
-      (round as any).player_self_guessLat = round.p1_guessLat;
-      (round as any).player_self_guessLng = round.p1_guessLng;
-      (round as any).player_self_guessCountry = round.p1_guessCountry;
-      (round as any).player_self_distanceKm = round.p1_distanceKm;
-      (round as any).player_self_score = round.p1_score;
-      (round as any).player_self_healthAfter = round.p1_healthAfter;
-
-      (round as any).player_opponent_playerId = round.p2_playerId;
-      (round as any).player_opponent_guessLat = round.p2_guessLat;
-      (round as any).player_opponent_guessLng = round.p2_guessLng;
-      (round as any).player_opponent_guessCountry = round.p2_guessCountry;
-      (round as any).player_opponent_distanceKm = round.p2_distanceKm;
-      (round as any).player_opponent_score = round.p2_score;
-      (round as any).player_opponent_healthAfter = round.p2_healthAfter;
-
-      // legacy compatibility
-      const selfGuess = guessMaps[0]?.get(rn);
-      round.guessLat = asNum(selfGuess?.lat);
-      round.guessLng = asNum(selfGuess?.lng);
-      round.distanceMeters = asNum(selfGuess?.distance);
-      round.score = asNum(selfGuess?.score);
-      round.timeMs = (() => {
-        const s = toTs(r?.startTime);
-        const e = toTs(r?.endTime);
-        return s !== undefined && e !== undefined && e >= s ? e - s : undefined;
-      })();
 
       normalizedRounds.push(round);
     }
