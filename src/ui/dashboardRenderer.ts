@@ -1,6 +1,7 @@
 // src/ui/dashboardRenderer.ts
 import type { SemanticRegistry } from "../config/semantic.types";
 import type { DashboardDoc, WidgetDef } from "../config/dashboard.types";
+import type { RoundRow } from "../db";
 import { DrilldownOverlay } from "./drilldownOverlay";
 import { renderStatListWidget } from "./widgets/statListWidget";
 import { renderChartWidget } from "./widgets/chartWidget";
@@ -10,12 +11,14 @@ import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 export async function renderDashboard(
   root: HTMLElement,
   semantic: SemanticRegistry,
-  dashboard: DashboardDoc
+  dashboard: DashboardDoc,
+  opts?: { rows?: RoundRow[] }
 ): Promise<void> {
   root.innerHTML = "";
   const doc = root.ownerDocument;
 
   const overlay = new DrilldownOverlay(root);
+  const baseRows = opts?.rows;
 
   const tabBar = doc.createElement("div");
   tabBar.className = "ga-tabs";
@@ -49,9 +52,9 @@ export async function renderDashboard(
   }
 
   async function renderWidget(widget: WidgetDef): Promise<HTMLElement> {
-    if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay);
-    if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay);
-    if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
+    if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows);
+    if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, baseRows);
+    if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");

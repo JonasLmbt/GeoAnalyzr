@@ -128,23 +128,58 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     }
     .ga-chart-host { width:100%; }
     .ga-chart-svg { width:100%; max-width:100%; display:block; }
+    .ga-chart-bar { transform-box: view-box; }
     .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
-      transform-origin: center bottom;
-      transform-box: fill-box;
       transform: scaleY(0);
       opacity: 0.25;
+    }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-path {
+      stroke-dashoffset: var(--ga-line-length);
+      opacity: 0.65;
+    }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-dot {
+      transform: scale(0);
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
     }
     .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-bar {
       transform: none !important;
       opacity: 0.72 !important;
       animation: none !important;
     }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-path {
+      stroke-dasharray: none !important;
+      stroke-dashoffset: 0 !important;
+      animation: none !important;
+      opacity: 0.9 !important;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-dot {
+      transform: none !important;
+      animation: none !important;
+      opacity: 0.95 !important;
+    }
     @keyframes ga-bar-rise {
       from { transform: scaleY(0); opacity: 0.25; }
       to { transform: scaleY(1); opacity: 0.72; }
     }
+    @keyframes ga-line-draw {
+      from { stroke-dashoffset: var(--ga-line-length); opacity: 0.65; }
+      to { stroke-dashoffset: 0; opacity: 0.9; }
+    }
+    @keyframes ga-dot-in {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 0.95; }
+    }
     .ga-chart-svg[data-anim-state="run"] .ga-chart-bar {
       animation: ga-bar-rise 420ms ease-out both;
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-path {
+      animation: ga-line-draw 520ms ease-out both;
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-dot {
+      animation: ga-dot-in 220ms ease-out both;
+      animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
     }
     .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
     .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }

@@ -1,4 +1,5 @@
 import type { DashboardDoc } from "../config/dashboard.types";
+import type { FilterClause } from "../config/dashboard.types";
 import type { SemanticRegistry } from "../config/semantic.types";
 import { validateDashboardAgainstSemantic } from "../engine/validate";
 import {
@@ -19,10 +20,45 @@ type SettingsModalOptions = {
   applyDashboard: (next: DashboardDoc) => Promise<void>;
   getSettings: () => SemanticDashboardSettings;
   applySettings: (next: SemanticDashboardSettings) => Promise<void> | void;
+  getGlobalFilters: () => FilterClause[];
+  applyGlobalFilters: (next: FilterClause[]) => Promise<void> | void;
 };
 
 export function attachSettingsModal(opts: SettingsModalOptions): void {
-  const { doc, targetWindow, root, openButton, semantic, getDashboard, applyDashboard, getSettings, applySettings } = opts;
+  const {
+    doc,
+    targetWindow,
+    root,
+    openButton,
+    semantic,
+    getDashboard,
+    applyDashboard,
+    getSettings,
+    applySettings,
+    getGlobalFilters,
+    applyGlobalFilters
+  } = opts;
+
+  const normalizeClauses = (raw: unknown): FilterClause[] => {
+    if (!Array.isArray(raw)) return [];
+    const out: FilterClause[] = [];
+    for (const item of raw) {
+      if (typeof item !== "object" || !item) continue;
+      const r = item as Record<string, unknown>;
+      const dimension = typeof r.dimension === "string" ? r.dimension.trim() : "";
+      const op = r.op;
+      if (!dimension) continue;
+      if (op !== "eq" && op !== "neq" && op !== "in" && op !== "nin") continue;
+      // Keep only clauses that reference known semantic dimensions for stability.
+      if (!semantic.dimensions[dimension]) continue;
+
+      const clause: FilterClause = { dimension, op };
+      if ("value" in r) clause.value = r.value;
+      if ("values" in r && Array.isArray(r.values)) clause.values = r.values;
+      out.push(clause);
+    }
+    return out;
+  };
 
   const settingsModal = doc.createElement("div");
   settingsModal.className = "ga-settings-modal";
@@ -71,10 +107,14 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const templateTab = doc.createElement("button");
     templateTab.className = "ga-settings-tab";
     templateTab.textContent = "Template";
+    const filtersTab = doc.createElement("button");
+    filtersTab.className = "ga-settings-tab";
+    filtersTab.textContent = "Filters";
 
     tabs.appendChild(appearanceTab);
     tabs.appendChild(standardsTab);
     tabs.appendChild(templateTab);
+    tabs.appendChild(filtersTab);
 
     const settings = getSettings();
     const dashboard = getDashboard();
@@ -177,13 +217,42 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     templatePane.appendChild(templateField);
     templatePane.appendChild(templateStatus);
 
+    const filtersPane = doc.createElement("div");
+    filtersPane.className = "ga-settings-pane";
+    const filtersField = doc.createElement("div");
+    filtersField.className = "ga-settings-field";
+    const filtersLabel = doc.createElement("label");
+    filtersLabel.textContent = "Global filters (FilterClause[] JSON)";
+    const filtersEditor = doc.createElement("textarea");
+    filtersEditor.value = JSON.stringify(getGlobalFilters(), null, 2);
+    const filtersStatus = doc.createElement("div");
+    filtersStatus.className = "ga-settings-status";
+
+    const dimsHint = doc.createElement("div");
+    dimsHint.className = "ga-settings-note";
+    const dims = Object.entries(semantic.dimensions)
+      .filter(([, d]) => d.grain === "round")
+      .map(([id, d]) => `${id} (${d.label})`)
+      .sort((a, b) => a.localeCompare(b));
+    dimsHint.textContent =
+      dims.length > 0
+        ? `Available round dimensions: ${dims.join(", ")}`
+        : "No round dimensions found in semantic registry.";
+
+    filtersField.appendChild(filtersLabel);
+    filtersField.appendChild(filtersEditor);
+    filtersPane.appendChild(filtersField);
+    filtersPane.appendChild(filtersStatus);
+    filtersPane.appendChild(dimsHint);
+
     panes.appendChild(appearancePane);
     panes.appendChild(standardsPane);
     panes.appendChild(templatePane);
+    panes.appendChild(filtersPane);
 
-    const setActiveTab = (idx: 0 | 1 | 2) => {
-      const tabButtons = [appearanceTab, standardsTab, templateTab];
-      const tabPanes = [appearancePane, standardsPane, templatePane];
+    const setActiveTab = (idx: 0 | 1 | 2 | 3) => {
+      const tabButtons = [appearanceTab, standardsTab, templateTab, filtersTab];
+      const tabPanes = [appearancePane, standardsPane, templatePane, filtersPane];
       tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
       tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
     };
@@ -191,6 +260,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     appearanceTab.addEventListener("click", () => setActiveTab(0));
     standardsTab.addEventListener("click", () => setActiveTab(1));
     templateTab.addEventListener("click", () => setActiveTab(2));
+    filtersTab.addEventListener("click", () => setActiveTab(3));
 
     const persistSettings = async () => {
       const next: SemanticDashboardSettings = {
@@ -247,6 +317,30 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       }
       templateDebounce = targetWindow.setTimeout(() => {
         void tryApplyTemplate();
+      }, 280);
+    });
+
+    let filtersDebounce: number | null = null;
+    const tryApplyFilters = async () => {
+      filtersStatus.textContent = "";
+      filtersStatus.className = "ga-settings-status";
+      try {
+        const parsed = JSON.parse(filtersEditor.value) as unknown;
+        const clauses = normalizeClauses(parsed);
+        await applyGlobalFilters(clauses);
+        filtersStatus.textContent = "Filters applied.";
+        filtersStatus.classList.add("ok");
+      } catch (error) {
+        filtersStatus.textContent = error instanceof Error ? error.message : String(error);
+        filtersStatus.classList.add("error");
+      }
+    };
+    filtersEditor.addEventListener("input", () => {
+      if (filtersDebounce !== null) {
+        targetWindow.clearTimeout(filtersDebounce);
+      }
+      filtersDebounce = targetWindow.setTimeout(() => {
+        void tryApplyFilters();
       }, 280);
     });
 

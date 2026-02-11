@@ -1,5 +1,6 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, BreakdownSpec } from "../../config/dashboard.types";
+import type { RoundRow } from "../../db";
 import { getRounds } from "../../engine/queryEngine";
 import { ROUND_DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
@@ -52,7 +53,8 @@ function formatValue(semantic: SemanticRegistry, measureId: string, value: numbe
 export async function renderBreakdownWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
-  overlay: DrilldownOverlay
+  overlay: DrilldownOverlay,
+  baseRows?: RoundRow[]
 ): Promise<HTMLElement> {
   const spec = widget.spec as BreakdownSpec;
   const doc = overlay.getDocument();
@@ -67,7 +69,8 @@ export async function renderBreakdownWidget(
   const box = doc.createElement("div");
   box.className = "ga-breakdown-box";
 
-  const rowsAll = applyFilters(await getRounds({}), spec.filters);
+  const rowsAllBase = baseRows ?? (await getRounds({}));
+  const rowsAll = applyFilters(rowsAllBase, spec.filters);
   const dimId = spec.dimension;
   const measId = spec.measure;
 

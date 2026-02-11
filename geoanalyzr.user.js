@@ -13167,2087 +13167,6 @@
     };
   }
 
-  // src/engine/fieldAccess.ts
-  function getSelfScore(r) {
-    return r.player_self_score ?? r.p1_score ?? r.score;
-  }
-  function getPlayedAt(r) {
-    return r.playedAt;
-  }
-  function getTrueCountry(r) {
-    return r.trueCountry ?? r.true_country;
-  }
-  function getGuessCountrySelf(r) {
-    return r.player_self_guessCountry ?? r.p1_guessCountry;
-  }
-  function pick(obj, key) {
-    if (!obj) return void 0;
-    if (key in obj) return obj[key];
-    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    if (camel in obj) return obj[camel];
-    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-    if (snake in obj) return obj[snake];
-    return void 0;
-  }
-  function pickWithAliases(obj, logicalKey, columnAliases) {
-    const aliases = columnAliases?.[logicalKey] ?? [];
-    const probeOrder = [logicalKey, ...aliases];
-    for (const candidate of probeOrder) {
-      const value = pick(obj, candidate);
-      if (value !== void 0 && value !== null) return value;
-    }
-    return void 0;
-  }
-
-  // src/ui/drilldownOverlay.ts
-  var DrilldownOverlay = class {
-    root;
-    doc;
-    modal;
-    constructor(root) {
-      this.root = root;
-      this.doc = root.ownerDocument;
-      this.modal = this.doc.createElement("div");
-      this.modal.className = "ga-drilldown-modal";
-      this.modal.style.display = "none";
-      this.root.appendChild(this.modal);
-    }
-    getDocument() {
-      return this.doc;
-    }
-    open(semantic, req) {
-      this.modal.innerHTML = "";
-      this.modal.style.display = "block";
-      const bg = this.doc.createElement("div");
-      bg.className = "ga-drilldown-bg";
-      bg.addEventListener("click", () => this.close());
-      const panel = this.doc.createElement("div");
-      panel.className = "ga-drilldown-panel";
-      const header = this.doc.createElement("div");
-      header.className = "ga-drilldown-header";
-      const hTitle = this.doc.createElement("div");
-      hTitle.className = "ga-drilldown-title";
-      hTitle.textContent = req.title;
-      const btn = this.doc.createElement("button");
-      btn.className = "ga-drilldown-close";
-      btn.textContent = "Close";
-      btn.addEventListener("click", () => this.close());
-      header.appendChild(hTitle);
-      header.appendChild(btn);
-      const table = this.doc.createElement("table");
-      table.className = "ga-drilldown-table";
-      const preset = semantic.drilldownPresets[req.target];
-      const cols = preset?.columnsPresets?.[req.columnsPreset] ?? [];
-      const thead = this.doc.createElement("thead");
-      const trh = this.doc.createElement("tr");
-      for (const c of cols) {
-        const th = this.doc.createElement("th");
-        th.textContent = c;
-        trh.appendChild(th);
-      }
-      thead.appendChild(trh);
-      const tbody = this.doc.createElement("tbody");
-      const dateFormat = this.readDateFormatMode();
-      for (const r of req.rows) {
-        const tr = this.doc.createElement("tr");
-        for (const c of cols) {
-          const td = this.doc.createElement("td");
-          const v = pickWithAliases(r, c, semantic.columnAliases);
-          td.textContent = this.formatCellValue(v, c, dateFormat);
-          tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-      }
-      table.appendChild(thead);
-      table.appendChild(tbody);
-      panel.appendChild(header);
-      panel.appendChild(table);
-      this.modal.appendChild(bg);
-      this.modal.appendChild(panel);
-    }
-    close() {
-      this.modal.style.display = "none";
-    }
-    readDateFormatMode() {
-      const root = this.root;
-      const mode = root.dataset?.gaDateFormat;
-      return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
-    }
-    formatDate(ts, mode) {
-      const d = new Date(ts);
-      if (!Number.isFinite(d.getTime())) return String(ts);
-      if (mode === "locale") return d.toLocaleString();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
-      const ss = String(d.getSeconds()).padStart(2, "0");
-      if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
-      if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
-      return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
-    }
-    formatCellValue(value, columnName, dateMode) {
-      if (value === void 0 || value === null) return "";
-      const col = columnName.toLowerCase();
-      const looksLikeDateColumn = col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
-      if (typeof value === "number" && Number.isFinite(value)) {
-        if (looksLikeDateColumn && value > 9466848e5 && value < 41024448e5) {
-          return this.formatDate(value, dateMode);
-        }
-        return String(value);
-      }
-      if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (looksLikeDateColumn) {
-          const parsed = Date.parse(trimmed);
-          if (Number.isFinite(parsed)) return this.formatDate(parsed, dateMode);
-        }
-        return value;
-      }
-      return String(value);
-    }
-  };
-
-  // src/engine/queryEngine.ts
-  async function getRounds(_filters) {
-    const rows = await db.rounds.toArray();
-    const missingPlayedAt = rows.some((r) => typeof r.playedAt !== "number");
-    if (!missingPlayedAt) return rows;
-    const games = await db.games.toArray();
-    const playedAtByGame = /* @__PURE__ */ new Map();
-    for (const g of games) {
-      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
-    }
-    return rows.map((r) => {
-      if (typeof r.playedAt === "number") return r;
-      const gamePlayedAt = playedAtByGame.get(r.gameId);
-      if (typeof gamePlayedAt !== "number") return r;
-      return { ...r, playedAt: gamePlayedAt };
-    });
-  }
-
-  // src/engine/measures.ts
-  function is5k(r) {
-    const s = getSelfScore(r);
-    return typeof s === "number" && s >= 5e3;
-  }
-  function isHit(r) {
-    const truth = getTrueCountry(r);
-    if (!truth) return false;
-    const guess = getGuessCountrySelf(r);
-    return typeof guess === "string" && guess === truth;
-  }
-  function isThrowLt50(r) {
-    const s = getSelfScore(r);
-    return typeof s === "number" && s < 50;
-  }
-  var ROUND_MEASURES_BY_FORMULA_ID = {
-    count_rounds: (rows) => rows.length,
-    mean_p1_score: (rows) => {
-      let sum2 = 0;
-      let n = 0;
-      for (const r of rows) {
-        const s = getSelfScore(r);
-        if (typeof s === "number") {
-          sum2 += s;
-          n++;
-        }
-      }
-      return n ? sum2 / n : 0;
-    },
-    rate_p1_score_eq_5000: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
-      let k = 0;
-      for (const r of rows) if (is5k(r)) k++;
-      return k / n;
-    },
-    rate_true_country_hit: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
-      let k = 0;
-      for (const r of rows) if (isHit(r)) k++;
-      return k / n;
-    },
-    rate_throw_round: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
-      let k = 0;
-      for (const r of rows) if (isThrowLt50(r)) k++;
-      return k / n;
-    }
-  };
-
-  // src/engine/dimensions.ts
-  function scoreBucketKey(r) {
-    const s = getSelfScore(r);
-    if (typeof s !== "number") return null;
-    if (s >= 5e3) return "5000";
-    const lo = Math.max(0, Math.floor(s / 100) * 100);
-    const hi = lo + 99;
-    return `${lo}-${hi}`;
-  }
-  function timeDayKey(r) {
-    const ts = getPlayedAt(r);
-    if (typeof ts !== "number") return null;
-    const d = new Date(ts);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-  function weekdayKey(r) {
-    const ts = getPlayedAt(r);
-    if (typeof ts !== "number") return null;
-    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return names[new Date(ts).getDay()];
-  }
-  function hourKey(r) {
-    const ts = getPlayedAt(r);
-    if (typeof ts !== "number") return null;
-    return String(new Date(ts).getHours()).padStart(2, "0");
-  }
-  function trueCountryKey(r) {
-    const c = getTrueCountry(r);
-    return typeof c === "string" && c.length ? c : null;
-  }
-  var ROUND_DIMENSION_EXTRACTORS = {
-    score_bucket: scoreBucketKey,
-    time_day: timeDayKey,
-    weekday: weekdayKey,
-    hour: hourKey,
-    true_country: trueCountryKey
-  };
-
-  // src/engine/filters.ts
-  function evalClause(value, clause) {
-    if (clause.op === "eq") return value === clause.value;
-    if (clause.op === "neq") return value !== clause.value;
-    if (clause.op === "in") return Array.isArray(clause.values) && clause.values.includes(value);
-    if (clause.op === "nin") return Array.isArray(clause.values) && !clause.values.includes(value);
-    return true;
-  }
-  function evalRowFilter(row, clause) {
-    const extractor = ROUND_DIMENSION_EXTRACTORS[clause.dimension];
-    if (extractor) {
-      return evalClause(extractor(row), clause);
-    }
-    const direct = row[clause.dimension];
-    return evalClause(direct, clause);
-  }
-  function applyFilters(rows, clauses) {
-    if (!clauses || clauses.length === 0) return rows;
-    return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause)));
-  }
-
-  // src/ui/widgets/statListWidget.ts
-  function formatValue(semantic, measureId, value) {
-    const m = semantic.measures[measureId];
-    const unit = semantic.units[m.unit];
-    if (!unit) return String(value);
-    if (unit.format === "percent") {
-      const decimals2 = unit.decimals ?? 1;
-      return `${(value * 100).toFixed(decimals2)}%`;
-    }
-    if (unit.format === "int") return String(Math.round(value));
-    const decimals = unit.decimals ?? 1;
-    return value.toFixed(decimals);
-  }
-  async function computeMeasure(semantic, measureId, filters) {
-    const m = semantic.measures[measureId];
-    if (!m) return 0;
-    const rows = applyFilters(await getRounds({}), filters);
-    const fn = ROUND_MEASURES_BY_FORMULA_ID[m.formulaId];
-    if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
-    return fn(rows);
-  }
-  function attachClickIfAny(el, actions, overlay, semantic, title) {
-    const click = actions?.click;
-    if (!click) return;
-    el.style.cursor = "pointer";
-    el.addEventListener("click", async () => {
-      if (click.type === "drilldown") {
-        const rows = applyFilters(await getRounds({}), click.extraFilters);
-        overlay.open(semantic, {
-          title,
-          target: click.target,
-          columnsPreset: click.columnsPreset,
-          rows,
-          extraFilters: click.extraFilters
-        });
-      }
-    });
-  }
-  async function renderStatListWidget(semantic, widget, overlay) {
-    const spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-statlist";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = widget.title;
-    const box = doc.createElement("div");
-    box.className = "ga-statlist-box";
-    for (const row of spec.rows) {
-      const line = doc.createElement("div");
-      line.className = "ga-statrow";
-      const left = doc.createElement("div");
-      left.className = "ga-statrow-label";
-      left.textContent = row.label;
-      const right = doc.createElement("div");
-      right.className = "ga-statrow-value";
-      right.textContent = "...";
-      const val = await computeMeasure(semantic, row.measure, row.filters);
-      right.textContent = formatValue(semantic, row.measure, val);
-      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`);
-      line.appendChild(left);
-      line.appendChild(right);
-      box.appendChild(line);
-    }
-    wrap.appendChild(title);
-    wrap.appendChild(box);
-    return wrap;
-  }
-
-  // src/engine/aggregate.ts
-  function groupByKey(rows, keyFn) {
-    const m = /* @__PURE__ */ new Map();
-    for (const r of rows) {
-      const k = keyFn(r);
-      if (!k) continue;
-      const arr = m.get(k);
-      if (arr) arr.push(r);
-      else m.set(k, [r]);
-    }
-    return m;
-  }
-
-  // src/ui/widgets/chartWidget.ts
-  function sortKeysChronological(keys2) {
-    const parseKey = (k) => {
-      const first = k.split("-")[0] ?? k;
-      const parsed = Number(first);
-      return Number.isFinite(parsed) ? parsed : void 0;
-    };
-    return [...keys2].sort((a, b) => {
-      const na = parseKey(a);
-      const nb = parseKey(b);
-      if (na !== void 0 && nb !== void 0) return na - nb;
-      if (na !== void 0) return -1;
-      if (nb !== void 0) return 1;
-      return a.localeCompare(b);
-    });
-  }
-  function sortData(data, mode) {
-    if (mode === "chronological") {
-      const keys2 = sortKeysChronological(data.map((d) => d.x));
-      const rank = new Map(keys2.map((k, i) => [k, i]));
-      return [...data].sort((a, b) => (rank.get(a.x) ?? 0) - (rank.get(b.x) ?? 0));
-    }
-    if (mode === "asc") return [...data].sort((a, b) => a.y - b.y);
-    if (mode === "desc") return [...data].sort((a, b) => b.y - a.y);
-    return data;
-  }
-  function getMeasureIds(spec) {
-    const out = [];
-    const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
-    if (single) out.push(single);
-    if (Array.isArray(spec.y.measures)) {
-      for (const m of spec.y.measures) {
-        if (typeof m !== "string") continue;
-        const clean = m.trim();
-        if (!clean || out.includes(clean)) continue;
-        out.push(clean);
-      }
-    }
-    return out;
-  }
-  function formatMeasureValue(semantic, measureId, value) {
-    const measure = semantic.measures[measureId];
-    const unit = measure ? semantic.units[measure.unit] : void 0;
-    if (!unit) return `${value}`;
-    if (unit.format === "percent") return `${(value * 100).toFixed(unit.decimals ?? 1)}%`;
-    if (unit.format === "int") return `${Math.round(value)}`;
-    return value.toFixed(unit.decimals ?? 1);
-  }
-  function niceUpperBound(maxValue) {
-    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
-    const exp = Math.floor(Math.log10(maxValue));
-    const base = 10 ** exp;
-    const n = maxValue / base;
-    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
-    return nice * base;
-  }
-  async function renderChartWidget(semantic, widget, overlay) {
-    const spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-chart";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = widget.title;
-    const controls = doc.createElement("div");
-    controls.style.display = "flex";
-    controls.style.gap = "8px";
-    controls.style.alignItems = "center";
-    controls.style.marginBottom = "8px";
-    const box = doc.createElement("div");
-    box.className = "ga-chart-box";
-    const chartHost = doc.createElement("div");
-    box.appendChild(chartHost);
-    const rows = await getRounds({});
-    const dimId = spec.x.dimension;
-    const dimDef = semantic.dimensions[dimId];
-    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in widget ${widget.widgetId}`);
-    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
-    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}'`);
-    const measureIds = getMeasureIds(spec);
-    if (measureIds.length === 0) throw new Error(`Widget ${widget.widgetId} has no y.measure or y.measures`);
-    const measureFnById = /* @__PURE__ */ new Map();
-    for (const measureId of measureIds) {
-      const measDef = semantic.measures[measureId];
-      if (!measDef) throw new Error(`Unknown measure '${measureId}' in widget ${widget.widgetId}`);
-      const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
-      if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
-      measureFnById.set(measureId, measureFn);
-    }
-    const grouped = groupByKey(rows, keyFn);
-    const keys2 = Array.from(grouped.keys());
-    const buildDataForMeasure = (measureId) => {
-      const measureFn = measureFnById.get(measureId);
-      if (!measureFn) return [];
-      const baseData = keys2.map((k) => {
-        const g = grouped.get(k) ?? [];
-        return { x: k, y: measureFn(g), rows: g };
-      });
-      const sortedData = sortData(baseData, spec.sort?.mode);
-      return typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0 ? sortedData.slice(0, Math.floor(spec.limit)) : sortedData;
-    };
-    let activeMeasure = measureIds.includes(spec.y.activeMeasure || "") ? spec.y.activeMeasure : measureIds[0];
-    const render = () => {
-      chartHost.innerHTML = "";
-      const measureDef = semantic.measures[activeMeasure];
-      const data = buildDataForMeasure(activeMeasure);
-      if (!measureDef || data.length === 0) {
-        const empty = doc.createElement("div");
-        empty.style.fontSize = "12px";
-        empty.style.opacity = "0.75";
-        empty.textContent = "No chart data available for current selection.";
-        chartHost.appendChild(empty);
-        return;
-      }
-      const W = 920;
-      const H = 320;
-      const PAD_L = 72;
-      const PAD_B = 58;
-      const PAD_T = 16;
-      const PAD_R = 16;
-      const innerW = W - PAD_L - PAD_R;
-      const innerH = H - PAD_T - PAD_B;
-      const dataMax = Math.max(0, ...data.map((d) => d.y));
-      const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
-      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-      svg.setAttribute("width", "100%");
-      svg.setAttribute("height", String(H));
-      const axisX = doc.createElementNS(svg.namespaceURI, "line");
-      axisX.setAttribute("x1", String(PAD_L));
-      axisX.setAttribute("y1", String(PAD_T + innerH));
-      axisX.setAttribute("x2", String(PAD_L + innerW));
-      axisX.setAttribute("y2", String(PAD_T + innerH));
-      axisX.setAttribute("stroke", "var(--ga-axis-color)");
-      axisX.setAttribute("opacity", "0.7");
-      svg.appendChild(axisX);
-      const axisY = doc.createElementNS(svg.namespaceURI, "line");
-      axisY.setAttribute("x1", String(PAD_L));
-      axisY.setAttribute("y1", String(PAD_T));
-      axisY.setAttribute("x2", String(PAD_L));
-      axisY.setAttribute("y2", String(PAD_T + innerH));
-      axisY.setAttribute("stroke", "var(--ga-axis-color)");
-      axisY.setAttribute("opacity", "0.7");
-      svg.appendChild(axisY);
-      const tickCount = 5;
-      for (let i = 0; i <= tickCount; i++) {
-        const yVal = maxY * i / tickCount;
-        const yPos = PAD_T + innerH - yVal / maxY * innerH;
-        const grid = doc.createElementNS(svg.namespaceURI, "line");
-        grid.setAttribute("x1", String(PAD_L));
-        grid.setAttribute("y1", String(yPos));
-        grid.setAttribute("x2", String(PAD_L + innerW));
-        grid.setAttribute("y2", String(yPos));
-        grid.setAttribute("stroke", "var(--ga-axis-grid)");
-        grid.setAttribute("opacity", i === 0 ? "0.8" : "0.45");
-        svg.appendChild(grid);
-        const yTick = doc.createElementNS(svg.namespaceURI, "text");
-        yTick.setAttribute("x", String(PAD_L - 8));
-        yTick.setAttribute("y", String(yPos + 3));
-        yTick.setAttribute("text-anchor", "end");
-        yTick.setAttribute("font-size", "10");
-        yTick.setAttribute("fill", "var(--ga-axis-text)");
-        yTick.setAttribute("opacity", "0.95");
-        yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
-        svg.appendChild(yTick);
-      }
-      const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
-      xAxisLabel.setAttribute("x", String(PAD_L + innerW / 2));
-      xAxisLabel.setAttribute("y", String(H - 8));
-      xAxisLabel.setAttribute("text-anchor", "middle");
-      xAxisLabel.setAttribute("font-size", "12");
-      xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
-      xAxisLabel.setAttribute("opacity", "0.95");
-      xAxisLabel.textContent = dimDef.label;
-      svg.appendChild(xAxisLabel);
-      const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
-      yAxisLabel.setAttribute("x", "16");
-      yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
-      yAxisLabel.setAttribute("text-anchor", "middle");
-      yAxisLabel.setAttribute("font-size", "12");
-      yAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
-      yAxisLabel.setAttribute("opacity", "0.95");
-      yAxisLabel.setAttribute("transform", `rotate(-90 16 ${PAD_T + innerH / 2})`);
-      yAxisLabel.textContent = measureDef.label;
-      svg.appendChild(yAxisLabel);
-      const barW = innerW / Math.max(1, data.length);
-      data.forEach((d, i) => {
-        const x = PAD_L + i * barW;
-        const h = d.y / maxY * innerH;
-        const y = PAD_T + innerH - h;
-        const rect = doc.createElementNS(svg.namespaceURI, "rect");
-        rect.setAttribute("x", String(x + 1));
-        rect.setAttribute("y", String(y));
-        rect.setAttribute("width", String(Math.max(1, barW - 2)));
-        rect.setAttribute("height", String(Math.max(0, h)));
-        rect.setAttribute("rx", "2");
-        rect.setAttribute("fill", "var(--ga-graph-color)");
-        rect.setAttribute("opacity", "0.72");
-        const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
-        rect.appendChild(tooltip);
-        const click = spec.actions?.click;
-        if (click?.type === "drilldown") {
-          rect.setAttribute("style", "cursor: pointer;");
-          rect.addEventListener("click", () => {
-            const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-            overlay.open(semantic, {
-              title: `${widget.title} - ${d.x}`,
-              target: click.target,
-              columnsPreset: click.columnsPreset,
-              rows: filteredRows,
-              extraFilters: click.extraFilters
-            });
-          });
-        }
-        svg.appendChild(rect);
-        if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
-          const tx = doc.createElementNS(svg.namespaceURI, "text");
-          tx.setAttribute("x", String(x + barW / 2));
-          tx.setAttribute("y", String(PAD_T + innerH + 16));
-          tx.setAttribute("text-anchor", "middle");
-          tx.setAttribute("font-size", "10");
-          tx.setAttribute("fill", "var(--ga-axis-text)");
-          tx.setAttribute("opacity", "0.95");
-          tx.textContent = d.x;
-          svg.appendChild(tx);
-        }
-      });
-      chartHost.appendChild(svg);
-    };
-    if (measureIds.length > 1) {
-      const label = doc.createElement("label");
-      label.style.fontSize = "12px";
-      label.style.opacity = "0.9";
-      label.textContent = "Measure:";
-      const select = doc.createElement("select");
-      select.style.background = "var(--ga-control-bg)";
-      select.style.color = "var(--ga-control-text)";
-      select.style.border = "1px solid var(--ga-control-border)";
-      select.style.borderRadius = "8px";
-      select.style.padding = "4px 8px";
-      for (const measureId of measureIds) {
-        const option = doc.createElement("option");
-        option.value = measureId;
-        option.textContent = semantic.measures[measureId]?.label || measureId;
-        if (measureId === activeMeasure) option.selected = true;
-        select.appendChild(option);
-      }
-      select.addEventListener("change", () => {
-        activeMeasure = select.value;
-        render();
-      });
-      controls.appendChild(label);
-      controls.appendChild(select);
-    }
-    render();
-    wrap.appendChild(title);
-    if (controls.childElementCount > 0) wrap.appendChild(controls);
-    wrap.appendChild(box);
-    return wrap;
-  }
-
-  // src/ui/widgets/breakdownWidget.ts
-  function sortRows(rows, mode) {
-    if (mode === "asc") return [...rows].sort((a, b) => a.value - b.value);
-    if (mode === "desc") return [...rows].sort((a, b) => b.value - a.value);
-    const scoreBucketStart = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
-    const isDate = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
-    return [...rows].sort((a, b) => {
-      if (isDate(a.key) && isDate(b.key)) return a.key.localeCompare(b.key);
-      const na = Number.isFinite(scoreBucketStart(a.key)) ? scoreBucketStart(a.key) : NaN;
-      const nb = Number.isFinite(scoreBucketStart(b.key)) ? scoreBucketStart(b.key) : NaN;
-      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-      return a.key.localeCompare(b.key);
-    });
-  }
-  function formatValue2(semantic, measureId, value) {
-    const m = semantic.measures[measureId];
-    const unit = semantic.units[m.unit];
-    if (!unit) return String(value);
-    if (unit.format === "percent") {
-      const decimals2 = unit.decimals ?? 1;
-      return `${(value * 100).toFixed(decimals2)}%`;
-    }
-    if (unit.format === "int") return String(Math.round(value));
-    const decimals = unit.decimals ?? 1;
-    return value.toFixed(decimals);
-  }
-  async function renderBreakdownWidget(semantic, widget, overlay) {
-    const spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-breakdown";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = widget.title;
-    const box = doc.createElement("div");
-    box.className = "ga-breakdown-box";
-    const rowsAll = applyFilters(await getRounds({}), spec.filters);
-    const dimId = spec.dimension;
-    const measId = spec.measure;
-    const dimDef = semantic.dimensions[dimId];
-    const measDef = semantic.measures[measId];
-    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
-    if (!measDef) throw new Error(`Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
-    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
-    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
-    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
-    if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
-    const grouped = groupByKey(rowsAll, keyFn);
-    let rows = Array.from(grouped.entries()).map(([k, g]) => ({
-      key: k,
-      value: measureFn(g),
-      rows: g
-    }));
-    const sortMode = spec.sort?.mode ?? "desc";
-    rows = sortRows(rows, sortMode);
-    const limit = typeof spec.limit === "number" ? spec.limit : 12;
-    rows = rows.slice(0, limit);
-    const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
-    for (const r of rows) {
-      const line = doc.createElement("div");
-      line.className = "ga-breakdown-row";
-      const left = doc.createElement("div");
-      left.className = "ga-breakdown-label";
-      left.textContent = r.key;
-      const right = doc.createElement("div");
-      right.className = "ga-breakdown-right";
-      const val = doc.createElement("div");
-      val.className = "ga-breakdown-value";
-      val.textContent = formatValue2(semantic, measId, r.value);
-      const barWrap = doc.createElement("div");
-      barWrap.className = "ga-breakdown-barwrap";
-      const bar = doc.createElement("div");
-      bar.className = "ga-breakdown-bar";
-      bar.style.width = `${Math.max(2, r.value / maxVal * 100)}%`;
-      barWrap.appendChild(bar);
-      right.appendChild(val);
-      right.appendChild(barWrap);
-      line.appendChild(left);
-      line.appendChild(right);
-      const click = spec.actions?.click;
-      if (click?.type === "drilldown") {
-        line.style.cursor = "pointer";
-        line.addEventListener("click", () => {
-          const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-          overlay.open(semantic, {
-            title: `${widget.title} - ${r.key}`,
-            target: click.target,
-            columnsPreset: click.columnsPreset,
-            rows: filteredRows,
-            extraFilters: click.extraFilters
-          });
-        });
-      }
-      box.appendChild(line);
-    }
-    wrap.appendChild(title);
-    wrap.appendChild(box);
-    return wrap;
-  }
-
-  // src/ui/dashboardRenderer.ts
-  async function renderDashboard(root, semantic, dashboard) {
-    root.innerHTML = "";
-    const doc = root.ownerDocument;
-    const overlay = new DrilldownOverlay(root);
-    const tabBar = doc.createElement("div");
-    tabBar.className = "ga-tabs";
-    const content = doc.createElement("div");
-    content.className = "ga-content";
-    root.appendChild(tabBar);
-    root.appendChild(content);
-    const sections = dashboard.dashboard.sections;
-    let active = sections[0]?.id ?? "";
-    function makeTab(secId, label) {
-      const btn = doc.createElement("button");
-      btn.className = "ga-tab";
-      btn.textContent = label;
-      btn.addEventListener("click", async () => {
-        active = secId;
-        await renderActive();
-        highlight();
-      });
-      tabBar.appendChild(btn);
-    }
-    function highlight() {
-      const btns = Array.from(tabBar.querySelectorAll("button.ga-tab"));
-      btns.forEach((b, i) => {
-        b.classList.toggle("active", sections[i]?.id === active);
-      });
-    }
-    async function renderWidget(widget) {
-      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay);
-      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay);
-      if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
-      const ph = doc.createElement("div");
-      ph.className = "ga-widget ga-placeholder";
-      ph.textContent = `Widget type '${widget.type}' not implemented yet`;
-      return ph;
-    }
-    async function renderActive() {
-      content.innerHTML = "";
-      const section = sections.find((s) => s.id === active);
-      if (!section) return;
-      const grid = doc.createElement("div");
-      grid.className = "ga-grid";
-      grid.style.display = "grid";
-      grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
-      grid.style.gap = "12px";
-      for (const placed of section.layout.cards) {
-        const card = doc.createElement("div");
-        card.className = "ga-card";
-        card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
-        card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
-        const header = doc.createElement("div");
-        header.className = "ga-card-header";
-        header.textContent = placed.title;
-        const body = doc.createElement("div");
-        body.className = "ga-card-body";
-        const inner = doc.createElement("div");
-        inner.className = "ga-card-inner";
-        inner.style.display = "grid";
-        inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
-        inner.style.gap = "10px";
-        for (const w of placed.card.children) {
-          const container = doc.createElement("div");
-          container.className = "ga-child";
-          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
-          container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
-          container.style.gridRow = `${p.y + 1} / span ${p.h}`;
-          container.appendChild(await renderWidget(w));
-          inner.appendChild(container);
-        }
-        body.appendChild(inner);
-        card.appendChild(header);
-        card.appendChild(body);
-        grid.appendChild(card);
-      }
-      content.appendChild(grid);
-    }
-    for (const s of sections) makeTab(s.id, s.title);
-    await renderActive();
-    highlight();
-  }
-
-  // src/engine/validate.ts
-  var ValidationError = class extends Error {
-    code;
-    constructor(code, message) {
-      super(message);
-      this.code = code;
-    }
-  };
-  function assert(condition, code, msg) {
-    if (!condition) throw new ValidationError(code, msg);
-  }
-  function validateDashboardAgainstSemantic(semantic, dash) {
-    for (const section of dash.dashboard.sections) {
-      for (const placedCard of section.layout.cards) {
-        for (const widget of placedCard.card.children) {
-          validateWidget(semantic, widget);
-        }
-      }
-    }
-  }
-  function validateWidget(semantic, widget) {
-    assert(semantic.datasets[widget.grain] !== void 0, "E_UNKNOWN_GRAIN", `Unknown grain: ${widget.grain}`);
-    if (widget.type === "chart") {
-      const spec = widget.spec;
-      const xDimId = spec.x?.dimension;
-      assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
-      const yMeasureIds = getChartMeasureIds(spec);
-      assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
-      const xDim = semantic.dimensions[xDimId];
-      assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
-      assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
-      assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
-      if (spec.sort?.mode) {
-        assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
-      }
-      for (const yMeasId of yMeasureIds) {
-        const yMeas = semantic.measures[yMeasId];
-        assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
-        assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
-        assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
-      }
-      const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : void 0;
-      if (activeMeasure) {
-        assert(yMeasureIds.includes(activeMeasure), "E_BAD_SPEC", `activeMeasure '${activeMeasure}' is not listed in y.measures`);
-      }
-      if (spec.type === "line") {
-        assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
-      }
-      if (xDim.cardinality?.selectorRequired) {
-        const hasTopN = typeof spec.limit === "number" && spec.limit > 0;
-        const selectorMode = spec.x?.selector?.mode;
-        const hasSelector = selectorMode === "top_n" || selectorMode === "selected";
-        assert(
-          hasTopN || hasSelector,
-          "E_SELECTOR_REQUIRED",
-          `Dimension '${xDimId}' requires selector; set chart.limit or x.selector`
-        );
-      }
-      if (spec.series) {
-        const sDimId = spec.series.dimension;
-        const sDim = semantic.dimensions[sDimId];
-        assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
-        assert(sDim.grain === widget.grain, "E_GRAIN_MISMATCH", `series '${sDimId}' grain=${sDim.grain} but widget grain=${widget.grain}`);
-        assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
-        const maxSeries = sDim.cardinality?.maxSeries ?? 50;
-        const requested = spec.series.selector.mode === "selected" ? spec.series.selector.values?.length ?? 0 : spec.series.selector.mode === "top_n" ? spec.series.selector.n ?? 0 : spec.series.selector.maxSeries ?? maxSeries;
-        assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
-      }
-      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    }
-    if (widget.type === "stat_list") {
-      const spec = widget.spec;
-      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `stat_list ${widget.widgetId} has no rows`);
-      for (const row of spec.rows) {
-        const meas = semantic.measures[row.measure];
-        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
-        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${row.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
-        validateClickAction(semantic, widget.widgetId, row.actions?.click);
-      }
-    }
-    if (widget.type === "stat_value") {
-      const spec = widget.spec;
-      const meas = semantic.measures[spec.measure];
-      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
-      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
-      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    }
-    if (widget.type === "breakdown") {
-      const spec = widget.spec;
-      const dim = semantic.dimensions[spec.dimension];
-      const meas = semantic.measures[spec.measure];
-      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
-      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in breakdown ${widget.widgetId}`);
-      assert(dim.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
-      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure grain mismatch in ${widget.widgetId}`);
-      if (dim.cardinality?.selectorRequired) {
-        assert(
-          typeof spec.limit === "number" && spec.limit > 0,
-          "E_SELECTOR_REQUIRED",
-          `Breakdown '${spec.dimension}' requires a positive limit`
-        );
-      }
-      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    }
-  }
-  function validateClickAction(semantic, widgetId, click) {
-    if (!click || click.type !== "drilldown") return;
-    const target = click.target;
-    const targetPreset = semantic.drilldownPresets[target];
-    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
-    const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
-    assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
-  }
-  function getChartMeasureIds(spec) {
-    const result = [];
-    const single = typeof spec?.y?.measure === "string" ? spec.y.measure.trim() : "";
-    if (single) result.push(single);
-    if (Array.isArray(spec?.y?.measures)) {
-      for (const m of spec.y.measures) {
-        if (typeof m !== "string") continue;
-        const clean = m.trim();
-        if (!clean || result.includes(clean)) continue;
-        result.push(clean);
-      }
-    }
-    return result;
-  }
-
-  // src/config/semantic.json
-  var semantic_default = {
-    $schema: "./semantic.schema.json",
-    schemaVersion: "0.1.0",
-    grains: ["session", "game", "round"],
-    datasets: {
-      session: {
-        primaryKey: ["sessionId"],
-        timeField: "sessionStartTs"
-      },
-      game: {
-        primaryKey: ["gameId"],
-        timeField: "ts"
-      },
-      round: {
-        primaryKey: ["gameId", "roundNumber"],
-        timeField: "ts"
-      }
-    },
-    settings: {
-      sessionGapMinutesDefault: 45
-    },
-    dimensions: {
-      time_day: {
-        label: "Date",
-        kind: "time",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["line", "bar"],
-        sortModes: ["chronological"]
-      },
-      weekday: {
-        label: "Weekday",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      hour: {
-        label: "Hour of day",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      session_index: {
-        label: "Session #",
-        kind: "category",
-        grain: "session",
-        ordered: true,
-        allowedCharts: ["bar", "line"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      game_mode: {
-        label: "Game mode",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 10 }
-      },
-      result: {
-        label: "Result",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 5 }
-      },
-      round_number: {
-        label: "Round #",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological"]
-      },
-      true_country: {
-        label: "True country",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 12, selectorRequired: true }
-      },
-      movement_type: {
-        label: "Movement",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 8 }
-      },
-      duration_bucket: {
-        label: "Guess duration bucket",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological"]
-      },
-      score_bucket: {
-        label: "Score bucket",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological"]
-      }
-    },
-    measures: {
-      games_count: {
-        label: "Games",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_games"
-      },
-      rounds_count: {
-        label: "Rounds",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_rounds"
-      },
-      avg_score: {
-        label: "Avg score",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_p1_score"
-      },
-      fivek_rate: {
-        label: "5k rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_p1_score_eq_5000"
-      },
-      win_rate: {
-        label: "Win rate",
-        unit: "percent",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_p1_win"
-      },
-      end_rating_avg: {
-        label: "Avg end rating",
-        unit: "rating",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_p1_end_rating"
-      },
-      rating_delta_avg: {
-        label: "Avg rating delta",
-        unit: "rating",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_p1_rating_delta"
-      },
-      hit_rate: {
-        label: "Hit rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_true_country_hit"
-      },
-      throw_rate: {
-        label: "Throw rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_throw_round"
-      },
-      damage_dealt_avg: {
-        label: "Avg damage dealt",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_dealt"
-      },
-      damage_taken_avg: {
-        label: "Avg damage taken",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_taken"
-      }
-    },
-    units: {
-      count: { format: "int" },
-      points: { format: "float", decimals: 1 },
-      percent: { format: "percent", decimals: 1 },
-      seconds: { format: "float", decimals: 1 },
-      rating: { format: "float", decimals: 0 },
-      km: { format: "float", decimals: 1 }
-    },
-    columnAliases: {
-      ts: ["playedAt", "startTime"],
-      true_country: ["trueCountry", "true_country"],
-      p1_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
-      p1_score: ["player_self_score", "p1_score", "score"],
-      p2_score: ["player_opponent_score", "p2_score"],
-      distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
-      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"]
-    },
-    drilldownPresets: {
-      rounds: {
-        entity: "round",
-        columnsPresets: {
-          roundMode: [
-            "ts",
-            "gameId",
-            "roundNumber",
-            "true_country",
-            "p1_country",
-            "p1_score",
-            "p2_score",
-            "durationSeconds",
-            "distanceKm"
-          ]
-        },
-        defaultPreset: "roundMode"
-      },
-      players: {
-        entity: "game",
-        columnsPresets: {
-          opponentMode: [
-            "ts",
-            "gameId",
-            "opponentName",
-            "game_mode",
-            "p1_startRating",
-            "p1_endRating",
-            "result"
-          ]
-        },
-        defaultPreset: "opponentMode"
-      }
-    },
-    errors: {
-      E_GRAIN_MISMATCH: "Selected fields have incompatible grains.",
-      E_CHART_X_NOT_ORDERED: "Line charts require an ordered x-dimension.",
-      E_SELECTOR_REQUIRED: "This dimension requires a selector (Top-N or Selected).",
-      E_TOO_MANY_SERIES: "Too many series requested; reduce categories or use selector."
-    }
-  };
-
-  // src/config/dashboard.json
-  var dashboard_default = {
-    $schema: "./dashboard.schema.json",
-    schemaVersion: "0.1.0",
-    dashboard: {
-      id: "default",
-      title: "GeoAnalyzr",
-      sections: [
-        {
-          id: "scores",
-          title: "Scores",
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_scores_kpis",
-                title: "Score KPIs",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 6,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_scores_kpis",
-                      type: "stat_list",
-                      title: "KPIs (round-grain)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 6 },
-                      spec: {
-                        rows: [
-                          { label: "Rounds", measure: "rounds_count" },
-                          { label: "Avg score", measure: "avg_score" },
-                          {
-                            label: "5k rate",
-                            measure: "fivek_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  { dimension: "score_bucket", op: "eq", value: "5000" }
-                                ]
-                              }
-                            }
-                          },
-                          { label: "Hit rate", measure: "hit_rate" },
-                          { label: "Throw rate (<50)", measure: "throw_rate" }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_score_distribution",
-                title: "Score Distribution",
-                x: 0,
-                y: 6,
-                w: 12,
-                h: 12,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_score_distribution",
-                      type: "chart",
-                      title: "Score bucket distribution (click = drilldown rounds)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 12 },
-                      spec: {
-                        type: "bar",
-                        x: { dimension: "score_bucket" },
-                        y: { measure: "rounds_count" },
-                        sort: { mode: "chronological" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "time_patterns",
-          title: "Time Patterns",
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_by_weekday",
-                title: "By weekday",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_avg_score_weekday",
-                      type: "chart",
-                      title: "Avg score by weekday",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "bar",
-                        x: { dimension: "weekday" },
-                        y: { measure: "avg_score" },
-                        sort: { mode: "chronological" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_by_hour",
-                title: "By hour",
-                x: 0,
-                y: 10,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_fivek_rate_hour",
-                      type: "chart",
-                      title: "Rate by hour",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "bar",
-                        x: { dimension: "hour" },
-                        y: {
-                          measures: ["fivek_rate", "throw_rate", "hit_rate"],
-                          activeMeasure: "fivek_rate"
-                        },
-                        sort: { mode: "chronological" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_by_day",
-                title: "Daily progression",
-                x: 0,
-                y: 20,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_avg_score_day",
-                      type: "chart",
-                      title: "Avg score by day (bar)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "bar",
-                        x: { dimension: "time_day" },
-                        y: { measure: "avg_score" },
-                        sort: { mode: "chronological" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "countries",
-          title: "Countries",
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_countries_breakdown",
-                title: "True country breakdown",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_country_rounds_top",
-                      type: "breakdown",
-                      title: "Top countries by rounds (click = drilldown rounds)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        dimension: "true_country",
-                        measure: "rounds_count",
-                        sort: { mode: "desc" },
-                        limit: 15,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_country_quality",
-                title: "Quality by country",
-                x: 0,
-                y: 10,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_country_avg_score",
-                      type: "chart",
-                      title: "Avg score by country (top-ish)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "bar",
-                        limit: 12,
-                        x: { dimension: "true_country" },
-                        y: { measure: "avg_score" },
-                        sort: { mode: "desc" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      ]
-    }
-  };
-
-  // src/ui/semanticDashboardCss.ts
-  function injectSemanticDashboardCssOnce(doc) {
-    const id = "geoanalyzr-semantic-dashboard-css";
-    if (doc.getElementById(id)) return;
-    const style = doc.createElement("style");
-    style.id = id;
-    style.textContent = `
-    html.ga-semantic-page, body.ga-semantic-page {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
-      background: var(--ga-bg);
-      color: var(--ga-text);
-    }
-    .ga-root {
-      --ga-bg: #0f1115;
-      --ga-surface: #15181e;
-      --ga-surface-2: #171b22;
-      --ga-card: #12161d;
-      --ga-card-2: #10141b;
-      --ga-text: #d7deea;
-      --ga-text-muted: #9aa5b6;
-      --ga-border: #2b3340;
-      --ga-control-bg: #161b23;
-      --ga-control-text: #d7deea;
-      --ga-control-border: #3a4352;
-      --ga-axis-color: #7f8ca2;
-      --ga-axis-grid: #3c4555;
-      --ga-axis-text: #c7d2e4;
-      --ga-graph-color: #7eb6ff;
-      min-height: 100vh;
-      background: var(--ga-bg);
-      color: var(--ga-text);
-    }
-    .ga-root[data-ga-theme="light"] {
-      --ga-bg: #f4f7fc;
-      --ga-surface: #ffffff;
-      --ga-surface-2: #f9fbff;
-      --ga-card: #ffffff;
-      --ga-card-2: #f8fbff;
-      --ga-text: #1f2a38;
-      --ga-text-muted: #4b5d74;
-      --ga-border: #c8d5e6;
-      --ga-control-bg: #ffffff;
-      --ga-control-text: #1f2a38;
-      --ga-control-border: #b7c7dd;
-      --ga-axis-color: #51647e;
-      --ga-axis-grid: #c2cfdf;
-      --ga-axis-text: #2b3d56;
-    }
-    .ga-topbar {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px 14px;
-      border-bottom:1px solid var(--ga-border);
-      background: var(--ga-surface);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .ga-title { font-weight: 700; }
-    .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
-    .ga-close, .ga-gear {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color:var(--ga-control-text);
-      border-radius:10px;
-      padding:6px 10px;
-      cursor:pointer;
-    }
-    .ga-body { padding: 8px 12px 16px; }
-    .ga-tabs { display:flex; gap:8px; padding:10px; }
-    .ga-tab {
-      background:var(--ga-control-bg);
-      color:var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      padding:6px 10px;
-      border-radius:10px;
-      cursor:pointer;
-    }
-    .ga-tab.active { background: var(--ga-surface-2); }
-    .ga-content { padding:10px; }
-    .ga-card {
-      background: var(--ga-card);
-      border:1px solid var(--ga-border);
-      border-radius:14px;
-      overflow:hidden;
-    }
-    .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
-    .ga-card-body { padding:12px; }
-    .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
-    .ga-statlist-box {
-      background: var(--ga-card-2);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-    }
-    .ga-statrow {
-      display:flex;
-      justify-content:space-between;
-      padding:6px 2px;
-      border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
-    }
-    .ga-statrow:last-child { border-bottom:none; }
-    .ga-chart-box {
-      background: var(--ga-card-2);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-      color: var(--ga-text);
-    }
-    .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
-    .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
-    .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
-    .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
-    .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
-    .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
-    .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
-    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
-    .ga-drilldown-panel {
-      position:absolute;
-      top:6%;
-      left:50%;
-      transform:translateX(-50%);
-      width:min(1100px, 92vw);
-      max-height:88vh;
-      overflow:auto;
-      background:var(--ga-surface);
-      border:1px solid var(--ga-border);
-      border-radius:14px;
-    }
-    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--ga-border); }
-    .ga-drilldown-close {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius:10px;
-      padding:6px 10px;
-      cursor:pointer;
-    }
-    .ga-drilldown-table { width:100%; border-collapse:collapse; font-size:12px; }
-    .ga-drilldown-table th, .ga-drilldown-table td {
-      padding:8px 10px;
-      border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
-      text-align:left;
-    }
-    .ga-settings-panel {
-      position:absolute;
-      top:8%;
-      left:50%;
-      transform:translateX(-50%);
-      width:min(980px, 94vw);
-      max-height:84vh;
-      overflow:auto;
-      background: var(--ga-surface);
-      border:1px solid var(--ga-border);
-      border-radius:14px;
-    }
-    .ga-settings-header {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px 12px;
-      border-bottom:1px solid var(--ga-border);
-    }
-    .ga-settings-body { padding: 12px; }
-    .ga-settings-tabs { display:flex; gap:8px; margin-bottom:12px; }
-    .ga-settings-tab {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:6px 10px;
-      cursor:pointer;
-    }
-    .ga-settings-tab.active { background: var(--ga-surface-2); }
-    .ga-settings-pane { display:none; }
-    .ga-settings-pane.active { display:block; }
-    .ga-settings-grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .ga-settings-field { display:flex; flex-direction:column; gap:6px; }
-    .ga-settings-field label { font-size:12px; color: var(--ga-text-muted); }
-    .ga-settings-field input, .ga-settings-field select, .ga-settings-field textarea {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:8px;
-      font: inherit;
-    }
-    .ga-settings-field textarea {
-      min-height: 340px;
-      resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      line-height: 1.4;
-      white-space: pre;
-    }
-    .ga-settings-note { font-size:12px; color: var(--ga-text-muted); }
-    .ga-settings-status { margin-top: 8px; font-size:12px; }
-    .ga-settings-status.error { color: #ff8f8f; }
-    .ga-settings-status.ok { color: #8fe3a1; }
-  `;
-    doc.head.appendChild(style);
-  }
-
-  // src/ui/settingsStore.ts
-  var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
-  var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
-  var DEFAULT_SETTINGS = {
-    appearance: {
-      theme: "dark",
-      graphColor: "#7eb6ff"
-    },
-    standards: {
-      dateFormat: "dd/mm/yyyy",
-      sessionGapMinutes: 45
-    }
-  };
-  function cloneTemplate(value) {
-    if (typeof structuredClone === "function") return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-  }
-  function normalizeColor(value, fallback) {
-    if (typeof value !== "string") return fallback;
-    const trimmed = value.trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
-    return fallback;
-  }
-  function normalizeTheme(value) {
-    return value === "light" ? "light" : "dark";
-  }
-  function normalizeDateFormat(value) {
-    return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
-  }
-  function normalizeSettings(raw) {
-    const r = typeof raw === "object" && raw ? raw : {};
-    const appearance = typeof r.appearance === "object" && r.appearance ? r.appearance : {};
-    const standards = typeof r.standards === "object" && r.standards ? r.standards : {};
-    const sessionGapRaw = Number(standards.sessionGapMinutes);
-    return {
-      appearance: {
-        theme: normalizeTheme(appearance.theme),
-        graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor)
-      },
-      standards: {
-        dateFormat: normalizeDateFormat(standards.dateFormat),
-        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes
-      }
-    };
-  }
-  function getStorage(doc) {
-    try {
-      return doc.defaultView?.localStorage ?? null;
-    } catch {
-      return null;
-    }
-  }
-  function loadSettings(doc) {
-    const storage = getStorage(doc);
-    if (!storage) return cloneTemplate(DEFAULT_SETTINGS);
-    try {
-      const raw = storage.getItem(SETTINGS_KEY);
-      if (!raw) return cloneTemplate(DEFAULT_SETTINGS);
-      return normalizeSettings(JSON.parse(raw));
-    } catch {
-      return cloneTemplate(DEFAULT_SETTINGS);
-    }
-  }
-  function saveSettings(doc, settings) {
-    const storage = getStorage(doc);
-    if (!storage) return;
-    try {
-      storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    } catch {
-    }
-  }
-  function loadDashboardTemplate(doc, fallback) {
-    const storage = getStorage(doc);
-    if (!storage) return cloneTemplate(fallback);
-    try {
-      const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
-      if (!raw) return cloneTemplate(fallback);
-      return JSON.parse(raw);
-    } catch {
-      return cloneTemplate(fallback);
-    }
-  }
-  function saveDashboardTemplate(doc, dashboard) {
-    const storage = getStorage(doc);
-    if (!storage) return;
-    try {
-      storage.setItem(DASHBOARD_TEMPLATE_KEY, JSON.stringify(dashboard, null, 2));
-    } catch {
-    }
-  }
-  function applySettingsToRoot(root, settings) {
-    root.dataset.gaTheme = settings.appearance.theme;
-    root.dataset.gaDateFormat = settings.standards.dateFormat;
-    root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
-    root.style.setProperty("--ga-graph-color", settings.appearance.graphColor);
-  }
-
-  // src/ui/settingsModal.ts
-  function attachSettingsModal(opts) {
-    const { doc, targetWindow, root, openButton, semantic, getDashboard, applyDashboard, getSettings, applySettings } = opts;
-    const settingsModal = doc.createElement("div");
-    settingsModal.className = "ga-settings-modal";
-    settingsModal.style.display = "none";
-    root.appendChild(settingsModal);
-    const openSettings = async () => {
-      settingsModal.innerHTML = "";
-      settingsModal.style.display = "block";
-      const bg = doc.createElement("div");
-      bg.className = "ga-settings-bg";
-      bg.addEventListener("click", () => {
-        settingsModal.style.display = "none";
-      });
-      const panel = doc.createElement("div");
-      panel.className = "ga-settings-panel";
-      const header = doc.createElement("div");
-      header.className = "ga-settings-header";
-      const headerTitle = doc.createElement("div");
-      headerTitle.textContent = "Dashboard Settings";
-      const headerClose = doc.createElement("button");
-      headerClose.className = "ga-close";
-      headerClose.textContent = "Close";
-      headerClose.addEventListener("click", () => {
-        settingsModal.style.display = "none";
-      });
-      header.appendChild(headerTitle);
-      header.appendChild(headerClose);
-      const bodyEl = doc.createElement("div");
-      bodyEl.className = "ga-settings-body";
-      const tabs = doc.createElement("div");
-      tabs.className = "ga-settings-tabs";
-      const panes = doc.createElement("div");
-      const appearanceTab = doc.createElement("button");
-      appearanceTab.className = "ga-settings-tab active";
-      appearanceTab.textContent = "Appearance";
-      const standardsTab = doc.createElement("button");
-      standardsTab.className = "ga-settings-tab";
-      standardsTab.textContent = "Standards";
-      const templateTab = doc.createElement("button");
-      templateTab.className = "ga-settings-tab";
-      templateTab.textContent = "Template";
-      tabs.appendChild(appearanceTab);
-      tabs.appendChild(standardsTab);
-      tabs.appendChild(templateTab);
-      const settings = getSettings();
-      const dashboard = getDashboard();
-      const appearancePane = doc.createElement("div");
-      appearancePane.className = "ga-settings-pane active";
-      const appearanceGrid = doc.createElement("div");
-      appearanceGrid.className = "ga-settings-grid";
-      const themeField = doc.createElement("div");
-      themeField.className = "ga-settings-field";
-      const themeLabel = doc.createElement("label");
-      themeLabel.textContent = "Theme";
-      const themeSelect = doc.createElement("select");
-      themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
-      themeSelect.value = settings.appearance.theme;
-      themeField.appendChild(themeLabel);
-      themeField.appendChild(themeSelect);
-      const colorField = doc.createElement("div");
-      colorField.className = "ga-settings-field";
-      const colorLabel = doc.createElement("label");
-      colorLabel.textContent = "Graph color";
-      const colorInput = doc.createElement("input");
-      colorInput.type = "color";
-      colorInput.value = normalizeColor(settings.appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor);
-      colorField.appendChild(colorLabel);
-      colorField.appendChild(colorInput);
-      appearanceGrid.appendChild(themeField);
-      appearanceGrid.appendChild(colorField);
-      appearancePane.appendChild(appearanceGrid);
-      const standardsPane = doc.createElement("div");
-      standardsPane.className = "ga-settings-pane";
-      const standardsGrid = doc.createElement("div");
-      standardsGrid.className = "ga-settings-grid";
-      const dateField = doc.createElement("div");
-      dateField.className = "ga-settings-field";
-      const dateLabel = doc.createElement("label");
-      dateLabel.textContent = "Date format";
-      const dateSelect = doc.createElement("select");
-      dateSelect.innerHTML = `
-      <option value="dd/mm/yyyy">DD/MM/YYYY</option>
-      <option value="mm/dd/yyyy">MM/DD/YYYY</option>
-      <option value="yyyy-mm-dd">YYYY-MM-DD</option>
-      <option value="locale">Locale</option>
-    `;
-      dateSelect.value = settings.standards.dateFormat;
-      dateField.appendChild(dateLabel);
-      dateField.appendChild(dateSelect);
-      const sessionField = doc.createElement("div");
-      sessionField.className = "ga-settings-field";
-      const sessionLabel = doc.createElement("label");
-      sessionLabel.textContent = "New session gap (minutes)";
-      const sessionInput = doc.createElement("input");
-      sessionInput.type = "number";
-      sessionInput.min = "1";
-      sessionInput.max = "360";
-      sessionInput.step = "1";
-      sessionInput.value = String(settings.standards.sessionGapMinutes);
-      sessionField.appendChild(sessionLabel);
-      sessionField.appendChild(sessionInput);
-      standardsGrid.appendChild(dateField);
-      standardsGrid.appendChild(sessionField);
-      standardsPane.appendChild(standardsGrid);
-      const standardsNote = doc.createElement("div");
-      standardsNote.className = "ga-settings-note";
-      standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views.";
-      standardsPane.appendChild(standardsNote);
-      const templatePane = doc.createElement("div");
-      templatePane.className = "ga-settings-pane";
-      const templateField = doc.createElement("div");
-      templateField.className = "ga-settings-field";
-      const templateLabel = doc.createElement("label");
-      templateLabel.textContent = "Live dashboard JSON template";
-      const templateEditor = doc.createElement("textarea");
-      templateEditor.value = JSON.stringify(dashboard, null, 2);
-      const templateStatus = doc.createElement("div");
-      templateStatus.className = "ga-settings-status";
-      templateField.appendChild(templateLabel);
-      templateField.appendChild(templateEditor);
-      templatePane.appendChild(templateField);
-      templatePane.appendChild(templateStatus);
-      panes.appendChild(appearancePane);
-      panes.appendChild(standardsPane);
-      panes.appendChild(templatePane);
-      const setActiveTab = (idx) => {
-        const tabButtons = [appearanceTab, standardsTab, templateTab];
-        const tabPanes = [appearancePane, standardsPane, templatePane];
-        tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
-        tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
-      };
-      appearanceTab.addEventListener("click", () => setActiveTab(0));
-      standardsTab.addEventListener("click", () => setActiveTab(1));
-      templateTab.addEventListener("click", () => setActiveTab(2));
-      const persistSettings = async () => {
-        const next = {
-          appearance: {
-            theme: normalizeTheme(themeSelect.value),
-            graphColor: normalizeColor(colorInput.value, DEFAULT_SETTINGS.appearance.graphColor)
-          },
-          standards: {
-            dateFormat: normalizeDateFormat(dateSelect.value),
-            sessionGapMinutes: (() => {
-              const raw = Number(sessionInput.value);
-              return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes;
-            })()
-          }
-        };
-        await applySettings(next);
-      };
-      themeSelect.addEventListener("change", () => {
-        void persistSettings();
-      });
-      colorInput.addEventListener("input", () => {
-        void persistSettings();
-      });
-      dateSelect.addEventListener("change", () => {
-        void persistSettings();
-      });
-      sessionInput.addEventListener("change", () => {
-        void persistSettings();
-      });
-      let templateDebounce = null;
-      const tryApplyTemplate = async () => {
-        templateStatus.textContent = "";
-        templateStatus.className = "ga-settings-status";
-        try {
-          const parsed = JSON.parse(templateEditor.value);
-          validateDashboardAgainstSemantic(semantic, parsed);
-          await applyDashboard(parsed);
-          templateStatus.textContent = "Template applied.";
-          templateStatus.classList.add("ok");
-        } catch (error) {
-          templateStatus.textContent = error instanceof Error ? error.message : String(error);
-          templateStatus.classList.add("error");
-        }
-      };
-      templateEditor.addEventListener("input", () => {
-        if (templateDebounce !== null) {
-          targetWindow.clearTimeout(templateDebounce);
-        }
-        templateDebounce = targetWindow.setTimeout(() => {
-          void tryApplyTemplate();
-        }, 280);
-      });
-      bodyEl.appendChild(tabs);
-      bodyEl.appendChild(panes);
-      panel.appendChild(header);
-      panel.appendChild(bodyEl);
-      settingsModal.appendChild(bg);
-      settingsModal.appendChild(panel);
-    };
-    openButton.addEventListener("click", () => {
-      void openSettings();
-    });
-  }
-
-  // src/ui.ts
-  function cloneTemplate2(value) {
-    if (typeof structuredClone === "function") return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-  }
-  async function initAnalysisWindow(opts) {
-    const targetWindow = opts?.targetWindow ?? window;
-    if (!targetWindow || targetWindow.closed) {
-      throw new Error("Semantic dashboard target window is unavailable.");
-    }
-    const doc = targetWindow.document;
-    if (!doc.body || !doc.head) {
-      throw new Error("Semantic dashboard target document is not ready.");
-    }
-    doc.title = "GeoAnalyzr - Semantic Dashboard";
-    doc.documentElement.classList.add("ga-semantic-page");
-    doc.body.classList.add("ga-semantic-page");
-    injectSemanticDashboardCssOnce(doc);
-    const semantic = cloneTemplate2(semantic_default);
-    let dashboard = loadDashboardTemplate(doc, cloneTemplate2(dashboard_default));
-    let settings = loadSettings(doc);
-    let root = doc.getElementById("geoanalyzr-semantic-root");
-    let body;
-    const renderNow = async () => {
-      body.innerHTML = "";
-      validateDashboardAgainstSemantic(semantic, dashboard);
-      await renderDashboard(body, semantic, dashboard);
-    };
-    if (!root) {
-      root = doc.createElement("div");
-      root.id = "geoanalyzr-semantic-root";
-      root.className = "ga-root";
-      const top = doc.createElement("div");
-      top.className = "ga-topbar";
-      const title = doc.createElement("div");
-      title.className = "ga-title";
-      title.textContent = "GeoAnalyzr - Semantic Dashboard";
-      const actions = doc.createElement("div");
-      actions.className = "ga-topbar-actions";
-      const settingsBtn = doc.createElement("button");
-      settingsBtn.className = "ga-gear";
-      settingsBtn.textContent = "Settings";
-      settingsBtn.title = "Settings";
-      const close = doc.createElement("button");
-      close.className = "ga-close";
-      close.textContent = "Close";
-      close.addEventListener("click", () => {
-        targetWindow.close();
-      });
-      actions.appendChild(settingsBtn);
-      actions.appendChild(close);
-      top.appendChild(title);
-      top.appendChild(actions);
-      body = doc.createElement("div");
-      body.className = "ga-body";
-      root.appendChild(top);
-      root.appendChild(body);
-      doc.body.appendChild(root);
-      attachSettingsModal({
-        doc,
-        targetWindow,
-        root,
-        openButton: settingsBtn,
-        semantic,
-        getDashboard: () => dashboard,
-        applyDashboard: async (next) => {
-          dashboard = next;
-          saveDashboardTemplate(doc, dashboard);
-          await renderNow();
-        },
-        getSettings: () => settings,
-        applySettings: async (next) => {
-          settings = next;
-          applySettingsToRoot(root, settings);
-          saveSettings(doc, settings);
-        }
-      });
-    } else {
-      const foundBody = root.querySelector(".ga-body");
-      if (!(foundBody instanceof HTMLDivElement)) {
-        throw new Error("Semantic root has no .ga-body container");
-      }
-      body = foundBody;
-    }
-    applySettingsToRoot(root, settings);
-    try {
-      await renderNow();
-    } catch (error) {
-      body.innerHTML = "";
-      const pre = doc.createElement("pre");
-      pre.style.margin = "12px";
-      pre.style.whiteSpace = "pre-wrap";
-      pre.style.color = "#ff9aa2";
-      pre.textContent = `Failed to render semantic dashboard:
-${error instanceof Error ? error.message : String(error)}`;
-      body.appendChild(pre);
-      throw error;
-    }
-  }
-
   // src/http.ts
   function readNcfaFromDocumentCookie() {
     if (typeof document === "undefined") return void 0;
@@ -16771,14 +14690,14 @@ ${error instanceof Error ? error.message : String(error)}`;
       const r = rounds[i];
       let changed = false;
       const next = { ...r };
-      for (const slot of [1, 2, 3, 4]) {
-        const countryKey = `p${slot}_guessCountry`;
-        const latKey = `p${slot}_guessLat`;
-        const lngKey = `p${slot}_guessLng`;
+      for (const role of ["player_self", "player_mate", "player_opponent", "player_opponent_mate"]) {
+        const countryKey = `${role}_guessCountry`;
+        const latKey = `${role}_guessLat`;
+        const lngKey = `${role}_guessLng`;
         const currentCountry = normalizeIso22(next[countryKey]);
         if (currentCountry) continue;
-        const lat = asNum(slot === 1 ? next[latKey] ?? next.guessLat : next[latKey]);
-        const lng = asNum(slot === 1 ? next[lngKey] ?? next.guessLng : next[lngKey]);
+        const lat = asNum(next[latKey]);
+        const lng = asNum(next[lngKey]);
         if (lat === void 0 || lng === void 0) {
           noLatLng++;
           continue;
@@ -16987,94 +14906,53 @@ ${error instanceof Error ? error.message : String(error)}`;
       };
       if (family === "teamduels") {
         const round = { ...roundBase, modeFamily: "teamduels" };
-        for (let p = 0; p < Math.min(players.length, 4); p++) {
-          const playerIndex = p + 1;
-          const { teamId, player, healthMap } = players[p];
-          const guess = guessMaps[p].get(rn);
-          const guessPos = extractGuessLatLng(guess);
-          const guessLat = guessPos.lat;
-          const guessLng = guessPos.lng;
-          const distanceMeters = asNum(guess?.distance);
-          round[`p${playerIndex}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
-          round[`p${playerIndex}_teamId`] = teamId || void 0;
-          round[`p${playerIndex}_guessLat`] = guessLat;
-          round[`p${playerIndex}_guessLng`] = guessLng;
-          round[`p${playerIndex}_distanceMeters`] = distanceMeters;
-          round[`p${playerIndex}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
-          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
-          round[`p${playerIndex}_score`] = asNum(guess?.score);
-          round[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
-          round[`p${playerIndex}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
-        }
         const roleByPos = {
           1: "player_self",
           2: "player_mate",
           3: "player_opponent",
           4: "player_opponent_mate"
         };
-        const suffixes = [
-          "playerId",
-          "teamId",
-          "guessLat",
-          "guessLng",
-          "guessCountry",
-          "distanceKm",
-          "score",
-          "healthAfter",
-          "isBestGuess"
-        ];
-        for (let pos = 1; pos <= 4; pos++) {
-          const role = roleByPos[pos];
-          for (const s of suffixes) {
-            round[`${role}_${s}`] = round[`p${pos}_${s}`];
-          }
+        for (let p = 0; p < Math.min(players.length, 4); p++) {
+          const playerIndex = p + 1;
+          const { teamId, player, healthMap } = players[p];
+          const role = roleByPos[playerIndex];
+          const guess = guessMaps[p].get(rn);
+          const guessPos = extractGuessLatLng(guess);
+          const guessLat = guessPos.lat;
+          const guessLng = guessPos.lng;
+          const distanceMeters = asNum(guess?.distance);
+          round[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
+          round[`${role}_teamId`] = teamId || void 0;
+          round[`${role}_guessLat`] = guessLat;
+          round[`${role}_guessLng`] = guessLng;
+          round[`${role}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
+          round[`${role}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
+          round[`${role}_score`] = asNum(guess?.score);
+          round[`${role}_healthAfter`] = healthMap.get(rn);
+          round[`${role}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
         }
         normalizedRounds.push(round);
       } else {
         const round = { ...roundBase, modeFamily: "duels" };
         for (let p = 0; p < Math.min(players.length, 2); p++) {
-          const playerIndex = p + 1;
+          const role = p === 0 ? "player_self" : "player_opponent";
           const { player, healthMap } = players[p];
           const guess = guessMaps[p].get(rn);
           const guessPos = extractGuessLatLng(guess);
           const guessLat = guessPos.lat;
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
-          round[`p${playerIndex}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
-          round[`p${playerIndex}_guessLat`] = guessLat;
-          round[`p${playerIndex}_guessLng`] = guessLng;
-          round[`p${playerIndex}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
-          round[`p${playerIndex}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
-          round[`p${playerIndex}_score`] = asNum(guess?.score);
-          round[`p${playerIndex}_healthAfter`] = healthMap.get(rn);
+          round[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
+          round[`${role}_guessLat`] = guessLat;
+          round[`${role}_guessLng`] = guessLng;
+          round[`${role}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
+          round[`${role}_guessCountry`] = extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
+          round[`${role}_score`] = asNum(guess?.score);
+          round[`${role}_healthAfter`] = healthMap.get(rn);
         }
-        if (typeof round.p1_healthAfter === "number" && typeof round.p2_healthAfter === "number") {
-          round.healthDiffAfter = round.p1_healthAfter - round.p2_healthAfter;
+        if (typeof round.player_self_healthAfter === "number" && typeof round.player_opponent_healthAfter === "number") {
+          round.healthDiffAfter = round.player_self_healthAfter - round.player_opponent_healthAfter;
         }
-        round.player_self_playerId = round.p1_playerId;
-        round.player_self_guessLat = round.p1_guessLat;
-        round.player_self_guessLng = round.p1_guessLng;
-        round.player_self_guessCountry = round.p1_guessCountry;
-        round.player_self_distanceKm = round.p1_distanceKm;
-        round.player_self_score = round.p1_score;
-        round.player_self_healthAfter = round.p1_healthAfter;
-        round.player_opponent_playerId = round.p2_playerId;
-        round.player_opponent_guessLat = round.p2_guessLat;
-        round.player_opponent_guessLng = round.p2_guessLng;
-        round.player_opponent_guessCountry = round.p2_guessCountry;
-        round.player_opponent_distanceKm = round.p2_distanceKm;
-        round.player_opponent_score = round.p2_score;
-        round.player_opponent_healthAfter = round.p2_healthAfter;
-        const selfGuess = guessMaps[0]?.get(rn);
-        round.guessLat = asNum(selfGuess?.lat);
-        round.guessLng = asNum(selfGuess?.lng);
-        round.distanceMeters = asNum(selfGuess?.distance);
-        round.score = asNum(selfGuess?.score);
-        round.timeMs = (() => {
-          const s = toTs(r?.startTime);
-          const e = toTs(r?.endTime);
-          return s !== void 0 && e !== void 0 && e >= s ? e - s : void 0;
-        })();
         normalizedRounds.push(round);
       }
     }
@@ -17197,16 +15075,85 @@ ${error instanceof Error ? error.message : String(error)}`;
   function asRecord(v) {
     return typeof v === "object" && v !== null ? v : {};
   }
+  var LEGACY_KEY_ALIASES = {
+    player_self_id: ["playerOneId", "p1_id"],
+    player_self_name: ["playerOneName", "p1_name"],
+    player_self_country: ["playerOneCountry", "p1_country"],
+    player_self_victory: ["playerOneVictory", "p1_victory"],
+    player_self_finalHealth: ["playerOneFinalHealth", "p1_finalHealth"],
+    player_self_startRating: ["playerOneStartRating", "p1_startRating"],
+    player_self_endRating: ["playerOneEndRating", "p1_endRating"],
+    player_opponent_id: ["playerTwoId", "teamTwoPlayerOneId", "p3_id", "p2_id"],
+    player_opponent_name: ["playerTwoName", "teamTwoPlayerOneName", "p3_name", "p2_name"],
+    player_opponent_country: ["playerTwoCountry", "teamTwoPlayerOneCountry", "p3_country", "p2_country"],
+    player_opponent_victory: ["playerTwoVictory", "p2_victory"],
+    player_opponent_finalHealth: ["playerTwoFinalHealth", "p2_finalHealth"],
+    player_opponent_startRating: ["playerTwoStartRating", "p3_startRating", "p2_startRating"],
+    player_opponent_endRating: ["playerTwoEndRating", "p3_endRating", "p2_endRating"],
+    player_mate_id: ["teamOnePlayerTwoId", "p2_id"],
+    player_mate_name: ["teamOnePlayerTwoName", "p2_name"],
+    player_mate_country: ["teamOnePlayerTwoCountry", "p2_country"],
+    player_mate_startRating: ["p2_startRating"],
+    player_mate_endRating: ["p2_endRating"],
+    player_opponent_mate_id: ["teamTwoPlayerTwoId", "p4_id"],
+    player_opponent_mate_name: ["teamTwoPlayerTwoName", "p4_name"],
+    player_opponent_mate_country: ["teamTwoPlayerTwoCountry", "p4_country"],
+    player_opponent_mate_startRating: ["p4_startRating"],
+    player_opponent_mate_endRating: ["p4_endRating"],
+    player_self_playerId: ["p1_playerId"],
+    player_self_teamId: ["p1_teamId"],
+    player_self_guessLat: ["p1_guessLat"],
+    player_self_guessLng: ["p1_guessLng"],
+    player_self_guessCountry: ["p1_guessCountry", "guessCountry"],
+    player_self_distanceKm: ["p1_distanceKm"],
+    player_self_score: ["p1_score", "score"],
+    player_self_healthAfter: ["p1_healthAfter"],
+    player_self_isBestGuess: ["p1_isBestGuess"],
+    player_mate_playerId: ["p2_playerId"],
+    player_mate_teamId: ["p2_teamId"],
+    player_mate_guessLat: ["p2_guessLat"],
+    player_mate_guessLng: ["p2_guessLng"],
+    player_mate_guessCountry: ["p2_guessCountry"],
+    player_mate_distanceKm: ["p2_distanceKm"],
+    player_mate_score: ["p2_score"],
+    player_mate_healthAfter: ["p2_healthAfter"],
+    player_mate_isBestGuess: ["p2_isBestGuess"],
+    player_opponent_playerId: ["p3_playerId", "p2_playerId"],
+    player_opponent_teamId: ["p3_teamId", "p2_teamId"],
+    player_opponent_guessLat: ["p3_guessLat", "p2_guessLat"],
+    player_opponent_guessLng: ["p3_guessLng", "p2_guessLng"],
+    player_opponent_guessCountry: ["p3_guessCountry", "p2_guessCountry"],
+    player_opponent_distanceKm: ["p3_distanceKm", "p2_distanceKm"],
+    player_opponent_score: ["p3_score", "p2_score"],
+    player_opponent_healthAfter: ["p3_healthAfter", "p2_healthAfter"],
+    player_opponent_isBestGuess: ["p3_isBestGuess", "p2_isBestGuess"],
+    player_opponent_mate_playerId: ["p4_playerId"],
+    player_opponent_mate_teamId: ["p4_teamId"],
+    player_opponent_mate_guessLat: ["p4_guessLat"],
+    player_opponent_mate_guessLng: ["p4_guessLng"],
+    player_opponent_mate_guessCountry: ["p4_guessCountry"],
+    player_opponent_mate_distanceKm: ["p4_distanceKm"],
+    player_opponent_mate_score: ["p4_score"],
+    player_opponent_mate_healthAfter: ["p4_healthAfter"],
+    player_opponent_mate_isBestGuess: ["p4_isBestGuess"]
+  };
+  function pickWithLegacyAliases(rec, key) {
+    if (key in rec && rec[key] !== void 0 && rec[key] !== null) return rec[key];
+    for (const alias of LEGACY_KEY_ALIASES[key] || []) {
+      if (alias in rec && rec[alias] !== void 0 && rec[alias] !== null) return rec[alias];
+    }
+    return void 0;
+  }
   function getString(rec, key) {
-    const v = rec[key];
+    const v = pickWithLegacyAliases(rec, key);
     return typeof v === "string" ? v : void 0;
   }
   function getNumber(rec, key) {
-    const v = rec[key];
+    const v = pickWithLegacyAliases(rec, key);
     return typeof v === "number" ? v : void 0;
   }
   function getBoolean(rec, key) {
-    const v = rec[key];
+    const v = pickWithLegacyAliases(rec, key);
     return typeof v === "boolean" ? v : void 0;
   }
   var regionDisplay2 = typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
@@ -17246,8 +15193,8 @@ ${error instanceof Error ? error.message : String(error)}`;
     const rr = asRecord(r);
     const trueLat = typeof r.trueLat === "number" ? r.trueLat : void 0;
     const trueLng = typeof r.trueLng === "number" ? r.trueLng : void 0;
-    const guessLat = getNumber(rr, "p1_guessLat") ?? getNumber(rr, "guessLat");
-    const guessLng = getNumber(rr, "p1_guessLng") ?? getNumber(rr, "guessLng");
+    const guessLat = getNumber(rr, "player_self_guessLat");
+    const guessLng = getNumber(rr, "player_self_guessLng");
     const timeMs = extractTimeMs(r);
     const damage = meta?.ownPlayerId ? getRoundDamageDiff(r, meta.ownPlayerId) : void 0;
     return {
@@ -17256,7 +15203,7 @@ ${error instanceof Error ? error.message : String(error)}`;
       ts,
       score,
       trueCountry: normalizeCountryCode(r.trueCountry),
-      guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+      guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
       trueLat,
       trueLng,
       guessLat,
@@ -17343,26 +15290,15 @@ ${error instanceof Error ? error.message : String(error)}`;
   }
   function extractScore(r) {
     const rr = asRecord(r);
-    const p1Score = getNumber(rr, "p1_score");
-    if (typeof p1Score === "number") return p1Score;
-    const legacyScore = getNumber(rr, "score");
-    if (typeof legacyScore === "number") return legacyScore;
-    return void 0;
+    return getNumber(rr, "player_self_score");
   }
   function extractDistanceMeters(r) {
     const rr = asRecord(r);
-    const p1DistanceKm = getNumber(rr, "p1_distanceKm");
-    if (typeof p1DistanceKm === "number") return p1DistanceKm * 1e3;
-    const p1DistanceMeters = getNumber(rr, "p1_distanceMeters");
-    if (typeof p1DistanceMeters === "number") return p1DistanceMeters;
-    const legacyDistanceMeters = getNumber(rr, "distanceMeters");
-    if (typeof legacyDistanceMeters === "number") return legacyDistanceMeters;
+    const selfDistanceKm = getNumber(rr, "player_self_distanceKm");
+    if (typeof selfDistanceKm === "number") return selfDistanceKm * 1e3;
     return void 0;
   }
   function extractTimeMs(r) {
-    const rr = asRecord(r);
-    const legacyTimeMs = getNumber(rr, "timeMs");
-    if (typeof legacyTimeMs === "number") return legacyTimeMs;
     if (typeof r.durationSeconds === "number") return r.durationSeconds * 1e3;
     return void 0;
   }
@@ -17426,17 +15362,17 @@ ${error instanceof Error ? error.message : String(error)}`;
   }
   function extractOwnDuelRating(detail, ownPlayerId) {
     const d = asRecord(detail);
-    const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
-    const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
-    if (ownPlayerId && ownPlayerId === p2) {
+    const selfId = getString(d, "player_self_id");
+    const opponentId = getString(d, "player_opponent_id");
+    if (ownPlayerId && ownPlayerId === opponentId && ownPlayerId !== selfId) {
       return {
-        start: getNumber(d, "playerTwoStartRating") ?? getNumber(d, "p2_ratingBefore"),
-        end: getNumber(d, "playerTwoEndRating") ?? getNumber(d, "p2_ratingAfter")
+        start: getNumber(d, "player_opponent_startRating"),
+        end: getNumber(d, "player_opponent_endRating")
       };
     }
     return {
-      start: getNumber(d, "playerOneStartRating") ?? getNumber(d, "p1_ratingBefore"),
-      end: getNumber(d, "playerOneEndRating") ?? getNumber(d, "p1_ratingAfter")
+      start: getNumber(d, "player_self_startRating"),
+      end: getNumber(d, "player_self_endRating")
     };
   }
   function extractOwnTeamRating(detail, ownPlayerId) {
@@ -17456,24 +15392,16 @@ ${error instanceof Error ? error.message : String(error)}`;
       end: getNumber(d, "teamOneEndRating")
     };
   }
-  function playerSlots(round) {
-    const out = [];
-    const rr = asRecord(round);
-    for (const slot of [1, 2, 3, 4]) {
-      const id = getString(rr, `p${slot}_playerId`);
-      if (typeof id === "string" && id.trim()) out.push(slot);
-    }
-    return out;
-  }
   function getPlayerStatFromRound(round, playerId) {
     const rr = asRecord(round);
-    for (const slot of playerSlots(round)) {
-      const pid = getString(rr, `p${slot}_playerId`);
+    const roles = ["player_self", "player_mate", "player_opponent", "player_opponent_mate"];
+    for (const role of roles) {
+      const pid = getString(rr, `${role}_playerId`);
       if (pid !== playerId) continue;
       return {
-        score: getNumber(rr, `p${slot}_score`),
-        distanceKm: getNumber(rr, `p${slot}_distanceKm`),
-        teamId: getString(rr, `p${slot}_teamId`)
+        score: getNumber(rr, `${role}_score`),
+        distanceKm: getNumber(rr, `${role}_distanceKm`),
+        teamId: getString(rr, `${role}_teamId`)
       };
     }
     return void 0;
@@ -17482,13 +15410,13 @@ ${error instanceof Error ? error.message : String(error)}`;
     const rr = asRecord(round);
     const modeFamily = getString(rr, "modeFamily");
     if (modeFamily === "duels") {
-      const p1 = getString(rr, "p1_playerId");
-      const p2 = getString(rr, "p2_playerId");
-      const p1Score = getNumber(rr, "p1_score");
-      const p2Score = getNumber(rr, "p2_score");
-      if (typeof p1Score !== "number" || typeof p2Score !== "number") return void 0;
-      if (ownPlayerId === p2) return p2Score - p1Score;
-      if (ownPlayerId === p1 || !p1 || !p2) return p1Score - p2Score;
+      const selfId = getString(rr, "player_self_playerId");
+      const opponentId = getString(rr, "player_opponent_playerId");
+      const selfScore = getNumber(rr, "player_self_score");
+      const opponentScore = getNumber(rr, "player_opponent_score");
+      if (typeof selfScore !== "number" || typeof opponentScore !== "number") return void 0;
+      if (ownPlayerId === opponentId && ownPlayerId !== selfId) return opponentScore - selfScore;
+      if (ownPlayerId === selfId || !selfId || !opponentId) return selfScore - opponentScore;
       return void 0;
     }
     if (modeFamily === "teamduels") {
@@ -17498,11 +15426,12 @@ ${error instanceof Error ? error.message : String(error)}`;
       let ownTeamN = 0;
       let oppTeamScore = 0;
       let oppTeamN = 0;
-      for (const slot of playerSlots(round)) {
-        const pid = getString(rr, `p${slot}_playerId`);
+      const roles = ["player_self", "player_mate", "player_opponent", "player_opponent_mate"];
+      for (const role of roles) {
+        const pid = getString(rr, `${role}_playerId`);
         if (!pid) continue;
-        const teamId = getString(rr, `p${slot}_teamId`);
-        const score = getNumber(rr, `p${slot}_score`);
+        const teamId = getString(rr, `${role}_teamId`);
+        const score = getNumber(rr, `${role}_score`);
         if (typeof score !== "number" || !teamId) continue;
         if (teamId === own.teamId) {
           ownTeamScore += score;
@@ -17521,23 +15450,23 @@ ${error instanceof Error ? error.message : String(error)}`;
     const d = asRecord(detail);
     const modeFamily = getString(d, "modeFamily");
     if (modeFamily === "duels") {
-      const p1 = getString(d, "playerOneId") ?? getString(d, "p1_playerId");
-      const p2 = getString(d, "playerTwoId") ?? getString(d, "p2_playerId");
-      const ownIsP2 = ownPlayerId && ownPlayerId === p2;
-      const ownWin = ownIsP2 ? getBoolean(d, "playerTwoVictory") : getBoolean(d, "playerOneVictory");
-      const oppWin = ownIsP2 ? getBoolean(d, "playerOneVictory") : getBoolean(d, "playerTwoVictory");
+      const selfId = getString(d, "player_self_id");
+      const opponentId = getString(d, "player_opponent_id");
+      const ownIsOpponent = ownPlayerId && ownPlayerId === opponentId && ownPlayerId !== selfId;
+      const ownWin = ownIsOpponent ? getBoolean(d, "player_opponent_victory") : getBoolean(d, "player_self_victory");
+      const oppWin = ownIsOpponent ? getBoolean(d, "player_self_victory") : getBoolean(d, "player_opponent_victory");
       if (typeof ownWin === "boolean") return ownWin ? "W" : "L";
       if (typeof oppWin === "boolean") return oppWin ? "L" : "W";
-      const p1Hp = getNumber(d, "playerOneFinalHealth");
-      const p2Hp = getNumber(d, "playerTwoFinalHealth");
-      if (typeof p1Hp === "number" && typeof p2Hp === "number") {
-        const ownHp = ownIsP2 ? p2Hp : p1Hp;
-        const oppHp = ownIsP2 ? p1Hp : p2Hp;
+      const selfHp = getNumber(d, "player_self_finalHealth");
+      const opponentHp = getNumber(d, "player_opponent_finalHealth");
+      if (typeof selfHp === "number" && typeof opponentHp === "number") {
+        const ownHp = ownIsOpponent ? opponentHp : selfHp;
+        const oppHp = ownIsOpponent ? selfHp : opponentHp;
         if (ownHp > oppHp) return "W";
         if (ownHp < oppHp) return "L";
         return "T";
       }
-      if (!ownPlayerId && (p1 || p2)) return "T";
+      if (!ownPlayerId && (selfId || opponentId)) return "T";
       return void 0;
     }
     if (modeFamily === "teamduels") {
@@ -17564,9 +15493,9 @@ ${error instanceof Error ? error.message : String(error)}`;
   function inferOwnPlayerId(rounds) {
     const counts = /* @__PURE__ */ new Map();
     for (const r of rounds) {
-      const p1PlayerId = getString(asRecord(r), "p1_playerId");
-      if (typeof p1PlayerId === "string" && p1PlayerId.trim()) {
-        counts.set(p1PlayerId, (counts.get(p1PlayerId) || 0) + 1);
+      const selfPlayerId = getString(asRecord(r), "player_self_playerId");
+      if (typeof selfPlayerId === "string" && selfPlayerId.trim()) {
+        counts.set(selfPlayerId, (counts.get(selfPlayerId) || 0) + 1);
       }
     }
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -17577,8 +15506,10 @@ ${error instanceof Error ? error.message : String(error)}`;
     for (const d of details) {
       const dd = asRecord(d);
       const pairs = [
-        [getString(dd, "playerOneId") ?? getString(dd, "p1_playerId"), getString(dd, "playerOneName") ?? getString(dd, "p1_playerName")],
-        [getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"), getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName")],
+        [getString(dd, "player_self_id"), getString(dd, "player_self_name")],
+        [getString(dd, "player_mate_id"), getString(dd, "player_mate_name")],
+        [getString(dd, "player_opponent_id"), getString(dd, "player_opponent_name")],
+        [getString(dd, "player_opponent_mate_id"), getString(dd, "player_opponent_mate_name")],
         [getString(dd, "teamOnePlayerOneId"), getString(dd, "teamOnePlayerOneName")],
         [getString(dd, "teamOnePlayerTwoId"), getString(dd, "teamOnePlayerTwoName")],
         [getString(dd, "teamTwoPlayerOneId"), getString(dd, "teamTwoPlayerOneName")],
@@ -17799,7 +15730,7 @@ ${error instanceof Error ? error.message : String(error)}`;
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0,
         damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : void 0,
-        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
         trueCountry: normalizeCountryCode(r.trueCountry),
         trueLat: typeof r.trueLat === "number" ? r.trueLat : void 0,
         trueLng: typeof r.trueLng === "number" ? r.trueLng : void 0
@@ -18773,7 +16704,7 @@ ${error instanceof Error ? error.message : String(error)}`;
         score,
         timeSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
         distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0,
-        guessCountry: normalizeCountryCode(getString(asRecord(r), "p1_guessCountry")),
+        guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
         trueCountry: normalizeCountryCode(r.trueCountry),
         damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : void 0
       };
@@ -19124,7 +17055,7 @@ ${error instanceof Error ? error.message : String(error)}`;
       }
       const dm = extractDistanceMeters(r);
       if (typeof dm === "number") entry.dist.push(dm / 1e3);
-      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
       if (guess) {
         entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
         if (guess === t) {
@@ -19229,7 +17160,7 @@ ${error instanceof Error ? error.message : String(error)}`;
     const confusionMap = /* @__PURE__ */ new Map();
     for (const r of teamRounds) {
       const truth = normalizeCountryCode(r.trueCountry);
-      const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+      const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
       if (!truth || !guess || truth === guess) continue;
       const key = `${truth}|${guess}`;
       confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
@@ -19282,20 +17213,20 @@ ${error instanceof Error ? error.message : String(error)}`;
       const modeLabel = drilldownMetaByGameId.get(d.gameId)?.gameModeLabel;
       if (modeFamily === "duels") {
         ids.push({
-          id: getString(dd, "playerTwoId") ?? getString(dd, "p2_playerId"),
-          name: getString(dd, "playerTwoName") ?? getString(dd, "p2_playerName"),
-          country: getString(dd, "playerTwoCountry")
+          id: getString(dd, "player_opponent_id") ?? getString(dd, "playerTwoId"),
+          name: getString(dd, "player_opponent_name") ?? getString(dd, "playerTwoName"),
+          country: getString(dd, "player_opponent_country") ?? getString(dd, "playerTwoCountry")
         });
       } else if (modeFamily === "teamduels") {
         ids.push({
-          id: getString(dd, "p3_playerId") ?? getString(dd, "teamTwoPlayerOneId"),
-          name: getString(dd, "p3_playerName") ?? getString(dd, "teamTwoPlayerOneName"),
-          country: getString(dd, "teamTwoPlayerOneCountry")
+          id: getString(dd, "player_opponent_id") ?? getString(dd, "teamTwoPlayerOneId"),
+          name: getString(dd, "player_opponent_name") ?? getString(dd, "teamTwoPlayerOneName"),
+          country: getString(dd, "player_opponent_country") ?? getString(dd, "teamTwoPlayerOneCountry")
         });
         ids.push({
-          id: getString(dd, "p4_playerId") ?? getString(dd, "teamTwoPlayerTwoId"),
-          name: getString(dd, "p4_playerName") ?? getString(dd, "teamTwoPlayerTwoName"),
-          country: getString(dd, "teamTwoPlayerTwoCountry")
+          id: getString(dd, "player_opponent_mate_id") ?? getString(dd, "teamTwoPlayerTwoId"),
+          name: getString(dd, "player_opponent_mate_name") ?? getString(dd, "teamTwoPlayerTwoName"),
+          country: getString(dd, "player_opponent_mate_country") ?? getString(dd, "teamTwoPlayerTwoCountry")
         });
       }
       for (const x of ids) {
@@ -19614,7 +17545,7 @@ ${error instanceof Error ? error.message : String(error)}`;
         const ts = teamPlayedAtByGameId.get(r.gameId);
         const score = extractScore(r);
         if (typeof ts !== "number" || typeof score !== "number") return void 0;
-        const guessCountry = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+        const guessCountry = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
         const trueCountry = normalizeCountryCode(r.trueCountry);
         return {
           score,
@@ -19658,7 +17589,7 @@ ${error instanceof Error ? error.message : String(error)}`;
           if (sc < 50) cur.throws += 1;
           if (sc >= 5e3) cur.fiveKs += 1;
         }
-        const guess = normalizeCountryCode(getString(asRecord(r), "p1_guessCountry"));
+        const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
         if (guess && guess === country) cur.correct += 1;
         if (ownPlayerId) {
           const diff = getRoundDamageDiff(r, ownPlayerId);
@@ -40398,6 +38329,75 @@ ${error instanceof Error ? error.message : String(error)}`;
   var version = XLSX.version;
 
   // src/export.ts
+  var LEGACY_KEY_ALIASES2 = {
+    player_self_id: ["playerOneId", "p1_id"],
+    player_self_name: ["playerOneName", "p1_name"],
+    player_self_country: ["playerOneCountry", "p1_country"],
+    player_self_victory: ["playerOneVictory", "p1_victory"],
+    player_self_finalHealth: ["playerOneFinalHealth", "p1_finalHealth"],
+    player_self_startRating: ["playerOneStartRating", "p1_startRating"],
+    player_self_endRating: ["playerOneEndRating", "p1_endRating"],
+    player_mate_id: ["teamOnePlayerTwoId", "p2_id"],
+    player_mate_name: ["teamOnePlayerTwoName", "p2_name"],
+    player_mate_country: ["teamOnePlayerTwoCountry", "p2_country"],
+    player_mate_startRating: ["p2_startRating"],
+    player_mate_endRating: ["p2_endRating"],
+    player_opponent_id: ["playerTwoId", "teamTwoPlayerOneId", "p3_id", "p2_id"],
+    player_opponent_name: ["playerTwoName", "teamTwoPlayerOneName", "p3_name", "p2_name"],
+    player_opponent_country: ["playerTwoCountry", "teamTwoPlayerOneCountry", "p3_country", "p2_country"],
+    player_opponent_victory: ["playerTwoVictory", "p2_victory"],
+    player_opponent_finalHealth: ["playerTwoFinalHealth", "p2_finalHealth"],
+    player_opponent_startRating: ["playerTwoStartRating", "p3_startRating", "p2_startRating"],
+    player_opponent_endRating: ["playerTwoEndRating", "p3_endRating", "p2_endRating"],
+    player_opponent_mate_id: ["teamTwoPlayerTwoId", "p4_id"],
+    player_opponent_mate_name: ["teamTwoPlayerTwoName", "p4_name"],
+    player_opponent_mate_country: ["teamTwoPlayerTwoCountry", "p4_country"],
+    player_opponent_mate_startRating: ["p4_startRating"],
+    player_opponent_mate_endRating: ["p4_endRating"],
+    player_self_playerId: ["p1_playerId"],
+    player_self_teamId: ["p1_teamId"],
+    player_self_guessLat: ["p1_guessLat"],
+    player_self_guessLng: ["p1_guessLng"],
+    player_self_guessCountry: ["p1_guessCountry", "guessCountry"],
+    player_self_distanceKm: ["p1_distanceKm"],
+    player_self_score: ["p1_score", "score"],
+    player_self_healthAfter: ["p1_healthAfter"],
+    player_self_isBestGuess: ["p1_isBestGuess"],
+    player_mate_playerId: ["p2_playerId"],
+    player_mate_teamId: ["p2_teamId"],
+    player_mate_guessLat: ["p2_guessLat"],
+    player_mate_guessLng: ["p2_guessLng"],
+    player_mate_guessCountry: ["p2_guessCountry"],
+    player_mate_distanceKm: ["p2_distanceKm"],
+    player_mate_score: ["p2_score"],
+    player_mate_healthAfter: ["p2_healthAfter"],
+    player_mate_isBestGuess: ["p2_isBestGuess"],
+    player_opponent_playerId: ["p3_playerId", "p2_playerId"],
+    player_opponent_teamId: ["p3_teamId", "p2_teamId"],
+    player_opponent_guessLat: ["p3_guessLat", "p2_guessLat"],
+    player_opponent_guessLng: ["p3_guessLng", "p2_guessLng"],
+    player_opponent_guessCountry: ["p3_guessCountry", "p2_guessCountry"],
+    player_opponent_distanceKm: ["p3_distanceKm", "p2_distanceKm"],
+    player_opponent_score: ["p3_score", "p2_score"],
+    player_opponent_healthAfter: ["p3_healthAfter", "p2_healthAfter"],
+    player_opponent_isBestGuess: ["p3_isBestGuess", "p2_isBestGuess"],
+    player_opponent_mate_playerId: ["p4_playerId"],
+    player_opponent_mate_teamId: ["p4_teamId"],
+    player_opponent_mate_guessLat: ["p4_guessLat"],
+    player_opponent_mate_guessLng: ["p4_guessLng"],
+    player_opponent_mate_guessCountry: ["p4_guessCountry"],
+    player_opponent_mate_distanceKm: ["p4_distanceKm"],
+    player_opponent_mate_score: ["p4_score"],
+    player_opponent_mate_healthAfter: ["p4_healthAfter"],
+    player_opponent_mate_isBestGuess: ["p4_isBestGuess"]
+  };
+  function pickWithAliases(obj, key) {
+    if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
+    for (const alias of LEGACY_KEY_ALIASES2[key] || []) {
+      if (obj && obj[alias] !== void 0 && obj[alias] !== null) return obj[alias];
+    }
+    return void 0;
+  }
   function getByPath3(obj, path) {
     const parts = path.split(".");
     let cur = obj;
@@ -40571,20 +38571,20 @@ ${error instanceof Error ? error.message : String(error)}`;
         detailsError: d?.status === "error" ? d?.error || "" : ""
       };
       if (!isTeam) {
-        base.player_self_id = d?.player_self_id ?? d?.playerOneId ?? d?.p1_playerId ?? "";
-        base.player_self_name = d?.player_self_name ?? d?.playerOneName ?? d?.p1_playerName ?? "";
-        base.player_self_country = d?.player_self_country ?? d?.playerOneCountry ?? "";
-        base.player_self_victory = d?.player_self_victory ?? (d?.playerOneVictory === void 0 ? "" : d?.playerOneVictory);
-        base.player_self_finalHealth = d?.player_self_finalHealth ?? d?.playerOneFinalHealth ?? "";
-        base.player_self_startRating = d?.player_self_startRating ?? d?.playerOneStartRating ?? d?.p1_ratingBefore ?? "";
-        base.player_self_endRating = d?.player_self_endRating ?? d?.playerOneEndRating ?? d?.p1_ratingAfter ?? "";
-        base.player_opponent_id = d?.player_opponent_id ?? d?.playerTwoId ?? d?.p2_playerId ?? "";
-        base.player_opponent_name = d?.player_opponent_name ?? d?.playerTwoName ?? d?.p2_playerName ?? "";
-        base.player_opponent_country = d?.player_opponent_country ?? d?.playerTwoCountry ?? "";
-        base.player_opponent_victory = d?.player_opponent_victory ?? (d?.playerTwoVictory === void 0 ? "" : d?.playerTwoVictory);
-        base.player_opponent_finalHealth = d?.player_opponent_finalHealth ?? d?.playerTwoFinalHealth ?? "";
-        base.player_opponent_startRating = d?.player_opponent_startRating ?? d?.playerTwoStartRating ?? d?.p2_ratingBefore ?? "";
-        base.player_opponent_endRating = d?.player_opponent_endRating ?? d?.playerTwoEndRating ?? d?.p2_ratingAfter ?? "";
+        base.player_self_id = pickWithAliases(d, "player_self_id") ?? "";
+        base.player_self_name = pickWithAliases(d, "player_self_name") ?? "";
+        base.player_self_country = pickWithAliases(d, "player_self_country") ?? "";
+        base.player_self_victory = pickWithAliases(d, "player_self_victory") ?? (d?.playerOneVictory === void 0 ? "" : d?.playerOneVictory);
+        base.player_self_finalHealth = pickWithAliases(d, "player_self_finalHealth") ?? "";
+        base.player_self_startRating = pickWithAliases(d, "player_self_startRating") ?? "";
+        base.player_self_endRating = pickWithAliases(d, "player_self_endRating") ?? "";
+        base.player_opponent_id = pickWithAliases(d, "player_opponent_id") ?? "";
+        base.player_opponent_name = pickWithAliases(d, "player_opponent_name") ?? "";
+        base.player_opponent_country = pickWithAliases(d, "player_opponent_country") ?? "";
+        base.player_opponent_victory = pickWithAliases(d, "player_opponent_victory") ?? (d?.playerTwoVictory === void 0 ? "" : d?.playerTwoVictory);
+        base.player_opponent_finalHealth = pickWithAliases(d, "player_opponent_finalHealth") ?? "";
+        base.player_opponent_startRating = pickWithAliases(d, "player_opponent_startRating") ?? "";
+        base.player_opponent_endRating = pickWithAliases(d, "player_opponent_endRating") ?? "";
         base.totalRounds = d?.totalRounds ?? "";
         base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
         base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -40611,26 +38611,26 @@ ${error instanceof Error ? error.message : String(error)}`;
         base.teamTwoPlayerTwoId = d?.teamTwoPlayerTwoId ?? "";
         base.teamTwoPlayerTwoName = d?.teamTwoPlayerTwoName ?? "";
         base.teamTwoPlayerTwoCountry = d?.teamTwoPlayerTwoCountry ?? "";
-        base.player_self_id = d?.player_self_id ?? d?.teamOnePlayerOneId ?? "";
-        base.player_self_name = d?.player_self_name ?? d?.teamOnePlayerOneName ?? "";
-        base.player_self_country = d?.player_self_country ?? d?.teamOnePlayerOneCountry ?? "";
-        base.player_self_startRating = d?.player_self_startRating ?? "";
-        base.player_self_endRating = d?.player_self_endRating ?? "";
-        base.player_mate_id = d?.player_mate_id ?? d?.teamOnePlayerTwoId ?? "";
-        base.player_mate_name = d?.player_mate_name ?? d?.teamOnePlayerTwoName ?? "";
-        base.player_mate_country = d?.player_mate_country ?? d?.teamOnePlayerTwoCountry ?? "";
-        base.player_mate_startRating = d?.player_mate_startRating ?? "";
-        base.player_mate_endRating = d?.player_mate_endRating ?? "";
-        base.player_opponent_id = d?.player_opponent_id ?? d?.teamTwoPlayerOneId ?? "";
-        base.player_opponent_name = d?.player_opponent_name ?? d?.teamTwoPlayerOneName ?? "";
-        base.player_opponent_country = d?.player_opponent_country ?? d?.teamTwoPlayerOneCountry ?? "";
-        base.player_opponent_startRating = d?.player_opponent_startRating ?? "";
-        base.player_opponent_endRating = d?.player_opponent_endRating ?? "";
-        base.player_opponent_mate_id = d?.player_opponent_mate_id ?? d?.teamTwoPlayerTwoId ?? "";
-        base.player_opponent_mate_name = d?.player_opponent_mate_name ?? d?.teamTwoPlayerTwoName ?? "";
-        base.player_opponent_mate_country = d?.player_opponent_mate_country ?? d?.teamTwoPlayerTwoCountry ?? "";
-        base.player_opponent_mate_startRating = d?.player_opponent_mate_startRating ?? "";
-        base.player_opponent_mate_endRating = d?.player_opponent_mate_endRating ?? "";
+        base.player_self_id = pickWithAliases(d, "player_self_id") ?? "";
+        base.player_self_name = pickWithAliases(d, "player_self_name") ?? "";
+        base.player_self_country = pickWithAliases(d, "player_self_country") ?? "";
+        base.player_self_startRating = pickWithAliases(d, "player_self_startRating") ?? "";
+        base.player_self_endRating = pickWithAliases(d, "player_self_endRating") ?? "";
+        base.player_mate_id = pickWithAliases(d, "player_mate_id") ?? "";
+        base.player_mate_name = pickWithAliases(d, "player_mate_name") ?? "";
+        base.player_mate_country = pickWithAliases(d, "player_mate_country") ?? "";
+        base.player_mate_startRating = pickWithAliases(d, "player_mate_startRating") ?? "";
+        base.player_mate_endRating = pickWithAliases(d, "player_mate_endRating") ?? "";
+        base.player_opponent_id = pickWithAliases(d, "player_opponent_id") ?? "";
+        base.player_opponent_name = pickWithAliases(d, "player_opponent_name") ?? "";
+        base.player_opponent_country = pickWithAliases(d, "player_opponent_country") ?? "";
+        base.player_opponent_startRating = pickWithAliases(d, "player_opponent_startRating") ?? "";
+        base.player_opponent_endRating = pickWithAliases(d, "player_opponent_endRating") ?? "";
+        base.player_opponent_mate_id = pickWithAliases(d, "player_opponent_mate_id") ?? "";
+        base.player_opponent_mate_name = pickWithAliases(d, "player_opponent_mate_name") ?? "";
+        base.player_opponent_mate_country = pickWithAliases(d, "player_opponent_mate_country") ?? "";
+        base.player_opponent_mate_startRating = pickWithAliases(d, "player_opponent_mate_startRating") ?? "";
+        base.player_opponent_mate_endRating = pickWithAliases(d, "player_opponent_mate_endRating") ?? "";
         base.totalRounds = d?.totalRounds ?? "";
         base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
         base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -40642,12 +38642,24 @@ ${error instanceof Error ? error.message : String(error)}`;
       const g = gameById.get(r.gameId);
       const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
       if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
-      const selfLat = r.player_self_guessLat ?? r.p1_guessLat ?? r.guessLat;
-      const selfLng = r.player_self_guessLng ?? r.p1_guessLng ?? r.guessLng;
-      const selfCountry = await resolveGuessCountryForExport(r.player_self_guessCountry ?? r.p1_guessCountry, selfLat, selfLng);
-      const mateCountry = await resolveGuessCountryForExport(r.player_mate_guessCountry ?? r.p2_guessCountry, r.player_mate_guessLat ?? r.p2_guessLat, r.player_mate_guessLng ?? r.p2_guessLng);
-      const oppCountry = await resolveGuessCountryForExport(r.player_opponent_guessCountry ?? r.p3_guessCountry, r.player_opponent_guessLat ?? r.p3_guessLat, r.player_opponent_guessLng ?? r.p3_guessLng);
-      const oppMateCountry = await resolveGuessCountryForExport(r.player_opponent_mate_guessCountry ?? r.p4_guessCountry, r.player_opponent_mate_guessLat ?? r.p4_guessLat, r.player_opponent_mate_guessLng ?? r.p4_guessLng);
+      const selfLat = pickWithAliases(r, "player_self_guessLat");
+      const selfLng = pickWithAliases(r, "player_self_guessLng");
+      const selfCountry = await resolveGuessCountryForExport(pickWithAliases(r, "player_self_guessCountry"), selfLat, selfLng);
+      const mateCountry = await resolveGuessCountryForExport(
+        pickWithAliases(r, "player_mate_guessCountry"),
+        pickWithAliases(r, "player_mate_guessLat"),
+        pickWithAliases(r, "player_mate_guessLng")
+      );
+      const oppCountry = await resolveGuessCountryForExport(
+        pickWithAliases(r, "player_opponent_guessCountry"),
+        pickWithAliases(r, "player_opponent_guessLat"),
+        pickWithAliases(r, "player_opponent_guessLng")
+      );
+      const oppMateCountry = await resolveGuessCountryForExport(
+        pickWithAliases(r, "player_opponent_mate_guessCountry"),
+        pickWithAliases(r, "player_opponent_mate_guessLat"),
+        pickWithAliases(r, "player_opponent_mate_guessLng")
+      );
       const trueHeading = asFiniteNumber(
         pickFirst3(r.raw, [
           "panorama.heading",
@@ -40672,64 +38684,67 @@ ${error instanceof Error ? error.message : String(error)}`;
         true_streetView_url: buildStreetViewUrl2(r.trueLat, r.trueLng, trueHeading),
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
-        player_self_playerId: r.player_self_playerId ?? r.p1_playerId ?? "",
+        player_self_playerId: pickWithAliases(r, "player_self_playerId") ?? "",
         player_self_guessLat: selfLat ?? "",
         player_self_guessLng: selfLng ?? "",
         player_self_googleMaps_url: buildGoogleMapsUrl2(selfLat, selfLng),
         player_self_guessCountry: selfCountry,
-        player_self_distance_km: r.player_self_distanceKm ?? r.p1_distanceKm ?? ((r.p1_distanceMeters ?? r.distanceMeters) !== void 0 ? (r.p1_distanceMeters ?? r.distanceMeters) / 1e3 : ""),
-        player_self_score: r.player_self_score ?? r.p1_score ?? r.score ?? "",
-        player_self_healthAfter: r.player_self_healthAfter ?? r.p1_healthAfter ?? "",
-        player_self_isBestGuess: r.player_self_isBestGuess || r.p1_isBestGuess ? 1 : 0,
-        player_opponent_playerId: r.player_opponent_playerId ?? r.p2_playerId ?? "",
-        player_opponent_guessLat: r.player_opponent_guessLat ?? r.p2_guessLat ?? "",
-        player_opponent_guessLng: r.player_opponent_guessLng ?? r.p2_guessLng ?? "",
-        player_opponent_googleMaps_url: buildGoogleMapsUrl2(r.player_opponent_guessLat ?? r.p2_guessLat, r.player_opponent_guessLng ?? r.p2_guessLng),
+        player_self_distance_km: pickWithAliases(r, "player_self_distanceKm") ?? "",
+        player_self_score: pickWithAliases(r, "player_self_score") ?? "",
+        player_self_healthAfter: pickWithAliases(r, "player_self_healthAfter") ?? "",
+        player_self_isBestGuess: pickWithAliases(r, "player_self_isBestGuess") ? 1 : 0,
+        player_opponent_playerId: pickWithAliases(r, "player_opponent_playerId") ?? "",
+        player_opponent_guessLat: pickWithAliases(r, "player_opponent_guessLat") ?? "",
+        player_opponent_guessLng: pickWithAliases(r, "player_opponent_guessLng") ?? "",
+        player_opponent_googleMaps_url: buildGoogleMapsUrl2(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng")),
         player_opponent_guessCountry: await resolveGuessCountryForExport(
-          r.player_opponent_guessCountry ?? r.p2_guessCountry,
-          r.player_opponent_guessLat ?? r.p2_guessLat,
-          r.player_opponent_guessLng ?? r.p2_guessLng
+          pickWithAliases(r, "player_opponent_guessCountry"),
+          pickWithAliases(r, "player_opponent_guessLat"),
+          pickWithAliases(r, "player_opponent_guessLng")
         ),
-        player_opponent_distance_km: r.player_opponent_distanceKm ?? r.p2_distanceKm ?? (r.p2_distanceMeters !== void 0 ? r.p2_distanceMeters / 1e3 : ""),
-        player_opponent_score: r.player_opponent_score ?? r.p2_score ?? "",
-        player_opponent_healthAfter: r.player_opponent_healthAfter ?? r.p2_healthAfter ?? "",
-        player_opponent_isBestGuess: r.player_opponent_isBestGuess || r.p2_isBestGuess ? 1 : 0,
+        player_opponent_distance_km: pickWithAliases(r, "player_opponent_distanceKm") ?? "",
+        player_opponent_score: pickWithAliases(r, "player_opponent_score") ?? "",
+        player_opponent_healthAfter: pickWithAliases(r, "player_opponent_healthAfter") ?? "",
+        player_opponent_isBestGuess: pickWithAliases(r, "player_opponent_isBestGuess") ? 1 : 0,
         healthDiffAfter: r.healthDiffAfter ?? "",
         __sortTs: r.startTime ?? g?.playedAt ?? 0
       };
       const isTeamMode = (mode || "").toLowerCase().includes("team");
       if (isTeamMode) {
-        rowBase.player_self_teamId = r.player_self_teamId ?? r.p1_teamId ?? "";
-        rowBase.player_mate_playerId = r.player_mate_playerId ?? r.p2_playerId ?? "";
-        rowBase.player_mate_teamId = r.player_mate_teamId ?? r.p2_teamId ?? "";
-        rowBase.player_mate_guessLat = r.player_mate_guessLat ?? r.p2_guessLat ?? "";
-        rowBase.player_mate_guessLng = r.player_mate_guessLng ?? r.p2_guessLng ?? "";
-        rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl2(r.player_mate_guessLat ?? r.p2_guessLat, r.player_mate_guessLng ?? r.p2_guessLng);
+        rowBase.player_self_teamId = pickWithAliases(r, "player_self_teamId") ?? "";
+        rowBase.player_mate_playerId = pickWithAliases(r, "player_mate_playerId") ?? "";
+        rowBase.player_mate_teamId = pickWithAliases(r, "player_mate_teamId") ?? "";
+        rowBase.player_mate_guessLat = pickWithAliases(r, "player_mate_guessLat") ?? "";
+        rowBase.player_mate_guessLng = pickWithAliases(r, "player_mate_guessLng") ?? "";
+        rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases(r, "player_mate_guessLat"), pickWithAliases(r, "player_mate_guessLng"));
         rowBase.player_mate_guessCountry = mateCountry;
-        rowBase.player_mate_distance_km = r.player_mate_distanceKm ?? r.p2_distanceKm ?? (r.p2_distanceMeters !== void 0 ? r.p2_distanceMeters / 1e3 : "");
-        rowBase.player_mate_score = r.player_mate_score ?? r.p2_score ?? "";
-        rowBase.player_mate_healthAfter = r.player_mate_healthAfter ?? r.p2_healthAfter ?? "";
-        rowBase.player_mate_isBestGuess = r.player_mate_isBestGuess || r.p2_isBestGuess ? 1 : 0;
-        rowBase.player_opponent_playerId = r.player_opponent_playerId ?? r.p3_playerId ?? "";
-        rowBase.player_opponent_teamId = r.player_opponent_teamId ?? r.p3_teamId ?? "";
-        rowBase.player_opponent_guessLat = r.player_opponent_guessLat ?? r.p3_guessLat ?? "";
-        rowBase.player_opponent_guessLng = r.player_opponent_guessLng ?? r.p3_guessLng ?? "";
-        rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl2(r.player_opponent_guessLat ?? r.p3_guessLat, r.player_opponent_guessLng ?? r.p3_guessLng);
+        rowBase.player_mate_distance_km = pickWithAliases(r, "player_mate_distanceKm") ?? "";
+        rowBase.player_mate_score = pickWithAliases(r, "player_mate_score") ?? "";
+        rowBase.player_mate_healthAfter = pickWithAliases(r, "player_mate_healthAfter") ?? "";
+        rowBase.player_mate_isBestGuess = pickWithAliases(r, "player_mate_isBestGuess") ? 1 : 0;
+        rowBase.player_opponent_playerId = pickWithAliases(r, "player_opponent_playerId") ?? "";
+        rowBase.player_opponent_teamId = pickWithAliases(r, "player_opponent_teamId") ?? "";
+        rowBase.player_opponent_guessLat = pickWithAliases(r, "player_opponent_guessLat") ?? "";
+        rowBase.player_opponent_guessLng = pickWithAliases(r, "player_opponent_guessLng") ?? "";
+        rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng"));
         rowBase.player_opponent_guessCountry = oppCountry;
-        rowBase.player_opponent_distance_km = r.player_opponent_distanceKm ?? r.p3_distanceKm ?? (r.p3_distanceMeters !== void 0 ? r.p3_distanceMeters / 1e3 : "");
-        rowBase.player_opponent_score = r.player_opponent_score ?? r.p3_score ?? "";
-        rowBase.player_opponent_healthAfter = r.player_opponent_healthAfter ?? r.p3_healthAfter ?? "";
-        rowBase.player_opponent_isBestGuess = r.player_opponent_isBestGuess || r.p3_isBestGuess ? 1 : 0;
-        rowBase.player_opponent_mate_playerId = r.player_opponent_mate_playerId ?? r.p4_playerId ?? "";
-        rowBase.player_opponent_mate_teamId = r.player_opponent_mate_teamId ?? r.p4_teamId ?? "";
-        rowBase.player_opponent_mate_guessLat = r.player_opponent_mate_guessLat ?? r.p4_guessLat ?? "";
-        rowBase.player_opponent_mate_guessLng = r.player_opponent_mate_guessLng ?? r.p4_guessLng ?? "";
-        rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl2(r.player_opponent_mate_guessLat ?? r.p4_guessLat, r.player_opponent_mate_guessLng ?? r.p4_guessLng);
+        rowBase.player_opponent_distance_km = pickWithAliases(r, "player_opponent_distanceKm") ?? "";
+        rowBase.player_opponent_score = pickWithAliases(r, "player_opponent_score") ?? "";
+        rowBase.player_opponent_healthAfter = pickWithAliases(r, "player_opponent_healthAfter") ?? "";
+        rowBase.player_opponent_isBestGuess = pickWithAliases(r, "player_opponent_isBestGuess") ? 1 : 0;
+        rowBase.player_opponent_mate_playerId = pickWithAliases(r, "player_opponent_mate_playerId") ?? "";
+        rowBase.player_opponent_mate_teamId = pickWithAliases(r, "player_opponent_mate_teamId") ?? "";
+        rowBase.player_opponent_mate_guessLat = pickWithAliases(r, "player_opponent_mate_guessLat") ?? "";
+        rowBase.player_opponent_mate_guessLng = pickWithAliases(r, "player_opponent_mate_guessLng") ?? "";
+        rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl2(
+          pickWithAliases(r, "player_opponent_mate_guessLat"),
+          pickWithAliases(r, "player_opponent_mate_guessLng")
+        );
         rowBase.player_opponent_mate_guessCountry = oppMateCountry;
-        rowBase.player_opponent_mate_distance_km = r.player_opponent_mate_distanceKm ?? r.p4_distanceKm ?? (r.p4_distanceMeters !== void 0 ? r.p4_distanceMeters / 1e3 : "");
-        rowBase.player_opponent_mate_score = r.player_opponent_mate_score ?? r.p4_score ?? "";
-        rowBase.player_opponent_mate_healthAfter = r.player_opponent_mate_healthAfter ?? r.p4_healthAfter ?? "";
-        rowBase.player_opponent_mate_isBestGuess = r.player_opponent_mate_isBestGuess || r.p4_isBestGuess ? 1 : 0;
+        rowBase.player_opponent_mate_distance_km = pickWithAliases(r, "player_opponent_mate_distanceKm") ?? "";
+        rowBase.player_opponent_mate_score = pickWithAliases(r, "player_opponent_mate_score") ?? "";
+        rowBase.player_opponent_mate_healthAfter = pickWithAliases(r, "player_opponent_mate_healthAfter") ?? "";
+        rowBase.player_opponent_mate_isBestGuess = pickWithAliases(r, "player_opponent_mate_isBestGuess") ? 1 : 0;
       }
       roundsByMode.get(mode).push(rowBase);
     }
@@ -40922,6 +38937,2353 @@ ${error instanceof Error ? error.message : String(error)}`;
     onStatus(`Export done: ${games.length} games, ${rounds.length} rounds (${gamesByMode.size} mode sheets).`);
   }
 
+  // src/engine/fieldAccess.ts
+  function legacy(obj, ...keys2) {
+    for (const key of keys2) {
+      if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
+    }
+    return void 0;
+  }
+  function getSelfScore(r) {
+    const v = legacy(r, "player_self_score", "p1_score", "score");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getPlayedAt(r) {
+    return r.playedAt;
+  }
+  function getTrueCountry(r) {
+    return r.trueCountry ?? r.true_country;
+  }
+  function getGuessCountrySelf(r) {
+    const v = legacy(r, "player_self_guessCountry", "p1_guessCountry", "guessCountry");
+    return typeof v === "string" ? v : void 0;
+  }
+  function pick(obj, key) {
+    if (!obj) return void 0;
+    if (key in obj) return obj[key];
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    if (camel in obj) return obj[camel];
+    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    if (snake in obj) return obj[snake];
+    return void 0;
+  }
+  function pickWithAliases2(obj, logicalKey, columnAliases) {
+    const aliases = columnAliases?.[logicalKey] ?? [];
+    const probeOrder = [logicalKey, ...aliases];
+    for (const candidate of probeOrder) {
+      const value = pick(obj, candidate);
+      if (value !== void 0 && value !== null) return value;
+    }
+    return void 0;
+  }
+
+  // src/ui/drilldownOverlay.ts
+  var DrilldownOverlay = class {
+    root;
+    doc;
+    modal;
+    constructor(root) {
+      this.root = root;
+      this.doc = root.ownerDocument;
+      this.modal = this.doc.createElement("div");
+      this.modal.className = "ga-drilldown-modal";
+      this.modal.style.display = "none";
+      this.root.appendChild(this.modal);
+    }
+    getDocument() {
+      return this.doc;
+    }
+    open(semantic, req) {
+      this.modal.innerHTML = "";
+      this.modal.style.display = "block";
+      const bg = this.doc.createElement("div");
+      bg.className = "ga-drilldown-bg";
+      bg.addEventListener("click", () => this.close());
+      const panel = this.doc.createElement("div");
+      panel.className = "ga-drilldown-panel";
+      const header = this.doc.createElement("div");
+      header.className = "ga-drilldown-header";
+      const hTitle = this.doc.createElement("div");
+      hTitle.className = "ga-drilldown-title";
+      hTitle.textContent = req.title;
+      const btn = this.doc.createElement("button");
+      btn.className = "ga-drilldown-close";
+      btn.textContent = "Close";
+      btn.addEventListener("click", () => this.close());
+      header.appendChild(hTitle);
+      header.appendChild(btn);
+      const table = this.doc.createElement("table");
+      table.className = "ga-drilldown-table";
+      const preset = semantic.drilldownPresets[req.target];
+      const cols = preset?.columnsPresets?.[req.columnsPreset] ?? [];
+      const thead = this.doc.createElement("thead");
+      const trh = this.doc.createElement("tr");
+      for (const c of cols) {
+        const th = this.doc.createElement("th");
+        th.textContent = c;
+        trh.appendChild(th);
+      }
+      thead.appendChild(trh);
+      const tbody = this.doc.createElement("tbody");
+      const dateFormat = this.readDateFormatMode();
+      for (const r of req.rows) {
+        const tr = this.doc.createElement("tr");
+        for (const c of cols) {
+          const td = this.doc.createElement("td");
+          const v = pickWithAliases2(r, c, semantic.columnAliases);
+          td.textContent = this.formatCellValue(v, c, dateFormat);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      panel.appendChild(header);
+      panel.appendChild(table);
+      this.modal.appendChild(bg);
+      this.modal.appendChild(panel);
+    }
+    close() {
+      this.modal.style.display = "none";
+    }
+    readDateFormatMode() {
+      const root = this.root;
+      const mode = root.dataset?.gaDateFormat;
+      return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+    }
+    formatDate(ts, mode) {
+      const d = new Date(ts);
+      if (!Number.isFinite(d.getTime())) return String(ts);
+      if (mode === "locale") return d.toLocaleString();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+      if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+      return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+    }
+    formatCellValue(value, columnName, dateMode) {
+      if (value === void 0 || value === null) return "";
+      const col = columnName.toLowerCase();
+      const looksLikeDateColumn = col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
+      if (typeof value === "number" && Number.isFinite(value)) {
+        if (looksLikeDateColumn && value > 9466848e5 && value < 41024448e5) {
+          return this.formatDate(value, dateMode);
+        }
+        return String(value);
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (looksLikeDateColumn) {
+          const parsed = Date.parse(trimmed);
+          if (Number.isFinite(parsed)) return this.formatDate(parsed, dateMode);
+        }
+        return value;
+      }
+      return String(value);
+    }
+  };
+
+  // src/engine/queryEngine.ts
+  async function getRounds(_filters) {
+    const rows = await db.rounds.toArray();
+    const missingPlayedAt = rows.some((r) => typeof r.playedAt !== "number");
+    if (!missingPlayedAt) return rows;
+    const games = await db.games.toArray();
+    const playedAtByGame = /* @__PURE__ */ new Map();
+    for (const g of games) {
+      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
+    }
+    return rows.map((r) => {
+      if (typeof r.playedAt === "number") return r;
+      const gamePlayedAt = playedAtByGame.get(r.gameId);
+      if (typeof gamePlayedAt !== "number") return r;
+      return { ...r, playedAt: gamePlayedAt };
+    });
+  }
+
+  // src/engine/measures.ts
+  function is5k(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s >= 5e3;
+  }
+  function isHit(r) {
+    const truth = getTrueCountry(r);
+    if (!truth) return false;
+    const guess = getGuessCountrySelf(r);
+    return typeof guess === "string" && guess === truth;
+  }
+  function isThrowLt50(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s < 50;
+  }
+  var ROUND_MEASURES_BY_FORMULA_ID = {
+    count_rounds: (rows) => rows.length,
+    mean_player_self_score: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const s = getSelfScore(r);
+        if (typeof s === "number") {
+          sum2 += s;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    rate_player_self_score_eq_5000: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (is5k(r)) k++;
+      return k / n;
+    },
+    rate_true_country_hit: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isHit(r)) k++;
+      return k / n;
+    },
+    rate_throw_round: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isThrowLt50(r)) k++;
+      return k / n;
+    }
+  };
+
+  // src/engine/dimensions.ts
+  function scoreBucketKey(r) {
+    const s = getSelfScore(r);
+    if (typeof s !== "number") return null;
+    if (s >= 5e3) return "5000";
+    const lo = Math.max(0, Math.floor(s / 100) * 100);
+    const hi = lo + 99;
+    return `${lo}-${hi}`;
+  }
+  function timeDayKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function weekdayKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return names[new Date(ts).getDay()];
+  }
+  function hourKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    return String(new Date(ts).getHours()).padStart(2, "0");
+  }
+  function trueCountryKey(r) {
+    const c = getTrueCountry(r);
+    return typeof c === "string" && c.length ? c : null;
+  }
+  var ROUND_DIMENSION_EXTRACTORS = {
+    score_bucket: scoreBucketKey,
+    time_day: timeDayKey,
+    weekday: weekdayKey,
+    hour: hourKey,
+    true_country: trueCountryKey
+  };
+
+  // src/engine/filters.ts
+  function evalClause(value, clause) {
+    if (clause.op === "eq") return value === clause.value;
+    if (clause.op === "neq") return value !== clause.value;
+    if (clause.op === "in") return Array.isArray(clause.values) && clause.values.includes(value);
+    if (clause.op === "nin") return Array.isArray(clause.values) && !clause.values.includes(value);
+    return true;
+  }
+  function evalRowFilter(row, clause) {
+    const extractor = ROUND_DIMENSION_EXTRACTORS[clause.dimension];
+    if (extractor) {
+      return evalClause(extractor(row), clause);
+    }
+    const direct = row[clause.dimension];
+    return evalClause(direct, clause);
+  }
+  function applyFilters(rows, clauses) {
+    if (!clauses || clauses.length === 0) return rows;
+    return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause)));
+  }
+
+  // src/ui/widgets/statListWidget.ts
+  function formatValue(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      return `${(value * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    const decimals = unit.decimals ?? 1;
+    return value.toFixed(decimals);
+  }
+  async function computeMeasure(semantic, measureId, filters) {
+    const m = semantic.measures[measureId];
+    if (!m) return 0;
+    const rows = applyFilters(await getRounds({}), filters);
+    const fn = ROUND_MEASURES_BY_FORMULA_ID[m.formulaId];
+    if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
+    return fn(rows);
+  }
+  function attachClickIfAny(el, actions, overlay, semantic, title) {
+    const click = actions?.click;
+    if (!click) return;
+    el.style.cursor = "pointer";
+    el.addEventListener("click", async () => {
+      if (click.type === "drilldown") {
+        const rows = applyFilters(await getRounds({}), click.extraFilters);
+        overlay.open(semantic, {
+          title,
+          target: click.target,
+          columnsPreset: click.columnsPreset,
+          rows,
+          extraFilters: click.extraFilters
+        });
+      }
+    });
+  }
+  async function renderStatListWidget(semantic, widget, overlay) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-statlist";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = doc.createElement("div");
+    box.className = "ga-statlist-box";
+    for (const row of spec.rows) {
+      const line = doc.createElement("div");
+      line.className = "ga-statrow";
+      const left = doc.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = row.label;
+      const right = doc.createElement("div");
+      right.className = "ga-statrow-value";
+      right.textContent = "...";
+      const val = await computeMeasure(semantic, row.measure, row.filters);
+      right.textContent = formatValue(semantic, row.measure, val);
+      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`);
+      line.appendChild(left);
+      line.appendChild(right);
+      box.appendChild(line);
+    }
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/engine/aggregate.ts
+  function groupByKey(rows, keyFn) {
+    const m = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      if (!k) continue;
+      const arr = m.get(k);
+      if (arr) arr.push(r);
+      else m.set(k, [r]);
+    }
+    return m;
+  }
+
+  // src/ui/widgets/chartWidget.ts
+  function sortKeysChronological(keys2) {
+    const parseKey = (k) => {
+      const first = k.split("-")[0] ?? k;
+      const parsed = Number(first);
+      return Number.isFinite(parsed) ? parsed : void 0;
+    };
+    return [...keys2].sort((a, b) => {
+      const na = parseKey(a);
+      const nb = parseKey(b);
+      if (na !== void 0 && nb !== void 0) return na - nb;
+      if (na !== void 0) return -1;
+      if (nb !== void 0) return 1;
+      return a.localeCompare(b);
+    });
+  }
+  function sortData(data, mode) {
+    if (mode === "chronological") {
+      const keys2 = sortKeysChronological(data.map((d) => d.x));
+      const rank = new Map(keys2.map((k, i) => [k, i]));
+      return [...data].sort((a, b) => (rank.get(a.x) ?? 0) - (rank.get(b.x) ?? 0));
+    }
+    if (mode === "asc") return [...data].sort((a, b) => a.y - b.y);
+    if (mode === "desc") return [...data].sort((a, b) => b.y - a.y);
+    return data;
+  }
+  function getMeasureIds(spec) {
+    const out = [];
+    const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
+    if (single) out.push(single);
+    if (Array.isArray(spec.y.measures)) {
+      for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || out.includes(clean)) continue;
+        out.push(clean);
+      }
+    }
+    return out;
+  }
+  function formatMeasureValue(semantic, measureId, value) {
+    const measure = semantic.measures[measureId];
+    const unit = measure ? semantic.units[measure.unit] : void 0;
+    if (!unit) return `${value}`;
+    if (unit.format === "percent") return `${(value * 100).toFixed(unit.decimals ?? 1)}%`;
+    if (unit.format === "int") return `${Math.round(value)}`;
+    return value.toFixed(unit.decimals ?? 1);
+  }
+  function niceUpperBound(maxValue) {
+    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
+    const exp = Math.floor(Math.log10(maxValue));
+    const base = 10 ** exp;
+    const n = maxValue / base;
+    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+    return nice * base;
+  }
+  function normalizeHexColor(value) {
+    if (typeof value !== "string") return void 0;
+    const v = value.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : void 0;
+  }
+  function isAnimationsEnabled(doc) {
+    const root = doc.getElementById("geoanalyzr-semantic-root");
+    return root?.getAttribute("data-ga-chart-animations") !== "off";
+  }
+  function sanitizeFileName2(name) {
+    const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
+    return out.length > 0 ? out : "chart";
+  }
+  function triggerDownload2(doc, blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = doc.createElement("a");
+    a.href = url;
+    a.download = filename;
+    doc.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  }
+  function serializeSvg(svg) {
+    const clone = svg.cloneNode(true);
+    if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.removeAttribute("data-anim-state");
+    const vb = clone.getAttribute("viewBox")?.trim().split(/\s+/).map(Number) ?? [];
+    const width = Number.isFinite(vb[2]) && vb[2] > 0 ? vb[2] : 1200;
+    const height = Number.isFinite(vb[3]) && vb[3] > 0 ? vb[3] : 360;
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+    return { text: new XMLSerializer().serializeToString(clone), width, height };
+  }
+  async function downloadSvg2(doc, svg, title) {
+    const { text } = serializeSvg(svg);
+    const blob = new Blob([text], { type: "image/svg+xml;charset=utf-8" });
+    triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.svg`);
+  }
+  async function downloadPng2(doc, svg, title) {
+    const prepared = serializeSvg(svg);
+    const svgBlob = new Blob([prepared.text], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Could not render chart image."));
+        img.src = url;
+      });
+      const canvas = doc.createElement("canvas");
+      canvas.width = prepared.width;
+      canvas.height = prepared.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas context unavailable.");
+      ctx.drawImage(img, 0, 0, prepared.width, prepared.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (blob) {
+        triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.png`);
+        return;
+      }
+      const dataUrl = canvas.toDataURL("image/png");
+      const fallbackBlob = await (await fetch(dataUrl)).blob();
+      triggerDownload2(doc, fallbackBlob, `${sanitizeFileName2(title)}.png`);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  function maybeAnimateBars(svg, doc) {
+    if (!isAnimationsEnabled(doc)) {
+      svg.setAttribute("data-anim-state", "off");
+      return;
+    }
+    svg.setAttribute("data-anim-state", "pending");
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          svg.setAttribute("data-anim-state", "run");
+          obs.disconnect();
+          return;
+        }
+      },
+      { threshold: 0.15 }
+    );
+    obs.observe(svg);
+  }
+  async function renderChartWidget(semantic, widget, overlay) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-chart";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const controls = doc.createElement("div");
+    controls.className = "ga-chart-controls";
+    const controlsLeft = doc.createElement("div");
+    controlsLeft.className = "ga-chart-controls-left";
+    controls.appendChild(controlsLeft);
+    const actionsRight = doc.createElement("div");
+    actionsRight.className = "ga-chart-actions";
+    controls.appendChild(actionsRight);
+    const box = doc.createElement("div");
+    box.className = "ga-chart-box";
+    const chartHost = doc.createElement("div");
+    chartHost.className = "ga-chart-host";
+    box.appendChild(chartHost);
+    const rows = await getRounds({});
+    const dimId = spec.x.dimension;
+    const dimDef = semantic.dimensions[dimId];
+    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in widget ${widget.widgetId}`);
+    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}'`);
+    const measureIds = getMeasureIds(spec);
+    if (measureIds.length === 0) throw new Error(`Widget ${widget.widgetId} has no y.measure or y.measures`);
+    const measureFnById = /* @__PURE__ */ new Map();
+    for (const measureId of measureIds) {
+      const measDef = semantic.measures[measureId];
+      if (!measDef) throw new Error(`Unknown measure '${measureId}' in widget ${widget.widgetId}`);
+      const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
+      if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
+      measureFnById.set(measureId, measureFn);
+    }
+    const grouped = groupByKey(rows, keyFn);
+    const keys2 = Array.from(grouped.keys());
+    const colorOverride = normalizeHexColor(spec.color);
+    const buildDataForMeasure = (measureId) => {
+      const measureFn = measureFnById.get(measureId);
+      if (!measureFn) return [];
+      const baseData = keys2.map((k) => {
+        const g = grouped.get(k) ?? [];
+        return { x: k, y: measureFn(g), rows: g };
+      });
+      const sortedData = sortData(baseData, spec.sort?.mode);
+      return typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0 ? sortedData.slice(0, Math.floor(spec.limit)) : sortedData;
+    };
+    let activeMeasure = measureIds.includes(spec.y.activeMeasure || "") ? spec.y.activeMeasure : measureIds[0];
+    let currentSvg = null;
+    const mkActionBtn = (label, onClick) => {
+      const btn = doc.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      return btn;
+    };
+    actionsRight.appendChild(
+      mkActionBtn("Save PNG", () => {
+        if (currentSvg) void downloadPng2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+      })
+    );
+    actionsRight.appendChild(
+      mkActionBtn("Save SVG", () => {
+        if (currentSvg) void downloadSvg2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+      })
+    );
+    const render = () => {
+      chartHost.innerHTML = "";
+      currentSvg = null;
+      const measureDef = semantic.measures[activeMeasure];
+      const data = buildDataForMeasure(activeMeasure);
+      if (!measureDef || data.length === 0) {
+        const empty = doc.createElement("div");
+        empty.style.fontSize = "12px";
+        empty.style.opacity = "0.75";
+        empty.textContent = "No chart data available for current selection.";
+        chartHost.appendChild(empty);
+        return;
+      }
+      const W = 1200;
+      const H = 360;
+      const PAD_L = 72;
+      const PAD_B = 58;
+      const PAD_T = 16;
+      const PAD_R = 20;
+      const innerW = W - PAD_L - PAD_R;
+      const innerH = H - PAD_T - PAD_B;
+      const dataMax = Math.max(0, ...data.map((d) => d.y));
+      const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add("ga-chart-svg");
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      const axisX = doc.createElementNS(svg.namespaceURI, "line");
+      axisX.setAttribute("x1", String(PAD_L));
+      axisX.setAttribute("y1", String(PAD_T + innerH));
+      axisX.setAttribute("x2", String(PAD_L + innerW));
+      axisX.setAttribute("y2", String(PAD_T + innerH));
+      axisX.setAttribute("stroke", "var(--ga-axis-color)");
+      axisX.setAttribute("opacity", "0.7");
+      svg.appendChild(axisX);
+      const axisY = doc.createElementNS(svg.namespaceURI, "line");
+      axisY.setAttribute("x1", String(PAD_L));
+      axisY.setAttribute("y1", String(PAD_T));
+      axisY.setAttribute("x2", String(PAD_L));
+      axisY.setAttribute("y2", String(PAD_T + innerH));
+      axisY.setAttribute("stroke", "var(--ga-axis-color)");
+      axisY.setAttribute("opacity", "0.7");
+      svg.appendChild(axisY);
+      const tickCount = 5;
+      for (let i = 0; i <= tickCount; i++) {
+        const yVal = maxY * i / tickCount;
+        const yPos = PAD_T + innerH - yVal / maxY * innerH;
+        const grid = doc.createElementNS(svg.namespaceURI, "line");
+        grid.setAttribute("x1", String(PAD_L));
+        grid.setAttribute("y1", String(yPos));
+        grid.setAttribute("x2", String(PAD_L + innerW));
+        grid.setAttribute("y2", String(yPos));
+        grid.setAttribute("stroke", "var(--ga-axis-grid)");
+        grid.setAttribute("opacity", i === 0 ? "0.8" : "0.45");
+        svg.appendChild(grid);
+        const yTick = doc.createElementNS(svg.namespaceURI, "text");
+        yTick.setAttribute("x", String(PAD_L - 8));
+        yTick.setAttribute("y", String(yPos + 3));
+        yTick.setAttribute("text-anchor", "end");
+        yTick.setAttribute("font-size", "10");
+        yTick.setAttribute("fill", "var(--ga-axis-text)");
+        yTick.setAttribute("opacity", "0.95");
+        yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
+        svg.appendChild(yTick);
+      }
+      const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+      xAxisLabel.setAttribute("x", String(PAD_L + innerW / 2));
+      xAxisLabel.setAttribute("y", String(H - 8));
+      xAxisLabel.setAttribute("text-anchor", "middle");
+      xAxisLabel.setAttribute("font-size", "12");
+      xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
+      xAxisLabel.setAttribute("opacity", "0.95");
+      xAxisLabel.textContent = dimDef.label;
+      svg.appendChild(xAxisLabel);
+      const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+      yAxisLabel.setAttribute("x", "16");
+      yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
+      yAxisLabel.setAttribute("text-anchor", "middle");
+      yAxisLabel.setAttribute("font-size", "12");
+      yAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
+      yAxisLabel.setAttribute("opacity", "0.95");
+      yAxisLabel.setAttribute("transform", `rotate(-90 16 ${PAD_T + innerH / 2})`);
+      yAxisLabel.textContent = measureDef.label;
+      svg.appendChild(yAxisLabel);
+      if (spec.type === "line") {
+        const points = data.map((d, i) => {
+          const x = PAD_L + i / Math.max(1, data.length - 1) * innerW;
+          const y = PAD_T + innerH - d.y / maxY * innerH;
+          return { x, y, d };
+        });
+        const path = doc.createElementNS(svg.namespaceURI, "path");
+        const dPath = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+        path.setAttribute("d", dPath);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", colorOverride ?? "var(--ga-graph-color)");
+        path.setAttribute("stroke-width", "2.5");
+        path.setAttribute("opacity", "0.9");
+        svg.appendChild(path);
+        for (const p of points) {
+          const dot = doc.createElementNS(svg.namespaceURI, "circle");
+          dot.setAttribute("cx", String(p.x));
+          dot.setAttribute("cy", String(p.y));
+          dot.setAttribute("r", "3");
+          dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
+          dot.setAttribute("opacity", "0.95");
+          const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+          tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, p.d.y)}`;
+          dot.appendChild(tooltip);
+          const click = spec.actions?.click;
+          if (click?.type === "drilldown") {
+            dot.setAttribute("style", "cursor: pointer;");
+            dot.addEventListener("click", () => {
+              const rowsFromPoint = click.filterFromPoint ? p.d.rows : rows;
+              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+              overlay.open(semantic, {
+                title: `${widget.title} - ${p.d.x}`,
+                target: click.target,
+                columnsPreset: click.columnsPreset,
+                rows: filteredRows,
+                extraFilters: click.extraFilters
+              });
+            });
+          }
+          svg.appendChild(dot);
+        }
+      } else {
+        const barW = innerW / Math.max(1, data.length);
+        data.forEach((d, i) => {
+          const x = PAD_L + i * barW;
+          const h = d.y / maxY * innerH;
+          const y = PAD_T + innerH - h;
+          const rect = doc.createElementNS(svg.namespaceURI, "rect");
+          rect.classList.add("ga-chart-bar");
+          rect.style.setProperty("--ga-bar-index", String(i));
+          rect.setAttribute("x", String(x + 1));
+          rect.setAttribute("y", String(y));
+          rect.setAttribute("width", String(Math.max(1, barW - 2)));
+          rect.setAttribute("height", String(Math.max(0, h)));
+          rect.setAttribute("rx", "2");
+          rect.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
+          rect.setAttribute("opacity", "0.72");
+          rect.style.animationDelay = `${Math.min(i * 18, 320)}ms`;
+          rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
+          rect.style.transformBox = "view-box";
+          const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+          tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
+          rect.appendChild(tooltip);
+          const click = spec.actions?.click;
+          if (click?.type === "drilldown") {
+            rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
+            rect.addEventListener("click", () => {
+              const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
+              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+              overlay.open(semantic, {
+                title: `${widget.title} - ${d.x}`,
+                target: click.target,
+                columnsPreset: click.columnsPreset,
+                rows: filteredRows,
+                extraFilters: click.extraFilters
+              });
+            });
+          }
+          svg.appendChild(rect);
+          if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
+            const tx = doc.createElementNS(svg.namespaceURI, "text");
+            tx.setAttribute("x", String(x + barW / 2));
+            tx.setAttribute("y", String(PAD_T + innerH + 16));
+            tx.setAttribute("text-anchor", "middle");
+            tx.setAttribute("font-size", "10");
+            tx.setAttribute("fill", "var(--ga-axis-text)");
+            tx.setAttribute("opacity", "0.95");
+            tx.textContent = d.x;
+            svg.appendChild(tx);
+          }
+        });
+        maybeAnimateBars(svg, doc);
+      }
+      chartHost.appendChild(svg);
+      currentSvg = svg;
+    };
+    if (measureIds.length > 1) {
+      const label = doc.createElement("label");
+      label.style.fontSize = "12px";
+      label.style.opacity = "0.9";
+      label.textContent = "Measure:";
+      const select = doc.createElement("select");
+      select.style.background = "var(--ga-control-bg)";
+      select.style.color = "var(--ga-control-text)";
+      select.style.border = "1px solid var(--ga-control-border)";
+      select.style.borderRadius = "8px";
+      select.style.padding = "4px 8px";
+      for (const measureId of measureIds) {
+        const option = doc.createElement("option");
+        option.value = measureId;
+        option.textContent = semantic.measures[measureId]?.label || measureId;
+        if (measureId === activeMeasure) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener("change", () => {
+        activeMeasure = select.value;
+        render();
+      });
+      controlsLeft.appendChild(label);
+      controlsLeft.appendChild(select);
+    }
+    render();
+    wrap.appendChild(title);
+    wrap.appendChild(controls);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/ui/widgets/breakdownWidget.ts
+  function normalizeHexColor2(value) {
+    if (typeof value !== "string") return void 0;
+    const v = value.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : void 0;
+  }
+  function sortRows(rows, mode) {
+    if (mode === "asc") return [...rows].sort((a, b) => a.value - b.value);
+    if (mode === "desc") return [...rows].sort((a, b) => b.value - a.value);
+    const scoreBucketStart = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
+    const isDate = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
+    return [...rows].sort((a, b) => {
+      if (isDate(a.key) && isDate(b.key)) return a.key.localeCompare(b.key);
+      const na = Number.isFinite(scoreBucketStart(a.key)) ? scoreBucketStart(a.key) : NaN;
+      const nb = Number.isFinite(scoreBucketStart(b.key)) ? scoreBucketStart(b.key) : NaN;
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return a.key.localeCompare(b.key);
+    });
+  }
+  function formatValue2(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      return `${(value * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    const decimals = unit.decimals ?? 1;
+    return value.toFixed(decimals);
+  }
+  async function renderBreakdownWidget(semantic, widget, overlay) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-breakdown";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = doc.createElement("div");
+    box.className = "ga-breakdown-box";
+    const rowsAll = applyFilters(await getRounds({}), spec.filters);
+    const dimId = spec.dimension;
+    const measId = spec.measure;
+    const dimDef = semantic.dimensions[dimId];
+    const measDef = semantic.measures[measId];
+    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
+    if (!measDef) throw new Error(`Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
+    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
+    if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
+    const grouped = groupByKey(rowsAll, keyFn);
+    const colorOverride = normalizeHexColor2(spec.color);
+    let rows = Array.from(grouped.entries()).map(([k, g]) => ({
+      key: k,
+      value: measureFn(g),
+      rows: g
+    }));
+    const sortMode = spec.sort?.mode ?? "desc";
+    rows = sortRows(rows, sortMode);
+    const limit = typeof spec.limit === "number" ? spec.limit : 12;
+    rows = rows.slice(0, limit);
+    const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
+    for (const r of rows) {
+      const line = doc.createElement("div");
+      line.className = "ga-breakdown-row";
+      const left = doc.createElement("div");
+      left.className = "ga-breakdown-label";
+      left.textContent = r.key;
+      const right = doc.createElement("div");
+      right.className = "ga-breakdown-right";
+      const val = doc.createElement("div");
+      val.className = "ga-breakdown-value";
+      val.textContent = formatValue2(semantic, measId, r.value);
+      const barWrap = doc.createElement("div");
+      barWrap.className = "ga-breakdown-barwrap";
+      const bar = doc.createElement("div");
+      bar.className = "ga-breakdown-bar";
+      bar.style.width = `${Math.max(2, r.value / maxVal * 100)}%`;
+      if (colorOverride) bar.style.background = colorOverride;
+      barWrap.appendChild(bar);
+      right.appendChild(val);
+      right.appendChild(barWrap);
+      line.appendChild(left);
+      line.appendChild(right);
+      const click = spec.actions?.click;
+      if (click?.type === "drilldown") {
+        line.style.cursor = "pointer";
+        line.addEventListener("click", () => {
+          const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${r.key}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
+          });
+        });
+      }
+      box.appendChild(line);
+    }
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/ui/dashboardRenderer.ts
+  async function renderDashboard(root, semantic, dashboard) {
+    root.innerHTML = "";
+    const doc = root.ownerDocument;
+    const overlay = new DrilldownOverlay(root);
+    const tabBar = doc.createElement("div");
+    tabBar.className = "ga-tabs";
+    const content = doc.createElement("div");
+    content.className = "ga-content";
+    root.appendChild(tabBar);
+    root.appendChild(content);
+    const sections = dashboard.dashboard.sections;
+    let active = sections[0]?.id ?? "";
+    function makeTab(secId, label) {
+      const btn = doc.createElement("button");
+      btn.className = "ga-tab";
+      btn.textContent = label;
+      btn.addEventListener("click", async () => {
+        active = secId;
+        await renderActive();
+        highlight();
+      });
+      tabBar.appendChild(btn);
+    }
+    function highlight() {
+      const btns = Array.from(tabBar.querySelectorAll("button.ga-tab"));
+      btns.forEach((b, i) => {
+        b.classList.toggle("active", sections[i]?.id === active);
+      });
+    }
+    async function renderWidget(widget) {
+      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay);
+      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay);
+      if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
+      const ph = doc.createElement("div");
+      ph.className = "ga-widget ga-placeholder";
+      ph.textContent = `Widget type '${widget.type}' not implemented yet`;
+      return ph;
+    }
+    async function renderActive() {
+      content.innerHTML = "";
+      const section = sections.find((s) => s.id === active);
+      if (!section) return;
+      const grid = doc.createElement("div");
+      grid.className = "ga-grid";
+      grid.style.display = "grid";
+      grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
+      grid.style.gap = "12px";
+      for (const placed of section.layout.cards) {
+        const card = doc.createElement("div");
+        card.className = "ga-card";
+        card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
+        card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
+        const header = doc.createElement("div");
+        header.className = "ga-card-header";
+        header.textContent = placed.title;
+        const body = doc.createElement("div");
+        body.className = "ga-card-body";
+        const inner = doc.createElement("div");
+        inner.className = "ga-card-inner";
+        inner.style.display = "grid";
+        inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
+        inner.style.gap = "10px";
+        for (const w of placed.card.children) {
+          const container = doc.createElement("div");
+          container.className = "ga-child";
+          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
+          container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
+          container.style.gridRow = `${p.y + 1} / span ${p.h}`;
+          container.appendChild(await renderWidget(w));
+          inner.appendChild(container);
+        }
+        body.appendChild(inner);
+        card.appendChild(header);
+        card.appendChild(body);
+        grid.appendChild(card);
+      }
+      content.appendChild(grid);
+    }
+    for (const s of sections) makeTab(s.id, s.title);
+    await renderActive();
+    highlight();
+  }
+
+  // src/engine/validate.ts
+  var ValidationError = class extends Error {
+    code;
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+    }
+  };
+  function assert(condition, code, msg) {
+    if (!condition) throw new ValidationError(code, msg);
+  }
+  function validateDashboardAgainstSemantic(semantic, dash) {
+    for (const section of dash.dashboard.sections) {
+      for (const placedCard of section.layout.cards) {
+        for (const widget of placedCard.card.children) {
+          validateWidget(semantic, widget);
+        }
+      }
+    }
+  }
+  function validateWidget(semantic, widget) {
+    assert(semantic.datasets[widget.grain] !== void 0, "E_UNKNOWN_GRAIN", `Unknown grain: ${widget.grain}`);
+    if (widget.type === "chart") {
+      const spec = widget.spec;
+      const xDimId = spec.x?.dimension;
+      assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
+      const yMeasureIds = getChartMeasureIds(spec);
+      assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
+      const xDim = semantic.dimensions[xDimId];
+      assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
+      assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
+      assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
+      if (spec.sort?.mode) {
+        assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
+      }
+      for (const yMeasId of yMeasureIds) {
+        const yMeas = semantic.measures[yMeasId];
+        assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
+        assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
+        assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+      }
+      const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : void 0;
+      if (activeMeasure) {
+        assert(yMeasureIds.includes(activeMeasure), "E_BAD_SPEC", `activeMeasure '${activeMeasure}' is not listed in y.measures`);
+      }
+      if (spec.type === "line") {
+        assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
+      }
+      if (xDim.cardinality?.selectorRequired) {
+        const hasTopN = typeof spec.limit === "number" && spec.limit > 0;
+        const selectorMode = spec.x?.selector?.mode;
+        const hasSelector = selectorMode === "top_n" || selectorMode === "selected";
+        assert(
+          hasTopN || hasSelector,
+          "E_SELECTOR_REQUIRED",
+          `Dimension '${xDimId}' requires selector; set chart.limit or x.selector`
+        );
+      }
+      if (spec.series) {
+        const sDimId = spec.series.dimension;
+        const sDim = semantic.dimensions[sDimId];
+        assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
+        assert(sDim.grain === widget.grain, "E_GRAIN_MISMATCH", `series '${sDimId}' grain=${sDim.grain} but widget grain=${widget.grain}`);
+        assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
+        const maxSeries = sDim.cardinality?.maxSeries ?? 50;
+        const requested = spec.series.selector.mode === "selected" ? spec.series.selector.values?.length ?? 0 : spec.series.selector.mode === "top_n" ? spec.series.selector.n ?? 0 : spec.series.selector.maxSeries ?? maxSeries;
+        assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
+      }
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "stat_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `stat_list ${widget.widgetId} has no rows`);
+      for (const row of spec.rows) {
+        const meas = semantic.measures[row.measure];
+        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
+        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${row.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+        validateClickAction(semantic, widget.widgetId, row.actions?.click);
+      }
+    }
+    if (widget.type === "stat_value") {
+      const spec = widget.spec;
+      const meas = semantic.measures[spec.measure];
+      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
+      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "breakdown") {
+      const spec = widget.spec;
+      const dim = semantic.dimensions[spec.dimension];
+      const meas = semantic.measures[spec.measure];
+      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
+      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in breakdown ${widget.widgetId}`);
+      assert(dim.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
+      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure grain mismatch in ${widget.widgetId}`);
+      if (dim.cardinality?.selectorRequired) {
+        assert(
+          typeof spec.limit === "number" && spec.limit > 0,
+          "E_SELECTOR_REQUIRED",
+          `Breakdown '${spec.dimension}' requires a positive limit`
+        );
+      }
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+  }
+  function validateClickAction(semantic, widgetId, click) {
+    if (!click || click.type !== "drilldown") return;
+    const target = click.target;
+    const targetPreset = semantic.drilldownPresets[target];
+    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
+    const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
+    assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
+  }
+  function getChartMeasureIds(spec) {
+    const result = [];
+    const single = typeof spec?.y?.measure === "string" ? spec.y.measure.trim() : "";
+    if (single) result.push(single);
+    if (Array.isArray(spec?.y?.measures)) {
+      for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || result.includes(clean)) continue;
+        result.push(clean);
+      }
+    }
+    return result;
+  }
+
+  // src/config/semantic.json
+  var semantic_default = {
+    $schema: "./semantic.schema.json",
+    schemaVersion: "0.1.0",
+    grains: ["session", "game", "round"],
+    datasets: {
+      session: {
+        primaryKey: ["sessionId"],
+        timeField: "sessionStartTs"
+      },
+      game: {
+        primaryKey: ["gameId"],
+        timeField: "ts"
+      },
+      round: {
+        primaryKey: ["gameId", "roundNumber"],
+        timeField: "ts"
+      }
+    },
+    settings: {
+      sessionGapMinutesDefault: 45
+    },
+    dimensions: {
+      time_day: {
+        label: "Date",
+        kind: "time",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["line", "bar"],
+        sortModes: ["chronological"]
+      },
+      weekday: {
+        label: "Weekday",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      hour: {
+        label: "Hour of day",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      session_index: {
+        label: "Session #",
+        kind: "category",
+        grain: "session",
+        ordered: true,
+        allowedCharts: ["bar", "line"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      game_mode: {
+        label: "Game mode",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 10 }
+      },
+      result: {
+        label: "Result",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 5 }
+      },
+      round_number: {
+        label: "Round #",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      },
+      true_country: {
+        label: "True country",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 12, selectorRequired: true }
+      },
+      movement_type: {
+        label: "Movement",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 8 }
+      },
+      duration_bucket: {
+        label: "Guess duration bucket",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      },
+      score_bucket: {
+        label: "Score bucket",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      }
+    },
+    measures: {
+      games_count: {
+        label: "Games",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games"
+      },
+      rounds_count: {
+        label: "Rounds",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_rounds"
+      },
+      avg_score: {
+        label: "Avg score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_score"
+      },
+      fivek_rate: {
+        label: "5k rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_player_self_score_eq_5000"
+      },
+      win_rate: {
+        label: "Win rate",
+        unit: "percent",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_player_self_win"
+      },
+      end_rating_avg: {
+        label: "Avg end rating",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_end_rating"
+      },
+      rating_delta_avg: {
+        label: "Avg rating delta",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_rating_delta"
+      },
+      hit_rate: {
+        label: "Hit rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_true_country_hit"
+      },
+      throw_rate: {
+        label: "Throw rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_throw_round"
+      },
+      damage_dealt_avg: {
+        label: "Avg damage dealt",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_dealt"
+      },
+      damage_taken_avg: {
+        label: "Avg damage taken",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_taken"
+      }
+    },
+    units: {
+      count: { format: "int" },
+      points: { format: "float", decimals: 1 },
+      percent: { format: "percent", decimals: 1 },
+      seconds: { format: "float", decimals: 1 },
+      rating: { format: "float", decimals: 0 },
+      km: { format: "float", decimals: 1 }
+    },
+    columnAliases: {
+      ts: ["playedAt", "startTime"],
+      true_country: ["trueCountry", "true_country"],
+      player_self_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
+      player_self_score: ["player_self_score", "p1_score", "score"],
+      player_opponent_score: ["player_opponent_score", "p3_score", "p2_score"],
+      distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
+      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"]
+    },
+    drilldownPresets: {
+      rounds: {
+        entity: "round",
+        columnsPresets: {
+          roundMode: [
+            "ts",
+            "gameId",
+            "roundNumber",
+            "true_country",
+            "player_self_country",
+            "player_self_score",
+            "player_opponent_score",
+            "durationSeconds",
+            "distanceKm"
+          ]
+        },
+        defaultPreset: "roundMode"
+      },
+      players: {
+        entity: "game",
+        columnsPresets: {
+          opponentMode: [
+            "ts",
+            "gameId",
+            "opponentName",
+            "game_mode",
+            "player_self_startRating",
+            "player_self_endRating",
+            "result"
+          ]
+        },
+        defaultPreset: "opponentMode"
+      }
+    },
+    errors: {
+      E_GRAIN_MISMATCH: "Selected fields have incompatible grains.",
+      E_CHART_X_NOT_ORDERED: "Line charts require an ordered x-dimension.",
+      E_SELECTOR_REQUIRED: "This dimension requires a selector (Top-N or Selected).",
+      E_TOO_MANY_SERIES: "Too many series requested; reduce categories or use selector."
+    }
+  };
+
+  // src/config/dashboard.json
+  var dashboard_default = {
+    $schema: "./dashboard.schema.json",
+    schemaVersion: "0.1.0",
+    dashboard: {
+      id: "default",
+      title: "GeoAnalyzr",
+      sections: [
+        {
+          id: "scores",
+          title: "Scores",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_scores_kpis",
+                title: "Score KPIs",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 6,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_scores_kpis",
+                      type: "stat_list",
+                      title: "KPIs (round-grain)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 6 },
+                      spec: {
+                        rows: [
+                          { label: "Rounds", measure: "rounds_count" },
+                          { label: "Avg score", measure: "avg_score" },
+                          {
+                            label: "5k rate",
+                            measure: "fivek_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  { dimension: "score_bucket", op: "eq", value: "5000" }
+                                ]
+                              }
+                            }
+                          },
+                          { label: "Hit rate", measure: "hit_rate" },
+                          { label: "Throw rate (<50)", measure: "throw_rate" }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_score_distribution",
+                title: "Score Distribution",
+                x: 0,
+                y: 6,
+                w: 12,
+                h: 12,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_score_distribution",
+                      type: "chart",
+                      title: "Score bucket distribution (click = drilldown rounds)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 12 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "score_bucket" },
+                        y: { measure: "rounds_count" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "time_patterns",
+          title: "Time Patterns",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_by_weekday",
+                title: "By weekday",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_avg_score_weekday",
+                      type: "chart",
+                      title: "Avg score by weekday",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "weekday" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_by_hour",
+                title: "By hour",
+                x: 0,
+                y: 10,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_fivek_rate_hour",
+                      type: "chart",
+                      title: "Rate by hour",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        color: "#ff8a3d",
+                        x: { dimension: "hour" },
+                        y: {
+                          measures: ["fivek_rate", "throw_rate", "hit_rate"],
+                          activeMeasure: "fivek_rate"
+                        },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_by_day",
+                title: "Daily progression",
+                x: 0,
+                y: 20,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_avg_score_day",
+                      type: "chart",
+                      title: "Avg score by day (bar)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "time_day" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_line_progress",
+                title: "Progress over time (line)",
+                x: 0,
+                y: 30,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_line_avg_score_day",
+                      type: "chart",
+                      title: "Avg score by day (line)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "line",
+                        x: { dimension: "time_day" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "countries",
+          title: "Countries",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_countries_breakdown",
+                title: "True country breakdown",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_rounds_top",
+                      type: "breakdown",
+                      title: "Top countries by rounds (click = drilldown rounds)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        dimension: "true_country",
+                        measure: "rounds_count",
+                        sort: { mode: "desc" },
+                        limit: 15,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_country_quality",
+                title: "Quality by country",
+                x: 0,
+                y: 10,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_avg_score",
+                      type: "chart",
+                      title: "Avg score by country (top-ish)",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        limit: 12,
+                        x: { dimension: "true_country" },
+                        y: { measure: "avg_score" },
+                        sort: { mode: "desc" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  };
+
+  // src/ui/semanticDashboardCss.ts
+  function injectSemanticDashboardCssOnce(doc) {
+    const id = "geoanalyzr-semantic-dashboard-css";
+    if (doc.getElementById(id)) return;
+    const style = doc.createElement("style");
+    style.id = id;
+    style.textContent = `
+    html.ga-semantic-page, body.ga-semantic-page {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      background: var(--ga-bg);
+      color: var(--ga-text);
+    }
+    .ga-root {
+      --ga-bg: #0f1115;
+      --ga-surface: #15181e;
+      --ga-surface-2: #171b22;
+      --ga-card: #12161d;
+      --ga-card-2: #10141b;
+      --ga-text: #d7deea;
+      --ga-text-muted: #9aa5b6;
+      --ga-border: #2b3340;
+      --ga-control-bg: #161b23;
+      --ga-control-text: #d7deea;
+      --ga-control-border: #3a4352;
+      --ga-axis-color: #7f8ca2;
+      --ga-axis-grid: #3c4555;
+      --ga-axis-text: #c7d2e4;
+      --ga-graph-color: #7eb6ff;
+      min-height: 100vh;
+      background: var(--ga-bg);
+      color: var(--ga-text);
+    }
+    .ga-root[data-ga-theme="light"] {
+      --ga-bg: #f4f7fc;
+      --ga-surface: #ffffff;
+      --ga-surface-2: #f9fbff;
+      --ga-card: #ffffff;
+      --ga-card-2: #f8fbff;
+      --ga-text: #1f2a38;
+      --ga-text-muted: #4b5d74;
+      --ga-border: #c8d5e6;
+      --ga-control-bg: #ffffff;
+      --ga-control-text: #1f2a38;
+      --ga-control-border: #b7c7dd;
+      --ga-axis-color: #51647e;
+      --ga-axis-grid: #c2cfdf;
+      --ga-axis-text: #2b3d56;
+    }
+    .ga-topbar {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 14px;
+      border-bottom:1px solid var(--ga-border);
+      background: var(--ga-surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .ga-title { font-weight: 700; }
+    .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
+    .ga-close, .ga-gear {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color:var(--ga-control-text);
+      border-radius:10px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-body { padding: 8px 12px 16px; }
+    .ga-tabs { display:flex; gap:8px; padding:10px; }
+    .ga-tab {
+      background:var(--ga-control-bg);
+      color:var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+    }
+    .ga-tab.active { background: var(--ga-surface-2); }
+    .ga-content { padding:10px; }
+    .ga-card {
+      background: var(--ga-card);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
+    .ga-card-body { padding:12px; }
+    .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }
+    .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
+    .ga-statlist-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-statrow {
+      display:flex;
+      justify-content:space-between;
+      padding:6px 2px;
+      border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
+    }
+    .ga-statrow:last-child { border-bottom:none; }
+    .ga-chart-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+      color: var(--ga-text);
+      width: 100%;
+      overflow: hidden;
+    }
+    .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
+    .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-chart-actions { display:flex; gap:8px; align-items:center; }
+    .ga-chart-actions button {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:8px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .ga-chart-host { width:100%; }
+    .ga-chart-svg { width:100%; max-width:100%; display:block; }
+    .ga-chart-bar { transform-box: view-box; }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
+      transform: scaleY(0);
+      opacity: 0.25;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-bar {
+      transform: none !important;
+      opacity: 0.72 !important;
+      animation: none !important;
+    }
+    @keyframes ga-bar-rise {
+      from { transform: scaleY(0); opacity: 0.25; }
+      to { transform: scaleY(1); opacity: 0.72; }
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-bar {
+      animation: ga-bar-rise 420ms ease-out both;
+    }
+    .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
+    .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
+    .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
+    .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
+    .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
+    .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
+    .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
+    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
+    .ga-drilldown-panel {
+      position:absolute;
+      top:6%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(1100px, 92vw);
+      max-height:88vh;
+      overflow:auto;
+      background:var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+    }
+    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--ga-border); }
+    .ga-drilldown-close {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:10px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-drilldown-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .ga-drilldown-table th, .ga-drilldown-table td {
+      padding:8px 10px;
+      border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
+      text-align:left;
+    }
+    .ga-settings-panel {
+      position:absolute;
+      top:8%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(980px, 94vw);
+      max-height:84vh;
+      overflow:auto;
+      background: var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+    }
+    .ga-settings-header {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid var(--ga-border);
+    }
+    .ga-settings-body { padding: 12px; }
+    .ga-settings-tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .ga-settings-tab {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-settings-tab.active { background: var(--ga-surface-2); }
+    .ga-settings-pane { display:none; }
+    .ga-settings-pane.active { display:block; }
+    .ga-settings-grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .ga-settings-field { display:flex; flex-direction:column; gap:6px; }
+    .ga-settings-field label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-settings-field input, .ga-settings-field select, .ga-settings-field textarea {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:8px;
+      font: inherit;
+    }
+    .ga-settings-field textarea {
+      min-height: 340px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre;
+    }
+    .ga-settings-note { font-size:12px; color: var(--ga-text-muted); }
+    .ga-settings-status { margin-top: 8px; font-size:12px; }
+    .ga-settings-status.error { color: #ff8f8f; }
+    .ga-settings-status.ok { color: #8fe3a1; }
+  `;
+    doc.head.appendChild(style);
+  }
+
+  // src/ui/settingsStore.ts
+  var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
+  var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
+  var DEFAULT_SETTINGS = {
+    appearance: {
+      theme: "dark",
+      graphColor: "#7eb6ff",
+      chartAnimations: true
+    },
+    standards: {
+      dateFormat: "dd/mm/yyyy",
+      sessionGapMinutes: 45
+    }
+  };
+  function cloneTemplate(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function normalizeColor(value, fallback) {
+    if (typeof value !== "string") return fallback;
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
+    return fallback;
+  }
+  function normalizeTheme(value) {
+    return value === "light" ? "light" : "dark";
+  }
+  function normalizeBool(value, fallback) {
+    if (typeof value === "boolean") return value;
+    return fallback;
+  }
+  function normalizeDateFormat(value) {
+    return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
+  }
+  function normalizeSettings(raw) {
+    const r = typeof raw === "object" && raw ? raw : {};
+    const appearance = typeof r.appearance === "object" && r.appearance ? r.appearance : {};
+    const standards = typeof r.standards === "object" && r.standards ? r.standards : {};
+    const sessionGapRaw = Number(standards.sessionGapMinutes);
+    return {
+      appearance: {
+        theme: normalizeTheme(appearance.theme),
+        graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor),
+        chartAnimations: normalizeBool(appearance.chartAnimations, DEFAULT_SETTINGS.appearance.chartAnimations)
+      },
+      standards: {
+        dateFormat: normalizeDateFormat(standards.dateFormat),
+        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes
+      }
+    };
+  }
+  function getStorage(doc) {
+    try {
+      return doc.defaultView?.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function loadSettings(doc) {
+    const storage = getStorage(doc);
+    if (!storage) return cloneTemplate(DEFAULT_SETTINGS);
+    try {
+      const raw = storage.getItem(SETTINGS_KEY);
+      if (!raw) return cloneTemplate(DEFAULT_SETTINGS);
+      return normalizeSettings(JSON.parse(raw));
+    } catch {
+      return cloneTemplate(DEFAULT_SETTINGS);
+    }
+  }
+  function saveSettings(doc, settings) {
+    const storage = getStorage(doc);
+    if (!storage) return;
+    try {
+      storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch {
+    }
+  }
+  function loadDashboardTemplate(doc, fallback) {
+    const storage = getStorage(doc);
+    if (!storage) return cloneTemplate(fallback);
+    try {
+      const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
+      if (!raw) return cloneTemplate(fallback);
+      return JSON.parse(raw);
+    } catch {
+      return cloneTemplate(fallback);
+    }
+  }
+  function saveDashboardTemplate(doc, dashboard) {
+    const storage = getStorage(doc);
+    if (!storage) return;
+    try {
+      storage.setItem(DASHBOARD_TEMPLATE_KEY, JSON.stringify(dashboard, null, 2));
+    } catch {
+    }
+  }
+  function applySettingsToRoot(root, settings) {
+    root.dataset.gaTheme = settings.appearance.theme;
+    root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
+    root.dataset.gaDateFormat = settings.standards.dateFormat;
+    root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
+    root.style.setProperty("--ga-graph-color", settings.appearance.graphColor);
+  }
+
+  // src/ui/settingsModal.ts
+  function attachSettingsModal(opts) {
+    const { doc, targetWindow, root, openButton, semantic, getDashboard, applyDashboard, getSettings, applySettings } = opts;
+    const settingsModal = doc.createElement("div");
+    settingsModal.className = "ga-settings-modal";
+    settingsModal.style.display = "none";
+    root.appendChild(settingsModal);
+    const openSettings = async () => {
+      settingsModal.innerHTML = "";
+      settingsModal.style.display = "block";
+      const bg = doc.createElement("div");
+      bg.className = "ga-settings-bg";
+      bg.addEventListener("click", () => {
+        settingsModal.style.display = "none";
+      });
+      const panel = doc.createElement("div");
+      panel.className = "ga-settings-panel";
+      const header = doc.createElement("div");
+      header.className = "ga-settings-header";
+      const headerTitle = doc.createElement("div");
+      headerTitle.textContent = "Dashboard Settings";
+      const headerClose = doc.createElement("button");
+      headerClose.className = "ga-close";
+      headerClose.textContent = "Close";
+      headerClose.addEventListener("click", () => {
+        settingsModal.style.display = "none";
+      });
+      header.appendChild(headerTitle);
+      header.appendChild(headerClose);
+      const bodyEl = doc.createElement("div");
+      bodyEl.className = "ga-settings-body";
+      const tabs = doc.createElement("div");
+      tabs.className = "ga-settings-tabs";
+      const panes = doc.createElement("div");
+      const appearanceTab = doc.createElement("button");
+      appearanceTab.className = "ga-settings-tab active";
+      appearanceTab.textContent = "Appearance";
+      const standardsTab = doc.createElement("button");
+      standardsTab.className = "ga-settings-tab";
+      standardsTab.textContent = "Standards";
+      const templateTab = doc.createElement("button");
+      templateTab.className = "ga-settings-tab";
+      templateTab.textContent = "Template";
+      tabs.appendChild(appearanceTab);
+      tabs.appendChild(standardsTab);
+      tabs.appendChild(templateTab);
+      const settings = getSettings();
+      const dashboard = getDashboard();
+      const appearancePane = doc.createElement("div");
+      appearancePane.className = "ga-settings-pane active";
+      const appearanceGrid = doc.createElement("div");
+      appearanceGrid.className = "ga-settings-grid";
+      const themeField = doc.createElement("div");
+      themeField.className = "ga-settings-field";
+      const themeLabel = doc.createElement("label");
+      themeLabel.textContent = "Theme";
+      const themeSelect = doc.createElement("select");
+      themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
+      themeSelect.value = settings.appearance.theme;
+      themeField.appendChild(themeLabel);
+      themeField.appendChild(themeSelect);
+      const colorField = doc.createElement("div");
+      colorField.className = "ga-settings-field";
+      const colorLabel = doc.createElement("label");
+      colorLabel.textContent = "Graph color";
+      const colorInput = doc.createElement("input");
+      colorInput.type = "color";
+      colorInput.value = normalizeColor(settings.appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor);
+      colorField.appendChild(colorLabel);
+      colorField.appendChild(colorInput);
+      const animField = doc.createElement("div");
+      animField.className = "ga-settings-field";
+      const animLabel = doc.createElement("label");
+      animLabel.textContent = "Chart animations";
+      const animSelect = doc.createElement("select");
+      animSelect.innerHTML = `<option value="on">On</option><option value="off">Off</option>`;
+      animSelect.value = settings.appearance.chartAnimations ? "on" : "off";
+      animField.appendChild(animLabel);
+      animField.appendChild(animSelect);
+      appearanceGrid.appendChild(themeField);
+      appearanceGrid.appendChild(colorField);
+      appearanceGrid.appendChild(animField);
+      appearancePane.appendChild(appearanceGrid);
+      const standardsPane = doc.createElement("div");
+      standardsPane.className = "ga-settings-pane";
+      const standardsGrid = doc.createElement("div");
+      standardsGrid.className = "ga-settings-grid";
+      const dateField = doc.createElement("div");
+      dateField.className = "ga-settings-field";
+      const dateLabel = doc.createElement("label");
+      dateLabel.textContent = "Date format";
+      const dateSelect = doc.createElement("select");
+      dateSelect.innerHTML = `
+      <option value="dd/mm/yyyy">DD/MM/YYYY</option>
+      <option value="mm/dd/yyyy">MM/DD/YYYY</option>
+      <option value="yyyy-mm-dd">YYYY-MM-DD</option>
+      <option value="locale">Locale</option>
+    `;
+      dateSelect.value = settings.standards.dateFormat;
+      dateField.appendChild(dateLabel);
+      dateField.appendChild(dateSelect);
+      const sessionField = doc.createElement("div");
+      sessionField.className = "ga-settings-field";
+      const sessionLabel = doc.createElement("label");
+      sessionLabel.textContent = "New session gap (minutes)";
+      const sessionInput = doc.createElement("input");
+      sessionInput.type = "number";
+      sessionInput.min = "1";
+      sessionInput.max = "360";
+      sessionInput.step = "1";
+      sessionInput.value = String(settings.standards.sessionGapMinutes);
+      sessionField.appendChild(sessionLabel);
+      sessionField.appendChild(sessionInput);
+      standardsGrid.appendChild(dateField);
+      standardsGrid.appendChild(sessionField);
+      standardsPane.appendChild(standardsGrid);
+      const standardsNote = doc.createElement("div");
+      standardsNote.className = "ga-settings-note";
+      standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views.";
+      standardsPane.appendChild(standardsNote);
+      const templatePane = doc.createElement("div");
+      templatePane.className = "ga-settings-pane";
+      const templateField = doc.createElement("div");
+      templateField.className = "ga-settings-field";
+      const templateLabel = doc.createElement("label");
+      templateLabel.textContent = "Live dashboard JSON template";
+      const templateEditor = doc.createElement("textarea");
+      templateEditor.value = JSON.stringify(dashboard, null, 2);
+      const templateStatus = doc.createElement("div");
+      templateStatus.className = "ga-settings-status";
+      templateField.appendChild(templateLabel);
+      templateField.appendChild(templateEditor);
+      templatePane.appendChild(templateField);
+      templatePane.appendChild(templateStatus);
+      panes.appendChild(appearancePane);
+      panes.appendChild(standardsPane);
+      panes.appendChild(templatePane);
+      const setActiveTab = (idx) => {
+        const tabButtons = [appearanceTab, standardsTab, templateTab];
+        const tabPanes = [appearancePane, standardsPane, templatePane];
+        tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
+        tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
+      };
+      appearanceTab.addEventListener("click", () => setActiveTab(0));
+      standardsTab.addEventListener("click", () => setActiveTab(1));
+      templateTab.addEventListener("click", () => setActiveTab(2));
+      const persistSettings = async () => {
+        const next = {
+          appearance: {
+            theme: normalizeTheme(themeSelect.value),
+            graphColor: normalizeColor(colorInput.value, DEFAULT_SETTINGS.appearance.graphColor),
+            chartAnimations: animSelect.value !== "off"
+          },
+          standards: {
+            dateFormat: normalizeDateFormat(dateSelect.value),
+            sessionGapMinutes: (() => {
+              const raw = Number(sessionInput.value);
+              return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes;
+            })()
+          }
+        };
+        await applySettings(next);
+      };
+      themeSelect.addEventListener("change", () => {
+        void persistSettings();
+      });
+      colorInput.addEventListener("input", () => {
+        void persistSettings();
+      });
+      animSelect.addEventListener("change", () => {
+        void persistSettings();
+      });
+      dateSelect.addEventListener("change", () => {
+        void persistSettings();
+      });
+      sessionInput.addEventListener("change", () => {
+        void persistSettings();
+      });
+      let templateDebounce = null;
+      const tryApplyTemplate = async () => {
+        templateStatus.textContent = "";
+        templateStatus.className = "ga-settings-status";
+        try {
+          const parsed = JSON.parse(templateEditor.value);
+          validateDashboardAgainstSemantic(semantic, parsed);
+          await applyDashboard(parsed);
+          templateStatus.textContent = "Template applied.";
+          templateStatus.classList.add("ok");
+        } catch (error) {
+          templateStatus.textContent = error instanceof Error ? error.message : String(error);
+          templateStatus.classList.add("error");
+        }
+      };
+      templateEditor.addEventListener("input", () => {
+        if (templateDebounce !== null) {
+          targetWindow.clearTimeout(templateDebounce);
+        }
+        templateDebounce = targetWindow.setTimeout(() => {
+          void tryApplyTemplate();
+        }, 280);
+      });
+      bodyEl.appendChild(tabs);
+      bodyEl.appendChild(panes);
+      panel.appendChild(header);
+      panel.appendChild(bodyEl);
+      settingsModal.appendChild(bg);
+      settingsModal.appendChild(panel);
+    };
+    openButton.addEventListener("click", () => {
+      void openSettings();
+    });
+  }
+
+  // src/ui.ts
+  function cloneTemplate2(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  async function initAnalysisWindow(opts) {
+    const targetWindow = opts?.targetWindow ?? window;
+    if (!targetWindow || targetWindow.closed) {
+      throw new Error("Semantic dashboard target window is unavailable.");
+    }
+    const doc = targetWindow.document;
+    if (!doc.body || !doc.head) {
+      throw new Error("Semantic dashboard target document is not ready.");
+    }
+    doc.title = "GeoAnalyzr - Semantic Dashboard";
+    doc.documentElement.classList.add("ga-semantic-page");
+    doc.body.classList.add("ga-semantic-page");
+    injectSemanticDashboardCssOnce(doc);
+    const semantic = cloneTemplate2(semantic_default);
+    let dashboard = loadDashboardTemplate(doc, cloneTemplate2(dashboard_default));
+    let settings = loadSettings(doc);
+    let root = doc.getElementById("geoanalyzr-semantic-root");
+    let body;
+    const renderNow = async () => {
+      body.innerHTML = "";
+      validateDashboardAgainstSemantic(semantic, dashboard);
+      await renderDashboard(body, semantic, dashboard);
+    };
+    if (!root) {
+      root = doc.createElement("div");
+      root.id = "geoanalyzr-semantic-root";
+      root.className = "ga-root";
+      const top = doc.createElement("div");
+      top.className = "ga-topbar";
+      const title = doc.createElement("div");
+      title.className = "ga-title";
+      title.textContent = "GeoAnalyzr - Semantic Dashboard";
+      const actions = doc.createElement("div");
+      actions.className = "ga-topbar-actions";
+      const settingsBtn = doc.createElement("button");
+      settingsBtn.className = "ga-gear";
+      settingsBtn.textContent = "Settings";
+      settingsBtn.title = "Settings";
+      const close = doc.createElement("button");
+      close.className = "ga-close";
+      close.textContent = "Close";
+      close.addEventListener("click", () => {
+        targetWindow.close();
+      });
+      actions.appendChild(settingsBtn);
+      actions.appendChild(close);
+      top.appendChild(title);
+      top.appendChild(actions);
+      body = doc.createElement("div");
+      body.className = "ga-body";
+      root.appendChild(top);
+      root.appendChild(body);
+      doc.body.appendChild(root);
+      attachSettingsModal({
+        doc,
+        targetWindow,
+        root,
+        openButton: settingsBtn,
+        semantic,
+        getDashboard: () => dashboard,
+        applyDashboard: async (next) => {
+          dashboard = next;
+          saveDashboardTemplate(doc, dashboard);
+          await renderNow();
+        },
+        getSettings: () => settings,
+        applySettings: async (next) => {
+          settings = next;
+          applySettingsToRoot(root, settings);
+          saveSettings(doc, settings);
+        }
+      });
+    } else {
+      const foundBody = root.querySelector(".ga-body");
+      if (!(foundBody instanceof HTMLDivElement)) {
+        throw new Error("Semantic root has no .ga-body container");
+      }
+      body = foundBody;
+    }
+    applySettingsToRoot(root, settings);
+    try {
+      await renderNow();
+    } catch (error) {
+      body.innerHTML = "";
+      const pre = doc.createElement("pre");
+      pre.style.margin = "12px";
+      pre.style.whiteSpace = "pre-wrap";
+      pre.style.color = "#ff9aa2";
+      pre.textContent = `Failed to render semantic dashboard:
+${error instanceof Error ? error.message : String(error)}`;
+      body.appendChild(pre);
+      throw error;
+    }
+  }
+
   // src/auth.ts
   var AUTH_META_KEY = "auth";
   function readNcfaFromDocumentCookie2() {
@@ -40997,25 +41359,19 @@ ${error instanceof Error ? error.message : String(error)}`;
     }
   }
 
-  // src/main.ts
-  function isInGame() {
-    const p = location.pathname;
-    return p.startsWith("/game/") || p.startsWith("/challenge/") || p.startsWith("/duels/") || p.startsWith("/team-duels/") || p.startsWith("/battle-royale/") || p.startsWith("/live-challenge/");
+  // src/app/session.ts
+  async function hasAuthenticatedSession() {
+    try {
+      const res = await fetch("https://www.geoguessr.com/api/v4/feed/private", { credentials: "include" });
+      return res.status >= 200 && res.status < 300;
+    } catch {
+      return false;
+    }
   }
-  function watchRoutes(onRoute) {
-    const origPush = history.pushState;
-    const origReplace = history.replaceState;
-    history.pushState = function() {
-      origPush.apply(this, arguments);
-      onRoute();
-    };
-    history.replaceState = function() {
-      origReplace.apply(this, arguments);
-      onRoute();
-    };
-    window.addEventListener("popstate", onRoute);
-    setInterval(onRoute, 500);
-    onRoute();
+
+  // src/app/uiActions.ts
+  function errorText(e) {
+    return e instanceof Error ? e.message : String(e);
   }
   async function refreshUI(ui) {
     const [games, rounds, detailsOk, detailsError, detailsMissing] = await Promise.all([
@@ -41027,16 +41383,11 @@ ${error instanceof Error ? error.message : String(error)}`;
     ]);
     ui.setCounts({ games, rounds, detailsOk, detailsError, detailsMissing });
   }
-  async function hasAuthenticatedSession() {
-    try {
-      const res = await fetch("https://www.geoguessr.com/api/v4/feed/private", { credentials: "include" });
-      return res.status >= 200 && res.status < 300;
-    } catch {
-      return false;
-    }
+  async function refreshAnalysisWindow(ui, filter) {
+    const data = await getAnalysisWindowData(filter);
+    ui.setAnalysisWindowData(data);
   }
-  (async function boot() {
-    const ui = createUI();
+  function registerUiActions(ui) {
     ui.onUpdateClick(async () => {
       try {
         ui.setStatus("Update started...");
@@ -41045,7 +41396,7 @@ ${error instanceof Error ? error.message : String(error)}`;
         if (!ncfa) {
           const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
           if (wantsSet) {
-            const entered = prompt(`Paste _ncfa token here.`, "");
+            const entered = prompt("Paste _ncfa token here.", "");
             if (entered !== null) {
               const clean = entered.trim();
               if (clean) {
@@ -41083,7 +41434,7 @@ ${error instanceof Error ? error.message : String(error)}`;
         ui.setStatus(`Update complete. New feed games: ${res.inserted}.`);
         await refreshUI(ui);
       } catch (e) {
-        ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
+        ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
     });
@@ -41092,17 +41443,12 @@ ${error instanceof Error ? error.message : String(error)}`;
       try {
         ui.setStatus("Resetting DB...");
         await db.transaction("rw", db.games, db.rounds, db.details, db.meta, async () => {
-          await Promise.all([
-            db.games.clear(),
-            db.rounds.clear(),
-            db.details.clear(),
-            db.meta.clear()
-          ]);
+          await Promise.all([db.games.clear(), db.rounds.clear(), db.details.clear(), db.meta.clear()]);
         });
         ui.setStatus("DB reset complete.");
         await refreshUI(ui);
       } catch (e) {
-        ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
+        ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
     });
@@ -41110,7 +41456,7 @@ ${error instanceof Error ? error.message : String(error)}`;
       try {
         await exportExcel((m) => ui.setStatus(m));
       } catch (e) {
-        ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
+        ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
     });
@@ -41166,10 +41512,6 @@ ${error instanceof Error ? error.message : String(error)}`;
         }
       });
     });
-    async function refreshAnalysisWindow(filter) {
-      const data = await getAnalysisWindowData(filter);
-      ui.setAnalysisWindowData(data);
-    }
     ui.onOpenAnalysisClick(async () => {
       let semanticStatus = "";
       try {
@@ -41185,28 +41527,58 @@ ${error instanceof Error ? error.message : String(error)}`;
             console.error("Failed to initialize semantic dashboard tab", semanticError);
           }
         }
-        await refreshAnalysisWindow({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
+        await refreshAnalysisWindow(ui, { gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
         ui.setStatus(`Analysis loaded.${semanticStatus}`);
       } catch (e) {
-        ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
+        ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
     });
     ui.onRefreshAnalysisClick(async (filter) => {
       try {
         ui.setStatus("Refreshing analysis...");
-        await refreshAnalysisWindow(filter);
+        await refreshAnalysisWindow(ui, filter);
         ui.setStatus("Analysis refreshed.");
       } catch (e) {
-        ui.setStatus("Error: " + (e instanceof Error ? e.message : String(e)));
+        ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
     });
+  }
+
+  // src/app/routing.ts
+  function isInGame() {
+    const p = location.pathname;
+    return p.startsWith("/game/") || p.startsWith("/challenge/") || p.startsWith("/duels/") || p.startsWith("/team-duels/") || p.startsWith("/battle-royale/") || p.startsWith("/live-challenge/");
+  }
+  function watchRoutes(onRoute) {
+    const origPush = history.pushState;
+    const origReplace = history.replaceState;
+    history.pushState = function() {
+      origPush.apply(this, arguments);
+      onRoute();
+    };
+    history.replaceState = function() {
+      origReplace.apply(this, arguments);
+      onRoute();
+    };
+    window.addEventListener("popstate", onRoute);
+    setInterval(onRoute, 500);
+    onRoute();
+  }
+
+  // src/app/boot.ts
+  async function bootApp() {
+    const ui = createUI();
+    registerUiActions(ui);
     await refreshUI(ui);
     watchRoutes(() => {
       ui.setVisible(!isInGame());
     });
-  })();
+  }
+
+  // src/main.ts
+  void bootApp();
 })();
 /*! Bundled license information:
 

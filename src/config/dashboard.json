@@ -156,6 +156,7 @@
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                     "spec": {
                       "type": "bar",
+                      "color": "#ff8a3d",
                       "x": { "dimension": "hour" },
                       "y": {
                         "measures": ["fivek_rate", "throw_rate", "hit_rate"],
@@ -195,6 +196,41 @@
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                     "spec": {
                       "type": "bar",
+                      "x": { "dimension": "time_day" },
+                      "y": { "measure": "avg_score" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "cardId": "card_line_progress",
+              "title": "Progress over time (line)",
+              "x": 0,
+              "y": 30,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_line_avg_score_day",
+                    "type": "chart",
+                    "title": "Avg score by day (line)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "line",
                       "x": { "dimension": "time_day" },
                       "y": { "measure": "avg_score" },
                       "sort": { "mode": "chronological" },

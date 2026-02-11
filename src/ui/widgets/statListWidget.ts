@@ -1,5 +1,6 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, StatListSpec, Actions, FilterClause } from "../../config/dashboard.types";
+import type { RoundRow } from "../../db";
 import { getRounds } from "../../engine/queryEngine";
 import { ROUND_MEASURES_BY_FORMULA_ID } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
@@ -23,12 +24,14 @@ function formatValue(semantic: SemanticRegistry, measureId: string, value: numbe
 async function computeMeasure(
   semantic: SemanticRegistry,
   measureId: string,
+  baseRows: RoundRow[] | undefined,
   filters?: FilterClause[]
 ): Promise<number> {
   const m = semantic.measures[measureId];
   if (!m) return 0;
 
-  const rows = applyFilters(await getRounds({}), filters);
+  const rowsAll = baseRows ?? (await getRounds({}));
+  const rows = applyFilters(rowsAll, filters);
   const fn = ROUND_MEASURES_BY_FORMULA_ID[m.formulaId];
   if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
   return fn(rows);
@@ -39,7 +42,8 @@ function attachClickIfAny(
   actions: Actions | undefined,
   overlay: DrilldownOverlay,
   semantic: SemanticRegistry,
-  title: string
+  title: string,
+  baseRows: RoundRow[] | undefined
 ): void {
   const click = actions?.click;
   if (!click) return;
@@ -47,7 +51,8 @@ function attachClickIfAny(
   el.style.cursor = "pointer";
   el.addEventListener("click", async () => {
     if (click.type === "drilldown") {
-      const rows = applyFilters(await getRounds({}), click.extraFilters);
+      const rowsAll = baseRows ?? (await getRounds({}));
+      const rows = applyFilters(rowsAll, click.extraFilters);
       overlay.open(semantic, {
         title,
         target: click.target,
@@ -62,7 +67,8 @@ function attachClickIfAny(
 export async function renderStatListWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
-  overlay: DrilldownOverlay
+  overlay: DrilldownOverlay,
+  baseRows?: RoundRow[]
 ): Promise<HTMLElement> {
   const spec = widget.spec as StatListSpec;
   const doc = overlay.getDocument();
@@ -89,10 +95,10 @@ export async function renderStatListWidget(
     right.className = "ga-statrow-value";
     right.textContent = "...";
 
-    const val = await computeMeasure(semantic, row.measure, row.filters);
+    const val = await computeMeasure(semantic, row.measure, baseRows, row.filters);
     right.textContent = formatValue(semantic, row.measure, val);
 
-    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`);
+    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, baseRows);
 
     line.appendChild(left);
     line.appendChild(right);

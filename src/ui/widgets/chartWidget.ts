@@ -1,5 +1,6 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, ChartSpec } from "../../config/dashboard.types";
+import type { RoundRow } from "../../db";
 import { getRounds } from "../../engine/queryEngine";
 import { ROUND_DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
@@ -80,6 +81,26 @@ function isAnimationsEnabled(doc: Document): boolean {
   return root?.getAttribute("data-ga-chart-animations") !== "off";
 }
 
+function maybeAnimateChartSvg(svg: SVGSVGElement, doc: Document): void {
+  if (!isAnimationsEnabled(doc)) {
+    svg.setAttribute("data-anim-state", "off");
+    return;
+  }
+  svg.setAttribute("data-anim-state", "pending");
+  const obs = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        svg.setAttribute("data-anim-state", "run");
+        obs.disconnect();
+        return;
+      }
+    },
+    { threshold: 0.15 }
+  );
+  obs.observe(svg);
+}
+
 function sanitizeFileName(name: string): string {
   const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
   return out.length > 0 ? out : "chart";
@@ -144,30 +165,18 @@ async function downloadPng(doc: Document, svg: SVGSVGElement, title: string): Pr
   }
 }
 
-function maybeAnimateBars(svg: SVGSVGElement, doc: Document): void {
-  if (!isAnimationsEnabled(doc)) {
-    svg.setAttribute("data-anim-state", "off");
-    return;
-  }
-  svg.setAttribute("data-anim-state", "pending");
-  const obs = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        svg.setAttribute("data-anim-state", "run");
-        obs.disconnect();
-        return;
-      }
-    },
-    { threshold: 0.15 }
-  );
-  obs.observe(svg);
+function prepareLineAnimation(path: SVGPathElement): void {
+  const len = Math.max(1, Math.ceil(path.getTotalLength()));
+  path.style.setProperty("--ga-line-length", String(len));
+  path.style.strokeDasharray = `${len}`;
+  path.style.strokeDashoffset = `${len}`;
 }
 
 export async function renderChartWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
-  overlay: DrilldownOverlay
+  overlay: DrilldownOverlay,
+  baseRows?: RoundRow[]
 ): Promise<HTMLElement> {
   const spec = widget.spec as ChartSpec;
   const doc = overlay.getDocument();
@@ -197,7 +206,7 @@ export async function renderChartWidget(
   chartHost.className = "ga-chart-host";
   box.appendChild(chartHost);
 
-  const rows = await getRounds({});
+  const rows = baseRows ?? (await getRounds({}));
   const dimId = spec.x.dimension;
 
   const dimDef = semantic.dimensions[dimId];
@@ -360,6 +369,7 @@ export async function renderChartWidget(
         return { x, y, d };
       });
       const path = doc.createElementNS(svg.namespaceURI, "path");
+      path.classList.add("ga-chart-line-path");
       const dPath = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
       path.setAttribute("d", dPath);
       path.setAttribute("fill", "none");
@@ -367,8 +377,14 @@ export async function renderChartWidget(
       path.setAttribute("stroke-width", "2.5");
       path.setAttribute("opacity", "0.9");
       svg.appendChild(path);
-      for (const p of points) {
+      if (isAnimationsEnabled(doc)) {
+        // Set dash properties once; CSS animates dashoffset on visibility.
+        prepareLineAnimation(path);
+      }
+      points.forEach((p, i) => {
         const dot = doc.createElementNS(svg.namespaceURI, "circle");
+        dot.classList.add("ga-chart-line-dot");
+        dot.style.setProperty("--ga-dot-index", String(i));
         dot.setAttribute("cx", String(p.x));
         dot.setAttribute("cy", String(p.y));
         dot.setAttribute("r", "3");
@@ -393,7 +409,8 @@ export async function renderChartWidget(
           });
         }
         svg.appendChild(dot);
-      }
+      });
+      maybeAnimateChartSvg(svg, doc);
     } else {
       const barW = innerW / Math.max(1, data.length);
       data.forEach((d, i) => {
@@ -412,6 +429,8 @@ export async function renderChartWidget(
         rect.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         rect.setAttribute("opacity", "0.72");
         rect.style.animationDelay = `${Math.min(i * 18, 320)}ms`;
+        rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
+        rect.style.transformBox = "view-box";
 
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
         tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
@@ -446,7 +465,7 @@ export async function renderChartWidget(
           svg.appendChild(tx);
         }
       });
-      maybeAnimateBars(svg, doc);
+      maybeAnimateChartSvg(svg, doc);
     }
 
     chartHost.appendChild(svg);
