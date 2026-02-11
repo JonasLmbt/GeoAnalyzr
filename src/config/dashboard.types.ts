@@ -25,6 +25,47 @@ export interface FilterClause {
   values?: unknown[];
 }
 
+export type GlobalFilterGrain = Grain;
+
+export type GlobalFiltersSpec = {
+  enabled: boolean;
+  layout?: {
+    variant?: "compact" | "full";
+  };
+  controls: FilterControlSpec[];
+  buttons?: {
+    apply?: boolean;
+    reset?: boolean;
+  };
+};
+
+export type FilterControlSpec = DateRangeControlSpec | SelectControlSpec;
+
+export type DateRangeValue = {
+  fromTs: number | null;
+  toTs: number | null;
+};
+
+export type DateRangeControlSpec = {
+  id: string;
+  type: "date_range";
+  label: string;
+  default: DateRangeValue;
+  appliesTo: GlobalFilterGrain[];
+};
+
+export type SelectOptionsSpec = "auto_distinct";
+
+export type SelectControlSpec = {
+  id: string;
+  type: "select";
+  label: string;
+  dimension: string;
+  default: "all" | string;
+  options: SelectOptionsSpec;
+  appliesTo: GlobalFilterGrain[];
+};
+
 export interface DrilldownClickAction {
   type: "drilldown";
   target: "rounds" | "games" | "sessions" | "players";
@@ -134,7 +175,7 @@ export interface DashboardDoc {
   dashboard: {
     id: string;
     title: string;
-    globalFilters?: FilterClause[];
+    globalFilters?: GlobalFiltersSpec;
     sections: SectionDef[];
   };
 }

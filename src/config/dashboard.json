@@ -4,7 +4,29 @@
   "dashboard": {
     "id": "default",
     "title": "GeoAnalyzr",
-    "globalFilters": [],
+    "globalFilters": {
+      "enabled": true,
+      "layout": { "variant": "compact" },
+      "controls": [
+        {
+          "id": "dateRange",
+          "type": "date_range",
+          "label": "From / To",
+          "default": { "fromTs": null, "toTs": null },
+          "appliesTo": ["round", "game", "session"]
+        },
+        {
+          "id": "country",
+          "type": "select",
+          "label": "Country",
+          "dimension": "true_country",
+          "default": "all",
+          "options": "auto_distinct",
+          "appliesTo": ["round"]
+        }
+      ],
+      "buttons": { "apply": false, "reset": true }
+    },
     "sections": [
       {
         "id": "scores",

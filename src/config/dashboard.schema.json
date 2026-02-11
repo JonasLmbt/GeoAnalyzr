@@ -35,12 +35,87 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "title": { "$ref": "#/$defs/title" },
+        "globalFilters": { "$ref": "#/$defs/globalFiltersSpecDef" },
         "sections": {
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/sectionDef" }
         }
       }
+    },
+
+    "globalFiltersSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "controls"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "variant": { "enum": ["compact", "full"] }
+          }
+        },
+        "controls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/filterControlSpecDef" }
+        },
+        "buttons": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apply": { "type": "boolean" },
+            "reset": { "type": "boolean" }
+          }
+        }
+      }
+    },
+
+    "filterControlSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "label", "default", "appliesTo"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["date_range", "select"] },
+        "label": { "$ref": "#/$defs/title" },
+        "default": {},
+        "appliesTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/grain" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "date_range" } } },
+          "then": {
+            "properties": {
+              "default": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["fromTs", "toTs"],
+                "properties": {
+                  "fromTs": { "type": ["number", "null"] },
+                  "toTs": { "type": ["number", "null"] }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "select" } } },
+          "then": {
+            "required": ["dimension", "options"],
+            "properties": {
+              "dimension": { "type": "string", "minLength": 1 },
+              "default": { "type": "string", "minLength": 1 },
+              "options": { "enum": ["auto_distinct"] }
+            }
+          }
+        }
+      ]
     },
 
     "sectionDef": {
