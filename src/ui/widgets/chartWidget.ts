@@ -58,6 +58,26 @@ function sortData(data: Datum[], mode: "chronological" | "asc" | "desc" | undefi
   return data;
 }
 
+function getSortModes(spec: ChartSpec): Array<"chronological" | "asc" | "desc"> {
+  const out: Array<"chronological" | "asc" | "desc"> = [];
+  const single = spec.sort?.mode;
+  if (single) out.push(single);
+  if (Array.isArray(spec.sorts)) {
+    for (const s of spec.sorts) {
+      const mode = s?.mode;
+      if (!mode) continue;
+      if (!out.includes(mode)) out.push(mode);
+    }
+  }
+  return out;
+}
+
+function sortLabel(mode: "chronological" | "asc" | "desc"): string {
+  if (mode === "chronological") return "Chronological";
+  if (mode === "asc") return "Ascending";
+  return "Descending";
+}
+
 function getMeasureIds(spec: ChartSpec): string[] {
   const out: string[] = [];
   const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
@@ -261,16 +281,23 @@ export async function renderChartWidget(
   const keys = Array.from(grouped.keys());
   const colorOverride = normalizeHexColor(spec.color);
 
-  const buildDataForMeasure = (measureId: string): Datum[] => {
+  const sortModes = getSortModes(spec);
+  let activeSortMode: "chronological" | "asc" | "desc" | undefined =
+    spec.activeSort?.mode ?? spec.sort?.mode ?? sortModes[0];
+  if (activeSortMode && !sortModes.includes(activeSortMode)) sortModes.unshift(activeSortMode);
+
+  const buildDataForMeasure = (measureId: string, limitOverride?: number): Datum[] => {
     const measureFn = measureFnById.get(measureId);
     if (!measureFn) return [];
     const baseData: Datum[] = keys.map((k) => {
       const g = grouped.get(k) ?? [];
       return { x: k, y: clampForMeasure(semantic, measureId, measureFn(g)), rows: g };
     });
-    const sortedData = sortData(baseData, spec.sort?.mode);
-    return typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0
-      ? sortedData.slice(0, Math.floor(spec.limit))
+    const sortedData = sortData(baseData, activeSortMode);
+
+    const limit = typeof limitOverride === "number" && Number.isFinite(limitOverride) && limitOverride > 0 ? limitOverride : spec.limit;
+    return typeof limit === "number" && Number.isFinite(limit) && limit > 0
+      ? sortedData.slice(0, Math.floor(limit))
       : sortedData;
   };
 
@@ -299,12 +326,43 @@ export async function renderChartWidget(
     })
   );
 
+  if (sortModes.length > 1) {
+    const label = doc.createElement("label");
+    label.style.fontSize = "12px";
+    label.style.opacity = "0.9";
+    label.textContent = "Sort:";
+
+    const select = doc.createElement("select");
+    select.style.background = "var(--ga-control-bg)";
+    select.style.color = "var(--ga-control-text)";
+    select.style.border = "1px solid var(--ga-control-border)";
+    select.style.borderRadius = "8px";
+    select.style.padding = "4px 8px";
+
+    for (const mode of sortModes) {
+      const option = doc.createElement("option");
+      option.value = mode;
+      option.textContent = sortLabel(mode);
+      if (mode === activeSortMode) option.selected = true;
+      select.appendChild(option);
+    }
+
+    select.addEventListener("change", () => {
+      const next = select.value as any;
+      if (!sortModes.includes(next)) return;
+      activeSortMode = next;
+      render();
+    });
+
+    controlsLeft.appendChild(label);
+    controlsLeft.appendChild(select);
+  }
+
   const render = (): void => {
     chartHost.innerHTML = "";
     currentSvg = null;
     const measureDef = semantic.measures[activeMeasure];
-    const data = buildDataForMeasure(activeMeasure);
-    if (!measureDef || data.length === 0) {
+    if (!measureDef) {
       const empty = doc.createElement("div");
       empty.style.fontSize = "12px";
       empty.style.opacity = "0.75";
@@ -318,9 +376,31 @@ export async function renderChartWidget(
     const PAD_L = 72;
     const PAD_B = 58;
     const PAD_T = 16;
-    const PAD_R = 20;
+    const PAD_R = 44;
     const innerW = W - PAD_L - PAD_R;
     const innerH = H - PAD_T - PAD_B;
+
+    const effectiveLimit =
+      spec.type === "bar" && !(typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0)
+        ? (() => {
+            const hostW = chartHost.getBoundingClientRect().width;
+            const safeHostW = hostW > 50 ? hostW : 1000;
+            const minBarPx = 18;
+            const pxInnerW = safeHostW * (innerW / W);
+            const maxBars = Math.floor(pxInnerW / minBarPx);
+            return Math.max(6, Math.min(200, maxBars));
+          })()
+        : undefined;
+
+    const data = buildDataForMeasure(activeMeasure, effectiveLimit);
+    if (data.length === 0) {
+      const empty = doc.createElement("div");
+      empty.style.fontSize = "12px";
+      empty.style.opacity = "0.75";
+      empty.textContent = "No chart data available for current selection.";
+      chartHost.appendChild(empty);
+      return;
+    }
 
     const dataMax = clampForMeasure(semantic, activeMeasure, Math.max(0, ...data.map((d) => d.y)));
     const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
@@ -486,9 +566,12 @@ export async function renderChartWidget(
 
         if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
           const tx = doc.createElementNS(svg.namespaceURI, "text");
-          tx.setAttribute("x", String(x + barW / 2));
+          const isFirst = i === 0;
+          const isLast = i === data.length - 1;
+          const labelX = isFirst ? PAD_L + 2 : isLast ? PAD_L + innerW - 2 : x + barW / 2;
+          tx.setAttribute("x", String(labelX));
           tx.setAttribute("y", String(PAD_T + innerH + 16));
-          tx.setAttribute("text-anchor", "middle");
+          tx.setAttribute("text-anchor", isFirst ? "start" : isLast ? "end" : "middle");
           tx.setAttribute("font-size", "10");
           tx.setAttribute("fill", "var(--ga-axis-text)");
           tx.setAttribute("opacity", "0.95");

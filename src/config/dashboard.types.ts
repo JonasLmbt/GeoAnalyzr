@@ -96,7 +96,12 @@ export interface ChartSpec {
     dimension: string;
     selector: SelectorDef;
   };
+  // Single sort (legacy + simplest form).
   sort?: SortDef;
+  // Multiple selectable sorts.
+  sorts?: SortDef[];
+  // Which sort to use by default when using `sorts`.
+  activeSort?: SortDef;
   actions?: Actions;
 }
 
@@ -119,9 +124,21 @@ export interface StatValueSpec {
 
 export interface BreakdownSpec {
   color?: string;
+  // If true, allow expanding beyond `limit` to show all rows.
+  extendable?: boolean;
   dimension: string;
-  measure: string;
+  // Single-measure breakdown (legacy + simplest form).
+  measure?: string;
+  // Multi-measure breakdown. If provided, a select will be shown to switch active measure.
+  measures?: string[];
+  // Which measure to show by default when using `measures`.
+  activeMeasure?: string;
+  // Single sort (legacy + simplest form).
   sort?: SortDef;
+  // Multiple selectable sorts.
+  sorts?: SortDef[];
+  // Which sort to use by default when using `sorts`.
+  activeSort?: SortDef;
   limit?: number;
   filters?: FilterClause[];
   actions?: Actions;

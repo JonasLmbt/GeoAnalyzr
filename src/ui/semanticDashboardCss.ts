@@ -222,12 +222,46 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
     }
     .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
+    .ga-breakdown-header {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-end;
+      margin: 2px 0 8px 0;
+      font-size: 11px;
+      letter-spacing: 0.15px;
+      color: color-mix(in srgb, var(--ga-text) 78%, transparent);
+    }
+    .ga-breakdown-header-left { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight: 650; }
+    .ga-breakdown-header-right { flex:1; text-align:right; font-weight: 650; }
+    .ga-breakdown-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-breakdown-ctl-label { opacity: 0.9; font-weight: 650; }
+    .ga-breakdown-ctl-select {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:3px 8px;
+      font-size:12px;
+      max-width: min(360px, 62vw);
+    }
     .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
     .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
     .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
     .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
     .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
+    .ga-breakdown-footer { display:flex; justify-content:flex-end; margin-top: 10px; }
+    .ga-breakdown-toggle {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:8px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .ga-breakdown-toggle:hover { filter: brightness(1.02); }
     .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
     .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
     .ga-drilldown-panel {
