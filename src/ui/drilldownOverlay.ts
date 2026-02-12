@@ -216,7 +216,15 @@ export class DrilldownOverlay {
     if (value === undefined || value === null) return "";
 
     const col = columnName.toLowerCase();
-    const looksLikeDateColumn = col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
+    const looksLikeDateColumn =
+      col === "ts" ||
+      col === "playedat" ||
+      col === "starttime" ||
+      col === "endtime" ||
+      col.includes("date") ||
+      col.includes("time") ||
+      col.includes("playedat") ||
+      col.includes("timestamp");
 
     if (typeof value === "number" && Number.isFinite(value)) {
       if (looksLikeDateColumn && value > 946684800000 && value < 4102444800000) {
@@ -228,6 +236,14 @@ export class DrilldownOverlay {
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (looksLikeDateColumn) {
+        // Handle raw numeric timestamps that come in as strings.
+        if (/^[0-9]{10,13}$/.test(trimmed)) {
+          const n = Number(trimmed);
+          if (Number.isFinite(n)) {
+            const ts = trimmed.length === 10 ? n * 1000 : n;
+            if (ts > 946684800000 && ts < 4102444800000) return this.formatDate(ts, dateMode);
+          }
+        }
         const parsed = Date.parse(trimmed);
         if (Number.isFinite(parsed)) return this.formatDate(parsed, dateMode);
       }
@@ -278,12 +294,29 @@ export class DrilldownOverlay {
 
     let text = this.formatCellValue(raw, key, dateMode);
 
+    if (key === "result") {
+      if (typeof raw === "boolean") text = raw ? "Win" : "Loss";
+      else if (typeof raw === "string") text = raw;
+      else text = "-";
+    }
+
     if (key === "durationSeconds" && typeof raw === "number" && Number.isFinite(raw)) {
       text = `${raw.toFixed(1)}s`;
     }
     if (key === "damage" && typeof raw === "number" && Number.isFinite(raw)) {
       const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
       text = signed;
+    }
+    if ((key === "true_country" || key === "trueCountry") && typeof raw === "string") {
+      const iso2 = raw.trim().toUpperCase();
+      if (/^[A-Z]{2}$/.test(iso2) && typeof Intl !== "undefined" && (Intl as any).DisplayNames) {
+        try {
+          const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
+          text = dn.of(iso2) ?? raw;
+        } catch {
+          // keep raw
+        }
+      }
     }
 
     if (key === "gameId" && col.display?.truncate) {
