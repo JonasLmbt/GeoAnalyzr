@@ -54,7 +54,11 @@ function validateGlobalFiltersSpec(semantic: SemanticRegistry, dash: DashboardDo
     if (c.type === "select") {
       assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
       assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
-      assert(c.options === "auto_distinct", "E_BAD_SPEC", `select '${c.id}' options must be 'auto_distinct'`);
+      assert(
+        c.options === "auto_distinct" || c.options === "auto_teammates",
+        "E_BAD_SPEC",
+        `select '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+      );
       assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
 
       const dimId = String(c.dimension);

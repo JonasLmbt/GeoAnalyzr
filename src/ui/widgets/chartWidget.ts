@@ -30,7 +30,11 @@ function sortKeysChronological(keys: string[]): string[] {
 
   const parseKey = (k: string): number | undefined => {
     const first = k.split("-")[0] ?? k;
-    const parsed = Number(first);
+    const t = first.trim();
+    // Handle labels like "<20 sec" and ">180 sec" deterministically.
+    if (t.startsWith("<")) return -1;
+    if (t.startsWith(">")) return 1e9;
+    const parsed = Number(t.replace(/[^0-9.]/g, ""));
     return Number.isFinite(parsed) ? parsed : undefined;
   };
   return [...keys].sort((a, b) => {
@@ -73,9 +77,19 @@ function formatMeasureValue(semantic: SemanticRegistry, measureId: string, value
   const measure = semantic.measures[measureId];
   const unit = measure ? semantic.units[measure.unit] : undefined;
   if (!unit) return `${value}`;
-  if (unit.format === "percent") return `${(value * 100).toFixed(unit.decimals ?? 1)}%`;
+  if (unit.format === "percent") {
+    const clamped = Math.max(0, Math.min(1, value));
+    return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
+  }
   if (unit.format === "int") return `${Math.round(value)}`;
   return value.toFixed(unit.decimals ?? 1);
+}
+
+function clampForMeasure(semantic: SemanticRegistry, measureId: string, value: number): number {
+  const measure = semantic.measures[measureId];
+  const unit = measure ? semantic.units[measure.unit] : undefined;
+  if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
+  return value;
 }
 
 function niceUpperBound(maxValue: number): number {
@@ -252,7 +266,7 @@ export async function renderChartWidget(
     if (!measureFn) return [];
     const baseData: Datum[] = keys.map((k) => {
       const g = grouped.get(k) ?? [];
-      return { x: k, y: measureFn(g), rows: g };
+      return { x: k, y: clampForMeasure(semantic, measureId, measureFn(g)), rows: g };
     });
     const sortedData = sortData(baseData, spec.sort?.mode);
     return typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0
@@ -308,7 +322,7 @@ export async function renderChartWidget(
     const innerW = W - PAD_L - PAD_R;
     const innerH = H - PAD_T - PAD_B;
 
-    const dataMax = Math.max(0, ...data.map((d) => d.y));
+    const dataMax = clampForMeasure(semantic, activeMeasure, Math.max(0, ...data.map((d) => d.y)));
     const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
 
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -382,7 +396,7 @@ export async function renderChartWidget(
     if (spec.type === "line") {
       const points = data.map((d, i) => {
         const x = PAD_L + (i / Math.max(1, data.length - 1)) * innerW;
-        const y = PAD_T + innerH - (d.y / maxY) * innerH;
+        const y = PAD_T + innerH - (clampForMeasure(semantic, activeMeasure, d.y) / maxY) * innerH;
         return { x, y, d };
       });
       const path = doc.createElementNS(svg.namespaceURI, "path");
@@ -408,7 +422,7 @@ export async function renderChartWidget(
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, p.d.y)}`;
+        tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const click = spec.actions?.click;
         if (click?.type === "drilldown") {
@@ -432,7 +446,7 @@ export async function renderChartWidget(
       const barW = innerW / Math.max(1, data.length);
       data.forEach((d, i) => {
         const x = PAD_L + i * barW;
-        const h = (d.y / maxY) * innerH;
+        const h = (clampForMeasure(semantic, activeMeasure, d.y) / maxY) * innerH;
         const y = PAD_T + innerH - h;
 
         const rect = doc.createElementNS(svg.namespaceURI, "rect");
@@ -450,7 +464,7 @@ export async function renderChartWidget(
         rect.style.transformBox = "view-box";
 
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
+        tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
         const click = spec.actions?.click;

@@ -3,8 +3,8 @@ import type { DashboardDoc } from "../config/dashboard.types";
 import { renderDashboard } from "./dashboardRenderer";
 import { createGlobalFilterStore } from "./filterState";
 import { renderGlobalFiltersBar } from "./globalFiltersBar";
-import { getDistinctValuesForSelectControl } from "../engine/distinctOptions";
-import { getRounds } from "../engine/queryEngine";
+import { getSelectOptionsForControl } from "../engine/selectOptions";
+import { getGamePlayedAtBounds, getRounds } from "../engine/queryEngine";
 
 export async function renderAnalysisApp(opts: {
   body: HTMLDivElement;
@@ -27,6 +27,25 @@ export async function renderAnalysisApp(opts: {
   const spec = dashboard.dashboard.globalFilters;
   const store = createGlobalFilterStore(spec);
 
+  // If date-range defaults are unspecified, initialize them to the full dataset span.
+  if (spec?.enabled) {
+    const bounds = await getGamePlayedAtBounds();
+    if (bounds.minTs !== null && bounds.maxTs !== null) {
+      for (const c of spec.controls) {
+        if (c.type !== "date_range") continue;
+        const current = store.getState()[c.id] as any;
+        const isUnset =
+          !current ||
+          typeof current !== "object" ||
+          ((current.fromTs === null || current.fromTs === undefined) && (current.toTs === null || current.toTs === undefined));
+        if (!isUnset) continue;
+        const next = { fromTs: bounds.minTs, toTs: bounds.maxTs };
+        store.patchDefaults({ [c.id]: next });
+        store.setValue(c.id, next);
+      }
+    }
+  }
+
   const renderNow = async () => {
     await renderGlobalFiltersBar({
       container: filtersHost,
@@ -36,7 +55,7 @@ export async function renderAnalysisApp(opts: {
       setValue: store.setValue,
       setAll: store.setAll,
       reset: store.reset,
-      getDistinctOptions: async ({ control, spec: s, state }) => getDistinctValuesForSelectControl({ control, spec: s, state })
+      getDistinctOptions: async ({ control, spec: s, state }) => getSelectOptionsForControl({ control, spec: s, state })
     });
     const rows = await getRounds({ global: { spec, state: store.getState() } });
     await renderDashboard(dashboardHost, semantic, dashboard, { rows });

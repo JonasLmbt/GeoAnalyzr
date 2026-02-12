@@ -56,12 +56,20 @@ function formatValue(semantic: SemanticRegistry, measureId: string, value: numbe
   if (!unit) return String(value);
 
   if (unit.format === "percent") {
+    const clamped = Math.max(0, Math.min(1, value));
     const decimals = unit.decimals ?? 1;
-    return `${(value * 100).toFixed(decimals)}%`;
+    return `${(clamped * 100).toFixed(decimals)}%`;
   }
   if (unit.format === "int") return String(Math.round(value));
   const decimals = unit.decimals ?? 1;
   return value.toFixed(decimals);
+}
+
+function clampForMeasure(semantic: SemanticRegistry, measureId: string, value: number): number {
+  const m = semantic.measures[measureId];
+  const unit = m ? semantic.units[m.unit] : undefined;
+  if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
+  return value;
 }
 
 export async function renderBreakdownWidget(
@@ -104,7 +112,7 @@ export async function renderBreakdownWidget(
 
   let rows: Row[] = Array.from(grouped.entries()).map(([k, g]) => ({
     key: k,
-    value: measureFn(g),
+    value: clampForMeasure(semantic, measId, measureFn(g)),
     rows: g
   }));
 
@@ -114,7 +122,7 @@ export async function renderBreakdownWidget(
   const limit = typeof spec.limit === "number" ? spec.limit : 12;
   rows = rows.slice(0, limit);
 
-  const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
+  const maxVal = Math.max(1e-9, ...rows.map((r) => clampForMeasure(semantic, measId, r.value)));
 
   for (const r of rows) {
     const line = doc.createElement("div");

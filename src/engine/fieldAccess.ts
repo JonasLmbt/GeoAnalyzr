@@ -22,6 +22,21 @@ export function getTrueCountry(r: RoundRow): string | undefined {
   return (r as any).trueCountry ?? (r as any).true_country;
 }
 
+export function getMovementType(r: RoundRow): string | undefined {
+  const v = (r as any).movementType ?? (r as any).movement_type;
+  return typeof v === "string" ? v : undefined;
+}
+
+export function getDurationSeconds(r: RoundRow): number | undefined {
+  const v = legacy(r, "durationSeconds", "guessDurationSec", "timeSec");
+  return typeof v === "number" ? v : undefined;
+}
+
+export function getTeammateName(r: RoundRow): string | undefined {
+  const v = legacy(r, "teammateName", "player_mate_name");
+  return typeof v === "string" ? v : undefined;
+}
+
 export function getGuessCountrySelf(r: RoundRow): string | undefined {
   const v = legacy(r, "player_self_guessCountry", "p1_guessCountry", "guessCountry");
   return typeof v === "string" ? v : undefined;

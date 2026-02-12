@@ -89,6 +89,14 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 12, "selectorRequired": true }
     },
+    "teammate_name": {
+      "label": "Teammate",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 15, "selectorRequired": true }
+    },
     "movement_type": {
       "label": "Movement",
       "kind": "category",
@@ -226,7 +234,6 @@
           "gameId",
           "roundNumber",
           "true_country",
-          "player_self_country",
           "player_self_score",
           "player_opponent_score",
           "durationSeconds",

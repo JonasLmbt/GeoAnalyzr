@@ -1,6 +1,6 @@
 // src/engine/dimensions.ts
 import type { RoundRow } from "../db";
-import { getSelfScore, getPlayedAt, getTrueCountry } from "./fieldAccess";
+import { getSelfScore, getPlayedAt, getTrueCountry, getMovementType, getDurationSeconds, getTeammateName } from "./fieldAccess";
 
 export type GroupKey = string;
 
@@ -40,10 +40,37 @@ export function trueCountryKey(r: RoundRow): GroupKey | null {
   return typeof c === "string" && c.length ? c : null;
 }
 
+export function movementTypeKey(r: RoundRow): GroupKey | null {
+  const v = getMovementType(r);
+  return typeof v === "string" && v.length ? v : null;
+}
+
+export function durationBucketKey(r: RoundRow): GroupKey | null {
+  const s = getDurationSeconds(r);
+  if (typeof s !== "number" || !Number.isFinite(s) || s < 0) return null;
+  // Keep these buckets aligned with the legacy "tempo" buckets.
+  if (s < 20) return "<20 sec";
+  if (s < 30) return "20-30 sec";
+  if (s < 45) return "30-45 sec";
+  if (s < 60) return "45-60 sec";
+  if (s < 90) return "60-90 sec";
+  if (s < 180) return "90-180 sec";
+  return ">180 sec";
+}
+
+export function teammateNameKey(r: RoundRow): GroupKey | null {
+  const n = getTeammateName(r);
+  const v = typeof n === "string" ? n.trim() : "";
+  return v.length ? v : null;
+}
+
 export const ROUND_DIMENSION_EXTRACTORS: Record<string, (r: RoundRow) => GroupKey | null> = {
   score_bucket: scoreBucketKey,
   time_day: timeDayKey,
   weekday: weekdayKey,
   hour: hourKey,
-  true_country: trueCountryKey
+  true_country: trueCountryKey,
+  movement_type: movementTypeKey,
+  duration_bucket: durationBucketKey,
+  teammate_name: teammateNameKey
 };

@@ -15,27 +15,46 @@ export type GlobalFilters = {
 let roundsRawCache: RoundRow[] | null = null;
 const roundsFilteredCache = new Map<string, RoundRow[]>();
 
+export async function getGamePlayedAtBounds(): Promise<{ minTs: number | null; maxTs: number | null }> {
+  const first = await db.games.orderBy("playedAt").first();
+  const last = await db.games.orderBy("playedAt").last();
+  const minTs = first && typeof first.playedAt === "number" ? first.playedAt : null;
+  const maxTs = last && typeof last.playedAt === "number" ? last.playedAt : null;
+  return { minTs, maxTs };
+}
+
 async function getRoundsRaw(): Promise<RoundRow[]> {
   if (roundsRawCache) return roundsRawCache;
-  const rows = await db.rounds.toArray();
-  const missingPlayedAt = rows.some((r) => typeof (r as any).playedAt !== "number");
-  if (!missingPlayedAt) {
-    roundsRawCache = rows;
-    return rows;
-  }
+  const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
 
-  const games = await db.games.toArray();
   const playedAtByGame = new Map<string, number>();
   for (const g of games) {
     if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
   }
 
+  const mateNameByGame = new Map<string, string>();
+  for (const d of details) {
+    const raw = (d as any).player_mate_name;
+    const name = typeof raw === "string" ? raw.trim() : "";
+    if (name) mateNameByGame.set((d as any).gameId, name);
+  }
+
   roundsRawCache = rows.map((r) => {
-    if (typeof (r as any).playedAt === "number") return r;
-    const gamePlayedAt = playedAtByGame.get(r.gameId);
-    if (typeof gamePlayedAt !== "number") return r;
-    return { ...(r as any), playedAt: gamePlayedAt } as RoundRow;
+    const out: any = { ...(r as any) };
+
+    if (typeof out.playedAt !== "number") {
+      const gamePlayedAt = playedAtByGame.get(out.gameId);
+      if (typeof gamePlayedAt === "number") out.playedAt = gamePlayedAt;
+    }
+
+    if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
+      const mate = mateNameByGame.get(out.gameId);
+      if (mate) out.teammateName = mate;
+    }
+
+    return out as RoundRow;
   });
+
   return roundsRawCache;
 }
 

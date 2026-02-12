@@ -29,7 +29,7 @@ function normalizeDateRangeValue(value: unknown, fallback: DateRangeValue): Date
 }
 
 export function createGlobalFilterStore(spec: GlobalFiltersSpec | undefined) {
-  const defaults = buildDefaults(spec);
+  let defaults = buildDefaults(spec);
   let state: GlobalFilterState = cloneJson(defaults);
   const listeners = new Set<FilterStateListener>();
 
@@ -40,6 +40,9 @@ export function createGlobalFilterStore(spec: GlobalFiltersSpec | undefined) {
   return {
     getSpec: () => spec,
     getState: () => state,
+    patchDefaults: (partial: GlobalFilterState) => {
+      defaults = { ...defaults, ...cloneJson(partial) };
+    },
     setValue: (id: string, value: unknown) => {
       if (!id) return;
       // Validate basic shapes early to keep the store consistent.

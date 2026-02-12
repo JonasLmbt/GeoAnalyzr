@@ -16,6 +16,33 @@
           "appliesTo": ["round", "game", "session"]
         },
         {
+          "id": "movement",
+          "type": "select",
+          "label": "Movement",
+          "dimension": "movement_type",
+          "default": "all",
+          "options": "auto_distinct",
+          "appliesTo": ["round"]
+        },
+        {
+          "id": "teammate",
+          "type": "select",
+          "label": "Teammate",
+          "dimension": "teammate_name",
+          "default": "all",
+          "options": "auto_teammates",
+          "appliesTo": ["round"]
+        },
+        {
+          "id": "guessTimeBucket",
+          "type": "select",
+          "label": "Guess time",
+          "dimension": "duration_bucket",
+          "default": "all",
+          "options": "auto_distinct",
+          "appliesTo": ["round"]
+        },
+        {
           "id": "country",
           "type": "select",
           "label": "Country",

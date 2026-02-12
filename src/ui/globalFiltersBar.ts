@@ -1,12 +1,13 @@
 import type { SemanticRegistry } from "../config/semantic.types";
 import type { GlobalFiltersSpec, FilterControlSpec, DateRangeValue, SelectControlSpec } from "../config/dashboard.types";
 import type { GlobalFilterState } from "../engine/globalFilters";
+import type { SelectOption } from "../engine/selectOptions";
 
 export type DistinctOptionsProvider = (opts: {
   control: SelectControlSpec;
   spec: GlobalFiltersSpec;
   state: GlobalFilterState;
-}) => Promise<string[]>;
+}) => Promise<SelectOption[]>;
 
 function toYmd(ts: number): string {
   const d = new Date(ts);
@@ -141,10 +142,10 @@ export async function renderGlobalFiltersBar(args: {
     // Options can depend on other active filters; we compute distincts from DB.
     const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
     for (const opt of options) {
-      sel.appendChild(new Option(opt, opt));
+      sel.appendChild(new Option(opt.label, opt.value));
     }
 
-    sel.value = options.includes(current) ? current : "all";
+    sel.value = options.some((o) => o.value === current) ? current : "all";
     sel.addEventListener("change", () => {
       updatePending(id, sel.value);
     });
