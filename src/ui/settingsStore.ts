@@ -109,7 +109,19 @@ export function loadDashboardTemplate(doc: Document, fallback: DashboardDoc): Da
   try {
     const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
     if (!raw) return cloneTemplate(fallback) as DashboardDoc;
-    return JSON.parse(raw) as DashboardDoc;
+    const parsed = JSON.parse(raw) as DashboardDoc;
+    // Forward-compatible merge: preserve user template but adopt newly added top-level features by default.
+    const merged: DashboardDoc = {
+      ...cloneTemplate(fallback),
+      ...parsed,
+      dashboard: {
+        ...cloneTemplate(fallback).dashboard,
+        ...(parsed as any).dashboard,
+        globalFilters: (parsed as any).dashboard?.globalFilters ?? cloneTemplate(fallback).dashboard.globalFilters,
+        sections: Array.isArray((parsed as any).dashboard?.sections) ? (parsed as any).dashboard.sections : cloneTemplate(fallback).dashboard.sections
+      }
+    };
+    return merged;
   } catch {
     return cloneTemplate(fallback) as DashboardDoc;
   }

@@ -46,7 +46,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   const renderNow = async (): Promise<void> => {
     body.innerHTML = "";
     validateDashboardAgainstSemantic(semantic, dashboard);
-    await renderAnalysisApp({ root, body, semantic, dashboard });
+    await renderAnalysisApp({ body, semantic, dashboard });
   };
 
   if (!root) {

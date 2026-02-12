@@ -7,12 +7,11 @@ import { getDistinctValuesForSelectControl } from "../engine/distinctOptions";
 import { getRounds } from "../engine/queryEngine";
 
 export async function renderAnalysisApp(opts: {
-  root: HTMLDivElement;
   body: HTMLDivElement;
   semantic: SemanticRegistry;
   dashboard: DashboardDoc;
 }): Promise<void> {
-  const { root, body, semantic, dashboard } = opts;
+  const { body, semantic, dashboard } = opts;
   const doc = body.ownerDocument;
 
   body.innerHTML = "";
