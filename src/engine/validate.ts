@@ -93,6 +93,16 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     if (spec.sort?.mode) {
       assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
     }
+    if (Array.isArray(spec.sorts)) {
+      for (const s of spec.sorts) {
+        const mode = s?.mode;
+        if (!mode) continue;
+        assert(xDim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${xDimId}'`);
+      }
+    }
+    if (spec.activeSort?.mode) {
+      assert(xDim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${xDimId}'`);
+    }
     for (const yMeasId of yMeasureIds) {
       const yMeas = semantic.measures[yMeasId];
       assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
@@ -160,11 +170,31 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
   if (widget.type === "breakdown") {
     const spec: any = widget.spec;
     const dim = semantic.dimensions[spec.dimension];
-    const meas = semantic.measures[spec.measure];
+    const measIds = getBreakdownMeasureIds(spec);
     assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
-    assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in breakdown ${widget.widgetId}`);
     assert(dim.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
-    assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure grain mismatch in ${widget.widgetId}`);
+    assert(measIds.length > 0, "E_BAD_SPEC", `Breakdown ${widget.widgetId} missing measure or measures[]`);
+    for (const measId of measIds) {
+      const meas = semantic.measures[measId];
+      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
+      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure '${measId}' grain mismatch in ${widget.widgetId}`);
+    }
+    if (typeof spec.activeMeasure === "string" && spec.activeMeasure.trim()) {
+      assert(measIds.includes(spec.activeMeasure.trim()), "E_BAD_SPEC", `breakdown ${widget.widgetId} activeMeasure must be in measures[]`);
+    }
+    if (spec.sort?.mode) {
+      assert(dim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${spec.dimension}'`);
+    }
+    if (Array.isArray(spec.sorts)) {
+      for (const s of spec.sorts) {
+        const mode = s?.mode;
+        if (!mode) continue;
+        assert(dim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${spec.dimension}'`);
+      }
+    }
+    if (spec.activeSort?.mode) {
+      assert(dim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${spec.dimension}'`);
+    }
     if (dim.cardinality?.selectorRequired) {
       assert(
         typeof spec.limit === "number" && spec.limit > 0,
@@ -210,6 +240,21 @@ function getChartMeasureIds(spec: any): string[] {
   if (single) result.push(single);
   if (Array.isArray(spec?.y?.measures)) {
     for (const m of spec.y.measures) {
+      if (typeof m !== "string") continue;
+      const clean = m.trim();
+      if (!clean || result.includes(clean)) continue;
+      result.push(clean);
+    }
+  }
+  return result;
+}
+
+function getBreakdownMeasureIds(spec: any): string[] {
+  const result: string[] = [];
+  const single = typeof spec?.measure === "string" ? spec.measure.trim() : "";
+  if (single) result.push(single);
+  if (Array.isArray(spec?.measures)) {
+    for (const m of spec.measures) {
       if (typeof m !== "string") continue;
       const clean = m.trim();
       if (!clean || result.includes(clean)) continue;
