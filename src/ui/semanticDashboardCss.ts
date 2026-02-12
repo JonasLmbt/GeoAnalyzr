@@ -241,22 +241,61 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       background:var(--ga-surface);
       border:1px solid var(--ga-border);
       border-radius:14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
     }
-    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--ga-border); }
+    .ga-drilldown-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid var(--ga-border);
+      background: var(--ga-surface);
+      backdrop-filter: blur(8px);
+    }
+    .ga-drilldown-title {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
     .ga-drilldown-close {
       background: var(--ga-control-bg);
       border:1px solid var(--ga-control-border);
       color: var(--ga-control-text);
       border-radius:10px;
-      padding:6px 10px;
+      width: 30px;
+      height: 30px;
+      padding:0;
       cursor:pointer;
     }
-    .ga-drilldown-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .ga-drilldown-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
     .ga-drilldown-table th, .ga-drilldown-table td {
       padding:8px 10px;
       border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
       text-align:left;
     }
+    .ga-drilldown-table thead th {
+      position: sticky;
+      top: 52px;
+      z-index: 4;
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--ga-text) 14%, transparent);
+      font-weight: 600;
+      color: color-mix(in srgb, var(--ga-text) 85%, transparent);
+    }
+    .ga-dd-th.ga-dd-sortable { cursor: pointer; user-select: none; }
+    .ga-dd-th.ga-dd-sortable:hover { background: color-mix(in srgb, var(--ga-text) 6%, transparent); }
+    .ga-dd-tr:hover td { background: color-mix(in srgb, var(--ga-text) 5%, transparent); }
+    .ga-dd-tr.ga-dd-no-sep td { border-bottom-color: transparent; }
+    .ga-dd-link {
+      color: #2f8f3c;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .ga-dd-pos { color: #2f8f3c; font-variant-numeric: tabular-nums; }
+    .ga-dd-neg { color: #c23b3b; font-variant-numeric: tabular-nums; }
     .ga-settings-panel {
       position:absolute;
       top:8%;

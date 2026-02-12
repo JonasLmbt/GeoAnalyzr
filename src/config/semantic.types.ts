@@ -38,8 +38,26 @@ export interface UnitDef {
 
 export interface DrilldownPresetDef {
   entity: Grain;
-  columnsPresets: Record<string, string[]>;
+  columnsPresets: Record<string, DrilldownColumnSpec[]>;
   defaultPreset: string;
+}
+
+export type DrilldownColumnSpec = string | DrilldownColumnDef;
+
+export interface DrilldownColumnDef {
+  key: string;
+  label?: string;
+  sortable?: boolean;
+  colored?: boolean;
+  display?: {
+    truncate?: boolean;
+    truncateHead?: number;
+  };
+  type?: "text" | "link";
+  link?: {
+    kind: "guess_maps" | "street_view";
+    label?: string;
+  };
 }
 
 export interface SemanticRegistry {

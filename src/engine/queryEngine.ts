@@ -33,10 +33,13 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   }
 
   const mateNameByGame = new Map<string, string>();
+  const victoryByGame = new Map<string, boolean>();
   for (const d of details) {
     const raw = (d as any).player_mate_name;
     const name = typeof raw === "string" ? raw.trim() : "";
     if (name) mateNameByGame.set((d as any).gameId, name);
+    const v = (d as any).player_self_victory;
+    if (typeof v === "boolean") victoryByGame.set((d as any).gameId, v);
   }
 
   roundsRawCache = rows.map((r) => {
@@ -50,6 +53,29 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
       const mate = mateNameByGame.get(out.gameId);
       if (mate) out.teammateName = mate;
+    }
+
+    // Convenience fields for drilldown rendering.
+    const v = victoryByGame.get(out.gameId);
+    if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
+    if (typeof out.damage !== "number") {
+      const mf = String(out.modeFamily ?? "");
+      if (mf === "duels") {
+        const self = (out as any).player_self_score;
+        const opp = (out as any).player_opponent_score;
+        if (typeof self === "number" && typeof opp === "number") out.damage = self - opp;
+      } else if (mf === "teamduels") {
+        const s1 = (out as any).player_self_score;
+        const s2 = (out as any).player_mate_score;
+        const o1 = (out as any).player_opponent_score;
+        const o2 = (out as any).player_opponent_mate_score;
+        const own = [s1, s2].filter((x: any) => typeof x === "number") as number[];
+        const opp = [o1, o2].filter((x: any) => typeof x === "number") as number[];
+        if (own.length && opp.length) {
+          const avg = (a: number[]) => a.reduce((p, c) => p + c, 0) / a.length;
+          out.damage = avg(own) - avg(opp);
+        }
+      }
     }
 
     return out as RoundRow;

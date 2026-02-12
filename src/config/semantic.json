@@ -230,14 +230,17 @@
       "entity": "round",
       "columnsPresets": {
         "roundMode": [
-          "ts",
-          "gameId",
-          "roundNumber",
-          "true_country",
-          "player_self_score",
-          "player_opponent_score",
-          "durationSeconds",
-          "distanceKm"
+          { "key": "ts", "label": "Date", "sortable": true },
+          { "key": "result", "label": "Result", "sortable": true, "colored": true },
+          { "key": "roundNumber", "label": "Round", "sortable": true },
+          { "key": "player_self_score", "label": "Score", "sortable": true },
+          { "key": "true_country", "label": "Country", "sortable": true },
+          { "key": "durationSeconds", "label": "Guess Duration", "sortable": true },
+          { "key": "damage", "label": "Damage", "sortable": true, "colored": true },
+          { "key": "teammateName", "label": "Mate", "sortable": true },
+          { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } },
+          { "key": "guess_maps", "label": "Guess Maps", "type": "link", "link": { "kind": "guess_maps", "label": "Open" } },
+          { "key": "street_view", "label": "True Street View", "type": "link", "link": { "kind": "street_view", "label": "Open" } }
         ]
       },
       "defaultPreset": "roundMode"
