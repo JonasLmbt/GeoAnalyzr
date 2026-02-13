@@ -215,6 +215,56 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       background: linear-gradient(180deg, rgba(58, 232, 189, 0.24) 0%, rgba(0, 162, 254, 0.18) 100%);
       border-color: rgba(58, 232, 189, 0.24);
     }
+
+    /* GeoGuessr-like drilldown styling */
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-panel {
+      border-radius: 18px;
+      background:
+        radial-gradient(900px 520px at 18% 0%, rgba(121, 80, 229, 0.22), transparent 58%),
+        radial-gradient(900px 520px at 86% 0%, rgba(0, 162, 254, 0.16), transparent 60%),
+        color-mix(in srgb, var(--ga-surface) 88%, transparent);
+      border-color: rgba(255,255,255,0.14);
+      box-shadow: 0 28px 90px rgba(0,0,0,0.48);
+      overflow: hidden;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-header {
+      background: linear-gradient(180deg, rgba(22,22,38,0.82) 0%, rgba(22,22,38,0.58) 100%);
+      border-bottom-color: rgba(255,255,255,0.10);
+      backdrop-filter: blur(14px);
+      padding: 12px 14px;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-title {
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: 0.3px;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close {
+      border-radius: 999px;
+      width: 34px;
+      height: 34px;
+      background: rgba(16, 16, 28, 0.45);
+      border-color: rgba(255,255,255,0.16);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.32);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table thead th {
+      background: rgba(16,16,28,0.42);
+      border-bottom-color: rgba(255,255,255,0.10);
+      color: rgba(243,244,255,0.72);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table th,
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table td {
+      border-bottom-color: rgba(255,255,255,0.08);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-dd-tr:hover td {
+      background: rgba(121, 80, 229, 0.10);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-dd-th.ga-dd-sortable:hover {
+      background: rgba(58, 232, 189, 0.08);
+    }
     .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
     .ga-card-body { padding:12px; }
     .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }

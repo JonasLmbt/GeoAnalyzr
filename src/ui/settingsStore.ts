@@ -173,5 +173,5 @@ export function applySettingsToRoot(root: HTMLDivElement, settings: SemanticDash
   root.dataset.gaDateFormat = settings.standards.dateFormat;
   root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
   // GeoGuessr theme uses brand-tuned graph color regardless of the user's picker selection.
-  root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#3AE8BD" : settings.appearance.graphColor);
+  root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
 }

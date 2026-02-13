@@ -317,7 +317,10 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       if (mf === "duels") {
         const self = (out as any).player_self_score;
         const opp = (out as any).player_opponent_score;
-        if (typeof self === "number" && typeof opp === "number") out.damage = self - opp;
+        if (typeof self === "number" && Number.isFinite(self) && typeof opp === "number" && Number.isFinite(opp)) {
+          // Duel damage is the per-round score delta (bounded by [-5000, 5000]).
+          out.damage = Math.max(-5000, Math.min(5000, self - opp));
+        }
       } else if (mf === "teamduels") {
         const s1 = (out as any).player_self_score;
         const s2 = (out as any).player_mate_score;
@@ -325,7 +328,14 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
         const o2 = (out as any).player_opponent_mate_score;
         const own = [s1, s2].filter((x: any) => typeof x === "number") as number[];
         const opp = [o1, o2].filter((x: any) => typeof x === "number") as number[];
-        if (own.length && opp.length) out.damage = own.reduce((p, c) => p + c, 0) - opp.reduce((p, c) => p + c, 0);
+        if (own.length && opp.length) {
+          // Team Duel damage is the delta between the best score in each team (bounded by [-5000, 5000]).
+          const bestOwn = Math.max(...own);
+          const bestOpp = Math.max(...opp);
+          if (Number.isFinite(bestOwn) && Number.isFinite(bestOpp)) {
+            out.damage = Math.max(-5000, Math.min(5000, bestOwn - bestOpp));
+          }
+        }
       }
     }
 

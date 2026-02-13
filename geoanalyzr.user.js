@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.5
+// @version      1.6.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15695,7 +15695,9 @@
         if (mf === "duels") {
           const self2 = out.player_self_score;
           const opp = out.player_opponent_score;
-          if (typeof self2 === "number" && typeof opp === "number") out.damage = self2 - opp;
+          if (typeof self2 === "number" && Number.isFinite(self2) && typeof opp === "number" && Number.isFinite(opp)) {
+            out.damage = Math.max(-5e3, Math.min(5e3, self2 - opp));
+          }
         } else if (mf === "teamduels") {
           const s1 = out.player_self_score;
           const s2 = out.player_mate_score;
@@ -15703,7 +15705,13 @@
           const o2 = out.player_opponent_mate_score;
           const own = [s1, s2].filter((x) => typeof x === "number");
           const opp = [o1, o2].filter((x) => typeof x === "number");
-          if (own.length && opp.length) out.damage = own.reduce((p, c) => p + c, 0) - opp.reduce((p, c) => p + c, 0);
+          if (own.length && opp.length) {
+            const bestOwn = Math.max(...own);
+            const bestOpp = Math.max(...opp);
+            if (Number.isFinite(bestOwn) && Number.isFinite(bestOpp)) {
+              out.damage = Math.max(-5e3, Math.min(5e3, bestOwn - bestOpp));
+            }
+          }
         }
       }
       return out;
@@ -40075,7 +40083,7 @@
         grain: "round",
         ordered: true,
         allowedCharts: ["bar"],
-        sortModes: ["chronological"]
+        sortModes: ["chronological", "asc", "desc"]
       },
       score_bucket: {
         label: "Score bucket",
@@ -41155,7 +41163,7 @@
                       placement: { x: 0, y: 4, w: 12, h: 10 },
                       spec: {
                         type: "bar",
-                        limit: 1e3,
+                        limit: 200,
                         x: { dimension: "score_bucket" },
                         y: { measure: "rounds_count" },
                         sort: { mode: "chronological" },
@@ -41626,6 +41634,56 @@
       background: linear-gradient(180deg, rgba(58, 232, 189, 0.24) 0%, rgba(0, 162, 254, 0.18) 100%);
       border-color: rgba(58, 232, 189, 0.24);
     }
+
+    /* GeoGuessr-like drilldown styling */
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-panel {
+      border-radius: 18px;
+      background:
+        radial-gradient(900px 520px at 18% 0%, rgba(121, 80, 229, 0.22), transparent 58%),
+        radial-gradient(900px 520px at 86% 0%, rgba(0, 162, 254, 0.16), transparent 60%),
+        color-mix(in srgb, var(--ga-surface) 88%, transparent);
+      border-color: rgba(255,255,255,0.14);
+      box-shadow: 0 28px 90px rgba(0,0,0,0.48);
+      overflow: hidden;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-header {
+      background: linear-gradient(180deg, rgba(22,22,38,0.82) 0%, rgba(22,22,38,0.58) 100%);
+      border-bottom-color: rgba(255,255,255,0.10);
+      backdrop-filter: blur(14px);
+      padding: 12px 14px;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-title {
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: 0.3px;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close {
+      border-radius: 999px;
+      width: 34px;
+      height: 34px;
+      background: rgba(16, 16, 28, 0.45);
+      border-color: rgba(255,255,255,0.16);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.32);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table thead th {
+      background: rgba(16,16,28,0.42);
+      border-bottom-color: rgba(255,255,255,0.10);
+      color: rgba(243,244,255,0.72);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table th,
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table td {
+      border-bottom-color: rgba(255,255,255,0.08);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-dd-tr:hover td {
+      background: rgba(121, 80, 229, 0.10);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-dd-th.ga-dd-sortable:hover {
+      background: rgba(58, 232, 189, 0.08);
+    }
     .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
     .ga-card-body { padding:12px; }
     .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }
@@ -42040,7 +42098,7 @@
     root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
     root.dataset.gaDateFormat = settings.standards.dateFormat;
     root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
-    root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#3AE8BD" : settings.appearance.graphColor);
+    root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
   }
 
   // src/ui/settingsModal.ts
@@ -45010,6 +45068,9 @@
         throw new Error("Semantic root has no .ga-body container");
       }
       body = foundBody;
+    }
+    if (!root) {
+      throw new Error("Semantic root is missing after initialization.");
     }
     applySettingsToRoot(root, settings);
     try {

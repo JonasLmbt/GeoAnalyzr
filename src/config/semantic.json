@@ -175,7 +175,7 @@
       "grain": "round",
       "ordered": true,
       "allowedCharts": ["bar"],
-      "sortModes": ["chronological"]
+      "sortModes": ["chronological", "asc", "desc"]
     },
     "score_bucket": {
       "label": "Score bucket",
