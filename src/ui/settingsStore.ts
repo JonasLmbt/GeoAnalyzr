@@ -1,6 +1,6 @@
 import type { DashboardDoc } from "../config/dashboard.types";
 
-export type ThemeMode = "dark" | "light";
+export type ThemeMode = "dark" | "light" | "geoguessr_dark" | "geoguessr_light";
 export type DateFormatMode = "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale";
 
 export type SemanticDashboardSettings = {
@@ -16,12 +16,13 @@ export type SemanticDashboardSettings = {
 };
 
 const SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
+const THEME_KEY = "geoanalyzr.theme";
 const DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
 
 export const DEFAULT_SETTINGS: SemanticDashboardSettings = {
   appearance: {
-    theme: "dark",
-    graphColor: "#7eb6ff",
+    theme: "geoguessr_dark",
+    graphColor: "#00A2FE",
     chartAnimations: true
   },
   standards: {
@@ -43,7 +44,9 @@ export function normalizeColor(value: unknown, fallback: string): string {
 }
 
 export function normalizeTheme(value: unknown): ThemeMode {
-  return value === "light" ? "light" : "dark";
+  if (value === "geoguessr_dark" || value === "geoguessr_light") return value;
+  if (value === "light" || value === "dark") return value;
+  return "geoguessr_dark";
 }
 
 function normalizeBool(value: unknown, fallback: boolean): boolean {
@@ -81,15 +84,41 @@ function getStorage(doc: Document): Storage | null {
   }
 }
 
+function getSystemPreferredTheme(doc: Document): ThemeMode {
+  try {
+    const w = doc.defaultView;
+    if (!w || typeof w.matchMedia !== "function") return DEFAULT_SETTINGS.appearance.theme;
+    if (w.matchMedia("(prefers-color-scheme: light)").matches) return "geoguessr_light";
+    return "geoguessr_dark";
+  } catch {
+    return DEFAULT_SETTINGS.appearance.theme;
+  }
+}
+
 export function loadSettings(doc: Document): SemanticDashboardSettings {
   const storage = getStorage(doc);
-  if (!storage) return cloneTemplate(DEFAULT_SETTINGS);
+  if (!storage) {
+    const s = cloneTemplate(DEFAULT_SETTINGS);
+    s.appearance.theme = getSystemPreferredTheme(doc);
+    return s;
+  }
   try {
+    const themeOverrideRaw = storage.getItem(THEME_KEY);
     const raw = storage.getItem(SETTINGS_KEY);
-    if (!raw) return cloneTemplate(DEFAULT_SETTINGS);
-    return normalizeSettings(JSON.parse(raw));
+    if (!raw) {
+      const s = cloneTemplate(DEFAULT_SETTINGS);
+      // If user never selected a theme, respect system preference.
+      s.appearance.theme = themeOverrideRaw ? normalizeTheme(themeOverrideRaw) : getSystemPreferredTheme(doc);
+      return s;
+    }
+    const s = normalizeSettings(JSON.parse(raw));
+    // Always allow the theme key to override settings (single source of truth).
+    if (themeOverrideRaw) s.appearance.theme = normalizeTheme(themeOverrideRaw);
+    return s;
   } catch {
-    return cloneTemplate(DEFAULT_SETTINGS);
+    const s = cloneTemplate(DEFAULT_SETTINGS);
+    s.appearance.theme = getSystemPreferredTheme(doc);
+    return s;
   }
 }
 
@@ -98,6 +127,7 @@ export function saveSettings(doc: Document, settings: SemanticDashboardSettings)
   if (!storage) return;
   try {
     storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    storage.setItem(THEME_KEY, settings.appearance.theme);
   } catch {
     // ignore storage issues
   }

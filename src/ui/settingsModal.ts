@@ -103,7 +103,12 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const themeLabel = doc.createElement("label");
     themeLabel.textContent = "Theme";
     const themeSelect = doc.createElement("select");
-    themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
+    themeSelect.innerHTML = `
+      <option value="geoguessr_dark">GeoGuessr Dark</option>
+      <option value="geoguessr_light">GeoGuessr Light</option>
+      <option value="dark">Classic Dark</option>
+      <option value="light">Classic Light</option>
+    `;
     themeSelect.value = settings.appearance.theme;
     themeField.appendChild(themeLabel);
     themeField.appendChild(themeSelect);

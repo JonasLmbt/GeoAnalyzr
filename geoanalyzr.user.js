@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.2
+// @version      1.6.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -41330,6 +41330,14 @@
       --ga-axis-grid: #3c4555;
       --ga-axis-text: #c7d2e4;
       --ga-graph-color: #7eb6ff;
+      --ga-accent: #7950E5;
+      --ga-accent2: #00A2FE;
+      --ga-good: #97E851;
+      --ga-warn: #FECD19;
+      --ga-danger: #ff6b6b;
+      --ga-link: var(--ga-accent2);
+      --ga-overlay-bg: rgba(0,0,0,0.62);
+      --ga-focus-ring: color-mix(in srgb, var(--ga-accent2) 55%, transparent);
       min-height: 100vh;
       background: var(--ga-bg);
       color: var(--ga-text);
@@ -41349,6 +41357,66 @@
       --ga-axis-color: #51647e;
       --ga-axis-grid: #c2cfdf;
       --ga-axis-text: #2b3d56;
+      --ga-link: #563B9A;
+      --ga-overlay-bg: rgba(10,12,18,0.35);
+      --ga-focus-ring: color-mix(in srgb, var(--ga-accent) 55%, transparent);
+    }
+    .ga-root[data-ga-theme="geoguessr_dark"] {
+      --ga-bg:
+        radial-gradient(1200px 680px at 18% -10%, rgba(58, 232, 189, 0.16), transparent 60%),
+        radial-gradient(900px 520px at 82% 0%, rgba(0, 162, 254, 0.16), transparent 58%),
+        radial-gradient(1200px 820px at 50% 110%, rgba(121, 80, 229, 0.22), transparent 55%),
+        linear-gradient(180deg, #10101C 0%, #1A1A2E 100%);
+      --ga-surface: rgba(22, 22, 38, 0.72);
+      --ga-surface-2: rgba(26, 26, 46, 0.78);
+      --ga-card: rgba(22, 22, 38, 0.62);
+      --ga-card-2: rgba(18, 18, 32, 0.56);
+      --ga-text: rgba(243, 244, 255, 0.92);
+      --ga-text-muted: rgba(208, 214, 238, 0.68);
+      --ga-border: rgba(255,255,255,0.12);
+      --ga-control-bg: rgba(16, 16, 28, 0.45);
+      --ga-control-text: rgba(243, 244, 255, 0.92);
+      --ga-control-border: rgba(255,255,255,0.14);
+      --ga-axis-color: rgba(220, 226, 250, 0.50);
+      --ga-axis-grid: rgba(255,255,255,0.10);
+      --ga-axis-text: rgba(233, 236, 255, 0.78);
+      --ga-accent: #7950E5;
+      --ga-accent2: #00A2FE;
+      --ga-good: #3AE8BD;
+      --ga-warn: #FECD19;
+      --ga-danger: #ff6b6b;
+      --ga-link: #3AE8BD;
+      --ga-overlay-bg: rgba(6, 6, 14, 0.72);
+      --ga-focus-ring: color-mix(in srgb, #00A2FE 55%, transparent);
+      --ga-graph-color: var(--ga-accent2);
+    }
+    .ga-root[data-ga-theme="geoguessr_light"] {
+      --ga-bg:
+        radial-gradient(1100px 640px at 20% -10%, rgba(121, 80, 229, 0.14), transparent 58%),
+        radial-gradient(900px 520px at 82% 0%, rgba(0, 162, 254, 0.14), transparent 55%),
+        linear-gradient(180deg, #f7f6ff 0%, #ffffff 40%, #f6fbff 100%);
+      --ga-surface: rgba(255, 255, 255, 0.84);
+      --ga-surface-2: rgba(255, 255, 255, 0.92);
+      --ga-card: rgba(255, 255, 255, 0.88);
+      --ga-card-2: rgba(255, 255, 255, 0.78);
+      --ga-text: rgba(16, 16, 28, 0.92);
+      --ga-text-muted: rgba(16, 16, 28, 0.64);
+      --ga-border: rgba(16, 16, 28, 0.14);
+      --ga-control-bg: rgba(255, 255, 255, 0.92);
+      --ga-control-text: rgba(16, 16, 28, 0.92);
+      --ga-control-border: rgba(16, 16, 28, 0.18);
+      --ga-axis-color: rgba(16, 16, 28, 0.46);
+      --ga-axis-grid: rgba(16, 16, 28, 0.10);
+      --ga-axis-text: rgba(16, 16, 28, 0.72);
+      --ga-accent: #7950E5;
+      --ga-accent2: #00A2FE;
+      --ga-good: #97E851;
+      --ga-warn: #FECD19;
+      --ga-danger: #c23b3b;
+      --ga-link: #563B9A;
+      --ga-overlay-bg: rgba(10, 12, 18, 0.34);
+      --ga-focus-ring: color-mix(in srgb, #7950E5 45%, transparent);
+      --ga-graph-color: var(--ga-accent2);
     }
     .ga-topbar {
       display:flex;
@@ -41370,6 +41438,18 @@
       border-radius:10px;
       padding:6px 10px;
       cursor:pointer;
+    }
+    .ga-root button:focus-visible,
+    .ga-root select:focus-visible,
+    .ga-root input:focus-visible,
+    .ga-root textarea:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ga-focus-ring);
+    }
+    .ga-root[data-ga-theme="geoguessr_dark"] .ga-topbar,
+    .ga-root[data-ga-theme="geoguessr_light"] .ga-topbar {
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 34px rgba(0,0,0,0.20);
     }
     .ga-body { padding: 8px 12px 16px; }
     .ga-filters {
@@ -41428,6 +41508,11 @@
       border:1px solid var(--ga-border);
       border-radius:14px;
       overflow:hidden;
+    }
+    .ga-root[data-ga-theme="geoguessr_dark"] .ga-card,
+    .ga-root[data-ga-theme="geoguessr_light"] .ga-card {
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 54px rgba(0,0,0,0.18);
     }
     .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
     .ga-card-body { padding:12px; }
@@ -41578,7 +41663,7 @@
     }
     .ga-breakdown-toggle:hover { filter: brightness(1.02); }
     .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
-    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
+    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
     .ga-drilldown-panel {
       position:absolute;
       top:6%;
@@ -41639,12 +41724,12 @@
     .ga-dd-tr:hover td { background: color-mix(in srgb, var(--ga-text) 5%, transparent); }
     .ga-dd-tr.ga-dd-no-sep td { border-bottom-color: transparent; }
     .ga-dd-link {
-      color: #2f8f3c;
+      color: var(--ga-link);
       text-decoration: underline;
       text-underline-offset: 2px;
     }
-    .ga-dd-pos { color: #2f8f3c; font-variant-numeric: tabular-nums; }
-    .ga-dd-neg { color: #c23b3b; font-variant-numeric: tabular-nums; }
+    .ga-dd-pos { color: var(--ga-good); font-variant-numeric: tabular-nums; }
+    .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }
     .ga-settings-panel {
       position:absolute;
       top:8%;
@@ -41706,11 +41791,12 @@
 
   // src/ui/settingsStore.ts
   var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
+  var THEME_KEY = "geoanalyzr.theme";
   var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
   var DEFAULT_SETTINGS = {
     appearance: {
-      theme: "dark",
-      graphColor: "#7eb6ff",
+      theme: "geoguessr_dark",
+      graphColor: "#00A2FE",
       chartAnimations: true
     },
     standards: {
@@ -41729,7 +41815,9 @@
     return fallback;
   }
   function normalizeTheme(value) {
-    return value === "light" ? "light" : "dark";
+    if (value === "geoguessr_dark" || value === "geoguessr_light") return value;
+    if (value === "light" || value === "dark") return value;
+    return "geoguessr_dark";
   }
   function normalizeBool(value, fallback) {
     if (typeof value === "boolean") return value;
@@ -41762,15 +41850,38 @@
       return null;
     }
   }
+  function getSystemPreferredTheme(doc) {
+    try {
+      const w = doc.defaultView;
+      if (!w || typeof w.matchMedia !== "function") return DEFAULT_SETTINGS.appearance.theme;
+      if (w.matchMedia("(prefers-color-scheme: light)").matches) return "geoguessr_light";
+      return "geoguessr_dark";
+    } catch {
+      return DEFAULT_SETTINGS.appearance.theme;
+    }
+  }
   function loadSettings(doc) {
     const storage = getStorage(doc);
-    if (!storage) return cloneTemplate(DEFAULT_SETTINGS);
+    if (!storage) {
+      const s = cloneTemplate(DEFAULT_SETTINGS);
+      s.appearance.theme = getSystemPreferredTheme(doc);
+      return s;
+    }
     try {
+      const themeOverrideRaw = storage.getItem(THEME_KEY);
       const raw = storage.getItem(SETTINGS_KEY);
-      if (!raw) return cloneTemplate(DEFAULT_SETTINGS);
-      return normalizeSettings(JSON.parse(raw));
+      if (!raw) {
+        const s2 = cloneTemplate(DEFAULT_SETTINGS);
+        s2.appearance.theme = themeOverrideRaw ? normalizeTheme(themeOverrideRaw) : getSystemPreferredTheme(doc);
+        return s2;
+      }
+      const s = normalizeSettings(JSON.parse(raw));
+      if (themeOverrideRaw) s.appearance.theme = normalizeTheme(themeOverrideRaw);
+      return s;
     } catch {
-      return cloneTemplate(DEFAULT_SETTINGS);
+      const s = cloneTemplate(DEFAULT_SETTINGS);
+      s.appearance.theme = getSystemPreferredTheme(doc);
+      return s;
     }
   }
   function saveSettings(doc, settings) {
@@ -41778,6 +41889,7 @@
     if (!storage) return;
     try {
       storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      storage.setItem(THEME_KEY, settings.appearance.theme);
     } catch {
     }
   }
@@ -41890,7 +42002,12 @@
       const themeLabel = doc.createElement("label");
       themeLabel.textContent = "Theme";
       const themeSelect = doc.createElement("select");
-      themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
+      themeSelect.innerHTML = `
+      <option value="geoguessr_dark">GeoGuessr Dark</option>
+      <option value="geoguessr_light">GeoGuessr Light</option>
+      <option value="dark">Classic Dark</option>
+      <option value="light">Classic Light</option>
+    `;
       themeSelect.value = settings.appearance.theme;
       themeField.appendChild(themeLabel);
       themeField.appendChild(themeSelect);
