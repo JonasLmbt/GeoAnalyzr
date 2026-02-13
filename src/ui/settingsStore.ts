@@ -1,6 +1,6 @@
 import type { DashboardDoc } from "../config/dashboard.types";
 
-export type ThemeMode = "dark" | "light" | "geoguessr_dark" | "geoguessr_light";
+export type ThemeMode = "dark" | "light" | "geoguessr";
 export type DateFormatMode = "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale";
 
 export type SemanticDashboardSettings = {
@@ -21,8 +21,8 @@ const DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
 
 export const DEFAULT_SETTINGS: SemanticDashboardSettings = {
   appearance: {
-    theme: "geoguessr_dark",
-    graphColor: "#00A2FE",
+    theme: "geoguessr",
+    graphColor: "#7eb6ff",
     chartAnimations: true
   },
   standards: {
@@ -44,9 +44,9 @@ export function normalizeColor(value: unknown, fallback: string): string {
 }
 
 export function normalizeTheme(value: unknown): ThemeMode {
-  if (value === "geoguessr_dark" || value === "geoguessr_light") return value;
+  if (value === "geoguessr") return value;
   if (value === "light" || value === "dark") return value;
-  return "geoguessr_dark";
+  return "geoguessr";
 }
 
 function normalizeBool(value: unknown, fallback: boolean): boolean {
@@ -88,8 +88,8 @@ function getSystemPreferredTheme(doc: Document): ThemeMode {
   try {
     const w = doc.defaultView;
     if (!w || typeof w.matchMedia !== "function") return DEFAULT_SETTINGS.appearance.theme;
-    if (w.matchMedia("(prefers-color-scheme: light)").matches) return "geoguessr_light";
-    return "geoguessr_dark";
+    if (w.matchMedia("(prefers-color-scheme: light)").matches) return "light";
+    return "geoguessr";
   } catch {
     return DEFAULT_SETTINGS.appearance.theme;
   }
@@ -172,5 +172,6 @@ export function applySettingsToRoot(root: HTMLDivElement, settings: SemanticDash
   root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
   root.dataset.gaDateFormat = settings.standards.dateFormat;
   root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
-  root.style.setProperty("--ga-graph-color", settings.appearance.graphColor);
+  // GeoGuessr theme uses brand-tuned graph color regardless of the user's picker selection.
+  root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#3AE8BD" : settings.appearance.graphColor);
 }

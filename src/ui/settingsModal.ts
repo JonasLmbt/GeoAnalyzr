@@ -104,10 +104,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     themeLabel.textContent = "Theme";
     const themeSelect = doc.createElement("select");
     themeSelect.innerHTML = `
-      <option value="geoguessr_dark">GeoGuessr Dark</option>
-      <option value="geoguessr_light">GeoGuessr Light</option>
-      <option value="dark">Classic Dark</option>
-      <option value="light">Classic Light</option>
+      <option value="geoguessr">GeoGuessr</option>
+      <option value="dark">Dark</option>
+      <option value="light">Light</option>
     `;
     themeSelect.value = settings.appearance.theme;
     themeField.appendChild(themeLabel);
@@ -137,6 +136,13 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     appearanceGrid.appendChild(colorField);
     appearanceGrid.appendChild(animField);
     appearancePane.appendChild(appearanceGrid);
+
+    const syncAppearanceUi = () => {
+      const isGeoGuessr = themeSelect.value === "geoguessr";
+      colorInput.disabled = isGeoGuessr;
+      colorInput.title = isGeoGuessr ? "GeoGuessr theme uses a tuned graph color." : "";
+    };
+    syncAppearanceUi();
 
     const standardsPane = doc.createElement("div");
     standardsPane.className = "ga-settings-pane";
@@ -230,6 +236,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     };
 
     themeSelect.addEventListener("change", () => {
+      syncAppearanceUi();
       void persistSettings();
     });
     colorInput.addEventListener("input", () => {

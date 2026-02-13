@@ -14,6 +14,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       color: var(--ga-text);
     }
     .ga-root {
+      --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       --ga-bg: #0f1115;
       --ga-surface: #15181e;
       --ga-surface-2: #171b22;
@@ -40,6 +41,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       min-height: 100vh;
       background: var(--ga-bg);
       color: var(--ga-text);
+      font-family: var(--ga-font);
     }
     .ga-root[data-ga-theme="light"] {
       --ga-bg: #f4f7fc;
@@ -60,11 +62,12 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       --ga-overlay-bg: rgba(10,12,18,0.35);
       --ga-focus-ring: color-mix(in srgb, var(--ga-accent) 55%, transparent);
     }
-    .ga-root[data-ga-theme="geoguessr_dark"] {
+    .ga-root[data-ga-theme="geoguessr"] {
+      --ga-font: "Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       --ga-bg:
-        radial-gradient(1200px 680px at 18% -10%, rgba(58, 232, 189, 0.16), transparent 60%),
-        radial-gradient(900px 520px at 82% 0%, rgba(0, 162, 254, 0.16), transparent 58%),
-        radial-gradient(1200px 820px at 50% 110%, rgba(121, 80, 229, 0.22), transparent 55%),
+        radial-gradient(1200px 720px at 18% -12%, rgba(58, 232, 189, 0.18), transparent 62%),
+        radial-gradient(980px 560px at 86% -6%, rgba(0, 162, 254, 0.18), transparent 60%),
+        radial-gradient(1200px 860px at 50% 112%, rgba(121, 80, 229, 0.24), transparent 56%),
         linear-gradient(180deg, #10101C 0%, #1A1A2E 100%);
       --ga-surface: rgba(22, 22, 38, 0.72);
       --ga-surface-2: rgba(26, 26, 46, 0.78);
@@ -87,35 +90,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       --ga-link: #3AE8BD;
       --ga-overlay-bg: rgba(6, 6, 14, 0.72);
       --ga-focus-ring: color-mix(in srgb, #00A2FE 55%, transparent);
-      --ga-graph-color: var(--ga-accent2);
-    }
-    .ga-root[data-ga-theme="geoguessr_light"] {
-      --ga-bg:
-        radial-gradient(1100px 640px at 20% -10%, rgba(121, 80, 229, 0.14), transparent 58%),
-        radial-gradient(900px 520px at 82% 0%, rgba(0, 162, 254, 0.14), transparent 55%),
-        linear-gradient(180deg, #f7f6ff 0%, #ffffff 40%, #f6fbff 100%);
-      --ga-surface: rgba(255, 255, 255, 0.84);
-      --ga-surface-2: rgba(255, 255, 255, 0.92);
-      --ga-card: rgba(255, 255, 255, 0.88);
-      --ga-card-2: rgba(255, 255, 255, 0.78);
-      --ga-text: rgba(16, 16, 28, 0.92);
-      --ga-text-muted: rgba(16, 16, 28, 0.64);
-      --ga-border: rgba(16, 16, 28, 0.14);
-      --ga-control-bg: rgba(255, 255, 255, 0.92);
-      --ga-control-text: rgba(16, 16, 28, 0.92);
-      --ga-control-border: rgba(16, 16, 28, 0.18);
-      --ga-axis-color: rgba(16, 16, 28, 0.46);
-      --ga-axis-grid: rgba(16, 16, 28, 0.10);
-      --ga-axis-text: rgba(16, 16, 28, 0.72);
-      --ga-accent: #7950E5;
-      --ga-accent2: #00A2FE;
-      --ga-good: #97E851;
-      --ga-warn: #FECD19;
-      --ga-danger: #c23b3b;
-      --ga-link: #563B9A;
-      --ga-overlay-bg: rgba(10, 12, 18, 0.34);
-      --ga-focus-ring: color-mix(in srgb, #7950E5 45%, transparent);
-      --ga-graph-color: var(--ga-accent2);
+      --ga-graph-color: var(--ga-good);
     }
     .ga-topbar {
       display:flex;
@@ -145,8 +120,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       outline: none;
       box-shadow: 0 0 0 3px var(--ga-focus-ring);
     }
-    .ga-root[data-ga-theme="geoguessr_dark"] .ga-topbar,
-    .ga-root[data-ga-theme="geoguessr_light"] .ga-topbar {
+    .ga-root[data-ga-theme="geoguessr"] .ga-topbar {
       backdrop-filter: blur(12px);
       box-shadow: 0 10px 34px rgba(0,0,0,0.20);
     }
@@ -208,10 +182,38 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border-radius:14px;
       overflow:hidden;
     }
-    .ga-root[data-ga-theme="geoguessr_dark"] .ga-card,
-    .ga-root[data-ga-theme="geoguessr_light"] .ga-card {
+    .ga-root[data-ga-theme="geoguessr"] .ga-card {
       backdrop-filter: blur(10px);
       box-shadow: 0 18px 54px rgba(0,0,0,0.18);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-close,
+    .ga-root[data-ga-theme="geoguessr"] .ga-gear,
+    .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn,
+    .ga-root[data-ga-theme="geoguessr"] .ga-tab,
+    .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button,
+    .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle {
+      background: linear-gradient(180deg, rgba(121, 80, 229, 0.38) 0%, rgba(86, 59, 154, 0.26) 100%);
+      border-color: rgba(255,255,255,0.16);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-weight: 650;
+      letter-spacing: 0.15px;
+      transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-close:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-gear:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-tab:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle:hover {
+      filter: brightness(1.06);
+      box-shadow: 0 16px 38px rgba(0,0,0,0.28);
+      transform: translateY(-1px);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tab.active {
+      background: linear-gradient(180deg, rgba(58, 232, 189, 0.24) 0%, rgba(0, 162, 254, 0.18) 100%);
+      border-color: rgba(58, 232, 189, 0.24);
     }
     .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
     .ga-card-body { padding:12px; }
