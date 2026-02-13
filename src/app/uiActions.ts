@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { syncFeed } from "../sync";
 import { fetchMissingDuelsDetails } from "../details";
+import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
+import { invalidateRoundsCache } from "../engine/queryEngine";
 import { getAnalysisWindowData } from "../analysis";
 import { exportExcel } from "../export";
 import { initAnalysisWindow } from "../ui";
@@ -105,7 +107,10 @@ export function registerUiActions(ui: UI): void {
         verifyCompleteness: true,
         ncfa
       });
+      const norm = await normalizeLegacyRounds({ onStatus: (m) => ui.setStatus(m) });
+      invalidateRoundsCache();
       ui.setStatus(`Update complete. New feed games: ${res.inserted}.`);
+      if (norm.updated > 0) ui.setStatus(`Update complete. New feed games: ${res.inserted}. Normalized legacy rounds: ${norm.updated}.`);
       await refreshUI(ui);
     } catch (e) {
       ui.setStatus("Error: " + errorText(e));
@@ -120,6 +125,7 @@ export function registerUiActions(ui: UI): void {
       await db.transaction("rw", db.games, db.rounds, db.details, db.meta, async () => {
         await Promise.all([db.games.clear(), db.rounds.clear(), db.details.clear(), db.meta.clear()]);
       });
+      invalidateRoundsCache();
       ui.setStatus("DB reset complete.");
       await refreshUI(ui);
     } catch (e) {
