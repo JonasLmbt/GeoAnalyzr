@@ -32,6 +32,11 @@ export function getDurationSeconds(r: RoundRow): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+export function getDistanceKm(r: RoundRow): number | undefined {
+  const v = legacy(r, "distanceKm", "player_self_distanceKm", "p1_distanceKm");
+  return typeof v === "number" ? v : undefined;
+}
+
 export function getTeammateName(r: RoundRow): string | undefined {
   const v = legacy(r, "teammateName", "player_mate_name");
   return typeof v === "string" ? v : undefined;

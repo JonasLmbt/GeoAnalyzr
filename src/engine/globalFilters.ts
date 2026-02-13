@@ -1,4 +1,5 @@
 import type { FilterClause, GlobalFiltersSpec, DateRangeControlSpec, SelectControlSpec } from "../config/dashboard.types";
+import type { Grain } from "../config/semantic.types";
 
 export type GlobalFilterState = Record<string, unknown>;
 
@@ -26,11 +27,19 @@ function normalizeDateRange(value: unknown): { fromTs: number | null; toTs: numb
 }
 
 export function buildAppliedRoundFilters(spec: GlobalFiltersSpec | undefined, state: GlobalFilterState): AppliedRoundFilters {
+  return buildAppliedFilters(spec, state, "round");
+}
+
+export function buildAppliedFilters(
+  spec: GlobalFiltersSpec | undefined,
+  state: GlobalFilterState,
+  grain: Grain
+): AppliedRoundFilters {
   const out: AppliedRoundFilters = { clauses: [] };
   if (!spec?.enabled) return out;
 
   for (const control of spec.controls) {
-    if (!control.appliesTo.includes("round")) continue;
+    if (!control.appliesTo.includes(grain)) continue;
 
     if (control.type === "date_range") {
       const c = control as DateRangeControlSpec;
@@ -51,12 +60,12 @@ export function buildAppliedRoundFilters(spec: GlobalFiltersSpec | undefined, st
   return out;
 }
 
-export function normalizeGlobalFilterKey(spec: GlobalFiltersSpec | undefined, state: GlobalFilterState): string {
-  if (!spec?.enabled) return "gf:off";
+export function normalizeGlobalFilterKey(spec: GlobalFiltersSpec | undefined, state: GlobalFilterState, grain: Grain = "round"): string {
+  if (!spec?.enabled) return `gf:${grain}:off`;
   const parts: string[] = [];
   for (const c of spec.controls) {
     const v = state[c.id];
     parts.push(`${c.id}=${JSON.stringify(v)}`);
   }
-  return `gf:${parts.join("|")}`;
+  return `gf:${grain}:${parts.join("|")}`;
 }

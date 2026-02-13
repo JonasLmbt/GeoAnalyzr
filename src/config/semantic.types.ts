@@ -16,7 +16,8 @@ export interface CardinalityDef {
 export interface DimensionDef {
   label: string;
   kind: "time" | "category";
-  grain: Grain;
+  // Dimension can be available at one or multiple grains.
+  grain: Grain | Grain[];
   ordered?: boolean;
   allowedCharts: ChartType[];
   sortModes: SortMode[];

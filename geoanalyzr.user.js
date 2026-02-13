@@ -4104,7 +4104,7 @@
             return os2[key] && rangesOverlap2(os2[key], os1[key]);
           });
         }
-        var cache = {};
+        var cache2 = {};
         var unsignaledParts = {};
         var isTaskEnqueued = false;
         function signalSubscribersLazily(part, optimistic) {
@@ -4125,7 +4125,7 @@
           }
           var queriesToSignal = /* @__PURE__ */ new Set();
           if (updatedParts.all) {
-            for (var _i = 0, _a2 = Object.values(cache); _i < _a2.length; _i++) {
+            for (var _i = 0, _a2 = Object.values(cache2); _i < _a2.length; _i++) {
               var tblCache = _a2[_i];
               collectTableSubscribers(tblCache, updatedParts, queriesToSignal, deleteAffectedCacheEntries);
             }
@@ -4134,7 +4134,7 @@
               var parts = /^idb\:\/\/(.*)\/(.*)\//.exec(key);
               if (parts) {
                 var dbName = parts[1], tableName = parts[2];
-                var tblCache = cache["idb://".concat(dbName, "/").concat(tableName)];
+                var tblCache = cache2["idb://".concat(dbName, "/").concat(tableName)];
                 if (tblCache)
                   collectTableSubscribers(tblCache, updatedParts, queriesToSignal, deleteAffectedCacheEntries);
               }
@@ -4675,17 +4675,17 @@
         function getExistingValues(table, req, effectiveKeys) {
           return req.type === "add" ? Promise.resolve([]) : table.getMany({ trans: req.trans, keys: effectiveKeys, cache: "immutable" });
         }
-        function getFromTransactionCache(keys3, cache2, clone) {
+        function getFromTransactionCache(keys3, cache3, clone) {
           try {
-            if (!cache2)
+            if (!cache3)
               return null;
-            if (cache2.keys.length < keys3.length)
+            if (cache3.keys.length < keys3.length)
               return null;
             var result = [];
-            for (var i = 0, j = 0; i < cache2.keys.length && j < keys3.length; ++i) {
-              if (cmp2(cache2.keys[i], keys3[j]) !== 0)
+            for (var i = 0, j = 0; i < cache3.keys.length && j < keys3.length; ++i) {
+              if (cmp2(cache3.keys[i], keys3[j]) !== 0)
                 continue;
-              result.push(clone ? deepClone(cache2.values[i]) : cache2.values[i]);
+              result.push(clone ? deepClone(cache3.values[i]) : cache3.values[i]);
               ++j;
             }
             return result.length === keys3.length ? result : null;
@@ -5105,7 +5105,7 @@
           return compareLowers(r1.lower, r2.lower, r1.lowerOpen, r2.lowerOpen) <= 0 && compareUppers(r1.upper, r2.upper, r1.upperOpen, r2.upperOpen) >= 0;
         }
         function findCompatibleQuery(dbName, tableName, type2, req) {
-          var tblCache = cache["idb://".concat(dbName, "/").concat(tableName)];
+          var tblCache = cache2["idb://".concat(dbName, "/").concat(tableName)];
           if (!tblCache)
             return [];
           var queries = tblCache.queries[type2];
@@ -5173,7 +5173,7 @@
                       var affectedSubscribers_1 = /* @__PURE__ */ new Set();
                       for (var _i = 0, stores_1 = stores; _i < stores_1.length; _i++) {
                         var storeName = stores_1[_i];
-                        var tblCache = cache["idb://".concat(dbName, "/").concat(storeName)];
+                        var tblCache = cache2["idb://".concat(dbName, "/").concat(storeName)];
                         if (tblCache) {
                           var table = core.table(storeName);
                           var ops = tblCache.optimisticOps.filter(function(op) {
@@ -5252,7 +5252,7 @@
                 if (primKey.outbound || trans.db._options.cache === "disabled" || trans.explicit || trans.idbtrans.mode !== "readwrite") {
                   return downTable.mutate(req);
                 }
-                var tblCache = cache["idb://".concat(dbName, "/").concat(tableName)];
+                var tblCache = cache2["idb://".concat(dbName, "/").concat(tableName)];
                 if (!tblCache)
                   return downTable.mutate(req);
                 var promise = downTable.mutate(req);
@@ -5334,7 +5334,7 @@
                   } else {
                     container = [cacheEntry];
                     if (!tblCache) {
-                      tblCache = cache["idb://".concat(dbName, "/").concat(tableName)] = {
+                      tblCache = cache2["idb://".concat(dbName, "/").concat(tableName)] = {
                         queries: {
                           query: {},
                           count: {}
@@ -5955,7 +5955,7 @@
           connections,
           errnames,
           dependencies: domDeps,
-          cache,
+          cache: cache2,
           semVer: DEXIE_VERSION,
           version: DEXIE_VERSION.split(".").map(function(n) {
             return parseInt(n);
@@ -9814,7 +9814,7 @@
       game_mode: "asc",
       mate: "asc"
     };
-    const sortLabel = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
+    const sortLabel3 = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
     let sortKey = "date";
     let sortDir = "desc";
     const sortable = options?.sortable !== false;
@@ -10068,16 +10068,16 @@
       const movementTh = thBySort.get("movement");
       const gameModeTh = thBySort.get("game_mode");
       const mateTh = thBySort.get("mate");
-      if (dateTh) dateTh.textContent = sortLabel("Date", sortKey === "date", sortDir);
-      if (roundTh) roundTh.textContent = sortLabel("Round", sortKey === "round", sortDir);
-      if (scoreTh) scoreTh.textContent = sortLabel("Score", sortKey === "score", sortDir);
-      if (countryTh) countryTh.textContent = sortLabel("Country", sortKey === "country", sortDir);
-      if (resultTh) resultTh.textContent = sortLabel("Result", sortKey === "result", sortDir);
-      if (durationTh) durationTh.textContent = sortLabel("Guess Duration", sortKey === "duration", sortDir);
-      if (damageTh) damageTh.textContent = sortLabel("Damage", sortKey === "damage", sortDir);
-      if (movementTh) movementTh.textContent = sortLabel("Movement", sortKey === "movement", sortDir);
-      if (gameModeTh) gameModeTh.textContent = sortLabel("Game Mode", sortKey === "game_mode", sortDir);
-      if (mateTh) mateTh.textContent = sortLabel("Mate", sortKey === "mate", sortDir);
+      if (dateTh) dateTh.textContent = sortLabel3("Date", sortKey === "date", sortDir);
+      if (roundTh) roundTh.textContent = sortLabel3("Round", sortKey === "round", sortDir);
+      if (scoreTh) scoreTh.textContent = sortLabel3("Score", sortKey === "score", sortDir);
+      if (countryTh) countryTh.textContent = sortLabel3("Country", sortKey === "country", sortDir);
+      if (resultTh) resultTh.textContent = sortLabel3("Result", sortKey === "result", sortDir);
+      if (durationTh) durationTh.textContent = sortLabel3("Guess Duration", sortKey === "duration", sortDir);
+      if (damageTh) damageTh.textContent = sortLabel3("Damage", sortKey === "damage", sortDir);
+      if (movementTh) movementTh.textContent = sortLabel3("Movement", sortKey === "movement", sortDir);
+      if (gameModeTh) gameModeTh.textContent = sortLabel3("Game Mode", sortKey === "game_mode", sortDir);
+      if (mateTh) mateTh.textContent = sortLabel3("Mate", sortKey === "mate", sortDir);
     };
     let shown = 0;
     const pageSize = 60;
@@ -15071,6 +15071,536 @@
     );
   }
 
+  // src/migrations/normalizeLegacyRounds.ts
+  function hasAnyKeyPrefix(obj, prefix) {
+    if (!obj || typeof obj !== "object") return false;
+    for (const k of Object.keys(obj)) {
+      if (k.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+  function inferLegacyModeFamily(r) {
+    const mf = String(r?.modeFamily ?? "").toLowerCase();
+    if (mf === "teamduels") return "teamduels";
+    if (mf === "duels") return "duels";
+    if (hasAnyKeyPrefix(r, "p3_") || hasAnyKeyPrefix(r, "p4_")) return "teamduels";
+    return "duels";
+  }
+  function copyIfMissing(dst, dstKey, src, srcKey) {
+    if (!dst || !src) return false;
+    if (dst[dstKey] !== void 0 && dst[dstKey] !== null) return false;
+    const v = src[srcKey];
+    if (v === void 0 || v === null) return false;
+    dst[dstKey] = v;
+    return true;
+  }
+  function copyMetersToKmIfMissing(dst, dstKey, src, metersKey) {
+    if (!dst || !src) return false;
+    if (dst[dstKey] !== void 0 && dst[dstKey] !== null) return false;
+    const m = src[metersKey];
+    if (typeof m !== "number" || !Number.isFinite(m)) return false;
+    dst[dstKey] = m / 1e3;
+    return true;
+  }
+  function normalizeLegacyPlayerBlock(dst, src, legacyPrefix, role) {
+    let changed = false;
+    changed = copyIfMissing(dst, `${role}_playerId`, src, `${legacyPrefix}_playerId`) || changed;
+    changed = copyIfMissing(dst, `${role}_teamId`, src, `${legacyPrefix}_teamId`) || changed;
+    changed = copyIfMissing(dst, `${role}_guessLat`, src, `${legacyPrefix}_guessLat`) || changed;
+    changed = copyIfMissing(dst, `${role}_guessLng`, src, `${legacyPrefix}_guessLng`) || changed;
+    changed = copyIfMissing(dst, `${role}_guessCountry`, src, `${legacyPrefix}_guessCountry`) || changed;
+    changed = copyIfMissing(dst, `${role}_score`, src, `${legacyPrefix}_score`) || changed;
+    changed = copyIfMissing(dst, `${role}_healthAfter`, src, `${legacyPrefix}_healthAfter`) || changed;
+    changed = copyIfMissing(dst, `${role}_isBestGuess`, src, `${legacyPrefix}_isBestGuess`) || changed;
+    changed = copyIfMissing(dst, `${role}_distanceKm`, src, `${legacyPrefix}_distanceKm`) || changed;
+    changed = copyMetersToKmIfMissing(dst, `${role}_distanceKm`, src, `${legacyPrefix}_distanceMeters`) || changed;
+    return changed;
+  }
+  function normalizeLegacyRoundRow(r) {
+    if (!r || typeof r !== "object") return null;
+    if (!hasAnyKeyPrefix(r, "p1_")) return null;
+    const out = { ...r };
+    let changed = false;
+    const family = inferLegacyModeFamily(r);
+    if (family === "duels") {
+      changed = normalizeLegacyPlayerBlock(out, r, "p1", "player_self") || changed;
+      changed = normalizeLegacyPlayerBlock(out, r, "p2", "player_opponent") || changed;
+    } else {
+      changed = normalizeLegacyPlayerBlock(out, r, "p1", "player_self") || changed;
+      changed = normalizeLegacyPlayerBlock(out, r, "p2", "player_mate") || changed;
+      changed = normalizeLegacyPlayerBlock(out, r, "p3", "player_opponent") || changed;
+      changed = normalizeLegacyPlayerBlock(out, r, "p4", "player_opponent_mate") || changed;
+    }
+    return changed ? out : null;
+  }
+  async function normalizeLegacyRounds(opts) {
+    const onStatus = opts.onStatus ?? (() => {
+    });
+    const batchSize = opts.batchSize ?? 500;
+    const metaKey = "migration_legacy_rounds_v1";
+    if (!opts.force) {
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      if (typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 12 * 60 * 60 * 1e3) {
+        return { scanned: 0, updated: 0 };
+      }
+    }
+    const total = await db.rounds.count();
+    let scanned = 0;
+    let updated = 0;
+    onStatus(`Normalizing legacy rounds... (0/${total})`);
+    for (let offset = 0; offset < total; offset += batchSize) {
+      const chunk = await db.rounds.offset(offset).limit(batchSize).toArray();
+      scanned += chunk.length;
+      const patch = [];
+      for (const r of chunk) {
+        const normalized = normalizeLegacyRoundRow(r);
+        if (normalized) {
+          patch.push(normalized);
+        }
+      }
+      if (patch.length > 0) {
+        await db.rounds.bulkPut(patch);
+        updated += patch.length;
+      }
+      if (scanned % (batchSize * 5) === 0 || scanned === total) {
+        onStatus(`Normalizing legacy rounds... (${scanned}/${total}, updated ${updated})`);
+      }
+    }
+    await db.meta.put({
+      key: metaKey,
+      value: { doneAt: Date.now(), scanned, updated },
+      updatedAt: Date.now()
+    });
+    return { scanned, updated };
+  }
+
+  // src/engine/fieldAccess.ts
+  function legacy(obj, ...keys2) {
+    for (const key of keys2) {
+      if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
+    }
+    return void 0;
+  }
+  function getSelfScore(r) {
+    const v = legacy(r, "player_self_score", "p1_score", "score");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getPlayedAt(r) {
+    return r.playedAt;
+  }
+  function getTrueCountry(r) {
+    return r.trueCountry ?? r.true_country;
+  }
+  function getMovementType(r) {
+    const v = r.movementType ?? r.movement_type;
+    return typeof v === "string" ? v : void 0;
+  }
+  function getDurationSeconds(r) {
+    const v = legacy(r, "durationSeconds", "guessDurationSec", "timeSec");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getDistanceKm(r) {
+    const v = legacy(r, "distanceKm", "player_self_distanceKm", "p1_distanceKm");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getTeammateName(r) {
+    const v = legacy(r, "teammateName", "player_mate_name");
+    return typeof v === "string" ? v : void 0;
+  }
+  function getGuessCountrySelf(r) {
+    const v = legacy(r, "player_self_guessCountry", "p1_guessCountry", "guessCountry");
+    return typeof v === "string" ? v : void 0;
+  }
+  function pick(obj, key) {
+    if (!obj) return void 0;
+    if (key in obj) return obj[key];
+    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+    if (camel in obj) return obj[camel];
+    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    if (snake in obj) return obj[snake];
+    return void 0;
+  }
+  function pickWithAliases(obj, logicalKey, columnAliases) {
+    const aliases = columnAliases?.[logicalKey] ?? [];
+    const probeOrder = [logicalKey, ...aliases];
+    for (const candidate of probeOrder) {
+      const value = pick(obj, candidate);
+      if (value !== void 0 && value !== null) return value;
+    }
+    return void 0;
+  }
+
+  // src/engine/dimensions.ts
+  function getRowTs(row) {
+    const a = row?.playedAt;
+    if (typeof a === "number" && Number.isFinite(a)) return a;
+    const b = row?.ts;
+    if (typeof b === "number" && Number.isFinite(b)) return b;
+    return void 0;
+  }
+  function scoreBucketKey(r) {
+    const s = getSelfScore(r);
+    if (typeof s !== "number") return null;
+    if (s >= 5e3) return "5000";
+    const lo = Math.max(0, Math.floor(s / 100) * 100);
+    const hi = lo + 99;
+    return `${lo}-${hi}`;
+  }
+  function timeDayKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function weekdayKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return names[new Date(ts).getDay()];
+  }
+  function hourKey(r) {
+    const ts = getPlayedAt(r);
+    if (typeof ts !== "number") return null;
+    return String(new Date(ts).getHours()).padStart(2, "0");
+  }
+  function trueCountryKey(r) {
+    const c = getTrueCountry(r);
+    return typeof c === "string" && c.length ? c : null;
+  }
+  function movementTypeKey(r) {
+    const v = getMovementType(r);
+    return typeof v === "string" && v.length ? v : null;
+  }
+  function durationBucketKey(r) {
+    const s = getDurationSeconds(r);
+    if (typeof s !== "number" || !Number.isFinite(s) || s < 0) return null;
+    if (s < 20) return "<20 sec";
+    if (s < 30) return "20-30 sec";
+    if (s < 45) return "30-45 sec";
+    if (s < 60) return "45-60 sec";
+    if (s < 90) return "60-90 sec";
+    if (s < 180) return "90-180 sec";
+    return ">180 sec";
+  }
+  function teammateNameKey(r) {
+    const n = getTeammateName(r);
+    const v = typeof n === "string" ? n.trim() : "";
+    return v.length ? v : null;
+  }
+  function timeDayKeyAny(row) {
+    const ts = getRowTs(row);
+    if (typeof ts !== "number") return null;
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function weekdayKeyAny(row) {
+    const ts = getRowTs(row);
+    if (typeof ts !== "number") return null;
+    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return names[new Date(ts).getDay()];
+  }
+  function hourKeyAny(row) {
+    const ts = getRowTs(row);
+    if (typeof ts !== "number") return null;
+    return String(new Date(ts).getHours()).padStart(2, "0");
+  }
+  function asTrimmedString(v) {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : void 0;
+  }
+  function gameModeKeyAny(row) {
+    const v = asTrimmedString(row?.gameModeSimple ?? row?.gameMode ?? row?.mode ?? row?.game_mode);
+    return v ? v : null;
+  }
+  function modeFamilyKeyAny(row) {
+    const v = asTrimmedString(row?.modeFamily ?? row?.mode_family);
+    if (!v) return null;
+    if (v === "duels") return "Duel";
+    if (v === "teamduels") return "Team Duel";
+    if (v === "standard") return "Standard";
+    if (v === "streak") return "Streak";
+    return v;
+  }
+  function resultKeyAny(row) {
+    const r = asTrimmedString(row?.result);
+    if (r) return r;
+    const v = typeof row?.player_self_victory === "boolean" ? row.player_self_victory : typeof row?.teamOneVictory === "boolean" ? row.teamOneVictory : typeof row?.playerOneVictory === "boolean" ? row.playerOneVictory : void 0;
+    if (typeof v === "boolean") return v ? "Win" : "Loss";
+    return null;
+  }
+  var DIMENSION_EXTRACTORS = {
+    round: {
+      score_bucket: scoreBucketKey,
+      time_day: timeDayKey,
+      weekday: weekdayKey,
+      hour: hourKey,
+      true_country: trueCountryKey,
+      movement_type: movementTypeKey,
+      duration_bucket: durationBucketKey,
+      teammate_name: teammateNameKey,
+      round_number: (r) => typeof r?.roundNumber === "number" ? String(r.roundNumber) : null
+    },
+    game: {
+      time_day: timeDayKeyAny,
+      weekday: weekdayKeyAny,
+      hour: hourKeyAny,
+      game_mode: gameModeKeyAny,
+      mode_family: modeFamilyKeyAny,
+      result: resultKeyAny
+    },
+    session: {
+      session_index: (row) => typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null
+    }
+  };
+  var ROUND_DIMENSION_EXTRACTORS = DIMENSION_EXTRACTORS.round;
+
+  // src/engine/filters.ts
+  function evalClause(value, clause) {
+    if (clause.op === "eq") return value === clause.value;
+    if (clause.op === "neq") return value !== clause.value;
+    if (clause.op === "in") return Array.isArray(clause.values) && clause.values.includes(value);
+    if (clause.op === "nin") return Array.isArray(clause.values) && !clause.values.includes(value);
+    return true;
+  }
+  function evalRowFilter(row, clause, grain) {
+    const extractor = DIMENSION_EXTRACTORS[grain]?.[clause.dimension];
+    if (extractor) {
+      return evalClause(extractor(row), clause);
+    }
+    const direct = row[clause.dimension];
+    return evalClause(direct, clause);
+  }
+  function applyFilters(rows, clauses, grain = "round") {
+    if (!clauses || clauses.length === 0) return rows;
+    return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause, grain)));
+  }
+
+  // src/engine/globalFilters.ts
+  function normalizeAllString(value) {
+    if (value === "all") return null;
+    if (typeof value !== "string") return null;
+    const v = value.trim();
+    return v.length ? v : null;
+  }
+  function normalizeDateRange(value) {
+    if (!value || typeof value !== "object") return { fromTs: null, toTs: null };
+    const v = value;
+    const fromRaw = v.fromTs === null ? null : Number(v.fromTs);
+    const toRaw = v.toTs === null ? null : Number(v.toTs);
+    return {
+      fromTs: Number.isFinite(fromRaw) ? fromRaw : null,
+      toTs: Number.isFinite(toRaw) ? toRaw : null
+    };
+  }
+  function buildAppliedFilters(spec, state, grain) {
+    const out = { clauses: [] };
+    if (!spec?.enabled) return out;
+    for (const control of spec.controls) {
+      if (!control.appliesTo.includes(grain)) continue;
+      if (control.type === "date_range") {
+        const c = control;
+        const val = normalizeDateRange(state[c.id] ?? c.default);
+        out.date = val;
+        continue;
+      }
+      if (control.type === "select") {
+        const c = control;
+        const selected = normalizeAllString(state[c.id] ?? c.default);
+        if (!selected) continue;
+        out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+        continue;
+      }
+    }
+    return out;
+  }
+  function normalizeGlobalFilterKey(spec, state, grain = "round") {
+    if (!spec?.enabled) return `gf:${grain}:off`;
+    const parts = [];
+    for (const c of spec.controls) {
+      const v = state[c.id];
+      parts.push(`${c.id}=${JSON.stringify(v)}`);
+    }
+    return `gf:${grain}:${parts.join("|")}`;
+  }
+
+  // src/engine/queryEngine.ts
+  function normalizeMovementType(raw) {
+    if (typeof raw !== "string") return "unknown";
+    const s = raw.trim().toLowerCase();
+    if (!s) return "unknown";
+    if (s.includes("nmpz")) return "nmpz";
+    if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+    if (s.includes("moving")) return "moving";
+    return "unknown";
+  }
+  function asTrimmedString2(v) {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : void 0;
+  }
+  function pickFirst3(obj, keys2) {
+    for (const k of keys2) {
+      if (!obj) continue;
+      const v = obj[k];
+      if (v !== void 0 && v !== null) return v;
+    }
+    return void 0;
+  }
+  var roundsRawCache = null;
+  var roundsFilteredCache = /* @__PURE__ */ new Map();
+  var gamesRawCache = null;
+  var gamesFilteredCache = /* @__PURE__ */ new Map();
+  function invalidateRoundsCache() {
+    roundsRawCache = null;
+    roundsFilteredCache.clear();
+    gamesRawCache = null;
+    gamesFilteredCache.clear();
+  }
+  async function getGamePlayedAtBounds() {
+    const first = await db.games.orderBy("playedAt").first();
+    const last = await db.games.orderBy("playedAt").last();
+    const minTs = first && typeof first.playedAt === "number" ? first.playedAt : null;
+    const maxTs = last && typeof last.playedAt === "number" ? last.playedAt : null;
+    return { minTs, maxTs };
+  }
+  async function getRoundsRaw() {
+    if (roundsRawCache) return roundsRawCache;
+    const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
+    const playedAtByGame = /* @__PURE__ */ new Map();
+    const modeFamilyByGame = /* @__PURE__ */ new Map();
+    const gameModeByGame = /* @__PURE__ */ new Map();
+    for (const g of games) {
+      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
+      if (typeof g.modeFamily === "string" && g.modeFamily) modeFamilyByGame.set(g.gameId, g.modeFamily);
+      const gm = asTrimmedString2(g.gameMode ?? g.mode);
+      if (gm) gameModeByGame.set(g.gameId, gm);
+    }
+    const detailsByGame = /* @__PURE__ */ new Map();
+    for (const d of details) {
+      if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
+    }
+    roundsRawCache = rows.map((r) => {
+      const out = { ...r };
+      const gameId = String(out.gameId ?? "");
+      const d = detailsByGame.get(gameId);
+      const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : void 0;
+      const roundEnd = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : void 0;
+      const gamePlayedAt = playedAtByGame.get(gameId);
+      const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : void 0) ?? gamePlayedAt;
+      if (typeof bestTime === "number" && Number.isFinite(bestTime)) {
+        out.playedAt = bestTime;
+        out.ts = bestTime;
+      }
+      if (typeof out.modeFamily !== "string" || !out.modeFamily) {
+        const mf = asTrimmedString2(out.modeFamily) ?? asTrimmedString2(d?.modeFamily) ?? modeFamilyByGame.get(gameId);
+        if (mf) out.modeFamily = mf;
+      }
+      if (typeof out.gameMode !== "string" || !out.gameMode) {
+        const gm = asTrimmedString2(out.gameMode) ?? asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode) ?? gameModeByGame.get(gameId);
+        if (gm) out.gameMode = gm;
+      }
+      if (typeof out.movementType !== "string" || !out.movementType) {
+        const fromDetail = asTrimmedString2(d?.gameModeSimple);
+        const fromGame = gameModeByGame.get(gameId);
+        out.movementType = normalizeMovementType(fromDetail ?? fromGame);
+      }
+      if (d) {
+        const v = typeof d.player_self_victory === "boolean" ? d.player_self_victory : typeof d.teamOneVictory === "boolean" ? d.teamOneVictory : typeof d.playerOneVictory === "boolean" ? d.playerOneVictory : void 0;
+        if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
+        if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
+          const selfId = asTrimmedString2(out.player_self_playerId);
+          const t1id = asTrimmedString2(d.teamOnePlayerOneId);
+          const t2id = asTrimmedString2(d.teamOnePlayerTwoId);
+          const t1name = asTrimmedString2(d.teamOnePlayerOneName);
+          const t2name = asTrimmedString2(d.teamOnePlayerTwoName);
+          let mateName;
+          if (selfId && selfId === t1id) mateName = t2name;
+          else if (selfId && selfId === t2id) mateName = t1name;
+          else mateName = asTrimmedString2(pickFirst3(d, ["player_mate_name", "teamOnePlayerTwoName", "p2_name"]));
+          if (mateName) out.teammateName = mateName;
+        }
+      }
+      if (typeof out.damage !== "number") {
+        const mf = String(out.modeFamily ?? "");
+        if (mf === "duels") {
+          const self2 = out.player_self_score;
+          const opp = out.player_opponent_score;
+          if (typeof self2 === "number" && typeof opp === "number") out.damage = self2 - opp;
+        } else if (mf === "teamduels") {
+          const s1 = out.player_self_score;
+          const s2 = out.player_mate_score;
+          const o1 = out.player_opponent_score;
+          const o2 = out.player_opponent_mate_score;
+          const own = [s1, s2].filter((x) => typeof x === "number");
+          const opp = [o1, o2].filter((x) => typeof x === "number");
+          if (own.length && opp.length) out.damage = own.reduce((p, c) => p + c, 0) - opp.reduce((p, c) => p + c, 0);
+        }
+      }
+      return out;
+    });
+    return roundsRawCache;
+  }
+  async function getRounds(filters) {
+    const rowsAll = await getRoundsRaw();
+    const gf = filters?.global;
+    const spec = gf?.spec;
+    const state = gf?.state ?? {};
+    const key = normalizeGlobalFilterKey(spec, state, "round");
+    const cached = roundsFilteredCache.get(key);
+    if (cached) return cached;
+    const applied = buildAppliedFilters(spec, state, "round");
+    let rows = rowsAll;
+    if (applied.date) {
+      const fromTs = applied.date.fromTs ?? null;
+      const toTs2 = applied.date.toTs ?? null;
+      if (fromTs !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt >= fromTs);
+      if (toTs2 !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt <= toTs2);
+    }
+    rows = applyFilters(rows, applied.clauses, "round");
+    roundsFilteredCache.set(key, rows);
+    return rows;
+  }
+  async function getGamesRaw() {
+    if (gamesRawCache) return gamesRawCache;
+    const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
+    const detailsByGame = /* @__PURE__ */ new Map();
+    for (const d of details) {
+      if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
+    }
+    gamesRawCache = games.map((g) => {
+      const d = detailsByGame.get(g.gameId);
+      const out = { ...g, ...d ? d : {} };
+      if (typeof g.playedAt === "number" && Number.isFinite(g.playedAt)) {
+        out.playedAt = g.playedAt;
+        out.ts = g.playedAt;
+      }
+      const v = typeof out.player_self_victory === "boolean" ? out.player_self_victory : typeof out.teamOneVictory === "boolean" ? out.teamOneVictory : typeof out.playerOneVictory === "boolean" ? out.playerOneVictory : void 0;
+      if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
+      return out;
+    });
+    return gamesRawCache;
+  }
+  async function getGames(filters) {
+    const rowsAll = await getGamesRaw();
+    const gf = filters?.global;
+    const spec = gf?.spec;
+    const state = gf?.state ?? {};
+    const key = normalizeGlobalFilterKey(spec, state, "game");
+    const cached = gamesFilteredCache.get(key);
+    if (cached) return cached;
+    const applied = buildAppliedFilters(spec, state, "game");
+    let rows = rowsAll;
+    if (applied.date) {
+      const fromTs = applied.date.fromTs ?? null;
+      const toTs2 = applied.date.toTs ?? null;
+      if (fromTs !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt >= fromTs);
+      if (toTs2 !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt <= toTs2);
+    }
+    rows = applyFilters(rows, applied.clauses, "game");
+    gamesFilteredCache.set(key, rows);
+    return rows;
+  }
+
   // src/analysis.ts
   function asRecord(v) {
     return typeof v === "object" && v !== null ? v : {};
@@ -15322,7 +15852,7 @@
     if (key === "teamduels") return "Team Duel";
     return mode;
   }
-  function normalizeMovementType(raw) {
+  function normalizeMovementType2(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
     if (!s) return "unknown";
@@ -15337,11 +15867,11 @@
     if (kind === "nmpz") return "NMPZ";
     return "Unknown";
   }
-  function getMovementType(game, detail) {
+  function getMovementType2(game, detail) {
     const d = asRecord(detail);
     const fromDetail = getString(d, "gameModeSimple");
-    if (typeof fromDetail === "string" && fromDetail.trim()) return normalizeMovementType(fromDetail);
-    return normalizeMovementType(game.gameMode);
+    if (typeof fromDetail === "string" && fromDetail.trim()) return normalizeMovementType2(fromDetail);
+    return normalizeMovementType2(game.gameMode);
   }
   function normalizeCountryCode(v) {
     if (typeof v !== "string") return void 0;
@@ -15597,7 +16127,7 @@
       return true;
     });
     const detailByGameId = new Map(allDetails.map((d) => [d.gameId, d]));
-    const movementByGameId = new Map(modeGames.map((g) => [g.gameId, getMovementType(g, detailByGameId.get(g.gameId))]));
+    const movementByGameId = new Map(modeGames.map((g) => [g.gameId, getMovementType2(g, detailByGameId.get(g.gameId))]));
     const movementOrder = ["moving", "no_move", "nmpz", "unknown"];
     const movementSet = /* @__PURE__ */ new Set();
     for (const kind of movementByGameId.values()) movementSet.add(kind);
@@ -38391,7 +38921,7 @@
     player_opponent_mate_healthAfter: ["p4_healthAfter"],
     player_opponent_mate_isBestGuess: ["p4_isBestGuess"]
   };
-  function pickWithAliases(obj, key) {
+  function pickWithAliases2(obj, key) {
     if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
     for (const alias of LEGACY_KEY_ALIASES2[key] || []) {
       if (obj && obj[alias] !== void 0 && obj[alias] !== null) return obj[alias];
@@ -38407,7 +38937,7 @@
     }
     return cur;
   }
-  function pickFirst3(obj, paths) {
+  function pickFirst4(obj, paths) {
     for (const p of paths) {
       const v = getByPath3(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -38538,10 +39068,10 @@
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst3(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            mapName: pickFirst3(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
-            points: pickFirst3(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst3(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst4(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            mapName: pickFirst4(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
+            points: pickFirst4(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst4(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -38550,9 +39080,9 @@
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst3(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            points: pickFirst3(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst3(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst4(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            points: pickFirst4(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst4(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -38571,20 +39101,20 @@
         detailsError: d?.status === "error" ? d?.error || "" : ""
       };
       if (!isTeam) {
-        base.player_self_id = pickWithAliases(d, "player_self_id") ?? "";
-        base.player_self_name = pickWithAliases(d, "player_self_name") ?? "";
-        base.player_self_country = pickWithAliases(d, "player_self_country") ?? "";
-        base.player_self_victory = pickWithAliases(d, "player_self_victory") ?? (d?.playerOneVictory === void 0 ? "" : d?.playerOneVictory);
-        base.player_self_finalHealth = pickWithAliases(d, "player_self_finalHealth") ?? "";
-        base.player_self_startRating = pickWithAliases(d, "player_self_startRating") ?? "";
-        base.player_self_endRating = pickWithAliases(d, "player_self_endRating") ?? "";
-        base.player_opponent_id = pickWithAliases(d, "player_opponent_id") ?? "";
-        base.player_opponent_name = pickWithAliases(d, "player_opponent_name") ?? "";
-        base.player_opponent_country = pickWithAliases(d, "player_opponent_country") ?? "";
-        base.player_opponent_victory = pickWithAliases(d, "player_opponent_victory") ?? (d?.playerTwoVictory === void 0 ? "" : d?.playerTwoVictory);
-        base.player_opponent_finalHealth = pickWithAliases(d, "player_opponent_finalHealth") ?? "";
-        base.player_opponent_startRating = pickWithAliases(d, "player_opponent_startRating") ?? "";
-        base.player_opponent_endRating = pickWithAliases(d, "player_opponent_endRating") ?? "";
+        base.player_self_id = pickWithAliases2(d, "player_self_id") ?? "";
+        base.player_self_name = pickWithAliases2(d, "player_self_name") ?? "";
+        base.player_self_country = pickWithAliases2(d, "player_self_country") ?? "";
+        base.player_self_victory = pickWithAliases2(d, "player_self_victory") ?? (d?.playerOneVictory === void 0 ? "" : d?.playerOneVictory);
+        base.player_self_finalHealth = pickWithAliases2(d, "player_self_finalHealth") ?? "";
+        base.player_self_startRating = pickWithAliases2(d, "player_self_startRating") ?? "";
+        base.player_self_endRating = pickWithAliases2(d, "player_self_endRating") ?? "";
+        base.player_opponent_id = pickWithAliases2(d, "player_opponent_id") ?? "";
+        base.player_opponent_name = pickWithAliases2(d, "player_opponent_name") ?? "";
+        base.player_opponent_country = pickWithAliases2(d, "player_opponent_country") ?? "";
+        base.player_opponent_victory = pickWithAliases2(d, "player_opponent_victory") ?? (d?.playerTwoVictory === void 0 ? "" : d?.playerTwoVictory);
+        base.player_opponent_finalHealth = pickWithAliases2(d, "player_opponent_finalHealth") ?? "";
+        base.player_opponent_startRating = pickWithAliases2(d, "player_opponent_startRating") ?? "";
+        base.player_opponent_endRating = pickWithAliases2(d, "player_opponent_endRating") ?? "";
         base.totalRounds = d?.totalRounds ?? "";
         base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
         base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -38611,26 +39141,26 @@
         base.teamTwoPlayerTwoId = d?.teamTwoPlayerTwoId ?? "";
         base.teamTwoPlayerTwoName = d?.teamTwoPlayerTwoName ?? "";
         base.teamTwoPlayerTwoCountry = d?.teamTwoPlayerTwoCountry ?? "";
-        base.player_self_id = pickWithAliases(d, "player_self_id") ?? "";
-        base.player_self_name = pickWithAliases(d, "player_self_name") ?? "";
-        base.player_self_country = pickWithAliases(d, "player_self_country") ?? "";
-        base.player_self_startRating = pickWithAliases(d, "player_self_startRating") ?? "";
-        base.player_self_endRating = pickWithAliases(d, "player_self_endRating") ?? "";
-        base.player_mate_id = pickWithAliases(d, "player_mate_id") ?? "";
-        base.player_mate_name = pickWithAliases(d, "player_mate_name") ?? "";
-        base.player_mate_country = pickWithAliases(d, "player_mate_country") ?? "";
-        base.player_mate_startRating = pickWithAliases(d, "player_mate_startRating") ?? "";
-        base.player_mate_endRating = pickWithAliases(d, "player_mate_endRating") ?? "";
-        base.player_opponent_id = pickWithAliases(d, "player_opponent_id") ?? "";
-        base.player_opponent_name = pickWithAliases(d, "player_opponent_name") ?? "";
-        base.player_opponent_country = pickWithAliases(d, "player_opponent_country") ?? "";
-        base.player_opponent_startRating = pickWithAliases(d, "player_opponent_startRating") ?? "";
-        base.player_opponent_endRating = pickWithAliases(d, "player_opponent_endRating") ?? "";
-        base.player_opponent_mate_id = pickWithAliases(d, "player_opponent_mate_id") ?? "";
-        base.player_opponent_mate_name = pickWithAliases(d, "player_opponent_mate_name") ?? "";
-        base.player_opponent_mate_country = pickWithAliases(d, "player_opponent_mate_country") ?? "";
-        base.player_opponent_mate_startRating = pickWithAliases(d, "player_opponent_mate_startRating") ?? "";
-        base.player_opponent_mate_endRating = pickWithAliases(d, "player_opponent_mate_endRating") ?? "";
+        base.player_self_id = pickWithAliases2(d, "player_self_id") ?? "";
+        base.player_self_name = pickWithAliases2(d, "player_self_name") ?? "";
+        base.player_self_country = pickWithAliases2(d, "player_self_country") ?? "";
+        base.player_self_startRating = pickWithAliases2(d, "player_self_startRating") ?? "";
+        base.player_self_endRating = pickWithAliases2(d, "player_self_endRating") ?? "";
+        base.player_mate_id = pickWithAliases2(d, "player_mate_id") ?? "";
+        base.player_mate_name = pickWithAliases2(d, "player_mate_name") ?? "";
+        base.player_mate_country = pickWithAliases2(d, "player_mate_country") ?? "";
+        base.player_mate_startRating = pickWithAliases2(d, "player_mate_startRating") ?? "";
+        base.player_mate_endRating = pickWithAliases2(d, "player_mate_endRating") ?? "";
+        base.player_opponent_id = pickWithAliases2(d, "player_opponent_id") ?? "";
+        base.player_opponent_name = pickWithAliases2(d, "player_opponent_name") ?? "";
+        base.player_opponent_country = pickWithAliases2(d, "player_opponent_country") ?? "";
+        base.player_opponent_startRating = pickWithAliases2(d, "player_opponent_startRating") ?? "";
+        base.player_opponent_endRating = pickWithAliases2(d, "player_opponent_endRating") ?? "";
+        base.player_opponent_mate_id = pickWithAliases2(d, "player_opponent_mate_id") ?? "";
+        base.player_opponent_mate_name = pickWithAliases2(d, "player_opponent_mate_name") ?? "";
+        base.player_opponent_mate_country = pickWithAliases2(d, "player_opponent_mate_country") ?? "";
+        base.player_opponent_mate_startRating = pickWithAliases2(d, "player_opponent_mate_startRating") ?? "";
+        base.player_opponent_mate_endRating = pickWithAliases2(d, "player_opponent_mate_endRating") ?? "";
         base.totalRounds = d?.totalRounds ?? "";
         base.damageMultiplierRounds = Array.isArray(d?.damageMultiplierRounds) ? `[${d?.damageMultiplierRounds.join(", ")}]` : "[]";
         base.healingRounds = Array.isArray(d?.healingRounds) ? `[${d?.healingRounds.join(", ")}]` : "[]";
@@ -38642,26 +39172,26 @@
       const g = gameById.get(r.gameId);
       const mode = exportModeSheetKey(g?.gameMode || g?.mode, g?.modeFamily);
       if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
-      const selfLat = pickWithAliases(r, "player_self_guessLat");
-      const selfLng = pickWithAliases(r, "player_self_guessLng");
-      const selfCountry = await resolveGuessCountryForExport(pickWithAliases(r, "player_self_guessCountry"), selfLat, selfLng);
+      const selfLat = pickWithAliases2(r, "player_self_guessLat");
+      const selfLng = pickWithAliases2(r, "player_self_guessLng");
+      const selfCountry = await resolveGuessCountryForExport(pickWithAliases2(r, "player_self_guessCountry"), selfLat, selfLng);
       const mateCountry = await resolveGuessCountryForExport(
-        pickWithAliases(r, "player_mate_guessCountry"),
-        pickWithAliases(r, "player_mate_guessLat"),
-        pickWithAliases(r, "player_mate_guessLng")
+        pickWithAliases2(r, "player_mate_guessCountry"),
+        pickWithAliases2(r, "player_mate_guessLat"),
+        pickWithAliases2(r, "player_mate_guessLng")
       );
       const oppCountry = await resolveGuessCountryForExport(
-        pickWithAliases(r, "player_opponent_guessCountry"),
-        pickWithAliases(r, "player_opponent_guessLat"),
-        pickWithAliases(r, "player_opponent_guessLng")
+        pickWithAliases2(r, "player_opponent_guessCountry"),
+        pickWithAliases2(r, "player_opponent_guessLat"),
+        pickWithAliases2(r, "player_opponent_guessLng")
       );
       const oppMateCountry = await resolveGuessCountryForExport(
-        pickWithAliases(r, "player_opponent_mate_guessCountry"),
-        pickWithAliases(r, "player_opponent_mate_guessLat"),
-        pickWithAliases(r, "player_opponent_mate_guessLng")
+        pickWithAliases2(r, "player_opponent_mate_guessCountry"),
+        pickWithAliases2(r, "player_opponent_mate_guessLat"),
+        pickWithAliases2(r, "player_opponent_mate_guessLng")
       );
       const trueHeading = asFiniteNumber(
-        pickFirst3(r.raw, [
+        pickFirst4(r.raw, [
           "panorama.heading",
           "panorama.bearing",
           "panorama.rotation",
@@ -38684,67 +39214,67 @@
         true_streetView_url: buildStreetViewUrl2(r.trueLat, r.trueLng, trueHeading),
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
-        player_self_playerId: pickWithAliases(r, "player_self_playerId") ?? "",
+        player_self_playerId: pickWithAliases2(r, "player_self_playerId") ?? "",
         player_self_guessLat: selfLat ?? "",
         player_self_guessLng: selfLng ?? "",
         player_self_googleMaps_url: buildGoogleMapsUrl2(selfLat, selfLng),
         player_self_guessCountry: selfCountry,
-        player_self_distance_km: pickWithAliases(r, "player_self_distanceKm") ?? "",
-        player_self_score: pickWithAliases(r, "player_self_score") ?? "",
-        player_self_healthAfter: pickWithAliases(r, "player_self_healthAfter") ?? "",
-        player_self_isBestGuess: pickWithAliases(r, "player_self_isBestGuess") ? 1 : 0,
-        player_opponent_playerId: pickWithAliases(r, "player_opponent_playerId") ?? "",
-        player_opponent_guessLat: pickWithAliases(r, "player_opponent_guessLat") ?? "",
-        player_opponent_guessLng: pickWithAliases(r, "player_opponent_guessLng") ?? "",
-        player_opponent_googleMaps_url: buildGoogleMapsUrl2(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng")),
+        player_self_distance_km: pickWithAliases2(r, "player_self_distanceKm") ?? "",
+        player_self_score: pickWithAliases2(r, "player_self_score") ?? "",
+        player_self_healthAfter: pickWithAliases2(r, "player_self_healthAfter") ?? "",
+        player_self_isBestGuess: pickWithAliases2(r, "player_self_isBestGuess") ? 1 : 0,
+        player_opponent_playerId: pickWithAliases2(r, "player_opponent_playerId") ?? "",
+        player_opponent_guessLat: pickWithAliases2(r, "player_opponent_guessLat") ?? "",
+        player_opponent_guessLng: pickWithAliases2(r, "player_opponent_guessLng") ?? "",
+        player_opponent_googleMaps_url: buildGoogleMapsUrl2(pickWithAliases2(r, "player_opponent_guessLat"), pickWithAliases2(r, "player_opponent_guessLng")),
         player_opponent_guessCountry: await resolveGuessCountryForExport(
-          pickWithAliases(r, "player_opponent_guessCountry"),
-          pickWithAliases(r, "player_opponent_guessLat"),
-          pickWithAliases(r, "player_opponent_guessLng")
+          pickWithAliases2(r, "player_opponent_guessCountry"),
+          pickWithAliases2(r, "player_opponent_guessLat"),
+          pickWithAliases2(r, "player_opponent_guessLng")
         ),
-        player_opponent_distance_km: pickWithAliases(r, "player_opponent_distanceKm") ?? "",
-        player_opponent_score: pickWithAliases(r, "player_opponent_score") ?? "",
-        player_opponent_healthAfter: pickWithAliases(r, "player_opponent_healthAfter") ?? "",
-        player_opponent_isBestGuess: pickWithAliases(r, "player_opponent_isBestGuess") ? 1 : 0,
+        player_opponent_distance_km: pickWithAliases2(r, "player_opponent_distanceKm") ?? "",
+        player_opponent_score: pickWithAliases2(r, "player_opponent_score") ?? "",
+        player_opponent_healthAfter: pickWithAliases2(r, "player_opponent_healthAfter") ?? "",
+        player_opponent_isBestGuess: pickWithAliases2(r, "player_opponent_isBestGuess") ? 1 : 0,
         healthDiffAfter: r.healthDiffAfter ?? "",
         __sortTs: r.startTime ?? g?.playedAt ?? 0
       };
       const isTeamMode = (mode || "").toLowerCase().includes("team");
       if (isTeamMode) {
-        rowBase.player_self_teamId = pickWithAliases(r, "player_self_teamId") ?? "";
-        rowBase.player_mate_playerId = pickWithAliases(r, "player_mate_playerId") ?? "";
-        rowBase.player_mate_teamId = pickWithAliases(r, "player_mate_teamId") ?? "";
-        rowBase.player_mate_guessLat = pickWithAliases(r, "player_mate_guessLat") ?? "";
-        rowBase.player_mate_guessLng = pickWithAliases(r, "player_mate_guessLng") ?? "";
-        rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases(r, "player_mate_guessLat"), pickWithAliases(r, "player_mate_guessLng"));
+        rowBase.player_self_teamId = pickWithAliases2(r, "player_self_teamId") ?? "";
+        rowBase.player_mate_playerId = pickWithAliases2(r, "player_mate_playerId") ?? "";
+        rowBase.player_mate_teamId = pickWithAliases2(r, "player_mate_teamId") ?? "";
+        rowBase.player_mate_guessLat = pickWithAliases2(r, "player_mate_guessLat") ?? "";
+        rowBase.player_mate_guessLng = pickWithAliases2(r, "player_mate_guessLng") ?? "";
+        rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases2(r, "player_mate_guessLat"), pickWithAliases2(r, "player_mate_guessLng"));
         rowBase.player_mate_guessCountry = mateCountry;
-        rowBase.player_mate_distance_km = pickWithAliases(r, "player_mate_distanceKm") ?? "";
-        rowBase.player_mate_score = pickWithAliases(r, "player_mate_score") ?? "";
-        rowBase.player_mate_healthAfter = pickWithAliases(r, "player_mate_healthAfter") ?? "";
-        rowBase.player_mate_isBestGuess = pickWithAliases(r, "player_mate_isBestGuess") ? 1 : 0;
-        rowBase.player_opponent_playerId = pickWithAliases(r, "player_opponent_playerId") ?? "";
-        rowBase.player_opponent_teamId = pickWithAliases(r, "player_opponent_teamId") ?? "";
-        rowBase.player_opponent_guessLat = pickWithAliases(r, "player_opponent_guessLat") ?? "";
-        rowBase.player_opponent_guessLng = pickWithAliases(r, "player_opponent_guessLng") ?? "";
-        rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng"));
+        rowBase.player_mate_distance_km = pickWithAliases2(r, "player_mate_distanceKm") ?? "";
+        rowBase.player_mate_score = pickWithAliases2(r, "player_mate_score") ?? "";
+        rowBase.player_mate_healthAfter = pickWithAliases2(r, "player_mate_healthAfter") ?? "";
+        rowBase.player_mate_isBestGuess = pickWithAliases2(r, "player_mate_isBestGuess") ? 1 : 0;
+        rowBase.player_opponent_playerId = pickWithAliases2(r, "player_opponent_playerId") ?? "";
+        rowBase.player_opponent_teamId = pickWithAliases2(r, "player_opponent_teamId") ?? "";
+        rowBase.player_opponent_guessLat = pickWithAliases2(r, "player_opponent_guessLat") ?? "";
+        rowBase.player_opponent_guessLng = pickWithAliases2(r, "player_opponent_guessLng") ?? "";
+        rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases2(r, "player_opponent_guessLat"), pickWithAliases2(r, "player_opponent_guessLng"));
         rowBase.player_opponent_guessCountry = oppCountry;
-        rowBase.player_opponent_distance_km = pickWithAliases(r, "player_opponent_distanceKm") ?? "";
-        rowBase.player_opponent_score = pickWithAliases(r, "player_opponent_score") ?? "";
-        rowBase.player_opponent_healthAfter = pickWithAliases(r, "player_opponent_healthAfter") ?? "";
-        rowBase.player_opponent_isBestGuess = pickWithAliases(r, "player_opponent_isBestGuess") ? 1 : 0;
-        rowBase.player_opponent_mate_playerId = pickWithAliases(r, "player_opponent_mate_playerId") ?? "";
-        rowBase.player_opponent_mate_teamId = pickWithAliases(r, "player_opponent_mate_teamId") ?? "";
-        rowBase.player_opponent_mate_guessLat = pickWithAliases(r, "player_opponent_mate_guessLat") ?? "";
-        rowBase.player_opponent_mate_guessLng = pickWithAliases(r, "player_opponent_mate_guessLng") ?? "";
+        rowBase.player_opponent_distance_km = pickWithAliases2(r, "player_opponent_distanceKm") ?? "";
+        rowBase.player_opponent_score = pickWithAliases2(r, "player_opponent_score") ?? "";
+        rowBase.player_opponent_healthAfter = pickWithAliases2(r, "player_opponent_healthAfter") ?? "";
+        rowBase.player_opponent_isBestGuess = pickWithAliases2(r, "player_opponent_isBestGuess") ? 1 : 0;
+        rowBase.player_opponent_mate_playerId = pickWithAliases2(r, "player_opponent_mate_playerId") ?? "";
+        rowBase.player_opponent_mate_teamId = pickWithAliases2(r, "player_opponent_mate_teamId") ?? "";
+        rowBase.player_opponent_mate_guessLat = pickWithAliases2(r, "player_opponent_mate_guessLat") ?? "";
+        rowBase.player_opponent_mate_guessLng = pickWithAliases2(r, "player_opponent_mate_guessLng") ?? "";
         rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl2(
-          pickWithAliases(r, "player_opponent_mate_guessLat"),
-          pickWithAliases(r, "player_opponent_mate_guessLng")
+          pickWithAliases2(r, "player_opponent_mate_guessLat"),
+          pickWithAliases2(r, "player_opponent_mate_guessLng")
         );
         rowBase.player_opponent_mate_guessCountry = oppMateCountry;
-        rowBase.player_opponent_mate_distance_km = pickWithAliases(r, "player_opponent_mate_distanceKm") ?? "";
-        rowBase.player_opponent_mate_score = pickWithAliases(r, "player_opponent_mate_score") ?? "";
-        rowBase.player_opponent_mate_healthAfter = pickWithAliases(r, "player_opponent_mate_healthAfter") ?? "";
-        rowBase.player_opponent_mate_isBestGuess = pickWithAliases(r, "player_opponent_mate_isBestGuess") ? 1 : 0;
+        rowBase.player_opponent_mate_distance_km = pickWithAliases2(r, "player_opponent_mate_distanceKm") ?? "";
+        rowBase.player_opponent_mate_score = pickWithAliases2(r, "player_opponent_mate_score") ?? "";
+        rowBase.player_opponent_mate_healthAfter = pickWithAliases2(r, "player_opponent_mate_healthAfter") ?? "";
+        rowBase.player_opponent_mate_isBestGuess = pickWithAliases2(r, "player_opponent_mate_isBestGuess") ? 1 : 0;
       }
       roundsByMode.get(mode).push(rowBase);
     }
@@ -38937,982 +39467,6 @@
     onStatus(`Export done: ${games.length} games, ${rounds.length} rounds (${gamesByMode.size} mode sheets).`);
   }
 
-  // src/engine/fieldAccess.ts
-  function legacy(obj, ...keys2) {
-    for (const key of keys2) {
-      if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
-    }
-    return void 0;
-  }
-  function getSelfScore(r) {
-    const v = legacy(r, "player_self_score", "p1_score", "score");
-    return typeof v === "number" ? v : void 0;
-  }
-  function getPlayedAt(r) {
-    return r.playedAt;
-  }
-  function getTrueCountry(r) {
-    return r.trueCountry ?? r.true_country;
-  }
-  function getGuessCountrySelf(r) {
-    const v = legacy(r, "player_self_guessCountry", "p1_guessCountry", "guessCountry");
-    return typeof v === "string" ? v : void 0;
-  }
-  function pick(obj, key) {
-    if (!obj) return void 0;
-    if (key in obj) return obj[key];
-    const camel = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-    if (camel in obj) return obj[camel];
-    const snake = key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-    if (snake in obj) return obj[snake];
-    return void 0;
-  }
-  function pickWithAliases2(obj, logicalKey, columnAliases) {
-    const aliases = columnAliases?.[logicalKey] ?? [];
-    const probeOrder = [logicalKey, ...aliases];
-    for (const candidate of probeOrder) {
-      const value = pick(obj, candidate);
-      if (value !== void 0 && value !== null) return value;
-    }
-    return void 0;
-  }
-
-  // src/ui/drilldownOverlay.ts
-  var DrilldownOverlay = class {
-    root;
-    doc;
-    modal;
-    constructor(root) {
-      this.root = root;
-      this.doc = root.ownerDocument;
-      this.modal = this.doc.createElement("div");
-      this.modal.className = "ga-drilldown-modal";
-      this.modal.style.display = "none";
-      this.root.appendChild(this.modal);
-    }
-    getDocument() {
-      return this.doc;
-    }
-    open(semantic, req) {
-      this.modal.innerHTML = "";
-      this.modal.style.display = "block";
-      const bg = this.doc.createElement("div");
-      bg.className = "ga-drilldown-bg";
-      bg.addEventListener("click", () => this.close());
-      const panel = this.doc.createElement("div");
-      panel.className = "ga-drilldown-panel";
-      const header = this.doc.createElement("div");
-      header.className = "ga-drilldown-header";
-      const hTitle = this.doc.createElement("div");
-      hTitle.className = "ga-drilldown-title";
-      hTitle.textContent = req.title;
-      const btn = this.doc.createElement("button");
-      btn.className = "ga-drilldown-close";
-      btn.textContent = "Close";
-      btn.addEventListener("click", () => this.close());
-      header.appendChild(hTitle);
-      header.appendChild(btn);
-      const table = this.doc.createElement("table");
-      table.className = "ga-drilldown-table";
-      const preset = semantic.drilldownPresets[req.target];
-      const cols = preset?.columnsPresets?.[req.columnsPreset] ?? [];
-      const thead = this.doc.createElement("thead");
-      const trh = this.doc.createElement("tr");
-      for (const c of cols) {
-        const th = this.doc.createElement("th");
-        th.textContent = c;
-        trh.appendChild(th);
-      }
-      thead.appendChild(trh);
-      const tbody = this.doc.createElement("tbody");
-      const dateFormat = this.readDateFormatMode();
-      for (const r of req.rows) {
-        const tr = this.doc.createElement("tr");
-        for (const c of cols) {
-          const td = this.doc.createElement("td");
-          const v = pickWithAliases2(r, c, semantic.columnAliases);
-          td.textContent = this.formatCellValue(v, c, dateFormat);
-          tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-      }
-      table.appendChild(thead);
-      table.appendChild(tbody);
-      panel.appendChild(header);
-      panel.appendChild(table);
-      this.modal.appendChild(bg);
-      this.modal.appendChild(panel);
-    }
-    close() {
-      this.modal.style.display = "none";
-    }
-    readDateFormatMode() {
-      const root = this.root;
-      const mode = root.dataset?.gaDateFormat;
-      return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
-    }
-    formatDate(ts, mode) {
-      const d = new Date(ts);
-      if (!Number.isFinite(d.getTime())) return String(ts);
-      if (mode === "locale") return d.toLocaleString();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      const hh = String(d.getHours()).padStart(2, "0");
-      const mm = String(d.getMinutes()).padStart(2, "0");
-      const ss = String(d.getSeconds()).padStart(2, "0");
-      if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
-      if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
-      return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
-    }
-    formatCellValue(value, columnName, dateMode) {
-      if (value === void 0 || value === null) return "";
-      const col = columnName.toLowerCase();
-      const looksLikeDateColumn = col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
-      if (typeof value === "number" && Number.isFinite(value)) {
-        if (looksLikeDateColumn && value > 9466848e5 && value < 41024448e5) {
-          return this.formatDate(value, dateMode);
-        }
-        return String(value);
-      }
-      if (typeof value === "string") {
-        const trimmed = value.trim();
-        if (looksLikeDateColumn) {
-          const parsed = Date.parse(trimmed);
-          if (Number.isFinite(parsed)) return this.formatDate(parsed, dateMode);
-        }
-        return value;
-      }
-      return String(value);
-    }
-  };
-
-  // src/engine/queryEngine.ts
-  async function getRounds(_filters) {
-    const rows = await db.rounds.toArray();
-    const missingPlayedAt = rows.some((r) => typeof r.playedAt !== "number");
-    if (!missingPlayedAt) return rows;
-    const games = await db.games.toArray();
-    const playedAtByGame = /* @__PURE__ */ new Map();
-    for (const g of games) {
-      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
-    }
-    return rows.map((r) => {
-      if (typeof r.playedAt === "number") return r;
-      const gamePlayedAt = playedAtByGame.get(r.gameId);
-      if (typeof gamePlayedAt !== "number") return r;
-      return { ...r, playedAt: gamePlayedAt };
-    });
-  }
-
-  // src/engine/measures.ts
-  function is5k(r) {
-    const s = getSelfScore(r);
-    return typeof s === "number" && s >= 5e3;
-  }
-  function isHit(r) {
-    const truth = getTrueCountry(r);
-    if (!truth) return false;
-    const guess = getGuessCountrySelf(r);
-    return typeof guess === "string" && guess === truth;
-  }
-  function isThrowLt50(r) {
-    const s = getSelfScore(r);
-    return typeof s === "number" && s < 50;
-  }
-  var ROUND_MEASURES_BY_FORMULA_ID = {
-    count_rounds: (rows) => rows.length,
-    mean_player_self_score: (rows) => {
-      let sum2 = 0;
-      let n = 0;
-      for (const r of rows) {
-        const s = getSelfScore(r);
-        if (typeof s === "number") {
-          sum2 += s;
-          n++;
-        }
-      }
-      return n ? sum2 / n : 0;
-    },
-    rate_player_self_score_eq_5000: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
-      let k = 0;
-      for (const r of rows) if (is5k(r)) k++;
-      return k / n;
-    },
-    rate_true_country_hit: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
-      let k = 0;
-      for (const r of rows) if (isHit(r)) k++;
-      return k / n;
-    },
-    rate_throw_round: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
-      let k = 0;
-      for (const r of rows) if (isThrowLt50(r)) k++;
-      return k / n;
-    }
-  };
-
-  // src/engine/dimensions.ts
-  function scoreBucketKey(r) {
-    const s = getSelfScore(r);
-    if (typeof s !== "number") return null;
-    if (s >= 5e3) return "5000";
-    const lo = Math.max(0, Math.floor(s / 100) * 100);
-    const hi = lo + 99;
-    return `${lo}-${hi}`;
-  }
-  function timeDayKey(r) {
-    const ts = getPlayedAt(r);
-    if (typeof ts !== "number") return null;
-    const d = new Date(ts);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-  function weekdayKey(r) {
-    const ts = getPlayedAt(r);
-    if (typeof ts !== "number") return null;
-    const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return names[new Date(ts).getDay()];
-  }
-  function hourKey(r) {
-    const ts = getPlayedAt(r);
-    if (typeof ts !== "number") return null;
-    return String(new Date(ts).getHours()).padStart(2, "0");
-  }
-  function trueCountryKey(r) {
-    const c = getTrueCountry(r);
-    return typeof c === "string" && c.length ? c : null;
-  }
-  var ROUND_DIMENSION_EXTRACTORS = {
-    score_bucket: scoreBucketKey,
-    time_day: timeDayKey,
-    weekday: weekdayKey,
-    hour: hourKey,
-    true_country: trueCountryKey
-  };
-
-  // src/engine/filters.ts
-  function evalClause(value, clause) {
-    if (clause.op === "eq") return value === clause.value;
-    if (clause.op === "neq") return value !== clause.value;
-    if (clause.op === "in") return Array.isArray(clause.values) && clause.values.includes(value);
-    if (clause.op === "nin") return Array.isArray(clause.values) && !clause.values.includes(value);
-    return true;
-  }
-  function evalRowFilter(row, clause) {
-    const extractor = ROUND_DIMENSION_EXTRACTORS[clause.dimension];
-    if (extractor) {
-      return evalClause(extractor(row), clause);
-    }
-    const direct = row[clause.dimension];
-    return evalClause(direct, clause);
-  }
-  function applyFilters(rows, clauses) {
-    if (!clauses || clauses.length === 0) return rows;
-    return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause)));
-  }
-
-  // src/ui/widgets/statListWidget.ts
-  function formatValue(semantic, measureId, value) {
-    const m = semantic.measures[measureId];
-    const unit = semantic.units[m.unit];
-    if (!unit) return String(value);
-    if (unit.format === "percent") {
-      const decimals2 = unit.decimals ?? 1;
-      return `${(value * 100).toFixed(decimals2)}%`;
-    }
-    if (unit.format === "int") return String(Math.round(value));
-    const decimals = unit.decimals ?? 1;
-    return value.toFixed(decimals);
-  }
-  async function computeMeasure(semantic, measureId, filters) {
-    const m = semantic.measures[measureId];
-    if (!m) return 0;
-    const rows = applyFilters(await getRounds({}), filters);
-    const fn = ROUND_MEASURES_BY_FORMULA_ID[m.formulaId];
-    if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
-    return fn(rows);
-  }
-  function attachClickIfAny(el, actions, overlay, semantic, title) {
-    const click = actions?.click;
-    if (!click) return;
-    el.style.cursor = "pointer";
-    el.addEventListener("click", async () => {
-      if (click.type === "drilldown") {
-        const rows = applyFilters(await getRounds({}), click.extraFilters);
-        overlay.open(semantic, {
-          title,
-          target: click.target,
-          columnsPreset: click.columnsPreset,
-          rows,
-          extraFilters: click.extraFilters
-        });
-      }
-    });
-  }
-  async function renderStatListWidget(semantic, widget, overlay) {
-    const spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-statlist";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = widget.title;
-    const box = doc.createElement("div");
-    box.className = "ga-statlist-box";
-    for (const row of spec.rows) {
-      const line = doc.createElement("div");
-      line.className = "ga-statrow";
-      const left = doc.createElement("div");
-      left.className = "ga-statrow-label";
-      left.textContent = row.label;
-      const right = doc.createElement("div");
-      right.className = "ga-statrow-value";
-      right.textContent = "...";
-      const val = await computeMeasure(semantic, row.measure, row.filters);
-      right.textContent = formatValue(semantic, row.measure, val);
-      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`);
-      line.appendChild(left);
-      line.appendChild(right);
-      box.appendChild(line);
-    }
-    wrap.appendChild(title);
-    wrap.appendChild(box);
-    return wrap;
-  }
-
-  // src/engine/aggregate.ts
-  function groupByKey(rows, keyFn) {
-    const m = /* @__PURE__ */ new Map();
-    for (const r of rows) {
-      const k = keyFn(r);
-      if (!k) continue;
-      const arr = m.get(k);
-      if (arr) arr.push(r);
-      else m.set(k, [r]);
-    }
-    return m;
-  }
-
-  // src/ui/widgets/chartWidget.ts
-  function sortKeysChronological(keys2) {
-    const parseKey = (k) => {
-      const first = k.split("-")[0] ?? k;
-      const parsed = Number(first);
-      return Number.isFinite(parsed) ? parsed : void 0;
-    };
-    return [...keys2].sort((a, b) => {
-      const na = parseKey(a);
-      const nb = parseKey(b);
-      if (na !== void 0 && nb !== void 0) return na - nb;
-      if (na !== void 0) return -1;
-      if (nb !== void 0) return 1;
-      return a.localeCompare(b);
-    });
-  }
-  function sortData(data, mode) {
-    if (mode === "chronological") {
-      const keys2 = sortKeysChronological(data.map((d) => d.x));
-      const rank = new Map(keys2.map((k, i) => [k, i]));
-      return [...data].sort((a, b) => (rank.get(a.x) ?? 0) - (rank.get(b.x) ?? 0));
-    }
-    if (mode === "asc") return [...data].sort((a, b) => a.y - b.y);
-    if (mode === "desc") return [...data].sort((a, b) => b.y - a.y);
-    return data;
-  }
-  function getMeasureIds(spec) {
-    const out = [];
-    const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
-    if (single) out.push(single);
-    if (Array.isArray(spec.y.measures)) {
-      for (const m of spec.y.measures) {
-        if (typeof m !== "string") continue;
-        const clean = m.trim();
-        if (!clean || out.includes(clean)) continue;
-        out.push(clean);
-      }
-    }
-    return out;
-  }
-  function formatMeasureValue(semantic, measureId, value) {
-    const measure = semantic.measures[measureId];
-    const unit = measure ? semantic.units[measure.unit] : void 0;
-    if (!unit) return `${value}`;
-    if (unit.format === "percent") return `${(value * 100).toFixed(unit.decimals ?? 1)}%`;
-    if (unit.format === "int") return `${Math.round(value)}`;
-    return value.toFixed(unit.decimals ?? 1);
-  }
-  function niceUpperBound(maxValue) {
-    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
-    const exp = Math.floor(Math.log10(maxValue));
-    const base = 10 ** exp;
-    const n = maxValue / base;
-    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
-    return nice * base;
-  }
-  function normalizeHexColor(value) {
-    if (typeof value !== "string") return void 0;
-    const v = value.trim();
-    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : void 0;
-  }
-  function isAnimationsEnabled(doc) {
-    const root = doc.getElementById("geoanalyzr-semantic-root");
-    return root?.getAttribute("data-ga-chart-animations") !== "off";
-  }
-  function sanitizeFileName2(name) {
-    const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
-    return out.length > 0 ? out : "chart";
-  }
-  function triggerDownload2(doc, blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = doc.createElement("a");
-    a.href = url;
-    a.download = filename;
-    doc.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1e3);
-  }
-  function serializeSvg(svg) {
-    const clone = svg.cloneNode(true);
-    if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    clone.removeAttribute("data-anim-state");
-    const vb = clone.getAttribute("viewBox")?.trim().split(/\s+/).map(Number) ?? [];
-    const width = Number.isFinite(vb[2]) && vb[2] > 0 ? vb[2] : 1200;
-    const height = Number.isFinite(vb[3]) && vb[3] > 0 ? vb[3] : 360;
-    clone.setAttribute("width", String(width));
-    clone.setAttribute("height", String(height));
-    return { text: new XMLSerializer().serializeToString(clone), width, height };
-  }
-  async function downloadSvg2(doc, svg, title) {
-    const { text } = serializeSvg(svg);
-    const blob = new Blob([text], { type: "image/svg+xml;charset=utf-8" });
-    triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.svg`);
-  }
-  async function downloadPng2(doc, svg, title) {
-    const prepared = serializeSvg(svg);
-    const svgBlob = new Blob([prepared.text], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(svgBlob);
-    try {
-      const img = new Image();
-      await new Promise((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Could not render chart image."));
-        img.src = url;
-      });
-      const canvas = doc.createElement("canvas");
-      canvas.width = prepared.width;
-      canvas.height = prepared.height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context unavailable.");
-      ctx.drawImage(img, 0, 0, prepared.width, prepared.height);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      if (blob) {
-        triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.png`);
-        return;
-      }
-      const dataUrl = canvas.toDataURL("image/png");
-      const fallbackBlob = await (await fetch(dataUrl)).blob();
-      triggerDownload2(doc, fallbackBlob, `${sanitizeFileName2(title)}.png`);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-  function maybeAnimateBars(svg, doc) {
-    if (!isAnimationsEnabled(doc)) {
-      svg.setAttribute("data-anim-state", "off");
-      return;
-    }
-    svg.setAttribute("data-anim-state", "pending");
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          svg.setAttribute("data-anim-state", "run");
-          obs.disconnect();
-          return;
-        }
-      },
-      { threshold: 0.15 }
-    );
-    obs.observe(svg);
-  }
-  async function renderChartWidget(semantic, widget, overlay) {
-    const spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-chart";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = widget.title;
-    const controls = doc.createElement("div");
-    controls.className = "ga-chart-controls";
-    const controlsLeft = doc.createElement("div");
-    controlsLeft.className = "ga-chart-controls-left";
-    controls.appendChild(controlsLeft);
-    const actionsRight = doc.createElement("div");
-    actionsRight.className = "ga-chart-actions";
-    controls.appendChild(actionsRight);
-    const box = doc.createElement("div");
-    box.className = "ga-chart-box";
-    const chartHost = doc.createElement("div");
-    chartHost.className = "ga-chart-host";
-    box.appendChild(chartHost);
-    const rows = await getRounds({});
-    const dimId = spec.x.dimension;
-    const dimDef = semantic.dimensions[dimId];
-    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in widget ${widget.widgetId}`);
-    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
-    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}'`);
-    const measureIds = getMeasureIds(spec);
-    if (measureIds.length === 0) throw new Error(`Widget ${widget.widgetId} has no y.measure or y.measures`);
-    const measureFnById = /* @__PURE__ */ new Map();
-    for (const measureId of measureIds) {
-      const measDef = semantic.measures[measureId];
-      if (!measDef) throw new Error(`Unknown measure '${measureId}' in widget ${widget.widgetId}`);
-      const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
-      if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
-      measureFnById.set(measureId, measureFn);
-    }
-    const grouped = groupByKey(rows, keyFn);
-    const keys2 = Array.from(grouped.keys());
-    const colorOverride = normalizeHexColor(spec.color);
-    const buildDataForMeasure = (measureId) => {
-      const measureFn = measureFnById.get(measureId);
-      if (!measureFn) return [];
-      const baseData = keys2.map((k) => {
-        const g = grouped.get(k) ?? [];
-        return { x: k, y: measureFn(g), rows: g };
-      });
-      const sortedData = sortData(baseData, spec.sort?.mode);
-      return typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0 ? sortedData.slice(0, Math.floor(spec.limit)) : sortedData;
-    };
-    let activeMeasure = measureIds.includes(spec.y.activeMeasure || "") ? spec.y.activeMeasure : measureIds[0];
-    let currentSvg = null;
-    const mkActionBtn = (label, onClick) => {
-      const btn = doc.createElement("button");
-      btn.type = "button";
-      btn.textContent = label;
-      btn.addEventListener("click", onClick);
-      return btn;
-    };
-    actionsRight.appendChild(
-      mkActionBtn("Save PNG", () => {
-        if (currentSvg) void downloadPng2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
-      })
-    );
-    actionsRight.appendChild(
-      mkActionBtn("Save SVG", () => {
-        if (currentSvg) void downloadSvg2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
-      })
-    );
-    const render = () => {
-      chartHost.innerHTML = "";
-      currentSvg = null;
-      const measureDef = semantic.measures[activeMeasure];
-      const data = buildDataForMeasure(activeMeasure);
-      if (!measureDef || data.length === 0) {
-        const empty = doc.createElement("div");
-        empty.style.fontSize = "12px";
-        empty.style.opacity = "0.75";
-        empty.textContent = "No chart data available for current selection.";
-        chartHost.appendChild(empty);
-        return;
-      }
-      const W = 1200;
-      const H = 360;
-      const PAD_L = 72;
-      const PAD_B = 58;
-      const PAD_T = 16;
-      const PAD_R = 20;
-      const innerW = W - PAD_L - PAD_R;
-      const innerH = H - PAD_T - PAD_B;
-      const dataMax = Math.max(0, ...data.map((d) => d.y));
-      const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
-      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.classList.add("ga-chart-svg");
-      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-      const axisX = doc.createElementNS(svg.namespaceURI, "line");
-      axisX.setAttribute("x1", String(PAD_L));
-      axisX.setAttribute("y1", String(PAD_T + innerH));
-      axisX.setAttribute("x2", String(PAD_L + innerW));
-      axisX.setAttribute("y2", String(PAD_T + innerH));
-      axisX.setAttribute("stroke", "var(--ga-axis-color)");
-      axisX.setAttribute("opacity", "0.7");
-      svg.appendChild(axisX);
-      const axisY = doc.createElementNS(svg.namespaceURI, "line");
-      axisY.setAttribute("x1", String(PAD_L));
-      axisY.setAttribute("y1", String(PAD_T));
-      axisY.setAttribute("x2", String(PAD_L));
-      axisY.setAttribute("y2", String(PAD_T + innerH));
-      axisY.setAttribute("stroke", "var(--ga-axis-color)");
-      axisY.setAttribute("opacity", "0.7");
-      svg.appendChild(axisY);
-      const tickCount = 5;
-      for (let i = 0; i <= tickCount; i++) {
-        const yVal = maxY * i / tickCount;
-        const yPos = PAD_T + innerH - yVal / maxY * innerH;
-        const grid = doc.createElementNS(svg.namespaceURI, "line");
-        grid.setAttribute("x1", String(PAD_L));
-        grid.setAttribute("y1", String(yPos));
-        grid.setAttribute("x2", String(PAD_L + innerW));
-        grid.setAttribute("y2", String(yPos));
-        grid.setAttribute("stroke", "var(--ga-axis-grid)");
-        grid.setAttribute("opacity", i === 0 ? "0.8" : "0.45");
-        svg.appendChild(grid);
-        const yTick = doc.createElementNS(svg.namespaceURI, "text");
-        yTick.setAttribute("x", String(PAD_L - 8));
-        yTick.setAttribute("y", String(yPos + 3));
-        yTick.setAttribute("text-anchor", "end");
-        yTick.setAttribute("font-size", "10");
-        yTick.setAttribute("fill", "var(--ga-axis-text)");
-        yTick.setAttribute("opacity", "0.95");
-        yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
-        svg.appendChild(yTick);
-      }
-      const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
-      xAxisLabel.setAttribute("x", String(PAD_L + innerW / 2));
-      xAxisLabel.setAttribute("y", String(H - 8));
-      xAxisLabel.setAttribute("text-anchor", "middle");
-      xAxisLabel.setAttribute("font-size", "12");
-      xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
-      xAxisLabel.setAttribute("opacity", "0.95");
-      xAxisLabel.textContent = dimDef.label;
-      svg.appendChild(xAxisLabel);
-      const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
-      yAxisLabel.setAttribute("x", "16");
-      yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
-      yAxisLabel.setAttribute("text-anchor", "middle");
-      yAxisLabel.setAttribute("font-size", "12");
-      yAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
-      yAxisLabel.setAttribute("opacity", "0.95");
-      yAxisLabel.setAttribute("transform", `rotate(-90 16 ${PAD_T + innerH / 2})`);
-      yAxisLabel.textContent = measureDef.label;
-      svg.appendChild(yAxisLabel);
-      if (spec.type === "line") {
-        const points = data.map((d, i) => {
-          const x = PAD_L + i / Math.max(1, data.length - 1) * innerW;
-          const y = PAD_T + innerH - d.y / maxY * innerH;
-          return { x, y, d };
-        });
-        const path = doc.createElementNS(svg.namespaceURI, "path");
-        const dPath = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-        path.setAttribute("d", dPath);
-        path.setAttribute("fill", "none");
-        path.setAttribute("stroke", colorOverride ?? "var(--ga-graph-color)");
-        path.setAttribute("stroke-width", "2.5");
-        path.setAttribute("opacity", "0.9");
-        svg.appendChild(path);
-        for (const p of points) {
-          const dot = doc.createElementNS(svg.namespaceURI, "circle");
-          dot.setAttribute("cx", String(p.x));
-          dot.setAttribute("cy", String(p.y));
-          dot.setAttribute("r", "3");
-          dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
-          dot.setAttribute("opacity", "0.95");
-          const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, p.d.y)}`;
-          dot.appendChild(tooltip);
-          const click = spec.actions?.click;
-          if (click?.type === "drilldown") {
-            dot.setAttribute("style", "cursor: pointer;");
-            dot.addEventListener("click", () => {
-              const rowsFromPoint = click.filterFromPoint ? p.d.rows : rows;
-              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-              overlay.open(semantic, {
-                title: `${widget.title} - ${p.d.x}`,
-                target: click.target,
-                columnsPreset: click.columnsPreset,
-                rows: filteredRows,
-                extraFilters: click.extraFilters
-              });
-            });
-          }
-          svg.appendChild(dot);
-        }
-      } else {
-        const barW = innerW / Math.max(1, data.length);
-        data.forEach((d, i) => {
-          const x = PAD_L + i * barW;
-          const h = d.y / maxY * innerH;
-          const y = PAD_T + innerH - h;
-          const rect = doc.createElementNS(svg.namespaceURI, "rect");
-          rect.classList.add("ga-chart-bar");
-          rect.style.setProperty("--ga-bar-index", String(i));
-          rect.setAttribute("x", String(x + 1));
-          rect.setAttribute("y", String(y));
-          rect.setAttribute("width", String(Math.max(1, barW - 2)));
-          rect.setAttribute("height", String(Math.max(0, h)));
-          rect.setAttribute("rx", "2");
-          rect.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
-          rect.setAttribute("opacity", "0.72");
-          rect.style.animationDelay = `${Math.min(i * 18, 320)}ms`;
-          rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
-          rect.style.transformBox = "view-box";
-          const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, d.y)}`;
-          rect.appendChild(tooltip);
-          const click = spec.actions?.click;
-          if (click?.type === "drilldown") {
-            rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
-            rect.addEventListener("click", () => {
-              const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
-              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-              overlay.open(semantic, {
-                title: `${widget.title} - ${d.x}`,
-                target: click.target,
-                columnsPreset: click.columnsPreset,
-                rows: filteredRows,
-                extraFilters: click.extraFilters
-              });
-            });
-          }
-          svg.appendChild(rect);
-          if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
-            const tx = doc.createElementNS(svg.namespaceURI, "text");
-            tx.setAttribute("x", String(x + barW / 2));
-            tx.setAttribute("y", String(PAD_T + innerH + 16));
-            tx.setAttribute("text-anchor", "middle");
-            tx.setAttribute("font-size", "10");
-            tx.setAttribute("fill", "var(--ga-axis-text)");
-            tx.setAttribute("opacity", "0.95");
-            tx.textContent = d.x;
-            svg.appendChild(tx);
-          }
-        });
-        maybeAnimateBars(svg, doc);
-      }
-      chartHost.appendChild(svg);
-      currentSvg = svg;
-    };
-    if (measureIds.length > 1) {
-      const label = doc.createElement("label");
-      label.style.fontSize = "12px";
-      label.style.opacity = "0.9";
-      label.textContent = "Measure:";
-      const select = doc.createElement("select");
-      select.style.background = "var(--ga-control-bg)";
-      select.style.color = "var(--ga-control-text)";
-      select.style.border = "1px solid var(--ga-control-border)";
-      select.style.borderRadius = "8px";
-      select.style.padding = "4px 8px";
-      for (const measureId of measureIds) {
-        const option = doc.createElement("option");
-        option.value = measureId;
-        option.textContent = semantic.measures[measureId]?.label || measureId;
-        if (measureId === activeMeasure) option.selected = true;
-        select.appendChild(option);
-      }
-      select.addEventListener("change", () => {
-        activeMeasure = select.value;
-        render();
-      });
-      controlsLeft.appendChild(label);
-      controlsLeft.appendChild(select);
-    }
-    render();
-    wrap.appendChild(title);
-    wrap.appendChild(controls);
-    wrap.appendChild(box);
-    return wrap;
-  }
-
-  // src/ui/widgets/breakdownWidget.ts
-  function normalizeHexColor2(value) {
-    if (typeof value !== "string") return void 0;
-    const v = value.trim();
-    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : void 0;
-  }
-  function sortRows(rows, mode) {
-    if (mode === "asc") return [...rows].sort((a, b) => a.value - b.value);
-    if (mode === "desc") return [...rows].sort((a, b) => b.value - a.value);
-    const scoreBucketStart = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
-    const isDate = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
-    return [...rows].sort((a, b) => {
-      if (isDate(a.key) && isDate(b.key)) return a.key.localeCompare(b.key);
-      const na = Number.isFinite(scoreBucketStart(a.key)) ? scoreBucketStart(a.key) : NaN;
-      const nb = Number.isFinite(scoreBucketStart(b.key)) ? scoreBucketStart(b.key) : NaN;
-      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-      return a.key.localeCompare(b.key);
-    });
-  }
-  function formatValue2(semantic, measureId, value) {
-    const m = semantic.measures[measureId];
-    const unit = semantic.units[m.unit];
-    if (!unit) return String(value);
-    if (unit.format === "percent") {
-      const decimals2 = unit.decimals ?? 1;
-      return `${(value * 100).toFixed(decimals2)}%`;
-    }
-    if (unit.format === "int") return String(Math.round(value));
-    const decimals = unit.decimals ?? 1;
-    return value.toFixed(decimals);
-  }
-  async function renderBreakdownWidget(semantic, widget, overlay) {
-    const spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-breakdown";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = widget.title;
-    const box = doc.createElement("div");
-    box.className = "ga-breakdown-box";
-    const rowsAll = applyFilters(await getRounds({}), spec.filters);
-    const dimId = spec.dimension;
-    const measId = spec.measure;
-    const dimDef = semantic.dimensions[dimId];
-    const measDef = semantic.measures[measId];
-    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
-    if (!measDef) throw new Error(`Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
-    const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
-    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
-    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
-    if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
-    const grouped = groupByKey(rowsAll, keyFn);
-    const colorOverride = normalizeHexColor2(spec.color);
-    let rows = Array.from(grouped.entries()).map(([k, g]) => ({
-      key: k,
-      value: measureFn(g),
-      rows: g
-    }));
-    const sortMode = spec.sort?.mode ?? "desc";
-    rows = sortRows(rows, sortMode);
-    const limit = typeof spec.limit === "number" ? spec.limit : 12;
-    rows = rows.slice(0, limit);
-    const maxVal = Math.max(1e-9, ...rows.map((r) => r.value));
-    for (const r of rows) {
-      const line = doc.createElement("div");
-      line.className = "ga-breakdown-row";
-      const left = doc.createElement("div");
-      left.className = "ga-breakdown-label";
-      left.textContent = r.key;
-      const right = doc.createElement("div");
-      right.className = "ga-breakdown-right";
-      const val = doc.createElement("div");
-      val.className = "ga-breakdown-value";
-      val.textContent = formatValue2(semantic, measId, r.value);
-      const barWrap = doc.createElement("div");
-      barWrap.className = "ga-breakdown-barwrap";
-      const bar = doc.createElement("div");
-      bar.className = "ga-breakdown-bar";
-      bar.style.width = `${Math.max(2, r.value / maxVal * 100)}%`;
-      if (colorOverride) bar.style.background = colorOverride;
-      barWrap.appendChild(bar);
-      right.appendChild(val);
-      right.appendChild(barWrap);
-      line.appendChild(left);
-      line.appendChild(right);
-      const click = spec.actions?.click;
-      if (click?.type === "drilldown") {
-        line.style.cursor = "pointer";
-        line.addEventListener("click", () => {
-          const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
-          overlay.open(semantic, {
-            title: `${widget.title} - ${r.key}`,
-            target: click.target,
-            columnsPreset: click.columnsPreset,
-            rows: filteredRows,
-            extraFilters: click.extraFilters
-          });
-        });
-      }
-      box.appendChild(line);
-    }
-    wrap.appendChild(title);
-    wrap.appendChild(box);
-    return wrap;
-  }
-
-  // src/ui/dashboardRenderer.ts
-  async function renderDashboard(root, semantic, dashboard) {
-    root.innerHTML = "";
-    const doc = root.ownerDocument;
-    const overlay = new DrilldownOverlay(root);
-    const tabBar = doc.createElement("div");
-    tabBar.className = "ga-tabs";
-    const content = doc.createElement("div");
-    content.className = "ga-content";
-    root.appendChild(tabBar);
-    root.appendChild(content);
-    const sections = dashboard.dashboard.sections;
-    let active = sections[0]?.id ?? "";
-    function makeTab(secId, label) {
-      const btn = doc.createElement("button");
-      btn.className = "ga-tab";
-      btn.textContent = label;
-      btn.addEventListener("click", async () => {
-        active = secId;
-        await renderActive();
-        highlight();
-      });
-      tabBar.appendChild(btn);
-    }
-    function highlight() {
-      const btns = Array.from(tabBar.querySelectorAll("button.ga-tab"));
-      btns.forEach((b, i) => {
-        b.classList.toggle("active", sections[i]?.id === active);
-      });
-    }
-    async function renderWidget(widget) {
-      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay);
-      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay);
-      if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay);
-      const ph = doc.createElement("div");
-      ph.className = "ga-widget ga-placeholder";
-      ph.textContent = `Widget type '${widget.type}' not implemented yet`;
-      return ph;
-    }
-    async function renderActive() {
-      content.innerHTML = "";
-      const section = sections.find((s) => s.id === active);
-      if (!section) return;
-      const grid = doc.createElement("div");
-      grid.className = "ga-grid";
-      grid.style.display = "grid";
-      grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
-      grid.style.gap = "12px";
-      for (const placed of section.layout.cards) {
-        const card = doc.createElement("div");
-        card.className = "ga-card";
-        card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
-        card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
-        const header = doc.createElement("div");
-        header.className = "ga-card-header";
-        header.textContent = placed.title;
-        const body = doc.createElement("div");
-        body.className = "ga-card-body";
-        const inner = doc.createElement("div");
-        inner.className = "ga-card-inner";
-        inner.style.display = "grid";
-        inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
-        inner.style.gap = "10px";
-        for (const w of placed.card.children) {
-          const container = doc.createElement("div");
-          container.className = "ga-child";
-          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
-          container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
-          container.style.gridRow = `${p.y + 1} / span ${p.h}`;
-          container.appendChild(await renderWidget(w));
-          inner.appendChild(container);
-        }
-        body.appendChild(inner);
-        card.appendChild(header);
-        card.appendChild(body);
-        grid.appendChild(card);
-      }
-      content.appendChild(grid);
-    }
-    for (const s of sections) makeTab(s.id, s.title);
-    await renderActive();
-    highlight();
-  }
-
   // src/engine/validate.ts
   var ValidationError = class extends Error {
     code;
@@ -39925,12 +39479,56 @@
     if (!condition) throw new ValidationError(code, msg);
   }
   function validateDashboardAgainstSemantic(semantic, dash) {
+    if (dash.dashboard.globalFilters) validateGlobalFiltersSpec(semantic, dash);
     for (const section of dash.dashboard.sections) {
       for (const placedCard of section.layout.cards) {
         for (const widget of placedCard.card.children) {
           validateWidget(semantic, widget);
         }
       }
+    }
+  }
+  function validateGlobalFiltersSpec(semantic, dash) {
+    const gf = dash.dashboard.globalFilters;
+    assert(!!gf && typeof gf === "object", "E_BAD_SPEC", "dashboard.globalFilters must be an object");
+    assert(typeof gf.enabled === "boolean", "E_BAD_SPEC", "dashboard.globalFilters.enabled must be boolean");
+    assert(Array.isArray(gf.controls), "E_BAD_SPEC", "dashboard.globalFilters.controls must be an array");
+    const ids = /* @__PURE__ */ new Set();
+    for (const c of gf.controls) {
+      assert(!!c && typeof c === "object", "E_BAD_SPEC", "Global filter control must be an object");
+      assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", "Global filter control id must be a string");
+      assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate global filter control id '${c.id}'`);
+      ids.add(c.id);
+      assert(typeof c.type === "string", "E_BAD_SPEC", `Global filter control '${c.id}' missing type`);
+      assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' missing label`);
+      assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' appliesTo must be a non-empty array`);
+      if (c.type === "date_range") {
+        assert(!!c.default && typeof c.default === "object", "E_BAD_SPEC", `date_range '${c.id}' default must be an object`);
+        const fromTs = c.default.fromTs;
+        const toTs2 = c.default.toTs;
+        assert(fromTs === null || typeof fromTs === "number", "E_BAD_SPEC", `date_range '${c.id}' default.fromTs must be number|null`);
+        assert(toTs2 === null || typeof toTs2 === "number", "E_BAD_SPEC", `date_range '${c.id}' default.toTs must be number|null`);
+        continue;
+      }
+      if (c.type === "select") {
+        assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
+        assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
+        assert(
+          c.options === "auto_distinct" || c.options === "auto_teammates",
+          "E_BAD_SPEC",
+          `select '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+        );
+        assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
+        const dimId = String(c.dimension);
+        const dim = semantic.dimensions[dimId];
+        assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in global filter '${c.id}'`);
+        const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+        for (const g of grains) {
+          assert(c.appliesTo.includes(g), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo missing dimension grain '${g}'`);
+        }
+        continue;
+      }
+      throw new ValidationError("E_BAD_SPEC", `Unknown global filter control type '${c.type}'`);
     }
   }
   function validateWidget(semantic, widget) {
@@ -39943,15 +39541,30 @@
       assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
       const xDim = semantic.dimensions[xDimId];
       assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
-      assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
+      const xGrains = Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain];
+      assert(xGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `x '${xDimId}' grain mismatch for widget grain=${widget.grain}`);
       assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
       if (spec.sort?.mode) {
         assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
       }
+      if (Array.isArray(spec.sorts)) {
+        for (const s of spec.sorts) {
+          const mode = s?.mode;
+          if (!mode) continue;
+          assert(xDim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${xDimId}'`);
+        }
+      }
+      if (spec.activeSort?.mode) {
+        assert(xDim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${xDimId}'`);
+      }
       for (const yMeasId of yMeasureIds) {
         const yMeas = semantic.measures[yMeasId];
         assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
-        assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
+        assert(
+          xGrains.includes(yMeas.grain),
+          "E_GRAIN_MISMATCH",
+          `y '${yMeasId}' grain=${yMeas.grain} not supported by x '${xDimId}' grains=${xGrains.join(",")}`
+        );
         assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
       }
       const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : void 0;
@@ -39975,7 +39588,8 @@
         const sDimId = spec.series.dimension;
         const sDim = semantic.dimensions[sDimId];
         assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
-        assert(sDim.grain === widget.grain, "E_GRAIN_MISMATCH", `series '${sDimId}' grain=${sDim.grain} but widget grain=${widget.grain}`);
+        const sGrains = Array.isArray(sDim.grain) ? sDim.grain : [sDim.grain];
+        assert(sGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `series '${sDimId}' grain mismatch for widget grain=${widget.grain}`);
         assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
         const maxSeries = sDim.cardinality?.maxSeries ?? 50;
         const requested = spec.series.selector.mode === "selected" ? spec.series.selector.values?.length ?? 0 : spec.series.selector.mode === "top_n" ? spec.series.selector.n ?? 0 : spec.series.selector.maxSeries ?? maxSeries;
@@ -40003,11 +39617,32 @@
     if (widget.type === "breakdown") {
       const spec = widget.spec;
       const dim = semantic.dimensions[spec.dimension];
-      const meas = semantic.measures[spec.measure];
+      const measIds = getBreakdownMeasureIds(spec);
       assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
-      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in breakdown ${widget.widgetId}`);
-      assert(dim.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
-      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure grain mismatch in ${widget.widgetId}`);
+      const dGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+      assert(dGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
+      assert(measIds.length > 0, "E_BAD_SPEC", `Breakdown ${widget.widgetId} missing measure or measures[]`);
+      for (const measId of measIds) {
+        const meas = semantic.measures[measId];
+        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
+        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure '${measId}' grain mismatch in ${widget.widgetId}`);
+      }
+      if (typeof spec.activeMeasure === "string" && spec.activeMeasure.trim()) {
+        assert(measIds.includes(spec.activeMeasure.trim()), "E_BAD_SPEC", `breakdown ${widget.widgetId} activeMeasure must be in measures[]`);
+      }
+      if (spec.sort?.mode) {
+        assert(dim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${spec.dimension}'`);
+      }
+      if (Array.isArray(spec.sorts)) {
+        for (const s of spec.sorts) {
+          const mode = s?.mode;
+          if (!mode) continue;
+          assert(dim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${spec.dimension}'`);
+        }
+      }
+      if (spec.activeSort?.mode) {
+        assert(dim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${spec.dimension}'`);
+      }
       if (dim.cardinality?.selectorRequired) {
         assert(
           typeof spec.limit === "number" && spec.limit > 0,
@@ -40032,6 +39667,20 @@
     if (single) result.push(single);
     if (Array.isArray(spec?.y?.measures)) {
       for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || result.includes(clean)) continue;
+        result.push(clean);
+      }
+    }
+    return result;
+  }
+  function getBreakdownMeasureIds(spec) {
+    const result = [];
+    const single = typeof spec?.measure === "string" ? spec.measure.trim() : "";
+    if (single) result.push(single);
+    if (Array.isArray(spec?.measures)) {
+      for (const m of spec.measures) {
         if (typeof m !== "string") continue;
         const clean = m.trim();
         if (!clean || result.includes(clean)) continue;
@@ -40067,7 +39716,7 @@
       time_day: {
         label: "Date",
         kind: "time",
-        grain: "round",
+        grain: ["round", "game"],
         ordered: true,
         allowedCharts: ["line", "bar"],
         sortModes: ["chronological"]
@@ -40075,7 +39724,7 @@
       weekday: {
         label: "Weekday",
         kind: "category",
-        grain: "round",
+        grain: ["round", "game"],
         ordered: true,
         allowedCharts: ["bar"],
         sortModes: ["chronological", "asc", "desc"]
@@ -40083,7 +39732,7 @@
       hour: {
         label: "Hour of day",
         kind: "category",
-        grain: "round",
+        grain: ["round", "game"],
         ordered: true,
         allowedCharts: ["bar"],
         sortModes: ["chronological", "asc", "desc"]
@@ -40098,6 +39747,14 @@
       },
       game_mode: {
         label: "Game mode",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 10 }
+      },
+      mode_family: {
+        label: "Mode",
         kind: "category",
         grain: "game",
         allowedCharts: ["bar", "line"],
@@ -40127,6 +39784,14 @@
         allowedCharts: ["bar", "line"],
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 12, selectorRequired: true }
+      },
+      teammate_name: {
+        label: "Teammate",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 15, selectorRequired: true }
       },
       movement_type: {
         label: "Movement",
@@ -40175,6 +39840,27 @@
         allowedCharts: ["bar", "line"],
         formulaId: "mean_player_self_score"
       },
+      avg_score_hit_only: {
+        label: "Avg score (hit only)",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_score_hit_only"
+      },
+      avg_distance_km: {
+        label: "Avg distance",
+        unit: "km",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_distance_km"
+      },
+      avg_guess_duration: {
+        label: "Avg guess duration",
+        unit: "seconds",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_duration_seconds"
+      },
       fivek_rate: {
         label: "5k rate",
         unit: "percent",
@@ -40182,12 +39868,26 @@
         allowedCharts: ["bar", "line"],
         formulaId: "rate_player_self_score_eq_5000"
       },
+      fivek_count: {
+        label: "5k count",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_5k_round"
+      },
       win_rate: {
         label: "Win rate",
         unit: "percent",
         grain: "game",
         allowedCharts: ["bar", "line"],
         formulaId: "rate_player_self_win"
+      },
+      win_count: {
+        label: "Win count",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_win_game"
       },
       end_rating_avg: {
         label: "Avg end rating",
@@ -40210,12 +39910,26 @@
         allowedCharts: ["bar", "line"],
         formulaId: "rate_true_country_hit"
       },
+      hit_count: {
+        label: "Hit count",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_hit_round"
+      },
       throw_rate: {
         label: "Throw rate",
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "rate_throw_round"
+      },
+      throw_count: {
+        label: "Throw count",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_throw_round"
       },
       damage_dealt_avg: {
         label: "Avg damage dealt",
@@ -40245,7 +39959,21 @@
       true_country: ["trueCountry", "true_country"],
       player_self_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
       player_self_score: ["player_self_score", "p1_score", "score"],
-      player_opponent_score: ["player_opponent_score", "p3_score", "p2_score"],
+      player_self_guessLat: ["p1_guessLat", "player_self_guessLat"],
+      player_self_guessLng: ["p1_guessLng", "player_self_guessLng"],
+      player_self_isBestGuess: ["p1_isBestGuess", "player_self_isBestGuess"],
+      player_mate_guessLat: ["p2_guessLat", "player_mate_guessLat"],
+      player_mate_guessLng: ["p2_guessLng", "player_mate_guessLng"],
+      player_mate_score: ["p2_score", "player_mate_score"],
+      player_mate_isBestGuess: ["p2_isBestGuess", "player_mate_isBestGuess"],
+      player_opponent_guessLat: ["p3_guessLat", "player_opponent_guessLat", "p2_guessLat"],
+      player_opponent_guessLng: ["p3_guessLng", "player_opponent_guessLng", "p2_guessLng"],
+      player_opponent_score: ["p3_score", "player_opponent_score", "p2_score"],
+      player_opponent_isBestGuess: ["p3_isBestGuess", "player_opponent_isBestGuess", "p2_isBestGuess"],
+      player_opponent_mate_guessLat: ["p4_guessLat", "player_opponent_mate_guessLat"],
+      player_opponent_mate_guessLng: ["p4_guessLng", "player_opponent_mate_guessLng"],
+      player_opponent_mate_score: ["p4_score", "player_opponent_mate_score"],
+      player_opponent_mate_isBestGuess: ["p4_isBestGuess", "player_opponent_mate_isBestGuess"],
       distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
       durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"]
     },
@@ -40254,15 +39982,17 @@
         entity: "round",
         columnsPresets: {
           roundMode: [
-            "ts",
-            "gameId",
-            "roundNumber",
-            "true_country",
-            "player_self_country",
-            "player_self_score",
-            "player_opponent_score",
-            "durationSeconds",
-            "distanceKm"
+            { key: "ts", label: "Date", sortable: true },
+            { key: "result", label: "Result", sortable: true, colored: true },
+            { key: "roundNumber", label: "Round", sortable: true },
+            { key: "player_self_score", label: "Score", sortable: true },
+            { key: "true_country", label: "Country", sortable: true },
+            { key: "durationSeconds", label: "Guess Duration", sortable: true },
+            { key: "damage", label: "Damage", sortable: true, colored: true },
+            { key: "teammateName", label: "Mate", sortable: true },
+            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
+            { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
+            { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
           ]
         },
         defaultPreset: "roundMode"
@@ -40298,7 +40028,205 @@
     dashboard: {
       id: "default",
       title: "GeoAnalyzr",
+      globalFilters: {
+        enabled: true,
+        layout: { variant: "compact" },
+        controls: [
+          {
+            id: "dateRange",
+            type: "date_range",
+            label: "From / To",
+            default: { fromTs: null, toTs: null },
+            appliesTo: ["round", "game", "session"]
+          },
+          {
+            id: "movement",
+            type: "select",
+            label: "Movement",
+            dimension: "movement_type",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"]
+          },
+          {
+            id: "teammate",
+            type: "select",
+            label: "Teammate",
+            dimension: "teammate_name",
+            default: "all",
+            options: "auto_teammates",
+            appliesTo: ["round"]
+          },
+          {
+            id: "guessTimeBucket",
+            type: "select",
+            label: "Guess time",
+            dimension: "duration_bucket",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"]
+          },
+          {
+            id: "country",
+            type: "select",
+            label: "Country",
+            dimension: "true_country",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"]
+          }
+        ],
+        buttons: { apply: false, reset: true }
+      },
       sections: [
+        {
+          id: "overview",
+          title: "Overview",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_overview_main",
+                title: "Overview",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 22,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_overview_facts",
+                      type: "stat_list",
+                      title: "Results, Win Rate & Ratings",
+                      grain: "game",
+                      placement: { x: 0, y: 0, w: 12, h: 7 },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Games",
+                            measure: "games_count",
+                            actions: {
+                              click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false }
+                            }
+                          },
+                          {
+                            label: "Wins",
+                            measure: "win_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Win rate",
+                            measure: "win_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
+                          },
+                          { label: "Avg end rating", measure: "end_rating_avg" },
+                          { label: "Avg rating delta", measure: "rating_delta_avg" }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_overview_mode_breakdown",
+                      type: "breakdown",
+                      title: "Mode Breakdown",
+                      grain: "game",
+                      placement: { x: 0, y: 7, w: 12, h: 4 },
+                      spec: {
+                        dimension: "mode_family",
+                        measure: "games_count",
+                        sort: { mode: "desc" },
+                        limit: 12,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_overview_movement_breakdown",
+                      type: "breakdown",
+                      title: "Movement Breakdown",
+                      grain: "round",
+                      placement: { x: 0, y: 11, w: 12, h: 4 },
+                      spec: {
+                        dimension: "movement_type",
+                        measure: "rounds_count",
+                        sort: { mode: "desc" },
+                        limit: 12,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_overview_time_progression",
+                      type: "chart",
+                      title: "Time progression metrics",
+                      grain: "round",
+                      placement: { x: 0, y: 15, w: 12, h: 7 },
+                      spec: {
+                        type: "line",
+                        x: { dimension: "time_day" },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "end_rating_avg",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count",
+                          accumulations: ["period", "to_date"],
+                          activeAccumulation: "to_date"
+                        },
+                        sort: { mode: "chronological" },
+                        actions: { hover: true }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
         {
           id: "scores",
           title: "Scores",
@@ -40453,7 +40381,8 @@
                           measures: ["fivek_rate", "throw_rate", "hit_rate"],
                           activeMeasure: "fivek_rate"
                         },
-                        sort: { mode: "chronological" },
+                        sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
+                        activeSort: { mode: "desc" },
                         actions: {
                           hover: true,
                           click: {
@@ -40537,6 +40466,33 @@
                     }
                   ]
                 }
+              },
+              {
+                cardId: "card_rating_over_time",
+                title: "Rating over time",
+                x: 0,
+                y: 40,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_rating_over_time",
+                      type: "chart",
+                      title: "Avg end rating by day",
+                      grain: "game",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        type: "line",
+                        x: { dimension: "time_day" },
+                        y: { measure: "end_rating_avg" },
+                        sort: { mode: "chronological" },
+                        actions: { hover: true }
+                      }
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -40566,9 +40522,11 @@
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
                         dimension: "true_country",
-                        measure: "rounds_count",
+                        measures: ["rounds_count", "avg_score", "rate_5k", "throw_rate", "hit_rate"],
+                        activeMeasure: "rounds_count",
                         sort: { mode: "desc" },
                         limit: 15,
+                        extendable: true,
                         actions: {
                           click: {
                             type: "drilldown",
@@ -40698,6 +40656,46 @@
       cursor:pointer;
     }
     .ga-body { padding: 8px 12px 16px; }
+    .ga-filters {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px 0;
+      flex-wrap:wrap;
+    }
+    .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+    .ga-filters-right { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+    .ga-filter {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:8px 10px;
+      background: var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      min-width: 200px;
+    }
+    .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-filter-row { display:flex; gap:8px; align-items:center; }
+    .ga-filter select, .ga-filter input[type="date"] {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:6px 8px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .ga-filter-btn {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:10px;
+      padding:7px 10px;
+      cursor:pointer;
+      font-size:12px;
+      height: 34px;
+    }
     .ga-tabs { display:flex; gap:8px; padding:10px; }
     .ga-tab {
       background:var(--ga-control-bg);
@@ -40760,25 +40758,95 @@
       transform: scaleY(0);
       opacity: 0.25;
     }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-path {
+      stroke-dashoffset: var(--ga-line-length);
+      opacity: 0.65;
+    }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-dot {
+      transform: scale(0);
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+    }
     .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-bar {
       transform: none !important;
       opacity: 0.72 !important;
       animation: none !important;
     }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-path {
+      stroke-dasharray: none !important;
+      stroke-dashoffset: 0 !important;
+      animation: none !important;
+      opacity: 0.9 !important;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-dot {
+      transform: none !important;
+      animation: none !important;
+      opacity: 0.95 !important;
+    }
     @keyframes ga-bar-rise {
       from { transform: scaleY(0); opacity: 0.25; }
       to { transform: scaleY(1); opacity: 0.72; }
     }
+    @keyframes ga-line-draw {
+      from { stroke-dashoffset: var(--ga-line-length); opacity: 0.65; }
+      to { stroke-dashoffset: 0; opacity: 0.9; }
+    }
+    @keyframes ga-dot-in {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 0.95; }
+    }
     .ga-chart-svg[data-anim-state="run"] .ga-chart-bar {
       animation: ga-bar-rise 420ms ease-out both;
     }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-path {
+      animation: ga-line-draw 520ms ease-out both;
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-dot {
+      animation: ga-dot-in 220ms ease-out both;
+      animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
+    }
     .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
+    .ga-breakdown-header {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-end;
+      margin: 2px 0 8px 0;
+      font-size: 11px;
+      letter-spacing: 0.15px;
+      color: color-mix(in srgb, var(--ga-text) 78%, transparent);
+    }
+    .ga-breakdown-header-left { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight: 650; }
+    .ga-breakdown-header-right { flex:1; text-align:right; font-weight: 650; }
+    .ga-breakdown-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-breakdown-ctl-label { opacity: 0.9; font-weight: 650; }
+    .ga-breakdown-ctl-select {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:3px 8px;
+      font-size:12px;
+      max-width: min(360px, 62vw);
+    }
     .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
     .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
     .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
     .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
     .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
+    .ga-breakdown-footer { display:flex; justify-content:flex-end; margin-top: 10px; }
+    .ga-breakdown-toggle {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:8px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .ga-breakdown-toggle:hover { filter: brightness(1.02); }
     .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
     .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background:rgba(0,0,0,0.6); }
     .ga-drilldown-panel {
@@ -40792,22 +40860,61 @@
       background:var(--ga-surface);
       border:1px solid var(--ga-border);
       border-radius:14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
     }
-    .ga-drilldown-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid var(--ga-border); }
+    .ga-drilldown-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid var(--ga-border);
+      background: var(--ga-surface);
+      backdrop-filter: blur(8px);
+    }
+    .ga-drilldown-title {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
     .ga-drilldown-close {
       background: var(--ga-control-bg);
       border:1px solid var(--ga-control-border);
       color: var(--ga-control-text);
       border-radius:10px;
-      padding:6px 10px;
+      width: 30px;
+      height: 30px;
+      padding:0;
       cursor:pointer;
     }
-    .ga-drilldown-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .ga-drilldown-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
     .ga-drilldown-table th, .ga-drilldown-table td {
       padding:8px 10px;
       border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
       text-align:left;
     }
+    .ga-drilldown-table thead th {
+      position: sticky;
+      top: 52px;
+      z-index: 4;
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--ga-text) 14%, transparent);
+      font-weight: 600;
+      color: color-mix(in srgb, var(--ga-text) 85%, transparent);
+    }
+    .ga-dd-th.ga-dd-sortable { cursor: pointer; user-select: none; }
+    .ga-dd-th.ga-dd-sortable:hover { background: color-mix(in srgb, var(--ga-text) 6%, transparent); }
+    .ga-dd-tr:hover td { background: color-mix(in srgb, var(--ga-text) 5%, transparent); }
+    .ga-dd-tr.ga-dd-no-sep td { border-bottom-color: transparent; }
+    .ga-dd-link {
+      color: #2f8f3c;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .ga-dd-pos { color: #2f8f3c; font-variant-numeric: tabular-nums; }
+    .ga-dd-neg { color: #c23b3b; font-variant-numeric: tabular-nums; }
     .ga-settings-panel {
       position:absolute;
       top:8%;
@@ -40950,7 +41057,18 @@
     try {
       const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
       if (!raw) return cloneTemplate(fallback);
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      const merged = {
+        ...cloneTemplate(fallback),
+        ...parsed,
+        dashboard: {
+          ...cloneTemplate(fallback).dashboard,
+          ...parsed.dashboard,
+          globalFilters: parsed.dashboard?.globalFilters ?? cloneTemplate(fallback).dashboard.globalFilters,
+          sections: Array.isArray(parsed.dashboard?.sections) ? parsed.dashboard.sections : cloneTemplate(fallback).dashboard.sections
+        }
+      };
+      return merged;
     } catch {
       return cloneTemplate(fallback);
     }
@@ -40973,7 +41091,21 @@
 
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
-    const { doc, targetWindow, root, openButton, semantic, getDashboard, applyDashboard, getSettings, applySettings } = opts;
+    const {
+      doc,
+      targetWindow,
+      root,
+      openButton,
+      semantic,
+      getDashboard,
+      applyDashboard,
+      getSettings,
+      applySettings
+    } = opts;
+    const cloneDashboard = (value) => {
+      if (typeof structuredClone === "function") return structuredClone(value);
+      return JSON.parse(JSON.stringify(value));
+    };
     const settingsModal = doc.createElement("div");
     settingsModal.className = "ga-settings-modal";
     settingsModal.style.display = "none";
@@ -41184,6 +41316,1953 @@
     });
   }
 
+  // src/ui/drilldownOverlay.ts
+  var DrilldownOverlay = class {
+    root;
+    doc;
+    modal;
+    constructor(root) {
+      this.root = root;
+      this.doc = root.ownerDocument;
+      this.modal = this.doc.createElement("div");
+      this.modal.className = "ga-drilldown-modal";
+      this.modal.style.display = "none";
+      this.root.appendChild(this.modal);
+    }
+    getDocument() {
+      return this.doc;
+    }
+    open(semantic, req) {
+      this.modal.innerHTML = "";
+      this.modal.style.display = "block";
+      const bg = this.doc.createElement("div");
+      bg.className = "ga-drilldown-bg";
+      bg.addEventListener("click", () => this.close());
+      const panel = this.doc.createElement("div");
+      panel.className = "ga-drilldown-panel";
+      const header = this.doc.createElement("div");
+      header.className = "ga-drilldown-header";
+      const hTitle = this.doc.createElement("div");
+      hTitle.className = "ga-drilldown-title";
+      hTitle.textContent = `${req.title} (${req.rows.length})`;
+      const btn = this.doc.createElement("button");
+      btn.className = "ga-drilldown-close";
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Close");
+      btn.textContent = "X";
+      btn.addEventListener("click", () => this.close());
+      header.appendChild(hTitle);
+      header.appendChild(btn);
+      const preset = semantic.drilldownPresets[req.target];
+      const dateFormat = this.readDateFormatMode();
+      const rawCols = preset?.columnsPresets?.[req.columnsPreset] ?? [];
+      const cols = rawCols.map((c) => typeof c === "string" ? { key: c } : c);
+      let sortKey = cols.find((c) => c.sortable)?.key ?? cols[0]?.key ?? "";
+      let sortDir = "desc";
+      const sortRankForResult = (v) => {
+        const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+        if (s === "win" || s === "w" || s === "true") return 2;
+        if (s === "tie" || s === "t") return 1;
+        if (s === "loss" || s === "l" || s === "false") return 0;
+        return -1;
+      };
+      const getSortValue = (row, col) => {
+        const key = col.key;
+        const v = this.getCellRawValue(row, key, semantic);
+        if (key === "result") return sortRankForResult(v);
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+        const s = typeof v === "string" ? v : String(v ?? "");
+        const k = key.toLowerCase();
+        if ((k.includes("date") || k.includes("time") || k.includes("playedat") || k.includes("ts")) && s) {
+          const parsed = Date.parse(s);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+        return s.toLowerCase();
+      };
+      const isSameGame = (a, b) => {
+        const ga = pickWithAliases(a, "gameId", semantic.columnAliases);
+        const gb = pickWithAliases(b, "gameId", semantic.columnAliases);
+        return typeof ga === "string" && typeof gb === "string" && ga.length > 0 && ga === gb;
+      };
+      const sortRows2 = (rows) => {
+        const col = cols.find((c) => c.key === sortKey);
+        if (!col) return rows;
+        const sorted = [...rows].sort((a, b) => {
+          const av = getSortValue(a, col);
+          const bv = getSortValue(b, col);
+          if (typeof av === "number" && typeof bv === "number") return sortDir === "asc" ? av - bv : bv - av;
+          return sortDir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+        });
+        return sorted;
+      };
+      const table = this.doc.createElement("table");
+      table.className = "ga-drilldown-table";
+      const thead = this.doc.createElement("thead");
+      const trh = this.doc.createElement("tr");
+      thead.appendChild(trh);
+      const tbody = this.doc.createElement("tbody");
+      const renderHeader = () => {
+        trh.innerHTML = "";
+        for (const c of cols) {
+          const th = this.doc.createElement("th");
+          th.className = "ga-dd-th";
+          const label = c.label ?? c.key;
+          if (c.sortable) {
+            th.classList.add("ga-dd-sortable");
+            const arrow = c.key === sortKey ? sortDir === "asc" ? " ^" : " v" : "";
+            th.textContent = `${label}${arrow}`;
+            th.addEventListener("click", () => {
+              if (sortKey === c.key) sortDir = sortDir === "asc" ? "desc" : "asc";
+              else {
+                sortKey = c.key;
+                sortDir = "desc";
+              }
+              renderBody(true);
+              renderHeader();
+            });
+          } else {
+            th.textContent = label;
+          }
+          trh.appendChild(th);
+        }
+      };
+      const renderBody = (reset = false) => {
+        const rows = sortRows2(req.rows);
+        if (reset) tbody.innerHTML = "";
+        tbody.innerHTML = "";
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          const tr = this.doc.createElement("tr");
+          tr.className = "ga-dd-tr";
+          const next = rows[i + 1];
+          if (next && isSameGame(r, next)) tr.classList.add("ga-dd-no-sep");
+          for (const c of cols) {
+            const td = this.doc.createElement("td");
+            td.className = "ga-dd-td";
+            this.renderCell(td, r, c, semantic, dateFormat);
+            tr.appendChild(td);
+          }
+          tbody.appendChild(tr);
+        }
+      };
+      renderHeader();
+      renderBody(true);
+      table.appendChild(thead);
+      table.appendChild(tbody);
+      panel.appendChild(header);
+      panel.appendChild(table);
+      this.modal.appendChild(bg);
+      this.modal.appendChild(panel);
+    }
+    close() {
+      this.modal.style.display = "none";
+    }
+    readDateFormatMode() {
+      const root = this.root;
+      const mode = root.dataset?.gaDateFormat;
+      return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+    }
+    formatDate(ts, mode) {
+      const d = new Date(ts);
+      if (!Number.isFinite(d.getTime())) return String(ts);
+      if (mode === "locale") return d.toLocaleString();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      const ss = String(d.getSeconds()).padStart(2, "0");
+      if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+      if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+      return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+    }
+    formatCellValue(value, columnName, dateMode) {
+      if (value === void 0 || value === null) return "";
+      const col = columnName.toLowerCase();
+      const looksLikeDateColumn = col === "ts" || col === "playedat" || col === "starttime" || col === "endtime" || col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
+      if (typeof value === "number" && Number.isFinite(value)) {
+        if (looksLikeDateColumn && value > 9466848e5 && value < 41024448e5) {
+          return this.formatDate(value, dateMode);
+        }
+        return String(value);
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (looksLikeDateColumn) {
+          if (/^[0-9]{10,13}$/.test(trimmed)) {
+            const n = Number(trimmed);
+            if (Number.isFinite(n)) {
+              const ts = trimmed.length === 10 ? n * 1e3 : n;
+              if (ts > 9466848e5 && ts < 41024448e5) return this.formatDate(ts, dateMode);
+            }
+          }
+          const parsed = Date.parse(trimmed);
+          if (Number.isFinite(parsed)) return this.formatDate(parsed, dateMode);
+        }
+        return value;
+      }
+      return String(value);
+    }
+    movementLabel(v) {
+      const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+      if (!s) return "";
+      if (s === "moving") return "Moving";
+      if (s === "no_move" || s === "nomove" || s.includes("no move")) return "No Move";
+      if (s === "nmpz" || s.includes("nmpz")) return "NMPZ";
+      return v;
+    }
+    gameModeLabel(v) {
+      const s = typeof v === "string" ? v.trim() : "";
+      const k = s.toLowerCase();
+      if (!k) return "";
+      if (k === "duels" || k === "duel") return "Duel";
+      if (k === "teamduels" || k === "teamduel" || k.includes("team") && k.includes("duel")) return "Team Duel";
+      return s;
+    }
+    getCellRawValue(row, key, semantic) {
+      const pickNum = (k) => {
+        const v = pickWithAliases(row, k, semantic.columnAliases);
+        return typeof v === "number" && Number.isFinite(v) ? v : void 0;
+      };
+      const pickBool = (k) => {
+        const v = pickWithAliases(row, k, semantic.columnAliases);
+        return typeof v === "boolean" ? v : void 0;
+      };
+      const bestOwnGuess = () => {
+        const mf = String(row?.modeFamily ?? "").toLowerCase();
+        if (mf !== "teamduels") {
+          return {
+            lat: pickNum("player_self_guessLat"),
+            lng: pickNum("player_self_guessLng"),
+            score: pickNum("player_self_score")
+          };
+        }
+        const self2 = {
+          lat: pickNum("player_self_guessLat"),
+          lng: pickNum("player_self_guessLng"),
+          score: pickNum("player_self_score"),
+          best: pickBool("player_self_isBestGuess")
+        };
+        const mate = {
+          lat: pickNum("player_mate_guessLat"),
+          lng: pickNum("player_mate_guessLng"),
+          score: pickNum("player_mate_score"),
+          best: pickBool("player_mate_isBestGuess")
+        };
+        if (mate.best === true && self2.best !== true) return mate;
+        if (self2.best === true && mate.best !== true) return self2;
+        if (typeof mate.score === "number" && typeof self2.score === "number") return mate.score > self2.score ? mate : self2;
+        if (typeof mate.score === "number") return mate;
+        return self2;
+      };
+      if (key === "guess_maps") {
+        const g = bestOwnGuess();
+        if (typeof g.lat === "number" && typeof g.lng === "number") return `https://www.google.com/maps?q=${g.lat},${g.lng}`;
+        return void 0;
+      }
+      if (key === "street_view") {
+        const lat = pickWithAliases(row, "trueLat", semantic.columnAliases);
+        const lng = pickWithAliases(row, "trueLng", semantic.columnAliases);
+        if (typeof lat === "number" && typeof lng === "number") return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+        return void 0;
+      }
+      if (key === "player_self_score") {
+        const mf = String(row?.modeFamily ?? "").toLowerCase();
+        if (mf === "teamduels") {
+          const g = bestOwnGuess();
+          if (typeof g.score === "number") return g.score;
+        }
+      }
+      return pickWithAliases(row, key, semantic.columnAliases);
+    }
+    renderCell(td, row, col, semantic, dateMode) {
+      const key = col.key;
+      const raw = this.getCellRawValue(row, key, semantic);
+      if (col.type === "link" || key === "guess_maps" || key === "street_view") {
+        const href = typeof raw === "string" ? raw : "";
+        if (!href) return;
+        const a = this.doc.createElement("a");
+        a.className = "ga-dd-link";
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = col.link?.label ?? "Open";
+        td.appendChild(a);
+        return;
+      }
+      let text = this.formatCellValue(raw, key, dateMode);
+      if (key === "movementType" || key === "movement_type" || key === "movement") {
+        const lbl = this.movementLabel(raw);
+        if (lbl) text = String(lbl);
+      }
+      if (key === "gameMode" || key === "game_mode" || key === "modeFamily") {
+        const lbl = this.gameModeLabel(raw);
+        if (lbl) text = String(lbl);
+      }
+      if (key === "result") {
+        if (typeof raw === "boolean") text = raw ? "Win" : "Loss";
+        else if (typeof raw === "string") text = raw;
+        else text = "-";
+      }
+      if (key === "durationSeconds" && typeof raw === "number" && Number.isFinite(raw)) {
+        text = `${raw.toFixed(1)}s`;
+      }
+      if (key === "damage" && typeof raw === "number" && Number.isFinite(raw)) {
+        const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
+        text = signed;
+      }
+      if ((key === "true_country" || key === "trueCountry") && typeof raw === "string") {
+        const iso2 = raw.trim().toUpperCase();
+        if (/^[A-Z]{2}$/.test(iso2) && typeof Intl !== "undefined" && Intl.DisplayNames) {
+          try {
+            const dn = new Intl.DisplayNames(["en"], { type: "region" });
+            text = dn.of(iso2) ?? raw;
+          } catch {
+          }
+        }
+      }
+      if (key === "gameId" && col.display?.truncate) {
+        const head = typeof col.display.truncateHead === "number" ? col.display.truncateHead : 8;
+        const s = typeof raw === "string" ? raw : text;
+        if (s.length > head + 3) text = `${s.slice(0, head)}...`;
+      }
+      const span = this.doc.createElement("span");
+      span.textContent = text;
+      if (col.colored) {
+        if (key === "result") {
+          const s = (typeof raw === "string" ? raw : String(raw ?? "")).trim().toLowerCase();
+          if (s === "win" || s === "w" || s === "true") span.classList.add("ga-dd-pos");
+          else if (s === "loss" || s === "l" || s === "false") span.classList.add("ga-dd-neg");
+        }
+        if (key === "damage" && typeof raw === "number" && Number.isFinite(raw)) {
+          if (raw > 0) span.classList.add("ga-dd-pos");
+          else if (raw < 0) span.classList.add("ga-dd-neg");
+        }
+      }
+      td.appendChild(span);
+    }
+  };
+
+  // src/engine/measures.ts
+  function is5k(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s >= 5e3;
+  }
+  function isHit(r) {
+    const truth = getTrueCountry(r);
+    if (!truth) return false;
+    const guess = getGuessCountrySelf(r);
+    return typeof guess === "string" && guess === truth;
+  }
+  function isThrowLt50(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s < 50;
+  }
+  function getGameSelfVictory(g) {
+    const v = pick(g, "player_self_victory") ?? pick(g, "playerOneVictory") ?? pick(g, "teamOneVictory");
+    return typeof v === "boolean" ? v : void 0;
+  }
+  function getGameSelfStartRating(g) {
+    const v = pick(g, "player_self_startRating") ?? pick(g, "playerOneStartRating") ?? pick(g, "teamOneStartRating");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getGameSelfEndRating(g) {
+    const v = pick(g, "player_self_endRating") ?? pick(g, "playerOneEndRating") ?? pick(g, "teamOneEndRating");
+    return typeof v === "number" ? v : void 0;
+  }
+  var ROUND_MEASURES_BY_FORMULA_ID = {
+    count_rounds: (rows) => rows.length,
+    mean_player_self_score: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const s = getSelfScore(r);
+        if (typeof s === "number") {
+          sum2 += s;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    rate_player_self_score_eq_5000: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (is5k(r)) k++;
+      return k / n;
+    },
+    rate_true_country_hit: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isHit(r)) k++;
+      return k / n;
+    },
+    rate_throw_round: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isThrowLt50(r)) k++;
+      return k / n;
+    },
+    count_5k_round: (rows) => {
+      let k = 0;
+      for (const r of rows) if (is5k(r)) k++;
+      return k;
+    },
+    count_hit_round: (rows) => {
+      let k = 0;
+      for (const r of rows) if (isHit(r)) k++;
+      return k;
+    },
+    count_throw_round: (rows) => {
+      let k = 0;
+      for (const r of rows) if (isThrowLt50(r)) k++;
+      return k;
+    },
+    mean_player_self_score_hit_only: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        if (!isHit(r)) continue;
+        const s = getSelfScore(r);
+        if (typeof s === "number") {
+          sum2 += s;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    mean_duration_seconds: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const v = getDurationSeconds(r);
+        if (typeof v === "number" && Number.isFinite(v)) {
+          sum2 += v;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    mean_player_self_distance_km: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const v = getDistanceKm(r);
+        if (typeof v === "number" && Number.isFinite(v)) {
+          sum2 += v;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    mean_damage_dealt: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const dmg = r.damage;
+        if (typeof dmg === "number" && Number.isFinite(dmg)) {
+          sum2 += Math.max(0, dmg);
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    mean_damage_taken: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const dmg = r.damage;
+        if (typeof dmg === "number" && Number.isFinite(dmg)) {
+          sum2 += Math.max(0, -dmg);
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    }
+  };
+  var GAME_MEASURES_BY_FORMULA_ID = {
+    count_games: (rows) => rows.length,
+    rate_player_self_win: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const g of rows) if (getGameSelfVictory(g) === true) k++;
+      return k / n;
+    },
+    mean_player_self_end_rating: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const g of rows) {
+        const v = getGameSelfEndRating(g);
+        if (typeof v === "number") {
+          sum2 += v;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    mean_player_self_rating_delta: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const g of rows) {
+        const start = getGameSelfStartRating(g);
+        const end = getGameSelfEndRating(g);
+        if (typeof start === "number" && typeof end === "number") {
+          sum2 += end - start;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    count_win_game: (rows) => {
+      let k = 0;
+      for (const g of rows) if (getGameSelfVictory(g) === true) k++;
+      return k;
+    }
+  };
+  var MEASURES_BY_GRAIN = {
+    round: ROUND_MEASURES_BY_FORMULA_ID,
+    game: GAME_MEASURES_BY_FORMULA_ID,
+    session: {}
+  };
+
+  // src/ui/widgets/statListWidget.ts
+  function formatValue(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      return `${(value * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    const decimals = unit.decimals ?? 1;
+    return value.toFixed(decimals);
+  }
+  async function computeMeasure(semantic, measureId, baseRows, grain, filters) {
+    const m = semantic.measures[measureId];
+    if (!m) return 0;
+    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+    const rows = applyFilters(rowsAll, filters, grain);
+    const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
+    if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
+    return fn(rows);
+  }
+  function attachClickIfAny(el, actions, overlay, semantic, title, baseRows, grain) {
+    const click = actions?.click;
+    if (!click) return;
+    el.style.cursor = "pointer";
+    el.addEventListener("click", async () => {
+      if (click.type === "drilldown") {
+        const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+        const rows = applyFilters(rowsAll, click.extraFilters, grain);
+        overlay.open(semantic, {
+          title,
+          target: click.target,
+          columnsPreset: click.columnsPreset,
+          rows,
+          extraFilters: click.extraFilters
+        });
+      }
+    });
+  }
+  async function renderStatListWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const grain = widget.grain;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-statlist";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = doc.createElement("div");
+    box.className = "ga-statlist-box";
+    for (const row of spec.rows) {
+      const line = doc.createElement("div");
+      line.className = "ga-statrow";
+      const left = doc.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = row.label;
+      const right = doc.createElement("div");
+      right.className = "ga-statrow-value";
+      right.textContent = "...";
+      const val = await computeMeasure(semantic, row.measure, baseRows, grain, row.filters);
+      right.textContent = formatValue(semantic, row.measure, val);
+      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, baseRows, grain);
+      line.appendChild(left);
+      line.appendChild(right);
+      box.appendChild(line);
+    }
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/engine/aggregate.ts
+  function groupByKey(rows, keyFn) {
+    const m = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const k = keyFn(r);
+      if (!k) continue;
+      const arr = m.get(k);
+      if (arr) arr.push(r);
+      else m.set(k, [r]);
+    }
+    return m;
+  }
+
+  // src/ui/widgets/chartWidget.ts
+  function sortKeysChronological(keys2) {
+    const weekdayRank = (k) => {
+      const v = k.trim().toLowerCase();
+      if (v === "mon") return 0;
+      if (v === "tue") return 1;
+      if (v === "wed") return 2;
+      if (v === "thu") return 3;
+      if (v === "fri") return 4;
+      if (v === "sat") return 5;
+      if (v === "sun") return 6;
+      return void 0;
+    };
+    const weekdayKeys = keys2.map((k) => weekdayRank(k));
+    if (weekdayKeys.every((r) => r !== void 0)) {
+      return [...keys2].sort((a, b) => (weekdayRank(a) ?? 0) - (weekdayRank(b) ?? 0));
+    }
+    const parseKey = (k) => {
+      const first = k.split("-")[0] ?? k;
+      const t = first.trim();
+      if (t.startsWith("<")) return -1;
+      if (t.startsWith(">")) return 1e9;
+      const parsed = Number(t.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(parsed) ? parsed : void 0;
+    };
+    return [...keys2].sort((a, b) => {
+      const na = parseKey(a);
+      const nb = parseKey(b);
+      if (na !== void 0 && nb !== void 0) return na - nb;
+      if (na !== void 0) return -1;
+      if (nb !== void 0) return 1;
+      return a.localeCompare(b);
+    });
+  }
+  function sortData(data, mode) {
+    if (mode === "chronological") {
+      const keys2 = sortKeysChronological(data.map((d) => d.x));
+      const rank = new Map(keys2.map((k, i) => [k, i]));
+      return [...data].sort((a, b) => (rank.get(a.x) ?? 0) - (rank.get(b.x) ?? 0));
+    }
+    if (mode === "asc") return [...data].sort((a, b) => a.y - b.y);
+    if (mode === "desc") return [...data].sort((a, b) => b.y - a.y);
+    return data;
+  }
+  function getSortModes(spec) {
+    const out = [];
+    const single = spec.sort?.mode;
+    if (single) out.push(single);
+    if (Array.isArray(spec.sorts)) {
+      for (const s of spec.sorts) {
+        const mode = s?.mode;
+        if (!mode) continue;
+        if (!out.includes(mode)) out.push(mode);
+      }
+    }
+    return out;
+  }
+  function sortLabel(mode) {
+    if (mode === "chronological") return "Chronological";
+    if (mode === "asc") return "Ascending";
+    return "Descending";
+  }
+  function accumulationLabel(mode) {
+    return mode === "to_date" ? "To date" : "Per period";
+  }
+  function toDayKey(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function dayKeysBetween(fromTs, toTs2) {
+    const out = [];
+    const start = new Date(fromTs);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(toTs2);
+    end.setHours(0, 0, 0, 0);
+    for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1e3) {
+      out.push(toDayKey(t));
+    }
+    return out;
+  }
+  function getMeasureIds(spec) {
+    const out = [];
+    const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
+    if (single) out.push(single);
+    if (Array.isArray(spec.y.measures)) {
+      for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || out.includes(clean)) continue;
+        out.push(clean);
+      }
+    }
+    return out;
+  }
+  function formatMeasureValue(semantic, measureId, value) {
+    const measure = semantic.measures[measureId];
+    const unit = measure ? semantic.units[measure.unit] : void 0;
+    if (!unit) return `${value}`;
+    if (unit.format === "percent") {
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
+    }
+    if (unit.format === "int") return `${Math.round(value)}`;
+    return value.toFixed(unit.decimals ?? 1);
+  }
+  function clampForMeasure(semantic, measureId, value) {
+    const measure = semantic.measures[measureId];
+    const unit = measure ? semantic.units[measure.unit] : void 0;
+    if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
+    return value;
+  }
+  function niceUpperBound(maxValue) {
+    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
+    const exp = Math.floor(Math.log10(maxValue));
+    const base = 10 ** exp;
+    const n = maxValue / base;
+    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+    return nice * base;
+  }
+  function normalizeHexColor(value) {
+    if (typeof value !== "string") return void 0;
+    const v = value.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : void 0;
+  }
+  function isAnimationsEnabled(doc) {
+    const root = doc.getElementById("geoanalyzr-semantic-root");
+    return root?.getAttribute("data-ga-chart-animations") !== "off";
+  }
+  function maybeAnimateChartSvg(svg, doc) {
+    if (!isAnimationsEnabled(doc)) {
+      svg.setAttribute("data-anim-state", "off");
+      return;
+    }
+    svg.setAttribute("data-anim-state", "pending");
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          svg.setAttribute("data-anim-state", "run");
+          obs.disconnect();
+          return;
+        }
+      },
+      { threshold: 0.15 }
+    );
+    obs.observe(svg);
+  }
+  function sanitizeFileName2(name) {
+    const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
+    return out.length > 0 ? out : "chart";
+  }
+  function triggerDownload2(doc, blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = doc.createElement("a");
+    a.href = url;
+    a.download = filename;
+    doc.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  }
+  function serializeSvg(svg) {
+    const clone = svg.cloneNode(true);
+    if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.removeAttribute("data-anim-state");
+    const vb = clone.getAttribute("viewBox")?.trim().split(/\s+/).map(Number) ?? [];
+    const width = Number.isFinite(vb[2]) && vb[2] > 0 ? vb[2] : 1200;
+    const height = Number.isFinite(vb[3]) && vb[3] > 0 ? vb[3] : 360;
+    clone.setAttribute("width", String(width));
+    clone.setAttribute("height", String(height));
+    return { text: new XMLSerializer().serializeToString(clone), width, height };
+  }
+  async function downloadSvg2(doc, svg, title) {
+    const { text } = serializeSvg(svg);
+    const blob = new Blob([text], { type: "image/svg+xml;charset=utf-8" });
+    triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.svg`);
+  }
+  async function downloadPng2(doc, svg, title) {
+    const prepared = serializeSvg(svg);
+    const svgBlob = new Blob([prepared.text], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Could not render chart image."));
+        img.src = url;
+      });
+      const canvas = doc.createElement("canvas");
+      canvas.width = prepared.width;
+      canvas.height = prepared.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas context unavailable.");
+      ctx.drawImage(img, 0, 0, prepared.width, prepared.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+      if (blob) {
+        triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.png`);
+        return;
+      }
+      const dataUrl = canvas.toDataURL("image/png");
+      const fallbackBlob = await (await fetch(dataUrl)).blob();
+      triggerDownload2(doc, fallbackBlob, `${sanitizeFileName2(title)}.png`);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  function prepareLineAnimation(path) {
+    const len = Math.max(1, Math.ceil(path.getTotalLength()));
+    path.style.setProperty("--ga-line-length", String(len));
+    path.style.strokeDasharray = `${len}`;
+    path.style.strokeDashoffset = `${len}`;
+  }
+  async function renderChartWidget(semantic, widget, overlay, datasets, context) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-chart";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const controls = doc.createElement("div");
+    controls.className = "ga-chart-controls";
+    const controlsLeft = doc.createElement("div");
+    controlsLeft.className = "ga-chart-controls-left";
+    controls.appendChild(controlsLeft);
+    const actionsRight = doc.createElement("div");
+    actionsRight.className = "ga-chart-actions";
+    controls.appendChild(actionsRight);
+    const box = doc.createElement("div");
+    box.className = "ga-chart-box";
+    const chartHost = doc.createElement("div");
+    chartHost.className = "ga-chart-host";
+    box.appendChild(chartHost);
+    const dimId = spec.x.dimension;
+    const dimDef = semantic.dimensions[dimId];
+    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in widget ${widget.widgetId}`);
+    const measureIds = getMeasureIds(spec);
+    if (measureIds.length === 0) throw new Error(`Widget ${widget.widgetId} has no y.measure or y.measures`);
+    const colorOverride = normalizeHexColor(spec.color);
+    const sortModes = getSortModes(spec);
+    let activeSortMode = spec.activeSort?.mode ?? spec.sort?.mode ?? sortModes[0];
+    if (activeSortMode && !sortModes.includes(activeSortMode)) sortModes.unshift(activeSortMode);
+    let activeMeasure = measureIds.includes(spec.y.activeMeasure || "") ? spec.y.activeMeasure : measureIds[0];
+    const accModes = [];
+    const singleAcc = spec.y.accumulation;
+    if (singleAcc) accModes.push(singleAcc);
+    if (Array.isArray(spec.y.accumulations)) {
+      for (const a of spec.y.accumulations) {
+        if (!a) continue;
+        if (!accModes.includes(a)) accModes.push(a);
+      }
+    }
+    let activeAcc = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
+    if (!accModes.includes(activeAcc)) accModes.unshift(activeAcc);
+    let currentSvg = null;
+    const mkActionBtn = (label, onClick) => {
+      const btn = doc.createElement("button");
+      btn.type = "button";
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      return btn;
+    };
+    actionsRight.appendChild(
+      mkActionBtn("Save PNG", () => {
+        if (currentSvg) void downloadPng2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+      })
+    );
+    actionsRight.appendChild(
+      mkActionBtn("Save SVG", () => {
+        if (currentSvg) void downloadSvg2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+      })
+    );
+    if (sortModes.length > 1) {
+      const label = doc.createElement("label");
+      label.style.fontSize = "12px";
+      label.style.opacity = "0.9";
+      label.textContent = "Sort:";
+      const select = doc.createElement("select");
+      select.style.background = "var(--ga-control-bg)";
+      select.style.color = "var(--ga-control-text)";
+      select.style.border = "1px solid var(--ga-control-border)";
+      select.style.borderRadius = "8px";
+      select.style.padding = "4px 8px";
+      for (const mode of sortModes) {
+        const option = doc.createElement("option");
+        option.value = mode;
+        option.textContent = sortLabel(mode);
+        if (mode === activeSortMode) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener("change", () => {
+        const next = select.value;
+        if (!sortModes.includes(next)) return;
+        activeSortMode = next;
+        render();
+      });
+      controlsLeft.appendChild(label);
+      controlsLeft.appendChild(select);
+    }
+    if (accModes.length > 1 && dimId === "time_day") {
+      const label = doc.createElement("label");
+      label.style.fontSize = "12px";
+      label.style.opacity = "0.9";
+      label.textContent = "Mode:";
+      const select = doc.createElement("select");
+      select.style.background = "var(--ga-control-bg)";
+      select.style.color = "var(--ga-control-text)";
+      select.style.border = "1px solid var(--ga-control-border)";
+      select.style.borderRadius = "8px";
+      select.style.padding = "4px 8px";
+      for (const mode of accModes) {
+        const option = doc.createElement("option");
+        option.value = mode;
+        option.textContent = accumulationLabel(mode);
+        if (mode === activeAcc) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener("change", () => {
+        const next = select.value;
+        if (!accModes.includes(next)) return;
+        activeAcc = next;
+        render();
+      });
+      controlsLeft.appendChild(label);
+      controlsLeft.appendChild(select);
+    }
+    function getActiveGrain() {
+      const measDef = semantic.measures[activeMeasure];
+      return measDef?.grain ?? widget.grain;
+    }
+    function getDatasetForGrain(g) {
+      const provided = datasets?.[g];
+      if (Array.isArray(provided)) return provided;
+      if (g === "game") return [];
+      return [];
+    }
+    const buildDataForMeasure = (measureId, limitOverride) => {
+      const measDef = semantic.measures[measureId];
+      if (!measDef) return [];
+      const g = measDef.grain;
+      const rows = getDatasetForGrain(g);
+      const keyFn = DIMENSION_EXTRACTORS[g]?.[dimId];
+      if (!keyFn) return [];
+      const measureFn = MEASURES_BY_GRAIN[g]?.[measDef.formulaId];
+      if (!measureFn) return [];
+      if (dimId === "time_day") {
+        let fromTs = context?.dateRange?.fromTs ?? null;
+        let toTs2 = context?.dateRange?.toTs ?? null;
+        if (fromTs === null || toTs2 === null) {
+          const tsValues = rows.map((r) => typeof r.playedAt === "number" ? r.playedAt : typeof r.ts === "number" ? r.ts : null).filter((x) => typeof x === "number");
+          const min = tsValues.length ? Math.min(...tsValues) : null;
+          const max = tsValues.length ? Math.max(...tsValues) : null;
+          if (fromTs === null) fromTs = min;
+          if (toTs2 === null) toTs2 = max;
+        }
+        const grouped2 = groupByKey(rows, keyFn);
+        const keys3 = fromTs !== null && toTs2 !== null ? dayKeysBetween(fromTs, toTs2) : sortKeysChronological(Array.from(grouped2.keys()));
+        if (activeAcc === "to_date") {
+          const cum = [];
+          const out2 = [];
+          for (const k of keys3) {
+            const dayRows = grouped2.get(k) ?? [];
+            if (dayRows.length) cum.push(...dayRows);
+            out2.push({ x: k, y: clampForMeasure(semantic, measureId, measureFn(cum)), rows: cum.slice() });
+          }
+          return out2;
+        }
+        const out = keys3.map((k) => {
+          const dayRows = grouped2.get(k) ?? [];
+          return { x: k, y: clampForMeasure(semantic, measureId, measureFn(dayRows)), rows: dayRows };
+        });
+        return out;
+      }
+      const grouped = groupByKey(rows, keyFn);
+      const keys2 = Array.from(grouped.keys());
+      const baseData = keys2.map((k) => {
+        const rowsForKey = grouped.get(k) ?? [];
+        return { x: k, y: clampForMeasure(semantic, measureId, measureFn(rowsForKey)), rows: rowsForKey };
+      });
+      const sortedData = sortData(baseData, activeSortMode);
+      const limit = typeof limitOverride === "number" && Number.isFinite(limitOverride) && limitOverride > 0 ? limitOverride : spec.limit;
+      return typeof limit === "number" && Number.isFinite(limit) && limit > 0 ? sortedData.slice(0, Math.floor(limit)) : sortedData;
+    };
+    const render = () => {
+      chartHost.innerHTML = "";
+      currentSvg = null;
+      const measureDef = semantic.measures[activeMeasure];
+      if (!measureDef) {
+        const empty = doc.createElement("div");
+        empty.style.fontSize = "12px";
+        empty.style.opacity = "0.75";
+        empty.textContent = "No chart data available for current selection.";
+        chartHost.appendChild(empty);
+        return;
+      }
+      const W = 1200;
+      const H = 360;
+      const PAD_L = 72;
+      const PAD_B = 58;
+      const PAD_T = 16;
+      const PAD_R = 44;
+      const innerW = W - PAD_L - PAD_R;
+      const innerH = H - PAD_T - PAD_B;
+      const effectiveLimit = spec.type === "bar" && !(typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0) ? (() => {
+        const hostW = chartHost.getBoundingClientRect().width;
+        const safeHostW = hostW > 50 ? hostW : 1e3;
+        const minBarPx = 18;
+        const pxInnerW = safeHostW * (innerW / W);
+        const maxBars = Math.floor(pxInnerW / minBarPx);
+        return Math.max(6, Math.min(200, maxBars));
+      })() : void 0;
+      const data = buildDataForMeasure(activeMeasure, effectiveLimit);
+      if (data.length === 0) {
+        const empty = doc.createElement("div");
+        empty.style.fontSize = "12px";
+        empty.style.opacity = "0.75";
+        empty.textContent = "No chart data available for current selection.";
+        chartHost.appendChild(empty);
+        return;
+      }
+      const dataMax = clampForMeasure(semantic, activeMeasure, Math.max(0, ...data.map((d) => d.y)));
+      const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add("ga-chart-svg");
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      const axisX = doc.createElementNS(svg.namespaceURI, "line");
+      axisX.setAttribute("x1", String(PAD_L));
+      axisX.setAttribute("y1", String(PAD_T + innerH));
+      axisX.setAttribute("x2", String(PAD_L + innerW));
+      axisX.setAttribute("y2", String(PAD_T + innerH));
+      axisX.setAttribute("stroke", "var(--ga-axis-color)");
+      axisX.setAttribute("opacity", "0.7");
+      svg.appendChild(axisX);
+      const axisY = doc.createElementNS(svg.namespaceURI, "line");
+      axisY.setAttribute("x1", String(PAD_L));
+      axisY.setAttribute("y1", String(PAD_T));
+      axisY.setAttribute("x2", String(PAD_L));
+      axisY.setAttribute("y2", String(PAD_T + innerH));
+      axisY.setAttribute("stroke", "var(--ga-axis-color)");
+      axisY.setAttribute("opacity", "0.7");
+      svg.appendChild(axisY);
+      const tickCount = 5;
+      for (let i = 0; i <= tickCount; i++) {
+        const yVal = maxY * i / tickCount;
+        const yPos = PAD_T + innerH - yVal / maxY * innerH;
+        const grid = doc.createElementNS(svg.namespaceURI, "line");
+        grid.setAttribute("x1", String(PAD_L));
+        grid.setAttribute("y1", String(yPos));
+        grid.setAttribute("x2", String(PAD_L + innerW));
+        grid.setAttribute("y2", String(yPos));
+        grid.setAttribute("stroke", "var(--ga-axis-grid)");
+        grid.setAttribute("opacity", i === 0 ? "0.8" : "0.45");
+        svg.appendChild(grid);
+        const yTick = doc.createElementNS(svg.namespaceURI, "text");
+        yTick.setAttribute("x", String(PAD_L - 8));
+        yTick.setAttribute("y", String(yPos + 3));
+        yTick.setAttribute("text-anchor", "end");
+        yTick.setAttribute("font-size", "10");
+        yTick.setAttribute("fill", "var(--ga-axis-text)");
+        yTick.setAttribute("opacity", "0.95");
+        yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
+        svg.appendChild(yTick);
+      }
+      const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+      xAxisLabel.setAttribute("x", String(PAD_L + innerW / 2));
+      xAxisLabel.setAttribute("y", String(H - 8));
+      xAxisLabel.setAttribute("text-anchor", "middle");
+      xAxisLabel.setAttribute("font-size", "12");
+      xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
+      xAxisLabel.setAttribute("opacity", "0.95");
+      xAxisLabel.textContent = dimDef.label;
+      svg.appendChild(xAxisLabel);
+      const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+      yAxisLabel.setAttribute("x", "16");
+      yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
+      yAxisLabel.setAttribute("text-anchor", "middle");
+      yAxisLabel.setAttribute("font-size", "12");
+      yAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
+      yAxisLabel.setAttribute("opacity", "0.95");
+      yAxisLabel.setAttribute("transform", `rotate(-90 16 ${PAD_T + innerH / 2})`);
+      yAxisLabel.textContent = measureDef.label;
+      svg.appendChild(yAxisLabel);
+      if (spec.type === "line") {
+        const points = data.map((d, i) => {
+          const x = PAD_L + i / Math.max(1, data.length - 1) * innerW;
+          const y = PAD_T + innerH - clampForMeasure(semantic, activeMeasure, d.y) / maxY * innerH;
+          return { x, y, d };
+        });
+        const path = doc.createElementNS(svg.namespaceURI, "path");
+        path.classList.add("ga-chart-line-path");
+        const dPath = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+        path.setAttribute("d", dPath);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", colorOverride ?? "var(--ga-graph-color)");
+        path.setAttribute("stroke-width", "2.5");
+        path.setAttribute("opacity", "0.9");
+        svg.appendChild(path);
+        if (isAnimationsEnabled(doc)) {
+          prepareLineAnimation(path);
+        }
+        points.forEach((p, i) => {
+          const dot = doc.createElementNS(svg.namespaceURI, "circle");
+          dot.classList.add("ga-chart-line-dot");
+          dot.style.setProperty("--ga-dot-index", String(i));
+          dot.setAttribute("cx", String(p.x));
+          dot.setAttribute("cy", String(p.y));
+          dot.setAttribute("r", "3");
+          dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
+          dot.setAttribute("opacity", "0.95");
+          const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+          tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+          dot.appendChild(tooltip);
+          const click = spec.actions?.click;
+          if (click?.type === "drilldown") {
+            dot.setAttribute("style", "cursor: pointer;");
+            dot.addEventListener("click", () => {
+              const base = getDatasetForGrain(getActiveGrain());
+              const rowsFromPoint = click.filterFromPoint ? p.d.rows : base;
+              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
+              overlay.open(semantic, {
+                title: `${widget.title} - ${p.d.x}`,
+                target: click.target,
+                columnsPreset: click.columnsPreset,
+                rows: filteredRows,
+                extraFilters: click.extraFilters
+              });
+            });
+          }
+          svg.appendChild(dot);
+        });
+        maybeAnimateChartSvg(svg, doc);
+      } else {
+        const barW = innerW / Math.max(1, data.length);
+        data.forEach((d, i) => {
+          const x = PAD_L + i * barW;
+          const h = clampForMeasure(semantic, activeMeasure, d.y) / maxY * innerH;
+          const y = PAD_T + innerH - h;
+          const rect = doc.createElementNS(svg.namespaceURI, "rect");
+          rect.classList.add("ga-chart-bar");
+          rect.style.setProperty("--ga-bar-index", String(i));
+          rect.setAttribute("x", String(x + 1));
+          rect.setAttribute("y", String(y));
+          rect.setAttribute("width", String(Math.max(1, barW - 2)));
+          rect.setAttribute("height", String(Math.max(0, h)));
+          rect.setAttribute("rx", "2");
+          rect.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
+          rect.setAttribute("opacity", "0.72");
+          rect.style.animationDelay = `${Math.min(i * 18, 320)}ms`;
+          rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
+          rect.style.transformBox = "view-box";
+          const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+          tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
+          rect.appendChild(tooltip);
+          const click = spec.actions?.click;
+          if (click?.type === "drilldown") {
+            rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
+            rect.addEventListener("click", () => {
+              const base = getDatasetForGrain(getActiveGrain());
+              const rowsFromPoint = click.filterFromPoint ? d.rows : base;
+              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
+              overlay.open(semantic, {
+                title: `${widget.title} - ${d.x}`,
+                target: click.target,
+                columnsPreset: click.columnsPreset,
+                rows: filteredRows,
+                extraFilters: click.extraFilters
+              });
+            });
+          }
+          svg.appendChild(rect);
+          if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
+            const tx = doc.createElementNS(svg.namespaceURI, "text");
+            const isFirst = i === 0;
+            const isLast = i === data.length - 1;
+            const labelX = isFirst ? PAD_L + 2 : isLast ? PAD_L + innerW - 2 : x + barW / 2;
+            tx.setAttribute("x", String(labelX));
+            tx.setAttribute("y", String(PAD_T + innerH + 16));
+            tx.setAttribute("text-anchor", isFirst ? "start" : isLast ? "end" : "middle");
+            tx.setAttribute("font-size", "10");
+            tx.setAttribute("fill", "var(--ga-axis-text)");
+            tx.setAttribute("opacity", "0.95");
+            tx.textContent = d.x;
+            svg.appendChild(tx);
+          }
+        });
+        maybeAnimateChartSvg(svg, doc);
+      }
+      chartHost.appendChild(svg);
+      currentSvg = svg;
+    };
+    if (measureIds.length > 1) {
+      const label = doc.createElement("label");
+      label.style.fontSize = "12px";
+      label.style.opacity = "0.9";
+      label.textContent = "Measure:";
+      const select = doc.createElement("select");
+      select.style.background = "var(--ga-control-bg)";
+      select.style.color = "var(--ga-control-text)";
+      select.style.border = "1px solid var(--ga-control-border)";
+      select.style.borderRadius = "8px";
+      select.style.padding = "4px 8px";
+      for (const measureId of measureIds) {
+        const option = doc.createElement("option");
+        option.value = measureId;
+        option.textContent = semantic.measures[measureId]?.label || measureId;
+        if (measureId === activeMeasure) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener("change", () => {
+        activeMeasure = select.value;
+        render();
+      });
+      controlsLeft.appendChild(label);
+      controlsLeft.appendChild(select);
+    }
+    render();
+    wrap.appendChild(title);
+    wrap.appendChild(controls);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/ui/widgets/breakdownWidget.ts
+  function normalizeHexColor2(value) {
+    if (typeof value !== "string") return void 0;
+    const v = value.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : void 0;
+  }
+  function sortRows(rows, mode) {
+    if (mode === "asc") return [...rows].sort((a, b) => a.value - b.value);
+    if (mode === "desc") return [...rows].sort((a, b) => b.value - a.value);
+    const scoreBucketStart = (k) => k === "5000" ? 5e3 : parseInt(k.split("-")[0] ?? "0", 10);
+    const isDate = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
+    const weekdayRank = (k) => {
+      const v = k.trim().toLowerCase();
+      if (v === "mon") return 0;
+      if (v === "tue") return 1;
+      if (v === "wed") return 2;
+      if (v === "thu") return 3;
+      if (v === "fri") return 4;
+      if (v === "sat") return 5;
+      if (v === "sun") return 6;
+      return void 0;
+    };
+    return [...rows].sort((a, b) => {
+      if (isDate(a.key) && isDate(b.key)) return a.key.localeCompare(b.key);
+      const wa = weekdayRank(a.key);
+      const wb = weekdayRank(b.key);
+      if (wa !== void 0 && wb !== void 0) return wa - wb;
+      const na = Number.isFinite(scoreBucketStart(a.key)) ? scoreBucketStart(a.key) : NaN;
+      const nb = Number.isFinite(scoreBucketStart(b.key)) ? scoreBucketStart(b.key) : NaN;
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return a.key.localeCompare(b.key);
+    });
+  }
+  function formatValue2(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const clamped = Math.max(0, Math.min(1, value));
+      const decimals2 = unit.decimals ?? 1;
+      return `${(clamped * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    const decimals = unit.decimals ?? 1;
+    return value.toFixed(decimals);
+  }
+  function clampForMeasure2(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
+    return value;
+  }
+  function getMeasureIds2(spec) {
+    const out = [];
+    const single = typeof spec.measure === "string" ? spec.measure.trim() : "";
+    if (single) out.push(single);
+    if (Array.isArray(spec.measures)) {
+      for (const m of spec.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || out.includes(clean)) continue;
+        out.push(clean);
+      }
+    }
+    return out;
+  }
+  function getSortModes2(spec) {
+    const out = [];
+    const single = spec.sort?.mode;
+    if (single) out.push(single);
+    if (Array.isArray(spec.sorts)) {
+      for (const s of spec.sorts) {
+        const mode = s?.mode;
+        if (!mode) continue;
+        if (!out.includes(mode)) out.push(mode);
+      }
+    }
+    return out;
+  }
+  function sortLabel2(mode) {
+    if (mode === "chronological") return "Chronological";
+    if (mode === "asc") return "Ascending";
+    return "Descending";
+  }
+  async function renderBreakdownWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-breakdown";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const header = doc.createElement("div");
+    header.className = "ga-breakdown-header";
+    const box = doc.createElement("div");
+    box.className = "ga-breakdown-box";
+    const grain = widget.grain;
+    const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+    const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
+    const dimId = spec.dimension;
+    const dimDef = semantic.dimensions[dimId];
+    if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
+    const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+    const measureIds = getMeasureIds2(spec);
+    if (measureIds.length === 0) throw new Error(`Breakdown ${widget.widgetId} has no measure or measures[]`);
+    const measureFnById = /* @__PURE__ */ new Map();
+    for (const measureId of measureIds) {
+      const measDef = semantic.measures[measureId];
+      if (!measDef) throw new Error(`Unknown measure '${measureId}' in breakdown ${widget.widgetId}`);
+      const measureFn = MEASURES_BY_GRAIN[grain]?.[measDef.formulaId];
+      if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
+      measureFnById.set(measureId, measureFn);
+    }
+    let activeMeasure = measureIds.includes(spec.activeMeasure || "") ? spec.activeMeasure : measureIds[0];
+    const sortModes = getSortModes2(spec);
+    let activeSortMode = spec.activeSort?.mode ?? spec.sort?.mode ?? sortModes[0] ?? "desc";
+    if (!sortModes.includes(activeSortMode)) sortModes.unshift(activeSortMode);
+    const grouped = groupByKey(rowsAll, keyFn);
+    const colorOverride = normalizeHexColor2(spec.color);
+    const limit = typeof spec.limit === "number" ? spec.limit : 12;
+    let expanded = false;
+    const headerLeft = doc.createElement("div");
+    headerLeft.className = "ga-breakdown-header-left";
+    headerLeft.textContent = dimDef.label;
+    const headerRight = doc.createElement("div");
+    headerRight.className = "ga-breakdown-header-right";
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    let rowsAllSorted = [];
+    let maxValAll = 1e-9;
+    const rebuildForActiveMeasure = () => {
+      const measureFn = measureFnById.get(activeMeasure);
+      if (!measureFn) return;
+      rowsAllSorted = Array.from(grouped.entries()).map(([k, g]) => ({
+        key: k,
+        value: clampForMeasure2(semantic, activeMeasure, measureFn(g)),
+        rows: g
+      }));
+      rowsAllSorted = sortRows(rowsAllSorted, activeSortMode);
+      maxValAll = Math.max(1e-9, ...rowsAllSorted.map((r) => clampForMeasure2(semantic, activeMeasure, r.value)));
+    };
+    const renderHeaderRight = () => {
+      headerRight.innerHTML = "";
+      const measDef = semantic.measures[activeMeasure];
+      const labelText = measDef ? measDef.label : activeMeasure;
+      const wrapRight = doc.createElement("div");
+      wrapRight.className = "ga-breakdown-controls";
+      if (measureIds.length > 1) {
+        const mLabel = doc.createElement("span");
+        mLabel.className = "ga-breakdown-ctl-label";
+        mLabel.textContent = "Measure:";
+        const mSelect = doc.createElement("select");
+        mSelect.className = "ga-breakdown-ctl-select";
+        for (const measureId of measureIds) {
+          const opt = doc.createElement("option");
+          opt.value = measureId;
+          opt.textContent = semantic.measures[measureId]?.label ?? measureId;
+          if (measureId === activeMeasure) opt.selected = true;
+          mSelect.appendChild(opt);
+        }
+        mSelect.addEventListener("change", () => {
+          const next = mSelect.value;
+          if (!measureIds.includes(next)) return;
+          activeMeasure = next;
+          rebuildForActiveMeasure();
+          renderHeaderRight();
+          renderRows();
+          renderFooter();
+        });
+        wrapRight.appendChild(mLabel);
+        wrapRight.appendChild(mSelect);
+      } else {
+        const mText = doc.createElement("span");
+        mText.textContent = labelText;
+        wrapRight.appendChild(mText);
+      }
+      if (sortModes.length > 1) {
+        const sLabel = doc.createElement("span");
+        sLabel.className = "ga-breakdown-ctl-label";
+        sLabel.textContent = "Sort:";
+        const sSelect = doc.createElement("select");
+        sSelect.className = "ga-breakdown-ctl-select";
+        for (const mode of sortModes) {
+          const opt = doc.createElement("option");
+          opt.value = mode;
+          opt.textContent = sortLabel2(mode);
+          if (mode === activeSortMode) opt.selected = true;
+          sSelect.appendChild(opt);
+        }
+        sSelect.addEventListener("change", () => {
+          const next = sSelect.value;
+          if (!sortModes.includes(next)) return;
+          activeSortMode = next;
+          rebuildForActiveMeasure();
+          renderRows();
+          renderFooter();
+        });
+        wrapRight.appendChild(sLabel);
+        wrapRight.appendChild(sSelect);
+      }
+      headerRight.appendChild(wrapRight);
+    };
+    const renderRows = () => {
+      box.innerHTML = "";
+      const visible = expanded ? rowsAllSorted : rowsAllSorted.slice(0, limit);
+      for (const r of visible) {
+        const line = doc.createElement("div");
+        line.className = "ga-breakdown-row";
+        const left = doc.createElement("div");
+        left.className = "ga-breakdown-label";
+        left.textContent = r.key;
+        const right = doc.createElement("div");
+        right.className = "ga-breakdown-right";
+        const val = doc.createElement("div");
+        val.className = "ga-breakdown-value";
+        val.textContent = formatValue2(semantic, activeMeasure, r.value);
+        const barWrap = doc.createElement("div");
+        barWrap.className = "ga-breakdown-barwrap";
+        const bar = doc.createElement("div");
+        bar.className = "ga-breakdown-bar";
+        bar.style.width = `${Math.max(2, r.value / maxValAll * 100)}%`;
+        if (colorOverride) bar.style.background = colorOverride;
+        barWrap.appendChild(bar);
+        right.appendChild(val);
+        right.appendChild(barWrap);
+        line.appendChild(left);
+        line.appendChild(right);
+        const click = spec.actions?.click;
+        if (click?.type === "drilldown") {
+          line.style.cursor = "pointer";
+          line.addEventListener("click", () => {
+            const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+            overlay.open(semantic, {
+              title: `${widget.title} - ${r.key}`,
+              target: click.target,
+              columnsPreset: click.columnsPreset,
+              rows: filteredRows,
+              extraFilters: click.extraFilters
+            });
+          });
+        }
+        box.appendChild(line);
+      }
+    };
+    const footer = doc.createElement("div");
+    footer.className = "ga-breakdown-footer";
+    const renderFooter = () => {
+      footer.innerHTML = "";
+      const canExpand = !!spec.extendable && rowsAllSorted.length > limit;
+      if (!canExpand) return;
+      const btn = doc.createElement("button");
+      btn.type = "button";
+      btn.className = "ga-breakdown-toggle";
+      const updateLabel = () => {
+        btn.textContent = expanded ? `Show top ${limit}` : `Show all (${rowsAllSorted.length})`;
+      };
+      updateLabel();
+      btn.addEventListener("click", () => {
+        expanded = !expanded;
+        updateLabel();
+        renderRows();
+      });
+      footer.appendChild(btn);
+    };
+    rebuildForActiveMeasure();
+    renderHeaderRight();
+    renderRows();
+    renderFooter();
+    wrap.appendChild(title);
+    wrap.appendChild(header);
+    wrap.appendChild(box);
+    if (footer.childElementCount > 0) wrap.appendChild(footer);
+    return wrap;
+  }
+
+  // src/ui/dashboardRenderer.ts
+  async function renderDashboard(root, semantic, dashboard, opts) {
+    root.innerHTML = "";
+    const doc = root.ownerDocument;
+    const overlay = new DrilldownOverlay(root);
+    const datasets = opts?.datasets ?? {};
+    const context = opts?.context;
+    const tabBar = doc.createElement("div");
+    tabBar.className = "ga-tabs";
+    const content = doc.createElement("div");
+    content.className = "ga-content";
+    root.appendChild(tabBar);
+    root.appendChild(content);
+    const sections = dashboard.dashboard.sections;
+    let active = sections[0]?.id ?? "";
+    function makeTab(secId, label) {
+      const btn = doc.createElement("button");
+      btn.className = "ga-tab";
+      btn.textContent = label;
+      btn.addEventListener("click", async () => {
+        active = secId;
+        await renderActive();
+        highlight();
+      });
+      tabBar.appendChild(btn);
+    }
+    function highlight() {
+      const btns = Array.from(tabBar.querySelectorAll("button.ga-tab"));
+      btns.forEach((b, i) => {
+        b.classList.toggle("active", sections[i]?.id === active);
+      });
+    }
+    async function renderWidget(widget) {
+      const baseRows = datasets[widget.grain];
+      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, datasets, context);
+      if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
+      const ph = doc.createElement("div");
+      ph.className = "ga-widget ga-placeholder";
+      ph.textContent = `Widget type '${widget.type}' not implemented yet`;
+      return ph;
+    }
+    async function renderActive() {
+      content.innerHTML = "";
+      const section = sections.find((s) => s.id === active);
+      if (!section) return;
+      const grid = doc.createElement("div");
+      grid.className = "ga-grid";
+      grid.style.display = "grid";
+      grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
+      grid.style.gap = "12px";
+      for (const placed of section.layout.cards) {
+        const card = doc.createElement("div");
+        card.className = "ga-card";
+        card.style.gridColumn = `${placed.x + 1} / span ${placed.w}`;
+        card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
+        const header = doc.createElement("div");
+        header.className = "ga-card-header";
+        header.textContent = placed.title;
+        const body = doc.createElement("div");
+        body.className = "ga-card-body";
+        const inner = doc.createElement("div");
+        inner.className = "ga-card-inner";
+        inner.style.display = "grid";
+        inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
+        inner.style.gap = "10px";
+        for (const w of placed.card.children) {
+          const container = doc.createElement("div");
+          container.className = "ga-child";
+          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
+          container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
+          container.style.gridRow = `${p.y + 1} / span ${p.h}`;
+          container.appendChild(await renderWidget(w));
+          inner.appendChild(container);
+        }
+        body.appendChild(inner);
+        card.appendChild(header);
+        card.appendChild(body);
+        grid.appendChild(card);
+      }
+      content.appendChild(grid);
+    }
+    for (const s of sections) makeTab(s.id, s.title);
+    await renderActive();
+    highlight();
+  }
+
+  // src/ui/filterState.ts
+  function cloneJson(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function buildDefaults(spec) {
+    const state = {};
+    if (!spec?.enabled) return state;
+    for (const c of spec.controls) {
+      state[c.id] = cloneJson(c.default);
+    }
+    return state;
+  }
+  function normalizeDateRangeValue(value, fallback) {
+    if (!value || typeof value !== "object") return fallback;
+    const v = value;
+    const fromTs = v.fromTs === null ? null : Number(v.fromTs);
+    const toTs2 = v.toTs === null ? null : Number(v.toTs);
+    return {
+      fromTs: Number.isFinite(fromTs) ? fromTs : null,
+      toTs: Number.isFinite(toTs2) ? toTs2 : null
+    };
+  }
+  function createGlobalFilterStore(spec) {
+    let defaults = buildDefaults(spec);
+    let state = cloneJson(defaults);
+    const listeners = /* @__PURE__ */ new Set();
+    const notify = () => {
+      for (const l of listeners) l();
+    };
+    return {
+      getSpec: () => spec,
+      getState: () => state,
+      patchDefaults: (partial) => {
+        defaults = { ...defaults, ...cloneJson(partial) };
+      },
+      setValue: (id, value) => {
+        if (!id) return;
+        const control = spec?.enabled ? spec.controls.find((c) => c.id === id) : void 0;
+        if (control?.type === "date_range") {
+          const fb = defaults[id] ?? { fromTs: null, toTs: null };
+          state = { ...state, [id]: normalizeDateRangeValue(value, fb) };
+        } else {
+          state = { ...state, [id]: value };
+        }
+        notify();
+      },
+      setAll: (next) => {
+        state = { ...cloneJson(defaults), ...cloneJson(next) };
+        notify();
+      },
+      reset: () => {
+        state = cloneJson(defaults);
+        notify();
+      },
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      }
+    };
+  }
+
+  // src/ui/globalFiltersBar.ts
+  function toYmd(ts) {
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  }
+  function fromYmdStartOfDay(ymd) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    if (!m) return null;
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const d = Number(m[3]);
+    const dt = new Date(y, mo, d, 0, 0, 0, 0);
+    const ts = dt.getTime();
+    return Number.isFinite(ts) ? ts : null;
+  }
+  function fromYmdEndOfDay(ymd) {
+    const start = fromYmdStartOfDay(ymd);
+    if (start === null) return null;
+    return start + 24 * 60 * 60 * 1e3 - 1;
+  }
+  function getDateRangeValue(state, id, fallback) {
+    const v = state[id];
+    if (!v || typeof v !== "object") return fallback;
+    const r = v;
+    return {
+      fromTs: r.fromTs === null ? null : Number(r.fromTs),
+      toTs: r.toTs === null ? null : Number(r.toTs)
+    };
+  }
+  function renderControlLabel(doc, label) {
+    const el = doc.createElement("div");
+    el.className = "ga-filter-label";
+    el.textContent = label;
+    return el;
+  }
+  async function renderGlobalFiltersBar(args) {
+    const { container, semantic, spec, state, setValue, setAll, reset, getDistinctOptions } = args;
+    const doc = container.ownerDocument;
+    container.innerHTML = "";
+    if (!spec?.enabled) return;
+    const bar = doc.createElement("div");
+    bar.className = "ga-filters";
+    container.appendChild(bar);
+    const left = doc.createElement("div");
+    left.className = "ga-filters-left";
+    bar.appendChild(left);
+    const right = doc.createElement("div");
+    right.className = "ga-filters-right";
+    bar.appendChild(right);
+    const applyMode = spec.buttons?.apply === true;
+    const showReset = spec.buttons?.reset !== false;
+    let pending = { ...state };
+    const commit = () => setAll(pending);
+    const updatePending = (id, value) => {
+      pending = { ...pending, [id]: value };
+      if (!applyMode) setValue(id, value);
+    };
+    const renderDateRange = (control) => {
+      const c = control;
+      const id = String(c.id);
+      const def = c.default;
+      const current = getDateRangeValue(applyMode ? pending : state, id, def);
+      const wrap = doc.createElement("div");
+      wrap.className = "ga-filter";
+      wrap.appendChild(renderControlLabel(doc, c.label));
+      const row = doc.createElement("div");
+      row.className = "ga-filter-row";
+      const from = doc.createElement("input");
+      from.type = "date";
+      from.value = current.fromTs ? toYmd(current.fromTs) : "";
+      from.addEventListener("change", () => {
+        const ts = from.value ? fromYmdStartOfDay(from.value) : null;
+        const next = { ...current, fromTs: ts };
+        updatePending(id, next);
+      });
+      const to = doc.createElement("input");
+      to.type = "date";
+      to.value = current.toTs ? toYmd(current.toTs) : "";
+      to.addEventListener("change", () => {
+        const ts = to.value ? fromYmdEndOfDay(to.value) : null;
+        const next = { ...current, toTs: ts };
+        updatePending(id, next);
+      });
+      row.appendChild(from);
+      row.appendChild(to);
+      wrap.appendChild(row);
+      left.appendChild(wrap);
+    };
+    const renderSelect = async (control) => {
+      const id = control.id;
+      const current = String((applyMode ? pending : state)[id] ?? control.default ?? "all");
+      const wrap = doc.createElement("div");
+      wrap.className = "ga-filter";
+      wrap.appendChild(renderControlLabel(doc, control.label));
+      const sel = doc.createElement("select");
+      sel.className = "ga-filter-select";
+      sel.appendChild(new Option("All", "all"));
+      const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
+      for (const opt of options) {
+        sel.appendChild(new Option(opt.label, opt.value));
+      }
+      sel.value = options.some((o) => o.value === current) ? current : "all";
+      sel.addEventListener("change", () => {
+        updatePending(id, sel.value);
+      });
+      wrap.appendChild(sel);
+      left.appendChild(wrap);
+    };
+    const controls = spec.controls;
+    for (const c of controls) {
+      if (c.type === "date_range") {
+        renderDateRange(c);
+        continue;
+      }
+      if (c.type === "select") {
+        const dim = semantic.dimensions[c.dimension];
+        if (dim && dim.grain !== "round") continue;
+        await renderSelect(c);
+        continue;
+      }
+    }
+    if (applyMode) {
+      const applyBtn = doc.createElement("button");
+      applyBtn.className = "ga-filter-btn";
+      applyBtn.textContent = "Apply";
+      applyBtn.addEventListener("click", () => {
+        commit();
+      });
+      right.appendChild(applyBtn);
+    }
+    if (showReset) {
+      const resetBtn = doc.createElement("button");
+      resetBtn.className = "ga-filter-btn";
+      resetBtn.textContent = "Reset";
+      resetBtn.addEventListener("click", () => {
+        reset();
+      });
+      right.appendChild(resetBtn);
+    }
+  }
+
+  // src/engine/selectOptions.ts
+  var cache = /* @__PURE__ */ new Map();
+  function stableKey(spec, state, excludeId) {
+    const parts = spec.controls.map((c) => c.id === excludeId ? `${c.id}=<excluded>` : `${c.id}=${JSON.stringify(state[c.id])}`);
+    return `selectopts:${excludeId}:${parts.join("|")}`;
+  }
+  function movementLabel(v) {
+    const k = v.trim().toLowerCase();
+    if (k === "moving") return "Moving";
+    if (k === "no_move") return "No move";
+    if (k === "nmpz") return "NMPZ";
+    if (k === "unknown") return "Unknown";
+    return v;
+  }
+  var durationOrder = ["<20 sec", "20-30 sec", "30-45 sec", "45-60 sec", "60-90 sec", "90-180 sec", ">180 sec"];
+  var durationRank = new Map(durationOrder.map((k, i) => [k, i]));
+  async function getSelectOptionsForControl(opts) {
+    const { spec, state, control } = opts;
+    const key = stableKey(spec, state, control.id);
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const stateWithoutSelf = { ...state };
+    delete stateWithoutSelf[control.id];
+    const rows = await getRounds({ global: { spec, state: stateWithoutSelf } });
+    if (control.options === "auto_teammates") {
+      const gamesByMate = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const mate = r.teammateName;
+        const name = typeof mate === "string" ? mate.trim() : "";
+        if (!name) continue;
+        const gameId = String(r.gameId ?? "");
+        if (!gameId) continue;
+        const set = gamesByMate.get(name) ?? /* @__PURE__ */ new Set();
+        set.add(gameId);
+        gamesByMate.set(name, set);
+      }
+      const out2 = Array.from(gamesByMate.entries()).map(([name, games]) => ({ value: name, label: `${name} (${games.size})`, n: games.size })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)).map(({ value, label }) => ({ value, label }));
+      cache.set(key, out2);
+      return out2;
+    }
+    const dimId = control.dimension;
+    const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];
+    if (!extractor) return [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const r of rows) {
+      const v = extractor(r);
+      if (typeof v === "string" && v.length) seen.add(v);
+    }
+    let values = Array.from(seen);
+    if (dimId === "duration_bucket") {
+      values.sort((a, b) => (durationRank.get(a) ?? 999) - (durationRank.get(b) ?? 999));
+    } else {
+      values.sort((a, b) => a.localeCompare(b));
+    }
+    const out = values.map((v) => ({
+      value: v,
+      label: dimId === "movement_type" ? movementLabel(v) : v
+    }));
+    cache.set(key, out);
+    return out;
+  }
+
+  // src/ui/analysisRenderer.ts
+  async function renderAnalysisApp(opts) {
+    const { body, semantic, dashboard } = opts;
+    const doc = body.ownerDocument;
+    body.innerHTML = "";
+    const filtersHost = doc.createElement("div");
+    filtersHost.className = "ga-filters-host";
+    body.appendChild(filtersHost);
+    const dashboardHost = doc.createElement("div");
+    dashboardHost.className = "ga-dashboard-host";
+    body.appendChild(dashboardHost);
+    const spec = dashboard.dashboard.globalFilters;
+    const store = createGlobalFilterStore(spec);
+    if (spec?.enabled) {
+      const bounds = await getGamePlayedAtBounds();
+      if (bounds.minTs !== null && bounds.maxTs !== null) {
+        for (const c of spec.controls) {
+          if (c.type !== "date_range") continue;
+          const current = store.getState()[c.id];
+          const isUnset = !current || typeof current !== "object" || (current.fromTs === null || current.fromTs === void 0) && (current.toTs === null || current.toTs === void 0);
+          if (!isUnset) continue;
+          const next = { fromTs: bounds.minTs, toTs: bounds.maxTs };
+          store.patchDefaults({ [c.id]: next });
+          store.setValue(c.id, next);
+        }
+      }
+    }
+    const renderNow = async () => {
+      await renderGlobalFiltersBar({
+        container: filtersHost,
+        semantic,
+        spec,
+        state: store.getState(),
+        setValue: store.setValue,
+        setAll: store.setAll,
+        reset: store.reset,
+        getDistinctOptions: async ({ control, spec: s, state }) => getSelectOptionsForControl({ control, spec: s, state })
+      });
+      const used = /* @__PURE__ */ new Set();
+      for (const section of dashboard.dashboard.sections) {
+        for (const placed of section.layout.cards) {
+          for (const w of placed.card.children) {
+            used.add(w.grain);
+            const anySpec = w.spec;
+            if (w.type === "chart") {
+              const xDimId = anySpec?.x?.dimension;
+              const xDim = xDimId ? semantic.dimensions[xDimId] : void 0;
+              const xGrains = xDim ? Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain] : [];
+              for (const g of xGrains) used.add(g);
+              const ids = [];
+              if (typeof anySpec?.y?.measure === "string") ids.push(anySpec.y.measure);
+              if (Array.isArray(anySpec?.y?.measures)) ids.push(...anySpec.y.measures);
+              for (const mId of ids) {
+                const m = semantic.measures[mId];
+                if (m) used.add(m.grain);
+              }
+            }
+            if (w.type === "breakdown") {
+              const ids = [];
+              if (typeof anySpec?.measure === "string") ids.push(anySpec.measure);
+              if (Array.isArray(anySpec?.measures)) ids.push(...anySpec.measures);
+              for (const mId of ids) {
+                const m = semantic.measures[mId];
+                if (m) used.add(m.grain);
+              }
+            }
+            if (w.type === "stat_list") {
+              const rows = Array.isArray(anySpec?.rows) ? anySpec.rows : [];
+              for (const r of rows) {
+                const m = semantic.measures[r?.measure];
+                if (m) used.add(m.grain);
+              }
+            }
+            if (w.type === "stat_value") {
+              const m = semantic.measures[anySpec?.measure];
+              if (m) used.add(m.grain);
+            }
+          }
+        }
+      }
+      const datasets = {};
+      const filters = { global: { spec, state: store.getState() } };
+      if (used.has("round")) datasets.round = await getRounds(filters);
+      if (used.has("game")) datasets.game = await getGames(filters);
+      if (used.has("session")) datasets.session = [];
+      const dateVal = store.getState()["dateRange"];
+      const fromTs = dateVal && typeof dateVal === "object" ? dateVal.fromTs ?? null : null;
+      const toTs2 = dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
+      await renderDashboard(dashboardHost, semantic, dashboard, { datasets, context: { dateRange: { fromTs, toTs: toTs2 } } });
+    };
+    store.subscribe(() => {
+      void renderNow();
+    });
+    await renderNow();
+  }
+
   // src/ui.ts
   function cloneTemplate2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
@@ -41210,7 +43289,7 @@
     const renderNow = async () => {
       body.innerHTML = "";
       validateDashboardAgainstSemantic(semantic, dashboard);
-      await renderDashboard(body, semantic, dashboard);
+      await renderAnalysisApp({ body, semantic, dashboard });
     };
     if (!root) {
       root = doc.createElement("div");
@@ -41431,7 +43510,10 @@ ${error instanceof Error ? error.message : String(error)}`;
           verifyCompleteness: true,
           ncfa
         });
+        const norm = await normalizeLegacyRounds({ onStatus: (m) => ui.setStatus(m) });
+        invalidateRoundsCache();
         ui.setStatus(`Update complete. New feed games: ${res.inserted}.`);
+        if (norm.updated > 0) ui.setStatus(`Update complete. New feed games: ${res.inserted}. Normalized legacy rounds: ${norm.updated}.`);
         await refreshUI(ui);
       } catch (e) {
         ui.setStatus("Error: " + errorText(e));
@@ -41445,6 +43527,7 @@ ${error instanceof Error ? error.message : String(error)}`;
         await db.transaction("rw", db.games, db.rounds, db.details, db.meta, async () => {
           await Promise.all([db.games.clear(), db.rounds.clear(), db.details.clear(), db.meta.clear()]);
         });
+        invalidateRoundsCache();
         ui.setStatus("DB reset complete.");
         await refreshUI(ui);
       } catch (e) {

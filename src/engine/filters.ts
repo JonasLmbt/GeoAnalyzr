@@ -1,6 +1,6 @@
 import type { FilterClause } from "../config/dashboard.types";
-import type { RoundRow } from "../db";
-import { ROUND_DIMENSION_EXTRACTORS } from "./dimensions";
+import type { Grain } from "../config/semantic.types";
+import { DIMENSION_EXTRACTORS } from "./dimensions";
 
 function evalClause(value: unknown, clause: FilterClause): boolean {
   if (clause.op === "eq") return value === clause.value;
@@ -10,8 +10,8 @@ function evalClause(value: unknown, clause: FilterClause): boolean {
   return true;
 }
 
-function evalRowFilter(row: RoundRow, clause: FilterClause): boolean {
-  const extractor = ROUND_DIMENSION_EXTRACTORS[clause.dimension];
+function evalRowFilter(row: any, clause: FilterClause, grain: Grain): boolean {
+  const extractor = DIMENSION_EXTRACTORS[grain]?.[clause.dimension];
   if (extractor) {
     return evalClause(extractor(row), clause);
   }
@@ -19,7 +19,7 @@ function evalRowFilter(row: RoundRow, clause: FilterClause): boolean {
   return evalClause(direct, clause);
 }
 
-export function applyFilters(rows: RoundRow[], clauses: FilterClause[] | undefined): RoundRow[] {
+export function applyFilters<T = any>(rows: T[], clauses: FilterClause[] | undefined, grain: Grain = "round"): T[] {
   if (!clauses || clauses.length === 0) return rows;
-  return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause)));
+  return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause, grain)));
 }

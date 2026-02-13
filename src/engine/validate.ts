@@ -64,7 +64,10 @@ function validateGlobalFiltersSpec(semantic: SemanticRegistry, dash: DashboardDo
       const dimId = String(c.dimension);
       const dim = semantic.dimensions[dimId];
       assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in global filter '${c.id}'`);
-      assert(c.appliesTo.includes(dim.grain), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo missing dimension grain '${dim.grain}'`);
+      const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+      for (const g of grains) {
+        assert(c.appliesTo.includes(g), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo missing dimension grain '${g}'`);
+      }
       continue;
     }
 
@@ -86,7 +89,8 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
 
     const xDim = semantic.dimensions[xDimId];
     assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
-    assert(xDim.grain === widget.grain, "E_GRAIN_MISMATCH", `x '${xDimId}' grain=${xDim.grain} but widget grain=${widget.grain}`);
+    const xGrains = Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain];
+    assert(xGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `x '${xDimId}' grain mismatch for widget grain=${widget.grain}`);
 
     // chart type constraints
     assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
@@ -106,7 +110,12 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     for (const yMeasId of yMeasureIds) {
       const yMeas = semantic.measures[yMeasId];
       assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
-      assert(yMeas.grain === widget.grain, "E_GRAIN_MISMATCH", `y '${yMeasId}' grain=${yMeas.grain} but widget grain=${widget.grain}`);
+      // Allow mixed-grain y-measures as long as the x-dimension supports that grain.
+      assert(
+        xGrains.includes(yMeas.grain),
+        "E_GRAIN_MISMATCH",
+        `y '${yMeasId}' grain=${yMeas.grain} not supported by x '${xDimId}' grains=${xGrains.join(",")}`
+      );
       assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
     }
     const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : undefined;
@@ -136,7 +145,8 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
       const sDimId = spec.series.dimension;
       const sDim = semantic.dimensions[sDimId];
       assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
-      assert(sDim.grain === widget.grain, "E_GRAIN_MISMATCH", `series '${sDimId}' grain=${sDim.grain} but widget grain=${widget.grain}`);
+      const sGrains = Array.isArray(sDim.grain) ? sDim.grain : [sDim.grain];
+      assert(sGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `series '${sDimId}' grain mismatch for widget grain=${widget.grain}`);
       assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
       const maxSeries = sDim.cardinality?.maxSeries ?? 50;
       const requested = spec.series.selector.mode === "selected"
@@ -172,7 +182,8 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     const dim = semantic.dimensions[spec.dimension];
     const measIds = getBreakdownMeasureIds(spec);
     assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
-    assert(dim.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
+    const dGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+    assert(dGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
     assert(measIds.length > 0, "E_BAD_SPEC", `Breakdown ${widget.widgetId} missing measure or measures[]`);
     for (const measId of measIds) {
       const meas = semantic.measures[measId];
@@ -230,7 +241,8 @@ function validateFilterClause(semantic: SemanticRegistry, clause: any): void {
   const dim = semantic.dimensions[dimId];
   // If the dimension exists in semantic registry, global filters should be round-grain compatible.
   if (dim) {
-    assert(dim.grain === "round", "E_GRAIN_MISMATCH", `Global filter dimension '${dimId}' grain=${dim.grain} but expected round`);
+    const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+    assert(grains.includes("round"), "E_GRAIN_MISMATCH", `Global filter dimension '${dimId}' grain mismatch (expected round)`);
   }
 }
 

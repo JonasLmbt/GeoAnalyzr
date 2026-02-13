@@ -1,10 +1,10 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, ChartSpec } from "../../config/dashboard.types";
-import type { RoundRow } from "../../db";
-import { getRounds } from "../../engine/queryEngine";
-import { ROUND_DIMENSION_EXTRACTORS } from "../../engine/dimensions";
+import type { Grain } from "../../config/semantic.types";
+import { getRounds, getGames } from "../../engine/queryEngine";
+import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
-import { ROUND_MEASURES_BY_FORMULA_ID } from "../../engine/measures";
+import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
@@ -76,6 +76,27 @@ function sortLabel(mode: "chronological" | "asc" | "desc"): string {
   if (mode === "chronological") return "Chronological";
   if (mode === "asc") return "Ascending";
   return "Descending";
+}
+
+function accumulationLabel(mode: "period" | "to_date"): string {
+  return mode === "to_date" ? "To date" : "Per period";
+}
+
+function toDayKey(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dayKeysBetween(fromTs: number, toTs: number): string[] {
+  const out: string[] = [];
+  const start = new Date(fromTs);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(toTs);
+  end.setHours(0, 0, 0, 0);
+  for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1000) {
+    out.push(toDayKey(t));
+  }
+  return out;
 }
 
 function getMeasureIds(spec: ChartSpec): string[] {
@@ -227,7 +248,8 @@ export async function renderChartWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
   overlay: DrilldownOverlay,
-  baseRows?: RoundRow[]
+  datasets?: Partial<Record<Grain, any[]>>,
+  context?: { dateRange?: { fromTs: number | null; toTs: number | null } }
 ): Promise<HTMLElement> {
   const spec = widget.spec as ChartSpec;
   const doc = overlay.getDocument();
@@ -257,28 +279,13 @@ export async function renderChartWidget(
   chartHost.className = "ga-chart-host";
   box.appendChild(chartHost);
 
-  const rows = baseRows ?? (await getRounds({}));
   const dimId = spec.x.dimension;
 
   const dimDef = semantic.dimensions[dimId];
   if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in widget ${widget.widgetId}`);
 
-  const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
-  if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}'`);
-
   const measureIds = getMeasureIds(spec);
   if (measureIds.length === 0) throw new Error(`Widget ${widget.widgetId} has no y.measure or y.measures`);
-  const measureFnById = new Map<string, (rows: any[]) => number>();
-  for (const measureId of measureIds) {
-    const measDef = semantic.measures[measureId];
-    if (!measDef) throw new Error(`Unknown measure '${measureId}' in widget ${widget.widgetId}`);
-    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
-    if (!measureFn) throw new Error(`Missing formula implementation for ${measDef.formulaId}`);
-    measureFnById.set(measureId, measureFn);
-  }
-
-  const grouped = groupByKey(rows, keyFn);
-  const keys = Array.from(grouped.keys());
   const colorOverride = normalizeHexColor(spec.color);
 
   const sortModes = getSortModes(spec);
@@ -286,24 +293,21 @@ export async function renderChartWidget(
     spec.activeSort?.mode ?? spec.sort?.mode ?? sortModes[0];
   if (activeSortMode && !sortModes.includes(activeSortMode)) sortModes.unshift(activeSortMode);
 
-  const buildDataForMeasure = (measureId: string, limitOverride?: number): Datum[] => {
-    const measureFn = measureFnById.get(measureId);
-    if (!measureFn) return [];
-    const baseData: Datum[] = keys.map((k) => {
-      const g = grouped.get(k) ?? [];
-      return { x: k, y: clampForMeasure(semantic, measureId, measureFn(g)), rows: g };
-    });
-    const sortedData = sortData(baseData, activeSortMode);
-
-    const limit = typeof limitOverride === "number" && Number.isFinite(limitOverride) && limitOverride > 0 ? limitOverride : spec.limit;
-    return typeof limit === "number" && Number.isFinite(limit) && limit > 0
-      ? sortedData.slice(0, Math.floor(limit))
-      : sortedData;
-  };
-
   let activeMeasure = measureIds.includes(spec.y.activeMeasure || "")
     ? (spec.y.activeMeasure as string)
     : measureIds[0];
+
+  const accModes: Array<"period" | "to_date"> = [];
+  const singleAcc = spec.y.accumulation;
+  if (singleAcc) accModes.push(singleAcc);
+  if (Array.isArray(spec.y.accumulations)) {
+    for (const a of spec.y.accumulations) {
+      if (!a) continue;
+      if (!accModes.includes(a)) accModes.push(a);
+    }
+  }
+  let activeAcc: "period" | "to_date" = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
+  if (!accModes.includes(activeAcc)) accModes.unshift(activeAcc);
 
   let currentSvg: SVGSVGElement | null = null;
 
@@ -357,6 +361,110 @@ export async function renderChartWidget(
     controlsLeft.appendChild(label);
     controlsLeft.appendChild(select);
   }
+
+  if (accModes.length > 1 && dimId === "time_day") {
+    const label = doc.createElement("label");
+    label.style.fontSize = "12px";
+    label.style.opacity = "0.9";
+    label.textContent = "Mode:";
+
+    const select = doc.createElement("select");
+    select.style.background = "var(--ga-control-bg)";
+    select.style.color = "var(--ga-control-text)";
+    select.style.border = "1px solid var(--ga-control-border)";
+    select.style.borderRadius = "8px";
+    select.style.padding = "4px 8px";
+
+    for (const mode of accModes) {
+      const option = doc.createElement("option");
+      option.value = mode;
+      option.textContent = accumulationLabel(mode);
+      if (mode === activeAcc) option.selected = true;
+      select.appendChild(option);
+    }
+
+    select.addEventListener("change", () => {
+      const next = select.value as any;
+      if (!accModes.includes(next)) return;
+      activeAcc = next;
+      render();
+    });
+
+    controlsLeft.appendChild(label);
+    controlsLeft.appendChild(select);
+  }
+
+  function getActiveGrain(): Grain {
+    const measDef = semantic.measures[activeMeasure];
+    return (measDef?.grain as Grain) ?? (widget.grain as Grain);
+  }
+
+  function getDatasetForGrain(g: Grain): any[] {
+    const provided = datasets?.[g];
+    if (Array.isArray(provided)) return provided;
+    // Fallback only for non-analysis contexts.
+    if (g === "game") return [];
+    return [];
+  }
+
+  const buildDataForMeasure = (measureId: string, limitOverride?: number): Datum[] => {
+    const measDef = semantic.measures[measureId];
+    if (!measDef) return [];
+
+    const g = measDef.grain as Grain;
+    const rows = getDatasetForGrain(g);
+    const keyFn = DIMENSION_EXTRACTORS[g]?.[dimId];
+    if (!keyFn) return [];
+
+    const measureFn = MEASURES_BY_GRAIN[g]?.[measDef.formulaId];
+    if (!measureFn) return [];
+
+    // For time_day, fill all days in the selected dateRange (or fallback to data bounds).
+    if (dimId === "time_day") {
+      let fromTs = context?.dateRange?.fromTs ?? null;
+      let toTs = context?.dateRange?.toTs ?? null;
+      if (fromTs === null || toTs === null) {
+        const tsValues = rows.map((r) => (typeof (r as any).playedAt === "number" ? (r as any).playedAt : typeof (r as any).ts === "number" ? (r as any).ts : null)).filter((x) => typeof x === "number") as number[];
+        const min = tsValues.length ? Math.min(...tsValues) : null;
+        const max = tsValues.length ? Math.max(...tsValues) : null;
+        if (fromTs === null) fromTs = min;
+        if (toTs === null) toTs = max;
+      }
+
+      const grouped = groupByKey(rows, keyFn);
+      const keys = (fromTs !== null && toTs !== null) ? dayKeysBetween(fromTs, toTs) : sortKeysChronological(Array.from(grouped.keys()));
+
+      if (activeAcc === "to_date") {
+        const cum: any[] = [];
+        const out: Datum[] = [];
+        for (const k of keys) {
+          const dayRows = grouped.get(k) ?? [];
+          if (dayRows.length) cum.push(...dayRows);
+          out.push({ x: k, y: clampForMeasure(semantic, measureId, measureFn(cum)), rows: cum.slice() });
+        }
+        return out;
+      }
+
+      const out: Datum[] = keys.map((k) => {
+        const dayRows = grouped.get(k) ?? [];
+        return { x: k, y: clampForMeasure(semantic, measureId, measureFn(dayRows)), rows: dayRows };
+      });
+      return out;
+    }
+
+    const grouped = groupByKey(rows, keyFn);
+    const keys = Array.from(grouped.keys());
+    const baseData: Datum[] = keys.map((k) => {
+      const rowsForKey = grouped.get(k) ?? [];
+      return { x: k, y: clampForMeasure(semantic, measureId, measureFn(rowsForKey)), rows: rowsForKey };
+    });
+    const sortedData = sortData(baseData, activeSortMode);
+
+    const limit = typeof limitOverride === "number" && Number.isFinite(limitOverride) && limitOverride > 0 ? limitOverride : spec.limit;
+    return typeof limit === "number" && Number.isFinite(limit) && limit > 0
+      ? sortedData.slice(0, Math.floor(limit))
+      : sortedData;
+  };
 
   const render = (): void => {
     chartHost.innerHTML = "";
@@ -508,8 +616,9 @@ export async function renderChartWidget(
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
-            const rowsFromPoint = click.filterFromPoint ? p.d.rows : rows;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+            const base = getDatasetForGrain(getActiveGrain());
+            const rowsFromPoint = click.filterFromPoint ? p.d.rows : base;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
             overlay.open(semantic, {
               title: `${widget.title} - ${p.d.x}`,
               target: click.target,
@@ -551,8 +660,9 @@ export async function renderChartWidget(
         if (click?.type === "drilldown") {
           rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
           rect.addEventListener("click", () => {
-            const rowsFromPoint = click.filterFromPoint ? d.rows : rows;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+            const base = getDatasetForGrain(getActiveGrain());
+            const rowsFromPoint = click.filterFromPoint ? d.rows : base;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
             overlay.open(semantic, {
               title: `${widget.title} - ${d.x}`,
               target: click.target,

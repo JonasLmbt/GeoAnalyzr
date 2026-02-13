@@ -253,11 +253,71 @@ export class DrilldownOverlay {
     return String(value);
   }
 
+  private movementLabel(v: unknown): string {
+    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+    if (!s) return "";
+    if (s === "moving") return "Moving";
+    if (s === "no_move" || s === "nomove" || s.includes("no move")) return "No Move";
+    if (s === "nmpz" || s.includes("nmpz")) return "NMPZ";
+    return v as any;
+  }
+
+  private gameModeLabel(v: unknown): string {
+    const s = typeof v === "string" ? v.trim() : "";
+    const k = s.toLowerCase();
+    if (!k) return "";
+    if (k === "duels" || k === "duel") return "Duel";
+    if (k === "teamduels" || k === "teamduel" || k.includes("team") && k.includes("duel")) return "Team Duel";
+    return s;
+  }
+
   private getCellRawValue(row: any, key: string, semantic: SemanticRegistry): unknown {
+    const pickNum = (k: string): number | undefined => {
+      const v = pickWithAliases(row, k, semantic.columnAliases);
+      return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+    };
+
+    const pickBool = (k: string): boolean | undefined => {
+      const v = pickWithAliases(row, k, semantic.columnAliases);
+      return typeof v === "boolean" ? v : undefined;
+    };
+
+    const bestOwnGuess = (): { lat?: number; lng?: number; score?: number } => {
+      const mf = String((row as any)?.modeFamily ?? "").toLowerCase();
+      if (mf !== "teamduels") {
+        return {
+          lat: pickNum("player_self_guessLat"),
+          lng: pickNum("player_self_guessLng"),
+          score: pickNum("player_self_score")
+        };
+      }
+
+      const self = {
+        lat: pickNum("player_self_guessLat"),
+        lng: pickNum("player_self_guessLng"),
+        score: pickNum("player_self_score"),
+        best: pickBool("player_self_isBestGuess")
+      };
+      const mate = {
+        lat: pickNum("player_mate_guessLat"),
+        lng: pickNum("player_mate_guessLng"),
+        score: pickNum("player_mate_score"),
+        best: pickBool("player_mate_isBestGuess")
+      };
+
+      // Prefer explicit best-guess flag when present.
+      if (mate.best === true && self.best !== true) return mate;
+      if (self.best === true && mate.best !== true) return self;
+
+      // Fallback: pick higher score if available.
+      if (typeof mate.score === "number" && typeof self.score === "number") return mate.score > self.score ? mate : self;
+      if (typeof mate.score === "number") return mate;
+      return self;
+    };
+
     if (key === "guess_maps") {
-      const lat = pickWithAliases(row, "player_self_guessLat", semantic.columnAliases);
-      const lng = pickWithAliases(row, "player_self_guessLng", semantic.columnAliases);
-      if (typeof lat === "number" && typeof lng === "number") return `https://www.google.com/maps?q=${lat},${lng}`;
+      const g = bestOwnGuess();
+      if (typeof g.lat === "number" && typeof g.lng === "number") return `https://www.google.com/maps?q=${g.lat},${g.lng}`;
       return undefined;
     }
     if (key === "street_view") {
@@ -266,6 +326,16 @@ export class DrilldownOverlay {
       if (typeof lat === "number" && typeof lng === "number") return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
       return undefined;
     }
+
+    // Drilldown requirement: in team duels, score should reflect the best own guess (self or mate).
+    if (key === "player_self_score") {
+      const mf = String((row as any)?.modeFamily ?? "").toLowerCase();
+      if (mf === "teamduels") {
+        const g = bestOwnGuess();
+        if (typeof g.score === "number") return g.score;
+      }
+    }
+
     return pickWithAliases(row, key, semantic.columnAliases);
   }
 
@@ -293,6 +363,15 @@ export class DrilldownOverlay {
     }
 
     let text = this.formatCellValue(raw, key, dateMode);
+
+    if (key === "movementType" || key === "movement_type" || key === "movement") {
+      const lbl = this.movementLabel(raw);
+      if (lbl) text = String(lbl);
+    }
+    if (key === "gameMode" || key === "game_mode" || key === "modeFamily") {
+      const lbl = this.gameModeLabel(raw);
+      if (lbl) text = String(lbl);
+    }
 
     if (key === "result") {
       if (typeof raw === "boolean") text = raw ? "Win" : "Loss";

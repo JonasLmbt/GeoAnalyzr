@@ -1,10 +1,10 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, BreakdownSpec } from "../../config/dashboard.types";
-import type { RoundRow } from "../../db";
-import { getRounds } from "../../engine/queryEngine";
-import { ROUND_DIMENSION_EXTRACTORS } from "../../engine/dimensions";
+import type { Grain } from "../../config/semantic.types";
+import { getRounds, getGames } from "../../engine/queryEngine";
+import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
-import { ROUND_MEASURES_BY_FORMULA_ID } from "../../engine/measures";
+import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
@@ -111,7 +111,7 @@ export async function renderBreakdownWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
   overlay: DrilldownOverlay,
-  baseRows?: RoundRow[]
+  baseRows?: any[]
 ): Promise<HTMLElement> {
   const spec = widget.spec as BreakdownSpec;
   const doc = overlay.getDocument();
@@ -129,14 +129,15 @@ export async function renderBreakdownWidget(
   const box = doc.createElement("div");
   box.className = "ga-breakdown-box";
 
-  const rowsAllBase = baseRows ?? (await getRounds({}));
-  const rowsAll = applyFilters(rowsAllBase, spec.filters);
+  const grain = widget.grain as Grain;
+  const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+  const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
   const dimId = spec.dimension;
 
   const dimDef = semantic.dimensions[dimId];
   if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
 
-  const keyFn = ROUND_DIMENSION_EXTRACTORS[dimId];
+  const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
   if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
 
   const measureIds = getMeasureIds(spec);
@@ -145,7 +146,7 @@ export async function renderBreakdownWidget(
   for (const measureId of measureIds) {
     const measDef = semantic.measures[measureId];
     if (!measDef) throw new Error(`Unknown measure '${measureId}' in breakdown ${widget.widgetId}`);
-    const measureFn = ROUND_MEASURES_BY_FORMULA_ID[measDef.formulaId];
+    const measureFn = MEASURES_BY_GRAIN[grain]?.[measDef.formulaId];
     if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
     measureFnById.set(measureId, measureFn);
   }
@@ -301,7 +302,7 @@ export async function renderBreakdownWidget(
         line.style.cursor = "pointer";
         line.addEventListener("click", () => {
           const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters);
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
           overlay.open(semantic, {
             title: `${widget.title} - ${r.key}`,
             target: click.target,

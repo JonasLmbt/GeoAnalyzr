@@ -1,8 +1,8 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, StatListSpec, Actions, FilterClause } from "../../config/dashboard.types";
-import type { RoundRow } from "../../db";
-import { getRounds } from "../../engine/queryEngine";
-import { ROUND_MEASURES_BY_FORMULA_ID } from "../../engine/measures";
+import type { Grain } from "../../config/semantic.types";
+import { getRounds, getGames } from "../../engine/queryEngine";
+import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
@@ -24,15 +24,16 @@ function formatValue(semantic: SemanticRegistry, measureId: string, value: numbe
 async function computeMeasure(
   semantic: SemanticRegistry,
   measureId: string,
-  baseRows: RoundRow[] | undefined,
+  baseRows: any[] | undefined,
+  grain: Grain,
   filters?: FilterClause[]
 ): Promise<number> {
   const m = semantic.measures[measureId];
   if (!m) return 0;
 
-  const rowsAll = baseRows ?? (await getRounds({}));
-  const rows = applyFilters(rowsAll, filters);
-  const fn = ROUND_MEASURES_BY_FORMULA_ID[m.formulaId];
+  const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+  const rows = applyFilters(rowsAll, filters, grain);
+  const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
   if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
   return fn(rows);
 }
@@ -43,7 +44,8 @@ function attachClickIfAny(
   overlay: DrilldownOverlay,
   semantic: SemanticRegistry,
   title: string,
-  baseRows: RoundRow[] | undefined
+  baseRows: any[] | undefined,
+  grain: Grain
 ): void {
   const click = actions?.click;
   if (!click) return;
@@ -51,8 +53,8 @@ function attachClickIfAny(
   el.style.cursor = "pointer";
   el.addEventListener("click", async () => {
     if (click.type === "drilldown") {
-      const rowsAll = baseRows ?? (await getRounds({}));
-      const rows = applyFilters(rowsAll, click.extraFilters);
+      const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+      const rows = applyFilters(rowsAll, click.extraFilters, grain);
       overlay.open(semantic, {
         title,
         target: click.target,
@@ -68,10 +70,11 @@ export async function renderStatListWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
   overlay: DrilldownOverlay,
-  baseRows?: RoundRow[]
+  baseRows?: any[]
 ): Promise<HTMLElement> {
   const spec = widget.spec as StatListSpec;
   const doc = overlay.getDocument();
+  const grain = widget.grain as Grain;
 
   const wrap = doc.createElement("div");
   wrap.className = "ga-widget ga-statlist";
@@ -95,10 +98,10 @@ export async function renderStatListWidget(
     right.className = "ga-statrow-value";
     right.textContent = "...";
 
-    const val = await computeMeasure(semantic, row.measure, baseRows, row.filters);
+    const val = await computeMeasure(semantic, row.measure, baseRows, grain, row.filters);
     right.textContent = formatValue(semantic, row.measure, val);
 
-    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, baseRows);
+    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, baseRows, grain);
 
     line.appendChild(left);
     line.appendChild(right);

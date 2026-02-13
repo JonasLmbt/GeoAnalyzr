@@ -56,6 +56,157 @@
     },
     "sections": [
       {
+        "id": "overview",
+        "title": "Overview",
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_overview_main",
+              "title": "Overview",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 22,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_overview_facts",
+                    "type": "stat_list",
+                    "title": "Results, Win Rate & Ratings",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 7 },
+                    "spec": {
+                      "rows": [
+                        {
+                          "label": "Games",
+                          "measure": "games_count",
+                          "actions": {
+                            "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false }
+                          }
+                        },
+                        {
+                          "label": "Wins",
+                          "measure": "win_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Win rate",
+                          "measure": "win_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
+                        },
+                        { "label": "Avg end rating", "measure": "end_rating_avg" },
+                        { "label": "Avg rating delta", "measure": "rating_delta_avg" }
+                      ]
+                    }
+                  },
+
+                  {
+                    "widgetId": "w_overview_mode_breakdown",
+                    "type": "breakdown",
+                    "title": "Mode Breakdown",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 7, "w": 12, "h": 4 },
+                    "spec": {
+                      "dimension": "mode_family",
+                      "measure": "games_count",
+                      "sort": { "mode": "desc" },
+                      "limit": 12,
+                      "actions": {
+                        "click": {
+                          "type": "drilldown",
+                          "target": "players",
+                          "columnsPreset": "opponentMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  },
+
+                  {
+                    "widgetId": "w_overview_movement_breakdown",
+                    "type": "breakdown",
+                    "title": "Movement Breakdown",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 11, "w": 12, "h": 4 },
+                    "spec": {
+                      "dimension": "movement_type",
+                      "measure": "rounds_count",
+                      "sort": { "mode": "desc" },
+                      "limit": 12,
+                      "actions": {
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  },
+
+                  {
+                    "widgetId": "w_overview_time_progression",
+                    "type": "chart",
+                    "title": "Time progression metrics",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 15, "w": 12, "h": 7 },
+                    "spec": {
+                      "type": "line",
+                      "x": { "dimension": "time_day" },
+                      "y": {
+                        "measures": [
+                          "games_count",
+                          "rounds_count",
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "throw_rate",
+                          "throw_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "hit_rate",
+                          "hit_count",
+                          "win_rate",
+                          "win_count",
+                          "end_rating_avg",
+                          "damage_dealt_avg",
+                          "damage_taken_avg"
+                        ],
+                        "activeMeasure": "games_count",
+                        "accumulations": ["period", "to_date"],
+                        "activeAccumulation": "to_date"
+                      },
+                      "sort": { "mode": "chronological" },
+                      "actions": { "hover": true }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
         "id": "scores",
         "title": "Scores",
         "layout": {
@@ -212,7 +363,8 @@
                         "measures": ["fivek_rate", "throw_rate", "hit_rate"],
                         "activeMeasure": "fivek_rate"
                       },
-                      "sort": { "mode": "chronological" },
+                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }, { "mode": "chronological" }],
+                      "activeSort": { "mode": "desc" },
                       "actions": {
                         "hover": true,
                         "click": {
@@ -298,6 +450,34 @@
                 ]
               }
             }
+            ,
+            {
+              "cardId": "card_rating_over_time",
+              "title": "Rating over time",
+              "x": 0,
+              "y": 40,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_rating_over_time",
+                    "type": "chart",
+                    "title": "Avg end rating by day",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "line",
+                      "x": { "dimension": "time_day" },
+                      "y": { "measure": "end_rating_avg" },
+                      "sort": { "mode": "chronological" },
+                      "actions": { "hover": true }
+                    }
+                  }
+                ]
+              }
+            }
           ]
         }
       },
@@ -325,15 +505,17 @@
                     "title": "Top countries by rounds (click = drilldown rounds)",
                     "grain": "round",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
-                    "spec": {
-                      "dimension": "true_country",
-                      "measure": "rounds_count",
-                      "sort": { "mode": "desc" },
-                      "limit": 15,
-                      "actions": {
-                        "click": {
-                          "type": "drilldown",
-                          "target": "rounds",
+                      "spec": {
+                        "dimension": "true_country",
+                        "measures": ["rounds_count", "avg_score", "rate_5k", "throw_rate", "hit_rate"],
+                        "activeMeasure": "rounds_count",
+                        "sort": { "mode": "desc" },
+                        "limit": 15,
+                        "extendable": true,
+                        "actions": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
                           "columnsPreset": "roundMode",
                           "filterFromPoint": true
                         }

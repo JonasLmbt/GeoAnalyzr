@@ -249,6 +249,9 @@ export type GameRow =
   | GameRowStreak
   | GameRowOther;
 
+// Convenience "fact" row for analytics (feed + details merged, with a stable time field).
+export type GameFactRow = FeedGameRow & Partial<GameRow> & { ts?: number; result?: "Win" | "Loss" };
+
 export interface LegacyDetailsRowCompat {
   gameId: string; // PK
   status: "missing" | "ok" | "error";

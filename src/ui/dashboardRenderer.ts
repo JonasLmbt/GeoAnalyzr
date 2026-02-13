@@ -1,7 +1,8 @@
 // src/ui/dashboardRenderer.ts
 import type { SemanticRegistry } from "../config/semantic.types";
 import type { DashboardDoc, WidgetDef } from "../config/dashboard.types";
-import type { RoundRow } from "../db";
+import type { Grain } from "../config/semantic.types";
+import type { RoundRow, GameFactRow } from "../db";
 import { DrilldownOverlay } from "./drilldownOverlay";
 import { renderStatListWidget } from "./widgets/statListWidget";
 import { renderChartWidget } from "./widgets/chartWidget";
@@ -12,13 +13,14 @@ export async function renderDashboard(
   root: HTMLElement,
   semantic: SemanticRegistry,
   dashboard: DashboardDoc,
-  opts?: { rows?: RoundRow[] }
+  opts?: { datasets?: Partial<Record<Grain, any[]>>; context?: { dateRange?: { fromTs: number | null; toTs: number | null } } }
 ): Promise<void> {
   root.innerHTML = "";
   const doc = root.ownerDocument;
 
   const overlay = new DrilldownOverlay(root);
-  const baseRows = opts?.rows;
+  const datasets = opts?.datasets ?? {};
+  const context = opts?.context;
 
   const tabBar = doc.createElement("div");
   tabBar.className = "ga-tabs";
@@ -52,9 +54,10 @@ export async function renderDashboard(
   }
 
   async function renderWidget(widget: WidgetDef): Promise<HTMLElement> {
-    if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows);
-    if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, baseRows);
-    if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
+    const baseRows = datasets[widget.grain];
+    if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, datasets, context);
+    if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");
