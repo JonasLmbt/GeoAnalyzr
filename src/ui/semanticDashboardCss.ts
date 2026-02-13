@@ -189,7 +189,6 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-root[data-ga-theme="geoguessr"] .ga-close,
     .ga-root[data-ga-theme="geoguessr"] .ga-gear,
     .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn,
-    .ga-root[data-ga-theme="geoguessr"] .ga-tab,
     .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button,
     .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle {
       background: linear-gradient(180deg, rgba(121, 80, 229, 0.38) 0%, rgba(86, 59, 154, 0.26) 100%);
@@ -204,26 +203,21 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-root[data-ga-theme="geoguessr"] .ga-close:hover,
     .ga-root[data-ga-theme="geoguessr"] .ga-gear:hover,
     .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn:hover,
-    .ga-root[data-ga-theme="geoguessr"] .ga-tab:hover,
     .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button:hover,
     .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle:hover {
       filter: brightness(1.06);
       box-shadow: 0 16px 38px rgba(0,0,0,0.28);
       transform: translateY(-1px);
     }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tab.active {
-      background: linear-gradient(180deg, rgba(58, 232, 189, 0.24) 0%, rgba(0, 162, 254, 0.18) 100%);
-      border-color: rgba(58, 232, 189, 0.24);
-    }
 
     /* GeoGuessr-like section tabs (top navigation vibe) */
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs {
       padding: 8px 10px;
-      gap: 6px;
+      gap: 18px;
       border-radius: 14px;
-      background: linear-gradient(180deg, rgba(16, 16, 28, 0.55) 0%, rgba(16, 16, 28, 0.28) 100%);
-      border: 1px solid rgba(255,255,255,0.10);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 44px rgba(0,0,0,0.22);
+      background: linear-gradient(180deg, rgba(16, 16, 28, 0.42) 0%, rgba(16, 16, 28, 0.18) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.20);
       backdrop-filter: blur(14px);
       overflow-x: auto;
       scrollbar-width: none;
@@ -231,37 +225,35 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs::-webkit-scrollbar { display: none; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab {
       background: transparent;
-      border: 1px solid transparent;
+      border: 0;
       box-shadow: none;
-      border-radius: 999px;
-      padding: 8px 12px;
+      border-radius: 10px;
+      padding: 10px 4px;
       font-size: 12px;
       font-weight: 800;
-      letter-spacing: 0.7px;
+      letter-spacing: 0.9px;
       text-transform: uppercase;
-      color: rgba(243,244,255,0.78);
-      transition: background 160ms ease, transform 160ms ease, filter 160ms ease;
+      color: rgba(243,244,255,0.70);
+      transition: color 160ms ease, background 160ms ease;
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
-      background: rgba(255,255,255,0.06);
-      transform: translateY(-1px);
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.88);
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab.active {
-      background: linear-gradient(180deg, rgba(121, 80, 229, 0.42) 0%, rgba(86, 59, 154, 0.30) 100%);
-      border-color: rgba(255,255,255,0.14);
-      color: rgba(255,255,255,0.95);
-      box-shadow: 0 14px 34px rgba(0,0,0,0.26);
+      background: transparent;
+      color: rgba(255,255,255,0.96);
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab.active::after {
       content: "";
       position: absolute;
-      left: 14px;
-      right: 14px;
-      bottom: -6px;
-      height: 3px;
+      left: 6px;
+      right: 6px;
+      bottom: 2px;
+      height: 2px;
       border-radius: 999px;
-      background: linear-gradient(90deg, rgba(254, 205, 25, 0.95), rgba(58, 232, 189, 0.85));
-      filter: drop-shadow(0 8px 16px rgba(0,0,0,0.35));
+      background: rgba(254, 205, 25, 0.95);
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.32));
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab { position: relative; }
 
