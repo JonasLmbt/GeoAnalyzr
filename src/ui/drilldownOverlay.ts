@@ -327,6 +327,10 @@ export class DrilldownOverlay {
       return undefined;
     }
 
+    if (key === "opponentName") return typeof (row as any)?.opponentName === "string" ? (row as any).opponentName : undefined;
+    if (key === "opponentCountry") return typeof (row as any)?.opponentCountry === "string" ? (row as any).opponentCountry : undefined;
+    if (key === "matchups") return typeof (row as any)?.matchups === "number" ? (row as any).matchups : undefined;
+
     // Drilldown requirement: in team duels, score should reflect the best own guess (self or mate).
     if (key === "player_self_score") {
       const mf = String((row as any)?.modeFamily ?? "").toLowerCase();
@@ -348,6 +352,14 @@ export class DrilldownOverlay {
   ): void {
     const key = col.key;
     const raw = this.getCellRawValue(row, key, semantic);
+
+    if (key === "opponentName" && typeof raw === "string" && raw.trim()) {
+      const span = this.doc.createElement("span");
+      span.className = "ga-dd-link";
+      span.textContent = raw;
+      td.appendChild(span);
+      return;
+    }
 
     if (col.type === "link" || key === "guess_maps" || key === "street_view") {
       const href = typeof raw === "string" ? raw : "";

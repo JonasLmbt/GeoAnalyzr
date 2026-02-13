@@ -97,6 +97,22 @@
       "sortModes": ["chronological", "asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 30 }
     },
+    "opponent_country": {
+      "label": "Opponent country",
+      "kind": "category",
+      "grain": "game",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30 }
+    },
+    "opponent_name": {
+      "label": "Opponent",
+      "kind": "category",
+      "grain": "game",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30, "selectorRequired": true }
+    },
 
     "round_number": {
       "label": "Round #",
@@ -227,6 +243,27 @@
       "grain": "game",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_games"
+    },
+    "matchups_count": {
+      "label": "Match-ups",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_games"
+    },
+    "unique_opponents_count": {
+      "label": "Unique opponents",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_distinct_opponent_name"
+    },
+    "unique_opponent_countries_count": {
+      "label": "Unique countries",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_distinct_opponent_country"
     },
     "avg_game_length": {
       "label": "Avg game length",
@@ -589,6 +626,7 @@
   },
   "columnAliases": {
     "ts": ["playedAt", "startTime"],
+    "game_mode": ["gameMode", "gameModeSimple", "game_mode", "mode", "gameType"],
     "true_country": ["trueCountry", "true_country"],
     "player_self_country": ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
     "player_self_score": ["player_self_score", "p1_score", "score"],
@@ -635,13 +673,13 @@
       "entity": "game",
       "columnsPresets": {
         "opponentMode": [
-          "ts",
-          "gameId",
-          "opponentName",
-          "game_mode",
-          "player_self_startRating",
-          "player_self_endRating",
-          "result"
+          { "key": "ts", "label": "Date", "sortable": true },
+          { "key": "opponentName", "label": "Opponent", "sortable": true },
+          { "key": "result", "label": "Result", "sortable": true, "colored": true },
+          { "key": "matchups", "label": "Match-ups", "sortable": true },
+          { "key": "opponentCountry", "label": "Country", "sortable": true },
+          { "key": "game_mode", "label": "Game Mode", "sortable": true },
+          { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } }
         ]
       },
       "defaultPreset": "opponentMode"

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.10
+// @version      1.6.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15400,6 +15400,14 @@
       weekday: weekdayKeyAny,
       hour: hourKeyAny,
       game_id: (g) => typeof g?.gameId === "string" && g.gameId.trim().length ? g.gameId : null,
+      opponent_name: (g) => {
+        const s = typeof g?.opponentName === "string" ? g.opponentName.trim() : "";
+        return s ? s : null;
+      },
+      opponent_country: (g) => {
+        const s = typeof g?.opponentCountry === "string" ? g.opponentCountry.trim() : "";
+        return s ? s : null;
+      },
       game_mode: gameModeKeyAny,
       mode_family: modeFamilyKeyAny,
       result: resultKeyAny,
@@ -40052,6 +40060,22 @@
         sortModes: ["chronological", "asc", "desc"],
         cardinality: { policy: "small", maxSeries: 30 }
       },
+      opponent_country: {
+        label: "Opponent country",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      opponent_name: {
+        label: "Opponent",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30, selectorRequired: true }
+      },
       round_number: {
         label: "Round #",
         kind: "category",
@@ -40180,6 +40204,27 @@
         grain: "game",
         allowedCharts: ["bar", "line"],
         formulaId: "count_games"
+      },
+      matchups_count: {
+        label: "Match-ups",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games"
+      },
+      unique_opponents_count: {
+        label: "Unique opponents",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_opponent_name"
+      },
+      unique_opponent_countries_count: {
+        label: "Unique countries",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_opponent_country"
       },
       avg_game_length: {
         label: "Avg game length",
@@ -40536,6 +40581,7 @@
     },
     columnAliases: {
       ts: ["playedAt", "startTime"],
+      game_mode: ["gameMode", "gameModeSimple", "game_mode", "mode", "gameType"],
       true_country: ["trueCountry", "true_country"],
       player_self_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
       player_self_score: ["player_self_score", "p1_score", "score"],
@@ -40581,13 +40627,13 @@
         entity: "game",
         columnsPresets: {
           opponentMode: [
-            "ts",
-            "gameId",
-            "opponentName",
-            "game_mode",
-            "player_self_startRating",
-            "player_self_endRating",
-            "result"
+            { key: "ts", label: "Date", sortable: true },
+            { key: "opponentName", label: "Opponent", sortable: true },
+            { key: "result", label: "Result", sortable: true, colored: true },
+            { key: "matchups", label: "Match-ups", sortable: true },
+            { key: "opponentCountry", label: "Country", sortable: true },
+            { key: "game_mode", label: "Game Mode", sortable: true },
+            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
           ]
         },
         defaultPreset: "opponentMode"
@@ -41740,6 +41786,78 @@
                         actions: {
                           hover: true,
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "opponents",
+          title: "Opponents",
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_opponents",
+                title: "Opponents",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_opponents_scope",
+                      type: "stat_list",
+                      title: "Scope",
+                      grain: "game",
+                      placement: { x: 0, y: 0, w: 12, h: 3 },
+                      spec: {
+                        rows: [
+                          { label: "Unique opponents", measure: "unique_opponents_count" },
+                          { label: "Unique countries", measure: "unique_opponent_countries_count" }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_opponents_by_country",
+                      type: "chart",
+                      title: "Opponents - Match-ups by opponent country",
+                      grain: "game",
+                      placement: { x: 0, y: 3, w: 12, h: 8 },
+                      spec: {
+                        type: "bar",
+                        limit: 20,
+                        x: { dimension: "opponent_country" },
+                        y: { measure: "matchups_count" },
+                        sort: { mode: "desc" },
+                        actions: {
+                          hover: true,
+                          click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_opponents_top",
+                      type: "breakdown",
+                      title: "Opponents - Top opponents",
+                      grain: "game",
+                      placement: { x: 0, y: 11, w: 12, h: 7 },
+                      spec: {
+                        dimension: "opponent_name",
+                        measure: "matchups_count",
+                        sort: { mode: "desc" },
+                        limit: 15,
+                        extendable: true,
+                        actions: {
+                          click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: true }
                         }
                       }
                     }
@@ -42977,6 +43095,9 @@
         if (typeof lat === "number" && typeof lng === "number") return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
         return void 0;
       }
+      if (key === "opponentName") return typeof row?.opponentName === "string" ? row.opponentName : void 0;
+      if (key === "opponentCountry") return typeof row?.opponentCountry === "string" ? row.opponentCountry : void 0;
+      if (key === "matchups") return typeof row?.matchups === "number" ? row.matchups : void 0;
       if (key === "player_self_score") {
         const mf = String(row?.modeFamily ?? "").toLowerCase();
         if (mf === "teamduels") {
@@ -42989,6 +43110,13 @@
     renderCell(td, row, col, semantic, dateMode) {
       const key = col.key;
       const raw = this.getCellRawValue(row, key, semantic);
+      if (key === "opponentName" && typeof raw === "string" && raw.trim()) {
+        const span2 = this.doc.createElement("span");
+        span2.className = "ga-dd-link";
+        span2.textContent = raw;
+        td.appendChild(span2);
+        return;
+      }
       if (col.type === "link" || key === "guess_maps" || key === "street_view") {
         const href = typeof raw === "string" ? raw : "";
         if (!href) return;
@@ -43290,6 +43418,22 @@
   };
   var GAME_MEASURES_BY_FORMULA_ID = {
     count_games: (rows) => rows.length,
+    count_distinct_opponent_name: (rows) => {
+      const set = /* @__PURE__ */ new Set();
+      for (const g of rows) {
+        const s = typeof g?.opponentName === "string" ? g.opponentName.trim() : "";
+        if (s) set.add(s);
+      }
+      return set.size;
+    },
+    count_distinct_opponent_country: (rows) => {
+      const set = /* @__PURE__ */ new Set();
+      for (const g of rows) {
+        const s = typeof g?.opponentCountry === "string" ? g.opponentCountry.trim() : "";
+        if (s) set.add(s);
+      }
+      return set.size;
+    },
     mean_game_length_rounds: (rows) => {
       let sum2 = 0;
       let n = 0;
@@ -45356,6 +45500,23 @@
   }
 
   // src/ui/analysisRenderer.ts
+  function explodeOpponentsFromGames(games) {
+    const out = [];
+    for (const g of games) {
+      const base = { ...g };
+      const mf = String(base?.modeFamily ?? "").toLowerCase();
+      const matchups = mf === "teamduels" ? 2 : 1;
+      const pushOpp = (name, country) => {
+        const n = typeof name === "string" ? name.trim() : "";
+        if (!n) return;
+        const c = typeof country === "string" ? country.trim() : "";
+        out.push({ ...base, opponentName: n, opponentCountry: c || "Unknown", matchups });
+      };
+      pushOpp(base.player_opponent_name ?? base.playerOpponentName, base.player_opponent_country ?? base.playerOpponentCountry);
+      pushOpp(base.player_opponent_mate_name ?? base.playerOpponentMateName, base.player_opponent_mate_country ?? base.playerOpponentMateCountry);
+    }
+    return out;
+  }
   async function renderAnalysisApp(opts) {
     const { body, semantic, dashboard } = opts;
     const doc = body.ownerDocument;
@@ -45465,11 +45626,20 @@
         }
         const filters = { global: { spec: specFilters, state, controlIds } };
         const datasets = {};
-        if (used.has("round") || used.has("session")) datasets.round = await getRounds(filters);
-        if (used.has("game")) datasets.game = await getGames(filters);
+        const isOpponentsSection = section.id === "opponents";
+        if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
+        if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
         if (used.has("session")) {
           const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
           datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
+        }
+        if (isOpponentsSection && Array.isArray(datasets.game)) {
+          const rr = Array.isArray(datasets.round) ? datasets.round : [];
+          if (rr.length) {
+            const allowed = new Set(rr.map((r) => r?.gameId).filter((x) => typeof x === "string" && x));
+            datasets.game = datasets.game.filter((g) => allowed.has(g?.gameId));
+          }
+          datasets.game = explodeOpponentsFromGames(datasets.game);
         }
         datasetsBySection[section.id] = datasets;
         const hasDate = !controlIds || controlIds.includes("dateRange");

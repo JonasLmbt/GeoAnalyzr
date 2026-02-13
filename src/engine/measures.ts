@@ -278,6 +278,24 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
 export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) => number> = {
   count_games: (rows) => rows.length,
 
+  count_distinct_opponent_name: (rows) => {
+    const set = new Set<string>();
+    for (const g of rows as any[]) {
+      const s = typeof g?.opponentName === "string" ? g.opponentName.trim() : "";
+      if (s) set.add(s);
+    }
+    return set.size;
+  },
+
+  count_distinct_opponent_country: (rows) => {
+    const set = new Set<string>();
+    for (const g of rows as any[]) {
+      const s = typeof g?.opponentCountry === "string" ? g.opponentCountry.trim() : "";
+      if (s) set.add(s);
+    }
+    return set.size;
+  },
+
   mean_game_length_rounds: (rows) => {
     let sum = 0;
     let n = 0;

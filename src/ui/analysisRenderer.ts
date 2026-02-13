@@ -7,6 +7,26 @@ import { getSelectOptionsForControl } from "../engine/selectOptions";
 import { getGamePlayedAtBounds, getRounds, getGames, getSessions } from "../engine/queryEngine";
 import type { Grain } from "../config/semantic.types";
 
+function explodeOpponentsFromGames(games: any[]): any[] {
+  const out: any[] = [];
+  for (const g of games as any[]) {
+    const base: any = { ...g };
+    const mf = String(base?.modeFamily ?? "").toLowerCase();
+    const matchups = mf === "teamduels" ? 2 : 1;
+
+    const pushOpp = (name: unknown, country: unknown) => {
+      const n = typeof name === "string" ? name.trim() : "";
+      if (!n) return;
+      const c = typeof country === "string" ? country.trim() : "";
+      out.push({ ...base, opponentName: n, opponentCountry: c || "Unknown", matchups });
+    };
+
+    pushOpp(base.player_opponent_name ?? base.playerOpponentName, base.player_opponent_country ?? base.playerOpponentCountry);
+    pushOpp(base.player_opponent_mate_name ?? base.playerOpponentMateName, base.player_opponent_mate_country ?? base.playerOpponentMateCountry);
+  }
+  return out;
+}
+
 export async function renderAnalysisApp(opts: {
   body: HTMLDivElement;
   semantic: SemanticRegistry;
@@ -139,11 +159,23 @@ export async function renderAnalysisApp(opts: {
 
       const filters = { global: { spec: specFilters, state, controlIds } };
       const datasets: Partial<Record<Grain, any[]>> = {};
-      if (used.has("round") || used.has("session")) datasets.round = await getRounds(filters);
-      if (used.has("game")) datasets.game = await getGames(filters);
+      const isOpponentsSection = section.id === "opponents";
+      if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
+      if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
       if (used.has("session")) {
         const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
         datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
+      }
+
+      if (isOpponentsSection && Array.isArray(datasets.game)) {
+        // Ensure round-grain filters like teammate/country influence opponent stats by filtering games to those present in rounds.
+        const rr = Array.isArray(datasets.round) ? (datasets.round as any[]) : [];
+        if (rr.length) {
+          const allowed = new Set(rr.map((r) => (r as any)?.gameId).filter((x) => typeof x === "string" && x));
+          datasets.game = (datasets.game as any[]).filter((g) => allowed.has((g as any)?.gameId));
+        }
+        // Explode each game into one row per opponent (opponent + opponent_mate).
+        datasets.game = explodeOpponentsFromGames(datasets.game as any[]);
       }
       datasetsBySection[section.id] = datasets;
 

@@ -1153,6 +1153,79 @@
           ]
         }
       }
+      ,
+      {
+        "id": "opponents",
+        "title": "Opponents",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_opponents",
+              "title": "Opponents",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 18,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_opponents_scope",
+                    "type": "stat_list",
+                    "title": "Scope",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 3 },
+                    "spec": {
+                      "rows": [
+                        { "label": "Unique opponents", "measure": "unique_opponents_count" },
+                        { "label": "Unique countries", "measure": "unique_opponent_countries_count" }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_opponents_by_country",
+                    "type": "chart",
+                    "title": "Opponents - Match-ups by opponent country",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 3, "w": 12, "h": 8 },
+                    "spec": {
+                      "type": "bar",
+                      "limit": 20,
+                      "x": { "dimension": "opponent_country" },
+                      "y": { "measure": "matchups_count" },
+                      "sort": { "mode": "desc" },
+                      "actions": {
+                        "hover": true,
+                        "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
+                    "widgetId": "w_opponents_top",
+                    "type": "breakdown",
+                    "title": "Opponents - Top opponents",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 11, "w": 12, "h": 7 },
+                    "spec": {
+                      "dimension": "opponent_name",
+                      "measure": "matchups_count",
+                      "sort": { "mode": "desc" },
+                      "limit": 15,
+                      "extendable": true,
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
     ]
   }
 }

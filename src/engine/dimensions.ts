@@ -205,6 +205,14 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     weekday: weekdayKeyAny,
     hour: hourKeyAny,
     game_id: (g: any) => (typeof g?.gameId === "string" && g.gameId.trim().length ? g.gameId : null),
+    opponent_name: (g: any) => {
+      const s = typeof g?.opponentName === "string" ? g.opponentName.trim() : "";
+      return s ? s : null;
+    },
+    opponent_country: (g: any) => {
+      const s = typeof g?.opponentCountry === "string" ? g.opponentCountry.trim() : "";
+      return s ? s : null;
+    },
     game_mode: gameModeKeyAny,
     mode_family: modeFamilyKeyAny,
     result: resultKeyAny,
