@@ -114,6 +114,9 @@ export interface ChartSpec {
 export interface StatRowDef {
   label: string;
   measure: string;
+  // Optional override to compute the row at a different grain than the widget.
+  // This allows "overview" stat lists to mix e.g. game and round measures without hardcoding.
+  grain?: Grain;
   filters?: FilterClause[];
   actions?: Actions;
 }
@@ -133,6 +136,8 @@ export interface BreakdownSpec {
   // If true, allow expanding beyond `limit` to show all rows.
   extendable?: boolean;
   dimension: string;
+  // Optional list of dimension keys to hide (case-insensitive match on displayed key).
+  excludeKeys?: string[];
   // Single-measure breakdown (legacy + simplest form).
   measure?: string;
   // Multi-measure breakdown. If provided, a select will be shown to switch active measure.

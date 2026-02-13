@@ -204,6 +204,27 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_win_game"
     },
+    "games_with_result_count": {
+      "label": "Games with result data",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_games_with_result"
+    },
+    "loss_count": {
+      "label": "Loss count",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_loss_game"
+    },
+    "tie_count": {
+      "label": "Tie count",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_tie_game"
+    },
     "end_rating_avg": {
       "label": "Avg end rating",
       "unit": "rating",
@@ -211,12 +232,33 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_player_self_end_rating"
     },
+    "best_end_rating": {
+      "label": "Best rating",
+      "unit": "rating",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_player_self_end_rating"
+    },
     "rating_delta_avg": {
       "label": "Avg rating delta",
       "unit": "rating",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_player_self_rating_delta"
+    },
+    "longest_win_streak": {
+      "label": "Longest win streak",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_win_streak"
+    },
+    "longest_loss_streak": {
+      "label": "Longest loss streak",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_loss_streak"
     },
 
     "hit_rate": {
@@ -247,6 +289,48 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_throw_round"
     },
+    "score_median": {
+      "label": "Median score",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "median_player_self_score"
+    },
+    "score_stddev": {
+      "label": "Score Std Dev",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "stddev_player_self_score"
+    },
+    "distance_median_km": {
+      "label": "Median distance",
+      "unit": "km",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "median_player_self_distance_km"
+    },
+    "guess_duration_median": {
+      "label": "Median guess duration",
+      "unit": "seconds",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "median_duration_seconds"
+    },
+    "rounds_with_time_count": {
+      "label": "Rounds with time data",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_rounds_with_duration"
+    },
+    "time_played_seconds": {
+      "label": "Time played",
+      "unit": "duration",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "sum_duration_seconds"
+    },
 
     "damage_dealt_avg": {
       "label": "Avg damage dealt",
@@ -269,6 +353,7 @@
     "points": { "format": "float", "decimals": 1 },
     "percent": { "format": "percent", "decimals": 1 },
     "seconds": { "format": "float", "decimals": 1 },
+    "duration": { "format": "duration" },
     "rating": { "format": "float", "decimals": 0 },
     "km": { "format": "float", "decimals": 1 }
   },

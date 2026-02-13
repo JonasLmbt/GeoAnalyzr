@@ -164,7 +164,12 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     for (const row of spec.rows) {
       const meas = semantic.measures[row.measure];
       assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
-      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${row.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+      const rowGrain = (row as any).grain ?? widget.grain;
+      assert(
+        meas.grain === rowGrain,
+        "E_GRAIN_MISMATCH",
+        `Measure '${row.measure}' grain=${meas.grain} but stat row grain=${rowGrain} (widget grain=${widget.grain})`
+      );
       validateClickAction(semantic, widget.widgetId, row.actions?.click);
     }
   }

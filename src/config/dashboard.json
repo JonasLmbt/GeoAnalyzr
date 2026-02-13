@@ -75,17 +75,15 @@
                   {
                     "widgetId": "w_overview_facts",
                     "type": "stat_list",
-                    "title": "Results, Win Rate & Ratings",
+                    "title": "Results, Win Rate & Streaks",
                     "grain": "game",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 7 },
                     "spec": {
                       "rows": [
                         {
-                          "label": "Games",
-                          "measure": "games_count",
-                          "actions": {
-                            "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false }
-                          }
+                          "label": "Games with result data",
+                          "measure": "games_with_result_count",
+                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
                         },
                         {
                           "label": "Wins",
@@ -97,6 +95,32 @@
                               "columnsPreset": "opponentMode",
                               "filterFromPoint": false,
                               "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Losses",
+                          "measure": "loss_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Loss" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Ties",
+                          "measure": "tie_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Tie" }]
                             }
                           }
                         },
@@ -113,8 +137,15 @@
                             }
                           }
                         },
-                        { "label": "Avg end rating", "measure": "end_rating_avg" },
-                        { "label": "Avg rating delta", "measure": "rating_delta_avg" }
+                        { "label": "Best rating", "measure": "best_end_rating" },
+                        { "label": "Longest win streak", "measure": "longest_win_streak" },
+                        { "label": "Longest loss streak", "measure": "longest_loss_streak" },
+                        { "label": "Avg score", "measure": "avg_score", "grain": "round" },
+                        { "label": "Avg distance", "measure": "avg_distance_km", "grain": "round" },
+                        { "label": "Avg time", "measure": "avg_guess_duration", "grain": "round" },
+                        { "label": "Time played", "measure": "time_played_seconds", "grain": "round" },
+                        { "label": "Perfect 5k rounds", "measure": "fivek_count", "grain": "round" },
+                        { "label": "Throws (<50)", "measure": "throw_count", "grain": "round" }
                       ]
                     }
                   },
@@ -127,6 +158,7 @@
                     "placement": { "x": 0, "y": 7, "w": 12, "h": 4 },
                     "spec": {
                       "dimension": "mode_family",
+                      "excludeKeys": ["other", "Streak"],
                       "measure": "games_count",
                       "sort": { "mode": "desc" },
                       "limit": 12,

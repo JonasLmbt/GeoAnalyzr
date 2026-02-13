@@ -5,6 +5,24 @@ import { getSelfScore, getTrueCountry, getGuessCountrySelf, getDurationSeconds, 
 
 export type MeasureFn = (rows: any[]) => number;
 
+function medianOf(values: number[]): number {
+  const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
+  if (finite.length === 0) return 0;
+  finite.sort((a, b) => a - b);
+  const mid = Math.floor(finite.length / 2);
+  return finite.length % 2 ? finite[mid] : (finite[mid - 1] + finite[mid]) / 2;
+}
+
+function stddevOf(values: number[]): number {
+  const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
+  const n = finite.length;
+  if (n <= 1) return 0;
+  const mean = finite.reduce((a, b) => a + b, 0) / n;
+  let sumSq = 0;
+  for (const v of finite) sumSq += (v - mean) * (v - mean);
+  return Math.sqrt(sumSq / n);
+}
+
 function is5k(r: RoundRow): boolean {
   const s = getSelfScore(r);
   return typeof s === "number" && s >= 5000;
@@ -40,6 +58,18 @@ function getGameSelfEndRating(g: GameFactRow): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+function getGameOutcome(g: GameFactRow): "win" | "loss" | "tie" | null {
+  const v = getGameSelfVictory(g);
+  if (typeof v === "boolean") return v ? "win" : "loss";
+  const r = pick(g as any, "result");
+  const s = typeof r === "string" ? r.trim().toLowerCase() : "";
+  if (!s) return null;
+  if (s === "win" || s === "w" || s === "true") return "win";
+  if (s === "loss" || s === "l" || s === "false") return "loss";
+  if (s === "tie" || s === "t" || s === "draw") return "tie";
+  return null;
+}
+
 export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => number> = {
   count_rounds: (rows) => rows.length,
 
@@ -55,6 +85,9 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     }
     return n ? sum / n : 0;
   },
+
+  median_player_self_score: (rows) => medianOf(rows.map((r) => getSelfScore(r) as any).filter((v) => typeof v === "number")),
+  stddev_player_self_score: (rows) => stddevOf(rows.map((r) => getSelfScore(r) as any).filter((v) => typeof v === "number")),
 
   rate_player_self_score_eq_5000: (rows) => {
     const n = rows.length;
@@ -125,6 +158,24 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     return n ? sum / n : 0;
   },
 
+  median_duration_seconds: (rows) => medianOf(rows.map((r) => getDurationSeconds(r) as any).filter((v) => typeof v === "number")),
+  sum_duration_seconds: (rows) => {
+    let sum = 0;
+    for (const r of rows) {
+      const v = getDurationSeconds(r);
+      if (typeof v === "number" && Number.isFinite(v)) sum += v;
+    }
+    return sum;
+  },
+  count_rounds_with_duration: (rows) => {
+    let k = 0;
+    for (const r of rows) {
+      const v = getDurationSeconds(r);
+      if (typeof v === "number" && Number.isFinite(v)) k++;
+    }
+    return k;
+  },
+
   mean_player_self_distance_km: (rows) => {
     let sum = 0;
     let n = 0;
@@ -137,6 +188,8 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     }
     return n ? sum / n : 0;
   },
+
+  median_player_self_distance_km: (rows) => medianOf(rows.map((r) => getDistanceKm(r) as any).filter((v) => typeof v === "number")),
 
   mean_damage_dealt: (rows) => {
     let sum = 0;
@@ -169,11 +222,15 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
   count_games: (rows) => rows.length,
 
   rate_player_self_win: (rows) => {
-    const n = rows.length;
-    if (!n) return 0;
+    let n = 0;
     let k = 0;
-    for (const g of rows) if (getGameSelfVictory(g) === true) k++;
-    return k / n;
+    for (const g of rows) {
+      const o = getGameOutcome(g);
+      if (!o) continue;
+      n++;
+      if (o === "win") k++;
+    }
+    return n ? k / n : 0;
   },
 
   mean_player_self_end_rating: (rows) => {
@@ -205,8 +262,63 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
   ,
   count_win_game: (rows) => {
     let k = 0;
-    for (const g of rows) if (getGameSelfVictory(g) === true) k++;
+    for (const g of rows) if (getGameOutcome(g) === "win") k++;
     return k;
+  },
+  count_loss_game: (rows) => {
+    let k = 0;
+    for (const g of rows) if (getGameOutcome(g) === "loss") k++;
+    return k;
+  },
+  count_tie_game: (rows) => {
+    let k = 0;
+    for (const g of rows) if (getGameOutcome(g) === "tie") k++;
+    return k;
+  },
+  count_games_with_result: (rows) => {
+    let k = 0;
+    for (const g of rows) if (getGameOutcome(g)) k++;
+    return k;
+  },
+  max_player_self_end_rating: (rows) => {
+    let best = -Infinity;
+    for (const g of rows) {
+      const v = getGameSelfEndRating(g);
+      if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
+    }
+    return Number.isFinite(best) ? best : 0;
+  },
+  max_win_streak: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0));
+    let best = 0;
+    let cur = 0;
+    for (const g of sorted) {
+      const o = getGameOutcome(g);
+      if (!o) continue;
+      if (o === "win") {
+        cur++;
+        best = Math.max(best, cur);
+      } else {
+        cur = 0;
+      }
+    }
+    return best;
+  },
+  max_loss_streak: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0));
+    let best = 0;
+    let cur = 0;
+    for (const g of sorted) {
+      const o = getGameOutcome(g);
+      if (!o) continue;
+      if (o === "loss") {
+        cur++;
+        best = Math.max(best, cur);
+      } else {
+        cur = 0;
+      }
+    }
+    return best;
   }
 };
 

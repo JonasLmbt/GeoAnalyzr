@@ -39603,7 +39603,12 @@
       for (const row of spec.rows) {
         const meas = semantic.measures[row.measure];
         assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
-        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${row.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+        const rowGrain = row.grain ?? widget.grain;
+        assert(
+          meas.grain === rowGrain,
+          "E_GRAIN_MISMATCH",
+          `Measure '${row.measure}' grain=${meas.grain} but stat row grain=${rowGrain} (widget grain=${widget.grain})`
+        );
         validateClickAction(semantic, widget.widgetId, row.actions?.click);
       }
     }
@@ -39889,6 +39894,27 @@
         allowedCharts: ["bar", "line"],
         formulaId: "count_win_game"
       },
+      games_with_result_count: {
+        label: "Games with result data",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games_with_result"
+      },
+      loss_count: {
+        label: "Loss count",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_loss_game"
+      },
+      tie_count: {
+        label: "Tie count",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_tie_game"
+      },
       end_rating_avg: {
         label: "Avg end rating",
         unit: "rating",
@@ -39896,12 +39922,33 @@
         allowedCharts: ["bar", "line"],
         formulaId: "mean_player_self_end_rating"
       },
+      best_end_rating: {
+        label: "Best rating",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_player_self_end_rating"
+      },
       rating_delta_avg: {
         label: "Avg rating delta",
         unit: "rating",
         grain: "game",
         allowedCharts: ["bar", "line"],
         formulaId: "mean_player_self_rating_delta"
+      },
+      longest_win_streak: {
+        label: "Longest win streak",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_win_streak"
+      },
+      longest_loss_streak: {
+        label: "Longest loss streak",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_loss_streak"
       },
       hit_rate: {
         label: "Hit rate",
@@ -39931,6 +39978,48 @@
         allowedCharts: ["bar", "line"],
         formulaId: "count_throw_round"
       },
+      score_median: {
+        label: "Median score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "median_player_self_score"
+      },
+      score_stddev: {
+        label: "Score Std Dev",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "stddev_player_self_score"
+      },
+      distance_median_km: {
+        label: "Median distance",
+        unit: "km",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "median_player_self_distance_km"
+      },
+      guess_duration_median: {
+        label: "Median guess duration",
+        unit: "seconds",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "median_duration_seconds"
+      },
+      rounds_with_time_count: {
+        label: "Rounds with time data",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_rounds_with_duration"
+      },
+      time_played_seconds: {
+        label: "Time played",
+        unit: "duration",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "sum_duration_seconds"
+      },
       damage_dealt_avg: {
         label: "Avg damage dealt",
         unit: "points",
@@ -39951,6 +40040,7 @@
       points: { format: "float", decimals: 1 },
       percent: { format: "percent", decimals: 1 },
       seconds: { format: "float", decimals: 1 },
+      duration: { format: "duration" },
       rating: { format: "float", decimals: 0 },
       km: { format: "float", decimals: 1 }
     },
@@ -40105,11 +40195,9 @@
                       spec: {
                         rows: [
                           {
-                            label: "Games",
-                            measure: "games_count",
-                            actions: {
-                              click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false }
-                            }
+                            label: "Games with result data",
+                            measure: "games_with_result_count",
+                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
                           },
                           {
                             label: "Wins",
@@ -40121,6 +40209,32 @@
                                 columnsPreset: "opponentMode",
                                 filterFromPoint: false,
                                 extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Losses",
+                            measure: "loss_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Ties",
+                            measure: "tie_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Tie" }]
                               }
                             }
                           },
@@ -40137,8 +40251,15 @@
                               }
                             }
                           },
-                          { label: "Avg end rating", measure: "end_rating_avg" },
-                          { label: "Avg rating delta", measure: "rating_delta_avg" }
+                          { label: "Best rating", measure: "best_end_rating" },
+                          { label: "Longest win streak", measure: "longest_win_streak" },
+                          { label: "Longest loss streak", measure: "longest_loss_streak" },
+                          { label: "Avg score", measure: "avg_score", grain: "round" },
+                          { label: "Avg distance", measure: "avg_distance_km", grain: "round" },
+                          { label: "Avg time", measure: "avg_guess_duration", grain: "round" },
+                          { label: "Time played", measure: "time_played_seconds", grain: "round" },
+                          { label: "Perfect 5k rounds", measure: "fivek_count", grain: "round" },
+                          { label: "Throws (<50)", measure: "throw_count", grain: "round" }
                         ]
                       }
                     },
@@ -40150,6 +40271,7 @@
                       placement: { x: 0, y: 7, w: 12, h: 4 },
                       spec: {
                         dimension: "mode_family",
+                        excludeKeys: ["other", "Streak"],
                         measure: "games_count",
                         sort: { mode: "desc" },
                         limit: 12,
@@ -40807,7 +40929,15 @@
       animation: ga-dot-in 220ms ease-out both;
       animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
     }
-    .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
+    .ga-breakdown-box {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
     .ga-breakdown-header {
       display:flex;
       justify-content:space-between;
@@ -41645,6 +41775,22 @@
   };
 
   // src/engine/measures.ts
+  function medianOf(values) {
+    const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (finite.length === 0) return 0;
+    finite.sort((a, b) => a - b);
+    const mid = Math.floor(finite.length / 2);
+    return finite.length % 2 ? finite[mid] : (finite[mid - 1] + finite[mid]) / 2;
+  }
+  function stddevOf(values) {
+    const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
+    const n = finite.length;
+    if (n <= 1) return 0;
+    const mean = finite.reduce((a, b) => a + b, 0) / n;
+    let sumSq = 0;
+    for (const v of finite) sumSq += (v - mean) * (v - mean);
+    return Math.sqrt(sumSq / n);
+  }
   function is5k(r) {
     const s = getSelfScore(r);
     return typeof s === "number" && s >= 5e3;
@@ -41671,6 +41817,17 @@
     const v = pick(g, "player_self_endRating") ?? pick(g, "playerOneEndRating") ?? pick(g, "teamOneEndRating");
     return typeof v === "number" ? v : void 0;
   }
+  function getGameOutcome(g) {
+    const v = getGameSelfVictory(g);
+    if (typeof v === "boolean") return v ? "win" : "loss";
+    const r = pick(g, "result");
+    const s = typeof r === "string" ? r.trim().toLowerCase() : "";
+    if (!s) return null;
+    if (s === "win" || s === "w" || s === "true") return "win";
+    if (s === "loss" || s === "l" || s === "false") return "loss";
+    if (s === "tie" || s === "t" || s === "draw") return "tie";
+    return null;
+  }
   var ROUND_MEASURES_BY_FORMULA_ID = {
     count_rounds: (rows) => rows.length,
     mean_player_self_score: (rows) => {
@@ -41685,6 +41842,8 @@
       }
       return n ? sum2 / n : 0;
     },
+    median_player_self_score: (rows) => medianOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
+    stddev_player_self_score: (rows) => stddevOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
     rate_player_self_score_eq_5000: (rows) => {
       const n = rows.length;
       if (!n) return 0;
@@ -41746,6 +41905,23 @@
       }
       return n ? sum2 / n : 0;
     },
+    median_duration_seconds: (rows) => medianOf(rows.map((r) => getDurationSeconds(r)).filter((v) => typeof v === "number")),
+    sum_duration_seconds: (rows) => {
+      let sum2 = 0;
+      for (const r of rows) {
+        const v = getDurationSeconds(r);
+        if (typeof v === "number" && Number.isFinite(v)) sum2 += v;
+      }
+      return sum2;
+    },
+    count_rounds_with_duration: (rows) => {
+      let k = 0;
+      for (const r of rows) {
+        const v = getDurationSeconds(r);
+        if (typeof v === "number" && Number.isFinite(v)) k++;
+      }
+      return k;
+    },
     mean_player_self_distance_km: (rows) => {
       let sum2 = 0;
       let n = 0;
@@ -41758,6 +41934,7 @@
       }
       return n ? sum2 / n : 0;
     },
+    median_player_self_distance_km: (rows) => medianOf(rows.map((r) => getDistanceKm(r)).filter((v) => typeof v === "number")),
     mean_damage_dealt: (rows) => {
       let sum2 = 0;
       let n = 0;
@@ -41786,11 +41963,15 @@
   var GAME_MEASURES_BY_FORMULA_ID = {
     count_games: (rows) => rows.length,
     rate_player_self_win: (rows) => {
-      const n = rows.length;
-      if (!n) return 0;
+      let n = 0;
       let k = 0;
-      for (const g of rows) if (getGameSelfVictory(g) === true) k++;
-      return k / n;
+      for (const g of rows) {
+        const o = getGameOutcome(g);
+        if (!o) continue;
+        n++;
+        if (o === "win") k++;
+      }
+      return n ? k / n : 0;
     },
     mean_player_self_end_rating: (rows) => {
       let sum2 = 0;
@@ -41819,8 +42000,63 @@
     },
     count_win_game: (rows) => {
       let k = 0;
-      for (const g of rows) if (getGameSelfVictory(g) === true) k++;
+      for (const g of rows) if (getGameOutcome(g) === "win") k++;
       return k;
+    },
+    count_loss_game: (rows) => {
+      let k = 0;
+      for (const g of rows) if (getGameOutcome(g) === "loss") k++;
+      return k;
+    },
+    count_tie_game: (rows) => {
+      let k = 0;
+      for (const g of rows) if (getGameOutcome(g) === "tie") k++;
+      return k;
+    },
+    count_games_with_result: (rows) => {
+      let k = 0;
+      for (const g of rows) if (getGameOutcome(g)) k++;
+      return k;
+    },
+    max_player_self_end_rating: (rows) => {
+      let best = -Infinity;
+      for (const g of rows) {
+        const v = getGameSelfEndRating(g);
+        if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
+      }
+      return Number.isFinite(best) ? best : 0;
+    },
+    max_win_streak: (rows) => {
+      const sorted = [...rows].sort((a, b) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0));
+      let best = 0;
+      let cur = 0;
+      for (const g of sorted) {
+        const o = getGameOutcome(g);
+        if (!o) continue;
+        if (o === "win") {
+          cur++;
+          best = Math.max(best, cur);
+        } else {
+          cur = 0;
+        }
+      }
+      return best;
+    },
+    max_loss_streak: (rows) => {
+      const sorted = [...rows].sort((a, b) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0));
+      let best = 0;
+      let cur = 0;
+      for (const g of sorted) {
+        const o = getGameOutcome(g);
+        if (!o) continue;
+        if (o === "loss") {
+          cur++;
+          best = Math.max(best, cur);
+        } else {
+          cur = 0;
+        }
+      }
+      return best;
     }
   };
   var MEASURES_BY_GRAIN = {
@@ -41836,7 +42072,18 @@
     if (!unit) return String(value);
     if (unit.format === "percent") {
       const decimals2 = unit.decimals ?? 1;
-      return `${(value * 100).toFixed(decimals2)}%`;
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
     }
     if (unit.format === "int") return String(Math.round(value));
     const decimals = unit.decimals ?? 1;
@@ -41872,7 +42119,7 @@
   async function renderStatListWidget(semantic, widget, overlay, baseRows) {
     const spec = widget.spec;
     const doc = overlay.getDocument();
-    const grain = widget.grain;
+    const widgetGrain = widget.grain;
     const wrap = doc.createElement("div");
     wrap.className = "ga-widget ga-statlist";
     const title = doc.createElement("div");
@@ -41881,6 +42128,8 @@
     const box = doc.createElement("div");
     box.className = "ga-statlist-box";
     for (const row of spec.rows) {
+      const rowGrain = row.grain ? row.grain : widgetGrain;
+      const rowBaseRows = rowGrain === widgetGrain ? baseRows : void 0;
       const line = doc.createElement("div");
       line.className = "ga-statrow";
       const left = doc.createElement("div");
@@ -41889,9 +42138,9 @@
       const right = doc.createElement("div");
       right.className = "ga-statrow-value";
       right.textContent = "...";
-      const val = await computeMeasure(semantic, row.measure, baseRows, grain, row.filters);
+      const val = await computeMeasure(semantic, row.measure, rowBaseRows, rowGrain, row.filters);
       right.textContent = formatValue(semantic, row.measure, val);
-      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, baseRows, grain);
+      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain);
       line.appendChild(left);
       line.appendChild(right);
       box.appendChild(line);
@@ -42028,6 +42277,16 @@
       const clamped = Math.max(0, Math.min(1, value));
       return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
     }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
     if (unit.format === "int") return `${Math.round(value)}`;
     return value.toFixed(unit.decimals ?? 1);
   }
@@ -42041,7 +42300,32 @@
     const { unitFormat, values, preferZero } = opts;
     const finite = values.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return { minY: 0, maxY: 1 };
-    if (unitFormat === "percent") return { minY: 0, maxY: 1 };
+    if (unitFormat === "percent") {
+      const clamped = finite.map((v) => Math.max(0, Math.min(1, v)));
+      let min2 = Math.min(...clamped);
+      let max2 = Math.max(...clamped);
+      if (preferZero) min2 = 0;
+      let range2 = max2 - min2;
+      if (!Number.isFinite(range2) || range2 <= 0) range2 = Math.max(0.01, Math.abs(max2) || 0.01);
+      const pad2 = range2 * 0.06;
+      min2 = Math.max(0, min2 - pad2);
+      max2 = Math.min(1, max2 + pad2);
+      range2 = max2 - min2;
+      const niceStep2 = (raw) => {
+        if (!Number.isFinite(raw) || raw <= 0) return 0.01;
+        const exp = Math.floor(Math.log10(raw));
+        const base = 10 ** exp;
+        const n = raw / base;
+        const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+        return nice * base;
+      };
+      const tickCount2 = 5;
+      const step2 = niceStep2(range2 / tickCount2);
+      const niceMin2 = preferZero ? 0 : Math.max(0, Math.floor(min2 / step2) * step2);
+      const niceMax2 = Math.min(1, Math.ceil(max2 / step2) * step2);
+      if (niceMax2 <= niceMin2) return { minY: niceMin2, maxY: Math.min(1, niceMin2 + Math.max(step2, 0.01)) };
+      return { minY: niceMin2, maxY: niceMax2 };
+    }
     let min = Math.min(...finite);
     let max = Math.max(...finite);
     if (preferZero) min = Math.min(0, min);
@@ -42380,7 +42664,7 @@
         return;
       }
       const unitFormat = semantic.units[measureDef.unit]?.format ?? "float";
-      const preferZero = spec.type === "bar" || unitFormat === "percent" || unitFormat === "int";
+      const preferZero = spec.type === "bar" || unitFormat === "int";
       const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
       const { minY, maxY } = computeYBounds({ unitFormat, values: yVals, preferZero });
       const yRange = Math.max(1e-9, maxY - minY);
@@ -42648,6 +42932,16 @@
       const decimals2 = unit.decimals ?? 1;
       return `${(clamped * 100).toFixed(decimals2)}%`;
     }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
     if (unit.format === "int") return String(Math.round(value));
     const decimals = unit.decimals ?? 1;
     return value.toFixed(decimals);
@@ -42693,6 +42987,9 @@
   async function renderBreakdownWidget(semantic, widget, overlay, baseRows) {
     const spec = widget.spec;
     const doc = overlay.getDocument();
+    const exclude = new Set(
+      Array.isArray(spec.excludeKeys) ? spec.excludeKeys.map((k) => typeof k === "string" ? k.trim().toLowerCase() : "").filter(Boolean) : []
+    );
     const wrap = doc.createElement("div");
     wrap.className = "ga-widget ga-breakdown";
     const title = doc.createElement("div");
@@ -42740,7 +43037,7 @@
     const rebuildForActiveMeasure = () => {
       const measureFn = measureFnById.get(activeMeasure);
       if (!measureFn) return;
-      rowsAllSorted = Array.from(grouped.entries()).map(([k, g]) => ({
+      rowsAllSorted = Array.from(grouped.entries()).filter(([k]) => !exclude.has(String(k).trim().toLowerCase())).map(([k, g]) => ({
         key: k,
         value: clampForMeasure2(semantic, activeMeasure, measureFn(g)),
         rows: g

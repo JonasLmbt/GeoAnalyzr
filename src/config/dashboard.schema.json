@@ -355,6 +355,7 @@
       "properties": {
         "label": { "$ref": "#/$defs/title" },
         "measure": { "type": "string", "minLength": 1 },
+        "grain": { "$ref": "#/$defs/grain" },
         "filters": { "type": "array", "items": { "$ref": "#/$defs/filterDef" } },
         "actions": { "$ref": "#/$defs/actionsDef" }
       }
@@ -379,6 +380,11 @@
           "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
           "extendable": { "type": "boolean" },
           "dimension": { "type": "string", "minLength": 1 },
+          "excludeKeys": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
           "measure": { "type": "string", "minLength": 1 },
           "measures": {
             "type": "array",

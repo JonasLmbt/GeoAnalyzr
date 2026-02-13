@@ -135,6 +135,16 @@ function formatMeasureValue(semantic: SemanticRegistry, measureId: string, value
     const clamped = Math.max(0, Math.min(1, value));
     return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
   }
+  if (unit.format === "duration") {
+    const s = Math.max(0, Math.round(value));
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    if (mins > 0) return `${mins}m ${s % 60}s`;
+    return `${(Math.max(0, value)).toFixed(1)}s`;
+  }
   if (unit.format === "int") return `${Math.round(value)}`;
   return value.toFixed(unit.decimals ?? 1);
 }
@@ -147,7 +157,7 @@ function clampForMeasure(semantic: SemanticRegistry, measureId: string, value: n
 }
 
 function computeYBounds(opts: {
-  unitFormat: "int" | "float" | "percent";
+  unitFormat: "int" | "float" | "percent" | "duration";
   values: number[];
   preferZero: boolean;
 }): { minY: number; maxY: number } {
@@ -155,7 +165,37 @@ function computeYBounds(opts: {
   const finite = values.filter((v) => Number.isFinite(v));
   if (finite.length === 0) return { minY: 0, maxY: 1 };
 
-  if (unitFormat === "percent") return { minY: 0, maxY: 1 };
+  if (unitFormat === "percent") {
+    // For percent series we still want "fit to data" (otherwise small changes are invisible),
+    // but we must never go below 0% or above 100%.
+    const clamped = finite.map((v) => Math.max(0, Math.min(1, v)));
+    let min = Math.min(...clamped);
+    let max = Math.max(...clamped);
+    if (preferZero) min = 0;
+
+    let range = max - min;
+    if (!Number.isFinite(range) || range <= 0) range = Math.max(0.01, Math.abs(max) || 0.01);
+    const pad = range * 0.06;
+    min = Math.max(0, min - pad);
+    max = Math.min(1, max + pad);
+    range = max - min;
+
+    const niceStep = (raw: number): number => {
+      if (!Number.isFinite(raw) || raw <= 0) return 0.01;
+      const exp = Math.floor(Math.log10(raw));
+      const base = 10 ** exp;
+      const n = raw / base;
+      const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+      return nice * base;
+    };
+
+    const tickCount = 5;
+    const step = niceStep(range / tickCount);
+    const niceMin = preferZero ? 0 : Math.max(0, Math.floor(min / step) * step);
+    const niceMax = Math.min(1, Math.ceil(max / step) * step);
+    if (niceMax <= niceMin) return { minY: niceMin, maxY: Math.min(1, niceMin + Math.max(step, 0.01)) };
+    return { minY: niceMin, maxY: niceMax };
+  }
 
   let min = Math.min(...finite);
   let max = Math.max(...finite);
@@ -571,7 +611,8 @@ export async function renderChartWidget(
     }
 
     const unitFormat = semantic.units[measureDef.unit]?.format ?? "float";
-    const preferZero = spec.type === "bar" || unitFormat === "percent" || unitFormat === "int";
+    // Percent line series should be allowed to "fit" (still clamped to 0..100% in computeYBounds).
+    const preferZero = spec.type === "bar" || unitFormat === "int";
     const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
     const { minY, maxY } = computeYBounds({ unitFormat, values: yVals, preferZero });
     const yRange = Math.max(1e-9, maxY - minY);

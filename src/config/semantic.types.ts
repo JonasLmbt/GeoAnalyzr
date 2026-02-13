@@ -33,7 +33,7 @@ export interface MeasureDef {
 }
 
 export interface UnitDef {
-  format: "int" | "float" | "percent";
+  format: "int" | "float" | "percent" | "duration";
   decimals?: number;
 }
 

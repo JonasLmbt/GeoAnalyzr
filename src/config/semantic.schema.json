@@ -172,7 +172,7 @@
       "additionalProperties": false,
       "required": ["format"],
       "properties": {
-        "format": { "enum": ["int", "float", "percent"] },
+        "format": { "enum": ["int", "float", "percent", "duration"] },
         "decimals": { "type": "integer", "minimum": 0, "maximum": 6 }
       }
     },

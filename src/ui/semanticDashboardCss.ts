@@ -221,7 +221,15 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       animation: ga-dot-in 220ms ease-out both;
       animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
     }
-    .ga-breakdown-box { display:flex; flex-direction:column; gap:8px; }
+    .ga-breakdown-box {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
     .ga-breakdown-header {
       display:flex;
       justify-content:space-between;

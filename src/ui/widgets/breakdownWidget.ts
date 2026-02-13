@@ -60,6 +60,16 @@ function formatValue(semantic: SemanticRegistry, measureId: string, value: numbe
     const decimals = unit.decimals ?? 1;
     return `${(clamped * 100).toFixed(decimals)}%`;
   }
+  if (unit.format === "duration") {
+    const s = Math.max(0, Math.round(value));
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    if (mins > 0) return `${mins}m ${s % 60}s`;
+    return `${(Math.max(0, value)).toFixed(1)}s`;
+  }
   if (unit.format === "int") return String(Math.round(value));
   const decimals = unit.decimals ?? 1;
   return value.toFixed(decimals);
@@ -115,6 +125,9 @@ export async function renderBreakdownWidget(
 ): Promise<HTMLElement> {
   const spec = widget.spec as BreakdownSpec;
   const doc = overlay.getDocument();
+  const exclude = new Set(
+    Array.isArray(spec.excludeKeys) ? spec.excludeKeys.map((k) => (typeof k === "string" ? k.trim().toLowerCase() : "")).filter(Boolean) : []
+  );
 
   const wrap = doc.createElement("div");
   wrap.className = "ga-widget ga-breakdown";
@@ -183,11 +196,13 @@ export async function renderBreakdownWidget(
     const measureFn = measureFnById.get(activeMeasure);
     if (!measureFn) return;
 
-    rowsAllSorted = Array.from(grouped.entries()).map(([k, g]) => ({
-      key: k,
-      value: clampForMeasure(semantic, activeMeasure, measureFn(g)),
-      rows: g
-    }));
+    rowsAllSorted = Array.from(grouped.entries())
+      .filter(([k]) => !exclude.has(String(k).trim().toLowerCase()))
+      .map(([k, g]) => ({
+        key: k,
+        value: clampForMeasure(semantic, activeMeasure, measureFn(g)),
+        rows: g
+      }));
 
     rowsAllSorted = sortRows(rowsAllSorted, activeSortMode);
     maxValAll = Math.max(1e-9, ...rowsAllSorted.map((r) => clampForMeasure(semantic, activeMeasure, r.value)));

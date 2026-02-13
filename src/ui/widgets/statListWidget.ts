@@ -14,7 +14,18 @@ function formatValue(semantic: SemanticRegistry, measureId: string, value: numbe
 
   if (unit.format === "percent") {
     const decimals = unit.decimals ?? 1;
-    return `${(value * 100).toFixed(decimals)}%`;
+    const clamped = Math.max(0, Math.min(1, value));
+    return `${(clamped * 100).toFixed(decimals)}%`;
+  }
+  if (unit.format === "duration") {
+    const s = Math.max(0, Math.round(value));
+    const days = Math.floor(s / 86400);
+    const hours = Math.floor((s % 86400) / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    if (mins > 0) return `${mins}m ${s % 60}s`;
+    return `${(Math.max(0, value)).toFixed(1)}s`;
   }
   if (unit.format === "int") return String(Math.round(value));
   const decimals = unit.decimals ?? 1;
@@ -74,7 +85,7 @@ export async function renderStatListWidget(
 ): Promise<HTMLElement> {
   const spec = widget.spec as StatListSpec;
   const doc = overlay.getDocument();
-  const grain = widget.grain as Grain;
+  const widgetGrain = widget.grain as Grain;
 
   const wrap = doc.createElement("div");
   wrap.className = "ga-widget ga-statlist";
@@ -87,6 +98,10 @@ export async function renderStatListWidget(
   box.className = "ga-statlist-box";
 
   for (const row of spec.rows) {
+    const rowGrain = (row as any).grain ? ((row as any).grain as Grain) : widgetGrain;
+    // `baseRows` is pre-filtered for the widget grain. If a row overrides grain,
+    // it must fetch from its own dataset instead.
+    const rowBaseRows = rowGrain === widgetGrain ? baseRows : undefined;
     const line = doc.createElement("div");
     line.className = "ga-statrow";
 
@@ -98,10 +113,10 @@ export async function renderStatListWidget(
     right.className = "ga-statrow-value";
     right.textContent = "...";
 
-    const val = await computeMeasure(semantic, row.measure, baseRows, grain, row.filters);
+    const val = await computeMeasure(semantic, row.measure, rowBaseRows, rowGrain, row.filters);
     right.textContent = formatValue(semantic, row.measure, val);
 
-    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, baseRows, grain);
+    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain);
 
     line.appendChild(left);
     line.appendChild(right);
