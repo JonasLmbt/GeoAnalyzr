@@ -999,31 +999,49 @@
       {
         "id": "countries",
         "title": "Countries",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
           "cards": [
             {
-              "cardId": "card_countries_breakdown",
-              "title": "True country breakdown",
+              "cardId": "card_countries",
+              "title": "Countries",
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 10,
+              "h": 18,
               "card": {
                 "type": "composite",
                 "children": [
                   {
-                    "widgetId": "w_country_rounds_top",
+                    "widgetId": "w_country_metrics",
                     "type": "breakdown",
-                    "title": "Top countries by rounds (click = drilldown rounds)",
+                    "title": "Countries - Country metrics",
                     "grain": "round",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                       "spec": {
                         "dimension": "true_country",
-                        "measures": ["rounds_count", "avg_score", "fivek_rate", "throw_rate", "hit_rate"],
-                        "activeMeasure": "rounds_count",
-                        "sort": { "mode": "desc" },
+                        "measures": [
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "rounds_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "throw_rate",
+                          "throw_count",
+                          "hit_rate",
+                          "hit_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg",
+                          "damage_dealt_share",
+                          "damage_taken_share"
+                        ],
+                        "activeMeasure": "avg_score",
+                        "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                        "activeSort": { "mode": "desc" },
                         "limit": 15,
                         "extendable": true,
                         "actions": {
@@ -1035,6 +1053,15 @@
                         }
                       },
                       "actionsByMeasure": {
+                        "fivek_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                          }
+                        },
                         "fivek_rate": {
                           "click": {
                             "type": "drilldown",
@@ -1053,6 +1080,15 @@
                             "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
                           }
                         },
+                        "throw_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                          }
+                        },
                         "hit_rate": {
                           "click": {
                             "type": "drilldown",
@@ -1061,44 +1097,53 @@
                             "filterFromPoint": true,
                             "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
                           }
+                        },
+                        "hit_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "damage_dealt_share": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "damage_taken_share": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }]
+                          }
                         }
                       }
                     }
                   }
-                ]
-              }
-            },
-
-            {
-              "cardId": "card_country_quality",
-              "title": "Quality by country",
-              "x": 0,
-              "y": 10,
-              "w": 12,
-              "h": 10,
-              "card": {
-                "type": "composite",
-                "children": [
+                  ,
                   {
-                    "widgetId": "w_country_avg_score",
+                    "widgetId": "w_country_confusion",
                     "type": "chart",
-                    "title": "Avg score by country (top-ish)",
+                    "title": "Countries - Confusion matrix (top pairs)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "placement": { "x": 0, "y": 10, "w": 12, "h": 8 },
                     "spec": {
                       "type": "bar",
-                      "limit": 12,
-                      "x": { "dimension": "true_country" },
-                      "y": { "measure": "avg_score" },
+                      "limit": 24,
+                      "x": { "dimension": "confused_countries" },
+                      "y": { "measure": "rounds_count" },
                       "sort": { "mode": "desc" },
                       "actions": {
                         "hover": true,
-                        "click": {
-                          "type": "drilldown",
-                          "target": "rounds",
-                          "columnsPreset": "roundMode",
-                          "filterFromPoint": true
-                        }
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
                       }
                     }
                   }

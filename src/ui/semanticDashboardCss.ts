@@ -225,7 +225,8 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
         color-mix(in srgb, var(--ga-surface) 88%, transparent);
       border-color: rgba(255,255,255,0.14);
       box-shadow: 0 28px 90px rgba(0,0,0,0.48);
-      overflow: hidden;
+      overflow: auto;
+      overscroll-behavior: contain;
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-header {
       background: linear-gradient(180deg, rgba(22,22,38,0.82) 0%, rgba(22,22,38,0.58) 100%);
@@ -427,6 +428,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border:1px solid var(--ga-border);
       border-radius:14px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      color: var(--ga-text);
     }
     .ga-drilldown-header {
       position: sticky;
@@ -461,6 +463,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
       text-align:left;
     }
+    .ga-drilldown-table td { color: var(--ga-text); }
     .ga-drilldown-table thead th {
       position: sticky;
       top: 52px;

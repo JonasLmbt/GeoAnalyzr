@@ -10,6 +10,23 @@ import { DrilldownOverlay } from "../drilldownOverlay";
 
 type Datum = { x: string; y: number; rows: any[] };
 
+function getShareKindFromFormulaId(formulaId: string): "dealt" | "taken" | null {
+  if (formulaId === "share_damage_dealt") return "dealt";
+  if (formulaId === "share_damage_taken") return "taken";
+  return null;
+}
+
+function sumDamage(rows: any[], kind: "dealt" | "taken"): number {
+  let sum = 0;
+  for (const r of rows as any[]) {
+    const dmg = (r as any)?.damage;
+    if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+    if (kind === "dealt") sum += Math.max(0, dmg);
+    else sum += Math.max(0, -dmg);
+  }
+  return sum;
+}
+
 function sortKeysChronological(keys: string[]): string[] {
   const weekdayRank = (k: string): number | undefined => {
     const v = k.trim().toLowerCase();
@@ -543,6 +560,13 @@ export async function renderChartWidget(
     const measureFn = MEASURES_BY_GRAIN[g]?.[measDef.formulaId];
     if (!measureFn) return [];
 
+    const shareKind = getShareKindFromFormulaId(measDef.formulaId);
+    const denom = shareKind ? sumDamage(rows, shareKind) : 0;
+    const yForRows = (bucketRows: any[]): number => {
+      if (!shareKind) return measureFn(bucketRows);
+      return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
+    };
+
     // For time_day, fill all days in the selected dateRange (or fallback to data bounds).
     if (dimId === "time_day") {
       let fromTs = context?.dateRange?.fromTs ?? null;
@@ -575,7 +599,7 @@ export async function renderChartWidget(
             if (dayRows.length) bucketRows.push(...dayRows);
           }
           if (bucketRows.length) cum.push(...bucketRows);
-          out.push({ x: b.label, y: clampForMeasure(semantic, measureId, measureFn(cum)), rows: cum.slice() });
+          out.push({ x: b.label, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
         }
         return out;
       }
@@ -586,7 +610,7 @@ export async function renderChartWidget(
           const dayRows = grouped.get(k) ?? [];
           if (dayRows.length) bucketRows.push(...dayRows);
         }
-        return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
+        return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(bucketRows)), rows: bucketRows };
       });
       return out;
     }
@@ -595,7 +619,7 @@ export async function renderChartWidget(
     const keys = Array.from(grouped.keys());
     const baseData: Datum[] = keys.map((k) => {
       const rowsForKey = grouped.get(k) ?? [];
-      return { x: k, y: clampForMeasure(semantic, measureId, measureFn(rowsForKey)), rows: rowsForKey };
+      return { x: k, y: clampForMeasure(semantic, measureId, yForRows(rowsForKey)), rows: rowsForKey };
     });
 
     // If this is an ordered axis and a long series, optionally bucket down to maxPoints.
@@ -611,7 +635,7 @@ export async function renderChartWidget(
             const item = byKey.get(k);
             if (item?.rows?.length) bucketRows.push(...item.rows);
           }
-          return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
+          return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(bucketRows)), rows: bucketRows };
         });
         return out;
       }

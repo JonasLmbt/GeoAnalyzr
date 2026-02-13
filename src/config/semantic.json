@@ -202,6 +202,14 @@
       "allowedCharts": ["bar"],
       "sortModes": ["chronological", "asc", "desc"]
     },
+    "confused_countries": {
+      "label": "Confused countries",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 80, "selectorRequired": true }
+    },
     "score_bucket": {
       "label": "Score bucket",
       "kind": "category",
@@ -473,6 +481,20 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_damage_taken"
+    },
+    "damage_dealt_share": {
+      "label": "Damage dealt share",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "share_damage_dealt"
+    },
+    "damage_taken_share": {
+      "label": "Damage taken share",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "share_damage_taken"
     }
     ,
     "sessions_count": {

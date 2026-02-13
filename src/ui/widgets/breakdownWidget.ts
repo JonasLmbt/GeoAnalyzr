@@ -14,6 +14,23 @@ type Row = {
   rows: any[];
 };
 
+function getShareKindFromFormulaId(formulaId: string): "dealt" | "taken" | null {
+  if (formulaId === "share_damage_dealt") return "dealt";
+  if (formulaId === "share_damage_taken") return "taken";
+  return null;
+}
+
+function sumDamage(rows: any[], kind: "dealt" | "taken"): number {
+  let sum = 0;
+  for (const r of rows as any[]) {
+    const dmg = (r as any)?.damage;
+    if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+    if (kind === "dealt") sum += Math.max(0, dmg);
+    else sum += Math.max(0, -dmg);
+  }
+  return sum;
+}
+
 function normalizeHexColor(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const v = value.trim();
@@ -195,14 +212,23 @@ export async function renderBreakdownWidget(
   let maxValAll = 1e-9;
 
   const rebuildForActiveMeasure = (): void => {
-    const measureFn = measureFnById.get(activeMeasure);
-    if (!measureFn) return;
+    const measDef = semantic.measures[activeMeasure];
+    if (!measDef) return;
+
+    const shareKind = getShareKindFromFormulaId(measDef.formulaId);
+    const measureFn = shareKind ? null : measureFnById.get(activeMeasure);
+    if (!shareKind && !measureFn) return;
+    const denom = shareKind ? sumDamage(rowsAll, shareKind) : 0;
 
     rowsAllSorted = Array.from(grouped.entries())
       .filter(([k]) => !exclude.has(String(k).trim().toLowerCase()))
       .map(([k, g]) => ({
         key: k,
-        value: clampForMeasure(semantic, activeMeasure, measureFn(g)),
+        value: clampForMeasure(
+          semantic,
+          activeMeasure,
+          shareKind ? (denom > 0 ? sumDamage(g, shareKind) / denom : 0) : (measureFn as any)(g)
+        ),
         rows: g
       }));
 

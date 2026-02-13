@@ -97,6 +97,11 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     return Math.max(0, max - min);
   },
 
+  // Share-of-total measures are normalized in chart/breakdown widgets (they need access to total rows).
+  // In non-grouped contexts (e.g. stat row over all rows), returning 1.0 is a sensible default (100% of itself).
+  share_damage_dealt: (_rows) => 1,
+  share_damage_taken: (_rows) => 1,
+
   mean_player_self_score: (rows) => {
     let sum = 0;
     let n = 0;

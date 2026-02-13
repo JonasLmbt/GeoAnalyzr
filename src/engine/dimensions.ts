@@ -98,6 +98,19 @@ export function teammateNameKey(r: RoundRow): GroupKey | null {
   return v.length ? v : null;
 }
 
+export function confusedCountriesKey(r: RoundRow): GroupKey | null {
+  const truthRaw = getTrueCountry(r);
+  const guessRaw = getGuessCountrySelf(r);
+  if (typeof truthRaw !== "string" || typeof guessRaw !== "string") return null;
+  const truth = truthRaw.trim();
+  const guess = guessRaw.trim();
+  if (!truth || !guess) return null;
+  if (truth === guess) return null;
+
+  const pretty = (v: string): string => (v.length <= 3 ? v.toUpperCase() : v);
+  return `${pretty(truth)} -> ${pretty(guess)}`;
+}
+
 function timeDayKeyAny(row: any): GroupKey | null {
   const ts = getRowTs(row);
   if (typeof ts !== "number") return null;
@@ -183,6 +196,7 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
       return s < 500 ? "true" : "false";
     },
     duration_bucket: durationBucketKey,
+    confused_countries: confusedCountriesKey,
     teammate_name: teammateNameKey,
     round_number: (r: any) => (typeof r?.roundNumber === "number" ? `#${r.roundNumber}` : null)
   },

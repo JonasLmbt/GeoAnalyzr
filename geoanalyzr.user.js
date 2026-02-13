@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.8
+// @version      1.6.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15309,6 +15309,17 @@
     const v = typeof n === "string" ? n.trim() : "";
     return v.length ? v : null;
   }
+  function confusedCountriesKey(r) {
+    const truthRaw = getTrueCountry(r);
+    const guessRaw = getGuessCountrySelf(r);
+    if (typeof truthRaw !== "string" || typeof guessRaw !== "string") return null;
+    const truth = truthRaw.trim();
+    const guess = guessRaw.trim();
+    if (!truth || !guess) return null;
+    if (truth === guess) return null;
+    const pretty = (v) => v.length <= 3 ? v.toUpperCase() : v;
+    return `${pretty(truth)} -> ${pretty(guess)}`;
+  }
   function timeDayKeyAny(row) {
     const ts = getRowTs(row);
     if (typeof ts !== "number") return null;
@@ -15380,6 +15391,7 @@
         return s < 500 ? "true" : "false";
       },
       duration_bucket: durationBucketKey,
+      confused_countries: confusedCountriesKey,
       teammate_name: teammateNameKey,
       round_number: (r) => typeof r?.roundNumber === "number" ? `#${r.roundNumber}` : null
     },
@@ -40144,6 +40156,14 @@
         allowedCharts: ["bar"],
         sortModes: ["chronological", "asc", "desc"]
       },
+      confused_countries: {
+        label: "Confused countries",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
+      },
       score_bucket: {
         label: "Score bucket",
         kind: "category",
@@ -40410,6 +40430,20 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "mean_damage_taken"
+      },
+      damage_dealt_share: {
+        label: "Damage dealt share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "share_damage_dealt"
+      },
+      damage_taken_share: {
+        label: "Damage taken share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "share_damage_taken"
       },
       sessions_count: {
         label: "Sessions",
@@ -41562,31 +41596,49 @@
         {
           id: "countries",
           title: "Countries",
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
           layout: {
             mode: "grid",
             columns: 12,
             cards: [
               {
-                cardId: "card_countries_breakdown",
-                title: "True country breakdown",
+                cardId: "card_countries",
+                title: "Countries",
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 10,
+                h: 18,
                 card: {
                   type: "composite",
                   children: [
                     {
-                      widgetId: "w_country_rounds_top",
+                      widgetId: "w_country_metrics",
                       type: "breakdown",
-                      title: "Top countries by rounds (click = drilldown rounds)",
+                      title: "Countries - Country metrics",
                       grain: "round",
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
                         dimension: "true_country",
-                        measures: ["rounds_count", "avg_score", "fivek_rate", "throw_rate", "hit_rate"],
-                        activeMeasure: "rounds_count",
-                        sort: { mode: "desc" },
+                        measures: [
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "rounds_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "throw_rate",
+                          "throw_count",
+                          "hit_rate",
+                          "hit_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg",
+                          "damage_dealt_share",
+                          "damage_taken_share"
+                        ],
+                        activeMeasure: "avg_score",
+                        sorts: [{ mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "desc" },
                         limit: 15,
                         extendable: true,
                         actions: {
@@ -41598,6 +41650,15 @@
                           }
                         },
                         actionsByMeasure: {
+                          fivek_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                            }
+                          },
                           fivek_rate: {
                             click: {
                               type: "drilldown",
@@ -41616,6 +41677,15 @@
                               extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
                             }
                           },
+                          throw_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                            }
+                          },
                           hit_rate: {
                             click: {
                               type: "drilldown",
@@ -41624,43 +41694,52 @@
                               filterFromPoint: true,
                               extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
                             }
+                          },
+                          hit_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                            }
+                          },
+                          damage_dealt_share: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
+                            }
+                          },
+                          damage_taken_share: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
+                            }
                           }
                         }
                       }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_country_quality",
-                title: "Quality by country",
-                x: 0,
-                y: 10,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
+                    },
                     {
-                      widgetId: "w_country_avg_score",
+                      widgetId: "w_country_confusion",
                       type: "chart",
-                      title: "Avg score by country (top-ish)",
+                      title: "Countries - Confusion matrix (top pairs)",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      placement: { x: 0, y: 10, w: 12, h: 8 },
                       spec: {
                         type: "bar",
-                        limit: 12,
-                        x: { dimension: "true_country" },
-                        y: { measure: "avg_score" },
+                        limit: 24,
+                        x: { dimension: "confused_countries" },
+                        y: { measure: "rounds_count" },
                         sort: { mode: "desc" },
                         actions: {
                           hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
                         }
                       }
                     }
@@ -41901,7 +41980,8 @@
         color-mix(in srgb, var(--ga-surface) 88%, transparent);
       border-color: rgba(255,255,255,0.14);
       box-shadow: 0 28px 90px rgba(0,0,0,0.48);
-      overflow: hidden;
+      overflow: auto;
+      overscroll-behavior: contain;
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-header {
       background: linear-gradient(180deg, rgba(22,22,38,0.82) 0%, rgba(22,22,38,0.58) 100%);
@@ -42103,6 +42183,7 @@
       border:1px solid var(--ga-border);
       border-radius:14px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      color: var(--ga-text);
     }
     .ga-drilldown-header {
       position: sticky;
@@ -42137,6 +42218,7 @@
       border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
       text-align:left;
     }
+    .ga-drilldown-table td { color: var(--ga-text); }
     .ga-drilldown-table thead th {
       position: sticky;
       top: 52px;
@@ -42999,6 +43081,10 @@
       if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
       return Math.max(0, max - min);
     },
+    // Share-of-total measures are normalized in chart/breakdown widgets (they need access to total rows).
+    // In non-grouped contexts (e.g. stat row over all rows), returning 1.0 is a sensible default (100% of itself).
+    share_damage_dealt: (_rows) => 1,
+    share_damage_taken: (_rows) => 1,
     mean_player_self_score: (rows) => {
       let sum2 = 0;
       let n = 0;
@@ -43476,6 +43562,21 @@
   }
 
   // src/ui/widgets/chartWidget.ts
+  function getShareKindFromFormulaId(formulaId) {
+    if (formulaId === "share_damage_dealt") return "dealt";
+    if (formulaId === "share_damage_taken") return "taken";
+    return null;
+  }
+  function sumDamage(rows, kind) {
+    let sum2 = 0;
+    for (const r of rows) {
+      const dmg = r?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      if (kind === "dealt") sum2 += Math.max(0, dmg);
+      else sum2 += Math.max(0, -dmg);
+    }
+    return sum2;
+  }
   function sortKeysChronological(keys2) {
     const weekdayRank = (k) => {
       const v = k.trim().toLowerCase();
@@ -43917,6 +44018,12 @@
       if (!keyFn) return [];
       const measureFn = MEASURES_BY_GRAIN[g]?.[measDef.formulaId];
       if (!measureFn) return [];
+      const shareKind = getShareKindFromFormulaId(measDef.formulaId);
+      const denom = shareKind ? sumDamage(rows, shareKind) : 0;
+      const yForRows = (bucketRows) => {
+        if (!shareKind) return measureFn(bucketRows);
+        return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
+      };
       if (dimId === "time_day") {
         let fromTs = context?.dateRange?.fromTs ?? null;
         let toTs2 = context?.dateRange?.toTs ?? null;
@@ -43941,7 +44048,7 @@
               if (dayRows.length) bucketRows.push(...dayRows);
             }
             if (bucketRows.length) cum.push(...bucketRows);
-            out2.push({ x: b.label, y: clampForMeasure(semantic, measureId, measureFn(cum)), rows: cum.slice() });
+            out2.push({ x: b.label, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
           }
           return out2;
         }
@@ -43951,7 +44058,7 @@
             const dayRows = grouped2.get(k) ?? [];
             if (dayRows.length) bucketRows.push(...dayRows);
           }
-          return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
+          return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(bucketRows)), rows: bucketRows };
         });
         return out;
       }
@@ -43959,7 +44066,7 @@
       const keys2 = Array.from(grouped.keys());
       const baseData = keys2.map((k) => {
         const rowsForKey = grouped.get(k) ?? [];
-        return { x: k, y: clampForMeasure(semantic, measureId, measureFn(rowsForKey)), rows: rowsForKey };
+        return { x: k, y: clampForMeasure(semantic, measureId, yForRows(rowsForKey)), rows: rowsForKey };
       });
       if (dimDef.ordered && typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {
         const maxPoints = Math.floor(spec.maxPoints);
@@ -43973,7 +44080,7 @@
               const item = byKey.get(k);
               if (item?.rows?.length) bucketRows.push(...item.rows);
             }
-            return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
+            return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(bucketRows)), rows: bucketRows };
           });
           return out;
         }
@@ -44263,6 +44370,21 @@
   }
 
   // src/ui/widgets/breakdownWidget.ts
+  function getShareKindFromFormulaId2(formulaId) {
+    if (formulaId === "share_damage_dealt") return "dealt";
+    if (formulaId === "share_damage_taken") return "taken";
+    return null;
+  }
+  function sumDamage2(rows, kind) {
+    let sum2 = 0;
+    for (const r of rows) {
+      const dmg = r?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      if (kind === "dealt") sum2 += Math.max(0, dmg);
+      else sum2 += Math.max(0, -dmg);
+    }
+    return sum2;
+  }
   function normalizeHexColor2(value) {
     if (typeof value !== "string") return void 0;
     const v = value.trim();
@@ -44407,11 +44529,19 @@
     let rowsAllSorted = [];
     let maxValAll = 1e-9;
     const rebuildForActiveMeasure = () => {
-      const measureFn = measureFnById.get(activeMeasure);
-      if (!measureFn) return;
+      const measDef = semantic.measures[activeMeasure];
+      if (!measDef) return;
+      const shareKind = getShareKindFromFormulaId2(measDef.formulaId);
+      const measureFn = shareKind ? null : measureFnById.get(activeMeasure);
+      if (!shareKind && !measureFn) return;
+      const denom = shareKind ? sumDamage2(rowsAll, shareKind) : 0;
       rowsAllSorted = Array.from(grouped.entries()).filter(([k]) => !exclude.has(String(k).trim().toLowerCase())).map(([k, g]) => ({
         key: k,
-        value: clampForMeasure2(semantic, activeMeasure, measureFn(g)),
+        value: clampForMeasure2(
+          semantic,
+          activeMeasure,
+          shareKind ? denom > 0 ? sumDamage2(g, shareKind) / denom : 0 : measureFn(g)
+        ),
         rows: g
       }));
       rowsAllSorted = sortRows(rowsAllSorted, activeSortMode);
