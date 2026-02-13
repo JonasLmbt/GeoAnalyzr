@@ -147,6 +147,7 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     time_day: timeDayKey,
     weekday: weekdayKey,
     hour: hourKey,
+    game_id: (r: any) => (typeof r?.gameId === "string" && r.gameId.trim().length ? r.gameId : null),
     true_country: trueCountryKey,
     movement_type: movementTypeKey,
     is_hit: isHitKey,
@@ -159,6 +160,7 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     time_day: timeDayKeyAny,
     weekday: weekdayKeyAny,
     hour: hourKeyAny,
+    game_id: (g: any) => (typeof g?.gameId === "string" && g.gameId.trim().length ? g.gameId : null),
     game_mode: gameModeKeyAny,
     mode_family: modeFamilyKeyAny,
     result: resultKeyAny

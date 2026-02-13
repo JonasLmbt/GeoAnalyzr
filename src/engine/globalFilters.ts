@@ -33,12 +33,16 @@ export function buildAppliedRoundFilters(spec: GlobalFiltersSpec | undefined, st
 export function buildAppliedFilters(
   spec: GlobalFiltersSpec | undefined,
   state: GlobalFilterState,
-  grain: Grain
+  grain: Grain,
+  controlIds?: string[]
 ): AppliedRoundFilters {
   const out: AppliedRoundFilters = { clauses: [] };
   if (!spec?.enabled) return out;
 
+  const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
+
   for (const control of spec.controls) {
+    if (allowed && !allowed.has(control.id)) continue;
     if (!control.appliesTo.includes(grain)) continue;
 
     if (control.type === "date_range") {
@@ -60,10 +64,17 @@ export function buildAppliedFilters(
   return out;
 }
 
-export function normalizeGlobalFilterKey(spec: GlobalFiltersSpec | undefined, state: GlobalFilterState, grain: Grain = "round"): string {
+export function normalizeGlobalFilterKey(
+  spec: GlobalFiltersSpec | undefined,
+  state: GlobalFilterState,
+  grain: Grain = "round",
+  controlIds?: string[]
+): string {
   if (!spec?.enabled) return `gf:${grain}:off`;
   const parts: string[] = [];
+  const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
   for (const c of spec.controls) {
+    if (allowed && !allowed.has(c.id)) continue;
     const v = state[c.id];
     parts.push(`${c.id}=${JSON.stringify(v)}`);
   }

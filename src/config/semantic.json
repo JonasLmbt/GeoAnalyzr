@@ -113,6 +113,14 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 8 }
     },
+    "game_id": {
+      "label": "Game",
+      "kind": "category",
+      "grain": ["round", "game"],
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 50, "selectorRequired": true }
+    },
     "is_hit": {
       "label": "Hit?",
       "kind": "category",

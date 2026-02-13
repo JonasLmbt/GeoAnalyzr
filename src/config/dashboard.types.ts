@@ -162,9 +162,16 @@ export interface BreakdownSpec {
 export interface RecordItemDef {
   id: string;
   label: string;
-  metric: string;
-  groupBy: string;
-  extreme: "max" | "min";
+  kind?: "group_extreme" | "streak";
+  // group_extreme:
+  metric?: string;
+  groupBy?: string;
+  extreme?: "max" | "min";
+  // streak:
+  streakFilters?: FilterClause[];
+  // presentation:
+  displayKey?: "group" | "first_ts";
+  actions?: Actions;
 }
 
 export interface RecordListSpec {
@@ -194,6 +201,12 @@ export interface CardPlacementDef extends PlacementDef {
 export interface SectionDef {
   id: string;
   title: string;
+  // Control which global filter controls apply to this section. Default: all.
+  // `include`/`exclude` refer to control ids from dashboard.globalFilters.controls[].id.
+  filterScope?: {
+    include?: string[];
+    exclude?: string[];
+  };
   layout: {
     mode: "grid";
     columns: number;

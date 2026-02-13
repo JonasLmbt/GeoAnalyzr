@@ -138,6 +138,12 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border-radius:12px;
       padding:10px;
     }
+    .ga-recordlist-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
     .ga-statrow {
       display:flex;
       justify-content:space-between;

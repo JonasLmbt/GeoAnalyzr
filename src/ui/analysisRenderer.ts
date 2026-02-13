@@ -59,8 +59,26 @@ export async function renderAnalysisApp(opts: {
       getDistinctOptions: async ({ control, spec: s, state }) => getSelectOptionsForControl({ control, spec: s, state })
     });
 
-    const used = new Set<Grain>();
+    const specFilters = spec;
+    const state = store.getState();
+
+    const resolveControlIdsForSection = (section: any): string[] | undefined => {
+      if (!specFilters?.enabled) return undefined;
+      const all = specFilters.controls.map((c) => c.id);
+      const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : null;
+      const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : null;
+      let ids = include && include.length ? all.filter((id) => include.includes(id)) : [...all];
+      if (exclude && exclude.length) ids = ids.filter((id) => !exclude.includes(id));
+      return ids;
+    };
+
+    const datasetsBySection: Record<string, Partial<Record<Grain, any[]>>> = {};
+    const contextBySection: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }> = {};
+
     for (const section of dashboard.dashboard.sections) {
+      const controlIds = resolveControlIdsForSection(section);
+
+      const used = new Set<Grain>();
       for (const placed of section.layout.cards) {
         for (const w of placed.card.children) {
           used.add(w.grain);
@@ -101,20 +119,62 @@ export async function renderAnalysisApp(opts: {
             const m = semantic.measures[anySpec?.measure];
             if (m) used.add(m.grain);
           }
+          if (w.type === "record_list") {
+            const recs = Array.isArray(anySpec?.records) ? anySpec.records : [];
+            for (const r of recs) {
+              if (typeof r?.metric === "string") {
+                const m = semantic.measures[r.metric];
+                if (m) used.add(m.grain);
+              }
+              if (typeof r?.groupBy === "string") {
+                const d = semantic.dimensions[r.groupBy];
+                const grains = d ? (Array.isArray(d.grain) ? d.grain : [d.grain]) : [];
+                for (const g of grains as Grain[]) used.add(g);
+              }
+            }
+          }
         }
       }
+
+      const filters = { global: { spec: specFilters, state, controlIds } };
+      const datasets: Partial<Record<Grain, any[]>> = {};
+      if (used.has("round")) datasets.round = await getRounds(filters);
+      if (used.has("game")) datasets.game = await getGames(filters);
+      if (used.has("session")) datasets.session = [];
+      datasetsBySection[section.id] = datasets;
+
+      // Context dateRange should only be set if the section includes the dateRange control.
+      const hasDate = !controlIds || controlIds.includes("dateRange");
+      const dateVal = state["dateRange"] as any;
+      const fromTs = hasDate && dateVal && typeof dateVal === "object" ? (dateVal.fromTs ?? null) : null;
+      const toTs = hasDate && dateVal && typeof dateVal === "object" ? (dateVal.toTs ?? null) : null;
+      contextBySection[section.id] = { dateRange: { fromTs, toTs } };
     }
 
-    const datasets: Partial<Record<Grain, any[]>> = {};
-    const filters = { global: { spec, state: store.getState() } };
-    if (used.has("round")) datasets.round = await getRounds(filters);
-    if (used.has("game")) datasets.game = await getGames(filters);
-    if (used.has("session")) datasets.session = [];
-
-    const dateVal = store.getState()["dateRange"] as any;
-    const fromTs = dateVal && typeof dateVal === "object" ? (dateVal.fromTs ?? null) : null;
-    const toTs = dateVal && typeof dateVal === "object" ? (dateVal.toTs ?? null) : null;
-    await renderDashboard(dashboardHost, semantic, dashboard, { datasets, context: { dateRange: { fromTs, toTs } } });
+    // Default datasets/context use all controls (kept for backwards compat).
+    const allControlIds = specFilters?.enabled ? specFilters.controls.map((c) => c.id) : undefined;
+    const filtersAll = { global: { spec: specFilters, state, controlIds: allControlIds } };
+    const datasetsAll: Partial<Record<Grain, any[]>> = {};
+    // Only load what the dashboard needs.
+    const usedAll = new Set<Grain>();
+    for (const section of dashboard.dashboard.sections) {
+      const d = datasetsBySection[section.id];
+      if (d?.round) usedAll.add("round");
+      if (d?.game) usedAll.add("game");
+      if (d?.session) usedAll.add("session");
+    }
+    if (usedAll.has("round")) datasetsAll.round = await getRounds(filtersAll);
+    if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
+    if (usedAll.has("session")) datasetsAll.session = [];
+    const dateValAll = state["dateRange"] as any;
+    const fromTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.fromTs ?? null) : null;
+    const toTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.toTs ?? null) : null;
+    await renderDashboard(dashboardHost, semantic, dashboard, {
+      datasets: datasetsAll,
+      datasetsBySection,
+      context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
+      contextBySection
+    });
   };
 
   store.subscribe(() => {

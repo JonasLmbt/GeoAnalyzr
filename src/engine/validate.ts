@@ -236,7 +236,27 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     validateClickAction(semantic, widget.widgetId, spec.actions?.click);
   }
 
-  // record_list: we keep structural validation only here; actual logic later.
+  if (widget.type === "record_list") {
+    const spec: any = widget.spec;
+    assert(Array.isArray(spec.records) && spec.records.length > 0, "E_BAD_SPEC", `record_list ${widget.widgetId} has no records`);
+    for (const r of spec.records) {
+      const kind = r?.kind === "streak" ? "streak" : "group_extreme";
+      if (kind === "streak") {
+        assert(Array.isArray(r.streakFilters) && r.streakFilters.length > 0, "E_BAD_SPEC", `record ${r.id} missing streakFilters`);
+        validateClickAction(semantic, widget.widgetId, r.actions?.click);
+        continue;
+      }
+      const m = semantic.measures[r.metric];
+      assert(!!m, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
+      assert(m.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
+      const d = semantic.dimensions[r.groupBy];
+      assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown record groupBy '${r.groupBy}' in ${widget.widgetId}`);
+      const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
+      assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record groupBy '${r.groupBy}' grain mismatch in ${widget.widgetId}`);
+      assert(r.extreme === "max" || r.extreme === "min", "E_BAD_SPEC", `Record extreme must be max|min in ${widget.widgetId}`);
+      validateClickAction(semantic, widget.widgetId, r.actions?.click);
+    }
+  }
 }
 
 function validateClickAction(semantic: SemanticRegistry, widgetId: string, click: any): void {

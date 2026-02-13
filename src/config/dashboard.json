@@ -227,6 +227,121 @@
         }
       },
       {
+        "id": "personal_records",
+        "title": "Personal Records",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_personal_records",
+              "title": "Personal Records",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 10,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_personal_records",
+                    "type": "record_list",
+                    "title": "Personal Records",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "best_day",
+                          "label": "Best day",
+                          "metric": "avg_score",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "hardest_day",
+                          "label": "Hardest day",
+                          "metric": "avg_score",
+                          "groupBy": "time_day",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "best_game_avg_score",
+                          "label": "Best avg score in a game",
+                          "metric": "avg_score",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "displayKey": "first_ts",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "worst_game_avg_score",
+                          "label": "Worst avg score in a game",
+                          "metric": "avg_score",
+                          "groupBy": "game_id",
+                          "extreme": "min",
+                          "displayKey": "first_ts",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "fastest_day",
+                          "label": "Fastest day",
+                          "metric": "avg_guess_duration",
+                          "groupBy": "time_day",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "slowest_day",
+                          "label": "Slowest day",
+                          "metric": "avg_guess_duration",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "best_5k_streak",
+                          "label": "Best 5k streak",
+                          "kind": "streak",
+                          "streakFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "worst_throw_streak",
+                          "label": "Worst throw streak (<50)",
+                          "kind": "streak",
+                          "streakFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
         "id": "scores",
         "title": "Scores",
         "layout": {
@@ -425,9 +540,9 @@
                 "type": "composite",
                 "children": [
                   {
-                    "widgetId": "w_avg_score_weekday",
+                    "widgetId": "by_weekday_chart",
                     "type": "chart",
-                    "title": "Avg score by weekday",
+                    "title": "Weekday Analysis",
                     "grain": "round",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                     "spec": {
@@ -482,9 +597,9 @@
                 "type": "composite",
                 "children": [
                   {
-                    "widgetId": "w_fivek_rate_hour",
+                    "widgetId": "by_hour_chart",
                     "type": "chart",
-                    "title": "Rate by hour",
+                    "title": "Hour Analysis",
                     "grain": "round",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                     "spec": {
@@ -514,62 +629,6 @@
                       },
                       "sorts": [{ "mode": "desc" }, { "mode": "asc" }, { "mode": "chronological" }],
                       "activeSort": { "mode": "chronological" },
-                      "actions": {
-                        "hover": true,
-                        "click": {
-                          "type": "drilldown",
-                          "target": "rounds",
-                          "columnsPreset": "roundMode",
-                          "filterFromPoint": true
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            },
-
-            {
-              "cardId": "card_by_day",
-              "title": "Daily progression",
-              "x": 0,
-              "y": 20,
-              "w": 12,
-              "h": 10,
-              "card": {
-                "type": "composite",
-                "children": [
-                  {
-                    "widgetId": "w_avg_score_day",
-                    "type": "chart",
-                    "title": "Avg score by day (bar)",
-                    "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
-                    "spec": {
-                      "type": "bar",
-                      "x": { "dimension": "time_day" },
-                      "y": {
-                        "measures": [
-                          "games_count",
-                          "rounds_count",
-                          "avg_score",
-                          "avg_score_hit_only",
-                          "avg_distance_km",
-                          "avg_guess_duration",
-                          "throw_rate",
-                          "throw_count",
-                          "fivek_rate",
-                          "fivek_count",
-                          "hit_rate",
-                          "hit_count",
-                          "win_rate",
-                          "win_count",
-                          "damage_dealt_avg",
-                          "damage_taken_avg"
-                        ],
-                        "activeMeasure": "games_count"
-                      },
-                      "sort": { "mode": "chronological" },
                       "actions": {
                         "hover": true,
                         "click": {

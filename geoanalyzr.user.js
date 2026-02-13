@@ -15346,6 +15346,7 @@
       time_day: timeDayKey,
       weekday: weekdayKey,
       hour: hourKey,
+      game_id: (r) => typeof r?.gameId === "string" && r.gameId.trim().length ? r.gameId : null,
       true_country: trueCountryKey,
       movement_type: movementTypeKey,
       is_hit: isHitKey,
@@ -15358,6 +15359,7 @@
       time_day: timeDayKeyAny,
       weekday: weekdayKeyAny,
       hour: hourKeyAny,
+      game_id: (g) => typeof g?.gameId === "string" && g.gameId.trim().length ? g.gameId : null,
       game_mode: gameModeKeyAny,
       mode_family: modeFamilyKeyAny,
       result: resultKeyAny
@@ -15406,10 +15408,12 @@
       toTs: Number.isFinite(toRaw) ? toRaw : null
     };
   }
-  function buildAppliedFilters(spec, state, grain) {
+  function buildAppliedFilters(spec, state, grain, controlIds) {
     const out = { clauses: [] };
     if (!spec?.enabled) return out;
+    const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
     for (const control of spec.controls) {
+      if (allowed && !allowed.has(control.id)) continue;
       if (!control.appliesTo.includes(grain)) continue;
       if (control.type === "date_range") {
         const c = control;
@@ -15427,10 +15431,12 @@
     }
     return out;
   }
-  function normalizeGlobalFilterKey(spec, state, grain = "round") {
+  function normalizeGlobalFilterKey(spec, state, grain = "round", controlIds) {
     if (!spec?.enabled) return `gf:${grain}:off`;
     const parts = [];
+    const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
     for (const c of spec.controls) {
+      if (allowed && !allowed.has(c.id)) continue;
       const v = state[c.id];
       parts.push(`${c.id}=${JSON.stringify(v)}`);
     }
@@ -15558,10 +15564,11 @@
     const gf = filters?.global;
     const spec = gf?.spec;
     const state = gf?.state ?? {};
-    const key = normalizeGlobalFilterKey(spec, state, "round");
+    const controlIds = gf?.controlIds;
+    const key = normalizeGlobalFilterKey(spec, state, "round", controlIds);
     const cached = roundsFilteredCache.get(key);
     if (cached) return cached;
-    const applied = buildAppliedFilters(spec, state, "round");
+    const applied = buildAppliedFilters(spec, state, "round", controlIds);
     let rows = rowsAll;
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
@@ -15598,10 +15605,11 @@
     const gf = filters?.global;
     const spec = gf?.spec;
     const state = gf?.state ?? {};
-    const key = normalizeGlobalFilterKey(spec, state, "game");
+    const controlIds = gf?.controlIds;
+    const key = normalizeGlobalFilterKey(spec, state, "game", controlIds);
     const cached = gamesFilteredCache.get(key);
     if (cached) return cached;
-    const applied = buildAppliedFilters(spec, state, "game");
+    const applied = buildAppliedFilters(spec, state, "game", controlIds);
     let rows = rowsAll;
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
@@ -39684,6 +39692,27 @@
       }
       validateClickAction(semantic, widget.widgetId, spec.actions?.click);
     }
+    if (widget.type === "record_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.records) && spec.records.length > 0, "E_BAD_SPEC", `record_list ${widget.widgetId} has no records`);
+      for (const r of spec.records) {
+        const kind = r?.kind === "streak" ? "streak" : "group_extreme";
+        if (kind === "streak") {
+          assert(Array.isArray(r.streakFilters) && r.streakFilters.length > 0, "E_BAD_SPEC", `record ${r.id} missing streakFilters`);
+          validateClickAction(semantic, widget.widgetId, r.actions?.click);
+          continue;
+        }
+        const m = semantic.measures[r.metric];
+        assert(!!m, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
+        assert(m.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
+        const d = semantic.dimensions[r.groupBy];
+        assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown record groupBy '${r.groupBy}' in ${widget.widgetId}`);
+        const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
+        assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record groupBy '${r.groupBy}' grain mismatch in ${widget.widgetId}`);
+        assert(r.extreme === "max" || r.extreme === "min", "E_BAD_SPEC", `Record extreme must be max|min in ${widget.widgetId}`);
+        validateClickAction(semantic, widget.widgetId, r.actions?.click);
+      }
+    }
   }
   function validateClickAction(semantic, widgetId, click) {
     if (!click || click.type !== "drilldown") return;
@@ -39832,6 +39861,14 @@
         allowedCharts: ["bar", "line"],
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 8 }
+      },
+      game_id: {
+        label: "Game",
+        kind: "category",
+        grain: ["round", "game"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 50, selectorRequired: true }
       },
       is_hit: {
         label: "Hit?",
@@ -40385,6 +40422,121 @@
           }
         },
         {
+          id: "personal_records",
+          title: "Personal Records",
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_personal_records",
+                title: "Personal Records",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_personal_records",
+                      type: "record_list",
+                      title: "Personal Records",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      spec: {
+                        records: [
+                          {
+                            id: "best_day",
+                            label: "Best day",
+                            metric: "avg_score",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "hardest_day",
+                            label: "Hardest day",
+                            metric: "avg_score",
+                            groupBy: "time_day",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "best_game_avg_score",
+                            label: "Best avg score in a game",
+                            metric: "avg_score",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            displayKey: "first_ts",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "worst_game_avg_score",
+                            label: "Worst avg score in a game",
+                            metric: "avg_score",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            displayKey: "first_ts",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "fastest_day",
+                            label: "Fastest day",
+                            metric: "avg_guess_duration",
+                            groupBy: "time_day",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "slowest_day",
+                            label: "Slowest day",
+                            metric: "avg_guess_duration",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "best_5k_streak",
+                            label: "Best 5k streak",
+                            kind: "streak",
+                            streakFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_throw_streak",
+                            label: "Worst throw streak (<50)",
+                            kind: "streak",
+                            streakFilters: [{ dimension: "is_throw", op: "eq", value: "true" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
           id: "scores",
           title: "Scores",
           layout: {
@@ -40581,9 +40733,9 @@
                   type: "composite",
                   children: [
                     {
-                      widgetId: "w_avg_score_weekday",
+                      widgetId: "by_weekday_chart",
                       type: "chart",
-                      title: "Avg score by weekday",
+                      title: "Weekday Analysis",
                       grain: "round",
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
@@ -40637,9 +40789,9 @@
                   type: "composite",
                   children: [
                     {
-                      widgetId: "w_fivek_rate_hour",
+                      widgetId: "by_hour_chart",
                       type: "chart",
-                      title: "Rate by hour",
+                      title: "Hour Analysis",
                       grain: "round",
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
@@ -40669,61 +40821,6 @@
                         },
                         sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
                         activeSort: { mode: "chronological" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_by_day",
-                title: "Daily progression",
-                x: 0,
-                y: 20,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_avg_score_day",
-                      type: "chart",
-                      title: "Avg score by day (bar)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "bar",
-                        x: { dimension: "time_day" },
-                        y: {
-                          measures: [
-                            "games_count",
-                            "rounds_count",
-                            "avg_score",
-                            "avg_score_hit_only",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "throw_rate",
-                            "throw_count",
-                            "fivek_rate",
-                            "fivek_count",
-                            "hit_rate",
-                            "hit_count",
-                            "win_rate",
-                            "win_count",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
-                          activeMeasure: "games_count"
-                        },
-                        sort: { mode: "chronological" },
                         actions: {
                           hover: true,
                           click: {
@@ -40991,6 +41088,12 @@
     .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }
     .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
     .ga-statlist-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-recordlist-box {
       background: var(--ga-card-2);
       border:1px solid var(--ga-border);
       border-radius:12px;
@@ -43344,13 +43447,181 @@
     return wrap;
   }
 
+  // src/ui/widgets/recordListWidget.ts
+  function formatMetricValue(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!unit) return String(value);
+    if (unit.format === "percent") {
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
+    }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
+    if (unit.format === "int") return String(Math.round(value));
+    return value.toFixed(unit.decimals ?? 1);
+  }
+  function formatTs(ts) {
+    const d = new Date(ts);
+    if (!Number.isFinite(d.getTime())) return String(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${day}/${m}/${y} ${hh}:${mm}`;
+  }
+  function getRowTs2(row) {
+    const a = row?.playedAt;
+    if (typeof a === "number" && Number.isFinite(a)) return a;
+    const b = row?.ts;
+    if (typeof b === "number" && Number.isFinite(b)) return b;
+    return null;
+  }
+  function buildGroupExtreme(semantic, grain, rowsAll, rec) {
+    const metricId = typeof rec.metric === "string" ? rec.metric.trim() : "";
+    const groupById = typeof rec.groupBy === "string" ? rec.groupBy.trim() : "";
+    const extreme = rec.extreme === "min" ? "min" : "max";
+    if (!metricId || !groupById) return null;
+    const metric = semantic.measures[metricId];
+    if (!metric) return null;
+    const fn = MEASURES_BY_GRAIN[grain]?.[metric.formulaId];
+    if (!fn) return null;
+    const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
+    if (!keyFn) return null;
+    const grouped = groupByKey(rowsAll, keyFn);
+    let bestKey = null;
+    let bestVal = null;
+    let bestRows = [];
+    for (const [k, g] of grouped.entries()) {
+      if (!g || g.length === 0) continue;
+      const v = fn(g);
+      if (!Number.isFinite(v)) continue;
+      if (bestVal === null) {
+        bestKey = k;
+        bestVal = v;
+        bestRows = g;
+        continue;
+      }
+      const better = extreme === "max" ? v > bestVal : v < bestVal;
+      if (better) {
+        bestKey = k;
+        bestVal = v;
+        bestRows = g;
+      }
+    }
+    if (!bestKey || bestVal === null) return null;
+    const n = bestRows.length;
+    const metricLabel = semantic.measures[metricId]?.label ?? metricId;
+    const metricText = formatMetricValue(semantic, metricId, bestVal);
+    const displayKey = rec.displayKey === "first_ts" ? "first_ts" : "group";
+    const keyText = displayKey === "first_ts" ? (() => {
+      const ts = bestRows.map(getRowTs2).filter((x) => typeof x === "number");
+      const min = ts.length ? Math.min(...ts) : null;
+      return min !== null ? formatTs(min) : bestKey;
+    })() : bestKey;
+    const valueText = groupById === "time_day" ? (
+      // Match the legacy-style record hint for day records.
+      `${keyText} (${metricLabel.toLowerCase().startsWith("avg ") ? `avg ${metricText}` : metricText}, n=${n})`
+    ) : `${metricText} (${n} rounds, ${keyText})`;
+    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+  }
+  function buildStreak(semantic, grain, rowsAll, rec) {
+    const clauses = Array.isArray(rec.streakFilters) ? rec.streakFilters : [];
+    if (clauses.length === 0) return null;
+    const sorted = [...rowsAll].sort((a, b) => (getRowTs2(a) ?? 0) - (getRowTs2(b) ?? 0));
+    let cur = 0;
+    let best = 0;
+    let bestStart = -1;
+    let bestEnd = -1;
+    for (let i = 0; i < sorted.length; i++) {
+      const r = sorted[i];
+      const ok = applyFilters([r], clauses, grain).length === 1;
+      if (ok) {
+        cur++;
+        if (cur > best) {
+          best = cur;
+          bestStart = i - cur + 1;
+          bestEnd = i;
+        }
+      } else {
+        cur = 0;
+      }
+    }
+    const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
+    const valueText = best > 0 ? `${best} rounds in a row` : "0";
+    const keyText = bestRows.length ? (() => {
+      const ts = getRowTs2(bestRows[0]);
+      return ts !== null ? formatTs(ts) : "";
+    })() : "";
+    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+  }
+  async function renderRecordListWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const grain = widget.grain;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-recordlist";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = doc.createElement("div");
+    box.className = "ga-recordlist-box";
+    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+    for (const rec of spec.records) {
+      const kind = rec.kind === "streak" ? "streak" : "group_extreme";
+      const result = kind === "streak" ? buildStreak(semantic, grain, rowsAll, rec) : buildGroupExtreme(semantic, grain, rowsAll, rec);
+      const line = doc.createElement("div");
+      line.className = "ga-statrow";
+      const left = doc.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = rec.label;
+      const right = doc.createElement("div");
+      right.className = "ga-statrow-value";
+      right.textContent = result ? result.valueText : "-";
+      line.appendChild(left);
+      line.appendChild(right);
+      box.appendChild(line);
+      const click = result?.click;
+      if (click?.type === "drilldown" && result) {
+        line.style.cursor = "pointer";
+        line.addEventListener("click", () => {
+          const rowsFromPoint = click.filterFromPoint ? result.rows : rowsAll;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${rec.label}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
+          });
+        });
+      }
+    }
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
     const doc = root.ownerDocument;
     const overlay = new DrilldownOverlay(root);
-    const datasets = opts?.datasets ?? {};
-    const context = opts?.context;
+    const datasetsDefault = opts?.datasets ?? {};
+    const datasetsBySection = opts?.datasetsBySection ?? {};
+    const contextDefault = opts?.context;
+    const contextBySection = opts?.contextBySection ?? {};
+    let activeDatasets = datasetsDefault;
+    let activeContext = contextDefault;
     const tabBar = doc.createElement("div");
     tabBar.className = "ga-tabs";
     const content = doc.createElement("div");
@@ -43377,10 +43648,11 @@
       });
     }
     async function renderWidget(widget) {
-      const baseRows = datasets[widget.grain];
+      const baseRows = activeDatasets[widget.grain];
       if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows);
-      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, datasets, context);
+      if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
@@ -43390,6 +43662,8 @@
       content.innerHTML = "";
       const section = sections.find((s) => s.id === active);
       if (!section) return;
+      activeDatasets = datasetsBySection[section.id] ?? datasetsDefault;
+      activeContext = contextBySection[section.id] ?? contextDefault;
       const grid = doc.createElement("div");
       grid.className = "ga-grid";
       grid.style.display = "grid";
@@ -43735,10 +44009,24 @@
         setValue: store.setValue,
         setAll: store.setAll,
         reset: store.reset,
-        getDistinctOptions: async ({ control, spec: s, state }) => getSelectOptionsForControl({ control, spec: s, state })
+        getDistinctOptions: async ({ control, spec: s, state: state2 }) => getSelectOptionsForControl({ control, spec: s, state: state2 })
       });
-      const used = /* @__PURE__ */ new Set();
+      const specFilters = spec;
+      const state = store.getState();
+      const resolveControlIdsForSection = (section) => {
+        if (!specFilters?.enabled) return void 0;
+        const all = specFilters.controls.map((c) => c.id);
+        const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : null;
+        const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : null;
+        let ids = include && include.length ? all.filter((id) => include.includes(id)) : [...all];
+        if (exclude && exclude.length) ids = ids.filter((id) => !exclude.includes(id));
+        return ids;
+      };
+      const datasetsBySection = {};
+      const contextBySection = {};
       for (const section of dashboard.dashboard.sections) {
+        const controlIds = resolveControlIdsForSection(section);
+        const used = /* @__PURE__ */ new Set();
         for (const placed of section.layout.cards) {
           for (const w of placed.card.children) {
             used.add(w.grain);
@@ -43776,18 +44064,56 @@
               const m = semantic.measures[anySpec?.measure];
               if (m) used.add(m.grain);
             }
+            if (w.type === "record_list") {
+              const recs = Array.isArray(anySpec?.records) ? anySpec.records : [];
+              for (const r of recs) {
+                if (typeof r?.metric === "string") {
+                  const m = semantic.measures[r.metric];
+                  if (m) used.add(m.grain);
+                }
+                if (typeof r?.groupBy === "string") {
+                  const d = semantic.dimensions[r.groupBy];
+                  const grains = d ? Array.isArray(d.grain) ? d.grain : [d.grain] : [];
+                  for (const g of grains) used.add(g);
+                }
+              }
+            }
           }
         }
+        const filters = { global: { spec: specFilters, state, controlIds } };
+        const datasets = {};
+        if (used.has("round")) datasets.round = await getRounds(filters);
+        if (used.has("game")) datasets.game = await getGames(filters);
+        if (used.has("session")) datasets.session = [];
+        datasetsBySection[section.id] = datasets;
+        const hasDate = !controlIds || controlIds.includes("dateRange");
+        const dateVal = state["dateRange"];
+        const fromTs = hasDate && dateVal && typeof dateVal === "object" ? dateVal.fromTs ?? null : null;
+        const toTs2 = hasDate && dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
+        contextBySection[section.id] = { dateRange: { fromTs, toTs: toTs2 } };
       }
-      const datasets = {};
-      const filters = { global: { spec, state: store.getState() } };
-      if (used.has("round")) datasets.round = await getRounds(filters);
-      if (used.has("game")) datasets.game = await getGames(filters);
-      if (used.has("session")) datasets.session = [];
-      const dateVal = store.getState()["dateRange"];
-      const fromTs = dateVal && typeof dateVal === "object" ? dateVal.fromTs ?? null : null;
-      const toTs2 = dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
-      await renderDashboard(dashboardHost, semantic, dashboard, { datasets, context: { dateRange: { fromTs, toTs: toTs2 } } });
+      const allControlIds = specFilters?.enabled ? specFilters.controls.map((c) => c.id) : void 0;
+      const filtersAll = { global: { spec: specFilters, state, controlIds: allControlIds } };
+      const datasetsAll = {};
+      const usedAll = /* @__PURE__ */ new Set();
+      for (const section of dashboard.dashboard.sections) {
+        const d = datasetsBySection[section.id];
+        if (d?.round) usedAll.add("round");
+        if (d?.game) usedAll.add("game");
+        if (d?.session) usedAll.add("session");
+      }
+      if (usedAll.has("round")) datasetsAll.round = await getRounds(filtersAll);
+      if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
+      if (usedAll.has("session")) datasetsAll.session = [];
+      const dateValAll = state["dateRange"];
+      const fromTsAll = dateValAll && typeof dateValAll === "object" ? dateValAll.fromTs ?? null : null;
+      const toTsAll = dateValAll && typeof dateValAll === "object" ? dateValAll.toTs ?? null : null;
+      await renderDashboard(dashboardHost, semantic, dashboard, {
+        datasets: datasetsAll,
+        datasetsBySection,
+        context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
+        contextBySection
+      });
     };
     store.subscribe(() => {
       void renderNow();

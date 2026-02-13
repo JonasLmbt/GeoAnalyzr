@@ -9,6 +9,7 @@ export type GlobalFilters = {
   global?: {
     spec: GlobalFiltersSpec | undefined;
     state: GlobalFilterState;
+    controlIds?: string[];
   };
 };
 
@@ -165,12 +166,13 @@ export async function getRounds(filters: GlobalFilters): Promise<RoundRow[]> {
   const gf = filters?.global;
   const spec = gf?.spec;
   const state = gf?.state ?? {};
+  const controlIds = gf?.controlIds;
 
-  const key = normalizeGlobalFilterKey(spec, state, "round");
+  const key = normalizeGlobalFilterKey(spec, state, "round", controlIds);
   const cached = roundsFilteredCache.get(key);
   if (cached) return cached;
 
-  const applied = buildAppliedFilters(spec, state, "round");
+  const applied = buildAppliedFilters(spec, state, "round", controlIds);
   let rows = rowsAll;
 
   if (applied.date) {
@@ -225,12 +227,13 @@ export async function getGames(filters: GlobalFilters): Promise<GameFactRow[]> {
   const gf = filters?.global;
   const spec = gf?.spec;
   const state = gf?.state ?? {};
+  const controlIds = gf?.controlIds;
 
-  const key = normalizeGlobalFilterKey(spec, state, "game");
+  const key = normalizeGlobalFilterKey(spec, state, "game", controlIds);
   const cached = gamesFilteredCache.get(key);
   if (cached) return cached;
 
-  const applied = buildAppliedFilters(spec, state, "game");
+  const applied = buildAppliedFilters(spec, state, "game", controlIds);
   let rows = rowsAll;
 
   if (applied.date) {

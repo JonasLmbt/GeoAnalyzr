@@ -7,20 +7,30 @@ import { DrilldownOverlay } from "./drilldownOverlay";
 import { renderStatListWidget } from "./widgets/statListWidget";
 import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
+import { renderRecordListWidget } from "./widgets/recordListWidget";
 
 
 export async function renderDashboard(
   root: HTMLElement,
   semantic: SemanticRegistry,
   dashboard: DashboardDoc,
-  opts?: { datasets?: Partial<Record<Grain, any[]>>; context?: { dateRange?: { fromTs: number | null; toTs: number | null } } }
+  opts?: {
+    datasets?: Partial<Record<Grain, any[]>>;
+    datasetsBySection?: Record<string, Partial<Record<Grain, any[]>>>;
+    context?: { dateRange?: { fromTs: number | null; toTs: number | null } };
+    contextBySection?: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }>;
+  }
 ): Promise<void> {
   root.innerHTML = "";
   const doc = root.ownerDocument;
 
   const overlay = new DrilldownOverlay(root);
-  const datasets = opts?.datasets ?? {};
-  const context = opts?.context;
+  const datasetsDefault = opts?.datasets ?? {};
+  const datasetsBySection = opts?.datasetsBySection ?? {};
+  const contextDefault = opts?.context;
+  const contextBySection = opts?.contextBySection ?? {};
+  let activeDatasets: Partial<Record<Grain, any[]>> = datasetsDefault;
+  let activeContext: { dateRange?: { fromTs: number | null; toTs: number | null } } | undefined = contextDefault;
 
   const tabBar = doc.createElement("div");
   tabBar.className = "ga-tabs";
@@ -54,10 +64,11 @@ export async function renderDashboard(
   }
 
   async function renderWidget(widget: WidgetDef): Promise<HTMLElement> {
-    const baseRows = datasets[widget.grain];
+    const baseRows = activeDatasets[widget.grain];
     if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows as any);
-    if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, datasets, context);
+    if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");
@@ -70,6 +81,8 @@ export async function renderDashboard(
     content.innerHTML = "";
     const section = sections.find((s) => s.id === active);
     if (!section) return;
+    activeDatasets = datasetsBySection[section.id] ?? datasetsDefault;
+    activeContext = contextBySection[section.id] ?? contextDefault;
 
     const grid = doc.createElement("div");
     grid.className = "ga-grid";
