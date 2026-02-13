@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.7
+// @version      1.6.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -39880,9 +39880,18 @@
       const spec = widget.spec;
       assert(Array.isArray(spec.records) && spec.records.length > 0, "E_BAD_SPEC", `record_list ${widget.widgetId} has no records`);
       for (const r of spec.records) {
-        const kind = r?.kind === "streak" ? "streak" : "group_extreme";
+        const kind = r?.kind === "same_value_streak" ? "same_value_streak" : r?.kind === "streak" ? "streak" : "group_extreme";
         if (kind === "streak") {
           assert(Array.isArray(r.streakFilters) && r.streakFilters.length > 0, "E_BAD_SPEC", `record ${r.id} missing streakFilters`);
+          validateClickAction(semantic, widget.widgetId, r.actions?.click);
+          continue;
+        }
+        if (kind === "same_value_streak") {
+          assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `record ${r.id} missing dimension`);
+          const d2 = semantic.dimensions[r.dimension];
+          assert(!!d2, "E_UNKNOWN_DIMENSION", `Unknown record dimension '${r.dimension}' in ${widget.widgetId}`);
+          const grains2 = Array.isArray(d2.grain) ? d2.grain : [d2.grain];
+          assert(grains2.includes(widget.grain), "E_GRAIN_MISMATCH", `Record dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
           validateClickAction(semantic, widget.widgetId, r.actions?.click);
           continue;
         }
