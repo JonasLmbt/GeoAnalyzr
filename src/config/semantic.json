@@ -104,7 +104,7 @@
       "grain": "round",
       "ordered": true,
       "allowedCharts": ["bar"],
-      "sortModes": ["chronological"]
+      "sortModes": ["chronological", "asc", "desc"]
     },
     "round_id": {
       "label": "Round",
