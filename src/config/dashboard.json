@@ -466,176 +466,217 @@
         }
       },
       {
-        "id": "scores",
-        "title": "Scores",
+        "id": "tempo",
+        "title": "Tempo",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
           "cards": [
             {
-              "cardId": "card_scores_kpis",
-              "title": "Score KPIs",
+              "cardId": "card_tempo",
+              "title": "Tempo",
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 6,
+              "h": 14,
               "card": {
                 "type": "composite",
                 "children": [
                   {
-                    "widgetId": "w_scores_kpis",
-                    "type": "stat_list",
-                    "title": "KPIs (round-grain)",
+                    "widgetId": "w_tempo_records",
+                    "type": "record_list",
+                    "title": "Tempo",
                     "grain": "round",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
                     "spec": {
-                      "rows": [
-                        { "label": "Rounds", "measure": "rounds_count" },
-                        { "label": "Avg score", "measure": "avg_score" },
+                      "records": [
                         {
-                          "label": "5k rate",
-                          "measure": "fivek_rate",
+                          "id": "fastest_guess",
+                          "label": "Fastest guess",
+                          "metric": "avg_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "min",
+                          "displayKey": "first_ts_score",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "slowest_guess",
+                          "label": "Slowest guess",
+                          "metric": "avg_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "displayKey": "first_ts_score",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "fastest_5k",
+                          "label": "Fastest 5k",
+                          "metric": "avg_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "min",
+                          "filters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
+                          "displayKey": "first_ts",
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
-                              "filterFromPoint": false,
-                              "extraFilters": [
-                                { "dimension": "score_bucket", "op": "eq", "value": "5000" }
-                              ]
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
                             }
                           }
                         },
-                        { "label": "Hit rate", "measure": "hit_rate" },
-                        { "label": "Throw rate (<50)", "measure": "throw_rate" }
+                        {
+                          "id": "slowest_throw",
+                          "label": "Slowest throw (<50)",
+                          "metric": "avg_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "filters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
+                          "displayKey": "first_ts_score",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        }
                       ]
                     }
-                  }
-                ]
-              }
-            },
-
-            {
-              "cardId": "card_score_distribution",
-              "title": "Score Distribution",
-              "x": 0,
-              "y": 6,
-              "w": 12,
-              "h": 12,
-              "card": {
-                "type": "composite",
-                "children": [
+                  },
                   {
-                    "widgetId": "w_score_distribution",
-                    "type": "chart",
-                    "title": "Score bucket distribution (click = drilldown rounds)",
+                    "widgetId": "w_tempo_bucket_breakdown",
+                    "type": "breakdown",
+                    "title": "Tempo - Time bucket metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 12 },
+                    "placement": { "x": 0, "y": 6, "w": 12, "h": 8 },
                     "spec": {
-                      "type": "bar",
-                      "x": { "dimension": "score_bucket" },
-                      "y": { "measure": "rounds_count" },
-                      "sort": { "mode": "chronological" },
+                      "dimension": "duration_bucket",
+                      "measures": ["avg_score", "fivek_rate", "throw_rate", "hit_rate", "avg_guess_duration"],
+                      "activeMeasure": "avg_score",
+                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
+                      "activeSort": { "mode": "chronological" },
+                      "limit": 12,
                       "actions": {
-                        "hover": true,
                         "click": {
                           "type": "drilldown",
                           "target": "rounds",
                           "columnsPreset": "roundMode",
                           "filterFromPoint": true
                         }
-                      },
-                      "actionsByMeasure": {
-                        "games_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "players",
-                            "columnsPreset": "opponentMode",
-                            "filterFromPoint": true
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "scores",
+        "title": "Scores",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_scores_kpis",
+              "title": "Scores",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 14,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_scores_kpis",
+                    "type": "stat_list",
+                    "title": "Scores",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 4 },
+                    "spec": {
+                      "rows": [
+                        {
+                          "label": "Perfect 5k",
+                          "measure": "fivek_count",
+                          "secondaryMeasure": "fivek_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                            }
                           }
                         },
-                        "win_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "players",
-                            "columnsPreset": "opponentMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                        {
+                          "label": "Near-perfect (>=4500)",
+                          "measure": "near_perfect_count",
+                          "secondaryMeasure": "near_perfect_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_near_perfect", "op": "eq", "value": "true" }]
+                            }
                           }
                         },
-                        "win_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "players",
-                            "columnsPreset": "opponentMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                        {
+                          "label": "Low scores (<500)",
+                          "measure": "low_score_count",
+                          "secondaryMeasure": "low_score_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_low_score", "op": "eq", "value": "true" }]
+                            }
                           }
                         },
-                        "avg_score_hit_only": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "fivek_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
-                          }
-                        },
-                        "fivek_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
-                          }
-                        },
-                        "throw_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "throw_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "hit_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "hit_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                        {
+                          "label": "Throws (<50)",
+                          "measure": "throw_count",
+                          "secondaryMeasure": "throw_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                            }
                           }
                         }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_score_distribution",
+                    "type": "chart",
+                    "title": "Scores - Score distribution (smoothed)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 4, "w": 12, "h": 10 },
+                    "spec": {
+                      "type": "bar",
+                      "limit": 1000,
+                      "x": { "dimension": "score_bucket" },
+                      "y": { "measure": "rounds_count" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
                       }
                     }
                   }

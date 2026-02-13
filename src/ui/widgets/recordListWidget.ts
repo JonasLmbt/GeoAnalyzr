@@ -75,7 +75,8 @@ function buildGroupExtreme(
   const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
   if (!keyFn) return null;
 
-  const grouped = groupByKey(rowsAll, keyFn);
+  const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
+  const grouped = groupByKey(inputRows, keyFn);
   let bestKey: string | null = null;
   let bestVal: number | null = null;
   let bestRows: any[] = [];
@@ -104,15 +105,30 @@ function buildGroupExtreme(
   const metricLabel = semantic.measures[metricId]?.label ?? metricId;
   const metricText = formatMetricValue(semantic, metricId, bestVal);
 
-  const displayKey = rec.displayKey === "first_ts" ? "first_ts" : "group";
+  const displayKey =
+    rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
+
+  const firstTs = (() => {
+    const ts = bestRows.map(getRowTs).filter((x): x is number => typeof x === "number");
+    return ts.length ? Math.min(...ts) : null;
+  })();
+
   const keyText =
-    displayKey === "first_ts"
-      ? (() => {
-          const ts = bestRows.map(getRowTs).filter((x): x is number => typeof x === "number");
-          const min = ts.length ? Math.min(...ts) : null;
-          return min !== null ? formatTs(min) : bestKey;
-        })()
+    displayKey === "first_ts" || displayKey === "first_ts_score"
+      ? (firstTs !== null ? formatTs(firstTs) : bestKey)
       : bestKey;
+
+  if (displayKey === "first_ts_score") {
+    // Try to include score context, matching the legacy-style tempo rows.
+    let scoreText = "";
+    const scoreMeasure = semantic.measures["avg_score"];
+    const scoreFn = scoreMeasure ? MEASURES_BY_GRAIN[grain]?.[scoreMeasure.formulaId] : undefined;
+    if (scoreFn) {
+      const s = scoreFn(bestRows as any[]);
+      if (Number.isFinite(s)) scoreText = ` (score ${Math.round(s)})`;
+    }
+    return { keyText, valueText: `${metricText} on ${keyText}${scoreText}`, rows: bestRows, click: rec.actions?.click };
+  }
 
   const valueText =
     groupById === "time_day"

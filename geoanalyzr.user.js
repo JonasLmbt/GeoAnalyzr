@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.4
+// @version      1.6.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15343,6 +15343,12 @@
   var DIMENSION_EXTRACTORS = {
     round: {
       score_bucket: scoreBucketKey,
+      round_id: (r) => {
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const rn = typeof r?.roundNumber === "number" ? r.roundNumber : null;
+        if (!gid || rn === null) return null;
+        return `${gid}#${rn}`;
+      },
       time_day: timeDayKey,
       weekday: weekdayKey,
       hour: hourKey,
@@ -15351,6 +15357,16 @@
       movement_type: movementTypeKey,
       is_hit: isHitKey,
       is_throw: isThrowKey,
+      is_near_perfect: (r) => {
+        const s = getSelfScore(r);
+        if (typeof s !== "number") return null;
+        return s >= 4500 ? "true" : "false";
+      },
+      is_low_score: (r) => {
+        const s = getSelfScore(r);
+        if (typeof s !== "number") return null;
+        return s < 500 ? "true" : "false";
+      },
       duration_bucket: durationBucketKey,
       teammate_name: teammateNameKey,
       round_number: (r) => typeof r?.roundNumber === "number" ? String(r.roundNumber) : null
@@ -39981,6 +39997,14 @@
         allowedCharts: ["bar"],
         sortModes: ["chronological"]
       },
+      round_id: {
+        label: "Round",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 200, selectorRequired: true }
+      },
       true_country: {
         label: "True country",
         kind: "category",
@@ -40023,6 +40047,22 @@
       },
       is_throw: {
         label: "Throw?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_near_perfect: {
+        label: "Near-perfect? (>=4500)",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_low_score: {
+        label: "Low score? (<500)",
         kind: "category",
         grain: "round",
         allowedCharts: ["bar"],
@@ -40104,6 +40144,34 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_5k_round"
+      },
+      near_perfect_rate: {
+        label: "Near-perfect rate (>=4500)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_near_perfect_round"
+      },
+      near_perfect_count: {
+        label: "Near-perfect count (>=4500)",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_near_perfect_round"
+      },
+      low_score_rate: {
+        label: "Low score rate (<500)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_low_score_round"
+      },
+      low_score_count: {
+        label: "Low score count (<500)",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_low_score_round"
       },
       win_rate: {
         label: "Win rate",
@@ -40883,175 +40951,217 @@
           }
         },
         {
-          id: "scores",
-          title: "Scores",
+          id: "tempo",
+          title: "Tempo",
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
           layout: {
             mode: "grid",
             columns: 12,
             cards: [
               {
-                cardId: "card_scores_kpis",
-                title: "Score KPIs",
+                cardId: "card_tempo",
+                title: "Tempo",
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 6,
+                h: 14,
                 card: {
                   type: "composite",
                   children: [
                     {
-                      widgetId: "w_scores_kpis",
-                      type: "stat_list",
-                      title: "KPIs (round-grain)",
+                      widgetId: "w_tempo_records",
+                      type: "record_list",
+                      title: "Tempo",
                       grain: "round",
                       placement: { x: 0, y: 0, w: 12, h: 6 },
                       spec: {
-                        rows: [
-                          { label: "Rounds", measure: "rounds_count" },
-                          { label: "Avg score", measure: "avg_score" },
+                        records: [
                           {
-                            label: "5k rate",
-                            measure: "fivek_rate",
+                            id: "fastest_guess",
+                            label: "Fastest guess",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            displayKey: "first_ts_score",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "slowest_guess",
+                            label: "Slowest guess",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            displayKey: "first_ts_score",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "fastest_5k",
+                            label: "Fastest 5k",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            filters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
+                            displayKey: "first_ts",
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  { dimension: "score_bucket", op: "eq", value: "5000" }
-                                ]
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
                               }
                             }
                           },
-                          { label: "Hit rate", measure: "hit_rate" },
-                          { label: "Throw rate (<50)", measure: "throw_rate" }
+                          {
+                            id: "slowest_throw",
+                            label: "Slowest throw (<50)",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            filters: [{ dimension: "is_throw", op: "eq", value: "true" }],
+                            displayKey: "first_ts_score",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                              }
+                            }
+                          }
                         ]
                       }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_score_distribution",
-                title: "Score Distribution",
-                x: 0,
-                y: 6,
-                w: 12,
-                h: 12,
-                card: {
-                  type: "composite",
-                  children: [
+                    },
                     {
-                      widgetId: "w_score_distribution",
-                      type: "chart",
-                      title: "Score bucket distribution (click = drilldown rounds)",
+                      widgetId: "w_tempo_bucket_breakdown",
+                      type: "breakdown",
+                      title: "Tempo - Time bucket metrics",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 12 },
+                      placement: { x: 0, y: 6, w: 12, h: 8 },
                       spec: {
-                        type: "bar",
-                        x: { dimension: "score_bucket" },
-                        y: { measure: "rounds_count" },
-                        sort: { mode: "chronological" },
+                        dimension: "duration_bucket",
+                        measures: ["avg_score", "fivek_rate", "throw_rate", "hit_rate", "avg_guess_duration"],
+                        activeMeasure: "avg_score",
+                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "chronological" },
+                        limit: 12,
                         actions: {
-                          hover: true,
                           click: {
                             type: "drilldown",
                             target: "rounds",
                             columnsPreset: "roundMode",
                             filterFromPoint: true
                           }
-                        },
-                        actionsByMeasure: {
-                          games_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "players",
-                              columnsPreset: "opponentMode",
-                              filterFromPoint: true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "scores",
+          title: "Scores",
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_scores_kpis",
+                title: "Scores",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 14,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_scores_kpis",
+                      type: "stat_list",
+                      title: "Scores",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 4 },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Perfect 5k",
+                            measure: "fivek_count",
+                            secondaryMeasure: "fivek_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                              }
                             }
                           },
-                          win_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "players",
-                              columnsPreset: "opponentMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                          {
+                            label: "Near-perfect (>=4500)",
+                            measure: "near_perfect_count",
+                            secondaryMeasure: "near_perfect_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_near_perfect", op: "eq", value: "true" }]
+                              }
                             }
                           },
-                          win_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "players",
-                              columnsPreset: "opponentMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                          {
+                            label: "Low scores (<500)",
+                            measure: "low_score_count",
+                            secondaryMeasure: "low_score_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_low_score", op: "eq", value: "true" }]
+                              }
                             }
                           },
-                          avg_score_hit_only: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
-                            }
-                          },
-                          fivek_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-                            }
-                          },
-                          fivek_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-                            }
-                          },
-                          throw_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-                            }
-                          },
-                          throw_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-                            }
-                          },
-                          hit_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
-                            }
-                          },
-                          hit_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                          {
+                            label: "Throws (<50)",
+                            measure: "throw_count",
+                            secondaryMeasure: "throw_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                              }
                             }
                           }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_score_distribution",
+                      type: "chart",
+                      title: "Scores - Score distribution (smoothed)",
+                      grain: "round",
+                      placement: { x: 0, y: 4, w: 12, h: 10 },
+                      spec: {
+                        type: "bar",
+                        limit: 1e3,
+                        x: { dimension: "score_bucket" },
+                        y: { measure: "rounds_count" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
                         }
                       }
                     }
@@ -42529,6 +42639,14 @@
     const s = getSelfScore(r);
     return typeof s === "number" && s < 50;
   }
+  function isNearPerfect(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s >= 4500;
+  }
+  function isLowScoreLt500(r) {
+    const s = getSelfScore(r);
+    return typeof s === "number" && s < 500;
+  }
   function getGameSelfVictory(g) {
     const v = pick(g, "player_self_victory") ?? pick(g, "playerOneVictory") ?? pick(g, "teamOneVictory");
     return typeof v === "boolean" ? v : void 0;
@@ -42594,6 +42712,18 @@
       for (const r of rows) if (is5k(r)) k++;
       return k;
     },
+    rate_near_perfect_round: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isNearPerfect(r)) k++;
+      return k / n;
+    },
+    count_near_perfect_round: (rows) => {
+      let k = 0;
+      for (const r of rows) if (isNearPerfect(r)) k++;
+      return k;
+    },
     count_hit_round: (rows) => {
       let k = 0;
       for (const r of rows) if (isHit(r)) k++;
@@ -42602,6 +42732,18 @@
     count_throw_round: (rows) => {
       let k = 0;
       for (const r of rows) if (isThrowLt50(r)) k++;
+      return k;
+    },
+    rate_low_score_round: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      let k = 0;
+      for (const r of rows) if (isLowScoreLt500(r)) k++;
+      return k / n;
+    },
+    count_low_score_round: (rows) => {
+      let k = 0;
+      for (const r of rows) if (isLowScoreLt500(r)) k++;
       return k;
     },
     mean_player_self_score_hit_only: (rows) => {
@@ -42962,7 +43104,15 @@
       right.className = "ga-statrow-value";
       right.textContent = "...";
       const val = await computeMeasure(semantic, row.measure, rowBaseRows, rowGrain, row.filters);
-      right.textContent = formatValue(semantic, row.measure, val);
+      const primaryText = formatValue(semantic, row.measure, val);
+      const secondaryId = typeof row.secondaryMeasure === "string" ? row.secondaryMeasure.trim() : "";
+      if (secondaryId) {
+        const secVal = await computeMeasure(semantic, secondaryId, rowBaseRows, rowGrain, row.filters);
+        const secondaryText = formatValue(semantic, secondaryId, secVal);
+        right.textContent = `${primaryText} (${secondaryText})`;
+      } else {
+        right.textContent = primaryText;
+      }
       attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain);
       line.appendChild(left);
       line.appendChild(right);
@@ -44124,7 +44274,8 @@
     if (!fn) return null;
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
     if (!keyFn) return null;
-    const grouped = groupByKey(rowsAll, keyFn);
+    const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
+    const grouped = groupByKey(inputRows, keyFn);
     let bestKey = null;
     let bestVal = null;
     let bestRows = [];
@@ -44149,12 +44300,22 @@
     const n = bestRows.length;
     const metricLabel = semantic.measures[metricId]?.label ?? metricId;
     const metricText = formatMetricValue(semantic, metricId, bestVal);
-    const displayKey = rec.displayKey === "first_ts" ? "first_ts" : "group";
-    const keyText = displayKey === "first_ts" ? (() => {
+    const displayKey = rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
+    const firstTs = (() => {
       const ts = bestRows.map(getRowTs2).filter((x) => typeof x === "number");
-      const min = ts.length ? Math.min(...ts) : null;
-      return min !== null ? formatTs(min) : bestKey;
-    })() : bestKey;
+      return ts.length ? Math.min(...ts) : null;
+    })();
+    const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
+    if (displayKey === "first_ts_score") {
+      let scoreText = "";
+      const scoreMeasure = semantic.measures["avg_score"];
+      const scoreFn = scoreMeasure ? MEASURES_BY_GRAIN[grain]?.[scoreMeasure.formulaId] : void 0;
+      if (scoreFn) {
+        const s = scoreFn(bestRows);
+        if (Number.isFinite(s)) scoreText = ` (score ${Math.round(s)})`;
+      }
+      return { keyText, valueText: `${metricText} on ${keyText}${scoreText}`, rows: bestRows, click: rec.actions?.click };
+    }
     const valueText = groupById === "time_day" ? (
       // Match the legacy-style record hint for day records.
       `${keyText} (${metricLabel.toLowerCase().startsWith("avg ") ? `avg ${metricText}` : metricText}, n=${n})`

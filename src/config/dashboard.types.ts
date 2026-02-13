@@ -116,6 +116,8 @@ export interface ChartSpec {
 export interface StatRowDef {
   label: string;
   measure: string;
+  // Optional second measure to show as "(...)" next to the primary value.
+  secondaryMeasure?: string;
   // Optional override to compute the row at a different grain than the widget.
   // This allows "overview" stat lists to mix e.g. game and round measures without hardcoding.
   grain?: Grain;
@@ -167,10 +169,12 @@ export interface RecordItemDef {
   metric?: string;
   groupBy?: string;
   extreme?: "max" | "min";
+  // Optional filters applied before computing the record.
+  filters?: FilterClause[];
   // streak:
   streakFilters?: FilterClause[];
   // presentation:
-  displayKey?: "group" | "first_ts";
+  displayKey?: "group" | "first_ts" | "first_ts_score";
   actions?: Actions;
 }
 

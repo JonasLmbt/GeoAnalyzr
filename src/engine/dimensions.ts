@@ -144,6 +144,12 @@ function resultKeyAny(row: any): GroupKey | null {
 export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => GroupKey | null>> = {
   round: {
     score_bucket: scoreBucketKey,
+    round_id: (r: any) => {
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      const rn = typeof r?.roundNumber === "number" ? r.roundNumber : null;
+      if (!gid || rn === null) return null;
+      return `${gid}#${rn}`;
+    },
     time_day: timeDayKey,
     weekday: weekdayKey,
     hour: hourKey,
@@ -152,6 +158,16 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     movement_type: movementTypeKey,
     is_hit: isHitKey,
     is_throw: isThrowKey,
+    is_near_perfect: (r: any) => {
+      const s = getSelfScore(r as any);
+      if (typeof s !== "number") return null;
+      return s >= 4500 ? "true" : "false";
+    },
+    is_low_score: (r: any) => {
+      const s = getSelfScore(r as any);
+      if (typeof s !== "number") return null;
+      return s < 500 ? "true" : "false";
+    },
     duration_bucket: durationBucketKey,
     teammate_name: teammateNameKey,
     round_number: (r: any) => (typeof r?.roundNumber === "number" ? String(r.roundNumber) : null)

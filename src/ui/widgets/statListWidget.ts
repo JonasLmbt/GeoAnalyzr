@@ -116,7 +116,16 @@ export async function renderStatListWidget(
     right.textContent = "...";
 
     const val = await computeMeasure(semantic, row.measure, rowBaseRows, rowGrain, row.filters);
-    right.textContent = formatValue(semantic, row.measure, val);
+    const primaryText = formatValue(semantic, row.measure, val);
+
+    const secondaryId = typeof (row as any).secondaryMeasure === "string" ? ((row as any).secondaryMeasure as string).trim() : "";
+    if (secondaryId) {
+      const secVal = await computeMeasure(semantic, secondaryId, rowBaseRows, rowGrain, row.filters);
+      const secondaryText = formatValue(semantic, secondaryId, secVal);
+      right.textContent = `${primaryText} (${secondaryText})`;
+    } else {
+      right.textContent = primaryText;
+    }
 
     attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain);
 

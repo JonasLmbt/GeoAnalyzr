@@ -41,6 +41,16 @@ function isThrowLt50(r: RoundRow): boolean {
   return typeof s === "number" && s < 50;
 }
 
+function isNearPerfect(r: RoundRow): boolean {
+  const s = getSelfScore(r);
+  return typeof s === "number" && s >= 4500;
+}
+
+function isLowScoreLt500(r: RoundRow): boolean {
+  const s = getSelfScore(r);
+  return typeof s === "number" && s < 500;
+}
+
 function getGameSelfVictory(g: GameFactRow): boolean | undefined {
   const v =
     pick(g as any, "player_self_victory") ??
@@ -120,6 +130,20 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     return k;
   },
 
+  rate_near_perfect_round: (rows) => {
+    const n = rows.length;
+    if (!n) return 0;
+    let k = 0;
+    for (const r of rows) if (isNearPerfect(r)) k++;
+    return k / n;
+  },
+
+  count_near_perfect_round: (rows) => {
+    let k = 0;
+    for (const r of rows) if (isNearPerfect(r)) k++;
+    return k;
+  },
+
   count_hit_round: (rows) => {
     let k = 0;
     for (const r of rows) if (isHit(r)) k++;
@@ -129,6 +153,20 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
   count_throw_round: (rows) => {
     let k = 0;
     for (const r of rows) if (isThrowLt50(r)) k++;
+    return k;
+  },
+
+  rate_low_score_round: (rows) => {
+    const n = rows.length;
+    if (!n) return 0;
+    let k = 0;
+    for (const r of rows) if (isLowScoreLt500(r)) k++;
+    return k / n;
+  },
+
+  count_low_score_round: (rows) => {
+    let k = 0;
+    for (const r of rows) if (isLowScoreLt500(r)) k++;
     return k;
   },
 
