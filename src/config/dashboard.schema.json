@@ -275,6 +275,7 @@
           "type": { "$ref": "#/$defs/chartType" },
           "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
           "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+          "maxPoints": { "type": "integer", "minimum": 2, "maximum": 400 },
           "x": { "$ref": "#/$defs/xAxisDef" },
           "y": { "$ref": "#/$defs/yAxisDef" },
           "series": { "$ref": "#/$defs/seriesDef" },

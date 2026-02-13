@@ -83,6 +83,8 @@ export interface ChartSpec {
   type: ChartType;
   color?: string;
   limit?: number;
+  // For ordered x-axes (especially time), automatically bucket data down to this many points at most.
+  maxPoints?: number;
   x: {
     dimension: string;
     selector?: SelectorDef;

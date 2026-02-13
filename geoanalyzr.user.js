@@ -40192,6 +40192,7 @@
                       placement: { x: 0, y: 15, w: 12, h: 7 },
                       spec: {
                         type: "line",
+                        maxPoints: 100,
                         x: { dimension: "time_day" },
                         y: {
                           measures: [
@@ -40522,7 +40523,7 @@
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
                         dimension: "true_country",
-                        measures: ["rounds_count", "avg_score", "rate_5k", "throw_rate", "hit_rate"],
+                        measures: ["rounds_count", "avg_score", "fivek_rate", "throw_rate", "hit_rate"],
                         activeMeasure: "rounds_count",
                         sort: { mode: "desc" },
                         limit: 15,
@@ -41993,6 +41994,18 @@
     }
     return out;
   }
+  function chunkKeys(keys2, maxPoints) {
+    if (!Number.isFinite(maxPoints) || maxPoints <= 1) return keys2.map((k) => ({ label: k, keys: [k] }));
+    if (keys2.length <= maxPoints) return keys2.map((k) => ({ label: k, keys: [k] }));
+    const bucket = Math.ceil(keys2.length / maxPoints);
+    const out = [];
+    for (let i = 0; i < keys2.length; i += bucket) {
+      const slice = keys2.slice(i, i + bucket);
+      const label = slice.length <= 1 ? slice[0] : `${slice[0]}..${slice[slice.length - 1]}`;
+      out.push({ label, keys: slice });
+    }
+    return out;
+  }
   function getMeasureIds(spec) {
     const out = [];
     const single = typeof spec.y.measure === "string" ? spec.y.measure.trim() : "";
@@ -42024,13 +42037,36 @@
     if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
     return value;
   }
-  function niceUpperBound(maxValue) {
-    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
-    const exp = Math.floor(Math.log10(maxValue));
-    const base = 10 ** exp;
-    const n = maxValue / base;
-    const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
-    return nice * base;
+  function computeYBounds(opts) {
+    const { unitFormat, values, preferZero } = opts;
+    const finite = values.filter((v) => Number.isFinite(v));
+    if (finite.length === 0) return { minY: 0, maxY: 1 };
+    if (unitFormat === "percent") return { minY: 0, maxY: 1 };
+    let min = Math.min(...finite);
+    let max = Math.max(...finite);
+    if (preferZero) min = Math.min(0, min);
+    let range = max - min;
+    if (!Number.isFinite(range) || range <= 0) range = Math.max(1, Math.abs(max) || 1);
+    const pad = range * 0.06;
+    min -= pad;
+    max += pad;
+    range = max - min;
+    const niceStep = (raw) => {
+      if (!Number.isFinite(raw) || raw <= 0) return 1;
+      const exp = Math.floor(Math.log10(raw));
+      const base = 10 ** exp;
+      const n = raw / base;
+      const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+      return nice * base;
+    };
+    const tickCount = 5;
+    const step = niceStep(range / tickCount);
+    const niceMin = preferZero ? 0 : Math.floor(min / step) * step;
+    const niceMax = Math.ceil(max / step) * step;
+    const outMin = Number.isFinite(niceMin) ? niceMin : 0;
+    const outMax = Number.isFinite(niceMax) ? niceMax : 1;
+    if (outMax <= outMin) return { minY: outMin, maxY: outMin + 1 };
+    return { minY: outMin, maxY: outMax };
   }
   function normalizeHexColor(value) {
     if (typeof value !== "string") return void 0;
@@ -42270,19 +42306,29 @@
         }
         const grouped2 = groupByKey(rows, keyFn);
         const keys3 = fromTs !== null && toTs2 !== null ? dayKeysBetween(fromTs, toTs2) : sortKeysChronological(Array.from(grouped2.keys()));
+        const maxPoints = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) ? Math.floor(spec.maxPoints) : 0;
+        const buckets = maxPoints > 1 ? chunkKeys(keys3, maxPoints) : keys3.map((k) => ({ label: k, keys: [k] }));
         if (activeAcc === "to_date") {
           const cum = [];
           const out2 = [];
-          for (const k of keys3) {
-            const dayRows = grouped2.get(k) ?? [];
-            if (dayRows.length) cum.push(...dayRows);
-            out2.push({ x: k, y: clampForMeasure(semantic, measureId, measureFn(cum)), rows: cum.slice() });
+          for (const b of buckets) {
+            const bucketRows = [];
+            for (const k of b.keys) {
+              const dayRows = grouped2.get(k) ?? [];
+              if (dayRows.length) bucketRows.push(...dayRows);
+            }
+            if (bucketRows.length) cum.push(...bucketRows);
+            out2.push({ x: b.label, y: clampForMeasure(semantic, measureId, measureFn(cum)), rows: cum.slice() });
           }
           return out2;
         }
-        const out = keys3.map((k) => {
-          const dayRows = grouped2.get(k) ?? [];
-          return { x: k, y: clampForMeasure(semantic, measureId, measureFn(dayRows)), rows: dayRows };
+        const out = buckets.map((b) => {
+          const bucketRows = [];
+          for (const k of b.keys) {
+            const dayRows = grouped2.get(k) ?? [];
+            if (dayRows.length) bucketRows.push(...dayRows);
+          }
+          return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
         });
         return out;
       }
@@ -42333,8 +42379,11 @@
         chartHost.appendChild(empty);
         return;
       }
-      const dataMax = clampForMeasure(semantic, activeMeasure, Math.max(0, ...data.map((d) => d.y)));
-      const maxY = dataMax > 0 ? niceUpperBound(dataMax * 1.05) : 1;
+      const unitFormat = semantic.units[measureDef.unit]?.format ?? "float";
+      const preferZero = spec.type === "bar" || unitFormat === "percent" || unitFormat === "int";
+      const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
+      const { minY, maxY } = computeYBounds({ unitFormat, values: yVals, preferZero });
+      const yRange = Math.max(1e-9, maxY - minY);
       const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.classList.add("ga-chart-svg");
       svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -42356,8 +42405,8 @@
       svg.appendChild(axisY);
       const tickCount = 5;
       for (let i = 0; i <= tickCount; i++) {
-        const yVal = maxY * i / tickCount;
-        const yPos = PAD_T + innerH - yVal / maxY * innerH;
+        const yVal = minY + yRange * i / tickCount;
+        const yPos = PAD_T + innerH - (yVal - minY) / yRange * innerH;
         const grid = doc.createElementNS(svg.namespaceURI, "line");
         grid.setAttribute("x1", String(PAD_L));
         grid.setAttribute("y1", String(yPos));
@@ -42385,6 +42434,28 @@
       xAxisLabel.setAttribute("opacity", "0.95");
       xAxisLabel.textContent = dimDef.label;
       svg.appendChild(xAxisLabel);
+      if (dimId === "time_day" && data.length > 0) {
+        const first = data[0].x;
+        const last = data[data.length - 1].x;
+        const lx = doc.createElementNS(svg.namespaceURI, "text");
+        lx.setAttribute("x", String(PAD_L + 2));
+        lx.setAttribute("y", String(PAD_T + innerH + 18));
+        lx.setAttribute("text-anchor", "start");
+        lx.setAttribute("font-size", "10");
+        lx.setAttribute("fill", "var(--ga-axis-text)");
+        lx.setAttribute("opacity", "0.95");
+        lx.textContent = first;
+        svg.appendChild(lx);
+        const rx = doc.createElementNS(svg.namespaceURI, "text");
+        rx.setAttribute("x", String(PAD_L + innerW - 2));
+        rx.setAttribute("y", String(PAD_T + innerH + 18));
+        rx.setAttribute("text-anchor", "end");
+        rx.setAttribute("font-size", "10");
+        rx.setAttribute("fill", "var(--ga-axis-text)");
+        rx.setAttribute("opacity", "0.95");
+        rx.textContent = last;
+        svg.appendChild(rx);
+      }
       const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
       yAxisLabel.setAttribute("x", "16");
       yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
@@ -42398,7 +42469,7 @@
       if (spec.type === "line") {
         const points = data.map((d, i) => {
           const x = PAD_L + i / Math.max(1, data.length - 1) * innerW;
-          const y = PAD_T + innerH - clampForMeasure(semantic, activeMeasure, d.y) / maxY * innerH;
+          const y = PAD_T + innerH - (clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange * innerH;
           return { x, y, d };
         });
         const path = doc.createElementNS(svg.namespaceURI, "path");
@@ -42448,7 +42519,7 @@
         const barW = innerW / Math.max(1, data.length);
         data.forEach((d, i) => {
           const x = PAD_L + i * barW;
-          const h = clampForMeasure(semantic, activeMeasure, d.y) / maxY * innerH;
+          const h = (clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange * innerH;
           const y = PAD_T + innerH - h;
           const rect = doc.createElementNS(svg.namespaceURI, "rect");
           rect.classList.add("ga-chart-bar");

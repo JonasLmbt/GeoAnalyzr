@@ -171,6 +171,7 @@
                     "placement": { "x": 0, "y": 15, "w": 12, "h": 7 },
                     "spec": {
                       "type": "line",
+                      "maxPoints": 100,
                       "x": { "dimension": "time_day" },
                       "y": {
                         "measures": [
@@ -507,7 +508,7 @@
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                       "spec": {
                         "dimension": "true_country",
-                        "measures": ["rounds_count", "avg_score", "rate_5k", "throw_rate", "hit_rate"],
+                        "measures": ["rounds_count", "avg_score", "fivek_rate", "throw_rate", "hit_rate"],
                         "activeMeasure": "rounds_count",
                         "sort": { "mode": "desc" },
                         "limit": 15,
