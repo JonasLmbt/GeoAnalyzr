@@ -160,8 +160,10 @@ function computeYBounds(opts: {
   unitFormat: "int" | "float" | "percent" | "duration";
   values: number[];
   preferZero: boolean;
+  hardMin?: number;
+  hardMax?: number;
 }): { minY: number; maxY: number } {
-  const { unitFormat, values, preferZero } = opts;
+  const { unitFormat, values, preferZero, hardMin, hardMax } = opts;
   const finite = values.filter((v) => Number.isFinite(v));
   if (finite.length === 0) return { minY: 0, maxY: 1 };
 
@@ -201,6 +203,8 @@ function computeYBounds(opts: {
   let max = Math.max(...finite);
 
   if (preferZero) min = Math.min(0, min);
+  if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
+  if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
 
   let range = max - min;
   if (!Number.isFinite(range) || range <= 0) range = Math.max(1, Math.abs(max) || 1);
@@ -210,6 +214,8 @@ function computeYBounds(opts: {
   const pad = range * 0.06;
   min -= pad;
   max += pad;
+  if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
+  if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
   range = max - min;
 
   const niceStep = (raw: number): number => {
@@ -226,8 +232,10 @@ function computeYBounds(opts: {
   const niceMin = preferZero ? 0 : Math.floor(min / step) * step;
   const niceMax = Math.ceil(max / step) * step;
 
-  const outMin = Number.isFinite(niceMin) ? niceMin : 0;
-  const outMax = Number.isFinite(niceMax) ? niceMax : 1;
+  let outMin = Number.isFinite(niceMin) ? niceMin : 0;
+  let outMax = Number.isFinite(niceMax) ? niceMax : 1;
+  if (typeof hardMin === "number" && Number.isFinite(hardMin)) outMin = Math.max(outMin, hardMin);
+  if (typeof hardMax === "number" && Number.isFinite(hardMax)) outMax = Math.min(outMax, hardMax);
   if (outMax <= outMin) return { minY: outMin, maxY: outMin + 1 };
   return { minY: outMin, maxY: outMax };
 }
@@ -523,7 +531,12 @@ export async function renderChartWidget(
 
       const grouped = groupByKey(rows, keyFn);
       const keys = (fromTs !== null && toTs !== null) ? dayKeysBetween(fromTs, toTs) : sortKeysChronological(Array.from(grouped.keys()));
-      const maxPoints = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) ? Math.floor(spec.maxPoints) : 0;
+      const maxPoints =
+        typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints)
+          ? Math.floor(spec.maxPoints)
+          : typeof limitOverride === "number" && Number.isFinite(limitOverride)
+            ? Math.floor(limitOverride)
+            : 0;
       const buckets = maxPoints > 1 ? chunkKeys(keys, maxPoints) : keys.map((k) => ({ label: k, keys: [k] }));
 
       if (activeAcc === "to_date") {
@@ -614,7 +627,15 @@ export async function renderChartWidget(
     // Percent line series should be allowed to "fit" (still clamped to 0..100% in computeYBounds).
     const preferZero = spec.type === "bar" || unitFormat === "int";
     const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
-    const { minY, maxY } = computeYBounds({ unitFormat, values: yVals, preferZero });
+    const hardMin = measureDef.range?.min;
+    const hardMax = measureDef.range?.max;
+    const { minY, maxY } = computeYBounds({
+      unitFormat,
+      values: yVals,
+      preferZero,
+      hardMin: typeof hardMin === "number" && Number.isFinite(hardMin) ? hardMin : undefined,
+      hardMax: typeof hardMax === "number" && Number.isFinite(hardMax) ? hardMax : undefined
+    });
     const yRange = Math.max(1e-9, maxY - minY);
 
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -742,7 +763,7 @@ export async function renderChartWidget(
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
         tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
-        const click = spec.actions?.click;
+        const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
@@ -786,7 +807,7 @@ export async function renderChartWidget(
         tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
-        const click = spec.actions?.click;
+        const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
         if (click?.type === "drilldown") {
           rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
           rect.addEventListener("click", () => {

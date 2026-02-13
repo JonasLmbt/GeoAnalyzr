@@ -312,7 +312,7 @@ export async function renderBreakdownWidget(
       line.appendChild(left);
       line.appendChild(right);
 
-      const click = spec.actions?.click;
+      const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
       if (click?.type === "drilldown") {
         line.style.cursor = "pointer";
         line.addEventListener("click", () => {

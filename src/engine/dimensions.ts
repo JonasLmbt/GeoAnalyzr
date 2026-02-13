@@ -1,7 +1,7 @@
 // src/engine/dimensions.ts
 import type { RoundRow } from "../db";
 import type { Grain } from "../config/semantic.types";
-import { getSelfScore, getPlayedAt, getTrueCountry, getMovementType, getDurationSeconds, getTeammateName } from "./fieldAccess";
+import { getSelfScore, getPlayedAt, getTrueCountry, getMovementType, getDurationSeconds, getTeammateName, getGuessCountrySelf } from "./fieldAccess";
 
 export type GroupKey = string;
 
@@ -52,6 +52,19 @@ export function trueCountryKey(r: RoundRow): GroupKey | null {
 export function movementTypeKey(r: RoundRow): GroupKey | null {
   const v = getMovementType(r);
   return typeof v === "string" && v.length ? v : null;
+}
+
+export function isHitKey(r: RoundRow): GroupKey | null {
+  const truth = getTrueCountry(r);
+  if (!truth) return null;
+  const guess = getGuessCountrySelf(r);
+  return typeof guess === "string" && guess === truth ? "true" : "false";
+}
+
+export function isThrowKey(r: RoundRow): GroupKey | null {
+  const s = getSelfScore(r);
+  if (typeof s !== "number") return null;
+  return s < 50 ? "true" : "false";
 }
 
 export function durationBucketKey(r: RoundRow): GroupKey | null {
@@ -136,6 +149,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     hour: hourKey,
     true_country: trueCountryKey,
     movement_type: movementTypeKey,
+    is_hit: isHitKey,
+    is_throw: isThrowKey,
     duration_bucket: durationBucketKey,
     teammate_name: teammateNameKey,
     round_number: (r: any) => (typeof r?.roundNumber === "number" ? String(r.roundNumber) : null)

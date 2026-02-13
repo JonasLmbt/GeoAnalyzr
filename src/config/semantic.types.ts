@@ -30,6 +30,11 @@ export interface MeasureDef {
   grain: Grain;
   allowedCharts: ChartType[];
   formulaId: string;
+  // Optional hard bounds for y-axis scaling (e.g. score is always 0..5000).
+  range?: {
+    min?: number;
+    max?: number;
+  };
 }
 
 export interface UnitDef {

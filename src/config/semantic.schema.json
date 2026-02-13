@@ -163,7 +163,15 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/chartType" }
         },
-        "formulaId": { "type": "string", "minLength": 1 }
+        "formulaId": { "type": "string", "minLength": 1 },
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        }
       }
     },
 

@@ -112,19 +112,6 @@
                           }
                         },
                         {
-                          "label": "Ties",
-                          "measure": "tie_count",
-                          "actions": {
-                            "click": {
-                              "type": "drilldown",
-                              "target": "players",
-                              "columnsPreset": "opponentMode",
-                              "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Tie" }]
-                            }
-                          }
-                        },
-                        {
                           "label": "Win rate",
                           "measure": "win_rate",
                           "actions": {
@@ -319,6 +306,97 @@
                           "columnsPreset": "roundMode",
                           "filterFromPoint": true
                         }
+                      },
+                      "actionsByMeasure": {
+                        "games_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "players",
+                            "columnsPreset": "opponentMode",
+                            "filterFromPoint": true
+                          }
+                        },
+                        "win_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "players",
+                            "columnsPreset": "opponentMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                          }
+                        },
+                        "win_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "players",
+                            "columnsPreset": "opponentMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                          }
+                        },
+                        "avg_score_hit_only": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "fivek_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                          }
+                        },
+                        "fivek_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                          }
+                        },
+                        "throw_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "throw_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "hit_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "hit_count": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                          }
+                        }
                       }
                     }
                   }
@@ -355,8 +433,29 @@
                     "spec": {
                       "type": "bar",
                       "x": { "dimension": "weekday" },
-                      "y": { "measure": "avg_score" },
-                      "sort": { "mode": "chronological" },
+                      "y": {
+                        "measures": [
+                          "games_count",
+                          "rounds_count",
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "throw_rate",
+                          "throw_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "hit_rate",
+                          "hit_count",
+                          "win_rate",
+                          "win_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg"
+                        ],
+                        "activeMeasure": "games_count"
+                      },
+                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }, { "mode": "chronological" }],
+                      "activeSort": { "mode": "chronological" },
                       "actions": {
                         "hover": true,
                         "click": {
@@ -393,11 +492,28 @@
                       "color": "#ff8a3d",
                       "x": { "dimension": "hour" },
                       "y": {
-                        "measures": ["fivek_rate", "throw_rate", "hit_rate"],
-                        "activeMeasure": "fivek_rate"
+                        "measures": [
+                          "games_count",
+                          "rounds_count",
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "throw_rate",
+                          "throw_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "hit_rate",
+                          "hit_count",
+                          "win_rate",
+                          "win_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg"
+                        ],
+                        "activeMeasure": "games_count"
                       },
                       "sorts": [{ "mode": "desc" }, { "mode": "asc" }, { "mode": "chronological" }],
-                      "activeSort": { "mode": "desc" },
+                      "activeSort": { "mode": "chronological" },
                       "actions": {
                         "hover": true,
                         "click": {
@@ -432,7 +548,27 @@
                     "spec": {
                       "type": "bar",
                       "x": { "dimension": "time_day" },
-                      "y": { "measure": "avg_score" },
+                      "y": {
+                        "measures": [
+                          "games_count",
+                          "rounds_count",
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "throw_rate",
+                          "throw_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "hit_rate",
+                          "hit_count",
+                          "win_rate",
+                          "win_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg"
+                        ],
+                        "activeMeasure": "games_count"
+                      },
                       "sort": { "mode": "chronological" },
                       "actions": {
                         "hover": true,
@@ -443,69 +579,6 @@
                           "filterFromPoint": true
                         }
                       }
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "cardId": "card_line_progress",
-              "title": "Progress over time (line)",
-              "x": 0,
-              "y": 30,
-              "w": 12,
-              "h": 10,
-              "card": {
-                "type": "composite",
-                "children": [
-                  {
-                    "widgetId": "w_line_avg_score_day",
-                    "type": "chart",
-                    "title": "Avg score by day (line)",
-                    "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
-                    "spec": {
-                      "type": "line",
-                      "x": { "dimension": "time_day" },
-                      "y": { "measure": "avg_score" },
-                      "sort": { "mode": "chronological" },
-                      "actions": {
-                        "hover": true,
-                        "click": {
-                          "type": "drilldown",
-                          "target": "rounds",
-                          "columnsPreset": "roundMode",
-                          "filterFromPoint": true
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            }
-            ,
-            {
-              "cardId": "card_rating_over_time",
-              "title": "Rating over time",
-              "x": 0,
-              "y": 40,
-              "w": 12,
-              "h": 10,
-              "card": {
-                "type": "composite",
-                "children": [
-                  {
-                    "widgetId": "w_rating_over_time",
-                    "type": "chart",
-                    "title": "Avg end rating by day",
-                    "grain": "game",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
-                    "spec": {
-                      "type": "line",
-                      "x": { "dimension": "time_day" },
-                      "y": { "measure": "end_rating_avg" },
-                      "sort": { "mode": "chronological" },
-                      "actions": { "hover": true }
                     }
                   }
                 ]
@@ -551,6 +624,35 @@
                             "target": "rounds",
                           "columnsPreset": "roundMode",
                           "filterFromPoint": true
+                        }
+                      },
+                      "actionsByMeasure": {
+                        "fivek_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                          }
+                        },
+                        "throw_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                          }
+                        },
+                        "hit_rate": {
+                          "click": {
+                            "type": "drilldown",
+                            "target": "rounds",
+                            "columnsPreset": "roundMode",
+                            "filterFromPoint": true,
+                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                          }
                         }
                       }
                     }

@@ -15272,6 +15272,17 @@
     const v = getMovementType(r);
     return typeof v === "string" && v.length ? v : null;
   }
+  function isHitKey(r) {
+    const truth = getTrueCountry(r);
+    if (!truth) return null;
+    const guess = getGuessCountrySelf(r);
+    return typeof guess === "string" && guess === truth ? "true" : "false";
+  }
+  function isThrowKey(r) {
+    const s = getSelfScore(r);
+    if (typeof s !== "number") return null;
+    return s < 50 ? "true" : "false";
+  }
   function durationBucketKey(r) {
     const s = getDurationSeconds(r);
     if (typeof s !== "number" || !Number.isFinite(s) || s < 0) return null;
@@ -15337,6 +15348,8 @@
       hour: hourKey,
       true_country: trueCountryKey,
       movement_type: movementTypeKey,
+      is_hit: isHitKey,
+      is_throw: isThrowKey,
       duration_bucket: durationBucketKey,
       teammate_name: teammateNameKey,
       round_number: (r) => typeof r?.roundNumber === "number" ? String(r.roundNumber) : null
@@ -39596,6 +39609,13 @@
         assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
       }
       validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+      if (spec.actionsByMeasure && typeof spec.actionsByMeasure === "object") {
+        for (const [measureId, acts] of Object.entries(spec.actionsByMeasure)) {
+          const click = acts?.click;
+          if (!click) continue;
+          validateClickAction(semantic, `${widget.widgetId}[${measureId}]`, click);
+        }
+      }
     }
     if (widget.type === "stat_list") {
       const spec = widget.spec;
@@ -39618,6 +39638,13 @@
       assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
       assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
       validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+      if (spec.actionsByMeasure && typeof spec.actionsByMeasure === "object") {
+        for (const [measureId, acts] of Object.entries(spec.actionsByMeasure)) {
+          const click = acts?.click;
+          if (!click) continue;
+          validateClickAction(semantic, `${widget.widgetId}[${measureId}]`, click);
+        }
+      }
     }
     if (widget.type === "breakdown") {
       const spec = widget.spec;
@@ -39806,6 +39833,22 @@
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 8 }
       },
+      is_hit: {
+        label: "Hit?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_throw: {
+        label: "Throw?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
       duration_bucket: {
         label: "Guess duration bucket",
         kind: "category",
@@ -39843,14 +39886,16 @@
         unit: "points",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_score"
+        formulaId: "mean_player_self_score",
+        range: { min: 0, max: 5e3 }
       },
       avg_score_hit_only: {
         label: "Avg score (hit only)",
         unit: "points",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_score_hit_only"
+        formulaId: "mean_player_self_score_hit_only",
+        range: { min: 0, max: 5e3 }
       },
       avg_distance_km: {
         label: "Avg distance",
@@ -39983,14 +40028,16 @@
         unit: "points",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "median_player_self_score"
+        formulaId: "median_player_self_score",
+        range: { min: 0, max: 5e3 }
       },
       score_stddev: {
         label: "Score Std Dev",
         unit: "points",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "stddev_player_self_score"
+        formulaId: "stddev_player_self_score",
+        range: { min: 0, max: 5e3 }
       },
       distance_median_km: {
         label: "Median distance",
@@ -40189,7 +40236,7 @@
                     {
                       widgetId: "w_overview_facts",
                       type: "stat_list",
-                      title: "Results, Win Rate & Ratings",
+                      title: "Results, Win Rate & Streaks",
                       grain: "game",
                       placement: { x: 0, y: 0, w: 12, h: 7 },
                       spec: {
@@ -40222,19 +40269,6 @@
                                 columnsPreset: "opponentMode",
                                 filterFromPoint: false,
                                 extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
-                              }
-                            }
-                          },
-                          {
-                            label: "Ties",
-                            measure: "tie_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Tie" }]
                               }
                             }
                           },
@@ -40429,6 +40463,97 @@
                             columnsPreset: "roundMode",
                             filterFromPoint: true
                           }
+                        },
+                        actionsByMeasure: {
+                          games_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "players",
+                              columnsPreset: "opponentMode",
+                              filterFromPoint: true
+                            }
+                          },
+                          win_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "players",
+                              columnsPreset: "opponentMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                            }
+                          },
+                          win_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "players",
+                              columnsPreset: "opponentMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                            }
+                          },
+                          avg_score_hit_only: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                            }
+                          },
+                          fivek_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                            }
+                          },
+                          fivek_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                            }
+                          },
+                          throw_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                            }
+                          },
+                          throw_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                            }
+                          },
+                          hit_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                            }
+                          },
+                          hit_count: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                            }
+                          }
                         }
                       }
                     }
@@ -40464,8 +40589,29 @@
                       spec: {
                         type: "bar",
                         x: { dimension: "weekday" },
-                        y: { measure: "avg_score" },
-                        sort: { mode: "chronological" },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count"
+                        },
+                        sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
+                        activeSort: { mode: "chronological" },
                         actions: {
                           hover: true,
                           click: {
@@ -40501,11 +40647,28 @@
                         color: "#ff8a3d",
                         x: { dimension: "hour" },
                         y: {
-                          measures: ["fivek_rate", "throw_rate", "hit_rate"],
-                          activeMeasure: "fivek_rate"
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count"
                         },
                         sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
-                        activeSort: { mode: "desc" },
+                        activeSort: { mode: "chronological" },
                         actions: {
                           hover: true,
                           click: {
@@ -40539,7 +40702,27 @@
                       spec: {
                         type: "bar",
                         x: { dimension: "time_day" },
-                        y: { measure: "avg_score" },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count"
+                        },
                         sort: { mode: "chronological" },
                         actions: {
                           hover: true,
@@ -40550,68 +40733,6 @@
                             filterFromPoint: true
                           }
                         }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_line_progress",
-                title: "Progress over time (line)",
-                x: 0,
-                y: 30,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_line_avg_score_day",
-                      type: "chart",
-                      title: "Avg score by day (line)",
-                      grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "line",
-                        x: { dimension: "time_day" },
-                        y: { measure: "avg_score" },
-                        sort: { mode: "chronological" },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_rating_over_time",
-                title: "Rating over time",
-                x: 0,
-                y: 40,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_rating_over_time",
-                      type: "chart",
-                      title: "Avg end rating by day",
-                      grain: "game",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
-                      spec: {
-                        type: "line",
-                        x: { dimension: "time_day" },
-                        y: { measure: "end_rating_avg" },
-                        sort: { mode: "chronological" },
-                        actions: { hover: true }
                       }
                     }
                   ]
@@ -40656,6 +40777,35 @@
                             target: "rounds",
                             columnsPreset: "roundMode",
                             filterFromPoint: true
+                          }
+                        },
+                        actionsByMeasure: {
+                          fivek_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                            }
+                          },
+                          throw_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                            }
+                          },
+                          hit_rate: {
+                            click: {
+                              type: "drilldown",
+                              target: "rounds",
+                              columnsPreset: "roundMode",
+                              filterFromPoint: true,
+                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                            }
                           }
                         }
                       }
@@ -40860,7 +41010,7 @@
       padding:10px;
       color: var(--ga-text);
       width: 100%;
-      overflow: hidden;
+      overflow: visible;
     }
     .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
     .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -42297,7 +42447,7 @@
     return value;
   }
   function computeYBounds(opts) {
-    const { unitFormat, values, preferZero } = opts;
+    const { unitFormat, values, preferZero, hardMin, hardMax } = opts;
     const finite = values.filter((v) => Number.isFinite(v));
     if (finite.length === 0) return { minY: 0, maxY: 1 };
     if (unitFormat === "percent") {
@@ -42329,11 +42479,15 @@
     let min = Math.min(...finite);
     let max = Math.max(...finite);
     if (preferZero) min = Math.min(0, min);
+    if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
+    if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
     let range = max - min;
     if (!Number.isFinite(range) || range <= 0) range = Math.max(1, Math.abs(max) || 1);
     const pad = range * 0.06;
     min -= pad;
     max += pad;
+    if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
+    if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
     range = max - min;
     const niceStep = (raw) => {
       if (!Number.isFinite(raw) || raw <= 0) return 1;
@@ -42347,8 +42501,10 @@
     const step = niceStep(range / tickCount);
     const niceMin = preferZero ? 0 : Math.floor(min / step) * step;
     const niceMax = Math.ceil(max / step) * step;
-    const outMin = Number.isFinite(niceMin) ? niceMin : 0;
-    const outMax = Number.isFinite(niceMax) ? niceMax : 1;
+    let outMin = Number.isFinite(niceMin) ? niceMin : 0;
+    let outMax = Number.isFinite(niceMax) ? niceMax : 1;
+    if (typeof hardMin === "number" && Number.isFinite(hardMin)) outMin = Math.max(outMin, hardMin);
+    if (typeof hardMax === "number" && Number.isFinite(hardMax)) outMax = Math.min(outMax, hardMax);
     if (outMax <= outMin) return { minY: outMin, maxY: outMin + 1 };
     return { minY: outMin, maxY: outMax };
   }
@@ -42590,7 +42746,7 @@
         }
         const grouped2 = groupByKey(rows, keyFn);
         const keys3 = fromTs !== null && toTs2 !== null ? dayKeysBetween(fromTs, toTs2) : sortKeysChronological(Array.from(grouped2.keys()));
-        const maxPoints = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) ? Math.floor(spec.maxPoints) : 0;
+        const maxPoints = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) ? Math.floor(spec.maxPoints) : typeof limitOverride === "number" && Number.isFinite(limitOverride) ? Math.floor(limitOverride) : 0;
         const buckets = maxPoints > 1 ? chunkKeys(keys3, maxPoints) : keys3.map((k) => ({ label: k, keys: [k] }));
         if (activeAcc === "to_date") {
           const cum = [];
@@ -42666,7 +42822,15 @@
       const unitFormat = semantic.units[measureDef.unit]?.format ?? "float";
       const preferZero = spec.type === "bar" || unitFormat === "int";
       const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
-      const { minY, maxY } = computeYBounds({ unitFormat, values: yVals, preferZero });
+      const hardMin = measureDef.range?.min;
+      const hardMax = measureDef.range?.max;
+      const { minY, maxY } = computeYBounds({
+        unitFormat,
+        values: yVals,
+        preferZero,
+        hardMin: typeof hardMin === "number" && Number.isFinite(hardMin) ? hardMin : void 0,
+        hardMax: typeof hardMax === "number" && Number.isFinite(hardMax) ? hardMax : void 0
+      });
       const yRange = Math.max(1e-9, maxY - minY);
       const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.classList.add("ga-chart-svg");
@@ -42780,7 +42944,7 @@
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
-          const click = spec.actions?.click;
+          const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -42821,7 +42985,7 @@
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
           rect.appendChild(tooltip);
-          const click = spec.actions?.click;
+          const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
           if (click?.type === "drilldown") {
             rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
             rect.addEventListener("click", () => {
@@ -43131,7 +43295,7 @@
         right.appendChild(barWrap);
         line.appendChild(left);
         line.appendChild(right);
-        const click = spec.actions?.click;
+        const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
         if (click?.type === "drilldown") {
           line.style.cursor = "pointer";
           line.addEventListener("click", () => {
