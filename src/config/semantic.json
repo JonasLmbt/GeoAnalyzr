@@ -56,6 +56,14 @@
       "allowedCharts": ["bar", "line"],
       "sortModes": ["chronological", "asc", "desc"]
     },
+    "session_start": {
+      "label": "Session start",
+      "kind": "category",
+      "grain": "session",
+      "ordered": true,
+      "allowedCharts": ["bar", "line"],
+      "sortModes": ["chronological", "asc", "desc"]
+    },
     "game_mode": {
       "label": "Game mode",
       "kind": "category",
@@ -374,6 +382,85 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_damage_taken"
     }
+    ,
+    "sessions_count": {
+      "label": "Sessions",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_sessions"
+    },
+    "sessions_longest_break_seconds": {
+      "label": "Longest break between sessions",
+      "unit": "duration",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_break_between_sessions_seconds"
+    },
+    "sessions_avg_games": {
+      "label": "Avg games per session",
+      "unit": "float",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_games_per_session"
+    },
+    "session_games_count": {
+      "label": "Games",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_games_count"
+    },
+    "session_rounds_count": {
+      "label": "Rounds",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_rounds_count"
+    },
+    "session_avg_score": {
+      "label": "Avg score",
+      "unit": "points",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_avg_score",
+      "range": { "min": 0, "max": 5000 }
+    },
+    "session_avg_guess_duration": {
+      "label": "Avg guess duration",
+      "unit": "seconds",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_avg_guess_duration"
+    },
+    "session_avg_distance_km": {
+      "label": "Avg distance",
+      "unit": "km",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_avg_distance_km"
+    },
+    "session_fivek_rate": {
+      "label": "5k rate",
+      "unit": "percent",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_fivek_rate"
+    },
+    "session_hit_rate": {
+      "label": "Hit rate",
+      "unit": "percent",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_hit_rate"
+    },
+    "session_throw_rate": {
+      "label": "Throw rate",
+      "unit": "percent",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_throw_rate"
+    }
   },
 
   "units": {
@@ -383,7 +470,8 @@
     "seconds": { "format": "float", "decimals": 1 },
     "duration": { "format": "duration" },
     "rating": { "format": "float", "decimals": 0 },
-    "km": { "format": "float", "decimals": 1 }
+    "km": { "format": "float", "decimals": 1 },
+    "float": { "format": "float", "decimals": 2 }
   },
   "columnAliases": {
     "ts": ["playedAt", "startTime"],

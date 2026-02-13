@@ -10,6 +10,7 @@ export type GlobalFilters = {
     spec: GlobalFiltersSpec | undefined;
     state: GlobalFilterState;
     controlIds?: string[];
+    sessionGapMinutes?: number;
   };
 };
 
@@ -41,12 +42,185 @@ let roundsRawCache: RoundRow[] | null = null;
 const roundsFilteredCache = new Map<string, RoundRow[]>();
 let gamesRawCache: GameFactRow[] | null = null;
 const gamesFilteredCache = new Map<string, GameFactRow[]>();
+let sessionsRawCache: any[] | null = null;
+const sessionsFilteredCache = new Map<string, any[]>();
 
 export function invalidateRoundsCache(): void {
   roundsRawCache = null;
   roundsFilteredCache.clear();
   gamesRawCache = null;
   gamesFilteredCache.clear();
+  sessionsRawCache = null;
+  sessionsFilteredCache.clear();
+}
+
+export type SessionRow = {
+  sessionId: string;
+  sessionIndex: number;
+  sessionStartTs: number;
+  sessionEndTs: number;
+  ts: number;
+
+  gamesCount: number;
+  roundsCount: number;
+
+  scoreSum: number;
+  scoreCount: number;
+  durationSum: number;
+  durationCount: number;
+  distanceSum: number;
+  distanceCount: number;
+
+  fivekCount: number;
+  hitCount: number;
+  throwCount: number;
+
+  // For drilldowns.
+  gameIds: string[];
+  rounds: RoundRow[];
+};
+
+function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): SessionRow[] {
+  const byGame = new Map<string, RoundRow[]>();
+  for (const r of rounds) {
+    const gid = typeof (r as any).gameId === "string" ? (r as any).gameId : "";
+    if (!gid) continue;
+    const arr = byGame.get(gid) ?? [];
+    arr.push(r);
+    byGame.set(gid, arr);
+  }
+
+  const games = Array.from(byGame.entries())
+    .map(([gameId, rows]) => {
+      const times = rows
+        .map((x) => (typeof (x as any).playedAt === "number" ? (x as any).playedAt : typeof (x as any).ts === "number" ? (x as any).ts : null))
+        .filter((t): t is number => typeof t === "number" && Number.isFinite(t));
+      const ts = times.length ? Math.min(...times) : null;
+      const endTs = times.length ? Math.max(...times) : null;
+      return ts === null || endTs === null ? null : { gameId, ts, endTs, rows };
+    })
+    .filter((x): x is { gameId: string; ts: number; endTs: number; rows: RoundRow[] } => !!x)
+    .sort((a, b) => a.ts - b.ts);
+
+  if (games.length === 0) return [];
+
+  const gapMs = Math.max(1, Math.floor(gapMinutes * 60 * 1000));
+  const sessions: SessionRow[] = [];
+
+  let curGames: typeof games = [];
+  const flush = () => {
+    if (curGames.length === 0) return;
+    const start = curGames[0].ts;
+    const end = Math.max(...curGames.map((g) => g.endTs));
+    const sessionId = `s${sessions.length + 1}`;
+    const sessionIndex = sessions.length + 1;
+
+    const allRounds = curGames.flatMap((g) => g.rows);
+    const gameIdSet = new Set(curGames.map((g) => g.gameId));
+    const gameIds = Array.from(gameIdSet.values());
+
+    let scoreSum = 0, scoreCount = 0;
+    let durationSum = 0, durationCount = 0;
+    let distanceSum = 0, distanceCount = 0;
+    let fivekCount = 0, hitCount = 0, throwCount = 0;
+
+    for (const r of allRounds as any[]) {
+      const s = (r as any).player_self_score;
+      if (typeof s === "number" && Number.isFinite(s)) {
+        scoreSum += s;
+        scoreCount++;
+        if (s >= 5000) fivekCount++;
+        if (s < 50) throwCount++;
+      }
+      const truth = (r as any).trueCountry ?? (r as any).true_country;
+      const guess = (r as any).player_self_guessCountry ?? (r as any).p1_guessCountry ?? (r as any).guessCountry;
+      if (typeof truth === "string" && truth && typeof guess === "string" && guess === truth) hitCount++;
+
+      const dur = (r as any).durationSeconds;
+      if (typeof dur === "number" && Number.isFinite(dur) && dur >= 0) {
+        durationSum += dur;
+        durationCount++;
+      }
+      const dist = (r as any).distanceKm;
+      if (typeof dist === "number" && Number.isFinite(dist) && dist >= 0) {
+        distanceSum += dist;
+        distanceCount++;
+      }
+    }
+
+    sessions.push({
+      sessionId,
+      sessionIndex,
+      sessionStartTs: start,
+      sessionEndTs: end,
+      ts: start,
+      gamesCount: gameIdSet.size,
+      roundsCount: allRounds.length,
+      scoreSum,
+      scoreCount,
+      durationSum,
+      durationCount,
+      distanceSum,
+      distanceCount,
+      fivekCount,
+      hitCount,
+      throwCount,
+      gameIds,
+      rounds: allRounds
+    });
+    curGames = [];
+  };
+
+  for (const g of games) {
+    if (curGames.length === 0) {
+      curGames.push(g);
+      continue;
+    }
+    const prevEnd = Math.max(...curGames.map((x) => x.endTs));
+    if (g.ts - prevEnd > gapMs) {
+      flush();
+      curGames.push(g);
+    } else {
+      curGames.push(g);
+    }
+  }
+  flush();
+  return sessions;
+}
+
+async function getSessionsRaw(gapMinutes: number): Promise<SessionRow[]> {
+  if (sessionsRawCache) return sessionsRawCache as SessionRow[];
+  const rounds = await getRoundsRaw();
+  sessionsRawCache = buildSessionsFromRounds(rounds, gapMinutes);
+  return sessionsRawCache as SessionRow[];
+}
+
+export async function getSessions(filters: GlobalFilters, opts?: { rounds?: RoundRow[] }): Promise<SessionRow[]> {
+  const gf = filters?.global;
+  const spec = gf?.spec;
+  const state = gf?.state ?? {};
+  const controlIds = gf?.controlIds;
+  const gapMinutes = typeof gf?.sessionGapMinutes === "number" && Number.isFinite(gf.sessionGapMinutes) ? gf.sessionGapMinutes : 45;
+
+  const key = normalizeGlobalFilterKey(spec, state, "session", controlIds) + `|gap=${gapMinutes}`;
+  const cached = sessionsFilteredCache.get(key);
+  if (cached) return cached as SessionRow[];
+
+  // If prefiltered rounds are provided, build sessions from them (so round-grain filters affect sessionization).
+  const raw = opts?.rounds ? buildSessionsFromRounds(opts.rounds, gapMinutes) : await getSessionsRaw(gapMinutes);
+
+  const applied = buildAppliedFilters(spec, state, "session", controlIds);
+  let rows = raw as any[];
+  if (applied.date) {
+    const fromTs = applied.date.fromTs ?? null;
+    const toTs = applied.date.toTs ?? null;
+    if (fromTs !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs >= fromTs);
+    if (toTs !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs <= toTs);
+  }
+  rows = applyFilters(rows, applied.clauses, "session");
+
+  sessionsFilteredCache.set(key, rows);
+  return rows as SessionRow[];
 }
 
 export async function getGamePlayedAtBounds(): Promise<{ minTs: number | null; maxTs: number | null }> {

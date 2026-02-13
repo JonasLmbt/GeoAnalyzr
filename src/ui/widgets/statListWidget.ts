@@ -1,7 +1,7 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, StatListSpec, Actions, FilterClause } from "../../config/dashboard.types";
 import type { Grain } from "../../config/semantic.types";
-import { getRounds, getGames } from "../../engine/queryEngine";
+import { getRounds, getGames, getSessions } from "../../engine/queryEngine";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
@@ -42,7 +42,8 @@ async function computeMeasure(
   const m = semantic.measures[measureId];
   if (!m) return 0;
 
-  const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+  const rowsAll =
+    baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
   const rows = applyFilters(rowsAll, filters, grain);
   const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
   if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
@@ -64,7 +65,8 @@ function attachClickIfAny(
   el.style.cursor = "pointer";
   el.addEventListener("click", async () => {
     if (click.type === "drilldown") {
-      const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+      const rowsAll =
+        baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
       const rows = applyFilters(rowsAll, click.extraFilters, grain);
       overlay.open(semantic, {
         title,

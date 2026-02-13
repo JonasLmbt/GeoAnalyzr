@@ -1,7 +1,7 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, RecordListSpec, RecordItemDef, Actions } from "../../config/dashboard.types";
 import type { Grain } from "../../config/semantic.types";
-import { getRounds, getGames } from "../../engine/queryEngine";
+import { getRounds, getGames, getSessions } from "../../engine/queryEngine";
 import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
@@ -183,7 +183,8 @@ export async function renderRecordListWidget(
   const box = doc.createElement("div");
   box.className = "ga-recordlist-box";
 
-  const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+  const rowsAll =
+    baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
 
   for (const rec of spec.records) {
     const kind = rec.kind === "streak" ? "streak" : "group_extreme";
@@ -209,7 +210,18 @@ export async function renderRecordListWidget(
       line.style.cursor = "pointer";
       line.addEventListener("click", () => {
         const rowsFromPoint = click.filterFromPoint ? result.rows : (rowsAll as any[]);
-        const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+        let sourceRows: any[] = rowsFromPoint as any[];
+        let targetGrain: Grain = grain;
+        if (grain === "session" && click.target === "rounds") {
+          targetGrain = "round";
+          const out: any[] = [];
+          for (const s of sourceRows as any[]) {
+            const rr = (s as any)?.rounds;
+            if (Array.isArray(rr)) out.push(...rr);
+          }
+          sourceRows = out;
+        }
+        const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
         overlay.open(semantic, {
           title: `${widget.title} - ${rec.label}`,
           target: click.target,
@@ -225,4 +237,3 @@ export async function renderRecordListWidget(
   wrap.appendChild(box);
   return wrap;
 }
-

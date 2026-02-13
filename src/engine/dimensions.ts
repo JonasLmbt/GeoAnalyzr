@@ -166,7 +166,18 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     result: resultKeyAny
   },
   session: {
-    session_index: (row: any) => (typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null)
+    session_index: (row: any) => (typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null),
+    session_start: (row: any) => {
+      const ts = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : typeof row?.ts === "number" ? row.ts : null;
+      if (typeof ts !== "number" || !Number.isFinite(ts)) return null;
+      const d = new Date(ts);
+      const day = String(d.getDate()).padStart(2, "0");
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const y = d.getFullYear();
+      const hh = String(d.getHours()).padStart(2, "0");
+      const mm = String(d.getMinutes()).padStart(2, "0");
+      return `${day}/${m}/${y} ${hh}:${mm}`;
+    }
   }
 };
 

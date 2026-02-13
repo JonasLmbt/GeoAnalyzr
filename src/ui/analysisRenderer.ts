@@ -4,7 +4,7 @@ import { renderDashboard } from "./dashboardRenderer";
 import { createGlobalFilterStore } from "./filterState";
 import { renderGlobalFiltersBar } from "./globalFiltersBar";
 import { getSelectOptionsForControl } from "../engine/selectOptions";
-import { getGamePlayedAtBounds, getRounds, getGames } from "../engine/queryEngine";
+import { getGamePlayedAtBounds, getRounds, getGames, getSessions } from "../engine/queryEngine";
 import type { Grain } from "../config/semantic.types";
 
 export async function renderAnalysisApp(opts: {
@@ -122,6 +122,7 @@ export async function renderAnalysisApp(opts: {
           if (w.type === "record_list") {
             const recs = Array.isArray(anySpec?.records) ? anySpec.records : [];
             for (const r of recs) {
+              if (Array.isArray(r?.streakFilters) && r.streakFilters.length > 0) used.add("round");
               if (typeof r?.metric === "string") {
                 const m = semantic.measures[r.metric];
                 if (m) used.add(m.grain);
@@ -138,9 +139,12 @@ export async function renderAnalysisApp(opts: {
 
       const filters = { global: { spec: specFilters, state, controlIds } };
       const datasets: Partial<Record<Grain, any[]>> = {};
-      if (used.has("round")) datasets.round = await getRounds(filters);
+      if (used.has("round") || used.has("session")) datasets.round = await getRounds(filters);
       if (used.has("game")) datasets.game = await getGames(filters);
-      if (used.has("session")) datasets.session = [];
+      if (used.has("session")) {
+        const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+        datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
+      }
       datasetsBySection[section.id] = datasets;
 
       // Context dateRange should only be set if the section includes the dateRange control.
@@ -163,9 +167,12 @@ export async function renderAnalysisApp(opts: {
       if (d?.game) usedAll.add("game");
       if (d?.session) usedAll.add("session");
     }
-    if (usedAll.has("round")) datasetsAll.round = await getRounds(filtersAll);
+    if (usedAll.has("round") || usedAll.has("session")) datasetsAll.round = await getRounds(filtersAll);
     if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
-    if (usedAll.has("session")) datasetsAll.session = [];
+    if (usedAll.has("session")) {
+      const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+      datasetsAll.session = await getSessions({ global: { spec: specFilters, state, controlIds: allControlIds, sessionGapMinutes: gap } }, { rounds: datasetsAll.round as any });
+    }
     const dateValAll = state["dateRange"] as any;
     const fromTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.fromTs ?? null) : null;
     const toTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.toTs ?? null) : null;

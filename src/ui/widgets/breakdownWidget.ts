@@ -1,7 +1,7 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, BreakdownSpec } from "../../config/dashboard.types";
 import type { Grain } from "../../config/semantic.types";
-import { getRounds, getGames } from "../../engine/queryEngine";
+import { getRounds, getGames, getSessions } from "../../engine/queryEngine";
 import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
@@ -143,7 +143,9 @@ export async function renderBreakdownWidget(
   box.className = "ga-breakdown-box";
 
   const grain = widget.grain as Grain;
-  const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+  const rowsAllBase =
+    baseRows ??
+    (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
   const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
   const dimId = spec.dimension;
 
@@ -317,7 +319,18 @@ export async function renderBreakdownWidget(
         line.style.cursor = "pointer";
         line.addEventListener("click", () => {
           const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+          let sourceRows: any[] = rowsFromPoint as any[];
+          let targetGrain: Grain = grain;
+          if (grain === "session" && click.target === "rounds") {
+            targetGrain = "round";
+            const out: any[] = [];
+            for (const s of sourceRows as any[]) {
+              const rr = (s as any)?.rounds;
+              if (Array.isArray(rr)) out.push(...rr);
+            }
+            sourceRows = out;
+          }
+          const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
           overlay.open(semantic, {
             title: `${widget.title} - ${r.key}`,
             target: click.target,

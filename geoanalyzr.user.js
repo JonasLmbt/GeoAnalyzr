@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.1
+// @version      1.6.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15365,7 +15365,18 @@
       result: resultKeyAny
     },
     session: {
-      session_index: (row) => typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null
+      session_index: (row) => typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null,
+      session_start: (row) => {
+        const ts = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : typeof row?.ts === "number" ? row.ts : null;
+        if (typeof ts !== "number" || !Number.isFinite(ts)) return null;
+        const d = new Date(ts);
+        const day = String(d.getDate()).padStart(2, "0");
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const y = d.getFullYear();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return `${day}/${m}/${y} ${hh}:${mm}`;
+      }
     }
   };
   var ROUND_DIMENSION_EXTRACTORS = DIMENSION_EXTRACTORS.round;
@@ -15469,11 +15480,135 @@
   var roundsFilteredCache = /* @__PURE__ */ new Map();
   var gamesRawCache = null;
   var gamesFilteredCache = /* @__PURE__ */ new Map();
+  var sessionsRawCache = null;
+  var sessionsFilteredCache = /* @__PURE__ */ new Map();
   function invalidateRoundsCache() {
     roundsRawCache = null;
     roundsFilteredCache.clear();
     gamesRawCache = null;
     gamesFilteredCache.clear();
+    sessionsRawCache = null;
+    sessionsFilteredCache.clear();
+  }
+  function buildSessionsFromRounds(rounds, gapMinutes) {
+    const byGame = /* @__PURE__ */ new Map();
+    for (const r of rounds) {
+      const gid = typeof r.gameId === "string" ? r.gameId : "";
+      if (!gid) continue;
+      const arr = byGame.get(gid) ?? [];
+      arr.push(r);
+      byGame.set(gid, arr);
+    }
+    const games = Array.from(byGame.entries()).map(([gameId, rows]) => {
+      const times = rows.map((x) => typeof x.playedAt === "number" ? x.playedAt : typeof x.ts === "number" ? x.ts : null).filter((t) => typeof t === "number" && Number.isFinite(t));
+      const ts = times.length ? Math.min(...times) : null;
+      const endTs = times.length ? Math.max(...times) : null;
+      return ts === null || endTs === null ? null : { gameId, ts, endTs, rows };
+    }).filter((x) => !!x).sort((a, b) => a.ts - b.ts);
+    if (games.length === 0) return [];
+    const gapMs = Math.max(1, Math.floor(gapMinutes * 60 * 1e3));
+    const sessions = [];
+    let curGames = [];
+    const flush = () => {
+      if (curGames.length === 0) return;
+      const start = curGames[0].ts;
+      const end = Math.max(...curGames.map((g) => g.endTs));
+      const sessionId = `s${sessions.length + 1}`;
+      const sessionIndex = sessions.length + 1;
+      const allRounds = curGames.flatMap((g) => g.rows);
+      const gameIdSet = new Set(curGames.map((g) => g.gameId));
+      const gameIds = Array.from(gameIdSet.values());
+      let scoreSum = 0, scoreCount = 0;
+      let durationSum = 0, durationCount = 0;
+      let distanceSum = 0, distanceCount = 0;
+      let fivekCount = 0, hitCount = 0, throwCount = 0;
+      for (const r of allRounds) {
+        const s = r.player_self_score;
+        if (typeof s === "number" && Number.isFinite(s)) {
+          scoreSum += s;
+          scoreCount++;
+          if (s >= 5e3) fivekCount++;
+          if (s < 50) throwCount++;
+        }
+        const truth = r.trueCountry ?? r.true_country;
+        const guess = r.player_self_guessCountry ?? r.p1_guessCountry ?? r.guessCountry;
+        if (typeof truth === "string" && truth && typeof guess === "string" && guess === truth) hitCount++;
+        const dur = r.durationSeconds;
+        if (typeof dur === "number" && Number.isFinite(dur) && dur >= 0) {
+          durationSum += dur;
+          durationCount++;
+        }
+        const dist = r.distanceKm;
+        if (typeof dist === "number" && Number.isFinite(dist) && dist >= 0) {
+          distanceSum += dist;
+          distanceCount++;
+        }
+      }
+      sessions.push({
+        sessionId,
+        sessionIndex,
+        sessionStartTs: start,
+        sessionEndTs: end,
+        ts: start,
+        gamesCount: gameIdSet.size,
+        roundsCount: allRounds.length,
+        scoreSum,
+        scoreCount,
+        durationSum,
+        durationCount,
+        distanceSum,
+        distanceCount,
+        fivekCount,
+        hitCount,
+        throwCount,
+        gameIds,
+        rounds: allRounds
+      });
+      curGames = [];
+    };
+    for (const g of games) {
+      if (curGames.length === 0) {
+        curGames.push(g);
+        continue;
+      }
+      const prevEnd = Math.max(...curGames.map((x) => x.endTs));
+      if (g.ts - prevEnd > gapMs) {
+        flush();
+        curGames.push(g);
+      } else {
+        curGames.push(g);
+      }
+    }
+    flush();
+    return sessions;
+  }
+  async function getSessionsRaw(gapMinutes) {
+    if (sessionsRawCache) return sessionsRawCache;
+    const rounds = await getRoundsRaw();
+    sessionsRawCache = buildSessionsFromRounds(rounds, gapMinutes);
+    return sessionsRawCache;
+  }
+  async function getSessions(filters, opts) {
+    const gf = filters?.global;
+    const spec = gf?.spec;
+    const state = gf?.state ?? {};
+    const controlIds = gf?.controlIds;
+    const gapMinutes = typeof gf?.sessionGapMinutes === "number" && Number.isFinite(gf.sessionGapMinutes) ? gf.sessionGapMinutes : 45;
+    const key = normalizeGlobalFilterKey(spec, state, "session", controlIds) + `|gap=${gapMinutes}`;
+    const cached = sessionsFilteredCache.get(key);
+    if (cached) return cached;
+    const raw = opts?.rounds ? buildSessionsFromRounds(opts.rounds, gapMinutes) : await getSessionsRaw(gapMinutes);
+    const applied = buildAppliedFilters(spec, state, "session", controlIds);
+    let rows = raw;
+    if (applied.date) {
+      const fromTs = applied.date.fromTs ?? null;
+      const toTs2 = applied.date.toTs ?? null;
+      if (fromTs !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs >= fromTs);
+      if (toTs2 !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs <= toTs2);
+    }
+    rows = applyFilters(rows, applied.clauses, "session");
+    sessionsFilteredCache.set(key, rows);
+    return rows;
   }
   async function getGamePlayedAtBounds() {
     const first = await db.games.orderBy("playedAt").first();
@@ -39806,6 +39941,14 @@
         allowedCharts: ["bar", "line"],
         sortModes: ["chronological", "asc", "desc"]
       },
+      session_start: {
+        label: "Session start",
+        kind: "category",
+        grain: "session",
+        ordered: true,
+        allowedCharts: ["bar", "line"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
       game_mode: {
         label: "Game mode",
         kind: "category",
@@ -40117,6 +40260,84 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "mean_damage_taken"
+      },
+      sessions_count: {
+        label: "Sessions",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_sessions"
+      },
+      sessions_longest_break_seconds: {
+        label: "Longest break between sessions",
+        unit: "duration",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_break_between_sessions_seconds"
+      },
+      sessions_avg_games: {
+        label: "Avg games per session",
+        unit: "float",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_games_per_session"
+      },
+      session_games_count: {
+        label: "Games",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_games_count"
+      },
+      session_rounds_count: {
+        label: "Rounds",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_rounds_count"
+      },
+      session_avg_score: {
+        label: "Avg score",
+        unit: "points",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_score",
+        range: { min: 0, max: 5e3 }
+      },
+      session_avg_guess_duration: {
+        label: "Avg guess duration",
+        unit: "seconds",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_guess_duration"
+      },
+      session_avg_distance_km: {
+        label: "Avg distance",
+        unit: "km",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_distance_km"
+      },
+      session_fivek_rate: {
+        label: "5k rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_fivek_rate"
+      },
+      session_hit_rate: {
+        label: "Hit rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_hit_rate"
+      },
+      session_throw_rate: {
+        label: "Throw rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_throw_rate"
       }
     },
     units: {
@@ -40126,7 +40347,8 @@
       seconds: { format: "float", decimals: 1 },
       duration: { format: "duration" },
       rating: { format: "float", decimals: 0 },
-      km: { format: "float", decimals: 1 }
+      km: { format: "float", decimals: 1 },
+      float: { format: "float", decimals: 2 }
     },
     columnAliases: {
       ts: ["playedAt", "startTime"],
@@ -40528,6 +40750,130 @@
                             }
                           }
                         ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "sessions",
+          title: "Sessions",
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_sessions",
+                title: "Sessions",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 20,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_sessions_kpis",
+                      type: "stat_list",
+                      title: "Sessions",
+                      grain: "session",
+                      placement: { x: 0, y: 0, w: 12, h: 4 },
+                      spec: {
+                        rows: [
+                          { label: "Sessions detected (gap >45m)", measure: "sessions_count" },
+                          { label: "Longest break between sessions", measure: "sessions_longest_break_seconds" },
+                          { label: "Avg games per session", measure: "sessions_avg_games" }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_sessions_records",
+                      type: "record_list",
+                      title: "Session Records",
+                      grain: "session",
+                      placement: { x: 0, y: 4, w: 12, h: 5 },
+                      spec: {
+                        records: [
+                          {
+                            id: "longest_session",
+                            label: "Longest session",
+                            metric: "session_games_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "best_session",
+                            label: "Best session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "worst_session",
+                            label: "Worst session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_sessions_line",
+                      type: "chart",
+                      title: "Sessions over time (line)",
+                      grain: "session",
+                      placement: { x: 0, y: 9, w: 12, h: 5 },
+                      spec: {
+                        type: "line",
+                        maxPoints: 120,
+                        x: { dimension: "session_index" },
+                        y: {
+                          measures: [
+                            "session_avg_score",
+                            "session_fivek_rate",
+                            "session_throw_rate",
+                            "session_hit_rate",
+                            "session_games_count",
+                            "session_rounds_count",
+                            "session_avg_guess_duration",
+                            "session_avg_distance_km"
+                          ],
+                          activeMeasure: "session_avg_score"
+                        },
+                        sort: { mode: "chronological" },
+                        actions: { hover: true, click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                      }
+                    },
+                    {
+                      widgetId: "w_sessions_breakdown",
+                      type: "breakdown",
+                      title: "Sessions (bar)",
+                      grain: "session",
+                      placement: { x: 0, y: 14, w: 12, h: 6 },
+                      spec: {
+                        dimension: "session_start",
+                        measures: [
+                          "session_avg_score",
+                          "session_fivek_rate",
+                          "session_throw_rate",
+                          "session_hit_rate",
+                          "session_games_count",
+                          "session_rounds_count"
+                        ],
+                        activeMeasure: "session_avg_score",
+                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "chronological" },
+                        limit: 12,
+                        extendable: true,
+                        actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
                       }
                     }
                   ]
@@ -42312,10 +42658,109 @@
       return best;
     }
   };
+  var SESSION_MEASURES_BY_FORMULA_ID = {
+    count_sessions: (rows) => rows.length,
+    mean_games_per_session: (rows) => {
+      if (!rows.length) return 0;
+      const sum2 = rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0);
+      return sum2 / rows.length;
+    },
+    max_break_between_sessions_seconds: (rows) => {
+      const sorted = [...rows].sort((a, b) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
+      let best = 0;
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const cur = sorted[i];
+        const gapMs = Number(cur.sessionStartTs ?? 0) - Number(prev.sessionEndTs ?? 0);
+        if (Number.isFinite(gapMs) && gapMs > best) best = gapMs;
+      }
+      return best / 1e3;
+    },
+    session_games_count: (rows) => rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0),
+    session_rounds_count: (rows) => rows.reduce((a, r) => a + (typeof r.roundsCount === "number" ? r.roundsCount : 0), 0),
+    session_avg_score: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const ss = r.scoreSum;
+        const sc = r.scoreCount;
+        if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+          sum2 += ss;
+          n += sc;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    session_avg_guess_duration: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const ss = r.durationSum;
+        const sc = r.durationCount;
+        if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+          sum2 += ss;
+          n += sc;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    session_avg_distance_km: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const r of rows) {
+        const ss = r.distanceSum;
+        const sc = r.distanceCount;
+        if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+          sum2 += ss;
+          n += sc;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
+    session_fivek_rate: (rows) => {
+      let fivek = 0;
+      let n = 0;
+      for (const r of rows) {
+        const fk = r.fivekCount;
+        const rc = r.roundsCount;
+        if (typeof fk === "number" && typeof rc === "number" && rc > 0) {
+          fivek += fk;
+          n += rc;
+        }
+      }
+      return n ? fivek / n : 0;
+    },
+    session_hit_rate: (rows) => {
+      let k = 0;
+      let n = 0;
+      for (const r of rows) {
+        const hk = r.hitCount;
+        const rc = r.roundsCount;
+        if (typeof hk === "number" && typeof rc === "number" && rc > 0) {
+          k += hk;
+          n += rc;
+        }
+      }
+      return n ? k / n : 0;
+    },
+    session_throw_rate: (rows) => {
+      let k = 0;
+      let n = 0;
+      for (const r of rows) {
+        const tk = r.throwCount;
+        const rc = r.roundsCount;
+        if (typeof tk === "number" && typeof rc === "number" && rc > 0) {
+          k += tk;
+          n += rc;
+        }
+      }
+      return n ? k / n : 0;
+    }
+  };
   var MEASURES_BY_GRAIN = {
     round: ROUND_MEASURES_BY_FORMULA_ID,
     game: GAME_MEASURES_BY_FORMULA_ID,
-    session: {}
+    session: SESSION_MEASURES_BY_FORMULA_ID
   };
 
   // src/ui/widgets/statListWidget.ts
@@ -42345,7 +42790,7 @@
   async function computeMeasure(semantic, measureId, baseRows, grain, filters) {
     const m = semantic.measures[measureId];
     if (!m) return 0;
-    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
     const rows = applyFilters(rowsAll, filters, grain);
     const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
     if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
@@ -42357,7 +42802,7 @@
     el.style.cursor = "pointer";
     el.addEventListener("click", async () => {
       if (click.type === "drilldown") {
-        const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+        const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
         const rows = applyFilters(rowsAll, click.extraFilters, grain);
         overlay.open(semantic, {
           title,
@@ -42826,8 +43271,29 @@
       const provided = datasets?.[g];
       if (Array.isArray(provided)) return provided;
       if (g === "game") return [];
+      if (g === "session") return [];
       return [];
     }
+    const drilldownGrainForTarget = (target) => {
+      if (target === "rounds") return "round";
+      if (target === "players") return "game";
+      if (target === "games") return "game";
+      if (target === "sessions") return "session";
+      return getActiveGrain();
+    };
+    const materializeRowsForDrilldown = (target, sourceGrain, rows) => {
+      const g = drilldownGrainForTarget(target);
+      if (g === sourceGrain) return { grain: g, rows };
+      if (sourceGrain === "session" && g === "round") {
+        const out = [];
+        for (const s of rows) {
+          const r = s?.rounds;
+          if (Array.isArray(r)) out.push(...r);
+        }
+        return { grain: "round", rows: out };
+      }
+      return { grain: g, rows };
+    };
     const buildDataForMeasure = (measureId, limitOverride) => {
       const measDef = semantic.measures[measureId];
       if (!measDef) return [];
@@ -42881,6 +43347,23 @@
         const rowsForKey = grouped.get(k) ?? [];
         return { x: k, y: clampForMeasure(semantic, measureId, measureFn(rowsForKey)), rows: rowsForKey };
       });
+      if (dimDef.ordered && typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {
+        const maxPoints = Math.floor(spec.maxPoints);
+        const ordered = sortData(baseData, "chronological");
+        if (ordered.length > maxPoints && activeSortMode === "chronological") {
+          const buckets = chunkKeys(ordered.map((d) => d.x), maxPoints);
+          const byKey = new Map(ordered.map((d) => [d.x, d]));
+          const out = buckets.map((b) => {
+            const bucketRows = [];
+            for (const k of b.keys) {
+              const item = byKey.get(k);
+              if (item?.rows?.length) bucketRows.push(...item.rows);
+            }
+            return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
+          });
+          return out;
+        }
+      }
       const sortedData = sortData(baseData, activeSortMode);
       const limit = typeof limitOverride === "number" && Number.isFinite(limitOverride) && limitOverride > 0 ? limitOverride : spec.limit;
       return typeof limit === "number" && Number.isFinite(limit) && limit > 0 ? sortedData.slice(0, Math.floor(limit)) : sortedData;
@@ -43051,9 +43534,13 @@
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
-              const base = getDatasetForGrain(getActiveGrain());
-              const rowsFromPoint = click.filterFromPoint ? p.d.rows : base;
-              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
+              const sourceGrain = getActiveGrain();
+              const ddGrain = drilldownGrainForTarget(click.target);
+              const base = getDatasetForGrain(ddGrain);
+              const sourceRows = click.filterFromPoint ? p.d.rows : base;
+              const sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+              const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
+              const filteredRows = applyFilters(rows, click.extraFilters, grain);
               overlay.open(semantic, {
                 title: `${widget.title} - ${p.d.x}`,
                 target: click.target,
@@ -43092,9 +43579,13 @@
           if (click?.type === "drilldown") {
             rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
             rect.addEventListener("click", () => {
-              const base = getDatasetForGrain(getActiveGrain());
-              const rowsFromPoint = click.filterFromPoint ? d.rows : base;
-              const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
+              const sourceGrain = getActiveGrain();
+              const ddGrain = drilldownGrainForTarget(click.target);
+              const base = getDatasetForGrain(ddGrain);
+              const sourceRows = click.filterFromPoint ? d.rows : base;
+              const sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+              const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
+              const filteredRows = applyFilters(rows, click.extraFilters, grain);
               overlay.open(semantic, {
                 title: `${widget.title} - ${d.x}`,
                 target: click.target,
@@ -43267,7 +43758,7 @@
     const box = doc.createElement("div");
     box.className = "ga-breakdown-box";
     const grain = widget.grain;
-    const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+    const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
     const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
     const dimId = spec.dimension;
     const dimDef = semantic.dimensions[dimId];
@@ -43403,7 +43894,18 @@
           line.style.cursor = "pointer";
           line.addEventListener("click", () => {
             const rowsFromPoint = click.filterFromPoint ? r.rows : rowsAll;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+            let sourceRows = rowsFromPoint;
+            let targetGrain = grain;
+            if (grain === "session" && click.target === "rounds") {
+              targetGrain = "round";
+              const out = [];
+              for (const s of sourceRows) {
+                const rr = s?.rounds;
+                if (Array.isArray(rr)) out.push(...rr);
+              }
+              sourceRows = out;
+            }
+            const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
             overlay.open(semantic, {
               title: `${widget.title} - ${r.key}`,
               target: click.target,
@@ -43575,7 +44077,7 @@
     title.textContent = widget.title;
     const box = doc.createElement("div");
     box.className = "ga-recordlist-box";
-    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : await getRounds({}));
+    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
     for (const rec of spec.records) {
       const kind = rec.kind === "streak" ? "streak" : "group_extreme";
       const result = kind === "streak" ? buildStreak(semantic, grain, rowsAll, rec) : buildGroupExtreme(semantic, grain, rowsAll, rec);
@@ -43595,7 +44097,18 @@
         line.style.cursor = "pointer";
         line.addEventListener("click", () => {
           const rowsFromPoint = click.filterFromPoint ? result.rows : rowsAll;
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+          let sourceRows = rowsFromPoint;
+          let targetGrain = grain;
+          if (grain === "session" && click.target === "rounds") {
+            targetGrain = "round";
+            const out = [];
+            for (const s of sourceRows) {
+              const rr = s?.rounds;
+              if (Array.isArray(rr)) out.push(...rr);
+            }
+            sourceRows = out;
+          }
+          const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
           overlay.open(semantic, {
             title: `${widget.title} - ${rec.label}`,
             target: click.target,
@@ -44067,6 +44580,7 @@
             if (w.type === "record_list") {
               const recs = Array.isArray(anySpec?.records) ? anySpec.records : [];
               for (const r of recs) {
+                if (Array.isArray(r?.streakFilters) && r.streakFilters.length > 0) used.add("round");
                 if (typeof r?.metric === "string") {
                   const m = semantic.measures[r.metric];
                   if (m) used.add(m.grain);
@@ -44082,9 +44596,12 @@
         }
         const filters = { global: { spec: specFilters, state, controlIds } };
         const datasets = {};
-        if (used.has("round")) datasets.round = await getRounds(filters);
+        if (used.has("round") || used.has("session")) datasets.round = await getRounds(filters);
         if (used.has("game")) datasets.game = await getGames(filters);
-        if (used.has("session")) datasets.session = [];
+        if (used.has("session")) {
+          const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+          datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
+        }
         datasetsBySection[section.id] = datasets;
         const hasDate = !controlIds || controlIds.includes("dateRange");
         const dateVal = state["dateRange"];
@@ -44102,9 +44619,12 @@
         if (d?.game) usedAll.add("game");
         if (d?.session) usedAll.add("session");
       }
-      if (usedAll.has("round")) datasetsAll.round = await getRounds(filtersAll);
+      if (usedAll.has("round") || usedAll.has("session")) datasetsAll.round = await getRounds(filtersAll);
       if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
-      if (usedAll.has("session")) datasetsAll.session = [];
+      if (usedAll.has("session")) {
+        const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+        datasetsAll.session = await getSessions({ global: { spec: specFilters, state, controlIds: allControlIds, sessionGapMinutes: gap } }, { rounds: datasetsAll.round });
+      }
       const dateValAll = state["dateRange"];
       const fromTsAll = dateValAll && typeof dateValAll === "object" ? dateValAll.fromTs ?? null : null;
       const toTsAll = dateValAll && typeof dateValAll === "object" ? dateValAll.toTs ?? null : null;

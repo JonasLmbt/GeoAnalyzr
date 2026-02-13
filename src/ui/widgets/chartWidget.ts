@@ -502,8 +502,34 @@ export async function renderChartWidget(
     if (Array.isArray(provided)) return provided;
     // Fallback only for non-analysis contexts.
     if (g === "game") return [];
+    if (g === "session") return [];
     return [];
   }
+
+  const drilldownGrainForTarget = (target: string): Grain => {
+    if (target === "rounds") return "round";
+    if (target === "players") return "game";
+    if (target === "games") return "game";
+    if (target === "sessions") return "session";
+    return getActiveGrain();
+  };
+
+  const materializeRowsForDrilldown = (target: string, sourceGrain: Grain, rows: any[]): { grain: Grain; rows: any[] } => {
+    const g = drilldownGrainForTarget(target);
+    if (g === sourceGrain) return { grain: g, rows };
+
+    // Allow session widgets to drill down into underlying rounds.
+    if (sourceGrain === "session" && g === "round") {
+      const out: any[] = [];
+      for (const s of rows as any[]) {
+        const r = (s as any)?.rounds;
+        if (Array.isArray(r)) out.push(...r);
+      }
+      return { grain: "round", rows: out };
+    }
+
+    return { grain: g, rows };
+  };
 
   const buildDataForMeasure = (measureId: string, limitOverride?: number): Datum[] => {
     const measDef = semantic.measures[measureId];
@@ -571,6 +597,26 @@ export async function renderChartWidget(
       const rowsForKey = grouped.get(k) ?? [];
       return { x: k, y: clampForMeasure(semantic, measureId, measureFn(rowsForKey)), rows: rowsForKey };
     });
+
+    // If this is an ordered axis and a long series, optionally bucket down to maxPoints.
+    if (dimDef.ordered && typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {
+      const maxPoints = Math.floor(spec.maxPoints);
+      const ordered = sortData(baseData, "chronological");
+      if (ordered.length > maxPoints && activeSortMode === "chronological") {
+        const buckets = chunkKeys(ordered.map((d) => d.x), maxPoints);
+        const byKey = new Map(ordered.map((d) => [d.x, d]));
+        const out: Datum[] = buckets.map((b) => {
+          const bucketRows: any[] = [];
+          for (const k of b.keys) {
+            const item = byKey.get(k);
+            if (item?.rows?.length) bucketRows.push(...item.rows);
+          }
+          return { x: b.label, y: clampForMeasure(semantic, measureId, measureFn(bucketRows)), rows: bucketRows };
+        });
+        return out;
+      }
+    }
+
     const sortedData = sortData(baseData, activeSortMode);
 
     const limit = typeof limitOverride === "number" && Number.isFinite(limitOverride) && limitOverride > 0 ? limitOverride : spec.limit;
@@ -767,9 +813,14 @@ export async function renderChartWidget(
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
-            const base = getDatasetForGrain(getActiveGrain());
-            const rowsFromPoint = click.filterFromPoint ? p.d.rows : base;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
+            const sourceGrain = getActiveGrain();
+            const ddGrain = drilldownGrainForTarget(click.target);
+            const base = getDatasetForGrain(ddGrain);
+            const sourceRows = click.filterFromPoint ? p.d.rows : base;
+            // When not filtering from point we already have drilldown-grain rows (base).
+            const sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+            const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows as any[]);
+            const filteredRows = applyFilters(rows, click.extraFilters, grain);
             overlay.open(semantic, {
               title: `${widget.title} - ${p.d.x}`,
               target: click.target,
@@ -811,9 +862,14 @@ export async function renderChartWidget(
         if (click?.type === "drilldown") {
           rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
           rect.addEventListener("click", () => {
-            const base = getDatasetForGrain(getActiveGrain());
-            const rowsFromPoint = click.filterFromPoint ? d.rows : base;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, getActiveGrain());
+            const sourceGrain = getActiveGrain();
+            const ddGrain = drilldownGrainForTarget(click.target);
+            const base = getDatasetForGrain(ddGrain);
+            const sourceRows = click.filterFromPoint ? d.rows : base;
+            // When not filtering from point we already have drilldown-grain rows (base).
+            const sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+            const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows as any[]);
+            const filteredRows = applyFilters(rows, click.extraFilters, grain);
             overlay.open(semantic, {
               title: `${widget.title} - ${d.x}`,
               target: click.target,

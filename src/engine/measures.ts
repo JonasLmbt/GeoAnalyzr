@@ -2,6 +2,7 @@
 import type { Grain } from "../config/semantic.types";
 import type { RoundRow, GameFactRow } from "../db";
 import { getSelfScore, getTrueCountry, getGuessCountrySelf, getDurationSeconds, getDistanceKm, pick } from "./fieldAccess";
+import type { SessionRow } from "./queryEngine";
 
 export type MeasureFn = (rows: any[]) => number;
 
@@ -322,8 +323,108 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
   }
 };
 
+export const SESSION_MEASURES_BY_FORMULA_ID: Record<string, (rows: SessionRow[]) => number> = {
+  count_sessions: (rows) => rows.length,
+  mean_games_per_session: (rows) => {
+    if (!rows.length) return 0;
+    const sum = rows.reduce((a, r) => a + (typeof (r as any).gamesCount === "number" ? (r as any).gamesCount : 0), 0);
+    return sum / rows.length;
+  },
+  max_break_between_sessions_seconds: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
+    let best = 0;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1] as any;
+      const cur = sorted[i] as any;
+      const gapMs = Number(cur.sessionStartTs ?? 0) - Number(prev.sessionEndTs ?? 0);
+      if (Number.isFinite(gapMs) && gapMs > best) best = gapMs;
+    }
+    return best / 1000;
+  },
+  session_games_count: (rows) => rows.reduce((a, r: any) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0),
+  session_rounds_count: (rows) => rows.reduce((a, r: any) => a + (typeof r.roundsCount === "number" ? r.roundsCount : 0), 0),
+  session_avg_score: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const ss = r.scoreSum;
+      const sc = r.scoreCount;
+      if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+        sum += ss;
+        n += sc;
+      }
+    }
+    return n ? sum / n : 0;
+  },
+  session_avg_guess_duration: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const ss = r.durationSum;
+      const sc = r.durationCount;
+      if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+        sum += ss;
+        n += sc;
+      }
+    }
+    return n ? sum / n : 0;
+  },
+  session_avg_distance_km: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const ss = r.distanceSum;
+      const sc = r.distanceCount;
+      if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+        sum += ss;
+        n += sc;
+      }
+    }
+    return n ? sum / n : 0;
+  },
+  session_fivek_rate: (rows) => {
+    let fivek = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const fk = r.fivekCount;
+      const rc = r.roundsCount;
+      if (typeof fk === "number" && typeof rc === "number" && rc > 0) {
+        fivek += fk;
+        n += rc;
+      }
+    }
+    return n ? fivek / n : 0;
+  },
+  session_hit_rate: (rows) => {
+    let k = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const hk = r.hitCount;
+      const rc = r.roundsCount;
+      if (typeof hk === "number" && typeof rc === "number" && rc > 0) {
+        k += hk;
+        n += rc;
+      }
+    }
+    return n ? k / n : 0;
+  },
+  session_throw_rate: (rows) => {
+    let k = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const tk = r.throwCount;
+      const rc = r.roundsCount;
+      if (typeof tk === "number" && typeof rc === "number" && rc > 0) {
+        k += tk;
+        n += rc;
+      }
+    }
+    return n ? k / n : 0;
+  }
+};
+
 export const MEASURES_BY_GRAIN: Record<Grain, Record<string, MeasureFn>> = {
   round: ROUND_MEASURES_BY_FORMULA_ID as any,
   game: GAME_MEASURES_BY_FORMULA_ID as any,
-  session: {}
+  session: SESSION_MEASURES_BY_FORMULA_ID as any
 };
