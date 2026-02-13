@@ -67,6 +67,18 @@ export function isThrowKey(r: RoundRow): GroupKey | null {
   return s < 50 ? "true" : "false";
 }
 
+export function isDamageDealtKey(r: any): GroupKey | null {
+  const dmg = r?.damage;
+  if (typeof dmg !== "number" || !Number.isFinite(dmg)) return null;
+  return dmg > 0 ? "true" : "false";
+}
+
+export function isDamageTakenKey(r: any): GroupKey | null {
+  const dmg = r?.damage;
+  if (typeof dmg !== "number" || !Number.isFinite(dmg)) return null;
+  return dmg < 0 ? "true" : "false";
+}
+
 export function durationBucketKey(r: RoundRow): GroupKey | null {
   const s = getDurationSeconds(r);
   if (typeof s !== "number" || !Number.isFinite(s) || s < 0) return null;
@@ -158,6 +170,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     movement_type: movementTypeKey,
     is_hit: isHitKey,
     is_throw: isThrowKey,
+    is_damage_dealt: isDamageDealtKey,
+    is_damage_taken: isDamageTakenKey,
     is_near_perfect: (r: any) => {
       const s = getSelfScore(r as any);
       if (typeof s !== "number") return null;
@@ -170,7 +184,7 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     },
     duration_bucket: durationBucketKey,
     teammate_name: teammateNameKey,
-    round_number: (r: any) => (typeof r?.roundNumber === "number" ? String(r.roundNumber) : null)
+    round_number: (r: any) => (typeof r?.roundNumber === "number" ? `#${r.roundNumber}` : null)
   },
   game: {
     time_day: timeDayKeyAny,
@@ -179,7 +193,13 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     game_id: (g: any) => (typeof g?.gameId === "string" && g.gameId.trim().length ? g.gameId : null),
     game_mode: gameModeKeyAny,
     mode_family: modeFamilyKeyAny,
-    result: resultKeyAny
+    result: resultKeyAny,
+    game_length: (g: any) => {
+      const n = (g as any).roundsCount;
+      if (typeof n !== "number" || !Number.isFinite(n)) return null;
+      if (n < 2) return null;
+      return String(Math.round(n));
+    }
   },
   session: {
     session_index: (row: any) => (typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null),

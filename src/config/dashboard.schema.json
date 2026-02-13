@@ -445,12 +445,13 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "label": { "$ref": "#/$defs/title" },
-        "kind": { "enum": ["group_extreme", "streak"] },
+        "kind": { "enum": ["group_extreme", "streak", "same_value_streak"] },
         "metric": { "type": "string", "minLength": 1 },
         "groupBy": { "type": "string", "minLength": 1 },
         "extreme": { "enum": ["max", "min"] },
         "filters": { "type": "array", "items": { "$ref": "#/$defs/filterDef" } },
         "streakFilters": { "type": "array", "items": { "$ref": "#/$defs/filterDef" } },
+        "dimension": { "type": "string", "minLength": 1 },
         "displayKey": { "enum": ["group", "first_ts", "first_ts_score"] },
         "actions": { "$ref": "#/$defs/actionsDef" }
       },
@@ -459,7 +460,8 @@
         {
           "anyOf": [
             { "required": ["metric", "groupBy", "extreme"] },
-            { "required": ["streakFilters"] }
+            { "required": ["streakFilters"] },
+            { "required": ["dimension"] }
           ]
         }
       ]

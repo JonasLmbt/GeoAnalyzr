@@ -164,7 +164,7 @@ export interface BreakdownSpec {
 export interface RecordItemDef {
   id: string;
   label: string;
-  kind?: "group_extreme" | "streak";
+  kind?: "group_extreme" | "streak" | "same_value_streak";
   // group_extreme:
   metric?: string;
   groupBy?: string;
@@ -173,6 +173,8 @@ export interface RecordItemDef {
   filters?: FilterClause[];
   // streak:
   streakFilters?: FilterClause[];
+  // same_value_streak:
+  dimension?: string;
   // presentation:
   displayKey?: "group" | "first_ts" | "first_ts_score";
   actions?: Actions;

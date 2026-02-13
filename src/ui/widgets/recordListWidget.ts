@@ -118,6 +118,34 @@ function buildGroupExtreme(
       ? (firstTs !== null ? formatTs(firstTs) : bestKey)
       : bestKey;
 
+  // Special-case a few legacy-style "Rounds" records so the value reads naturally.
+  if (groupById === "game_id" && metricId === "rounds_count") {
+    if (extreme === "max") {
+      return { keyText, valueText: `${metricText} rounds (${keyText})`, rows: bestRows, click: rec.actions?.click };
+    }
+    // For "fewest rounds", show how many games share the minimum.
+    const tied: any[] = [];
+    let tieCount = 0;
+    for (const [, g] of grouped.entries()) {
+      if (!g || g.length === 0) continue;
+      const v = fn(g);
+      if (!Number.isFinite(v) || v !== bestVal) continue;
+      tieCount++;
+      tied.push(...g);
+    }
+    const rows = tied.length ? tied : bestRows;
+    return {
+      keyText,
+      valueText: `${metricText} rounds (${tieCount} game(s))`,
+      rows,
+      click: rec.actions?.click
+    };
+  }
+
+  if (groupById === "game_id" && metricId === "score_spread") {
+    return { keyText, valueText: `${metricText} points (${keyText})`, rows: bestRows, click: rec.actions?.click };
+  }
+
   if (displayKey === "first_ts_score") {
     // Try to include score context, matching the legacy-style tempo rows.
     let scoreText = "";
@@ -170,12 +198,63 @@ function buildStreak(
   }
 
   const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
-  const valueText = best > 0 ? `${best} rounds in a row` : "0";
   const keyText = bestRows.length ? (() => {
     const ts = getRowTs(bestRows[0]);
     return ts !== null ? formatTs(ts) : "";
   })() : "";
+  const valueText = best > 0 ? `${best} rounds in a row${keyText ? ` (${keyText})` : ""}` : "0";
 
+  return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+}
+
+function buildSameValueStreak(
+  semantic: SemanticRegistry,
+  grain: Grain,
+  rowsAll: any[],
+  rec: RecordItemDef
+): RecordResult | null {
+  const dimId = typeof rec.dimension === "string" ? rec.dimension.trim() : "";
+  if (!dimId) return null;
+  const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
+  if (!keyFn) return null;
+
+  const sorted = [...rowsAll].sort((a, b) => (getRowTs(a) ?? 0) - (getRowTs(b) ?? 0));
+  let best = 0;
+  let bestStart = -1;
+  let bestEnd = -1;
+  let bestKey: string | null = null;
+
+  let cur = 0;
+  let curStart = 0;
+  let prevKey: string | null = null;
+
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    const k = keyFn(r);
+    if (!k) {
+      cur = 0;
+      prevKey = null;
+      continue;
+    }
+    if (prevKey !== null && k === prevKey) {
+      cur++;
+    } else {
+      cur = 1;
+      curStart = i;
+      prevKey = k;
+    }
+    if (cur > best) {
+      best = cur;
+      bestStart = curStart;
+      bestEnd = i;
+      bestKey = k;
+    }
+  }
+
+  const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
+  const ts = bestRows.length ? getRowTs(bestRows[0]) : null;
+  const keyText = ts !== null ? formatTs(ts) : "";
+  const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${keyText ? ` (${keyText})` : ""}`.trim() : "0";
   return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
 }
 
@@ -203,8 +282,14 @@ export async function renderRecordListWidget(
     baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
 
   for (const rec of spec.records) {
-    const kind = rec.kind === "streak" ? "streak" : "group_extreme";
-    const result = kind === "streak" ? buildStreak(semantic, grain, rowsAll as any[], rec) : buildGroupExtreme(semantic, grain, rowsAll as any[], rec);
+    const kind =
+      rec.kind === "same_value_streak" ? "same_value_streak" : rec.kind === "streak" ? "streak" : "group_extreme";
+    const result =
+      kind === "streak"
+        ? buildStreak(semantic, grain, rowsAll as any[], rec)
+        : kind === "same_value_streak"
+          ? buildSameValueStreak(semantic, grain, rowsAll as any[], rec)
+          : buildGroupExtreme(semantic, grain, rowsAll as any[], rec);
 
     const line = doc.createElement("div");
     line.className = "ga-statrow";

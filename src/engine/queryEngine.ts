@@ -374,7 +374,14 @@ export async function getRounds(filters: GlobalFilters): Promise<RoundRow[]> {
 
 async function getGamesRaw(): Promise<GameFactRow[]> {
   if (gamesRawCache) return gamesRawCache;
-  const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
+  const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
+
+  const roundsCountByGame = new Map<string, number>();
+  for (const r of rounds as any[]) {
+    const gid = typeof r?.gameId === "string" ? r.gameId : "";
+    if (!gid) continue;
+    roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
+  }
 
   const detailsByGame = new Map<string, any>();
   for (const d of details) {
@@ -388,6 +395,7 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       out.playedAt = g.playedAt;
       out.ts = g.playedAt;
     }
+    out.roundsCount = roundsCountByGame.get(g.gameId) ?? 0;
 
     // Best-effort normalize a result string for the "result" dimension.
     const v =

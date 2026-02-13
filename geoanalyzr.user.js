@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.6
+// @version      1.6.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15283,6 +15283,16 @@
     if (typeof s !== "number") return null;
     return s < 50 ? "true" : "false";
   }
+  function isDamageDealtKey(r) {
+    const dmg = r?.damage;
+    if (typeof dmg !== "number" || !Number.isFinite(dmg)) return null;
+    return dmg > 0 ? "true" : "false";
+  }
+  function isDamageTakenKey(r) {
+    const dmg = r?.damage;
+    if (typeof dmg !== "number" || !Number.isFinite(dmg)) return null;
+    return dmg < 0 ? "true" : "false";
+  }
   function durationBucketKey(r) {
     const s = getDurationSeconds(r);
     if (typeof s !== "number" || !Number.isFinite(s) || s < 0) return null;
@@ -15357,6 +15367,8 @@
       movement_type: movementTypeKey,
       is_hit: isHitKey,
       is_throw: isThrowKey,
+      is_damage_dealt: isDamageDealtKey,
+      is_damage_taken: isDamageTakenKey,
       is_near_perfect: (r) => {
         const s = getSelfScore(r);
         if (typeof s !== "number") return null;
@@ -15369,7 +15381,7 @@
       },
       duration_bucket: durationBucketKey,
       teammate_name: teammateNameKey,
-      round_number: (r) => typeof r?.roundNumber === "number" ? String(r.roundNumber) : null
+      round_number: (r) => typeof r?.roundNumber === "number" ? `#${r.roundNumber}` : null
     },
     game: {
       time_day: timeDayKeyAny,
@@ -15378,7 +15390,13 @@
       game_id: (g) => typeof g?.gameId === "string" && g.gameId.trim().length ? g.gameId : null,
       game_mode: gameModeKeyAny,
       mode_family: modeFamilyKeyAny,
-      result: resultKeyAny
+      result: resultKeyAny,
+      game_length: (g) => {
+        const n = g.roundsCount;
+        if (typeof n !== "number" || !Number.isFinite(n)) return null;
+        if (n < 2) return null;
+        return String(Math.round(n));
+      }
     },
     session: {
       session_index: (row) => typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null,
@@ -15741,7 +15759,13 @@
   }
   async function getGamesRaw() {
     if (gamesRawCache) return gamesRawCache;
-    const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
+    const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
+    const roundsCountByGame = /* @__PURE__ */ new Map();
+    for (const r of rounds) {
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      if (!gid) continue;
+      roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
+    }
     const detailsByGame = /* @__PURE__ */ new Map();
     for (const d of details) {
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
@@ -15753,6 +15777,7 @@
         out.playedAt = g.playedAt;
         out.ts = g.playedAt;
       }
+      out.roundsCount = roundsCountByGame.get(g.gameId) ?? 0;
       const v = typeof out.player_self_victory === "boolean" ? out.player_self_victory : typeof out.teamOneVictory === "boolean" ? out.teamOneVictory : typeof out.playerOneVictory === "boolean" ? out.playerOneVictory : void 0;
       if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
       return out;
@@ -39997,6 +40022,15 @@
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 5 }
       },
+      game_length: {
+        label: "Game length (rounds)",
+        kind: "category",
+        grain: "game",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 30 }
+      },
       round_number: {
         label: "Round #",
         kind: "category",
@@ -40061,6 +40095,22 @@
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 2 }
       },
+      is_damage_dealt: {
+        label: "Damage dealt?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_damage_taken: {
+        label: "Damage taken?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
       is_near_perfect: {
         label: "Near-perfect? (>=4500)",
         kind: "category",
@@ -40102,12 +40152,27 @@
         allowedCharts: ["bar", "line"],
         formulaId: "count_games"
       },
+      avg_game_length: {
+        label: "Avg game length",
+        unit: "float",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_game_length_rounds"
+      },
       rounds_count: {
         label: "Rounds",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_rounds"
+      },
+      score_spread: {
+        label: "Score spread",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar"],
+        formulaId: "spread_player_self_score",
+        range: { min: 0, max: 5e3 }
       },
       avg_score: {
         label: "Avg score",
@@ -41170,6 +41235,189 @@
                         actions: {
                           hover: true,
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "rounds",
+          title: "Rounds",
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_rounds",
+                title: "Rounds",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 24,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_rounds_records",
+                      type: "record_list",
+                      title: "Rounds",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 7 },
+                      spec: {
+                        records: [
+                          {
+                            id: "game_most_rounds",
+                            label: "Game with most rounds",
+                            metric: "rounds_count",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            displayKey: "first_ts",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "game_fewest_rounds",
+                            label: "Games with fewest rounds",
+                            metric: "rounds_count",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            displayKey: "first_ts",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "largest_score_spread_game",
+                            label: "Largest score spread (max-min in one game)",
+                            metric: "score_spread",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            displayKey: "first_ts",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "fast_round_streak",
+                            label: "Fastest round streak (<20s)",
+                            kind: "streak",
+                            streakFilters: [{ dimension: "duration_bucket", op: "eq", value: "<20 sec" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "duration_bucket", op: "eq", value: "<20 sec" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "damage_dealt_streak",
+                            label: "Damage dealt streak",
+                            kind: "streak",
+                            streakFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "damage_taken_streak",
+                            label: "Damage taken streak",
+                            kind: "streak",
+                            streakFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "same_country_streak",
+                            label: "Longest same-country streak",
+                            kind: "same_value_streak",
+                            dimension: "true_country",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "correct_country_streak",
+                            label: "Correct-country streak",
+                            kind: "streak",
+                            streakFilters: [{ dimension: "is_hit", op: "eq", value: "true" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_rounds_progression",
+                      type: "chart",
+                      title: "Rounds - Round progression metrics",
+                      grain: "round",
+                      placement: { x: 0, y: 7, w: 12, h: 8 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "round_number" },
+                        y: {
+                          measures: [
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "fivek_rate",
+                            "throw_rate",
+                            "hit_rate",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "avg_score"
+                        },
+                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "chronological" },
+                        limit: 20,
+                        actions: {
+                          hover: true,
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_game_length_perf",
+                      type: "chart",
+                      title: "Rounds - Performance by game length (rounds per game, 2+)",
+                      grain: "game",
+                      placement: { x: 0, y: 15, w: 12, h: 9 },
+                      spec: {
+                        type: "bar",
+                        x: { dimension: "game_length" },
+                        y: {
+                          measures: ["games_count", "win_rate", "win_count", "loss_count", "tie_count", "best_end_rating"],
+                          activeMeasure: "games_count"
+                        },
+                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "chronological" },
+                        limit: 20,
+                        actions: {
+                          hover: true,
+                          click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: true }
                         }
                       }
                     }
@@ -42730,6 +42978,18 @@
   }
   var ROUND_MEASURES_BY_FORMULA_ID = {
     count_rounds: (rows) => rows.length,
+    spread_player_self_score: (rows) => {
+      let min = Infinity;
+      let max = -Infinity;
+      for (const r of rows) {
+        const s = getSelfScore(r);
+        if (typeof s !== "number" || !Number.isFinite(s)) continue;
+        if (s < min) min = s;
+        if (s > max) max = s;
+      }
+      if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
+      return Math.max(0, max - min);
+    },
     mean_player_self_score: (rows) => {
       let sum2 = 0;
       let n = 0;
@@ -42886,6 +43146,18 @@
   };
   var GAME_MEASURES_BY_FORMULA_ID = {
     count_games: (rows) => rows.length,
+    mean_game_length_rounds: (rows) => {
+      let sum2 = 0;
+      let n = 0;
+      for (const g of rows) {
+        const v = g?.roundsCount;
+        if (typeof v === "number" && Number.isFinite(v) && v > 0) {
+          sum2 += v;
+          n++;
+        }
+      }
+      return n ? sum2 / n : 0;
+    },
     rate_player_self_win: (rows) => {
       let n = 0;
       let k = 0;
@@ -44364,6 +44636,30 @@
       return ts.length ? Math.min(...ts) : null;
     })();
     const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
+    if (groupById === "game_id" && metricId === "rounds_count") {
+      if (extreme === "max") {
+        return { keyText, valueText: `${metricText} rounds (${keyText})`, rows: bestRows, click: rec.actions?.click };
+      }
+      const tied = [];
+      let tieCount = 0;
+      for (const [, g] of grouped.entries()) {
+        if (!g || g.length === 0) continue;
+        const v = fn(g);
+        if (!Number.isFinite(v) || v !== bestVal) continue;
+        tieCount++;
+        tied.push(...g);
+      }
+      const rows = tied.length ? tied : bestRows;
+      return {
+        keyText,
+        valueText: `${metricText} rounds (${tieCount} game(s))`,
+        rows,
+        click: rec.actions?.click
+      };
+    }
+    if (groupById === "game_id" && metricId === "score_spread") {
+      return { keyText, valueText: `${metricText} points (${keyText})`, rows: bestRows, click: rec.actions?.click };
+    }
     if (displayKey === "first_ts_score") {
       let scoreText = "";
       const scoreMeasure = semantic.measures["avg_score"];
@@ -44403,11 +44699,52 @@
       }
     }
     const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
-    const valueText = best > 0 ? `${best} rounds in a row` : "0";
     const keyText = bestRows.length ? (() => {
       const ts = getRowTs2(bestRows[0]);
       return ts !== null ? formatTs(ts) : "";
     })() : "";
+    const valueText = best > 0 ? `${best} rounds in a row${keyText ? ` (${keyText})` : ""}` : "0";
+    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+  }
+  function buildSameValueStreak(semantic, grain, rowsAll, rec) {
+    const dimId = typeof rec.dimension === "string" ? rec.dimension.trim() : "";
+    if (!dimId) return null;
+    const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
+    if (!keyFn) return null;
+    const sorted = [...rowsAll].sort((a, b) => (getRowTs2(a) ?? 0) - (getRowTs2(b) ?? 0));
+    let best = 0;
+    let bestStart = -1;
+    let bestEnd = -1;
+    let bestKey = null;
+    let cur = 0;
+    let curStart = 0;
+    let prevKey = null;
+    for (let i = 0; i < sorted.length; i++) {
+      const r = sorted[i];
+      const k = keyFn(r);
+      if (!k) {
+        cur = 0;
+        prevKey = null;
+        continue;
+      }
+      if (prevKey !== null && k === prevKey) {
+        cur++;
+      } else {
+        cur = 1;
+        curStart = i;
+        prevKey = k;
+      }
+      if (cur > best) {
+        best = cur;
+        bestStart = curStart;
+        bestEnd = i;
+        bestKey = k;
+      }
+    }
+    const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
+    const ts = bestRows.length ? getRowTs2(bestRows[0]) : null;
+    const keyText = ts !== null ? formatTs(ts) : "";
+    const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${keyText ? ` (${keyText})` : ""}`.trim() : "0";
     return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   async function renderRecordListWidget(semantic, widget, overlay, baseRows) {
@@ -44423,8 +44760,8 @@
     box.className = "ga-recordlist-box";
     const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
     for (const rec of spec.records) {
-      const kind = rec.kind === "streak" ? "streak" : "group_extreme";
-      const result = kind === "streak" ? buildStreak(semantic, grain, rowsAll, rec) : buildGroupExtreme(semantic, grain, rowsAll, rec);
+      const kind = rec.kind === "same_value_streak" ? "same_value_streak" : rec.kind === "streak" ? "streak" : "group_extreme";
+      const result = kind === "streak" ? buildStreak(semantic, grain, rowsAll, rec) : kind === "same_value_streak" ? buildSameValueStreak(semantic, grain, rowsAll, rec) : buildGroupExtreme(semantic, grain, rowsAll, rec);
       const line = doc.createElement("div");
       line.className = "ga-statrow";
       const left = doc.createElement("div");

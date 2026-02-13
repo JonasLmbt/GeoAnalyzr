@@ -688,6 +688,190 @@
       },
 
       {
+        "id": "rounds",
+        "title": "Rounds",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_rounds",
+              "title": "Rounds",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 24,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_rounds_records",
+                    "type": "record_list",
+                    "title": "Rounds",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 7 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "game_most_rounds",
+                          "label": "Game with most rounds",
+                          "metric": "rounds_count",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "displayKey": "first_ts",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "game_fewest_rounds",
+                          "label": "Games with fewest rounds",
+                          "metric": "rounds_count",
+                          "groupBy": "game_id",
+                          "extreme": "min",
+                          "displayKey": "first_ts",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "largest_score_spread_game",
+                          "label": "Largest score spread (max-min in one game)",
+                          "metric": "score_spread",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "displayKey": "first_ts",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "fast_round_streak",
+                          "label": "Fastest round streak (<20s)",
+                          "kind": "streak",
+                          "streakFilters": [{ "dimension": "duration_bucket", "op": "eq", "value": "<20 sec" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "duration_bucket", "op": "eq", "value": "<20 sec" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "damage_dealt_streak",
+                          "label": "Damage dealt streak",
+                          "kind": "streak",
+                          "streakFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "damage_taken_streak",
+                          "label": "Damage taken streak",
+                          "kind": "streak",
+                          "streakFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "same_country_streak",
+                          "label": "Longest same-country streak",
+                          "kind": "same_value_streak",
+                          "dimension": "true_country",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "correct_country_streak",
+                          "label": "Correct-country streak",
+                          "kind": "streak",
+                          "streakFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_rounds_progression",
+                    "type": "chart",
+                    "title": "Rounds - Round progression metrics",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 7, "w": 12, "h": 8 },
+                    "spec": {
+                      "type": "bar",
+                      "x": { "dimension": "round_number" },
+                      "y": {
+                        "measures": [
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "fivek_rate",
+                          "throw_rate",
+                          "hit_rate",
+                          "damage_dealt_avg",
+                          "damage_taken_avg"
+                        ],
+                        "activeMeasure": "avg_score"
+                      },
+                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
+                      "activeSort": { "mode": "chronological" },
+                      "limit": 20,
+                      "actions": {
+                        "hover": true,
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
+                    "widgetId": "w_game_length_perf",
+                    "type": "chart",
+                    "title": "Rounds - Performance by game length (rounds per game, 2+)",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 15, "w": 12, "h": 9 },
+                    "spec": {
+                      "type": "bar",
+                      "x": { "dimension": "game_length" },
+                      "y": {
+                        "measures": ["games_count", "win_rate", "win_count", "loss_count", "tie_count", "best_end_rating"],
+                        "activeMeasure": "games_count"
+                      },
+                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
+                      "activeSort": { "mode": "chronological" },
+                      "limit": 20,
+                      "actions": {
+                        "hover": true,
+                        "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+
+      {
         "id": "time_patterns",
         "title": "Time Patterns",
         "layout": {

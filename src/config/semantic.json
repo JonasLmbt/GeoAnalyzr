@@ -88,6 +88,15 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 5 }
     },
+    "game_length": {
+      "label": "Game length (rounds)",
+      "kind": "category",
+      "grain": "game",
+      "ordered": true,
+      "allowedCharts": ["bar"],
+      "sortModes": ["chronological", "asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 30 }
+    },
 
     "round_number": {
       "label": "Round #",
@@ -153,6 +162,22 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 2 }
     },
+    "is_damage_dealt": {
+      "label": "Damage dealt?",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 2 }
+    },
+    "is_damage_taken": {
+      "label": "Damage taken?",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 2 }
+    },
     "is_near_perfect": {
       "label": "Near-perfect? (>=4500)",
       "kind": "category",
@@ -195,12 +220,27 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_games"
     },
+    "avg_game_length": {
+      "label": "Avg game length",
+      "unit": "float",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "mean_game_length_rounds"
+    },
     "rounds_count": {
       "label": "Rounds",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_rounds"
+    },
+    "score_spread": {
+      "label": "Score spread",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "formulaId": "spread_player_self_score",
+      "range": { "min": 0, "max": 5000 }
     },
 
     "avg_score": {

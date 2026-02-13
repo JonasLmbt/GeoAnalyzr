@@ -84,6 +84,19 @@ function getGameOutcome(g: GameFactRow): "win" | "loss" | "tie" | null {
 export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => number> = {
   count_rounds: (rows) => rows.length,
 
+  spread_player_self_score: (rows) => {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const r of rows) {
+      const s = getSelfScore(r);
+      if (typeof s !== "number" || !Number.isFinite(s)) continue;
+      if (s < min) min = s;
+      if (s > max) max = s;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
+    return Math.max(0, max - min);
+  },
+
   mean_player_self_score: (rows) => {
     let sum = 0;
     let n = 0;
@@ -259,6 +272,19 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
 
 export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) => number> = {
   count_games: (rows) => rows.length,
+
+  mean_game_length_rounds: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const g of rows as any[]) {
+      const v = g?.roundsCount;
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) {
+        sum += v;
+        n++;
+      }
+    }
+    return n ? sum / n : 0;
+  },
 
   rate_player_self_win: (rows) => {
     let n = 0;
