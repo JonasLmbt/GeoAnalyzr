@@ -115,6 +115,10 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     body = foundBody;
   }
 
+  if (!root) {
+    throw new Error("Semantic root is missing after initialization.");
+  }
+
   applySettingsToRoot(root, settings);
 
   try {

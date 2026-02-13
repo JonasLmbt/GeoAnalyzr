@@ -670,7 +670,7 @@
                     "placement": { "x": 0, "y": 4, "w": 12, "h": 10 },
                     "spec": {
                       "type": "bar",
-                      "limit": 1000,
+                      "limit": 200,
                       "x": { "dimension": "score_bucket" },
                       "y": { "measure": "rounds_count" },
                       "sort": { "mode": "chronological" },
