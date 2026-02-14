@@ -21,7 +21,7 @@
       "additionalProperties": false,
       "properties": {
         "variant": { "enum": ["compact", "wide"] },
-        "height": { "type": "integer", "minimum": 160, "maximum": 520 },
+        "height": { "type": "integer", "minimum": 160, "maximum": 1200 },
         "restrictToOptions": { "type": "boolean" },
         "tintSelectable": { "type": "boolean" }
       }

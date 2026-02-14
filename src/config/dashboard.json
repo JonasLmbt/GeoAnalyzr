@@ -1468,7 +1468,7 @@
               "presentation": "map",
               "map": {
                 "variant": "wide",
-                "height": 300,
+                "height": 720,
                 "restrictToOptions": true,
                 "tintSelectable": true
               },
@@ -1478,7 +1478,7 @@
               "appliesTo": ["round"]
             }
           ],
-          "buttons": { "reset": true }
+          "buttons": { "reset": false }
         },
         "layout": {
           "mode": "grid",

@@ -219,6 +219,13 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       background: var(--ga-map-bg);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
+    /* Wide map: keep correct world aspect by default; cap via dashboard.json map.height (max-height). */
+    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-country-map {
+      height: auto;
+      aspect-ratio: 2 / 1;
+      max-height: var(--ga-country-map-h, 720px);
+      min-height: 320px;
+    }
     .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
     .ga-country-map-toolbar { display:flex; gap:8px; align-items:center; }
     .ga-country-map-btn {

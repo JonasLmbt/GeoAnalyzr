@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.34
+// @version      1.6.35
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -42526,7 +42526,7 @@
                 presentation: "map",
                 map: {
                   variant: "wide",
-                  height: 300,
+                  height: 720,
                   restrictToOptions: true,
                   tintSelectable: true
                 },
@@ -42536,7 +42536,7 @@
                 appliesTo: ["round"]
               }
             ],
-            buttons: { reset: true }
+            buttons: { reset: false }
           },
           layout: {
             mode: "grid",
@@ -42858,6 +42858,13 @@
       border: 1px solid var(--ga-map-border);
       background: var(--ga-map-bg);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    /* Wide map: keep correct world aspect by default; cap via dashboard.json map.height (max-height). */
+    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-country-map {
+      height: auto;
+      aspect-ratio: 2 / 1;
+      max-height: var(--ga-country-map-h, 720px);
+      min-height: 320px;
     }
     .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
     .ga-country-map-toolbar { display:flex; gap:8px; align-items:center; }
