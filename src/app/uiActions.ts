@@ -3,7 +3,6 @@ import { syncFeed } from "../sync";
 import { fetchMissingDuelsDetails } from "../details";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
 import { invalidateRoundsCache } from "../engine/queryEngine";
-import { getAnalysisWindowData } from "../analysis";
 import { exportExcel } from "../export";
 import { initAnalysisWindow } from "../ui";
 import { getNcfaToken, getResolvedNcfaToken, setNcfaToken, validateNcfaToken } from "../auth";
@@ -27,13 +26,11 @@ type UI = {
     detailsError: number;
     detailsMissing: number;
   }) => void;
-  setAnalysisWindowData: (data: unknown) => void;
   onUpdateClick: (handler: () => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
   onExportClick: (handler: () => void | Promise<void>) => void;
   onTokenClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
-  onRefreshAnalysisClick: (handler: (filter?: DashboardFilter) => void | Promise<void>) => void;
   openNcfaManager: (args: {
     initialToken: string;
     helpText: string;
@@ -56,11 +53,6 @@ export async function refreshUI(ui: UI): Promise<void> {
     db.details.where("status").equals("missing").count()
   ]);
   ui.setCounts({ games, rounds, detailsOk, detailsError, detailsMissing });
-}
-
-async function refreshAnalysisWindow(ui: UI, filter?: DashboardFilter): Promise<void> {
-  const data = await getAnalysisWindowData(filter);
-  ui.setAnalysisWindowData(data);
 }
 
 export function registerUiActions(ui: UI): void {
@@ -200,7 +192,7 @@ export function registerUiActions(ui: UI): void {
   ui.onOpenAnalysisClick(async () => {
     let semanticStatus = "";
     try {
-      ui.setStatus("Loading analysis...");
+      ui.setStatus("Opening dashboard...");
       const semanticTab = window.open("about:blank", "_blank");
       if (!semanticTab) {
         semanticStatus = " Semantic dashboard popup was blocked.";
@@ -212,19 +204,7 @@ export function registerUiActions(ui: UI): void {
           console.error("Failed to initialize semantic dashboard tab", semanticError);
         }
       }
-      await refreshAnalysisWindow(ui, { gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
-      ui.setStatus(`Analysis loaded.${semanticStatus}`);
-    } catch (e) {
-      ui.setStatus("Error: " + errorText(e));
-      console.error(e);
-    }
-  });
-
-  ui.onRefreshAnalysisClick(async (filter) => {
-    try {
-      ui.setStatus("Refreshing analysis...");
-      await refreshAnalysisWindow(ui, filter);
-      ui.setStatus("Analysis refreshed.");
+      ui.setStatus(`Dashboard opened.${semanticStatus}`);
     } catch (e) {
       ui.setStatus("Error: " + errorText(e));
       console.error(e);
