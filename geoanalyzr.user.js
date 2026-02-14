@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.2
+// @version      2.0.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6683,268 +6683,296 @@
   });
 
   // src/uiOverlay.ts
-  function el(tag, cls) {
-    const node = document.createElement(tag);
-    if (cls) node.className = cls;
-    return node;
+  function el(tag) {
+    return document.createElement(tag);
   }
   function cssOnce() {
-    const id = "geoanalyzr-overlay-css";
+    const id = "geoanalyzr-ui-overlay-css";
     if (document.getElementById(id)) return;
     const style = document.createElement("style");
     style.id = id;
     style.textContent = `
-    .ga-ov-root{
+    .ga-ui-icon {
       position: fixed;
-      left: 14px;
-      bottom: 14px;
-      z-index: 2147483647;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
-      color: rgba(243,244,255,0.92);
-    }
-    .ga-ov-launcher{
-      width: 46px;
-      height: 46px;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.16);
-      background:
-        radial-gradient(320px 220px at 20% 0%, rgba(121, 80, 229, 0.18), transparent 60%),
-        radial-gradient(320px 220px at 90% 0%, rgba(0, 162, 254, 0.14), transparent 62%),
-        rgba(16, 16, 28, 0.78);
-      backdrop-filter: blur(12px);
-      box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+      left: 16px;
+      bottom: 16px;
+      z-index: 999999;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,20,0.95);
+      color: white;
       cursor: pointer;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-weight: 850;
-      letter-spacing: 0.2px;
-      color: rgba(243,244,255,0.94);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
     }
-    .ga-ov-launcher:hover{ filter: brightness(1.08); transform: translateY(-1px); }
-    .ga-ov-launcher:active{ transform: translateY(0px); }
+    .ga-ui-icon:active { transform: translateY(1px); }
 
-    .ga-ov-card{
+    .ga-ui-panel {
+      position: fixed;
+      left: 16px;
+      bottom: 68px;
+      z-index: 999999;
       width: 360px;
-      max-width: calc(100vw - 28px);
+      max-width: calc(100vw - 32px);
       border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.14);
-      background:
-        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
-        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
-        rgba(16, 16, 28, 0.72);
-      backdrop-filter: blur(12px);
-      box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(20,20,20,0.92);
+      color: white;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      padding: 10px;
+      display: none;
+    }
+
+    .ga-ui-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .ga-ui-title {
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .ga-ui-close {
+      border: none;
+      background: transparent;
+      color: white;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 2px 6px;
+    }
+
+    .ga-ui-status {
+      font-size: 12px;
+      opacity: 0.95;
+      white-space: pre-wrap;
       margin-bottom: 10px;
     }
-    .ga-ov-head{
-      display:flex; align-items:center; justify-content:space-between;
+
+    .ga-ui-btn {
+      width: 100%;
       padding: 10px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.12);
-      font-weight: 750;
-    }
-    .ga-ov-head-left{ display:flex; align-items:center; gap:8px; min-width: 0; }
-    .ga-ov-title{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ga-ov-close{
-      border: 0;
-      background: rgba(0,0,0,0.18);
-      color: rgba(243,244,255,0.86);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
       cursor: pointer;
-      font-size: 14px;
-      line-height: 1;
-      padding: 5px 8px;
-      border-radius: 10px;
+      font-weight: 600;
+      margin-top: 8px;
     }
-    .ga-ov-close:hover{ background: rgba(0,0,0,0.28); }
+    .ga-ui-btn:active { transform: translateY(1px); }
+    .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
-    .ga-ov-body{ padding: 10px 12px 12px; display:flex; flex-direction:column; gap:10px; }
-    .ga-ov-row{ display:flex; gap:8px; flex-wrap:wrap; }
-    .ga-ov-meta{ font-size: 12px; color: rgba(208, 214, 238, 0.74); line-height: 1.35; }
-    .ga-ov-status{ font-size: 12px; color: rgba(208, 214, 238, 0.86); min-height: 16px; }
-    .ga-ov-btn{
-      border: 1px solid rgba(255,255,255,0.16);
-      background: linear-gradient(180deg, rgba(121, 80, 229, 0.38) 0%, rgba(86, 59, 154, 0.26) 100%);
-      color: rgba(243,244,255,0.94);
-      border-radius: 999px;
-      padding: 7px 12px;
-      cursor: pointer;
-      font-weight: 650;
-      letter-spacing: 0.15px;
+    .ga-ui-counts {
+      margin-top: 10px;
       font-size: 12px;
-      line-height: 1;
+      opacity: 0.92;
+      white-space: normal;
     }
-    .ga-ov-btn:hover{ filter: brightness(1.08); transform: translateY(-1px); }
-    .ga-ov-btn:active{ transform: translateY(0px); }
-    .ga-ov-btn-secondary{ background: rgba(16, 16, 28, 0.45); }
-    .ga-ov-btn-danger{
-      border-color: rgba(255, 107, 107, 0.35);
-      background: linear-gradient(180deg, rgba(255, 107, 107, 0.26) 0%, rgba(86, 59, 154, 0.18) 100%);
-    }
-    .ga-ov-btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px rgba(0,162,254,0.30); }
 
-    .ga-ov-modal{
+    .ga-ui-modal {
       position: fixed;
       inset: 0;
-      z-index: 2147483647;
+      z-index: 1000000;
       background: rgba(0,0,0,0.62);
-      display:flex;
-      align-items:center;
-      justify-content:center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 16px;
     }
-    .ga-ov-modal-card{
+    .ga-ui-modal-card {
       width: 520px;
       max-width: calc(100vw - 32px);
       border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(16, 16, 28, 0.92);
-      box-shadow: 0 22px 70px rgba(0,0,0,0.35);
-      color: rgba(243,244,255,0.92);
-      padding: 12px;
-    }
-    .ga-ov-modal-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 10px; }
-    .ga-ov-modal-title{ font-weight: 750; }
-    .ga-ov-x{ border:0; background: transparent; color: rgba(243,244,255,0.86); cursor:pointer; font-size: 18px; line-height: 1; }
-    .ga-ov-input{
-      width: 100%;
-      box-sizing:border-box;
-      border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.18);
-      padding: 10px 12px;
-      background: rgba(16,16,28,0.55);
-      color: rgba(243,244,255,0.92);
-      font: inherit;
-      font-size: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      background: rgba(20,20,20,0.94);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+      color: white;
+      padding: 12px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
-    .ga-ov-help{ font-size: 12px; color: rgba(208, 214, 238, 0.70); margin-top: 8px; white-space: pre-wrap; }
+    .ga-ui-modal-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 10px;
+    }
+    .ga-ui-modal-head-title { font-weight: 700; }
+    .ga-ui-modal-x { border:0; background: transparent; color: white; cursor:pointer; font-size: 18px; line-height: 1; }
+    .ga-ui-modal-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(0,0,0,0.25);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.20);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+    .ga-ui-modal-help {
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.90;
+      white-space: pre-wrap;
+    }
+    .ga-ui-modal-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
   `;
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const STORAGE_KEY = "geoanalyzr_overlay_open";
-    const readOpen = () => {
-      try {
-        const v = localStorage.getItem(STORAGE_KEY);
-        return v === null ? true : v === "1";
-      } catch {
-        return true;
-      }
-    };
-    const writeOpen = (open) => {
-      try {
-        localStorage.setItem(STORAGE_KEY, open ? "1" : "0");
-      } catch {
-      }
-    };
-    const root = el("div", "ga-ov-root");
-    const launcher = el("button", "ga-ov-launcher");
-    launcher.type = "button";
-    launcher.title = "GeoAnalyzr";
-    launcher.textContent = "GA";
-    const card = el("div", "ga-ov-card");
-    const head = el("div", "ga-ov-head");
-    const headLeft = el("div", "ga-ov-head-left");
-    const title = el("div", "ga-ov-title");
-    title.textContent = "GeoAnalyzr";
-    const closeBtn = el("button", "ga-ov-close");
-    closeBtn.type = "button";
-    closeBtn.title = "Close";
-    closeBtn.textContent = "x";
-    headLeft.appendChild(title);
-    headLeft.appendChild(closeBtn);
-    const openBtn = el("button", "ga-ov-btn");
-    openBtn.type = "button";
-    openBtn.textContent = "Dashboard";
-    head.appendChild(headLeft);
-    head.appendChild(openBtn);
-    card.appendChild(head);
-    const body = el("div", "ga-ov-body");
-    card.appendChild(body);
-    const meta = el("div", "ga-ov-meta");
-    meta.textContent = "Data: -";
-    const status = el("div", "ga-ov-status");
-    status.textContent = "";
-    const row1 = el("div", "ga-ov-row");
-    const updateBtn = el("button", "ga-ov-btn");
-    updateBtn.type = "button";
-    updateBtn.textContent = "Update";
-    const exportBtn = el("button", "ga-ov-btn ga-ov-btn-secondary");
-    exportBtn.type = "button";
-    exportBtn.textContent = "Export";
-    const tokenBtn = el("button", "ga-ov-btn ga-ov-btn-secondary");
-    tokenBtn.type = "button";
-    tokenBtn.textContent = "NCFA";
-    const resetBtn = el("button", "ga-ov-btn ga-ov-btn-danger");
-    resetBtn.type = "button";
-    resetBtn.textContent = "Reset DB";
-    row1.appendChild(updateBtn);
-    row1.appendChild(exportBtn);
-    row1.appendChild(tokenBtn);
-    row1.appendChild(resetBtn);
-    body.appendChild(meta);
-    body.appendChild(status);
-    body.appendChild(row1);
-    root.appendChild(card);
-    root.appendChild(launcher);
-    let isOpen = readOpen();
-    const applyOpenState = (open) => {
-      isOpen = open;
-      writeOpen(open);
-      card.style.display = open ? "block" : "none";
-      launcher.style.display = open ? "none" : "flex";
-    };
-    launcher.addEventListener("click", () => applyOpenState(true));
-    closeBtn.addEventListener("click", () => applyOpenState(false));
     const mount = () => {
       cssOnce();
-      if (!root.isConnected) (document.documentElement ?? document.body ?? document).appendChild(root);
-      applyOpenState(isOpen);
+      if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
+      if (!document.documentElement.contains(panel)) document.documentElement.appendChild(panel);
     };
+    const iconBtn = el("button");
+    iconBtn.className = "ga-ui-icon";
+    iconBtn.title = "GeoAnalyzr";
+    iconBtn.type = "button";
+    iconBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><polyline points="3,16 9,10 14,15 21,8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="16,8 21,8 21,13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>';
+    const panel = el("div");
+    panel.className = "ga-ui-panel";
+    const header = el("div");
+    header.className = "ga-ui-head";
+    const title = el("div");
+    title.className = "ga-ui-title";
+    title.textContent = "GeoAnalyzr";
+    const closeBtn = el("button");
+    closeBtn.className = "ga-ui-close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "x";
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    const status = el("div");
+    status.className = "ga-ui-status";
+    status.textContent = "Ready.";
+    const mkBtn2 = (label, bg) => {
+      const b = el("button");
+      b.className = "ga-ui-btn";
+      b.type = "button";
+      b.textContent = label;
+      b.style.background = bg;
+      return b;
+    };
+    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
+    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
+    const tokenBtn = mkBtn2("Set NCFA Token", "rgba(95,95,30,0.35)");
+    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
+    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
+    const counts = el("div");
+    counts.className = "ga-ui-counts";
+    counts.textContent = "Data: 0 games, 0 rounds.";
+    panel.appendChild(header);
+    panel.appendChild(status);
+    panel.appendChild(updateBtn);
+    panel.appendChild(analysisBtn);
+    panel.appendChild(tokenBtn);
+    panel.appendChild(exportBtn);
+    panel.appendChild(resetBtn);
+    panel.appendChild(counts);
+    let open = false;
+    const setOpen = (next) => {
+      open = next;
+      panel.style.display = open ? "block" : "none";
+    };
+    iconBtn.addEventListener("click", () => setOpen(!open));
+    closeBtn.addEventListener("click", () => setOpen(false));
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
     else mount();
     let updateHandler = null;
     let resetHandler = null;
     let exportHandler = null;
     let tokenHandler = null;
-    let openHandler = null;
+    let openAnalysisHandler = null;
     updateBtn.addEventListener("click", () => void updateHandler?.());
-    resetBtn.addEventListener("click", () => void resetHandler?.());
-    exportBtn.addEventListener("click", () => void exportHandler?.());
     tokenBtn.addEventListener("click", () => void tokenHandler?.());
-    openBtn.addEventListener("click", () => void openHandler?.());
+    exportBtn.addEventListener("click", () => void exportHandler?.());
+    resetBtn.addEventListener("click", () => void resetHandler?.());
+    analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
     const openNcfaManager = (args) => {
-      const overlay = el("div", "ga-ov-modal");
-      const modal = el("div", "ga-ov-modal-card");
+      const overlay = el("div");
+      overlay.className = "ga-ui-modal";
+      const modal = el("div");
+      modal.className = "ga-ui-modal-card";
       overlay.appendChild(modal);
-      const head2 = el("div", "ga-ov-modal-head");
-      const t = el("div", "ga-ov-modal-title");
-      t.textContent = "NCFA token";
-      const x = el("button", "ga-ov-x");
+      const head = el("div");
+      head.className = "ga-ui-modal-head";
+      const ht = el("div");
+      ht.className = "ga-ui-modal-head-title";
+      ht.textContent = "NCFA token";
+      const x = el("button");
+      x.className = "ga-ui-modal-x";
       x.type = "button";
-      x.textContent = "\xD7";
-      head2.appendChild(t);
-      head2.appendChild(x);
-      const input = el("input", "ga-ov-input");
+      x.textContent = "x";
+      head.appendChild(ht);
+      head.appendChild(x);
+      const input = el("input");
+      input.className = "ga-ui-modal-input";
+      input.type = "text";
       input.placeholder = "_ncfa value";
       input.value = args.initialToken || "";
-      const help = el("div", "ga-ov-help");
+      const help = el("div");
+      help.className = "ga-ui-modal-help";
       help.textContent = "Set manually or use auto-detect.";
-      const actions = el("div", "ga-ov-row");
-      const save = el("button", "ga-ov-btn");
-      save.type = "button";
-      save.textContent = "Save";
-      const auto = el("button", "ga-ov-btn ga-ov-btn-secondary");
-      auto.type = "button";
-      auto.textContent = "Auto-detect";
-      const docs = el("button", "ga-ov-btn ga-ov-btn-secondary");
-      docs.type = "button";
-      docs.textContent = "Help";
-      actions.appendChild(save);
-      actions.appendChild(auto);
-      actions.appendChild(docs);
-      modal.appendChild(head2);
+      const actions = el("div");
+      actions.className = "ga-ui-modal-actions";
+      const mkSmallBtn = (label, bg, onClick) => {
+        const b = el("button");
+        b.className = "ga-ui-btn";
+        b.type = "button";
+        b.textContent = label;
+        b.style.marginTop = "0";
+        b.style.background = bg;
+        b.addEventListener("click", onClick);
+        return b;
+      };
+      const saveBtn = mkSmallBtn("Save Manually", "rgba(95,95,30,0.45)", async () => {
+        saveBtn.disabled = true;
+        try {
+          const res = await args.onSave(input.value);
+          input.value = res.token || "";
+          help.textContent = res.message;
+        } catch (e) {
+          help.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+      const autoBtn = mkSmallBtn("Auto-Detect", "rgba(35,95,160,0.45)", async () => {
+        autoBtn.disabled = true;
+        try {
+          const res = await args.onAutoDetect();
+          if (res.token) input.value = res.token;
+          help.textContent = res.message;
+        } catch (e) {
+          help.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+          autoBtn.disabled = false;
+        }
+      });
+      const helpBtn = mkSmallBtn("Show Instructions", "rgba(40,120,50,0.45)", () => {
+        window.open(args.repoUrl, "_blank");
+      });
+      const closeRedBtn = mkSmallBtn("Close", "rgba(160,35,35,0.55)", () => {
+        close();
+      });
+      actions.appendChild(saveBtn);
+      actions.appendChild(autoBtn);
+      actions.appendChild(helpBtn);
+      actions.appendChild(closeRedBtn);
+      modal.appendChild(head);
       modal.appendChild(input);
       modal.appendChild(actions);
       modal.appendChild(help);
@@ -6953,43 +6981,18 @@
       overlay.addEventListener("click", (ev) => {
         if (ev.target === overlay) close();
       });
-      docs.addEventListener("click", () => window.open(args.repoUrl, "_blank"));
-      save.addEventListener("click", async () => {
-        save.disabled = true;
-        try {
-          const res = await args.onSave(input.value);
-          input.value = res.token || "";
-          help.textContent = res.message || "Saved.";
-        } catch (e) {
-          help.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
-        } finally {
-          save.disabled = false;
-        }
-      });
-      auto.addEventListener("click", async () => {
-        auto.disabled = true;
-        try {
-          const res = await args.onAutoDetect();
-          if (res.token) input.value = res.token;
-          help.textContent = res.message || `Auto-detect: ${res.source}`;
-        } catch (e) {
-          help.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
-        } finally {
-          auto.disabled = false;
-        }
-      });
-      (document.documentElement ?? document.body ?? document).appendChild(overlay);
+      (document.body ?? document.documentElement).appendChild(overlay);
     };
     return {
       setVisible(visible) {
-        root.style.display = visible ? "block" : "none";
+        iconBtn.style.display = visible ? "flex" : "none";
+        if (!visible) panel.style.display = "none";
       },
       setStatus(msg) {
         status.textContent = msg;
-        if (msg && !isOpen) applyOpenState(true);
       },
       setCounts(value) {
-        meta.textContent = `Data: ${value.games} games, ${value.rounds} rounds (details ok ${value.detailsOk}, missing ${value.detailsMissing}, error ${value.detailsError}).`;
+        counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
       },
       onUpdateClick(fn) {
         updateHandler = fn;
@@ -7004,7 +7007,7 @@
         tokenHandler = fn;
       },
       onOpenAnalysisClick(fn) {
-        openHandler = fn;
+        openAnalysisHandler = fn;
       },
       openNcfaManager
     };
