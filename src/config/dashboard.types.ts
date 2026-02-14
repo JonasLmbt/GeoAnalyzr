@@ -66,6 +66,30 @@ export type SelectControlSpec = {
   appliesTo: GlobalFilterGrain[];
 };
 
+export type LocalFiltersSpec = {
+  // Default: enabled
+  enabled?: boolean;
+  controls: LocalFilterControlSpec[];
+  buttons?: {
+    reset?: boolean;
+  };
+};
+
+export type LocalSelectOptionsSpec = SelectOptionsSpec;
+
+export type LocalFilterControlSpec = {
+  id: string;
+  type: "select";
+  label: string;
+  dimension: string;
+  // "auto_top" = pick the most frequent option in the current section dataset.
+  default: "auto_top" | string;
+  options: LocalSelectOptionsSpec;
+  appliesTo: GlobalFilterGrain[];
+  // If true, there is no "All" option and a value is always selected.
+  required?: boolean;
+};
+
 export interface DrilldownClickAction {
   type: "drilldown";
   target: "rounds" | "games" | "sessions" | "players";
@@ -184,21 +208,24 @@ export interface RecordListSpec {
   records: RecordItemDef[];
 }
 
-export interface TeamSectionSpec {
-  // Reserved for future options (e.g., session gap override).
-}
-
-export interface CountryInsightSpec {
-  // Reserved for future options.
+export interface LeaderListRowDef {
+  label: string;
+  dimension: string;
+  // Optional filters applied before computing the leader.
+  filters?: FilterClause[];
+  // Keys to ignore when computing leader share (e.g. ["Tie"]).
+  excludeKeys?: string[];
+  // Optional drilldown action when clicking the row.
+  actions?: Actions;
 }
 
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list" | "team_section" | "country_insight";
+  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list" | "leader_list";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec | TeamSectionSpec | CountryInsightSpec;
+  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec | { rows: LeaderListRowDef[] };
 }
 
 export interface CompositeCardDef {
@@ -221,6 +248,8 @@ export interface SectionDef {
     include?: string[];
     exclude?: string[];
   };
+  // Section-local filters (rendered inside the tab, above the cards).
+  localFilters?: LocalFiltersSpec;
   layout: {
     mode: "grid";
     columns: number;

@@ -18,6 +18,7 @@ function assert(condition: unknown, code: string, msg: string): asserts conditio
 export function validateDashboardAgainstSemantic(semantic: SemanticRegistry, dash: DashboardDoc): void {
   if (dash.dashboard.globalFilters) validateGlobalFiltersSpec(semantic, dash);
   for (const section of dash.dashboard.sections) {
+    if ((section as any).localFilters) validateLocalFiltersSpec(semantic, section as any);
     for (const placedCard of section.layout.cards) {
       for (const widget of placedCard.card.children) {
         validateWidget(semantic, widget);
@@ -72,6 +73,40 @@ function validateGlobalFiltersSpec(semantic: SemanticRegistry, dash: DashboardDo
     }
 
     throw new ValidationError("E_BAD_SPEC", `Unknown global filter control type '${c.type}'`);
+  }
+}
+
+function validateLocalFiltersSpec(semantic: SemanticRegistry, section: any): void {
+  const lf: any = section.localFilters;
+  assert(!!lf && typeof lf === "object", "E_BAD_SPEC", `section '${section.id}' localFilters must be an object`);
+  assert(Array.isArray(lf.controls) && lf.controls.length > 0, "E_BAD_SPEC", `section '${section.id}' localFilters.controls must be a non-empty array`);
+
+  const ids = new Set<string>();
+  for (const c of lf.controls as any[]) {
+    assert(!!c && typeof c === "object", "E_BAD_SPEC", `Local filter control in section '${section.id}' must be an object`);
+    assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", `Local filter control id must be a string`);
+    assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate local filter control id '${c.id}' in section '${section.id}'`);
+    ids.add(c.id);
+
+    assert(c.type === "select", "E_BAD_SPEC", `Local filter '${c.id}' in section '${section.id}' must have type 'select'`);
+    assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing label`);
+    assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
+    assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
+    assert(
+      c.options === "auto_distinct" || c.options === "auto_teammates",
+      "E_BAD_SPEC",
+      `Local filter '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+    );
+    assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
+    assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);
+
+    const dimId = String(c.dimension);
+    const dim = semantic.dimensions[dimId];
+    assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in local filter '${c.id}' (section '${section.id}')`);
+    const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+    for (const g of grains) {
+      assert(c.appliesTo.includes(g), "E_GRAIN_MISMATCH", `Local filter '${c.id}' appliesTo missing dimension grain '${g}'`);
+    }
   }
 }
 
@@ -263,6 +298,20 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
       const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
       assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record groupBy '${r.groupBy}' grain mismatch in ${widget.widgetId}`);
       assert(r.extreme === "max" || r.extreme === "min", "E_BAD_SPEC", `Record extreme must be max|min in ${widget.widgetId}`);
+      validateClickAction(semantic, widget.widgetId, r.actions?.click);
+    }
+  }
+
+  if (widget.type === "leader_list") {
+    const spec: any = widget.spec;
+    assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `leader_list ${widget.widgetId} has no rows`);
+    for (const r of spec.rows as any[]) {
+      assert(typeof r.label === "string" && r.label.trim().length > 0, "E_BAD_SPEC", `leader_list row missing label in ${widget.widgetId}`);
+      assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `leader_list row missing dimension in ${widget.widgetId}`);
+      const d = semantic.dimensions[r.dimension];
+      assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown leader_list dimension '${r.dimension}' in ${widget.widgetId}`);
+      const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
+      assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `leader_list dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
       validateClickAction(semantic, widget.widgetId, r.actions?.click);
     }
   }

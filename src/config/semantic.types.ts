@@ -38,7 +38,7 @@ export interface MeasureDef {
 }
 
 export interface UnitDef {
-  format: "int" | "float" | "percent" | "duration";
+  format: "int" | "float" | "percent" | "duration" | "datetime";
   decimals?: number;
 }
 

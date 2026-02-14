@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.17
+// @version      1.6.18
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15218,6 +15218,14 @@
     const v = legacy(r, "distanceKm", "player_self_distanceKm", "p1_distanceKm");
     return typeof v === "number" ? v : void 0;
   }
+  function getMateScore(r) {
+    const v = legacy(r, "player_mate_score", "p2_score");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getMateDistanceKm(r) {
+    const v = legacy(r, "player_mate_distanceKm", "p2_distanceKm");
+    return typeof v === "number" ? v : void 0;
+  }
   function getTeammateName(r) {
     const v = legacy(r, "teammateName", "player_mate_name");
     return typeof v === "string" ? v : void 0;
@@ -15375,6 +15383,22 @@
     if (typeof v === "boolean") return v ? "Win" : "Loss";
     return null;
   }
+  function guessCountryKey(r) {
+    const guess = getGuessCountrySelf(r);
+    const v = typeof guess === "string" ? guess.trim() : "";
+    return v.length ? v : null;
+  }
+  function mateLabel(r) {
+    const n = getTeammateName(r);
+    const v = typeof n === "string" ? n.trim() : "";
+    return v.length ? v : "Mate";
+  }
+  function winnerLabelForCompare(r, a, b, prefer) {
+    if (typeof a !== "number" || !Number.isFinite(a) || typeof b !== "number" || !Number.isFinite(b)) return null;
+    if (a === b) return "Tie";
+    const youWin = prefer === "min" ? a < b : a > b;
+    return youWin ? "You" : mateLabel(r);
+  }
   var DIMENSION_EXTRACTORS = {
     round: {
       score_bucket: scoreBucketKey,
@@ -15406,7 +15430,28 @@
       },
       duration_bucket: durationBucketKey,
       confused_countries: confusedCountriesKey,
+      guess_country: guessCountryKey,
       teammate_name: teammateNameKey,
+      team_closer_winner: (r) => winnerLabelForCompare(r, getDistanceKm(r), getMateDistanceKm(r), "min"),
+      team_higher_score_winner: (r) => winnerLabelForCompare(r, getSelfScore(r), getMateScore(r), "max"),
+      team_fewer_throw_winner: (r) => {
+        const a = getSelfScore(r);
+        const b = getMateScore(r);
+        if (typeof a !== "number" || typeof b !== "number") return null;
+        const aThrow = a < 50;
+        const bThrow = b < 50;
+        if (aThrow === bThrow) return "Tie";
+        return aThrow ? mateLabel(r) : "You";
+      },
+      team_more_5k_winner: (r) => {
+        const a = getSelfScore(r);
+        const b = getMateScore(r);
+        if (typeof a !== "number" || typeof b !== "number") return null;
+        const a5 = a >= 5e3;
+        const b5 = b >= 5e3;
+        if (a5 === b5) return "Tie";
+        return a5 ? "You" : mateLabel(r);
+      },
       round_number: (r) => typeof r?.roundNumber === "number" ? `#${r.roundNumber}` : null
     },
     game: {
@@ -15655,6 +15700,10 @@
     }
     flush();
     return sessions;
+  }
+  function buildSessionsFromRoundsForUi(rounds, gapMinutes) {
+    const mins = typeof gapMinutes === "number" && Number.isFinite(gapMinutes) ? Math.max(1, Math.min(360, Math.round(gapMinutes))) : 45;
+    return buildSessionsFromRounds(rounds, mins);
   }
   async function getSessionsRaw(gapMinutes) {
     if (sessionsRawCache) return sessionsRawCache;
@@ -39726,6 +39775,7 @@
   function validateDashboardAgainstSemantic(semantic, dash) {
     if (dash.dashboard.globalFilters) validateGlobalFiltersSpec(semantic, dash);
     for (const section of dash.dashboard.sections) {
+      if (section.localFilters) validateLocalFiltersSpec(semantic, section);
       for (const placedCard of section.layout.cards) {
         for (const widget of placedCard.card.children) {
           validateWidget(semantic, widget);
@@ -39774,6 +39824,36 @@
         continue;
       }
       throw new ValidationError("E_BAD_SPEC", `Unknown global filter control type '${c.type}'`);
+    }
+  }
+  function validateLocalFiltersSpec(semantic, section) {
+    const lf = section.localFilters;
+    assert(!!lf && typeof lf === "object", "E_BAD_SPEC", `section '${section.id}' localFilters must be an object`);
+    assert(Array.isArray(lf.controls) && lf.controls.length > 0, "E_BAD_SPEC", `section '${section.id}' localFilters.controls must be a non-empty array`);
+    const ids = /* @__PURE__ */ new Set();
+    for (const c of lf.controls) {
+      assert(!!c && typeof c === "object", "E_BAD_SPEC", `Local filter control in section '${section.id}' must be an object`);
+      assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", `Local filter control id must be a string`);
+      assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate local filter control id '${c.id}' in section '${section.id}'`);
+      ids.add(c.id);
+      assert(c.type === "select", "E_BAD_SPEC", `Local filter '${c.id}' in section '${section.id}' must have type 'select'`);
+      assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing label`);
+      assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
+      assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
+      assert(
+        c.options === "auto_distinct" || c.options === "auto_teammates",
+        "E_BAD_SPEC",
+        `Local filter '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+      );
+      assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
+      assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);
+      const dimId = String(c.dimension);
+      const dim = semantic.dimensions[dimId];
+      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in local filter '${c.id}' (section '${section.id}')`);
+      const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+      for (const g of grains) {
+        assert(c.appliesTo.includes(g), "E_GRAIN_MISMATCH", `Local filter '${c.id}' appliesTo missing dimension grain '${g}'`);
+      }
     }
   }
   function validateWidget(semantic, widget) {
@@ -39943,6 +40023,19 @@
         const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
         assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record groupBy '${r.groupBy}' grain mismatch in ${widget.widgetId}`);
         assert(r.extreme === "max" || r.extreme === "min", "E_BAD_SPEC", `Record extreme must be max|min in ${widget.widgetId}`);
+        validateClickAction(semantic, widget.widgetId, r.actions?.click);
+      }
+    }
+    if (widget.type === "leader_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `leader_list ${widget.widgetId} has no rows`);
+      for (const r of spec.rows) {
+        assert(typeof r.label === "string" && r.label.trim().length > 0, "E_BAD_SPEC", `leader_list row missing label in ${widget.widgetId}`);
+        assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `leader_list row missing dimension in ${widget.widgetId}`);
+        const d = semantic.dimensions[r.dimension];
+        assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown leader_list dimension '${r.dimension}' in ${widget.widgetId}`);
+        const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
+        assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `leader_list dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
         validateClickAction(semantic, widget.widgetId, r.actions?.click);
       }
     }
@@ -40208,6 +40301,14 @@
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
       },
+      guess_country: {
+        label: "Guessed country",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 20, selectorRequired: true }
+      },
       score_bucket: {
         label: "Score bucket",
         kind: "category",
@@ -40215,6 +40316,38 @@
         ordered: true,
         allowedCharts: ["bar"],
         sortModes: ["chronological"]
+      },
+      team_closer_winner: {
+        label: "Closer guesses",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      team_higher_score_winner: {
+        label: "Higher score rounds",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      team_fewer_throw_winner: {
+        label: "Fewer throws (<50)",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      team_more_5k_winner: {
+        label: "More 5k rounds",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
       }
     },
     measures: {
@@ -40259,6 +40392,27 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_rounds"
+      },
+      games_distinct_count: {
+        label: "Games",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_game_id"
+      },
+      first_played_at: {
+        label: "First game together",
+        unit: "datetime",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "min_played_at_ts"
+      },
+      last_played_at: {
+        label: "Most recent game together",
+        unit: "datetime",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_played_at_ts"
       },
       score_spread: {
         label: "Score spread",
@@ -40595,6 +40749,7 @@
       percent: { format: "percent", decimals: 1 },
       seconds: { format: "float", decimals: 1 },
       duration: { format: "duration" },
+      datetime: { format: "datetime" },
       rating: { format: "float", decimals: 0 },
       km: { format: "float", decimals: 1 },
       float: { format: "float", decimals: 2 }
@@ -41214,23 +41369,7 @@
                       placement: { x: 0, y: 6, w: 12, h: 8 },
                       spec: {
                         dimension: "duration_bucket",
-                        measures: [
-                          "rounds_count",
-                          "avg_score",
-                          "avg_score_hit_only",
-                          "avg_distance_km",
-                          "avg_guess_duration",
-                          "fivek_rate",
-                          "fivek_count",
-                          "throw_rate",
-                          "throw_count",
-                          "hit_rate",
-                          "hit_count",
-                          "damage_dealt_avg",
-                          "damage_taken_avg",
-                          "damage_dealt_share",
-                          "damage_taken_share"
-                        ],
+                        measures: ["avg_score", "fivek_rate", "throw_rate", "hit_rate", "avg_guess_duration"],
                         activeMeasure: "avg_score",
                         sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
                         activeSort: { mode: "chronological" },
@@ -41346,17 +41485,7 @@
                         type: "bar",
                         limit: 200,
                         x: { dimension: "score_bucket" },
-                        y: {
-                          measures: [
-                            "rounds_count",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "hit_rate",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
-                          activeMeasure: "rounds_count"
-                        },
+                        y: { measure: "rounds_count" },
                         sort: { mode: "chronological" },
                         actions: {
                           hover: true,
@@ -41508,17 +41637,11 @@
                             "avg_score_hit_only",
                             "avg_distance_km",
                             "avg_guess_duration",
-                            "rounds_count",
                             "fivek_rate",
-                            "fivek_count",
                             "throw_rate",
-                            "throw_count",
                             "hit_rate",
-                            "hit_count",
                             "damage_dealt_avg",
-                            "damage_taken_avg",
-                            "damage_dealt_share",
-                            "damage_taken_share"
+                            "damage_taken_avg"
                           ],
                           activeMeasure: "avg_score"
                         },
@@ -41541,25 +41664,7 @@
                         type: "bar",
                         x: { dimension: "game_length" },
                         y: {
-                          measures: [
-                            "games_count",
-                            "win_rate",
-                            "win_count",
-                            "loss_count",
-                            "rounds_count",
-                            "avg_score",
-                            "avg_score_hit_only",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "fivek_rate",
-                            "fivek_count",
-                            "throw_rate",
-                            "throw_count",
-                            "hit_rate",
-                            "hit_count",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
+                          measures: ["games_count", "win_rate", "win_count", "loss_count", "tie_count", "best_end_rating"],
                           activeMeasure: "games_count"
                         },
                         sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
@@ -41931,27 +42036,119 @@
         {
           id: "team",
           title: "Team",
+          localFilters: {
+            enabled: true,
+            controls: [
+              {
+                id: "mate",
+                type: "select",
+                label: "Mate",
+                dimension: "teammate_name",
+                default: "auto_top",
+                options: "auto_teammates",
+                required: true,
+                appliesTo: ["round"]
+              }
+            ],
+            buttons: { reset: true }
+          },
           layout: {
             mode: "grid",
             columns: 12,
             cards: [
               {
                 cardId: "card_team",
-                title: "Team Duels",
+                title: "Team: You + {{local.mate}}",
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 14,
+                h: 18,
                 card: {
                   type: "composite",
                   children: [
                     {
-                      widgetId: "w_team_summary",
-                      type: "team_section",
-                      title: "Team",
+                      widgetId: "w_team_h2h",
+                      type: "leader_list",
+                      title: "Head-to-head questions",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 14 },
-                      spec: {}
+                      placement: { x: 0, y: 0, w: 12, h: 5 },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Closer guesses",
+                            dimension: "team_closer_winner",
+                            excludeKeys: ["Tie"],
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          },
+                          {
+                            label: "Higher score rounds",
+                            dimension: "team_higher_score_winner",
+                            excludeKeys: ["Tie"],
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          },
+                          {
+                            label: "Fewer throws (<50)",
+                            dimension: "team_fewer_throw_winner",
+                            excludeKeys: ["Tie"],
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          },
+                          {
+                            label: "More 5k rounds",
+                            dimension: "team_more_5k_winner",
+                            excludeKeys: ["Tie"],
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_team_facts_round",
+                      type: "stat_list",
+                      title: "Team facts",
+                      grain: "round",
+                      placement: { x: 0, y: 5, w: 12, h: 5 },
+                      spec: {
+                        rows: [
+                          { label: "Games together", measure: "games_distinct_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "Rounds together", measure: "rounds_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "Time played together", measure: "time_played_seconds", secondaryMeasure: "rounds_with_time_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "First game together", measure: "first_played_at", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "Most recent game together", measure: "last_played_at", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_team_session_records",
+                      type: "record_list",
+                      title: "Session records together",
+                      grain: "session",
+                      placement: { x: 0, y: 10, w: 12, h: 4 },
+                      spec: {
+                        records: [
+                          {
+                            id: "longest_session_together",
+                            label: "Longest session together",
+                            metric: "session_games_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_team_facts_sessions",
+                      type: "stat_list",
+                      title: "Session stats together",
+                      grain: "session",
+                      placement: { x: 0, y: 14, w: 12, h: 4 },
+                      spec: {
+                        rows: [
+                          { label: "Sessions detected (gap > session standard)", measure: "sessions_count" },
+                          { label: "Longest break between sessions", measure: "sessions_longest_break_seconds" },
+                          { label: "Avg games per session", measure: "sessions_avg_games" }
+                        ]
+                      }
                     }
                   ]
                 }
@@ -41963,13 +42160,29 @@
           id: "country_insight",
           title: "Country Insight",
           filterScope: { exclude: ["country"] },
+          localFilters: {
+            enabled: true,
+            controls: [
+              {
+                id: "spotlightCountry",
+                type: "select",
+                label: "Country",
+                dimension: "true_country",
+                default: "auto_top",
+                options: "auto_distinct",
+                required: true,
+                appliesTo: ["round"]
+              }
+            ],
+            buttons: { reset: true }
+          },
           layout: {
             mode: "grid",
             columns: 12,
             cards: [
               {
                 cardId: "card_country_insight",
-                title: "Country Insight",
+                title: "Country Spotlight: {{local.spotlightCountry}}",
                 x: 0,
                 y: 0,
                 w: 12,
@@ -41978,12 +42191,80 @@
                   type: "composite",
                   children: [
                     {
-                      widgetId: "w_country_insight",
-                      type: "country_insight",
-                      title: "Country Insight",
+                      widgetId: "w_country_insight_stats",
+                      type: "stat_list",
+                      title: "Country spotlight",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 18 },
-                      spec: {}
+                      placement: { x: 0, y: 0, w: 12, h: 6 },
+                      spec: {
+                        rows: [
+                          { label: "Rounds", measure: "rounds_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "Hit rate", measure: "hit_rate", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "Avg score", measure: "avg_score", secondaryMeasure: "score_median", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          { label: "Avg distance", measure: "avg_distance_km", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          {
+                            label: "Perfect 5k in this country",
+                            measure: "fivek_count",
+                            secondaryMeasure: "fivek_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Throws (<50) in this country",
+                            measure: "throw_count",
+                            secondaryMeasure: "throw_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_confusions",
+                      type: "breakdown",
+                      title: "Top confusions (guessed country on misses)",
+                      grain: "round",
+                      placement: { x: 0, y: 6, w: 12, h: 4 },
+                      spec: {
+                        dimension: "guess_country",
+                        measure: "rounds_count",
+                        filters: [{ dimension: "is_hit", op: "eq", value: "false" }],
+                        sort: { mode: "desc" },
+                        limit: 3,
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_distribution",
+                      type: "chart",
+                      title: "Score distribution (smoothed)",
+                      grain: "round",
+                      placement: { x: 0, y: 10, w: 12, h: 8 },
+                      spec: {
+                        type: "bar",
+                        limit: 200,
+                        x: { dimension: "score_bucket" },
+                        y: { measure: "rounds_count" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
                     }
                   ]
                 }
@@ -43110,7 +43391,7 @@
       );
       const grains = allowedGrains(semantic);
       const grainDefault = grains[0] ?? "round";
-      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "team_section"];
+      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
       section.layout.cards.forEach((card, cardIdx) => {
         const cardItem = doc.createElement("div");
         cardItem.className = "ga-le-item";
@@ -44006,6 +44287,30 @@
   }
   var ROUND_MEASURES_BY_FORMULA_ID = {
     count_rounds: (rows) => rows.length,
+    count_distinct_game_id: (rows) => {
+      const seen = /* @__PURE__ */ new Set();
+      for (const r of rows) {
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (gid) seen.add(gid);
+      }
+      return seen.size;
+    },
+    min_played_at_ts: (rows) => {
+      let min = Infinity;
+      for (const r of rows) {
+        const ts = getPlayedAt(r) ?? r?.ts;
+        if (typeof ts === "number" && Number.isFinite(ts)) min = Math.min(min, ts);
+      }
+      return Number.isFinite(min) ? min : 0;
+    },
+    max_played_at_ts: (rows) => {
+      let max = -Infinity;
+      for (const r of rows) {
+        const ts = getPlayedAt(r) ?? r?.ts;
+        if (typeof ts === "number" && Number.isFinite(ts)) max = Math.max(max, ts);
+      }
+      return Number.isFinite(max) ? max : 0;
+    },
     spread_player_self_score: (rows) => {
       let min = Infinity;
       let max = -Infinity;
@@ -44409,10 +44714,31 @@
   };
 
   // src/ui/widgets/statListWidget.ts
-  function formatValue(semantic, measureId, value) {
+  function readDateFormatMode(doc) {
+    const root = doc.querySelector(".ga-root");
+    const mode = root?.dataset?.gaDateFormat;
+    return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+  }
+  function formatDateTime(doc, ts) {
+    const d = new Date(ts);
+    if (!Number.isFinite(d.getTime())) return String(ts);
+    const mode = readDateFormatMode(doc);
+    if (mode === "locale") return d.toLocaleString();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+    if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+    return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+  }
+  function formatValue(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = semantic.units[m.unit];
     if (!unit) return String(value);
+    if (unit.format === "datetime") return formatDateTime(doc, value);
     if (unit.format === "percent") {
       const decimals2 = unit.decimals ?? 1;
       const clamped = Math.max(0, Math.min(1, value));
@@ -44441,14 +44767,15 @@
     if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
     return fn(rows);
   }
-  function attachClickIfAny(el, actions, overlay, semantic, title, baseRows, grain) {
+  function attachClickIfAny(el, actions, overlay, semantic, title, baseRows, grain, filters) {
     const click = actions?.click;
     if (!click) return;
     el.style.cursor = "pointer";
     el.addEventListener("click", async () => {
       if (click.type === "drilldown") {
         const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
-        const rows = applyFilters(rowsAll, click.extraFilters, grain);
+        const mergedFilters = [...filters ?? [], ...click.extraFilters ?? []];
+        const rows = applyFilters(rowsAll, mergedFilters, grain);
         overlay.open(semantic, {
           title,
           target: click.target,
@@ -44482,16 +44809,16 @@
       right.className = "ga-statrow-value";
       right.textContent = "...";
       const val = await computeMeasure(semantic, row.measure, rowBaseRows, rowGrain, row.filters);
-      const primaryText = formatValue(semantic, row.measure, val);
+      const primaryText = formatValue(doc, semantic, row.measure, val);
       const secondaryId = typeof row.secondaryMeasure === "string" ? row.secondaryMeasure.trim() : "";
       if (secondaryId) {
         const secVal = await computeMeasure(semantic, secondaryId, rowBaseRows, rowGrain, row.filters);
-        const secondaryText = formatValue(semantic, secondaryId, secVal);
+        const secondaryText = formatValue(doc, semantic, secondaryId, secVal);
         right.textContent = `${primaryText} (${secondaryText})`;
       } else {
         right.textContent = primaryText;
       }
-      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain);
+      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain, row.filters);
       line.appendChild(left);
       line.appendChild(right);
       box.appendChild(line);
@@ -44635,10 +44962,31 @@
     }
     return out;
   }
-  function formatMeasureValue(semantic, measureId, value) {
+  function readDateFormatMode2(doc) {
+    const root = doc.querySelector(".ga-root");
+    const mode = root?.dataset?.gaDateFormat;
+    return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+  }
+  function formatDateTime2(doc, ts) {
+    const d = new Date(ts);
+    if (!Number.isFinite(d.getTime())) return String(ts);
+    const mode = readDateFormatMode2(doc);
+    if (mode === "locale") return d.toLocaleString();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+    if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+    return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+  }
+  function formatMeasureValue(doc, semantic, measureId, value) {
     const measure = semantic.measures[measureId];
     const unit = measure ? semantic.units[measure.unit] : void 0;
     if (!unit) return `${value}`;
+    if (unit.format === "datetime") return formatDateTime2(doc, value);
     if (unit.format === "percent") {
       const clamped = Math.max(0, Math.min(1, value));
       return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
@@ -45079,7 +45427,8 @@
         chartHost.appendChild(empty);
         return;
       }
-      const unitFormat = semantic.units[measureDef.unit]?.format ?? "float";
+      const unitFormatRaw = semantic.units[measureDef.unit]?.format ?? "float";
+      const unitFormat = unitFormatRaw === "datetime" ? "int" : unitFormatRaw;
       const preferZero = spec.type === "bar" || unitFormat === "int";
       const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
       const hardMin = measureDef.range?.min;
@@ -45130,7 +45479,7 @@
         yTick.setAttribute("font-size", "10");
         yTick.setAttribute("fill", "var(--ga-axis-text)");
         yTick.setAttribute("opacity", "0.95");
-        yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
+        yTick.textContent = formatMeasureValue(doc, semantic, activeMeasure, yVal);
         svg.appendChild(yTick);
       }
       const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
@@ -45202,7 +45551,7 @@
           dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+          tooltip.textContent = `${p.d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
           if (click?.type === "drilldown") {
@@ -45247,7 +45596,7 @@
           rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
           rect.style.transformBox = "view-box";
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
+          tooltip.textContent = `${d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
           rect.appendChild(tooltip);
           const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
           if (click?.type === "drilldown") {
@@ -45370,10 +45719,31 @@
       return a.key.localeCompare(b.key);
     });
   }
-  function formatValue2(semantic, measureId, value) {
+  function readDateFormatMode3(doc) {
+    const root = doc.querySelector(".ga-root");
+    const mode = root?.dataset?.gaDateFormat;
+    return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+  }
+  function formatDateTime3(doc, ts) {
+    const d = new Date(ts);
+    if (!Number.isFinite(d.getTime())) return String(ts);
+    const mode = readDateFormatMode3(doc);
+    if (mode === "locale") return d.toLocaleString();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+    if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+    return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+  }
+  function formatValue2(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = semantic.units[m.unit];
     if (!unit) return String(value);
+    if (unit.format === "datetime") return formatDateTime3(doc, value);
     if (unit.format === "percent") {
       const clamped = Math.max(0, Math.min(1, value));
       const decimals2 = unit.decimals ?? 1;
@@ -45574,7 +45944,7 @@
         right.className = "ga-breakdown-right";
         const val = doc.createElement("div");
         val.className = "ga-breakdown-value";
-        val.textContent = formatValue2(semantic, activeMeasure, r.value);
+        val.textContent = formatValue2(doc, semantic, activeMeasure, r.value);
         const barWrap = doc.createElement("div");
         barWrap.className = "ga-breakdown-barwrap";
         const bar = doc.createElement("div");
@@ -45897,686 +46267,93 @@
     return wrap;
   }
 
-  // src/ui/widgets/teamSectionWidget.ts
-  function asFiniteNumber2(v) {
-    const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
-    return Number.isFinite(n) ? n : null;
-  }
-  function formatPct01(value) {
-    const clamped = Math.max(0, Math.min(1, value));
-    return `${(clamped * 100).toFixed(1)}%`;
-  }
-  function formatShortDateTime2(ts) {
-    const d = new Date(ts);
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const y = d.getFullYear();
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mi = String(d.getMinutes()).padStart(2, "0");
-    return `${dd}/${mm}/${y} ${hh}:${mi}`;
-  }
-  function formatDurationHuman2(ms) {
-    const clamped = Math.max(0, Math.round(ms));
-    const totalSeconds = Math.floor(clamped / 1e3);
-    const days2 = Math.floor(totalSeconds / 86400);
-    const hours = Math.floor(totalSeconds % 86400 / 3600);
-    const mins = Math.floor(totalSeconds % 3600 / 60);
-    if (days2 > 0) return `${days2}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${mins}m`;
-    if (mins > 0) return `${mins}m ${totalSeconds % 60}s`;
-    return `${totalSeconds}s`;
-  }
-  function getModeFamilyRaw(row) {
-    const raw = typeof row?.modeFamily === "string" ? row.modeFamily : typeof row?.mode_family === "string" ? row.mode_family : "";
-    return raw.trim().toLowerCase();
-  }
-  function getTeammateName2(row) {
-    const v = typeof row?.teammateName === "string" ? row.teammateName : typeof row?.teammate_name === "string" ? row.teammate_name : "";
-    return v.trim();
-  }
-  function mkBox(doc, titleText) {
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-statlist";
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = titleText;
-    wrap.appendChild(title);
-    const box = doc.createElement("div");
-    box.className = "ga-statlist-box";
-    wrap.appendChild(box);
-    return { wrap, box };
-  }
-  async function renderTeamSectionWidget(semantic, widget, overlay, baseRows) {
-    const _spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-team-section";
-    const grain = widget.grain;
-    if (grain !== "round") {
-      const ph = doc.createElement("div");
-      ph.className = "ga-widget ga-placeholder";
-      ph.textContent = "Team section requires round grain";
-      return ph;
-    }
-    const storageKey = "geoanalyzr:semantic:team:mate";
-    const ls = doc.defaultView?.localStorage;
-    const globalAll = Array.isArray(baseRows) ? baseRows : [];
-    const globalTeamRounds = globalAll.filter((r) => getModeFamilyRaw(r) === "teamduels");
-    const roundsAll = await getRounds({});
-    const allTeamDuels = roundsAll.filter((r) => getModeFamilyRaw(r) === "teamduels");
-    const gamesByMate = /* @__PURE__ */ new Map();
-    const roundsByMate = /* @__PURE__ */ new Map();
-    for (const r of allTeamDuels) {
-      const name = getTeammateName2(r);
-      if (!name) continue;
-      const gid = typeof r?.gameId === "string" ? r.gameId : "";
-      if (!gid) continue;
-      const set = gamesByMate.get(name) ?? /* @__PURE__ */ new Set();
-      set.add(gid);
-      gamesByMate.set(name, set);
-      roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
-    }
-    const mateOptions = Array.from(gamesByMate.entries()).map(([name, games]) => ({ value: name, games: games.size, rounds: roundsByMate.get(name) ?? 0 })).sort((a, b) => b.games - a.games || a.value.localeCompare(b.value)).map((x) => ({ value: x.value, label: `${x.value} (${x.games} games, ${x.rounds} rounds)` }));
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = "Team Duels";
-    wrap.appendChild(title);
-    if (mateOptions.length === 0) {
-      const empty = doc.createElement("div");
-      empty.className = "ga-statlist-box";
-      empty.textContent = "No Team Duel data found.";
-      wrap.appendChild(empty);
-      return wrap;
-    }
-    let selectedMate = typeof ls?.getItem(storageKey) === "string" ? String(ls?.getItem(storageKey) ?? "").trim() : "";
-    const values = new Set(mateOptions.map((o) => o.value));
-    if (!selectedMate || !values.has(selectedMate)) selectedMate = mateOptions[0].value;
-    ls?.setItem(storageKey, selectedMate);
-    const localFilters = doc.createElement("div");
-    localFilters.className = "ga-team-local-filters";
-    const mateFilter = doc.createElement("div");
-    mateFilter.className = "ga-filter";
-    const mateLabel = doc.createElement("div");
-    mateLabel.className = "ga-filter-label";
-    mateLabel.textContent = "Mate";
-    const mateRow = doc.createElement("div");
-    mateRow.className = "ga-filter-row";
-    const sel = doc.createElement("select");
-    sel.className = "ga-filter-select";
-    for (const opt of mateOptions) sel.appendChild(new Option(opt.label, opt.value));
-    sel.value = selectedMate;
-    sel.addEventListener("change", () => {
-      const next = sel.value;
-      if (!next || next === selectedMate) return;
-      selectedMate = next;
-      ls?.setItem(storageKey, selectedMate);
-      renderForMate();
-    });
-    mateRow.appendChild(sel);
-    mateFilter.appendChild(mateLabel);
-    mateFilter.appendChild(mateRow);
-    localFilters.appendChild(mateFilter);
-    wrap.appendChild(localFilters);
-    const host = doc.createElement("div");
-    wrap.appendChild(host);
-    const openRoundsDrill = (drillTitle, rows) => {
-      overlay.open(semantic, { title: drillTitle, target: "rounds", columnsPreset: "roundMode", rows });
-    };
-    const addRowWithDrill2 = (box, label, value, drillTitle, drillRows) => {
-      const line = doc.createElement("div");
-      line.className = "ga-statrow";
-      const left = doc.createElement("div");
-      left.className = "ga-statrow-label";
-      left.textContent = label;
-      const right = doc.createElement("div");
-      right.className = "ga-statrow-value";
-      right.textContent = value;
-      if (Array.isArray(drillRows) && drillRows.length > 0) {
-        line.style.cursor = "pointer";
-        right.style.textDecoration = "underline";
-        right.style.textDecorationThickness = "1px";
-        right.style.textUnderlineOffset = "2px";
-        line.addEventListener("click", () => openRoundsDrill(drillTitle, drillRows));
-      }
-      line.appendChild(left);
-      line.appendChild(right);
-      box.appendChild(line);
-    };
-    const renderForMate = () => {
-      host.innerHTML = "";
-      const compareRounds = globalTeamRounds.filter((r) => getTeammateName2(r) === selectedMate);
-      const header = doc.createElement("div");
-      header.className = "ga-widget-title";
-      header.textContent = `Team: You + ${selectedMate}`;
-      host.appendChild(header);
-      if (compareRounds.length === 0) {
-        const empty = doc.createElement("div");
-        empty.className = "ga-statlist-box";
-        empty.textContent = "No Team Duel rounds for this mate in the current global filters.";
-        host.appendChild(empty);
-        return;
-      }
-      let myCloser = 0;
-      let mateCloser = 0;
-      let myScoreWins = 0;
-      let mateScoreWins = 0;
-      let myThrows = 0;
-      let mateThrows = 0;
-      let myFiveKs = 0;
-      let mateFiveKs = 0;
-      const closerDrill = [];
-      const higherScoreDrill = [];
-      const fewerThrowsDrill = [];
-      const moreFiveKDrill = [];
-      const byGame = /* @__PURE__ */ new Map();
-      const gameTsById = /* @__PURE__ */ new Map();
-      let timedRounds = 0;
-      let timePlayedMs = 0;
-      const timedRoundsDrill = [];
-      for (const r of compareRounds) {
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        if (gid) {
-          const arr = byGame.get(gid) ?? [];
-          arr.push(r);
-          byGame.set(gid, arr);
-        }
-        const ts = asFiniteNumber2(r?.playedAt ?? r?.ts);
-        if (gid && ts !== null) {
-          const cur = gameTsById.get(gid);
-          if (cur === void 0 || ts < cur) gameTsById.set(gid, ts);
-        }
-        const selfDist = asFiniteNumber2(r?.player_self_distanceKm ?? r?.distanceKm);
-        const mateDist = asFiniteNumber2(r?.player_mate_distanceKm);
-        if (selfDist !== null && mateDist !== null) {
-          closerDrill.push(r);
-          if (selfDist < mateDist) myCloser++;
-          else if (selfDist > mateDist) mateCloser++;
-        }
-        const selfScore = asFiniteNumber2(r?.player_self_score ?? r?.score);
-        const mateScore = asFiniteNumber2(r?.player_mate_score);
-        if (selfScore !== null && mateScore !== null) {
-          higherScoreDrill.push(r);
-          if (selfScore > mateScore) myScoreWins++;
-          else if (selfScore < mateScore) mateScoreWins++;
-          if (selfScore < 50) myThrows++;
-          if (mateScore < 50) mateThrows++;
-          if (selfScore < 50 || mateScore < 50) fewerThrowsDrill.push(r);
-          if (selfScore >= 5e3) myFiveKs++;
-          if (mateScore >= 5e3) mateFiveKs++;
-          if (selfScore >= 5e3 || mateScore >= 5e3) moreFiveKDrill.push(r);
-        }
-        const durSec = asFiniteNumber2(r?.durationSeconds ?? r?.guessDurationSec ?? r?.timeSec);
-        if (durSec !== null && durSec >= 0) {
-          timedRounds++;
-          timePlayedMs += durSec * 1e3;
-          timedRoundsDrill.push(r);
-        }
-      }
-      const decideLeader = (youValue, mateValue, neutralLabel = "Tie") => {
-        const decisive = youValue + mateValue;
-        if (decisive === 0) return `${neutralLabel} (-)`;
-        if (youValue === mateValue) return `${neutralLabel} (50.0%)`;
-        const youWin = youValue > mateValue;
-        const leader = youWin ? "You" : selectedMate || "Mate";
-        const share = youWin ? youValue / decisive : mateValue / decisive;
-        return `${leader} (${formatPct01(share)})`;
-      };
-      const games = Array.from(byGame.keys());
-      const gameTimes = games.map((id) => ({ gameId: id, ts: gameTsById.get(id) })).filter((x) => typeof x.ts === "number" && Number.isFinite(x.ts)).sort((a, b) => a.ts - b.ts);
-      const firstGameId = gameTimes[0]?.gameId;
-      const lastGameId = gameTimes.length ? gameTimes[gameTimes.length - 1].gameId : void 0;
-      const firstTogether = gameTimes[0]?.ts;
-      const lastTogether = gameTimes.length ? gameTimes[gameTimes.length - 1].ts : void 0;
-      const sessionGapMs = (() => {
-        const root = doc.querySelector(".ga-root");
-        const raw = Number(root?.dataset.gaSessionGapMinutes);
-        const minutes = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
-        return minutes * 60 * 1e3;
-      })();
-      let sessionCount = 0;
-      let sessionTotalGames = 0;
-      let longestSessionGames = 0;
-      let longestSessionStart;
-      let longestSessionEnd;
-      let longestSessionIds = [];
-      let longestBreakMs;
-      let longestBreakPrevGameId;
-      let longestBreakNextGameId;
-      if (gameTimes.length > 0) {
-        sessionCount = 1;
-        let curStart = gameTimes[0].ts;
-        let curGames = 1;
-        let curIds = [gameTimes[0].gameId];
-        let prevTs = gameTimes[0].ts;
-        let prevGameId = gameTimes[0].gameId;
-        for (let i = 1; i < gameTimes.length; i++) {
-          const ts = gameTimes[i].ts;
-          const gap = ts - prevTs;
-          if (Number.isFinite(gap) && gap > 0) {
-            if (longestBreakMs === void 0 || gap > longestBreakMs) {
-              longestBreakMs = gap;
-              longestBreakPrevGameId = prevGameId;
-              longestBreakNextGameId = gameTimes[i].gameId;
-            }
-          }
-          if (gap > sessionGapMs) {
-            sessionTotalGames += curGames;
-            if (curGames > longestSessionGames) {
-              longestSessionGames = curGames;
-              longestSessionStart = curStart;
-              longestSessionEnd = prevTs;
-              longestSessionIds = [...curIds];
-            }
-            sessionCount++;
-            curStart = ts;
-            curGames = 1;
-            curIds = [gameTimes[i].gameId];
-          } else {
-            curGames++;
-            curIds.push(gameTimes[i].gameId);
-          }
-          prevTs = ts;
-          prevGameId = gameTimes[i].gameId;
-        }
-        sessionTotalGames += curGames;
-        if (curGames > longestSessionGames) {
-          longestSessionGames = curGames;
-          longestSessionStart = curStart;
-          longestSessionEnd = prevTs;
-          longestSessionIds = [...curIds];
-        }
-      }
-      const avgGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
-      const roundsTogetherDrill = compareRounds;
-      const firstGameDrill = firstGameId ? byGame.get(firstGameId) ?? [] : [];
-      const lastGameDrill = lastGameId ? byGame.get(lastGameId) ?? [] : [];
-      const longestSessionDrill = longestSessionIds.flatMap((id) => byGame.get(id) ?? []);
-      const longestBreakDrill = longestBreakPrevGameId && longestBreakNextGameId ? [...byGame.get(longestBreakPrevGameId) ?? [], ...byGame.get(longestBreakNextGameId) ?? []] : [];
-      const h2h = mkBox(doc, "Head-to-head questions:");
-      addRowWithDrill2(h2h.box, "Closer guesses", decideLeader(myCloser, mateCloser), "Closer guesses - Rounds", closerDrill);
-      addRowWithDrill2(h2h.box, "Higher score rounds", decideLeader(myScoreWins, mateScoreWins), "Higher score rounds - Rounds", higherScoreDrill);
-      addRowWithDrill2(h2h.box, "Fewer throws (<50)", decideLeader(mateThrows, myThrows), "Throws (<50) - Rounds", fewerThrowsDrill);
-      addRowWithDrill2(h2h.box, "More 5k rounds", decideLeader(myFiveKs, mateFiveKs), "Perfect 5k - Rounds", moreFiveKDrill);
-      const facts = mkBox(doc, "Team facts:");
-      addRowWithDrill2(facts.box, "Games together", String(games.length), "Games together - Rounds", roundsTogetherDrill);
-      addRowWithDrill2(facts.box, "Rounds together", String(compareRounds.length), "Rounds together - Rounds", roundsTogetherDrill);
-      addRowWithDrill2(
-        facts.box,
-        "Time played together",
-        timedRounds > 0 ? `${formatDurationHuman2(timePlayedMs)}${timedRounds > 0 && timedRounds < compareRounds.length ? ` (from ${timedRounds}/${compareRounds.length} rounds with time data)` : ""}` : "-",
-        "Time played together - Rounds",
-        timedRoundsDrill
-      );
-      addRowWithDrill2(
-        facts.box,
-        "First game together",
-        typeof firstTogether === "number" ? formatShortDateTime2(firstTogether) : "-",
-        "First game together - Rounds",
-        firstGameDrill
-      );
-      addRowWithDrill2(
-        facts.box,
-        "Most recent game together",
-        typeof lastTogether === "number" ? formatShortDateTime2(lastTogether) : "-",
-        "Most recent game together - Rounds",
-        lastGameDrill
-      );
-      addRowWithDrill2(
-        facts.box,
-        "Longest session together",
-        longestSessionGames > 0 && longestSessionStart !== void 0 && longestSessionEnd !== void 0 ? `${longestSessionGames} games (${formatShortDateTime2(longestSessionStart)} -> ${formatShortDateTime2(longestSessionEnd)})` : "-",
-        "Longest session together - Rounds",
-        longestSessionDrill
-      );
-      addRowWithDrill2(
-        facts.box,
-        "Avg games per session together",
-        typeof avgGamesPerSession === "number" ? avgGamesPerSession.toFixed(1) : "-",
-        "Avg games per session together - Rounds",
-        roundsTogetherDrill
-      );
-      addRowWithDrill2(
-        facts.box,
-        "Longest break between games together",
-        typeof longestBreakMs === "number" ? formatDurationHuman2(longestBreakMs) : "-",
-        "Longest break between games together - Rounds",
-        longestBreakDrill
-      );
-      const grid = doc.createElement("div");
-      grid.style.display = "grid";
-      grid.style.gridTemplateColumns = "repeat(12, minmax(0, 1fr))";
-      grid.style.gap = "10px";
-      const left = doc.createElement("div");
-      left.style.gridColumn = "1 / span 12";
-      left.appendChild(h2h.wrap);
-      const right = doc.createElement("div");
-      right.style.gridColumn = "1 / span 12";
-      right.appendChild(facts.wrap);
-      grid.appendChild(left);
-      grid.appendChild(right);
-      host.appendChild(grid);
-    };
-    renderForMate();
-    return wrap;
-  }
-
-  // src/ui/widgets/countryInsightWidget.ts
-  function asTrimmedString3(v) {
-    return typeof v === "string" ? v.trim() : "";
-  }
-  function normalizeCountryCode2(v) {
-    return asTrimmedString3(v).toLowerCase();
-  }
-  function pickGuessCountry(row) {
-    return asTrimmedString3(row?.player_self_guessCountry ?? row?.p1_guessCountry ?? row?.guessCountry ?? row?.player_self_country);
-  }
-  function pickScore(row) {
-    const v = row?.player_self_score ?? row?.p1_score ?? row?.score;
-    return typeof v === "number" && Number.isFinite(v) ? v : null;
-  }
-  function isHit2(row) {
-    const truth = normalizeCountryCode2(row?.trueCountry ?? row?.true_country);
-    const guess = normalizeCountryCode2(pickGuessCountry(row));
-    return !!truth && !!guess && truth === guess;
-  }
-  function isThrow(row) {
-    const s = pickScore(row);
-    return typeof s === "number" && s < 50;
-  }
-  function isFiveK(row) {
-    const s = pickScore(row);
-    return typeof s === "number" && s >= 5e3;
-  }
-  function formatPct012(v) {
+  // src/ui/widgets/leaderListWidget.ts
+  function formatPct01(v) {
     const clamped = Math.max(0, Math.min(1, v));
     return `${(clamped * 100).toFixed(1)}%`;
   }
-  function formatNumber(v, decimals = 1) {
-    if (!Number.isFinite(v)) return "-";
-    return v.toFixed(decimals);
+  function getRowsAll(baseRows, grain) {
+    if (Array.isArray(baseRows)) return Promise.resolve(baseRows);
+    if (grain === "game") return getGames({});
+    if (grain === "session") return getSessions({});
+    return getRounds({});
   }
-  function countryDisplayName(code) {
-    const trimmed = code.trim();
-    const iso2 = /^[a-z]{2}$/i.test(trimmed) ? trimmed.toUpperCase() : "";
-    if (!iso2) return trimmed || "-";
-    const dn = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
-    const name = dn ? dn.of(iso2) : null;
-    return name ? String(name) : iso2;
+  function attachClickIfAny2(args) {
+    const { el, actions, overlay, semantic, title, grain, rows } = args;
+    const click = actions?.click;
+    if (!click) return;
+    el.style.cursor = "pointer";
+    el.addEventListener("click", () => {
+      if (click.type !== "drilldown") return;
+      const filteredRows = applyFilters(rows, click.extraFilters, grain);
+      overlay.open(semantic, {
+        title,
+        target: click.target,
+        columnsPreset: click.columnsPreset,
+        rows: filteredRows,
+        extraFilters: click.extraFilters
+      });
+    });
   }
-  function mkBox2(doc, titleText) {
+  function computeLeaderText(counts, exclude) {
+    const available = Array.from(counts.entries()).filter(([k]) => !exclude.has(k)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const youKey = counts.has("You") ? "You" : available[0]?.[0] ?? "You";
+    const mateKey = available.find(([k]) => k !== youKey)?.[0] ?? "Mate";
+    const youCount = counts.get(youKey) ?? 0;
+    const mateCount = counts.get(mateKey) ?? 0;
+    const decisive = youCount + mateCount;
+    if (decisive === 0) return "Tie (-)";
+    if (youCount === mateCount) return `Tie (${formatPct01(0.5)})`;
+    const leader = youCount > mateCount ? youKey : mateKey;
+    const share = Math.max(youCount, mateCount) / decisive;
+    return `${leader} (${formatPct01(share)})`;
+  }
+  async function renderLeaderListWidget(semantic, widget, overlay, baseRows) {
+    const doc = overlay.getDocument();
+    const spec = widget.spec;
+    const grain = widget.grain;
     const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-statlist";
+    wrap.className = "ga-widget ga-leaderlist";
     const title = doc.createElement("div");
     title.className = "ga-widget-title";
-    title.textContent = titleText;
-    wrap.appendChild(title);
+    title.textContent = widget.title;
     const box = doc.createElement("div");
     box.className = "ga-statlist-box";
-    wrap.appendChild(box);
-    return { wrap, box };
-  }
-  function addRowWithDrill(args) {
-    const { doc, box, label, value, drill, open } = args;
-    const line = doc.createElement("div");
-    line.className = "ga-statrow";
-    const left = doc.createElement("div");
-    left.className = "ga-statrow-label";
-    left.textContent = label;
-    const right = doc.createElement("div");
-    right.className = "ga-statrow-value";
-    right.textContent = value;
-    if (drill && Array.isArray(drill.rows) && drill.rows.length > 0) {
-      line.style.cursor = "pointer";
-      right.style.textDecoration = "underline";
-      right.style.textUnderlineOffset = "2px";
-      right.style.textDecorationThickness = "1px";
-      line.addEventListener("click", () => open(drill.title, drill.rows));
+    const rowsAll = await getRowsAll(baseRows, grain);
+    for (const row of spec.rows) {
+      const dimId = row.dimension;
+      const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
+      if (!keyFn) continue;
+      const exclude = new Set((row.excludeKeys ?? []).map((k) => typeof k === "string" ? k.trim() : "").filter(Boolean));
+      const scoped = applyFilters(rowsAll, row.filters, grain);
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of scoped) {
+        const k = keyFn(r);
+        if (typeof k !== "string" || !k.trim()) continue;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      const line = doc.createElement("div");
+      line.className = "ga-statrow";
+      const left = doc.createElement("div");
+      left.textContent = row.label;
+      const right = doc.createElement("div");
+      right.style.fontVariantNumeric = "tabular-nums";
+      right.textContent = computeLeaderText(counts, exclude);
+      line.appendChild(left);
+      line.appendChild(right);
+      attachClickIfAny2({
+        el: line,
+        actions: row.actions,
+        overlay,
+        semantic,
+        title: `${widget.title} - ${row.label}`,
+        grain,
+        rows: scoped
+      });
+      box.appendChild(line);
     }
-    line.appendChild(left);
-    line.appendChild(right);
-    box.appendChild(line);
-  }
-  function computeMeasure2(semantic, measureId, rows) {
-    const m = semantic.measures[measureId];
-    if (!m) return 0;
-    const grain = m.grain;
-    const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
-    if (!fn) return 0;
-    return fn(rows);
-  }
-  function fmtMeasure(semantic, measureId, value) {
-    const m = semantic.measures[measureId];
-    if (!m) return String(value);
-    const unit = semantic.units[m.unit];
-    if (!unit) return String(value);
-    if (unit.format === "percent") return formatPct012(value);
-    if (unit.format === "int") return String(Math.round(value));
-    if (unit.format === "duration") {
-      const s = Math.max(0, Math.round(value));
-      const days2 = Math.floor(s / 86400);
-      const hours = Math.floor(s % 86400 / 3600);
-      const mins = Math.floor(s % 3600 / 60);
-      if (days2 > 0) return `${days2}d ${hours}h`;
-      if (hours > 0) return `${hours}h ${mins}m`;
-      if (mins > 0) return `${mins}m ${s % 60}s`;
-      return `${s}s`;
-    }
-    const decimals = unit.decimals ?? 1;
-    return formatNumber(value, decimals);
-  }
-  async function renderCountryInsightWidget(semantic, widget, overlay, baseRows) {
-    const _spec = widget.spec;
-    const doc = overlay.getDocument();
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-widget ga-country-insight";
-    const grain = widget.grain;
-    if (grain !== "round") {
-      const ph = doc.createElement("div");
-      ph.className = "ga-widget ga-placeholder";
-      ph.textContent = "Country insight requires round grain";
-      return ph;
-    }
-    const all = Array.isArray(baseRows) ? baseRows : [];
-    const available = /* @__PURE__ */ new Map();
-    for (const r of all) {
-      const code = normalizeCountryCode2(r?.trueCountry ?? r?.true_country);
-      if (!code) continue;
-      available.set(code, (available.get(code) ?? 0) + 1);
-    }
-    const options = Array.from(available.entries()).map(([code, n]) => ({ code, n })).sort((a, b) => b.n - a.n || a.code.localeCompare(b.code)).map(({ code, n }) => ({
-      value: code,
-      label: `${countryDisplayName(code)} (${n} rounds)`
-    }));
-    const title = doc.createElement("div");
-    title.className = "ga-widget-title";
-    title.textContent = "Country Insight";
     wrap.appendChild(title);
-    if (options.length === 0) {
-      const empty = doc.createElement("div");
-      empty.className = "ga-statlist-box";
-      empty.textContent = "No country data available for the current global filters.";
-      wrap.appendChild(empty);
-      return wrap;
-    }
-    const storageKey = "geoanalyzr:semantic:country:spotlight";
-    const ls = doc.defaultView?.localStorage;
-    let selected = typeof ls?.getItem(storageKey) === "string" ? String(ls?.getItem(storageKey) ?? "").trim().toLowerCase() : "";
-    const valueSet = new Set(options.map((o) => o.value));
-    if (!selected || !valueSet.has(selected)) selected = options[0].value;
-    ls?.setItem(storageKey, selected);
-    const localFilters = doc.createElement("div");
-    localFilters.className = "ga-country-local-filters";
-    const filterBox = doc.createElement("div");
-    filterBox.className = "ga-filter";
-    const filterLabel = doc.createElement("div");
-    filterLabel.className = "ga-filter-label";
-    filterLabel.textContent = "Country (local)";
-    const filterRow = doc.createElement("div");
-    filterRow.className = "ga-filter-row";
-    const sel = doc.createElement("select");
-    sel.className = "ga-filter-select";
-    for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
-    sel.value = selected;
-    filterRow.appendChild(sel);
-    filterBox.appendChild(filterLabel);
-    filterBox.appendChild(filterRow);
-    localFilters.appendChild(filterBox);
-    const note = doc.createElement("div");
-    note.className = "ga-settings-note";
-    note.textContent = "Note: Global 'Country' filter is ignored here. Use this local selector instead.";
-    localFilters.appendChild(note);
-    wrap.appendChild(localFilters);
-    const host = doc.createElement("div");
-    wrap.appendChild(host);
-    const openRounds = (drillTitle, rows) => {
-      overlay.open(semantic, { title: drillTitle, target: "rounds", columnsPreset: "roundMode", rows });
-    };
-    const renderFor = async (countryCode) => {
-      host.innerHTML = "";
-      const rows = all.filter((r) => normalizeCountryCode2(r?.trueCountry ?? r?.true_country) === countryCode);
-      const display = countryDisplayName(countryCode);
-      const header = doc.createElement("div");
-      header.className = "ga-widget-title";
-      header.textContent = `Country Spotlight: ${display}`;
-      host.appendChild(header);
-      if (!rows.length) {
-        const empty = doc.createElement("div");
-        empty.className = "ga-statlist-box";
-        empty.textContent = "No rounds for this country in the current global filters.";
-        host.appendChild(empty);
-        return;
-      }
-      const roundsCount = rows.length;
-      const hitRows = rows.filter(isHit2);
-      const throwRows = rows.filter(isThrow);
-      const fiveKRows = rows.filter(isFiveK);
-      const avgScore = computeMeasure2(semantic, "avg_score", rows);
-      const medianScore = computeMeasure2(semantic, "score_median", rows);
-      const avgDist = computeMeasure2(semantic, "avg_distance_km", rows);
-      const hitRate = roundsCount ? hitRows.length / roundsCount : 0;
-      const throwRate = roundsCount ? throwRows.length / roundsCount : 0;
-      const fiveKRate = roundsCount ? fiveKRows.length / roundsCount : 0;
-      const confusionCounts = /* @__PURE__ */ new Map();
-      for (const r of rows) {
-        const truth = normalizeCountryCode2(r?.trueCountry ?? r?.true_country);
-        const guessRaw = pickGuessCountry(r);
-        const guess = normalizeCountryCode2(guessRaw);
-        if (!truth || !guess || truth === guess) continue;
-        const cur = confusionCounts.get(guess) ?? { n: 0, rows: [] };
-        cur.n += 1;
-        cur.rows.push(r);
-        confusionCounts.set(guess, cur);
-      }
-      const topConfusions = Array.from(confusionCounts.entries()).map(([guess, data]) => ({ guess, n: data.n, rows: data.rows })).sort((a2, b2) => b2.n - a2.n || a2.guess.localeCompare(b2.guess)).slice(0, 3);
-      const stats = mkBox2(doc, "Country insight:");
-      addRowWithDrill({ doc, box: stats.box, label: "Rounds", value: String(roundsCount), drill: { title: `${display} - Rounds`, rows }, open: openRounds });
-      addRowWithDrill({
-        doc,
-        box: stats.box,
-        label: "Hit rate",
-        value: formatPct012(hitRate),
-        drill: { title: `${display} - Hits`, rows: hitRows },
-        open: openRounds
-      });
-      addRowWithDrill({
-        doc,
-        box: stats.box,
-        label: "Avg score",
-        value: `${fmtMeasure(semantic, "avg_score", avgScore)} | Median score: ${fmtMeasure(semantic, "score_median", medianScore)}`,
-        drill: { title: `${display} - Rounds`, rows },
-        open: openRounds
-      });
-      addRowWithDrill({
-        doc,
-        box: stats.box,
-        label: "Avg distance",
-        value: `${fmtMeasure(semantic, "avg_distance_km", avgDist)} km`,
-        drill: { title: `${display} - Rounds`, rows },
-        open: openRounds
-      });
-      addRowWithDrill({
-        doc,
-        box: stats.box,
-        label: "Perfect 5k in this country",
-        value: `${fiveKRows.length} (${formatPct012(fiveKRate)})`,
-        drill: { title: `${display} - Perfect 5k`, rows: fiveKRows },
-        open: openRounds
-      });
-      addRowWithDrill({
-        doc,
-        box: stats.box,
-        label: "Throws (<50) in this country",
-        value: `${throwRows.length} (${formatPct012(throwRate)})`,
-        drill: { title: `${display} - Throws (<50)`, rows: throwRows },
-        open: openRounds
-      });
-      const confBox = mkBox2(doc, "Top confusions (guess country):");
-      if (topConfusions.length === 0) {
-        const line = doc.createElement("div");
-        line.className = "ga-statrow";
-        const left = doc.createElement("div");
-        left.className = "ga-statrow-label";
-        left.textContent = "No confusions found";
-        const right = doc.createElement("div");
-        right.className = "ga-statrow-value";
-        right.textContent = "-";
-        line.appendChild(left);
-        line.appendChild(right);
-        confBox.box.appendChild(line);
-      } else {
-        for (const c of topConfusions) {
-          const name = countryDisplayName(c.guess);
-          addRowWithDrill({
-            doc,
-            box: confBox.box,
-            label: name,
-            value: String(c.n),
-            drill: { title: `${display} confused with ${name}`, rows: c.rows },
-            open: openRounds
-          });
-        }
-      }
-      const distWidget = {
-        widgetId: "w_country_spotlight_distribution",
-        type: "chart",
-        title: `Country Spotlight: ${display} - Score distribution`,
-        grain: "round",
-        spec: {
-          type: "bar",
-          limit: 200,
-          x: { dimension: "score_bucket" },
-          y: { measure: "rounds_count" },
-          sort: { mode: "chronological" },
-          actions: {
-            hover: true,
-            click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-          }
-        }
-      };
-      const chartEl = await renderChartWidget(semantic, distWidget, overlay, { round: rows }, void 0);
-      const grid = doc.createElement("div");
-      grid.style.display = "grid";
-      grid.style.gridTemplateColumns = "repeat(12, minmax(0, 1fr))";
-      grid.style.gap = "10px";
-      const a = doc.createElement("div");
-      a.style.gridColumn = "1 / span 12";
-      a.appendChild(stats.wrap);
-      a.appendChild(confBox.wrap);
-      const b = doc.createElement("div");
-      b.style.gridColumn = "1 / span 12";
-      b.appendChild(chartEl);
-      grid.appendChild(a);
-      grid.appendChild(b);
-      host.appendChild(grid);
-    };
-    sel.addEventListener("change", () => {
-      const next = sel.value;
-      if (!next) return;
-      selected = next;
-      ls?.setItem(storageKey, next);
-      void renderFor(next);
-    });
-    await renderFor(selected);
+    wrap.appendChild(box);
     return wrap;
   }
 
@@ -46599,6 +46376,7 @@
     root.appendChild(content);
     const sections = dashboard.dashboard.sections;
     let active = sections[0]?.id ?? "";
+    const localStateBySection = /* @__PURE__ */ new Map();
     function makeTab(secId, label) {
       const btn = doc.createElement("button");
       btn.className = "ga-tab";
@@ -46622,20 +46400,167 @@
       if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
-      if (widget.type === "team_section") return await renderTeamSectionWidget(semantic, widget, overlay, baseRows);
-      if (widget.type === "country_insight") return await renderCountryInsightWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
       return ph;
     }
+    const interpolate = (text, localState) => {
+      return String(text).replace(/\{\{\s*local\.([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, id) => {
+        const v = localState[id];
+        return typeof v === "string" && v !== "all" ? v : "";
+      });
+    };
+    const renderLocalFiltersBar = async (args) => {
+      const { host, spec, sectionId, datasets, onChange } = args;
+      host.innerHTML = "";
+      if (spec.enabled === false) return {};
+      const base = localStateBySection.get(sectionId) ?? {};
+      const nextState = { ...base };
+      const bar = doc.createElement("div");
+      bar.className = "ga-filters";
+      host.appendChild(bar);
+      const left = doc.createElement("div");
+      left.className = "ga-filters-left";
+      bar.appendChild(left);
+      const right = doc.createElement("div");
+      right.className = "ga-filters-right";
+      bar.appendChild(right);
+      const renderControlLabel2 = (label) => {
+        const el = doc.createElement("div");
+        el.className = "ga-filter-label";
+        el.textContent = label;
+        return el;
+      };
+      const durationOrder2 = ["<20 sec", "20-30 sec", "30-45 sec", "45-60 sec", "60-90 sec", "90-180 sec", ">180 sec"];
+      const durationRank2 = new Map(durationOrder2.map((k, i) => [k, i]));
+      const movementLabel2 = (v) => {
+        const k = v.trim().toLowerCase();
+        if (k === "moving") return "Moving";
+        if (k === "no_move") return "No move";
+        if (k === "nmpz") return "NMPZ";
+        if (k === "unknown") return "Unknown";
+        return v;
+      };
+      const computeOptions = (control, stateWithoutSelf) => {
+        const grains = control.appliesTo;
+        const g = grains.includes("round") ? "round" : grains[0];
+        const rowsBase = datasets[g];
+        const rowsAll = Array.isArray(rowsBase) ? rowsBase : [];
+        const clauses = spec.controls.filter((c) => c.id !== control.id).map((c) => ({ control: c, value: stateWithoutSelf[c.id] })).filter((x) => typeof x.value === "string" && x.value && x.value !== "all").map((x) => ({ dimension: x.control.dimension, op: "eq", value: x.value }));
+        const filtered = clauses.length ? applyFilters(rowsAll, clauses, g) : rowsAll;
+        if (control.options === "auto_teammates") {
+          const gamesByMate = /* @__PURE__ */ new Map();
+          const roundsByMate = /* @__PURE__ */ new Map();
+          for (const r of filtered) {
+            const mate = r.teammateName;
+            const name = typeof mate === "string" ? mate.trim() : "";
+            if (!name) continue;
+            const gameId = String(r.gameId ?? "");
+            if (!gameId) continue;
+            const set = gamesByMate.get(name) ?? /* @__PURE__ */ new Set();
+            set.add(gameId);
+            gamesByMate.set(name, set);
+            roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
+          }
+          return Array.from(gamesByMate.entries()).map(([name, games]) => ({
+            value: name,
+            label: `${name} (${games.size} games, ${roundsByMate.get(name) ?? 0} rounds)`,
+            n: games.size
+          })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
+        }
+        const dimId = control.dimension;
+        const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];
+        if (!extractor) return [];
+        const counts = /* @__PURE__ */ new Map();
+        for (const r of filtered) {
+          const v = extractor(r);
+          if (typeof v === "string" && v.length) counts.set(v, (counts.get(v) ?? 0) + 1);
+        }
+        let values = Array.from(counts.entries()).map(([value, n]) => ({ value, n })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
+        if (dimId === "duration_bucket") values = values.sort((a, b) => (durationRank2.get(a.value) ?? 999) - (durationRank2.get(b.value) ?? 999));
+        return values.map((v) => ({
+          value: v.value,
+          label: `${dimId === "movement_type" ? movementLabel2(v.value) : v.value} (${v.n} rounds)`,
+          n: v.n
+        }));
+      };
+      for (const control of spec.controls) {
+        const wrap = doc.createElement("div");
+        wrap.className = "ga-filter";
+        wrap.appendChild(renderControlLabel2(control.label));
+        const sel = doc.createElement("select");
+        sel.className = "ga-filter-select";
+        const stateWithoutSelf = { ...nextState };
+        delete stateWithoutSelf[control.id];
+        const options = computeOptions(control, stateWithoutSelf);
+        const isRequired = control.required === true;
+        if (!isRequired) sel.appendChild(new Option("All", "all"));
+        for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
+        const current = typeof nextState[control.id] === "string" ? nextState[control.id] : "";
+        const hasCurrent = options.some((o) => o.value === current);
+        const desiredDefault = control.default === "auto_top" ? "" : control.default;
+        const next = hasCurrent ? current : desiredDefault && options.some((o) => o.value === desiredDefault) ? desiredDefault : isRequired ? options[0]?.value ?? "" : "all";
+        if (next) sel.value = next;
+        if (next && next !== current) nextState[control.id] = next;
+        sel.addEventListener("change", () => {
+          nextState[control.id] = sel.value;
+          localStateBySection.set(sectionId, { ...nextState });
+          onChange();
+        });
+        wrap.appendChild(sel);
+        left.appendChild(wrap);
+      }
+      const showReset = spec.buttons?.reset !== false;
+      if (showReset) {
+        const resetBtn = doc.createElement("button");
+        resetBtn.className = "ga-filter-btn";
+        resetBtn.textContent = "Reset";
+        resetBtn.addEventListener("click", () => {
+          localStateBySection.delete(sectionId);
+          onChange();
+        });
+        right.appendChild(resetBtn);
+      }
+      localStateBySection.set(sectionId, { ...nextState });
+      return nextState;
+    };
     async function renderActive() {
       content.innerHTML = "";
       const section = sections.find((s) => s.id === active);
       if (!section) return;
-      activeDatasets = datasetsBySection[section.id] ?? datasetsDefault;
+      const baseDatasets = datasetsBySection[section.id] ?? datasetsDefault;
       activeContext = contextBySection[section.id] ?? contextDefault;
       opts?.onActiveSectionChange?.(section.id);
+      const localHost = doc.createElement("div");
+      content.appendChild(localHost);
+      const localSpec = section.localFilters;
+      const localState = localSpec && Array.isArray(localSpec.controls) && localSpec.controls.length ? await renderLocalFiltersBar({
+        host: localHost,
+        spec: localSpec,
+        sectionId: section.id,
+        datasets: baseDatasets,
+        onChange: () => void renderActive()
+      }) : localStateBySection.get(section.id) ?? {};
+      const localClauses = localSpec ? localSpec.controls.map((c) => ({ c, v: localState[c.id] })).filter((x) => typeof x.v === "string" && x.v && x.v !== "all").map((x) => ({ dimension: x.c.dimension, op: "eq", value: x.v, appliesTo: x.c.appliesTo })) : [];
+      const localDatasets = { ...baseDatasets };
+      for (const [grainKey, rows] of Object.entries(baseDatasets)) {
+        if (!Array.isArray(rows)) continue;
+        const clauses = localClauses.filter((c) => Array.isArray(c.appliesTo) && c.appliesTo.includes(grainKey));
+        if (clauses.length) {
+          localDatasets[grainKey] = applyFilters(rows, clauses.map((c) => ({ dimension: c.dimension, op: c.op, value: c.value })), grainKey);
+        }
+      }
+      const usesSession = section.layout.cards.some((c) => c.card.children.some((w) => w.grain === "session"));
+      const localRounds = localDatasets.round;
+      if (usesSession && Array.isArray(localRounds)) {
+        const rootEl = content.closest(".ga-root");
+        const raw = Number(rootEl?.dataset?.gaSessionGapMinutes);
+        const gap = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
+        localDatasets.session = buildSessionsFromRoundsForUi(localRounds, gap);
+      }
+      activeDatasets = localDatasets;
       const grid = doc.createElement("div");
       grid.className = "ga-grid";
       grid.style.display = "grid";
@@ -46648,7 +46573,7 @@
         card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
         const header = doc.createElement("div");
         header.className = "ga-card-header";
-        header.textContent = placed.title;
+        header.textContent = interpolate(placed.title, localState);
         const body = doc.createElement("div");
         body.className = "ga-card-body";
         const inner = doc.createElement("div");
@@ -46662,7 +46587,8 @@
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
           container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
           container.style.gridRow = `${p.y + 1} / span ${p.h}`;
-          container.appendChild(await renderWidget(w));
+          const wInterp = { ...w, title: interpolate(w.title, localState) };
+          container.appendChild(await renderWidget(wInterp));
           inner.appendChild(container);
         }
         body.appendChild(inner);

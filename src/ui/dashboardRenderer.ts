@@ -8,8 +8,11 @@ import { renderStatListWidget } from "./widgets/statListWidget";
 import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
-import { renderTeamSectionWidget } from "./widgets/teamSectionWidget";
-import { renderCountryInsightWidget } from "./widgets/countryInsightWidget";
+import { renderLeaderListWidget } from "./widgets/leaderListWidget";
+import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
+import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
+import { applyFilters } from "../engine/filters";
+import { buildSessionsFromRoundsForUi } from "../engine/queryEngine";
 
 
 export async function renderDashboard(
@@ -46,6 +49,7 @@ export async function renderDashboard(
 
   const sections = dashboard.dashboard.sections;
   let active = sections[0]?.id ?? "";
+  const localStateBySection = new Map<string, Record<string, string>>();
 
   function makeTab(secId: string, label: string) {
     const btn = doc.createElement("button");
@@ -72,8 +76,7 @@ export async function renderDashboard(
     if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
-    if (widget.type === "team_section") return await renderTeamSectionWidget(semantic, widget, overlay, baseRows as any);
-    if (widget.type === "country_insight") return await renderCountryInsightWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows as any);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");
@@ -82,13 +85,224 @@ export async function renderDashboard(
     return ph;
   }
 
+  const interpolate = (text: string, localState: Record<string, string>): string => {
+    return String(text).replace(/\{\{\s*local\.([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, id: string) => {
+      const v = localState[id];
+      return typeof v === "string" && v !== "all" ? v : "";
+    });
+  };
+
+  const renderLocalFiltersBar = async (args: {
+    host: HTMLElement;
+    spec: LocalFiltersSpec;
+    sectionId: string;
+    datasets: Partial<Record<Grain, any[]>>;
+    onChange: () => void;
+  }): Promise<Record<string, string>> => {
+    const { host, spec, sectionId, datasets, onChange } = args;
+    host.innerHTML = "";
+    if (spec.enabled === false) return {};
+
+    const base = localStateBySection.get(sectionId) ?? {};
+    const nextState: Record<string, string> = { ...base };
+
+    const bar = doc.createElement("div");
+    bar.className = "ga-filters";
+    host.appendChild(bar);
+
+    const left = doc.createElement("div");
+    left.className = "ga-filters-left";
+    bar.appendChild(left);
+
+    const right = doc.createElement("div");
+    right.className = "ga-filters-right";
+    bar.appendChild(right);
+
+    const renderControlLabel = (label: string): HTMLElement => {
+      const el = doc.createElement("div");
+      el.className = "ga-filter-label";
+      el.textContent = label;
+      return el;
+    };
+
+    const durationOrder = ["<20 sec", "20-30 sec", "30-45 sec", "45-60 sec", "60-90 sec", "90-180 sec", ">180 sec"];
+    const durationRank = new Map(durationOrder.map((k, i) => [k, i]));
+
+    const movementLabel = (v: string): string => {
+      const k = v.trim().toLowerCase();
+      if (k === "moving") return "Moving";
+      if (k === "no_move") return "No move";
+      if (k === "nmpz") return "NMPZ";
+      if (k === "unknown") return "Unknown";
+      return v;
+    };
+
+    const computeOptions = (control: LocalFilterControlSpec, stateWithoutSelf: Record<string, string>): { value: string; label: string; n: number }[] => {
+      const grains = control.appliesTo;
+      const g = grains.includes("round") ? "round" : grains[0];
+      const rowsBase = datasets[g as Grain];
+      const rowsAll = Array.isArray(rowsBase) ? rowsBase : [];
+
+      const clauses = (spec.controls as LocalFilterControlSpec[])
+        .filter((c) => c.id !== control.id)
+        .map((c) => ({ control: c, value: stateWithoutSelf[c.id] }))
+        .filter((x) => typeof x.value === "string" && x.value && x.value !== "all")
+        .map((x) => ({ dimension: x.control.dimension, op: "eq" as const, value: x.value }));
+
+      const filtered = clauses.length ? applyFilters(rowsAll, clauses as any, g as Grain) : rowsAll;
+
+      if (control.options === "auto_teammates") {
+        const gamesByMate = new Map<string, Set<string>>();
+        const roundsByMate = new Map<string, number>();
+        for (const r of filtered) {
+          const mate = (r as any).teammateName;
+          const name = typeof mate === "string" ? mate.trim() : "";
+          if (!name) continue;
+          const gameId = String((r as any).gameId ?? "");
+          if (!gameId) continue;
+          const set = gamesByMate.get(name) ?? new Set<string>();
+          set.add(gameId);
+          gamesByMate.set(name, set);
+          roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
+        }
+        return Array.from(gamesByMate.entries())
+          .map(([name, games]) => ({
+            value: name,
+            label: `${name} (${games.size} games, ${roundsByMate.get(name) ?? 0} rounds)`,
+            n: games.size
+          }))
+          .sort((a, b) => (b.n - a.n) || a.value.localeCompare(b.value));
+      }
+
+      const dimId = control.dimension;
+      const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];
+      if (!extractor) return [];
+
+      const counts = new Map<string, number>();
+      for (const r of filtered) {
+        const v = extractor(r);
+        if (typeof v === "string" && v.length) counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+      let values = Array.from(counts.entries())
+        .map(([value, n]) => ({ value, n }))
+        .sort((a, b) => (b.n - a.n) || a.value.localeCompare(b.value));
+      if (dimId === "duration_bucket") values = values.sort((a, b) => (durationRank.get(a.value) ?? 999) - (durationRank.get(b.value) ?? 999));
+
+      return values.map((v) => ({
+        value: v.value,
+        label: `${dimId === "movement_type" ? movementLabel(v.value) : v.value} (${v.n} rounds)`,
+        n: v.n
+      }));
+    };
+
+    for (const control of spec.controls as LocalFilterControlSpec[]) {
+      const wrap = doc.createElement("div");
+      wrap.className = "ga-filter";
+      wrap.appendChild(renderControlLabel(control.label));
+
+      const sel = doc.createElement("select");
+      sel.className = "ga-filter-select";
+
+      const stateWithoutSelf: Record<string, string> = { ...nextState };
+      delete stateWithoutSelf[control.id];
+      const options = computeOptions(control, stateWithoutSelf);
+
+      const isRequired = control.required === true;
+      if (!isRequired) sel.appendChild(new Option("All", "all"));
+      for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
+
+      const current = typeof nextState[control.id] === "string" ? nextState[control.id] : "";
+      const hasCurrent = options.some((o) => o.value === current);
+      const desiredDefault = control.default === "auto_top" ? "" : control.default;
+      const next =
+        hasCurrent
+          ? current
+          : desiredDefault && options.some((o) => o.value === desiredDefault)
+            ? desiredDefault
+            : isRequired
+              ? (options[0]?.value ?? "")
+              : "all";
+
+      if (next) sel.value = next;
+      if (next && next !== current) nextState[control.id] = next;
+
+      sel.addEventListener("change", () => {
+        nextState[control.id] = sel.value;
+        localStateBySection.set(sectionId, { ...nextState });
+        onChange();
+      });
+
+      wrap.appendChild(sel);
+      left.appendChild(wrap);
+    }
+
+    const showReset = spec.buttons?.reset !== false;
+    if (showReset) {
+      const resetBtn = doc.createElement("button");
+      resetBtn.className = "ga-filter-btn";
+      resetBtn.textContent = "Reset";
+      resetBtn.addEventListener("click", () => {
+        localStateBySection.delete(sectionId);
+        onChange();
+      });
+      right.appendChild(resetBtn);
+    }
+
+    localStateBySection.set(sectionId, { ...nextState });
+    return nextState;
+  };
+
   async function renderActive(): Promise<void> {
     content.innerHTML = "";
     const section = sections.find((s) => s.id === active);
     if (!section) return;
-    activeDatasets = datasetsBySection[section.id] ?? datasetsDefault;
+
+    const baseDatasets = datasetsBySection[section.id] ?? datasetsDefault;
     activeContext = contextBySection[section.id] ?? contextDefault;
     opts?.onActiveSectionChange?.(section.id);
+
+    const localHost = doc.createElement("div");
+    content.appendChild(localHost);
+
+    const localSpec = (section as any).localFilters as LocalFiltersSpec | undefined;
+    const localState =
+      localSpec && Array.isArray((localSpec as any).controls) && (localSpec as any).controls.length
+        ? await renderLocalFiltersBar({
+            host: localHost,
+            spec: localSpec,
+            sectionId: section.id,
+            datasets: baseDatasets,
+            onChange: () => void renderActive()
+          })
+        : (localStateBySection.get(section.id) ?? {});
+
+    const localClauses = localSpec
+      ? (localSpec.controls as LocalFilterControlSpec[])
+          .map((c) => ({ c, v: localState[c.id] }))
+          .filter((x) => typeof x.v === "string" && x.v && x.v !== "all")
+          .map((x) => ({ dimension: x.c.dimension, op: "eq" as const, value: x.v, appliesTo: x.c.appliesTo }))
+      : [];
+
+    const localDatasets: Partial<Record<Grain, any[]>> = { ...baseDatasets };
+    for (const [grainKey, rows] of Object.entries(baseDatasets) as any) {
+      if (!Array.isArray(rows)) continue;
+      const clauses = localClauses.filter((c) => Array.isArray(c.appliesTo) && c.appliesTo.includes(grainKey as any));
+      if (clauses.length) {
+        localDatasets[grainKey as Grain] = applyFilters(rows, clauses.map((c) => ({ dimension: c.dimension, op: c.op, value: c.value })) as any, grainKey as Grain);
+      }
+    }
+
+    // If the section uses session-grain widgets, rebuild sessions from locally filtered rounds.
+    const usesSession = section.layout.cards.some((c) => c.card.children.some((w) => w.grain === "session"));
+    const localRounds = localDatasets.round;
+    if (usesSession && Array.isArray(localRounds)) {
+      const rootEl = content.closest(".ga-root") as HTMLElement | null;
+      const raw = Number((rootEl as any)?.dataset?.gaSessionGapMinutes);
+      const gap = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
+      localDatasets.session = buildSessionsFromRoundsForUi(localRounds as any[], gap);
+    }
+
+    activeDatasets = localDatasets;
 
     const grid = doc.createElement("div");
     grid.className = "ga-grid";
@@ -104,7 +318,7 @@ export async function renderDashboard(
 
       const header = doc.createElement("div");
       header.className = "ga-card-header";
-      header.textContent = placed.title;
+      header.textContent = interpolate(placed.title, localState);
 
       const body = doc.createElement("div");
       body.className = "ga-card-body";
@@ -123,7 +337,8 @@ export async function renderDashboard(
         container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
         container.style.gridRow = `${p.y + 1} / span ${p.h}`;
 
-        container.appendChild(await renderWidget(w));
+        const wInterp = { ...w, title: interpolate(w.title, localState) };
+        container.appendChild(await renderWidget(wInterp));
         inner.appendChild(container);
       }
 

@@ -226,6 +226,14 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 80, "selectorRequired": true }
     },
+    "guess_country": {
+      "label": "Guessed country",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 20, "selectorRequired": true }
+    },
     "score_bucket": {
       "label": "Score bucket",
       "kind": "category",
@@ -233,6 +241,39 @@
       "ordered": true,
       "allowedCharts": ["bar"],
       "sortModes": ["chronological"]
+    }
+    ,
+    "team_closer_winner": {
+      "label": "Closer guesses",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 3 }
+    },
+    "team_higher_score_winner": {
+      "label": "Higher score rounds",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 3 }
+    },
+    "team_fewer_throw_winner": {
+      "label": "Fewer throws (<50)",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 3 }
+    },
+    "team_more_5k_winner": {
+      "label": "More 5k rounds",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 3 }
     }
   },
 
@@ -278,6 +319,27 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_rounds"
+    },
+    "games_distinct_count": {
+      "label": "Games",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_distinct_game_id"
+    },
+    "first_played_at": {
+      "label": "First game together",
+      "unit": "datetime",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "min_played_at_ts"
+    },
+    "last_played_at": {
+      "label": "Most recent game together",
+      "unit": "datetime",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_played_at_ts"
     },
     "score_spread": {
       "label": "Score spread",
@@ -620,6 +682,7 @@
     "percent": { "format": "percent", "decimals": 1 },
     "seconds": { "format": "float", "decimals": 1 },
     "duration": { "format": "duration" },
+    "datetime": { "format": "datetime" },
     "rating": { "format": "float", "decimals": 0 },
     "km": { "format": "float", "decimals": 1 },
     "float": { "format": "float", "decimals": 2 }

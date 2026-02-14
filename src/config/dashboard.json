@@ -1221,27 +1221,119 @@
       {
         "id": "team",
         "title": "Team",
+        "localFilters": {
+          "enabled": true,
+          "controls": [
+            {
+              "id": "mate",
+              "type": "select",
+              "label": "Mate",
+              "dimension": "teammate_name",
+              "default": "auto_top",
+              "options": "auto_teammates",
+              "required": true,
+              "appliesTo": ["round"]
+            }
+          ],
+          "buttons": { "reset": true }
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
           "cards": [
             {
               "cardId": "card_team",
-              "title": "Team Duels",
+              "title": "Team: You + {{local.mate}}",
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 14,
+              "h": 18,
               "card": {
                 "type": "composite",
                 "children": [
                   {
-                    "widgetId": "w_team_summary",
-                    "type": "team_section",
-                    "title": "Team",
+                    "widgetId": "w_team_h2h",
+                    "type": "leader_list",
+                    "title": "Head-to-head questions",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 14 },
-                    "spec": {}
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 5 },
+                    "spec": {
+                      "rows": [
+                        {
+                          "label": "Closer guesses",
+                          "dimension": "team_closer_winner",
+                          "excludeKeys": ["Tie"],
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        },
+                        {
+                          "label": "Higher score rounds",
+                          "dimension": "team_higher_score_winner",
+                          "excludeKeys": ["Tie"],
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        },
+                        {
+                          "label": "Fewer throws (<50)",
+                          "dimension": "team_fewer_throw_winner",
+                          "excludeKeys": ["Tie"],
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        },
+                        {
+                          "label": "More 5k rounds",
+                          "dimension": "team_more_5k_winner",
+                          "excludeKeys": ["Tie"],
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_team_facts_round",
+                    "type": "stat_list",
+                    "title": "Team facts",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 5, "w": 12, "h": 5 },
+                    "spec": {
+                      "rows": [
+                        { "label": "Games together", "measure": "games_distinct_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "Rounds together", "measure": "rounds_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "Time played together", "measure": "time_played_seconds", "secondaryMeasure": "rounds_with_time_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "First game together", "measure": "first_played_at", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "Most recent game together", "measure": "last_played_at", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_team_session_records",
+                    "type": "record_list",
+                    "title": "Session records together",
+                    "grain": "session",
+                    "placement": { "x": 0, "y": 10, "w": 12, "h": 4 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "longest_session_together",
+                          "label": "Longest session together",
+                          "metric": "session_games_count",
+                          "groupBy": "session_start",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_team_facts_sessions",
+                    "type": "stat_list",
+                    "title": "Session stats together",
+                    "grain": "session",
+                    "placement": { "x": 0, "y": 14, "w": 12, "h": 4 },
+                    "spec": {
+                      "rows": [
+                        { "label": "Sessions detected (gap > session standard)", "measure": "sessions_count" },
+                        { "label": "Longest break between sessions", "measure": "sessions_longest_break_seconds" },
+                        { "label": "Avg games per session", "measure": "sessions_avg_games" }
+                      ]
+                    }
                   }
                 ]
               }
@@ -1254,13 +1346,29 @@
         "id": "country_insight",
         "title": "Country Insight",
         "filterScope": { "exclude": ["country"] },
+        "localFilters": {
+          "enabled": true,
+          "controls": [
+            {
+              "id": "spotlightCountry",
+              "type": "select",
+              "label": "Country",
+              "dimension": "true_country",
+              "default": "auto_top",
+              "options": "auto_distinct",
+              "required": true,
+              "appliesTo": ["round"]
+            }
+          ],
+          "buttons": { "reset": true }
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
           "cards": [
             {
               "cardId": "card_country_insight",
-              "title": "Country Insight",
+              "title": "Country Spotlight: {{local.spotlightCountry}}",
               "x": 0,
               "y": 0,
               "w": 12,
@@ -1269,12 +1377,80 @@
                 "type": "composite",
                 "children": [
                   {
-                    "widgetId": "w_country_insight",
-                    "type": "country_insight",
-                    "title": "Country Insight",
+                    "widgetId": "w_country_insight_stats",
+                    "type": "stat_list",
+                    "title": "Country spotlight",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 18 },
-                    "spec": {}
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
+                    "spec": {
+                      "rows": [
+                        { "label": "Rounds", "measure": "rounds_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "Hit rate", "measure": "hit_rate", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "Avg score", "measure": "avg_score", "secondaryMeasure": "score_median", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        { "label": "Avg distance", "measure": "avg_distance_km", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        {
+                          "label": "Perfect 5k in this country",
+                          "measure": "fivek_count",
+                          "secondaryMeasure": "fivek_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Throws (<50) in this country",
+                          "measure": "throw_count",
+                          "secondaryMeasure": "throw_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_confusions",
+                    "type": "breakdown",
+                    "title": "Top confusions (guessed country on misses)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 6, "w": 12, "h": 4 },
+                    "spec": {
+                      "dimension": "guess_country",
+                      "measure": "rounds_count",
+                      "filters": [{ "dimension": "is_hit", "op": "eq", "value": "false" }],
+                      "sort": { "mode": "desc" },
+                      "limit": 3,
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_distribution",
+                    "type": "chart",
+                    "title": "Score distribution (smoothed)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 10, "w": 12, "h": 8 },
+                    "spec": {
+                      "type": "bar",
+                      "limit": 200,
+                      "x": { "dimension": "score_bucket" },
+                      "y": { "measure": "rounds_count" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
                   }
                 ]
               }

@@ -366,7 +366,7 @@ export function renderLayoutEditor(args: {
 
     const grains = allowedGrains(semantic);
     const grainDefault = grains[0] ?? "round";
-    const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "team_section"];
+    const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
 
     section.layout.cards.forEach((card, cardIdx) => {
       const cardItem = doc.createElement("div");

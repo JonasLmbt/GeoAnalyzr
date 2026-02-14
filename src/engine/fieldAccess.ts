@@ -37,6 +37,16 @@ export function getDistanceKm(r: RoundRow): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+export function getMateScore(r: RoundRow): number | undefined {
+  const v = legacy(r, "player_mate_score", "p2_score");
+  return typeof v === "number" ? v : undefined;
+}
+
+export function getMateDistanceKm(r: RoundRow): number | undefined {
+  const v = legacy(r, "player_mate_distanceKm", "p2_distanceKm");
+  return typeof v === "number" ? v : undefined;
+}
+
 export function getTeammateName(r: RoundRow): string | undefined {
   const v = legacy(r, "teammateName", "player_mate_name");
   return typeof v === "string" ? v : undefined;

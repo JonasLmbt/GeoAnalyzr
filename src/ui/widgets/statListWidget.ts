@@ -6,12 +6,37 @@ import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
-function formatValue(semantic: SemanticRegistry, measureId: string, value: number): string {
+function readDateFormatMode(doc: Document): "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale" {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  const mode = root?.dataset?.gaDateFormat;
+  return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+}
+
+function formatDateTime(doc: Document, ts: number): string {
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return String(ts);
+  const mode = readDateFormatMode(doc);
+  if (mode === "locale") return d.toLocaleString();
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+
+  if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+  if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+  return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+}
+
+function formatValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
   const m = semantic.measures[measureId];
   const unit = semantic.units[m.unit];
 
   if (!unit) return String(value);
 
+  if (unit.format === "datetime") return formatDateTime(doc, value);
   if (unit.format === "percent") {
     const decimals = unit.decimals ?? 1;
     const clamped = Math.max(0, Math.min(1, value));
@@ -57,7 +82,8 @@ function attachClickIfAny(
   semantic: SemanticRegistry,
   title: string,
   baseRows: any[] | undefined,
-  grain: Grain
+  grain: Grain,
+  filters?: FilterClause[]
 ): void {
   const click = actions?.click;
   if (!click) return;
@@ -67,7 +93,8 @@ function attachClickIfAny(
     if (click.type === "drilldown") {
       const rowsAll =
         baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
-      const rows = applyFilters(rowsAll, click.extraFilters, grain);
+      const mergedFilters = [...(filters ?? []), ...(click.extraFilters ?? [])];
+      const rows = applyFilters(rowsAll, mergedFilters, grain);
       overlay.open(semantic, {
         title,
         target: click.target,
@@ -116,18 +143,18 @@ export async function renderStatListWidget(
     right.textContent = "...";
 
     const val = await computeMeasure(semantic, row.measure, rowBaseRows, rowGrain, row.filters);
-    const primaryText = formatValue(semantic, row.measure, val);
+    const primaryText = formatValue(doc, semantic, row.measure, val);
 
     const secondaryId = typeof (row as any).secondaryMeasure === "string" ? ((row as any).secondaryMeasure as string).trim() : "";
     if (secondaryId) {
       const secVal = await computeMeasure(semantic, secondaryId, rowBaseRows, rowGrain, row.filters);
-      const secondaryText = formatValue(semantic, secondaryId, secVal);
+      const secondaryText = formatValue(doc, semantic, secondaryId, secVal);
       right.textContent = `${primaryText} (${secondaryText})`;
     } else {
       right.textContent = primaryText;
     }
 
-    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain);
+    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain, row.filters);
 
     line.appendChild(left);
     line.appendChild(right);

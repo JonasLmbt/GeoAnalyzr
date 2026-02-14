@@ -67,11 +67,36 @@ function sortRows(rows: Row[], mode: "chronological" | "asc" | "desc"): Row[] {
   });
 }
 
-function formatValue(semantic: SemanticRegistry, measureId: string, value: number): string {
+function readDateFormatMode(doc: Document): "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale" {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  const mode = root?.dataset?.gaDateFormat;
+  return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+}
+
+function formatDateTime(doc: Document, ts: number): string {
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return String(ts);
+  const mode = readDateFormatMode(doc);
+  if (mode === "locale") return d.toLocaleString();
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+
+  if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+  if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+  return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+}
+
+function formatValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
   const m = semantic.measures[measureId];
   const unit = semantic.units[m.unit];
   if (!unit) return String(value);
 
+  if (unit.format === "datetime") return formatDateTime(doc, value);
   if (unit.format === "percent") {
     const clamped = Math.max(0, Math.min(1, value));
     const decimals = unit.decimals ?? 1;
@@ -323,7 +348,7 @@ export async function renderBreakdownWidget(
 
       const val = doc.createElement("div");
       val.className = "ga-breakdown-value";
-      val.textContent = formatValue(semantic, activeMeasure, r.value);
+      val.textContent = formatValue(doc, semantic, activeMeasure, r.value);
 
       const barWrap = doc.createElement("div");
       barWrap.className = "ga-breakdown-barwrap";

@@ -1,7 +1,7 @@
 // src/engine/measures.ts
 import type { Grain } from "../config/semantic.types";
 import type { RoundRow, GameFactRow } from "../db";
-import { getSelfScore, getTrueCountry, getGuessCountrySelf, getDurationSeconds, getDistanceKm, pick } from "./fieldAccess";
+import { getSelfScore, getTrueCountry, getGuessCountrySelf, getDurationSeconds, getDistanceKm, getPlayedAt, pick } from "./fieldAccess";
 import type { SessionRow } from "./queryEngine";
 
 export type MeasureFn = (rows: any[]) => number;
@@ -83,6 +83,33 @@ function getGameOutcome(g: GameFactRow): "win" | "loss" | "tie" | null {
 
 export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => number> = {
   count_rounds: (rows) => rows.length,
+
+  count_distinct_game_id: (rows) => {
+    const seen = new Set<string>();
+    for (const r of rows as any[]) {
+      const gid = typeof (r as any)?.gameId === "string" ? (r as any).gameId : "";
+      if (gid) seen.add(gid);
+    }
+    return seen.size;
+  },
+
+  min_played_at_ts: (rows) => {
+    let min = Infinity;
+    for (const r of rows) {
+      const ts = getPlayedAt(r) ?? (r as any)?.ts;
+      if (typeof ts === "number" && Number.isFinite(ts)) min = Math.min(min, ts);
+    }
+    return Number.isFinite(min) ? min : 0;
+  },
+
+  max_played_at_ts: (rows) => {
+    let max = -Infinity;
+    for (const r of rows) {
+      const ts = getPlayedAt(r) ?? (r as any)?.ts;
+      if (typeof ts === "number" && Number.isFinite(ts)) max = Math.max(max, ts);
+    }
+    return Number.isFinite(max) ? max : 0;
+  },
 
   spread_player_self_score: (rows) => {
     let min = Infinity;

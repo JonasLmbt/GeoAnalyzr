@@ -144,10 +144,35 @@ function getMeasureIds(spec: ChartSpec): string[] {
   return out;
 }
 
-function formatMeasureValue(semantic: SemanticRegistry, measureId: string, value: number): string {
+function readDateFormatMode(doc: Document): "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale" {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  const mode = root?.dataset?.gaDateFormat;
+  return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+}
+
+function formatDateTime(doc: Document, ts: number): string {
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return String(ts);
+  const mode = readDateFormatMode(doc);
+  if (mode === "locale") return d.toLocaleString();
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+
+  if (mode === "yyyy-mm-dd") return `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+  if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
+  return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
+}
+
+function formatMeasureValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
   const measure = semantic.measures[measureId];
   const unit = measure ? semantic.units[measure.unit] : undefined;
   if (!unit) return `${value}`;
+  if (unit.format === "datetime") return formatDateTime(doc, value);
   if (unit.format === "percent") {
     const clamped = Math.max(0, Math.min(1, value));
     return `${(clamped * 100).toFixed(unit.decimals ?? 1)}%`;
@@ -694,7 +719,9 @@ export async function renderChartWidget(
       return;
     }
 
-    const unitFormat = semantic.units[measureDef.unit]?.format ?? "float";
+    const unitFormatRaw = semantic.units[measureDef.unit]?.format ?? "float";
+    // Datetime measures are not intended for chart y-axes; treat them as ints to avoid layout/type issues.
+    const unitFormat = unitFormatRaw === "datetime" ? "int" : unitFormatRaw;
     // Percent line series should be allowed to "fit" (still clamped to 0..100% in computeYBounds).
     const preferZero = spec.type === "bar" || unitFormat === "int";
     const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
@@ -752,7 +779,7 @@ export async function renderChartWidget(
       yTick.setAttribute("font-size", "10");
       yTick.setAttribute("fill", "var(--ga-axis-text)");
       yTick.setAttribute("opacity", "0.95");
-      yTick.textContent = formatMeasureValue(semantic, activeMeasure, yVal);
+      yTick.textContent = formatMeasureValue(doc, semantic, activeMeasure, yVal);
       svg.appendChild(yTick);
     }
 
@@ -832,7 +859,7 @@ export async function renderChartWidget(
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${p.d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+        tooltip.textContent = `${p.d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
         if (click?.type === "drilldown") {
@@ -880,7 +907,7 @@ export async function renderChartWidget(
         rect.style.transformBox = "view-box";
 
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${d.x}: ${formatMeasureValue(semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
+        tooltip.textContent = `${d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
         const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;

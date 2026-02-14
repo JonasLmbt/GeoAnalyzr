@@ -195,6 +195,12 @@ function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): Sessio
   return sessions;
 }
 
+// UI helper: allow building sessions from an already-filtered round list (e.g. section-local filters).
+export function buildSessionsFromRoundsForUi(rounds: RoundRow[], gapMinutes: number): SessionRow[] {
+  const mins = typeof gapMinutes === "number" && Number.isFinite(gapMinutes) ? Math.max(1, Math.min(360, Math.round(gapMinutes))) : 45;
+  return buildSessionsFromRounds(rounds, mins);
+}
+
 async function getSessionsRaw(gapMinutes: number): Promise<SessionRow[]> {
   if (sessionsRawCache) return sessionsRawCache as SessionRow[];
   const rounds = await getRoundsRaw();

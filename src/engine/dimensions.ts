@@ -1,7 +1,18 @@
 // src/engine/dimensions.ts
 import type { RoundRow } from "../db";
 import type { Grain } from "../config/semantic.types";
-import { getSelfScore, getPlayedAt, getTrueCountry, getMovementType, getDurationSeconds, getTeammateName, getGuessCountrySelf } from "./fieldAccess";
+import {
+  getSelfScore,
+  getPlayedAt,
+  getTrueCountry,
+  getMovementType,
+  getDurationSeconds,
+  getTeammateName,
+  getGuessCountrySelf,
+  getMateScore,
+  getMateDistanceKm,
+  getDistanceKm
+} from "./fieldAccess";
 
 export type GroupKey = string;
 
@@ -166,6 +177,30 @@ function resultKeyAny(row: any): GroupKey | null {
   return null;
 }
 
+export function guessCountryKey(r: RoundRow): GroupKey | null {
+  const guess = getGuessCountrySelf(r);
+  const v = typeof guess === "string" ? guess.trim() : "";
+  return v.length ? v : null;
+}
+
+function mateLabel(r: RoundRow): string {
+  const n = getTeammateName(r);
+  const v = typeof n === "string" ? n.trim() : "";
+  return v.length ? v : "Mate";
+}
+
+function winnerLabelForCompare(
+  r: RoundRow,
+  a: number | undefined,
+  b: number | undefined,
+  prefer: "min" | "max"
+): GroupKey | null {
+  if (typeof a !== "number" || !Number.isFinite(a) || typeof b !== "number" || !Number.isFinite(b)) return null;
+  if (a === b) return "Tie";
+  const youWin = prefer === "min" ? a < b : a > b;
+  return youWin ? "You" : mateLabel(r);
+}
+
 export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => GroupKey | null>> = {
   round: {
     score_bucket: scoreBucketKey,
@@ -197,7 +232,28 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     },
     duration_bucket: durationBucketKey,
     confused_countries: confusedCountriesKey,
+    guess_country: guessCountryKey,
     teammate_name: teammateNameKey,
+    team_closer_winner: (r: any) => winnerLabelForCompare(r, getDistanceKm(r as any), getMateDistanceKm(r as any), "min"),
+    team_higher_score_winner: (r: any) => winnerLabelForCompare(r, getSelfScore(r as any), getMateScore(r as any), "max"),
+    team_fewer_throw_winner: (r: any) => {
+      const a = getSelfScore(r as any);
+      const b = getMateScore(r as any);
+      if (typeof a !== "number" || typeof b !== "number") return null;
+      const aThrow = a < 50;
+      const bThrow = b < 50;
+      if (aThrow === bThrow) return "Tie";
+      return aThrow ? mateLabel(r as any) : "You";
+    },
+    team_more_5k_winner: (r: any) => {
+      const a = getSelfScore(r as any);
+      const b = getMateScore(r as any);
+      if (typeof a !== "number" || typeof b !== "number") return null;
+      const a5 = a >= 5000;
+      const b5 = b >= 5000;
+      if (a5 === b5) return "Tie";
+      return a5 ? "You" : mateLabel(r as any);
+    },
     round_number: (r: any) => (typeof r?.roundNumber === "number" ? `#${r.roundNumber}` : null)
   },
   game: {
