@@ -14,6 +14,7 @@ import {
 } from "./ui/settingsStore";
 import { attachSettingsModal } from "./ui/settingsModal";
 import { renderAnalysisApp } from "./ui/analysisRenderer";
+import { getCurrentPlayerName } from "./app/playerIdentity";
 
 function cloneTemplate<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -31,7 +32,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     throw new Error("Semantic dashboard target document is not ready.");
   }
 
-  doc.title = "GeoAnalyzr - Semantic Dashboard";
+  doc.title = "GeoAnalyzr";
   doc.documentElement.classList.add("ga-semantic-page");
   doc.body.classList.add("ga-semantic-page");
   injectSemanticDashboardCssOnce(doc);
@@ -43,9 +44,36 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   let root = doc.getElementById("geoanalyzr-semantic-root") as HTMLDivElement | null;
   let body: HTMLDivElement;
 
+  const playerName = await getCurrentPlayerName();
+
+  const applyTitleTemplate = (tpl: string, vars: Record<string, string | undefined>): string => {
+    const raw = String(tpl ?? "");
+    const rendered = raw.replace(/\{\{\s*([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, key: string) => {
+      const v = vars[key];
+      return typeof v === "string" ? v : "";
+    });
+    return rendered.trim();
+  };
+
+  const updateTitles = (): void => {
+    const dashTitle = dashboard?.dashboard?.title ?? "GeoAnalyzr";
+    const ui: any = (dashboard as any)?.dashboard?.ui;
+    const topTpl = typeof ui?.topbarTitle === "string" ? ui.topbarTitle : "{{dashboardTitle}}";
+    const winTpl = typeof ui?.windowTitle === "string" ? ui.windowTitle : "{{dashboardTitle}}";
+    const vars = { playerName, dashboardTitle: dashTitle };
+
+    const topTitle = applyTitleTemplate(topTpl, vars) || dashTitle;
+    const winTitle = applyTitleTemplate(winTpl, vars) || dashTitle;
+
+    doc.title = winTitle;
+    const titleEl = doc.querySelector(".ga-topbar .ga-title") as HTMLDivElement | null;
+    if (titleEl) titleEl.textContent = topTitle;
+  };
+
   const renderNow = async (): Promise<void> => {
     body.innerHTML = "";
     validateDashboardAgainstSemantic(semantic, dashboard);
+    updateTitles();
     await renderAnalysisApp({ body, semantic, dashboard });
   };
 
@@ -59,7 +87,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
 
     const title = doc.createElement("div");
     title.className = "ga-title";
-    title.textContent = "GeoAnalyzr - Semantic Dashboard";
+    title.textContent = "GeoAnalyzr";
 
     const actions = doc.createElement("div");
     actions.className = "ga-topbar-actions";
@@ -99,6 +127,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
       applyDashboard: async (next) => {
         dashboard = next;
         saveDashboardTemplate(doc, dashboard);
+        updateTitles();
         await renderNow();
       },
       getSettings: () => settings,
@@ -121,6 +150,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   }
 
   applySettingsToRoot(root, settings);
+  updateTitles();
 
   try {
     await renderNow();

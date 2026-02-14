@@ -4,6 +4,10 @@
   "dashboard": {
     "id": "default",
     "title": "GeoAnalyzr",
+    "ui": {
+      "topbarTitle": "{{playerName}}",
+      "windowTitle": "{{playerName}} - GeoAnalyzr"
+    },
     "globalFilters": {
       "enabled": true,
       "layout": { "variant": "compact" },

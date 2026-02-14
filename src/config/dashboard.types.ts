@@ -276,6 +276,11 @@ export interface DashboardDoc {
   dashboard: {
     id: string;
     title: string;
+    // Optional UI title templates (supports {{playerName}} and {{dashboardTitle}}).
+    ui?: {
+      topbarTitle?: string;
+      windowTitle?: string;
+    };
     globalFilters?: GlobalFiltersSpec;
     sections: SectionDef[];
   };

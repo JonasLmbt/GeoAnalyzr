@@ -46,6 +46,14 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "title": { "$ref": "#/$defs/title" },
+        "ui": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "topbarTitle": { "$ref": "#/$defs/title" },
+            "windowTitle": { "$ref": "#/$defs/title" }
+          }
+        },
         "globalFilters": { "$ref": "#/$defs/globalFiltersSpecDef" },
         "sections": {
           "type": "array",
