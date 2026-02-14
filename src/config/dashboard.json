@@ -1039,84 +1039,11 @@
                           "click": {
                             "type": "drilldown",
                             "target": "rounds",
-                          "columnsPreset": "roundMode",
-                          "filterFromPoint": true
-                        }
-                      },
-                      "actionsByMeasure": {
-                        "fivek_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
                             "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
-                          }
-                        },
-                        "fivek_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
-                          }
-                        },
-                        "throw_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "throw_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "hit_rate": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "hit_count": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "damage_dealt_share": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }]
-                          }
-                        },
-                        "damage_taken_share": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true,
-                            "extraFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }]
+                            "filterFromPoint": true
                           }
                         }
-                      }
+                      
                     }
                   }
                   ,

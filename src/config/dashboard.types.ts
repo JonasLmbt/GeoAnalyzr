@@ -133,8 +133,6 @@ export interface ChartSpec {
   // Which sort to use by default when using `sorts`.
   activeSort?: SortDef;
   actions?: Actions;
-  // Optional per-measure overrides (useful when y.measures is used and drilldown needs measure-specific filters).
-  actionsByMeasure?: Record<string, Actions>;
 }
 
 export interface StatRowDef {
@@ -181,8 +179,6 @@ export interface BreakdownSpec {
   limit?: number;
   filters?: FilterClause[];
   actions?: Actions;
-  // Optional per-measure overrides (useful when measures is used and drilldown needs measure-specific filters).
-  actionsByMeasure?: Record<string, Actions>;
 }
 
 export interface RecordItemDef {

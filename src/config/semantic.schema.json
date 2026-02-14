@@ -164,6 +164,17 @@
           "items": { "$ref": "#/$defs/chartType" }
         },
         "formulaId": { "type": "string", "minLength": 1 },
+        "drilldown": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "filterFromPoint": { "type": "boolean" },
+            "extraFilters": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/filterDef" }
+            }
+          }
+        },
         "range": {
           "type": "object",
           "additionalProperties": false,
@@ -180,9 +191,27 @@
       "additionalProperties": false,
       "required": ["format"],
       "properties": {
-        "format": { "enum": ["int", "float", "percent", "duration"] },
+        "format": { "enum": ["int", "float", "percent", "duration", "datetime"] },
         "decimals": { "type": "integer", "minimum": 0, "maximum": 6 }
       }
+    },
+
+    "filterDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "op"],
+      "properties": {
+        "dimension": { "type": "string", "minLength": 1 },
+        "op": { "enum": ["eq", "neq", "in", "nin"] },
+        "value": {},
+        "values": { "type": "array", "items": {} }
+      },
+      "allOf": [
+        { "if": { "properties": { "op": { "const": "in" } } }, "then": { "required": ["values"] } },
+        { "if": { "properties": { "op": { "const": "nin" } } }, "then": { "required": ["values"] } },
+        { "if": { "properties": { "op": { "const": "eq" } } }, "then": { "required": ["value"] } },
+        { "if": { "properties": { "op": { "const": "neq" } } }, "then": { "required": ["value"] } }
+      ]
     },
 
     "drilldownPresetDef": {

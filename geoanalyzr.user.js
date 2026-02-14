@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.19
+// @version      1.6.20
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -39921,13 +39921,6 @@
         assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
       }
       validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-      if (spec.actionsByMeasure && typeof spec.actionsByMeasure === "object") {
-        for (const [measureId, acts] of Object.entries(spec.actionsByMeasure)) {
-          const click = acts?.click;
-          if (!click) continue;
-          validateClickAction(semantic, `${widget.widgetId}[${measureId}]`, click);
-        }
-      }
     }
     if (widget.type === "stat_list") {
       const spec = widget.spec;
@@ -39950,13 +39943,6 @@
       assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
       assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
       validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-      if (spec.actionsByMeasure && typeof spec.actionsByMeasure === "object") {
-        for (const [measureId, acts] of Object.entries(spec.actionsByMeasure)) {
-          const click = acts?.click;
-          if (!click) continue;
-          validateClickAction(semantic, `${widget.widgetId}[${measureId}]`, click);
-        }
-      }
     }
     if (widget.type === "breakdown") {
       const spec = widget.spec;
@@ -40457,14 +40443,22 @@
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "rate_player_self_score_eq_5000"
+        formulaId: "rate_player_self_score_eq_5000",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+        }
       },
       fivek_count: {
         label: "5k count",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_5k_round"
+        formulaId: "count_5k_round",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+        }
       },
       near_perfect_rate: {
         label: "Near-perfect rate (>=4500)",
@@ -40569,28 +40563,44 @@
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "rate_true_country_hit"
+        formulaId: "rate_true_country_hit",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+        }
       },
       hit_count: {
         label: "Hit count",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_hit_round"
+        formulaId: "count_hit_round",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+        }
       },
       throw_rate: {
         label: "Throw rate",
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "rate_throw_round"
+        formulaId: "rate_throw_round",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+        }
       },
       throw_count: {
         label: "Throw count",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_throw_round"
+        formulaId: "count_throw_round",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+        }
       },
       score_median: {
         label: "Median score",
@@ -40655,14 +40665,22 @@
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "share_damage_dealt"
+        formulaId: "share_damage_dealt",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
+        }
       },
       damage_taken_share: {
         label: "Damage taken share",
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "share_damage_taken"
+        formulaId: "share_damage_taken",
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
+        }
       },
       sessions_count: {
         label: "Sessions",
@@ -41859,80 +41877,6 @@
                             target: "rounds",
                             columnsPreset: "roundMode",
                             filterFromPoint: true
-                          }
-                        },
-                        actionsByMeasure: {
-                          fivek_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-                            }
-                          },
-                          fivek_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-                            }
-                          },
-                          throw_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-                            }
-                          },
-                          throw_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-                            }
-                          },
-                          hit_rate: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
-                            }
-                          },
-                          hit_count: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
-                            }
-                          },
-                          damage_dealt_share: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
-                            }
-                          },
-                          damage_taken_share: {
-                            click: {
-                              type: "drilldown",
-                              target: "rounds",
-                              columnsPreset: "roundMode",
-                              filterFromPoint: true,
-                              extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
-                            }
                           }
                         }
                       }
@@ -44767,8 +44711,16 @@
     if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
     return fn(rows);
   }
-  function attachClickIfAny(el, actions, overlay, semantic, title, baseRows, grain, filters) {
-    const click = actions?.click;
+  function attachClickIfAny(el, actions, overlay, semantic, title, baseRows, grain, filters, measureId) {
+    const clickBase = actions?.click;
+    const click = clickBase && clickBase.type === "drilldown" ? {
+      ...clickBase,
+      filterFromPoint: clickBase.filterFromPoint ?? semantic.measures[measureId ?? ""]?.drilldown?.filterFromPoint,
+      extraFilters: [
+        ...semantic.measures[measureId ?? ""]?.drilldown?.extraFilters ?? [],
+        ...clickBase.extraFilters ?? []
+      ]
+    } : clickBase;
     if (!click) return;
     el.style.cursor = "pointer";
     el.addEventListener("click", async () => {
@@ -44818,7 +44770,7 @@
       } else {
         right.textContent = primaryText;
       }
-      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain, row.filters);
+      attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain, row.filters, row.measure);
       line.appendChild(left);
       line.appendChild(right);
       box.appendChild(line);
@@ -45009,6 +44961,15 @@
     const unit = measure ? semantic.units[measure.unit] : void 0;
     if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
     return value;
+  }
+  function mergeDrilldownDefaults(base, defs) {
+    if (!base) return base;
+    if (!defs) return base;
+    return {
+      ...base,
+      filterFromPoint: base.filterFromPoint ?? defs.filterFromPoint,
+      extraFilters: [...defs.extraFilters ?? [], ...base.extraFilters ?? []]
+    };
   }
   function computeYBounds(opts) {
     const { unitFormat, values, preferZero, hardMin, hardMax } = opts;
@@ -45553,7 +45514,7 @@
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           tooltip.textContent = `${p.d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
-          const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
+          const click = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -45598,7 +45559,7 @@
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           tooltip.textContent = `${d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
           rect.appendChild(tooltip);
-          const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
+          const click = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
           if (click?.type === "drilldown") {
             rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
             rect.addEventListener("click", () => {
@@ -45801,6 +45762,15 @@
     if (mode === "asc") return "Ascending";
     return "Descending";
   }
+  function mergeDrilldownDefaults2(base, defs) {
+    if (!base) return base;
+    if (!defs) return base;
+    return {
+      ...base,
+      filterFromPoint: base.filterFromPoint ?? defs.filterFromPoint,
+      extraFilters: [...defs.extraFilters ?? [], ...base.extraFilters ?? []]
+    };
+  }
   async function renderBreakdownWidget(semantic, widget, overlay, baseRows) {
     const spec = widget.spec;
     const doc = overlay.getDocument();
@@ -45956,7 +45926,7 @@
         right.appendChild(barWrap);
         line.appendChild(left);
         line.appendChild(right);
-        const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
+        const click = mergeDrilldownDefaults2(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
         if (click?.type === "drilldown") {
           line.style.cursor = "pointer";
           line.addEventListener("click", () => {

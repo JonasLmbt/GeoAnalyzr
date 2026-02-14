@@ -191,13 +191,6 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     }
 
     validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    if (spec.actionsByMeasure && typeof spec.actionsByMeasure === "object") {
-      for (const [measureId, acts] of Object.entries(spec.actionsByMeasure)) {
-        const click = (acts as any)?.click;
-        if (!click) continue;
-        validateClickAction(semantic, `${widget.widgetId}[${measureId}]`, click);
-      }
-    }
   }
 
   if (widget.type === "stat_list") {
@@ -222,13 +215,6 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
     assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
     validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    if (spec.actionsByMeasure && typeof spec.actionsByMeasure === "object") {
-      for (const [measureId, acts] of Object.entries(spec.actionsByMeasure)) {
-        const click = (acts as any)?.click;
-        if (!click) continue;
-        validateClickAction(semantic, `${widget.widgetId}[${measureId}]`, click);
-      }
-    }
   }
 
   if (widget.type === "breakdown") {

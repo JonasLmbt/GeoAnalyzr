@@ -159,6 +159,19 @@ function sortLabel(mode: "chronological" | "asc" | "desc"): string {
   return "Descending";
 }
 
+function mergeDrilldownDefaults<T extends { extraFilters?: any[]; filterFromPoint?: boolean }>(
+  base: T | undefined,
+  defs: { extraFilters?: any[]; filterFromPoint?: boolean } | undefined
+): T | undefined {
+  if (!base) return base;
+  if (!defs) return base;
+  return {
+    ...(base as any),
+    filterFromPoint: (base as any).filterFromPoint ?? defs.filterFromPoint,
+    extraFilters: [...(defs.extraFilters ?? []), ...((base as any).extraFilters ?? [])]
+  } as T;
+}
+
 export async function renderBreakdownWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
@@ -365,7 +378,7 @@ export async function renderBreakdownWidget(
       line.appendChild(left);
       line.appendChild(right);
 
-      const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
+      const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
       if (click?.type === "drilldown") {
         line.style.cursor = "pointer";
         line.addEventListener("click", () => {

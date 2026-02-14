@@ -83,9 +83,20 @@ function attachClickIfAny(
   title: string,
   baseRows: any[] | undefined,
   grain: Grain,
-  filters?: FilterClause[]
+  filters?: FilterClause[],
+  measureId?: string
 ): void {
-  const click = actions?.click;
+  const clickBase = actions?.click;
+  const click = clickBase && clickBase.type === "drilldown"
+    ? ({
+        ...clickBase,
+        filterFromPoint: clickBase.filterFromPoint ?? semantic.measures[measureId ?? ""]?.drilldown?.filterFromPoint,
+        extraFilters: [
+          ...(semantic.measures[measureId ?? ""]?.drilldown?.extraFilters ?? []),
+          ...(clickBase.extraFilters ?? [])
+        ]
+      } as any)
+    : clickBase;
   if (!click) return;
 
   el.style.cursor = "pointer";
@@ -154,7 +165,7 @@ export async function renderStatListWidget(
       right.textContent = primaryText;
     }
 
-    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain, row.filters);
+    attachClickIfAny(line, row.actions, overlay, semantic, `${row.label} - Drilldown`, rowBaseRows, rowGrain, row.filters, row.measure);
 
     line.appendChild(left);
     line.appendChild(right);

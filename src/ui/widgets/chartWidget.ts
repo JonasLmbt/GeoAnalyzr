@@ -198,6 +198,19 @@ function clampForMeasure(semantic: SemanticRegistry, measureId: string, value: n
   return value;
 }
 
+function mergeDrilldownDefaults<T extends { extraFilters?: any[]; filterFromPoint?: boolean }>(
+  base: T | undefined,
+  defs: { extraFilters?: any[]; filterFromPoint?: boolean } | undefined
+): T | undefined {
+  if (!base) return base;
+  if (!defs) return base;
+  return {
+    ...(base as any),
+    filterFromPoint: (base as any).filterFromPoint ?? defs.filterFromPoint,
+    extraFilters: [...(defs.extraFilters ?? []), ...((base as any).extraFilters ?? [])]
+  } as T;
+}
+
 function computeYBounds(opts: {
   unitFormat: "int" | "float" | "percent" | "duration";
   values: number[];
@@ -861,7 +874,7 @@ export async function renderChartWidget(
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
         tooltip.textContent = `${p.d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
-        const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
+        const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
@@ -910,7 +923,7 @@ export async function renderChartWidget(
         tooltip.textContent = `${d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
-        const click = (spec.actionsByMeasure?.[activeMeasure] ?? spec.actions)?.click;
+        const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
         if (click?.type === "drilldown") {
           rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
           rect.addEventListener("click", () => {

@@ -30,6 +30,17 @@ export interface MeasureDef {
   grain: Grain;
   allowedCharts: ChartType[];
   formulaId: string;
+  // Optional drilldown defaults for widgets (to avoid per-widget actionsByMeasure boilerplate).
+  drilldown?: {
+    filterFromPoint?: boolean;
+    // Filters to add when drilling down into rounds for this measure.
+    extraFilters?: Array<{
+      dimension: string;
+      op: "eq" | "neq" | "in" | "nin";
+      value?: unknown;
+      values?: unknown[];
+    }>;
+  };
   // Optional hard bounds for y-axis scaling (e.g. score is always 0..5000).
   range?: {
     min?: number;

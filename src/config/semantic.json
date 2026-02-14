@@ -385,14 +385,22 @@
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_player_self_score_eq_5000"
+      "formulaId": "rate_player_self_score_eq_5000",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+      }
     },
     "fivek_count": {
       "label": "5k count",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_5k_round"
+      "formulaId": "count_5k_round",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+      }
     },
     "near_perfect_rate": {
       "label": "Near-perfect rate (>=4500)",
@@ -499,28 +507,44 @@
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_true_country_hit"
+      "formulaId": "rate_true_country_hit",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+      }
     },
     "hit_count": {
       "label": "Hit count",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_hit_round"
+      "formulaId": "count_hit_round",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+      }
     },
     "throw_rate": {
       "label": "Throw rate",
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_throw_round"
+      "formulaId": "rate_throw_round",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+      }
     },
     "throw_count": {
       "label": "Throw count",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_throw_round"
+      "formulaId": "count_throw_round",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+      }
     },
     "score_median": {
       "label": "Median score",
@@ -586,14 +610,22 @@
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "share_damage_dealt"
+      "formulaId": "share_damage_dealt",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }]
+      }
     },
     "damage_taken_share": {
       "label": "Damage taken share",
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "share_damage_taken"
+      "formulaId": "share_damage_taken",
+      "drilldown": {
+        "filterFromPoint": true,
+        "extraFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }]
+      }
     }
     ,
     "sessions_count": {
