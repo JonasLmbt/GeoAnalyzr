@@ -1,6 +1,7 @@
 import type { DashboardDoc } from "../config/dashboard.types";
 import type { SemanticRegistry } from "../config/semantic.types";
 import { validateDashboardAgainstSemantic } from "../engine/validate";
+import { renderLayoutEditor } from "./layoutEditor";
 import {
   DEFAULT_SETTINGS,
   normalizeColor,
@@ -86,12 +87,16 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const templateTab = doc.createElement("button");
     templateTab.className = "ga-settings-tab";
     templateTab.textContent = "Template";
+    const layoutTab = doc.createElement("button");
+    layoutTab.className = "ga-settings-tab";
+    layoutTab.textContent = "Layout";
     tabs.appendChild(appearanceTab);
     tabs.appendChild(standardsTab);
+    tabs.appendChild(layoutTab);
     tabs.appendChild(templateTab);
 
     const settings = getSettings();
-    const dashboard = getDashboard();
+    let dashboard = getDashboard();
 
     const appearancePane = doc.createElement("div");
     appearancePane.className = "ga-settings-pane active";
@@ -188,6 +193,13 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
 
     const templatePane = doc.createElement("div");
     templatePane.className = "ga-settings-pane";
+
+    const templateWarn = doc.createElement("div");
+    templateWarn.className = "ga-settings-note";
+    templateWarn.textContent =
+      "Warning: Editing the template JSON can easily break the dashboard. Prefer the Layout tab unless you know what you're doing.";
+    templatePane.appendChild(templateWarn);
+
     const templateField = doc.createElement("div");
     templateField.className = "ga-settings-field";
     const templateLabel = doc.createElement("label");
@@ -202,20 +214,58 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     templatePane.appendChild(templateField);
     templatePane.appendChild(templateStatus);
 
+    const layoutPane = doc.createElement("div");
+    layoutPane.className = "ga-settings-pane";
+    const layoutStatus = doc.createElement("div");
+    layoutStatus.className = "ga-settings-status";
+    const layoutHost = doc.createElement("div");
+    layoutPane.appendChild(layoutHost);
+    layoutPane.appendChild(layoutStatus);
+
     panes.appendChild(appearancePane);
     panes.appendChild(standardsPane);
+    panes.appendChild(layoutPane);
     panes.appendChild(templatePane);
 
-    const setActiveTab = (idx: 0 | 1 | 2) => {
-      const tabButtons = [appearanceTab, standardsTab, templateTab];
-      const tabPanes = [appearancePane, standardsPane, templatePane];
+    const renderLayout = () => {
+      layoutHost.innerHTML = "";
+      const latest = getDashboard();
+      dashboard = latest;
+      templateEditor.value = JSON.stringify(latest, null, 2);
+      layoutHost.appendChild(
+        renderLayoutEditor({
+          doc,
+          semantic,
+          dashboard: latest,
+          statusEl: layoutStatus,
+          onChange: (next) => {
+            void (async () => {
+              try {
+                await applyDashboard(next);
+                dashboard = next;
+                templateEditor.value = JSON.stringify(next, null, 2);
+              } catch (e) {
+                layoutStatus.textContent = e instanceof Error ? e.message : String(e);
+                layoutStatus.className = "ga-settings-status error";
+              }
+            })();
+          }
+        })
+      );
+    };
+
+    const setActiveTab = (idx: 0 | 1 | 2 | 3) => {
+      const tabButtons = [appearanceTab, standardsTab, layoutTab, templateTab];
+      const tabPanes = [appearancePane, standardsPane, layoutPane, templatePane];
       tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
       tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
+      if (idx === 2) renderLayout();
     };
 
     appearanceTab.addEventListener("click", () => setActiveTab(0));
     standardsTab.addEventListener("click", () => setActiveTab(1));
-    templateTab.addEventListener("click", () => setActiveTab(2));
+    layoutTab.addEventListener("click", () => setActiveTab(2));
+    templateTab.addEventListener("click", () => setActiveTab(3));
 
     const persistSettings = async () => {
       const next: SemanticDashboardSettings = {
@@ -260,6 +310,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         const parsed = JSON.parse(templateEditor.value) as DashboardDoc;
         validateDashboardAgainstSemantic(semantic, parsed);
         await applyDashboard(parsed);
+        dashboard = parsed;
         templateStatus.textContent = "Template applied.";
         templateStatus.classList.add("ok");
       } catch (error) {

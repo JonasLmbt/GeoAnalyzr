@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.14
+// @version      1.6.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10143,7 +10143,7 @@
     row.style.justifyContent = "flex-end";
     row.style.gap = "6px";
     row.style.marginBottom = "6px";
-    function mkBtn(label, onClick) {
+    function mkBtn2(label, onClick) {
       const b = doc.createElement("button");
       b.textContent = label;
       b.style.background = palette.buttonBg;
@@ -10156,10 +10156,10 @@
       b.addEventListener("click", onClick);
       return b;
     }
-    row.appendChild(mkBtn("Zoom", () => openZoomOverlay(svg, title)));
-    row.appendChild(mkBtn("New Tab", () => openChartInNewTab(svg, title, hostWindow)));
-    row.appendChild(mkBtn("Save SVG", () => void downloadSvg(svg, title)));
-    row.appendChild(mkBtn("Save PNG", () => void downloadPng(svg, title)));
+    row.appendChild(mkBtn2("Zoom", () => openZoomOverlay(svg, title)));
+    row.appendChild(mkBtn2("New Tab", () => openChartInNewTab(svg, title, hostWindow)));
+    row.appendChild(mkBtn2("Save SVG", () => void downloadSvg(svg, title)));
+    row.appendChild(mkBtn2("Save PNG", () => void downloadPng(svg, title)));
     return row;
   }
   function aggregateLinePoints(points, opts) {
@@ -10749,7 +10749,7 @@
     status.style.opacity = "0.95";
     status.style.whiteSpace = "pre-wrap";
     status.style.marginBottom = "10px";
-    function mkBtn(label, bg) {
+    function mkBtn2(label, bg) {
       const b = document.createElement("button");
       b.textContent = label;
       b.style.width = "100%";
@@ -10763,11 +10763,11 @@
       b.style.marginTop = "8px";
       return b;
     }
-    const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
-    const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
-    const tokenBtn = mkBtn("Set NCFA Token", "rgba(95,95,30,0.35)");
-    const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
-    const resetBtn = mkBtn("Reset Database", "rgba(160,35,35,0.35)");
+    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
+    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
+    const tokenBtn = mkBtn2("Set NCFA Token", "rgba(95,95,30,0.35)");
+    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
+    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
     const counts = document.createElement("div");
     counts.style.marginTop = "10px";
     counts.style.fontSize = "12px";
@@ -11233,7 +11233,7 @@
               editor.style.display = "grid";
               const currentSection = (analysisDesign.sections || []).find((s) => s.id === sectionId);
               if (!currentSection) return;
-              const mkField = (name, input, colSpan = false) => {
+              const mkField2 = (name, input, colSpan = false) => {
                 const wrap = doc.createElement("label");
                 wrap.style.display = "grid";
                 wrap.style.gap = "4px";
@@ -11262,25 +11262,25 @@
               const idInput = doc.createElement("input");
               idInput.value = currentSection.id;
               styleInput(idInput);
-              mkField("Section id", idInput);
+              mkField2("Section id", idInput);
               const titleInput = doc.createElement("input");
               titleInput.value = currentSection.title || "";
               styleInput(titleInput);
-              mkField("Label / title", titleInput);
+              mkField2("Label / title", titleInput);
               const tocInput = doc.createElement("input");
               tocInput.value = currentSection.tocLabel || "";
               styleInput(tocInput);
-              mkField("TOC label", tocInput);
+              mkField2("TOC label", tocInput);
               const sourceInput = doc.createElement("input");
               sourceInput.value = currentSection.sourceSectionId || "";
               sourceInput.placeholder = "(same as section id)";
               styleInput(sourceInput);
-              mkField("Source section id", sourceInput);
+              mkField2("Source section id", sourceInput);
               const possibleFiltersInput = doc.createElement("input");
               possibleFiltersInput.value = (currentSection.appliesFilters || []).join(", ");
               possibleFiltersInput.placeholder = "date, mode, movement, teammate, country";
               styleInput(possibleFiltersInput);
-              mkField("Possible filters (csv)", possibleFiltersInput, true);
+              mkField2("Possible filters (csv)", possibleFiltersInput, true);
               const forcedWrap = doc.createElement("div");
               forcedWrap.style.gridColumn = "1 / -1";
               forcedWrap.style.display = "grid";
@@ -11599,7 +11599,7 @@
                 title3.style.gridColumn = "1 / -1";
                 title3.style.fontWeight = "700";
                 editor.appendChild(title3);
-                const mkField = (name, input, colSpan = false) => {
+                const mkField2 = (name, input, colSpan = false) => {
                   const wrap = doc.createElement("label");
                   wrap.style.display = "grid";
                   wrap.style.gap = "4px";
@@ -11617,13 +11617,13 @@
                   const labelInput2 = doc.createElement("input");
                   labelInput2.value = single.label || "";
                   styleInput(labelInput2);
-                  mkField("Label", labelInput2);
+                  mkField2("Label", labelInput2);
                   const typeInputSingle = doc.createElement("input");
                   typeInputSingle.value = single.type || "";
                   typeInputSingle.placeholder = "type (optional)";
                   typeInputSingle.setAttribute("list", "ga-single-type-suggestions");
                   styleInput(typeInputSingle);
-                  mkField("Type", typeInputSingle);
+                  mkField2("Type", typeInputSingle);
                   const saveBtn2 = doc.createElement("button");
                   saveBtn2.textContent = "Save";
                   styleActionBtn(saveBtn2);
@@ -11643,7 +11643,7 @@
                   const titleInput2 = doc.createElement("input");
                   titleInput2.value = boxObj.title || "";
                   styleInput(titleInput2);
-                  mkField("Box title", titleInput2, true);
+                  mkField2("Box title", titleInput2, true);
                   const linesWrap = doc.createElement("div");
                   linesWrap.style.gridColumn = "1 / -1";
                   linesWrap.style.display = "grid";
@@ -11720,28 +11720,28 @@
                 const titleInput = doc.createElement("input");
                 titleInput.value = graphObj.title || "";
                 styleInput(titleInput);
-                mkField("Title", titleInput, true);
+                mkField2("Title", titleInput, true);
                 const contentInput = doc.createElement("input");
                 contentInput.value = graphObj.content || "";
                 contentInput.setAttribute("list", "ga-graph-content-suggestions");
                 styleInput(contentInput);
-                mkField("Content key", contentInput);
+                mkField2("Content key", contentInput);
                 const typeSelect = doc.createElement("select");
                 const graphTypeOptions = ANALYSIS_CAPABILITIES.graphTypes && ANALYSIS_CAPABILITIES.graphTypes.length > 0 ? ANALYSIS_CAPABILITIES.graphTypes : ["line", "bar"];
                 typeSelect.innerHTML = `<option value="">(auto)</option>${graphTypeOptions.map((t) => `<option value="${t}">${t}</option>`).join("")}`;
                 typeSelect.value = graphObj.type === "line" || graphObj.type === "selectableLine" ? "line" : graphObj.type === "bar" || graphObj.type === "selectableBar" || graphObj.type === "horizontalBar" || graphObj.type === "verticalBar" ? "bar" : "";
                 styleInput(typeSelect);
-                mkField("Type", typeSelect);
+                mkField2("Type", typeSelect);
                 const orientationSelect = doc.createElement("select");
                 orientationSelect.innerHTML = `<option value="">(auto)</option><option value="horizontal">horizontal</option><option value="vertical">vertical</option>`;
                 orientationSelect.value = graphObj.orientation || "";
                 styleInput(orientationSelect);
-                mkField("Orientation", orientationSelect);
+                mkField2("Orientation", orientationSelect);
                 const xDomainSelect = doc.createElement("select");
                 xDomainSelect.innerHTML = `<option value="">(auto)</option><option value="time">time</option><option value="index">index</option>`;
                 xDomainSelect.value = graphObj.xDomain || "";
                 styleInput(xDomainSelect);
-                mkField("X domain", xDomainSelect);
+                mkField2("X domain", xDomainSelect);
                 const metricsWrap = doc.createElement("div");
                 metricsWrap.style.gridColumn = "1 / -1";
                 metricsWrap.style.display = "grid";
@@ -11872,68 +11872,68 @@
                 defaultSortSelect.innerHTML = `<option value="">(auto)</option><option value="chronological">chronological</option><option value="desc">descending</option><option value="asc">ascending</option>`;
                 defaultSortSelect.value = graphObj.defaultSort || "";
                 styleInput(defaultSortSelect);
-                mkField("Default sort", defaultSortSelect);
+                mkField2("Default sort", defaultSortSelect);
                 const sortsInput = doc.createElement("input");
                 sortsInput.value = (graphObj.sorts || []).join(", ");
                 styleInput(sortsInput);
-                mkField("Sorts (csv)", sortsInput);
+                mkField2("Sorts (csv)", sortsInput);
                 const defaultInitialBars = graphObj.initialBars === "max" ? "max" : String(graphObj.initialBars ?? "");
                 const initialBarsInput = doc.createElement("input");
                 initialBarsInput.value = defaultInitialBars;
                 initialBarsInput.placeholder = "number | max";
                 styleInput(initialBarsInput);
-                mkField("Initial bars", initialBarsInput);
+                mkField2("Initial bars", initialBarsInput);
                 const maxPointsInput = doc.createElement("input");
                 maxPointsInput.value = typeof graphObj.maxPoints === "number" ? String(graphObj.maxPoints) : "";
                 maxPointsInput.placeholder = "line max points";
                 styleInput(maxPointsInput);
-                mkField("Max points", maxPointsInput);
+                mkField2("Max points", maxPointsInput);
                 const maxCompareInput = doc.createElement("input");
                 maxCompareInput.value = typeof graphObj.maxCompare === "number" ? String(graphObj.maxCompare) : "";
                 maxCompareInput.placeholder = "1..4 (optional)";
                 styleInput(maxCompareInput);
-                mkField("Max compare", maxCompareInput);
+                mkField2("Max compare", maxCompareInput);
                 const compareModeSelect = doc.createElement("select");
                 compareModeSelect.innerHTML = `<option value="">(auto)</option><option value="selectors">selectors</option><option value="period_to_date">period_to_date</option>`;
                 compareModeSelect.value = graphObj.compareMode || "";
                 styleInput(compareModeSelect);
-                mkField("Compare mode", compareModeSelect);
+                mkField2("Compare mode", compareModeSelect);
                 const compareModeOptionsInput = doc.createElement("input");
                 compareModeOptionsInput.value = (graphObj.compareModeOptions || []).join(", ");
                 compareModeOptionsInput.placeholder = "per_period, to_date, both";
                 styleInput(compareModeOptionsInput);
-                mkField("Compare mode options (csv)", compareModeOptionsInput);
+                mkField2("Compare mode options (csv)", compareModeOptionsInput);
                 const defaultCompareModeSelect = doc.createElement("select");
                 defaultCompareModeSelect.innerHTML = `<option value="">(auto)</option><option value="per_period">per_period</option><option value="to_date">to_date</option><option value="both">both</option>`;
                 defaultCompareModeSelect.value = graphObj.defaultCompareMode || "";
                 styleInput(defaultCompareModeSelect);
-                mkField("Default compare mode", defaultCompareModeSelect);
+                mkField2("Default compare mode", defaultCompareModeSelect);
                 const compareCandidatesInput = doc.createElement("input");
                 compareCandidatesInput.value = (graphObj.compareCandidates || []).map((c) => `${c.key}:${c.label}`).join(", ");
                 compareCandidatesInput.placeholder = "key:label, key2:label2";
                 styleInput(compareCandidatesInput);
-                mkField("Compare candidates (csv)", compareCandidatesInput, true);
+                mkField2("Compare candidates (csv)", compareCandidatesInput, true);
                 const defaultCompareKeysInput = doc.createElement("input");
                 defaultCompareKeysInput.value = (graphObj.defaultCompareKeys || []).join(", ");
                 styleInput(defaultCompareKeysInput);
-                mkField("Default compare keys (csv)", defaultCompareKeysInput, true);
+                mkField2("Default compare keys (csv)", defaultCompareKeysInput, true);
                 const drilldownTypeSelect = doc.createElement("select");
                 drilldownTypeSelect.innerHTML = `<option value="">(none)</option><option value="rounds">rounds</option><option value="players">players</option>`;
                 drilldownTypeSelect.value = graphObj.drilldownType || "";
                 styleInput(drilldownTypeSelect);
-                mkField("Drilldown type", drilldownTypeSelect);
+                mkField2("Drilldown type", drilldownTypeSelect);
                 const drilldownColsInput = doc.createElement("input");
                 drilldownColsInput.value = (graphObj.drilldownColumns || []).join(", ");
                 styleInput(drilldownColsInput);
-                mkField("Drilldown columns (csv)", drilldownColsInput, true);
+                mkField2("Drilldown columns (csv)", drilldownColsInput, true);
                 const drilldownColoredInput = doc.createElement("input");
                 drilldownColoredInput.value = (graphObj.drilldownColored || []).join(", ");
                 styleInput(drilldownColoredInput);
-                mkField("Colored columns (csv)", drilldownColoredInput);
+                mkField2("Colored columns (csv)", drilldownColoredInput);
                 const drilldownClickableInput = doc.createElement("input");
                 drilldownClickableInput.value = (graphObj.drilldownClickable || []).join(", ");
                 styleInput(drilldownClickableInput);
-                mkField("Clickable columns (csv)", drilldownClickableInput);
+                mkField2("Clickable columns (csv)", drilldownClickableInput);
                 const mkCheck = (labelText, checked) => {
                   const wrap = doc.createElement("label");
                   wrap.style.display = "inline-flex";
@@ -12474,7 +12474,7 @@
       doc.body.appendChild(shell);
       doc.body.appendChild(settingsOverlay);
       modalClose.addEventListener("click", () => win.close());
-      const toMovementType = (value) => {
+      const toMovementType2 = (value) => {
         if (value === "moving" || value === "no_move" || value === "nmpz" || value === "unknown" || value === "all") {
           return value;
         }
@@ -12485,7 +12485,7 @@
           fromTs: parseDateInput(fromInput.value, false),
           toTs: parseDateInput(toInput.value, true),
           gameMode: modeSelect.value || "all",
-          movementType: toMovementType(movementSelect.value || "all"),
+          movementType: toMovementType2(movementSelect.value || "all"),
           teammateId: teammateSelect.value || "all",
           country: countrySelect.value || "all"
         });
@@ -12540,18 +12540,32 @@
     let tokenHandler = null;
     let openAnalysisHandler = null;
     let refreshAnalysisHandler = null;
+    let openSemanticNext = true;
     updateBtn.addEventListener("click", () => updateHandler?.());
     tokenBtn.addEventListener("click", () => tokenHandler?.());
     exportBtn.addEventListener("click", () => exportHandler?.());
     resetBtn.addEventListener("click", () => resetHandler?.());
     analysisBtn.addEventListener("click", () => {
       try {
+        if (openSemanticNext) {
+          openSemanticNext = false;
+          openAnalysisHandler?.();
+          return;
+        }
+        openSemanticNext = true;
         const win = ensureAnalysisWindow();
         if (!win) {
           status.textContent = "Could not open analysis window (popup blocked?).";
           return;
         }
-        openAnalysisHandler?.();
+        refreshAnalysisHandler?.({
+          fromTs: parseDateInput(win.fromInput.value, false),
+          toTs: parseDateInput(win.toInput.value, true),
+          gameMode: win.modeSelect.value || "all",
+          movementType: toMovementType(win.movementSelect.value || "all"),
+          teammateId: win.teammateSelect.value || "all",
+          country: win.countrySelect.value || "all"
+        });
       } catch (e) {
         status.textContent = `Analysis open failed: ${e instanceof Error ? e.message : String(e)}`;
         console.error("[GeoAnalyzr] Failed to open analysis window", e);
@@ -42493,6 +42507,61 @@
     .ga-settings-status { margin-top: 8px; font-size:12px; }
     .ga-settings-status.error { color: #ff8f8f; }
     .ga-settings-status.ok { color: #8fe3a1; }
+
+    /* Layout editor (Settings -> Layout) */
+    .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }
+    @media (max-width: 820px) { .ga-layout-editor { grid-template-columns: 1fr; } }
+    .ga-le-left, .ga-le-right { min-width: 0; }
+    .ga-le-left-head { display:flex; gap:8px; margin-bottom:10px; }
+    .ga-le-list { display:flex; flex-direction:column; gap:6px; }
+    .ga-le-list-item {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 650;
+      opacity: 0.9;
+    }
+    .ga-le-list-item.active { background: var(--ga-surface-2); opacity: 1; }
+    .ga-le-toprow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+    .ga-le-btn {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      height: 32px;
+    }
+    .ga-le-btn-primary { border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
+    .ga-le-btn-danger { border-color: color-mix(in srgb, var(--ga-danger) 60%, var(--ga-control-border)); }
+    .ga-le-field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+    .ga-le-field label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-le-inputhost { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-le-field input, .ga-le-field select, .ga-le-inline-select {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      min-width: 220px;
+    }
+    .ga-le-field select[multiple] { min-width: 260px; padding: 6px; }
+    .ga-le-hr { border:0; height:1px; background: var(--ga-border); margin: 12px 0; opacity: 0.9; }
+    .ga-le-box { background: var(--ga-card-2); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-bottom:10px; }
+    .ga-le-box-head { font-weight: 750; font-size: 12px; color: var(--ga-text); margin-bottom: 8px; }
+    .ga-le-item { background: color-mix(in srgb, var(--ga-card) 65%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-grid4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px; }
+    @media (max-width: 820px) { .ga-le-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .ga-le-subbox { background: color-mix(in srgb, var(--ga-card) 55%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-subhead { font-weight: 700; font-size: 12px; color: var(--ga-text-muted); margin-bottom: 8px; }
+    .ga-le-widget { background: color-mix(in srgb, var(--ga-card-2) 65%, transparent); border:1px dashed var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
   `;
     doc.head.appendChild(style);
   }
@@ -42639,6 +42708,524 @@
     root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
   }
 
+  // src/ui/layoutEditor.ts
+  function cloneJson(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function asInt(value, fallback) {
+    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    return Number.isFinite(n) ? Math.round(n) : fallback;
+  }
+  function mkBtn(doc, label, onClick, kind = "ghost") {
+    const b = doc.createElement("button");
+    b.type = "button";
+    b.className = `ga-le-btn ga-le-btn-${kind}`;
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function mkField(doc, label) {
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-le-field";
+    const l = doc.createElement("label");
+    l.textContent = label;
+    wrap.appendChild(l);
+    const inputHost = doc.createElement("div");
+    inputHost.className = "ga-le-inputhost";
+    wrap.appendChild(inputHost);
+    return { wrap, inputHost };
+  }
+  function mkTextInput(doc, label, value, onChange) {
+    const f = mkField(doc, label);
+    const input = doc.createElement("input");
+    input.type = "text";
+    input.value = value ?? "";
+    input.addEventListener("input", () => onChange(input.value));
+    f.inputHost.appendChild(input);
+    return f.wrap;
+  }
+  function mkNumberInput(doc, label, value, onChange, opts) {
+    const f = mkField(doc, label);
+    const input = doc.createElement("input");
+    input.type = "number";
+    if (opts?.min !== void 0) input.min = String(opts.min);
+    if (opts?.max !== void 0) input.max = String(opts.max);
+    input.step = String(opts?.step ?? 1);
+    input.value = String(value);
+    input.addEventListener("change", () => onChange(asInt(input.value, value)));
+    f.inputHost.appendChild(input);
+    return f.wrap;
+  }
+  function mkSelect(doc, label, value, options, onChange) {
+    const f = mkField(doc, label);
+    const sel = doc.createElement("select");
+    for (const o of options) sel.appendChild(new Option(o.label, o.value));
+    if (options.some((o) => o.value === value)) sel.value = value;
+    sel.addEventListener("change", () => onChange(sel.value));
+    f.inputHost.appendChild(sel);
+    return f.wrap;
+  }
+  function mkMultiSelect(doc, label, values, options, onChange) {
+    const f = mkField(doc, label);
+    const sel = doc.createElement("select");
+    sel.multiple = true;
+    sel.size = Math.min(10, Math.max(3, options.length));
+    for (const o of options) {
+      const opt = new Option(o.label, o.value);
+      opt.selected = values.includes(o.value);
+      sel.appendChild(opt);
+    }
+    sel.addEventListener("change", () => onChange(Array.from(sel.selectedOptions).map((o) => o.value)));
+    f.inputHost.appendChild(sel);
+    return f.wrap;
+  }
+  function mkHr(doc) {
+    const hr = doc.createElement("hr");
+    hr.className = "ga-le-hr";
+    return hr;
+  }
+  function allowedGrains(semantic) {
+    return Object.keys(semantic.datasets ?? {});
+  }
+  function allowedMeasureOptions(semantic, grain) {
+    const keys2 = Object.keys(semantic.measures ?? {});
+    const out = [];
+    for (const id of keys2) {
+      const m = semantic.measures[id];
+      if (m?.grain === grain) out.push({ value: id, label: `${id}${m?.label ? ` \u2014 ${m.label}` : ""}` });
+    }
+    out.sort((a, b) => a.value.localeCompare(b.value));
+    return out;
+  }
+  function allowedDimensionOptions(semantic, grain) {
+    const keys2 = Object.keys(semantic.dimensions ?? {});
+    const out = [];
+    for (const id of keys2) {
+      const d = semantic.dimensions[id];
+      const grains = Array.isArray(d?.grain) ? d.grain : [d?.grain];
+      if (grains.includes(grain)) out.push({ value: id, label: `${id}${d?.label ? ` \u2014 ${d.label}` : ""}` });
+    }
+    out.sort((a, b) => a.value.localeCompare(b.value));
+    return out;
+  }
+  function defaultCard() {
+    return {
+      cardId: `card_${Math.random().toString(36).slice(2, 7)}`,
+      title: "Card",
+      x: 0,
+      y: 0,
+      w: 12,
+      h: 10,
+      card: { type: "composite", children: [] }
+    };
+  }
+  function defaultSection() {
+    return {
+      id: `section_${Math.random().toString(36).slice(2, 7)}`,
+      title: "New Section",
+      layout: { mode: "grid", columns: 12, cards: [defaultCard()] }
+    };
+  }
+  function defaultWidget(grain, type) {
+    const widgetId = `w_${type}_${Math.random().toString(36).slice(2, 7)}`;
+    const placement = { x: 0, y: 0, w: 12, h: 3 };
+    const base = { widgetId, type, title: type, grain, placement };
+    if (type === "stat_value") base.spec = { label: "Value", measure: "" };
+    else if (type === "stat_list") base.spec = { rows: [{ label: "Row", measure: "" }] };
+    else if (type === "chart") base.spec = { type: "bar", x: { dimension: "" }, y: { measure: "" }, actions: { hover: true } };
+    else if (type === "breakdown") base.spec = { dimension: "", measure: "", limit: 12 };
+    else if (type === "record_list") base.spec = { records: [] };
+    else base.spec = {};
+    return base;
+  }
+  function normalizeFilterScope(fs) {
+    const include = Array.isArray(fs?.include) ? fs.include.filter((x) => typeof x === "string" && x.trim()) : [];
+    const exclude = Array.isArray(fs?.exclude) ? fs.exclude.filter((x) => typeof x === "string" && x.trim()) : [];
+    const out = {};
+    if (include.length) out.include = include;
+    if (exclude.length) out.exclude = exclude;
+    return Object.keys(out).length ? out : void 0;
+  }
+  function renderWidgetSpecEditorPlaceholder(doc) {
+    const note = doc.createElement("div");
+    note.className = "ga-settings-note";
+    note.textContent = "Spec editor is available for common fields; advanced spec can still be edited in the Template tab.";
+    return note;
+  }
+  function renderLayoutEditor(args) {
+    const { doc, semantic, onChange, statusEl } = args;
+    const root = doc.createElement("div");
+    root.className = "ga-layout-editor";
+    let draft = cloneJson(args.dashboard);
+    let activeSectionIdx = 0;
+    let debounce = null;
+    const applyDraft = () => {
+      if (debounce !== null) doc.defaultView?.clearTimeout?.(debounce);
+      debounce = doc.defaultView?.setTimeout?.(() => {
+        debounce = null;
+        statusEl.textContent = "";
+        statusEl.className = "ga-settings-status";
+        try {
+          validateDashboardAgainstSemantic(semantic, draft);
+          statusEl.textContent = "Layout applied.";
+          statusEl.classList.add("ok");
+          onChange(cloneJson(draft));
+        } catch (e) {
+          statusEl.textContent = e instanceof Error ? e.message : String(e);
+          statusEl.classList.add("error");
+        }
+      }, 200);
+    };
+    const render = () => {
+      root.innerHTML = "";
+      const sections = draft.dashboard.sections ?? [];
+      if (activeSectionIdx < 0) activeSectionIdx = 0;
+      if (activeSectionIdx >= sections.length) activeSectionIdx = Math.max(0, sections.length - 1);
+      const left = doc.createElement("div");
+      left.className = "ga-le-left";
+      const right = doc.createElement("div");
+      right.className = "ga-le-right";
+      const leftHead = doc.createElement("div");
+      leftHead.className = "ga-le-left-head";
+      leftHead.appendChild(
+        mkBtn(doc, "Add section", () => {
+          const next = cloneJson(draft);
+          next.dashboard.sections = [...next.dashboard.sections ?? [], defaultSection()];
+          draft = next;
+          activeSectionIdx = next.dashboard.sections.length - 1;
+          applyDraft();
+          render();
+        }, "primary")
+      );
+      left.appendChild(leftHead);
+      const list = doc.createElement("div");
+      list.className = "ga-le-list";
+      sections.forEach((s, idx) => {
+        const item = doc.createElement("button");
+        item.type = "button";
+        item.className = "ga-le-list-item";
+        item.classList.toggle("active", idx === activeSectionIdx);
+        item.textContent = s.title || s.id || "(untitled)";
+        item.addEventListener("click", () => {
+          activeSectionIdx = idx;
+          render();
+        });
+        list.appendChild(item);
+      });
+      left.appendChild(list);
+      const section = sections[activeSectionIdx];
+      if (!section) {
+        root.appendChild(left);
+        root.appendChild(right);
+        return;
+      }
+      const topRow = doc.createElement("div");
+      topRow.className = "ga-le-toprow";
+      topRow.appendChild(
+        mkBtn(doc, "Move up", () => {
+          if (activeSectionIdx <= 0) return;
+          const next = cloneJson(draft);
+          const arr = [...next.dashboard.sections];
+          const [picked] = arr.splice(activeSectionIdx, 1);
+          arr.splice(activeSectionIdx - 1, 0, picked);
+          next.dashboard.sections = arr;
+          draft = next;
+          activeSectionIdx--;
+          applyDraft();
+          render();
+        })
+      );
+      topRow.appendChild(
+        mkBtn(doc, "Move down", () => {
+          if (activeSectionIdx >= sections.length - 1) return;
+          const next = cloneJson(draft);
+          const arr = [...next.dashboard.sections];
+          const [picked] = arr.splice(activeSectionIdx, 1);
+          arr.splice(activeSectionIdx + 1, 0, picked);
+          next.dashboard.sections = arr;
+          draft = next;
+          activeSectionIdx++;
+          applyDraft();
+          render();
+        })
+      );
+      topRow.appendChild(
+        mkBtn(doc, "Delete", () => {
+          if (!confirm(`Delete section '${section.title || section.id}'?`)) return;
+          const next = cloneJson(draft);
+          next.dashboard.sections = next.dashboard.sections.filter((_, i) => i !== activeSectionIdx);
+          draft = next;
+          activeSectionIdx = Math.max(0, activeSectionIdx - 1);
+          applyDraft();
+          render();
+        }, "danger")
+      );
+      right.appendChild(topRow);
+      const patchSection = (partial) => {
+        const next = cloneJson(draft);
+        next.dashboard.sections[activeSectionIdx] = { ...next.dashboard.sections[activeSectionIdx], ...partial };
+        draft = next;
+        applyDraft();
+        render();
+      };
+      right.appendChild(mkTextInput(doc, "section.id", section.id, (v) => patchSection({ id: v })));
+      right.appendChild(mkTextInput(doc, "section.title", section.title, (v) => patchSection({ title: v })));
+      right.appendChild(
+        mkNumberInput(doc, "layout.columns", asInt(section.layout?.columns, 12), (n) => {
+          patchSection({ layout: { ...section.layout, columns: Math.max(1, Math.min(24, n)) } });
+        }, { min: 1, max: 24 })
+      );
+      const gf = draft.dashboard.globalFilters;
+      const controlIds = gf?.enabled ? gf.controls.map((c) => c.id) : [];
+      const ctrlOpts = controlIds.map((id) => ({ value: id, label: id }));
+      const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : [];
+      const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : [];
+      if (ctrlOpts.length > 0) {
+        const fsBox = doc.createElement("div");
+        fsBox.className = "ga-le-box";
+        const fsHead = doc.createElement("div");
+        fsHead.className = "ga-le-box-head";
+        fsHead.textContent = "filterScope (optional)";
+        fsBox.appendChild(fsHead);
+        fsBox.appendChild(
+          mkMultiSelect(doc, "include", include, ctrlOpts, (vals) => patchSection({ filterScope: normalizeFilterScope({ ...section.filterScope, include: vals }) }))
+        );
+        fsBox.appendChild(
+          mkMultiSelect(doc, "exclude", exclude, ctrlOpts, (vals) => patchSection({ filterScope: normalizeFilterScope({ ...section.filterScope, exclude: vals }) }))
+        );
+        right.appendChild(fsBox);
+      }
+      right.appendChild(mkHr(doc));
+      const cardsBox = doc.createElement("div");
+      cardsBox.className = "ga-le-box";
+      const ch = doc.createElement("div");
+      ch.className = "ga-le-box-head";
+      ch.textContent = "Cards";
+      cardsBox.appendChild(ch);
+      cardsBox.appendChild(
+        mkBtn(doc, "Add card", () => {
+          const next = cloneJson(draft);
+          next.dashboard.sections[activeSectionIdx].layout.cards = [...next.dashboard.sections[activeSectionIdx].layout.cards ?? [], defaultCard()];
+          draft = next;
+          applyDraft();
+          render();
+        }, "primary")
+      );
+      const grains = allowedGrains(semantic);
+      const grainDefault = grains[0] ?? "round";
+      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "team_section"];
+      section.layout.cards.forEach((card, cardIdx) => {
+        const cardItem = doc.createElement("div");
+        cardItem.className = "ga-le-item";
+        cardItem.appendChild(mkTextInput(doc, "cardId", card.cardId, (v) => patchCard(cardIdx, { cardId: v })));
+        cardItem.appendChild(mkTextInput(doc, "title", card.title, (v) => patchCard(cardIdx, { title: v })));
+        const grid = doc.createElement("div");
+        grid.className = "ga-le-grid4";
+        grid.appendChild(mkNumberInput(doc, "x", asInt(card.x, 0), (n) => patchCard(cardIdx, { x: n })));
+        grid.appendChild(mkNumberInput(doc, "y", asInt(card.y, 0), (n) => patchCard(cardIdx, { y: n })));
+        grid.appendChild(mkNumberInput(doc, "w", asInt(card.w, 12), (n) => patchCard(cardIdx, { w: n })));
+        grid.appendChild(mkNumberInput(doc, "h", asInt(card.h, 10), (n) => patchCard(cardIdx, { h: n })));
+        cardItem.appendChild(grid);
+        const cardActions = doc.createElement("div");
+        cardActions.className = "ga-le-toprow";
+        cardActions.appendChild(mkBtn(doc, "Up", () => moveCard(cardIdx, -1)));
+        cardActions.appendChild(mkBtn(doc, "Down", () => moveCard(cardIdx, 1)));
+        cardActions.appendChild(
+          mkBtn(doc, "Delete card", () => {
+            if (!confirm(`Delete card '${card.title || card.cardId}'?`)) return;
+            const next = cloneJson(draft);
+            next.dashboard.sections[activeSectionIdx].layout.cards = next.dashboard.sections[activeSectionIdx].layout.cards.filter((_, i) => i !== cardIdx);
+            draft = next;
+            applyDraft();
+            render();
+          }, "danger")
+        );
+        cardItem.appendChild(cardActions);
+        const wBox = doc.createElement("div");
+        wBox.className = "ga-le-subbox";
+        const wh = doc.createElement("div");
+        wh.className = "ga-le-subhead";
+        wh.textContent = "Widgets";
+        wBox.appendChild(wh);
+        const addRow = doc.createElement("div");
+        addRow.className = "ga-le-toprow";
+        const typeSel = doc.createElement("select");
+        typeSel.className = "ga-le-inline-select";
+        for (const t of widgetTypes) typeSel.appendChild(new Option(t, t));
+        addRow.appendChild(typeSel);
+        addRow.appendChild(
+          mkBtn(doc, "Add widget", () => {
+            const next = cloneJson(draft);
+            const c = next.dashboard.sections[activeSectionIdx].layout.cards[cardIdx];
+            const children2 = c.card.children ?? [];
+            c.card.children = [...children2, defaultWidget(grainDefault, typeSel.value)];
+            draft = next;
+            applyDraft();
+            render();
+          }, "primary")
+        );
+        wBox.appendChild(addRow);
+        const children = (card.card.children ?? []).filter(Boolean);
+        children.forEach((w, wIdx) => {
+          const wItem = doc.createElement("div");
+          wItem.className = "ga-le-widget";
+          const wActions = doc.createElement("div");
+          wActions.className = "ga-le-toprow";
+          wActions.appendChild(mkBtn(doc, "Up", () => moveWidget(cardIdx, wIdx, -1)));
+          wActions.appendChild(mkBtn(doc, "Down", () => moveWidget(cardIdx, wIdx, 1)));
+          wActions.appendChild(
+            mkBtn(doc, "Delete", () => {
+              const next = cloneJson(draft);
+              const c = next.dashboard.sections[activeSectionIdx].layout.cards[cardIdx];
+              c.card.children = (c.card.children ?? []).filter((_, i) => i !== wIdx);
+              draft = next;
+              applyDraft();
+              render();
+            }, "danger")
+          );
+          wItem.appendChild(wActions);
+          const grainsOpts = allowedGrains(semantic).map((g) => ({ value: g, label: g }));
+          const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
+          wItem.appendChild(mkTextInput(doc, "widgetId", w.widgetId, (v) => patchWidget(cardIdx, wIdx, { ...w, widgetId: v })));
+          wItem.appendChild(
+            mkSelect(doc, "type", w.type, typeOpts, (v) => {
+              const nextWidget = defaultWidget(String(w.grain), v);
+              nextWidget.widgetId = w.widgetId;
+              nextWidget.title = w.title;
+              nextWidget.grain = w.grain;
+              nextWidget.placement = w.placement;
+              patchWidget(cardIdx, wIdx, nextWidget);
+            })
+          );
+          wItem.appendChild(mkTextInput(doc, "title", w.title, (v) => patchWidget(cardIdx, wIdx, { ...w, title: v })));
+          wItem.appendChild(mkSelect(doc, "grain", String(w.grain), grainsOpts, (v) => patchWidget(cardIdx, wIdx, { ...w, grain: v })));
+          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
+          const pGrid = doc.createElement("div");
+          pGrid.className = "ga-le-grid4";
+          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, x: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, y: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, w: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, h: n } })));
+          wItem.appendChild(pGrid);
+          wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
+          if (w.type === "chart") {
+            const spec = w.spec ?? {};
+            const dims = allowedDimensionOptions(semantic, String(w.grain));
+            const meas = allowedMeasureOptions(semantic, String(w.grain));
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "chart.type",
+                String(spec.type ?? "bar"),
+                [{ value: "bar", label: "bar" }, { value: "line", label: "line" }],
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, type: v } })
+              )
+            );
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "x.dimension",
+                String(spec?.x?.dimension ?? ""),
+                dims,
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, x: { ...spec.x ?? {}, dimension: v } } })
+              )
+            );
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "y.measure",
+                String(spec?.y?.measure ?? ""),
+                meas,
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, y: { ...spec.y ?? {}, measure: v } } })
+              )
+            );
+          }
+          if (w.type === "breakdown") {
+            const spec = w.spec ?? {};
+            const dims = allowedDimensionOptions(semantic, String(w.grain));
+            const meas = allowedMeasureOptions(semantic, String(w.grain));
+            wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, dimension: v } })));
+            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
+            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, limit: n } }), { min: 1, max: 500 }));
+          }
+          if (w.type === "stat_value") {
+            const spec = w.spec ?? {};
+            const meas = allowedMeasureOptions(semantic, String(w.grain));
+            wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, label: v } })));
+            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
+          }
+          if (w.type === "stat_list") {
+            const spec = w.spec ?? { rows: [] };
+            const rows = Array.isArray(spec.rows) ? spec.rows : [];
+            const head = doc.createElement("div");
+            head.className = "ga-settings-note";
+            head.textContent = `Rows: ${rows.length}`;
+            wItem.appendChild(head);
+          }
+          wBox.appendChild(wItem);
+        });
+        cardItem.appendChild(wBox);
+        cardsBox.appendChild(cardItem);
+      });
+      right.appendChild(cardsBox);
+      root.appendChild(left);
+      root.appendChild(right);
+      function patchCard(cardIdx, partial) {
+        const next = cloneJson(draft);
+        const sec = next.dashboard.sections[activeSectionIdx];
+        const cards = [...sec.layout.cards];
+        cards[cardIdx] = { ...cards[cardIdx], ...partial };
+        sec.layout.cards = cards;
+        draft = next;
+        applyDraft();
+        render();
+      }
+      function patchWidget(cardIdx, widgetIdx, nextWidget) {
+        const next = cloneJson(draft);
+        const sec = next.dashboard.sections[activeSectionIdx];
+        const card = sec.layout.cards[cardIdx];
+        const children = card.card.children ?? [];
+        children[widgetIdx] = nextWidget;
+        card.card.children = children;
+        draft = next;
+        applyDraft();
+        render();
+      }
+      function moveCard(cardIdx, delta) {
+        const cards = draft.dashboard.sections[activeSectionIdx].layout.cards ?? [];
+        const nextIdx = cardIdx + delta;
+        if (nextIdx < 0 || nextIdx >= cards.length) return;
+        const next = cloneJson(draft);
+        const arr = [...next.dashboard.sections[activeSectionIdx].layout.cards];
+        const [picked] = arr.splice(cardIdx, 1);
+        arr.splice(nextIdx, 0, picked);
+        next.dashboard.sections[activeSectionIdx].layout.cards = arr;
+        draft = next;
+        applyDraft();
+        render();
+      }
+      function moveWidget(cardIdx, widgetIdx, delta) {
+        const sec = draft.dashboard.sections[activeSectionIdx];
+        const card = sec.layout.cards[cardIdx];
+        const children = card.card.children ?? [];
+        const nextIdx = widgetIdx + delta;
+        if (nextIdx < 0 || nextIdx >= children.length) return;
+        const next = cloneJson(draft);
+        const c = next.dashboard.sections[activeSectionIdx].layout.cards[cardIdx];
+        const arr = [...c.card.children ?? []];
+        const [picked] = arr.splice(widgetIdx, 1);
+        arr.splice(nextIdx, 0, picked);
+        c.card.children = arr;
+        draft = next;
+        applyDraft();
+        render();
+      }
+    };
+    render();
+    return root;
+  }
+
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
@@ -42696,11 +43283,15 @@
       const templateTab = doc.createElement("button");
       templateTab.className = "ga-settings-tab";
       templateTab.textContent = "Template";
+      const layoutTab = doc.createElement("button");
+      layoutTab.className = "ga-settings-tab";
+      layoutTab.textContent = "Layout";
       tabs.appendChild(appearanceTab);
       tabs.appendChild(standardsTab);
+      tabs.appendChild(layoutTab);
       tabs.appendChild(templateTab);
       const settings = getSettings();
-      const dashboard = getDashboard();
+      let dashboard = getDashboard();
       const appearancePane = doc.createElement("div");
       appearancePane.className = "ga-settings-pane active";
       const appearanceGrid = doc.createElement("div");
@@ -42785,6 +43376,10 @@
       standardsPane.appendChild(standardsNote);
       const templatePane = doc.createElement("div");
       templatePane.className = "ga-settings-pane";
+      const templateWarn = doc.createElement("div");
+      templateWarn.className = "ga-settings-note";
+      templateWarn.textContent = "Warning: Editing the template JSON can easily break the dashboard. Prefer the Layout tab unless you know what you're doing.";
+      templatePane.appendChild(templateWarn);
       const templateField = doc.createElement("div");
       templateField.className = "ga-settings-field";
       const templateLabel = doc.createElement("label");
@@ -42797,18 +43392,54 @@
       templateField.appendChild(templateEditor);
       templatePane.appendChild(templateField);
       templatePane.appendChild(templateStatus);
+      const layoutPane = doc.createElement("div");
+      layoutPane.className = "ga-settings-pane";
+      const layoutStatus = doc.createElement("div");
+      layoutStatus.className = "ga-settings-status";
+      const layoutHost = doc.createElement("div");
+      layoutPane.appendChild(layoutHost);
+      layoutPane.appendChild(layoutStatus);
       panes.appendChild(appearancePane);
       panes.appendChild(standardsPane);
+      panes.appendChild(layoutPane);
       panes.appendChild(templatePane);
+      const renderLayout = () => {
+        layoutHost.innerHTML = "";
+        const latest = getDashboard();
+        dashboard = latest;
+        templateEditor.value = JSON.stringify(latest, null, 2);
+        layoutHost.appendChild(
+          renderLayoutEditor({
+            doc,
+            semantic,
+            dashboard: latest,
+            statusEl: layoutStatus,
+            onChange: (next) => {
+              void (async () => {
+                try {
+                  await applyDashboard(next);
+                  dashboard = next;
+                  templateEditor.value = JSON.stringify(next, null, 2);
+                } catch (e) {
+                  layoutStatus.textContent = e instanceof Error ? e.message : String(e);
+                  layoutStatus.className = "ga-settings-status error";
+                }
+              })();
+            }
+          })
+        );
+      };
       const setActiveTab = (idx) => {
-        const tabButtons = [appearanceTab, standardsTab, templateTab];
-        const tabPanes = [appearancePane, standardsPane, templatePane];
+        const tabButtons = [appearanceTab, standardsTab, layoutTab, templateTab];
+        const tabPanes = [appearancePane, standardsPane, layoutPane, templatePane];
         tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
         tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
+        if (idx === 2) renderLayout();
       };
       appearanceTab.addEventListener("click", () => setActiveTab(0));
       standardsTab.addEventListener("click", () => setActiveTab(1));
-      templateTab.addEventListener("click", () => setActiveTab(2));
+      layoutTab.addEventListener("click", () => setActiveTab(2));
+      templateTab.addEventListener("click", () => setActiveTab(3));
       const persistSettings = async () => {
         const next = {
           appearance: {
@@ -42850,6 +43481,7 @@
           const parsed = JSON.parse(templateEditor.value);
           validateDashboardAgainstSemantic(semantic, parsed);
           await applyDashboard(parsed);
+          dashboard = parsed;
           templateStatus.textContent = "Template applied.";
           templateStatus.classList.add("ok");
         } catch (error) {
@@ -45624,7 +46256,7 @@
   }
 
   // src/ui/filterState.ts
-  function cloneJson(value) {
+  function cloneJson2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
   }
@@ -45632,7 +46264,7 @@
     const state = {};
     if (!spec?.enabled) return state;
     for (const c of spec.controls) {
-      state[c.id] = cloneJson(c.default);
+      state[c.id] = cloneJson2(c.default);
     }
     return state;
   }
@@ -45648,7 +46280,7 @@
   }
   function createGlobalFilterStore(spec) {
     let defaults = buildDefaults(spec);
-    let state = cloneJson(defaults);
+    let state = cloneJson2(defaults);
     const listeners = /* @__PURE__ */ new Set();
     const notify = () => {
       for (const l of listeners) l();
@@ -45657,7 +46289,7 @@
       getSpec: () => spec,
       getState: () => state,
       patchDefaults: (partial) => {
-        defaults = { ...defaults, ...cloneJson(partial) };
+        defaults = { ...defaults, ...cloneJson2(partial) };
       },
       setValue: (id, value) => {
         if (!id) return;
@@ -45671,11 +46303,11 @@
         notify();
       },
       setAll: (next) => {
-        state = { ...cloneJson(defaults), ...cloneJson(next) };
+        state = { ...cloneJson2(defaults), ...cloneJson2(next) };
         notify();
       },
       reset: () => {
-        state = cloneJson(defaults);
+        state = cloneJson2(defaults);
         notify();
       },
       subscribe: (listener) => {

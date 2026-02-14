@@ -4440,6 +4440,7 @@ export function createUI(): UIHandle {
       country?: string;
     }
   ) => void) | null = null;
+  let openSemanticNext = true;
 
   updateBtn.addEventListener("click", () => updateHandler?.());
   tokenBtn.addEventListener("click", () => tokenHandler?.());
@@ -4447,12 +4448,26 @@ export function createUI(): UIHandle {
   resetBtn.addEventListener("click", () => resetHandler?.());
   analysisBtn.addEventListener("click", () => {
     try {
+      if (openSemanticNext) {
+        openSemanticNext = false;
+        openAnalysisHandler?.();
+        return;
+      }
+      openSemanticNext = true;
       const win = ensureAnalysisWindow();
       if (!win) {
         status.textContent = "Could not open analysis window (popup blocked?).";
         return;
       }
-      openAnalysisHandler?.();
+      // Refresh legacy analysis after opening (keep current filter inputs when possible).
+      refreshAnalysisHandler?.({
+        fromTs: parseDateInput(win.fromInput.value, false),
+        toTs: parseDateInput(win.toInput.value, true),
+        gameMode: win.modeSelect.value || "all",
+        movementType: toMovementType(win.movementSelect.value || "all"),
+        teammateId: win.teammateSelect.value || "all",
+        country: win.countrySelect.value || "all"
+      });
     } catch (e) {
       status.textContent = `Analysis open failed: ${e instanceof Error ? e.message : String(e)}`;
       console.error("[GeoAnalyzr] Failed to open analysis window", e);

@@ -592,6 +592,61 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-settings-status { margin-top: 8px; font-size:12px; }
     .ga-settings-status.error { color: #ff8f8f; }
     .ga-settings-status.ok { color: #8fe3a1; }
+
+    /* Layout editor (Settings -> Layout) */
+    .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }
+    @media (max-width: 820px) { .ga-layout-editor { grid-template-columns: 1fr; } }
+    .ga-le-left, .ga-le-right { min-width: 0; }
+    .ga-le-left-head { display:flex; gap:8px; margin-bottom:10px; }
+    .ga-le-list { display:flex; flex-direction:column; gap:6px; }
+    .ga-le-list-item {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 650;
+      opacity: 0.9;
+    }
+    .ga-le-list-item.active { background: var(--ga-surface-2); opacity: 1; }
+    .ga-le-toprow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+    .ga-le-btn {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      height: 32px;
+    }
+    .ga-le-btn-primary { border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
+    .ga-le-btn-danger { border-color: color-mix(in srgb, var(--ga-danger) 60%, var(--ga-control-border)); }
+    .ga-le-field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+    .ga-le-field label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-le-inputhost { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-le-field input, .ga-le-field select, .ga-le-inline-select {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      min-width: 220px;
+    }
+    .ga-le-field select[multiple] { min-width: 260px; padding: 6px; }
+    .ga-le-hr { border:0; height:1px; background: var(--ga-border); margin: 12px 0; opacity: 0.9; }
+    .ga-le-box { background: var(--ga-card-2); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-bottom:10px; }
+    .ga-le-box-head { font-weight: 750; font-size: 12px; color: var(--ga-text); margin-bottom: 8px; }
+    .ga-le-item { background: color-mix(in srgb, var(--ga-card) 65%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-grid4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px; }
+    @media (max-width: 820px) { .ga-le-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .ga-le-subbox { background: color-mix(in srgb, var(--ga-card) 55%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-subhead { font-weight: 700; font-size: 12px; color: var(--ga-text-muted); margin-bottom: 8px; }
+    .ga-le-widget { background: color-mix(in srgb, var(--ga-card-2) 65%, transparent); border:1px dashed var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
   `;
   doc.head.appendChild(style);
 }
