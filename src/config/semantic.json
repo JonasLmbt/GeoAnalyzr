@@ -460,28 +460,32 @@
       "unit": "count",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_games_with_result"
+      "formulaId": "count_games_with_result",
+      "range": { "min": 0 }
     },
     "loss_count": {
       "label": "Loss count",
       "unit": "count",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_loss_game"
+      "formulaId": "count_loss_game",
+      "range": { "min": 0 }
     },
     "tie_count": {
       "label": "Tie count",
       "unit": "count",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_tie_game"
+      "formulaId": "count_tie_game",
+      "range": { "min": 0 }
     },
     "end_rating_avg": {
       "label": "Avg end rating",
       "unit": "rating",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_player_self_end_rating"
+      "formulaId": "mean_player_self_end_rating",
+      "range": { "min": 0 }
     },
     "best_end_rating": {
       "label": "Best rating",
@@ -495,7 +499,8 @@
       "unit": "rating",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_player_self_rating_delta"
+      "formulaId": "mean_player_self_rating_delta",
+      "range": { "min": 0 }
     },
     "longest_win_streak": {
       "label": "Longest win streak",
@@ -518,6 +523,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "rate_true_country_hit",
+      "range": { "min": 0, "max": 100 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
@@ -529,6 +535,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_hit_round",
+      "range": { "min": 0 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
@@ -540,6 +547,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "rate_throw_round",
+      "range": { "min": 0, "max": 100 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
@@ -551,6 +559,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_throw_round",
+      "range": { "min": 0 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
@@ -577,21 +586,24 @@
       "unit": "km",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "median_player_self_distance_km"
+      "formulaId": "median_player_self_distance_km",
+      "range": { "min": 0 }
     },
     "guess_duration_median": {
       "label": "Median guess duration",
       "unit": "seconds",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "median_duration_seconds"
+      "formulaId": "median_duration_seconds",
+      "range": { "min": 0 }
     },
     "rounds_with_time_count": {
       "label": "Rounds with time data",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_rounds_with_duration"
+      "formulaId": "count_rounds_with_duration",
+      "range": { "min": 0 }
     },
     "time_played_seconds": {
       "label": "Time played",
@@ -606,14 +618,16 @@
       "unit": "points",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_damage_dealt"
+      "formulaId": "mean_damage_dealt",
+      "range": { "min": 0, "max": 5000 }
     },
     "damage_taken_avg": {
       "label": "Avg damage taken",
       "unit": "points",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_damage_taken"
+      "formulaId": "mean_damage_taken",
+      "range": { "min": 0, "max": 5000 }
     },
     "damage_dealt_share": {
       "label": "Damage dealt share",
@@ -621,6 +635,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "share_damage_dealt",
+      "range": { "min": 0, "max": 100 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }]
@@ -632,6 +647,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "share_damage_taken",
+      "range": { "min": 0, "max": 100 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }]
@@ -643,7 +659,8 @@
       "unit": "count",
       "grain": "session",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_sessions"
+      "formulaId": "count_sessions",
+      "range": { "min": 0 }
     },
     "sessions_longest_break_seconds": {
       "label": "Longest break between sessions",
@@ -729,6 +746,7 @@
     "km": { "format": "float", "decimals": 1 },
     "float": { "format": "float", "decimals": 2 }
   },
+
   "columnAliases": {
     "ts": ["playedAt", "startTime"],
     "game_mode": ["gameMode", "gameModeSimple", "game_mode", "mode", "gameType"],

@@ -52,6 +52,28 @@ export async function renderAnalysisApp(opts: {
   dashboardHost.className = "ga-dashboard-host";
   body.appendChild(dashboardHost);
 
+  const updateStickyVars = () => {
+    if (!root) return;
+    const topbar = root.querySelector(".ga-topbar") as HTMLElement | null;
+    root.style.setProperty("--ga-topbar-h", `${topbar?.offsetHeight ?? 0}px`);
+    root.style.setProperty("--ga-filters-h", `${filtersHost.offsetHeight}px`);
+  };
+
+  // Keep sticky offsets in sync with dynamic content/wrapping.
+  if (root && !(root as any).__gaStickyVarsSetup) {
+    (root as any).__gaStickyVarsSetup = true;
+    updateStickyVars();
+
+    const win = doc.defaultView;
+    if (win && typeof (win as any).ResizeObserver !== "undefined") {
+      const ro = new (win as any).ResizeObserver(() => updateStickyVars());
+      ro.observe(filtersHost);
+      const topbar = root.querySelector(".ga-topbar") as HTMLElement | null;
+      if (topbar) ro.observe(topbar);
+    }
+    win?.addEventListener("resize", () => updateStickyVars());
+  }
+
   const spec = dashboard.dashboard.globalFilters;
   const store = createGlobalFilterStore(spec);
 
@@ -88,6 +110,9 @@ export async function renderAnalysisApp(opts: {
       reset: store.reset,
       getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
     });
+
+    // Height can change due to select options and wrapping.
+    updateStickyVars();
 
     const resolveControlIdsForSection = (section: any): string[] | undefined => {
       if (!specFilters?.enabled) return undefined;

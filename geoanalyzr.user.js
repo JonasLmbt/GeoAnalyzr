@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.21
+// @version      1.6.22
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -40517,28 +40517,32 @@
         unit: "count",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_games_with_result"
+        formulaId: "count_games_with_result",
+        range: { min: 0 }
       },
       loss_count: {
         label: "Loss count",
         unit: "count",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_loss_game"
+        formulaId: "count_loss_game",
+        range: { min: 0 }
       },
       tie_count: {
         label: "Tie count",
         unit: "count",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_tie_game"
+        formulaId: "count_tie_game",
+        range: { min: 0 }
       },
       end_rating_avg: {
         label: "Avg end rating",
         unit: "rating",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_end_rating"
+        formulaId: "mean_player_self_end_rating",
+        range: { min: 0 }
       },
       best_end_rating: {
         label: "Best rating",
@@ -40552,7 +40556,8 @@
         unit: "rating",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_rating_delta"
+        formulaId: "mean_player_self_rating_delta",
+        range: { min: 0 }
       },
       longest_win_streak: {
         label: "Longest win streak",
@@ -40574,6 +40579,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "rate_true_country_hit",
+        range: { min: 0, max: 100 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
@@ -40585,6 +40591,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_hit_round",
+        range: { min: 0 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
@@ -40596,6 +40603,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "rate_throw_round",
+        range: { min: 0, max: 100 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
@@ -40607,6 +40615,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_throw_round",
+        range: { min: 0 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
@@ -40633,21 +40642,24 @@
         unit: "km",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "median_player_self_distance_km"
+        formulaId: "median_player_self_distance_km",
+        range: { min: 0 }
       },
       guess_duration_median: {
         label: "Median guess duration",
         unit: "seconds",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "median_duration_seconds"
+        formulaId: "median_duration_seconds",
+        range: { min: 0 }
       },
       rounds_with_time_count: {
         label: "Rounds with time data",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_rounds_with_duration"
+        formulaId: "count_rounds_with_duration",
+        range: { min: 0 }
       },
       time_played_seconds: {
         label: "Time played",
@@ -40661,14 +40673,16 @@
         unit: "points",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_dealt"
+        formulaId: "mean_damage_dealt",
+        range: { min: 0, max: 5e3 }
       },
       damage_taken_avg: {
         label: "Avg damage taken",
         unit: "points",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_taken"
+        formulaId: "mean_damage_taken",
+        range: { min: 0, max: 5e3 }
       },
       damage_dealt_share: {
         label: "Damage dealt share",
@@ -40676,6 +40690,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "share_damage_dealt",
+        range: { min: 0, max: 100 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
@@ -40687,6 +40702,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "share_damage_taken",
+        range: { min: 0, max: 100 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
@@ -40697,7 +40713,8 @@
         unit: "count",
         grain: "session",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_sessions"
+        formulaId: "count_sessions",
+        range: { min: 0 }
       },
       sessions_longest_break_seconds: {
         label: "Longest break between sessions",
@@ -42248,6 +42265,8 @@
     }
     .ga-root {
       --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      --ga-topbar-h: 0px;
+      --ga-filters-h: 0px;
       --ga-bg: #0f1115;
       --ga-surface: #15181e;
       --ga-surface-2: #171b22;
@@ -42358,6 +42377,17 @@
       box-shadow: 0 10px 34px rgba(0,0,0,0.20);
     }
     .ga-body { padding: 8px 12px 16px; }
+
+    .ga-filters-host {
+      position: sticky;
+      top: var(--ga-topbar-h);
+      z-index: 9;
+      background: var(--ga-bg);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-filters-host {
+      background: linear-gradient(180deg, rgba(16, 16, 28, 0.68) 0%, rgba(16, 16, 28, 0.28) 100%);
+      backdrop-filter: blur(14px);
+    }
     .ga-filters {
       display:flex;
       justify-content:space-between;
@@ -42398,7 +42428,15 @@
       font-size:12px;
       height: 34px;
     }
-    .ga-tabs { display:flex; gap:8px; padding:10px; }
+    .ga-tabs {
+      display:flex;
+      gap:8px;
+      padding:10px;
+      position: sticky;
+      top: calc(var(--ga-topbar-h) + var(--ga-filters-h));
+      z-index: 8;
+      background: var(--ga-bg);
+    }
     .ga-tab {
       background:var(--ga-control-bg);
       color:var(--ga-control-text);
@@ -47027,6 +47065,24 @@
     const dashboardHost = doc.createElement("div");
     dashboardHost.className = "ga-dashboard-host";
     body.appendChild(dashboardHost);
+    const updateStickyVars = () => {
+      if (!root) return;
+      const topbar = root.querySelector(".ga-topbar");
+      root.style.setProperty("--ga-topbar-h", `${topbar?.offsetHeight ?? 0}px`);
+      root.style.setProperty("--ga-filters-h", `${filtersHost.offsetHeight}px`);
+    };
+    if (root && !root.__gaStickyVarsSetup) {
+      root.__gaStickyVarsSetup = true;
+      updateStickyVars();
+      const win = doc.defaultView;
+      if (win && typeof win.ResizeObserver !== "undefined") {
+        const ro = new win.ResizeObserver(() => updateStickyVars());
+        ro.observe(filtersHost);
+        const topbar = root.querySelector(".ga-topbar");
+        if (topbar) ro.observe(topbar);
+      }
+      win?.addEventListener("resize", () => updateStickyVars());
+    }
     const spec = dashboard.dashboard.globalFilters;
     const store = createGlobalFilterStore(spec);
     if (spec?.enabled) {
@@ -47056,6 +47112,7 @@
         reset: store.reset,
         getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
       });
+      updateStickyVars();
       const resolveControlIdsForSection = (section) => {
         if (!specFilters?.enabled) return void 0;
         const all = specFilters.controls.map((c) => c.id);

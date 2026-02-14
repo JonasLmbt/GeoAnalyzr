@@ -15,6 +15,8 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     }
     .ga-root {
       --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      --ga-topbar-h: 0px;
+      --ga-filters-h: 0px;
       --ga-bg: #0f1115;
       --ga-surface: #15181e;
       --ga-surface-2: #171b22;
@@ -125,6 +127,17 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       box-shadow: 0 10px 34px rgba(0,0,0,0.20);
     }
     .ga-body { padding: 8px 12px 16px; }
+
+    .ga-filters-host {
+      position: sticky;
+      top: var(--ga-topbar-h);
+      z-index: 9;
+      background: var(--ga-bg);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-filters-host {
+      background: linear-gradient(180deg, rgba(16, 16, 28, 0.68) 0%, rgba(16, 16, 28, 0.28) 100%);
+      backdrop-filter: blur(14px);
+    }
     .ga-filters {
       display:flex;
       justify-content:space-between;
@@ -165,7 +178,15 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size:12px;
       height: 34px;
     }
-    .ga-tabs { display:flex; gap:8px; padding:10px; }
+    .ga-tabs {
+      display:flex;
+      gap:8px;
+      padding:10px;
+      position: sticky;
+      top: calc(var(--ga-topbar-h) + var(--ga-filters-h));
+      z-index: 8;
+      background: var(--ga-bg);
+    }
     .ga-tab {
       background:var(--ga-control-bg);
       color:var(--ga-control-text);
