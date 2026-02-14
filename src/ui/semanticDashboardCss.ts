@@ -370,7 +370,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       padding:10px;
       color: var(--ga-text);
       width: 100%;
-      overflow: visible;
+      overflow: hidden;
     }
     .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
     .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.22
+// @version      1.6.23
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -42620,7 +42620,7 @@
       padding:10px;
       color: var(--ga-text);
       width: 100%;
-      overflow: visible;
+      overflow: hidden;
     }
     .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
     .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -45589,8 +45589,10 @@
       yAxisLabel.textContent = measureDef.label;
       svg.appendChild(yAxisLabel);
       if (spec.type === "line") {
+        const outerPad = Math.min(28, innerW * 0.06);
+        const xSpan = Math.max(1, innerW - outerPad * 2);
         const points = data.map((d, i) => {
-          const x = PAD_L + i / Math.max(1, data.length - 1) * innerW;
+          const x = PAD_L + outerPad + i / Math.max(1, data.length - 1) * xSpan;
           const y = PAD_T + innerH - (clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange * innerH;
           return { x, y, d };
         });
@@ -45642,9 +45644,13 @@
         });
         maybeAnimateChartSvg(svg, doc);
       } else {
-        const barW = innerW / Math.max(1, data.length);
+        const n = Math.max(1, data.length);
+        const slotW = innerW / n;
+        const outerPad = Math.min(28, slotW * 0.6);
+        const xSpan = Math.max(1, innerW - outerPad * 2);
+        const barW = xSpan / n;
         data.forEach((d, i) => {
-          const x = PAD_L + i * barW;
+          const x = PAD_L + outerPad + i * barW;
           const h = (clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange * innerH;
           const y = PAD_T + innerH - h;
           const rect = doc.createElementNS(svg.namespaceURI, "rect");

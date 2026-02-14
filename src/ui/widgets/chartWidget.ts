@@ -869,8 +869,10 @@ export async function renderChartWidget(
     svg.appendChild(yAxisLabel);
 
     if (spec.type === "line") {
+      const outerPad = Math.min(28, innerW * 0.06);
+      const xSpan = Math.max(1, innerW - outerPad * 2);
       const points = data.map((d, i) => {
-        const x = PAD_L + (i / Math.max(1, data.length - 1)) * innerW;
+        const x = PAD_L + outerPad + (i / Math.max(1, data.length - 1)) * xSpan;
         const y = PAD_T + innerH - ((clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange) * innerH;
         return { x, y, d };
       });
@@ -924,9 +926,13 @@ export async function renderChartWidget(
       });
       maybeAnimateChartSvg(svg, doc);
     } else {
-      const barW = innerW / Math.max(1, data.length);
+      const n = Math.max(1, data.length);
+      const slotW = innerW / n;
+      const outerPad = Math.min(28, slotW * 0.6);
+      const xSpan = Math.max(1, innerW - outerPad * 2);
+      const barW = xSpan / n;
       data.forEach((d, i) => {
-        const x = PAD_L + i * barW;
+        const x = PAD_L + outerPad + i * barW;
         const h = ((clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange) * innerH;
         const y = PAD_T + innerH - h;
 
