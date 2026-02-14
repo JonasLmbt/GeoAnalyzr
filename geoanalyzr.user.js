@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.25
+// @version      1.6.26
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15747,16 +15747,32 @@
       const gs = ids.map((id) => byId.get(id)).filter(Boolean);
       if (!gs.length) continue;
       const sorted = [...gs].sort((a, b) => (pickGameTs(a) ?? 0) - (pickGameTs(b) ?? 0));
-      const first = sorted[0];
-      const last = sorted[sorted.length - 1];
-      const firstRat = extractGameRatings(first);
-      const lastRat = extractGameRatings(last);
-      const start = typeof firstRat.start === "number" ? firstRat.start : typeof firstRat.end === "number" ? firstRat.end : void 0;
-      const end = typeof lastRat.end === "number" ? lastRat.end : void 0;
-      if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) {
-        s.ratingStart = start;
-        s.ratingEnd = end;
-        s.ratingDelta = end - start;
+      let firstRating;
+      let lastRating;
+      let prevEnd;
+      let deltaSum = 0;
+      let haveDelta = false;
+      for (const g of sorted) {
+        const r = extractGameRatings(g);
+        const start = typeof r.start === "number" && Number.isFinite(r.start) ? r.start : void 0;
+        const end = typeof r.end === "number" && Number.isFinite(r.end) ? r.end : void 0;
+        const startEff = start ?? prevEnd ?? end;
+        if (firstRating === void 0 && typeof startEff === "number" && Number.isFinite(startEff)) firstRating = startEff;
+        if (typeof end === "number" && Number.isFinite(end)) {
+          lastRating = end;
+          prevEnd = end;
+        }
+        if (typeof startEff === "number" && Number.isFinite(startEff) && typeof end === "number" && Number.isFinite(end)) {
+          deltaSum += end - startEff;
+          haveDelta = true;
+        }
+      }
+      if (typeof firstRating === "number" && typeof lastRating === "number") {
+        s.ratingStart = firstRating;
+        s.ratingEnd = lastRating;
+        s.ratingDelta = lastRating - firstRating;
+      } else if (haveDelta) {
+        s.ratingDelta = deltaSum;
       }
     }
     return sessions;
@@ -45709,15 +45725,18 @@
         return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
       };
       if (dimId === "time_day") {
+        const tsValues = rows.map(
+          (r) => typeof r.playedAt === "number" ? r.playedAt : typeof r.ts === "number" ? r.ts : null
+        ).filter((x) => typeof x === "number");
+        const dataMinTs = tsValues.length ? Math.min(...tsValues) : null;
+        const dataMaxTs = tsValues.length ? Math.max(...tsValues) : null;
         let fromTs = context?.dateRange?.fromTs ?? null;
         let toTs2 = context?.dateRange?.toTs ?? null;
-        if (fromTs === null || toTs2 === null) {
-          const tsValues = rows.map((r) => typeof r.playedAt === "number" ? r.playedAt : typeof r.ts === "number" ? r.ts : null).filter((x) => typeof x === "number");
-          const min = tsValues.length ? Math.min(...tsValues) : null;
-          const max = tsValues.length ? Math.max(...tsValues) : null;
-          if (fromTs === null) fromTs = min;
-          if (toTs2 === null) toTs2 = max;
-        }
+        if (fromTs === null) fromTs = dataMinTs;
+        if (toTs2 === null) toTs2 = dataMaxTs;
+        if (dataMinTs !== null && fromTs !== null) fromTs = Math.max(fromTs, dataMinTs);
+        if (dataMaxTs !== null && toTs2 !== null) toTs2 = Math.min(toTs2, dataMaxTs);
+        if (fromTs !== null && toTs2 !== null && fromTs > toTs2) fromTs = toTs2;
         const grouped2 = groupByKey(rows, keyFn);
         const keys3 = fromTs !== null && toTs2 !== null ? dayKeysBetween(fromTs, toTs2) : sortKeysChronological(Array.from(grouped2.keys()));
         const maxPoints = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) ? Math.floor(spec.maxPoints) : typeof limitOverride === "number" && Number.isFinite(limitOverride) ? Math.floor(limitOverride) : 0;
@@ -45737,6 +45756,7 @@
           return out2;
         }
         const fillMode = measDef.timeDayFill ?? "none";
+        const isRating = measDef.unit === "rating";
         let lastY = null;
         const out = [];
         for (const b of buckets) {
@@ -45745,11 +45765,17 @@
             const dayRows = grouped2.get(k) ?? [];
             if (dayRows.length) bucketRows.push(...dayRows);
           }
-          if (bucketRows.length === 0 && fillMode === "carry_forward" && lastY !== null) {
-            out.push({ x: b.label, y: lastY, rows: [] });
-            continue;
+          const yRaw = yForRows(bucketRows);
+          const y = clampForMeasure(semantic, measureId, yRaw);
+          if (fillMode === "carry_forward" && lastY !== null) {
+            const isEmptyBucket = bucketRows.length === 0;
+            const isMissingRatingValue = isRating && bucketRows.length > 0 && y === 0;
+            const isNonFinite = !Number.isFinite(y);
+            if (isEmptyBucket || isMissingRatingValue || isNonFinite) {
+              out.push({ x: b.label, y: lastY, rows: bucketRows });
+              continue;
+            }
           }
-          const y = clampForMeasure(semantic, measureId, yForRows(bucketRows));
           lastY = y;
           out.push({ x: b.label, y, rows: bucketRows });
         }

@@ -634,17 +634,28 @@ export async function renderChartWidget(
       return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
     };
 
-    // For time_day, fill all days in the selected dateRange (or fallback to data bounds).
+    // For time_day, fill all days, but clamp the range to the filtered data bounds (so charts start at first datapoint).
     if (dimId === "time_day") {
+      const tsValues = rows
+        .map((r) =>
+          typeof (r as any).playedAt === "number"
+            ? (r as any).playedAt
+            : typeof (r as any).ts === "number"
+              ? (r as any).ts
+              : null
+        )
+        .filter((x) => typeof x === "number") as number[];
+      const dataMinTs = tsValues.length ? Math.min(...tsValues) : null;
+      const dataMaxTs = tsValues.length ? Math.max(...tsValues) : null;
+
       let fromTs = context?.dateRange?.fromTs ?? null;
       let toTs = context?.dateRange?.toTs ?? null;
-      if (fromTs === null || toTs === null) {
-        const tsValues = rows.map((r) => (typeof (r as any).playedAt === "number" ? (r as any).playedAt : typeof (r as any).ts === "number" ? (r as any).ts : null)).filter((x) => typeof x === "number") as number[];
-        const min = tsValues.length ? Math.min(...tsValues) : null;
-        const max = tsValues.length ? Math.max(...tsValues) : null;
-        if (fromTs === null) fromTs = min;
-        if (toTs === null) toTs = max;
-      }
+
+      if (fromTs === null) fromTs = dataMinTs;
+      if (toTs === null) toTs = dataMaxTs;
+      if (dataMinTs !== null && fromTs !== null) fromTs = Math.max(fromTs, dataMinTs);
+      if (dataMaxTs !== null && toTs !== null) toTs = Math.min(toTs, dataMaxTs);
+      if (fromTs !== null && toTs !== null && fromTs > toTs) fromTs = toTs;
 
       const grouped = groupByKey(rows, keyFn);
       const keys = (fromTs !== null && toTs !== null) ? dayKeysBetween(fromTs, toTs) : sortKeysChronological(Array.from(grouped.keys()));
@@ -672,6 +683,7 @@ export async function renderChartWidget(
       }
 
       const fillMode = measDef.timeDayFill ?? "none";
+      const isRating = measDef.unit === "rating";
       let lastY: number | null = null;
       const out: Datum[] = [];
       for (const b of buckets) {
@@ -680,11 +692,19 @@ export async function renderChartWidget(
           const dayRows = grouped.get(k) ?? [];
           if (dayRows.length) bucketRows.push(...dayRows);
         }
-        if (bucketRows.length === 0 && fillMode === "carry_forward" && lastY !== null) {
-          out.push({ x: b.label, y: lastY, rows: [] });
-          continue;
+        const yRaw = yForRows(bucketRows);
+        const y = clampForMeasure(semantic, measureId, yRaw);
+
+        if (fillMode === "carry_forward" && lastY !== null) {
+          const isEmptyBucket = bucketRows.length === 0;
+          const isMissingRatingValue = isRating && bucketRows.length > 0 && y === 0;
+          const isNonFinite = !Number.isFinite(y);
+          if (isEmptyBucket || isMissingRatingValue || isNonFinite) {
+            out.push({ x: b.label, y: lastY, rows: bucketRows });
+            continue;
+          }
         }
-        const y = clampForMeasure(semantic, measureId, yForRows(bucketRows));
+
         lastY = y;
         out.push({ x: b.label, y, rows: bucketRows });
       }

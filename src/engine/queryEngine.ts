@@ -240,16 +240,36 @@ async function attachRatingsToSessions(sessions: SessionRow[]): Promise<SessionR
     const gs = ids.map((id) => byId.get(id)).filter(Boolean);
     if (!gs.length) continue;
     const sorted = [...gs].sort((a, b) => (pickGameTs(a) ?? 0) - (pickGameTs(b) ?? 0));
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    const firstRat = extractGameRatings(first);
-    const lastRat = extractGameRatings(last);
-    const start = typeof firstRat.start === "number" ? firstRat.start : typeof firstRat.end === "number" ? firstRat.end : undefined;
-    const end = typeof lastRat.end === "number" ? lastRat.end : undefined;
-    if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) {
-      s.ratingStart = start;
-      s.ratingEnd = end;
-      s.ratingDelta = end - start;
+    let firstRating: number | undefined;
+    let lastRating: number | undefined;
+    let prevEnd: number | undefined;
+    let deltaSum = 0;
+    let haveDelta = false;
+
+    for (const g of sorted) {
+      const r = extractGameRatings(g);
+      const start = typeof r.start === "number" && Number.isFinite(r.start) ? r.start : undefined;
+      const end = typeof r.end === "number" && Number.isFinite(r.end) ? r.end : undefined;
+      const startEff = start ?? prevEnd ?? end;
+
+      if (firstRating === undefined && typeof startEff === "number" && Number.isFinite(startEff)) firstRating = startEff;
+      if (typeof end === "number" && Number.isFinite(end)) {
+        lastRating = end;
+        prevEnd = end;
+      }
+
+      if (typeof startEff === "number" && Number.isFinite(startEff) && typeof end === "number" && Number.isFinite(end)) {
+        deltaSum += end - startEff;
+        haveDelta = true;
+      }
+    }
+
+    if (typeof firstRating === "number" && typeof lastRating === "number") {
+      s.ratingStart = firstRating;
+      s.ratingEnd = lastRating;
+      s.ratingDelta = lastRating - firstRating;
+    } else if (haveDelta) {
+      s.ratingDelta = deltaSum;
     }
   }
 
