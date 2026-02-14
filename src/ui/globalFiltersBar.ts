@@ -60,12 +60,16 @@ export async function renderGlobalFiltersBar(args: {
   setAll: (next: GlobalFilterState) => void;
   reset: () => void;
   getDistinctOptions: DistinctOptionsProvider;
+  controlIds?: string[];
+  constraints?: Record<string, { required?: boolean }>;
 }): Promise<void> {
-  const { container, semantic, spec, state, setValue, setAll, reset, getDistinctOptions } = args;
+  const { container, semantic, spec, state, setValue, setAll, reset, getDistinctOptions, controlIds, constraints } = args;
   const doc = container.ownerDocument;
   container.innerHTML = "";
 
   if (!spec?.enabled) return;
+
+  const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
 
   const bar = doc.createElement("div");
   bar.className = "ga-filters";
@@ -129,6 +133,7 @@ export async function renderGlobalFiltersBar(args: {
 
   const renderSelect = async (control: SelectControlSpec) => {
     const id = control.id;
+    const isRequired = constraints?.[id]?.required === true;
     const current = String((applyMode ? pending : state)[id] ?? control.default ?? "all");
 
     const wrap = doc.createElement("div");
@@ -137,15 +142,20 @@ export async function renderGlobalFiltersBar(args: {
 
     const sel = doc.createElement("select");
     sel.className = "ga-filter-select";
-    sel.appendChild(new Option("All", "all"));
 
     // Options can depend on other active filters; we compute distincts from DB.
     const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
+    if (!isRequired) sel.appendChild(new Option("All", "all"));
     for (const opt of options) {
       sel.appendChild(new Option(opt.label, opt.value));
     }
 
-    sel.value = options.some((o) => o.value === current) ? current : "all";
+    const hasCurrent = options.some((o) => o.value === current);
+    const nextValue = hasCurrent ? current : isRequired ? (options[0]?.value ?? "") : "all";
+    if (nextValue) sel.value = nextValue;
+    if (isRequired && nextValue && nextValue !== current) {
+      updatePending(id, nextValue);
+    }
     sel.addEventListener("change", () => {
       updatePending(id, sel.value);
     });
@@ -156,13 +166,17 @@ export async function renderGlobalFiltersBar(args: {
 
   const controls = spec.controls as FilterControlSpec[];
   for (const c of controls) {
+    if (allowed && !allowed.has(c.id)) continue;
     if (c.type === "date_range") {
       renderDateRange(c);
       continue;
     }
     if (c.type === "select") {
       const dim = semantic.dimensions[c.dimension];
-      if (dim && dim.grain !== "round") continue;
+      if (dim) {
+        const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+        if (!grains.includes("round")) continue;
+      }
       await renderSelect(c);
       continue;
     }

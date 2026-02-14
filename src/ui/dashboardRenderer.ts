@@ -8,6 +8,7 @@ import { renderStatListWidget } from "./widgets/statListWidget";
 import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
+import { renderTeamSectionWidget } from "./widgets/teamSectionWidget";
 
 
 export async function renderDashboard(
@@ -19,6 +20,7 @@ export async function renderDashboard(
     datasetsBySection?: Record<string, Partial<Record<Grain, any[]>>>;
     context?: { dateRange?: { fromTs: number | null; toTs: number | null } };
     contextBySection?: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }>;
+    onActiveSectionChange?: (sectionId: string) => void;
   }
 ): Promise<void> {
   root.innerHTML = "";
@@ -69,6 +71,7 @@ export async function renderDashboard(
     if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "team_section") return await renderTeamSectionWidget(semantic, widget, overlay, baseRows as any);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");
@@ -83,6 +86,7 @@ export async function renderDashboard(
     if (!section) return;
     activeDatasets = datasetsBySection[section.id] ?? datasetsDefault;
     activeContext = contextBySection[section.id] ?? contextDefault;
+    opts?.onActiveSectionChange?.(section.id);
 
     const grid = doc.createElement("div");
     grid.className = "ga-grid";

@@ -184,13 +184,17 @@ export interface RecordListSpec {
   records: RecordItemDef[];
 }
 
+export interface TeamSectionSpec {
+  // Reserved for future options (e.g., session gap override).
+}
+
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list";
+  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list" | "team_section";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec;
+  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec | TeamSectionSpec;
 }
 
 export interface CompositeCardDef {

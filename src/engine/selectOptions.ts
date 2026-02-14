@@ -44,6 +44,7 @@ export async function getSelectOptionsForControl(opts: {
   if (control.options === "auto_teammates") {
     // Count unique games per teammate, based on the currently active global filters.
     const gamesByMate = new Map<string, Set<string>>();
+    const roundsByMate = new Map<string, number>();
     for (const r of rows) {
       const mate = (r as any).teammateName;
       const name = typeof mate === "string" ? mate.trim() : "";
@@ -53,9 +54,14 @@ export async function getSelectOptionsForControl(opts: {
       const set = gamesByMate.get(name) ?? new Set<string>();
       set.add(gameId);
       gamesByMate.set(name, set);
+      roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
     }
     const out = Array.from(gamesByMate.entries())
-      .map(([name, games]) => ({ value: name, label: `${name} (${games.size})`, n: games.size }))
+      .map(([name, games]) => ({
+        value: name,
+        label: `${name} (${games.size} games, ${roundsByMate.get(name) ?? 0} rounds)`,
+        n: games.size
+      }))
       .sort((a, b) => (b.n - a.n) || a.value.localeCompare(b.value))
       .map(({ value, label }) => ({ value, label }));
     cache.set(key, out);

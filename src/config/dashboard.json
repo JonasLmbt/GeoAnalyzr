@@ -58,6 +58,7 @@
       {
         "id": "overview",
         "title": "Overview",
+        "filterScope": { "exclude": ["teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -229,7 +230,7 @@
       {
         "id": "personal_records",
         "title": "Personal Records",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -344,7 +345,7 @@
       {
         "id": "sessions",
         "title": "Sessions",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -468,7 +469,7 @@
       {
         "id": "tempo",
         "title": "Tempo",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -580,7 +581,7 @@
       {
         "id": "scores",
         "title": "Scores",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -690,7 +691,7 @@
       {
         "id": "rounds",
         "title": "Rounds",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -874,6 +875,7 @@
       {
         "id": "time_patterns",
         "title": "Time Patterns",
+        "filterScope": { "exclude": ["teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -999,7 +1001,7 @@
       {
         "id": "countries",
         "title": "Countries",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1157,7 +1159,7 @@
       {
         "id": "opponents",
         "title": "Opponents",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country", "teammate"] },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1219,6 +1221,39 @@
                         "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
                       }
                     }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+      ,
+      {
+        "id": "team",
+        "title": "Team",
+        "filterScope": { "include": ["dateRange", "teammate"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_team",
+              "title": "Team Duels",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 14,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_team_summary",
+                    "type": "team_section",
+                    "title": "Team",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 14 },
+                    "spec": {}
                   }
                 ]
               }

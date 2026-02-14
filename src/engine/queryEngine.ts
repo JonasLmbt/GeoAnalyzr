@@ -54,6 +54,13 @@ export function invalidateRoundsCache(): void {
   sessionsFilteredCache.clear();
 }
 
+export async function hasAnyTeamDuels(): Promise<boolean> {
+  const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
+  if (byFamily > 0) return true;
+  const byFlag = await db.games.where("isTeamDuels").equals(true as any).count();
+  return byFlag > 0;
+}
+
 export type SessionRow = {
   sessionId: string;
   sessionIndex: number;

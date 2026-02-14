@@ -4,7 +4,7 @@ import { renderDashboard } from "./dashboardRenderer";
 import { createGlobalFilterStore } from "./filterState";
 import { renderGlobalFiltersBar } from "./globalFiltersBar";
 import { getSelectOptionsForControl } from "../engine/selectOptions";
-import { getGamePlayedAtBounds, getRounds, getGames, getSessions } from "../engine/queryEngine";
+import { getGamePlayedAtBounds, getRounds, getGames, getSessions, hasAnyTeamDuels } from "../engine/queryEngine";
 import type { Grain } from "../config/semantic.types";
 
 function explodeOpponentsFromGames(games: any[]): any[] {
@@ -47,6 +47,7 @@ export async function renderAnalysisApp(opts: {
 
   const spec = dashboard.dashboard.globalFilters;
   const store = createGlobalFilterStore(spec);
+  let activeSectionId = dashboard.dashboard.sections[0]?.id ?? "";
 
   // If date-range defaults are unspecified, initialize them to the full dataset span.
   if (spec?.enabled) {
@@ -68,19 +69,8 @@ export async function renderAnalysisApp(opts: {
   }
 
   const renderNow = async () => {
-    await renderGlobalFiltersBar({
-      container: filtersHost,
-      semantic,
-      spec,
-      state: store.getState(),
-      setValue: store.setValue,
-      setAll: store.setAll,
-      reset: store.reset,
-      getDistinctOptions: async ({ control, spec: s, state }) => getSelectOptionsForControl({ control, spec: s, state })
-    });
-
     const specFilters = spec;
-    const state = store.getState();
+    let state = store.getState();
 
     const resolveControlIdsForSection = (section: any): string[] | undefined => {
       if (!specFilters?.enabled) return undefined;
@@ -92,10 +82,71 @@ export async function renderAnalysisApp(opts: {
       return ids;
     };
 
+    const hasTeamDuels = await hasAnyTeamDuels();
+    const sections = hasTeamDuels
+      ? dashboard.dashboard.sections
+      : dashboard.dashboard.sections.filter((s) => s.id !== "team");
+
+    if (!sections.some((s) => s.id === activeSectionId)) {
+      activeSectionId = sections[0]?.id ?? "";
+    }
+
+    // Ensure "team" has a selected mate (local filter semantics via filterScope).
+    const getTeammateOptionsStable = async () => {
+      if (!specFilters?.enabled) return [];
+      const mateControl = specFilters.controls.find((c) => c.type === "select" && c.id === "teammate") as any;
+      if (!mateControl) return [];
+      const st = { ...store.getState() } as any;
+      // Keep teammate options stable even when date range filters to zero Team Duel games.
+      delete st.dateRange;
+      return await getSelectOptionsForControl({ control: mateControl, spec: specFilters, state: st });
+    };
+
+    if (hasTeamDuels && specFilters?.enabled) {
+      const mateControl = specFilters.controls.find((c) => c.type === "select" && c.id === "teammate") as any;
+      if (mateControl) {
+        const current = String(store.getState()["teammate"] ?? "all");
+        const opts = await getTeammateOptionsStable();
+        const values = new Set(opts.map((o) => o.value));
+        const next = (current && current !== "all" && values.has(current)) ? current : (opts[0]?.value ?? "");
+        if (next && next !== current) store.setValue("teammate", next);
+      }
+    }
+
+    state = store.getState();
+
+    const renderFiltersForSection = async (sectionId: string) => {
+      const section = sections.find((s) => s.id === sectionId) ?? sections[0];
+      const controlIds = section ? resolveControlIdsForSection(section) : undefined;
+      await renderGlobalFiltersBar({
+        container: filtersHost,
+        semantic,
+        spec,
+        state: store.getState(),
+        setValue: store.setValue,
+        setAll: store.setAll,
+        reset: store.reset,
+        getDistinctOptions: async ({ control, spec: s, state: st }) => {
+          if (section?.id === "team" && control.id === "teammate") {
+            const stable = { ...st } as any;
+            delete stable.dateRange;
+            return await getSelectOptionsForControl({ control, spec: s, state: stable });
+          }
+          return await getSelectOptionsForControl({ control, spec: s, state: st });
+        },
+        controlIds,
+        constraints: {
+          teammate: { required: section?.id === "team" }
+        }
+      });
+    };
+
+    await renderFiltersForSection(activeSectionId);
+
     const datasetsBySection: Record<string, Partial<Record<Grain, any[]>>> = {};
     const contextBySection: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }> = {};
 
-    for (const section of dashboard.dashboard.sections) {
+    for (const section of sections) {
       const controlIds = resolveControlIdsForSection(section);
 
       const used = new Set<Grain>();
@@ -193,7 +244,7 @@ export async function renderAnalysisApp(opts: {
     const datasetsAll: Partial<Record<Grain, any[]>> = {};
     // Only load what the dashboard needs.
     const usedAll = new Set<Grain>();
-    for (const section of dashboard.dashboard.sections) {
+    for (const section of sections) {
       const d = datasetsBySection[section.id];
       if (d?.round) usedAll.add("round");
       if (d?.game) usedAll.add("game");
@@ -208,11 +259,24 @@ export async function renderAnalysisApp(opts: {
     const dateValAll = state["dateRange"] as any;
     const fromTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.fromTs ?? null) : null;
     const toTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.toTs ?? null) : null;
-    await renderDashboard(dashboardHost, semantic, dashboard, {
+
+    const effectiveDashboard: DashboardDoc = {
+      ...dashboard,
+      dashboard: {
+        ...dashboard.dashboard,
+        sections
+      }
+    };
+
+    await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
       datasets: datasetsAll,
       datasetsBySection,
       context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
-      contextBySection
+      contextBySection,
+      onActiveSectionChange: (sectionId) => {
+        activeSectionId = sectionId;
+        void renderFiltersForSection(sectionId);
+      }
     });
   };
 
