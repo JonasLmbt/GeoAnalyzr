@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.35
+// @version      1.6.36
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -41074,6 +41074,10 @@
     dashboard: {
       id: "default",
       title: "GeoAnalyzr",
+      ui: {
+        topbarTitle: "{{playerName}}",
+        windowTitle: "{{playerName}} - GeoAnalyzr"
+      },
       globalFilters: {
         enabled: true,
         layout: { variant: "compact" },
@@ -48393,6 +48397,79 @@
     await renderNow();
   }
 
+  // src/app/playerIdentity.ts
+  var cachedPlayerName;
+  function asTrimmedString3(v) {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : void 0;
+  }
+  function pickFirst5(obj, paths) {
+    for (const path of paths) {
+      if (!obj || typeof obj !== "object") continue;
+      const parts = path.split(".");
+      let cur = obj;
+      let ok = true;
+      for (const p of parts) {
+        if (!cur || typeof cur !== "object" || !(p in cur)) {
+          ok = false;
+          break;
+        }
+        cur = cur[p];
+      }
+      if (!ok) continue;
+      if (cur !== void 0 && cur !== null) return cur;
+    }
+    return void 0;
+  }
+  async function fetchPlayerNameFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    let playerId;
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        playerId = asTrimmedString3(id);
+        if (playerId) break;
+      } catch {
+      }
+    }
+    if (!playerId) return void 0;
+    try {
+      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+      if (res.status < 200 || res.status >= 300) return void 0;
+      return asTrimmedString3(res.data?.nick);
+    } catch {
+      return void 0;
+    }
+  }
+  async function guessPlayerNameFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
+        if (candidate) return candidate;
+      }
+    } catch {
+    }
+    return void 0;
+  }
+  async function getCurrentPlayerName() {
+    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
+    const fromApi = await fetchPlayerNameFromApi();
+    if (fromApi) {
+      cachedPlayerName = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerNameFromDb();
+    cachedPlayerName = fromDb ?? null;
+    return fromDb;
+  }
+
   // src/ui.ts
   function cloneTemplate2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
@@ -48407,7 +48484,7 @@
     if (!doc.body || !doc.head) {
       throw new Error("Semantic dashboard target document is not ready.");
     }
-    doc.title = "GeoAnalyzr - Semantic Dashboard";
+    doc.title = "GeoAnalyzr";
     doc.documentElement.classList.add("ga-semantic-page");
     doc.body.classList.add("ga-semantic-page");
     injectSemanticDashboardCssOnce(doc);
@@ -48416,9 +48493,31 @@
     let settings = loadSettings(doc);
     let root = doc.getElementById("geoanalyzr-semantic-root");
     let body;
+    const playerName = await getCurrentPlayerName();
+    const applyTitleTemplate = (tpl, vars) => {
+      const raw = String(tpl ?? "");
+      const rendered = raw.replace(/\{\{\s*([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, key) => {
+        const v = vars[key];
+        return typeof v === "string" ? v : "";
+      });
+      return rendered.trim();
+    };
+    const updateTitles = () => {
+      const dashTitle = dashboard?.dashboard?.title ?? "GeoAnalyzr";
+      const ui = dashboard?.dashboard?.ui;
+      const topTpl = typeof ui?.topbarTitle === "string" ? ui.topbarTitle : "{{dashboardTitle}}";
+      const winTpl = typeof ui?.windowTitle === "string" ? ui.windowTitle : "{{dashboardTitle}}";
+      const vars = { playerName, dashboardTitle: dashTitle };
+      const topTitle = applyTitleTemplate(topTpl, vars) || dashTitle;
+      const winTitle = applyTitleTemplate(winTpl, vars) || dashTitle;
+      doc.title = winTitle;
+      const titleEl = doc.querySelector(".ga-topbar .ga-title");
+      if (titleEl) titleEl.textContent = topTitle;
+    };
     const renderNow = async () => {
       body.innerHTML = "";
       validateDashboardAgainstSemantic(semantic, dashboard);
+      updateTitles();
       await renderAnalysisApp({ body, semantic, dashboard });
     };
     if (!root) {
@@ -48429,7 +48528,7 @@
       top.className = "ga-topbar";
       const title = doc.createElement("div");
       title.className = "ga-title";
-      title.textContent = "GeoAnalyzr - Semantic Dashboard";
+      title.textContent = "GeoAnalyzr";
       const actions = doc.createElement("div");
       actions.className = "ga-topbar-actions";
       const settingsBtn = doc.createElement("button");
@@ -48462,6 +48561,7 @@
         applyDashboard: async (next) => {
           dashboard = next;
           saveDashboardTemplate(doc, dashboard);
+          updateTitles();
           await renderNow();
         },
         getSettings: () => settings,
@@ -48482,6 +48582,7 @@
       throw new Error("Semantic root is missing after initialization.");
     }
     applySettingsToRoot(root, settings);
+    updateTitles();
     try {
       await renderNow();
     } catch (error) {
