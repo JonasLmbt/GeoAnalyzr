@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.13
+// @version      1.6.14
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -12023,11 +12023,11 @@
             }
           };
           renderComponentRows();
-          const addRow2 = doc.createElement("div");
-          addRow2.style.display = "inline-flex";
-          addRow2.style.flexWrap = "wrap";
-          addRow2.style.gap = "8px";
-          addRow2.style.padding = "8px";
+          const addRow = doc.createElement("div");
+          addRow.style.display = "inline-flex";
+          addRow.style.flexWrap = "wrap";
+          addRow.style.gap = "8px";
+          addRow.style.padding = "8px";
           const kindSelect = doc.createElement("select");
           kindSelect.innerHTML = `<option value="single">Single</option><option value="box">Box</option><option value="graph">Graph</option>`;
           styleInput(kindSelect);
@@ -12071,8 +12071,8 @@
             renderComponentRows();
             if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
           });
-          addRow2.append(kindSelect, idInput, labelInput, typeInput, addCompBtn);
-          details.appendChild(addRow2);
+          addRow.append(kindSelect, idInput, labelInput, typeInput, addCompBtn);
+          details.appendChild(addRow);
           detailsWrap.appendChild(details);
         }
         tabContent.appendChild(wrapper);
@@ -40681,15 +40681,6 @@
             appliesTo: ["round"]
           },
           {
-            id: "teammate",
-            type: "select",
-            label: "Teammate",
-            dimension: "teammate_name",
-            default: "all",
-            options: "auto_teammates",
-            appliesTo: ["round"]
-          },
-          {
             id: "guessTimeBucket",
             type: "select",
             label: "Guess time",
@@ -40714,7 +40705,6 @@
         {
           id: "overview",
           title: "Overview",
-          filterScope: { exclude: ["teammate"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -40883,7 +40873,7 @@
         {
           id: "personal_records",
           title: "Personal Records",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -40998,7 +40988,7 @@
         {
           id: "sessions",
           title: "Sessions",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41122,7 +41112,7 @@
         {
           id: "tempo",
           title: "Tempo",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41234,7 +41224,7 @@
         {
           id: "scores",
           title: "Scores",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41343,7 +41333,7 @@
         {
           id: "rounds",
           title: "Rounds",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41526,7 +41516,6 @@
         {
           id: "time_patterns",
           title: "Time Patterns",
-          filterScope: { exclude: ["teammate"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41650,7 +41639,7 @@
         {
           id: "countries",
           title: "Countries",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41806,7 +41795,7 @@
         {
           id: "opponents",
           title: "Opponents",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country", "teammate"] },
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -41878,7 +41867,6 @@
         {
           id: "team",
           title: "Team",
-          filterScope: { include: ["dateRange", "teammate"] },
           layout: {
             mode: "grid",
             columns: 12,
@@ -42042,7 +42030,7 @@
       display:flex;
       justify-content:space-between;
       gap:10px;
-      padding:10px 10px 0;
+      padding:10px 10px 6px;
       flex-wrap:wrap;
     }
     .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
@@ -42125,8 +42113,8 @@
 
     /* GeoGuessr-like section tabs (top navigation vibe) */
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs {
-      padding: 8px 10px;
-      gap: 18px;
+      padding: 6px 10px;
+      gap: 12px;
       border-radius: 14px;
       background: linear-gradient(180deg, rgba(16, 16, 28, 0.42) 0%, rgba(16, 16, 28, 0.18) 100%);
       border: 1px solid rgba(255,255,255,0.08);
@@ -42134,6 +42122,9 @@
       backdrop-filter: blur(14px);
       overflow-x: auto;
       scrollbar-width: none;
+      width: fit-content;
+      max-width: 100%;
+      margin: 4px 10px 0;
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs::-webkit-scrollbar { display: none; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab {
@@ -42141,7 +42132,7 @@
       border: 0;
       box-shadow: none;
       border-radius: 10px;
-      padding: 10px 4px;
+      padding: 8px 4px;
       font-size: 12px;
       font-weight: 800;
       letter-spacing: 0.9px;
@@ -42149,6 +42140,15 @@
       color: rgba(243,244,255,0.70);
       transition: color 160ms ease, background 160ms ease;
     }
+
+    .ga-team-local-filters {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      margin: 6px 0 10px;
+    }
+    .ga-team-local-filters .ga-filter { min-width: 240px; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
       background: rgba(255,255,255,0.04);
       color: rgba(255,255,255,0.88);
@@ -45218,20 +45218,7 @@
     wrap.appendChild(box);
     return { wrap, box };
   }
-  function addRow(doc, box, label, value) {
-    const line = doc.createElement("div");
-    line.className = "ga-statrow";
-    const left = doc.createElement("div");
-    left.className = "ga-statrow-label";
-    left.textContent = label;
-    const right = doc.createElement("div");
-    right.className = "ga-statrow-value";
-    right.textContent = value;
-    line.appendChild(left);
-    line.appendChild(right);
-    box.appendChild(line);
-  }
-  async function renderTeamSectionWidget(_semantic, widget, overlay, baseRows) {
+  async function renderTeamSectionWidget(semantic, widget, overlay, baseRows) {
     const _spec = widget.spec;
     const doc = overlay.getDocument();
     const wrap = doc.createElement("div");
@@ -45243,153 +45230,300 @@
       ph.textContent = "Team section requires round grain";
       return ph;
     }
-    const all = Array.isArray(baseRows) ? baseRows : [];
-    const rows = all.filter((r) => getModeFamilyRaw(r) === "teamduels");
-    const mateName = rows.length ? getTeammateName2(rows[0]) : "";
+    const storageKey = "geoanalyzr:semantic:team:mate";
+    const ls = doc.defaultView?.localStorage;
+    const globalAll = Array.isArray(baseRows) ? baseRows : [];
+    const globalTeamRounds = globalAll.filter((r) => getModeFamilyRaw(r) === "teamduels");
+    const roundsAll = await getRounds({});
+    const allTeamDuels = roundsAll.filter((r) => getModeFamilyRaw(r) === "teamduels");
+    const gamesByMate = /* @__PURE__ */ new Map();
+    const roundsByMate = /* @__PURE__ */ new Map();
+    for (const r of allTeamDuels) {
+      const name = getTeammateName2(r);
+      if (!name) continue;
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      if (!gid) continue;
+      const set = gamesByMate.get(name) ?? /* @__PURE__ */ new Set();
+      set.add(gid);
+      gamesByMate.set(name, set);
+      roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
+    }
+    const mateOptions = Array.from(gamesByMate.entries()).map(([name, games]) => ({ value: name, games: games.size, rounds: roundsByMate.get(name) ?? 0 })).sort((a, b) => b.games - a.games || a.value.localeCompare(b.value)).map((x) => ({ value: x.value, label: `${x.value} (${x.games} games, ${x.rounds} rounds)` }));
     const title = doc.createElement("div");
     title.className = "ga-widget-title";
-    title.textContent = mateName ? `Team: You + ${mateName}` : "Team: You + (select a mate)";
+    title.textContent = "Team Duels";
     wrap.appendChild(title);
-    if (!rows.length) {
+    if (mateOptions.length === 0) {
       const empty = doc.createElement("div");
       empty.className = "ga-statlist-box";
-      empty.textContent = "No Team Duel rounds for the selected teammate (in the current filters).";
+      empty.textContent = "No Team Duel data found.";
       wrap.appendChild(empty);
       return wrap;
     }
-    let myCloser = 0;
-    let mateCloser = 0;
-    let myScoreWins = 0;
-    let mateScoreWins = 0;
-    let myThrows = 0;
-    let mateThrows = 0;
-    let myFiveKs = 0;
-    let mateFiveKs = 0;
-    const gameIdSet = /* @__PURE__ */ new Set();
-    const gameTsById = /* @__PURE__ */ new Map();
-    let timedRounds = 0;
-    let timePlayedMs = 0;
-    for (const r of rows) {
-      const gid = typeof r?.gameId === "string" ? r.gameId : "";
-      if (gid) gameIdSet.add(gid);
-      const ts = asFiniteNumber2(r?.playedAt ?? r?.ts);
-      if (gid && ts !== null) {
-        const cur = gameTsById.get(gid);
-        if (cur === void 0 || ts < cur) gameTsById.set(gid, ts);
-      }
-      const selfDist = asFiniteNumber2(r?.player_self_distanceKm ?? r?.distanceKm);
-      const mateDist = asFiniteNumber2(r?.player_mate_distanceKm);
-      if (selfDist !== null && mateDist !== null) {
-        if (selfDist < mateDist) myCloser++;
-        else if (selfDist > mateDist) mateCloser++;
-      }
-      const selfScore = asFiniteNumber2(r?.player_self_score ?? r?.score);
-      const mateScore = asFiniteNumber2(r?.player_mate_score);
-      if (selfScore !== null && mateScore !== null) {
-        if (selfScore > mateScore) myScoreWins++;
-        else if (selfScore < mateScore) mateScoreWins++;
-        if (selfScore < 50) myThrows++;
-        if (mateScore < 50) mateThrows++;
-        if (selfScore >= 5e3) myFiveKs++;
-        if (mateScore >= 5e3) mateFiveKs++;
-      }
-      const durSec = asFiniteNumber2(r?.durationSeconds ?? r?.guessDurationSec ?? r?.timeSec);
-      if (durSec !== null && durSec >= 0) {
-        timedRounds++;
-        timePlayedMs += durSec * 1e3;
-      }
-    }
-    const decideLeader = (youValue, mateValue, neutralLabel = "Tie") => {
-      const decisive = youValue + mateValue;
-      if (decisive === 0) return `${neutralLabel} (-)`;
-      if (youValue === mateValue) return `${neutralLabel} (50.0%)`;
-      const youWin = youValue > mateValue;
-      const leader = youWin ? "You" : mateName || "Mate";
-      const share = youWin ? youValue / decisive : mateValue / decisive;
-      return `${leader} (${formatPct01(share)})`;
+    let selectedMate = typeof ls?.getItem(storageKey) === "string" ? String(ls?.getItem(storageKey) ?? "").trim() : "";
+    const values = new Set(mateOptions.map((o) => o.value));
+    if (!selectedMate || !values.has(selectedMate)) selectedMate = mateOptions[0].value;
+    ls?.setItem(storageKey, selectedMate);
+    const localFilters = doc.createElement("div");
+    localFilters.className = "ga-team-local-filters";
+    const mateFilter = doc.createElement("div");
+    mateFilter.className = "ga-filter";
+    const mateLabel = doc.createElement("div");
+    mateLabel.className = "ga-filter-label";
+    mateLabel.textContent = "Mate";
+    const mateRow = doc.createElement("div");
+    mateRow.className = "ga-filter-row";
+    const sel = doc.createElement("select");
+    sel.className = "ga-filter-select";
+    for (const opt of mateOptions) sel.appendChild(new Option(opt.label, opt.value));
+    sel.value = selectedMate;
+    sel.addEventListener("change", () => {
+      const next = sel.value;
+      if (!next || next === selectedMate) return;
+      selectedMate = next;
+      ls?.setItem(storageKey, selectedMate);
+      renderForMate();
+    });
+    mateRow.appendChild(sel);
+    mateFilter.appendChild(mateLabel);
+    mateFilter.appendChild(mateRow);
+    localFilters.appendChild(mateFilter);
+    wrap.appendChild(localFilters);
+    const host = doc.createElement("div");
+    wrap.appendChild(host);
+    const openRoundsDrill = (drillTitle, rows) => {
+      overlay.open(semantic, { title: drillTitle, target: "rounds", columnsPreset: "roundMode", rows });
     };
-    const h2h = mkBox(doc, "Head-to-head questions:");
-    addRow(doc, h2h.box, "Closer guesses", decideLeader(myCloser, mateCloser));
-    addRow(doc, h2h.box, "Higher score rounds", decideLeader(myScoreWins, mateScoreWins));
-    addRow(doc, h2h.box, "Fewer throws (<50)", decideLeader(mateThrows, myThrows));
-    addRow(doc, h2h.box, "More 5k rounds", decideLeader(myFiveKs, mateFiveKs));
-    const games = Array.from(gameIdSet.values());
-    const gameTimes = games.map((id) => ({ gameId: id, ts: gameTsById.get(id) })).filter((x) => typeof x.ts === "number" && Number.isFinite(x.ts)).sort((a, b) => a.ts - b.ts);
-    const firstTogether = gameTimes[0]?.ts;
-    const lastTogether = gameTimes.length ? gameTimes[gameTimes.length - 1].ts : void 0;
-    const sessionGapMs = 45 * 60 * 1e3;
-    let sessionCount = 0;
-    let sessionTotalGames = 0;
-    let longestSessionGames = 0;
-    let longestSessionStart;
-    let longestSessionEnd;
-    let longestBreakMs;
-    if (gameTimes.length > 0) {
-      sessionCount = 1;
-      let curStart = gameTimes[0].ts;
-      let curGames = 1;
-      let prevTs = gameTimes[0].ts;
-      for (let i = 1; i < gameTimes.length; i++) {
-        const ts = gameTimes[i].ts;
-        const gap = ts - prevTs;
-        if (Number.isFinite(gap) && gap > 0) {
-          if (longestBreakMs === void 0 || gap > longestBreakMs) longestBreakMs = gap;
+    const addRowWithDrill = (box, label, value, drillTitle, drillRows) => {
+      const line = doc.createElement("div");
+      line.className = "ga-statrow";
+      const left = doc.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = label;
+      const right = doc.createElement("div");
+      right.className = "ga-statrow-value";
+      right.textContent = value;
+      if (Array.isArray(drillRows) && drillRows.length > 0) {
+        line.style.cursor = "pointer";
+        right.style.textDecoration = "underline";
+        right.style.textDecorationThickness = "1px";
+        right.style.textUnderlineOffset = "2px";
+        line.addEventListener("click", () => openRoundsDrill(drillTitle, drillRows));
+      }
+      line.appendChild(left);
+      line.appendChild(right);
+      box.appendChild(line);
+    };
+    const renderForMate = () => {
+      host.innerHTML = "";
+      const compareRounds = globalTeamRounds.filter((r) => getTeammateName2(r) === selectedMate);
+      const header = doc.createElement("div");
+      header.className = "ga-widget-title";
+      header.textContent = `Team: You + ${selectedMate}`;
+      host.appendChild(header);
+      if (compareRounds.length === 0) {
+        const empty = doc.createElement("div");
+        empty.className = "ga-statlist-box";
+        empty.textContent = "No Team Duel rounds for this mate in the current global filters.";
+        host.appendChild(empty);
+        return;
+      }
+      let myCloser = 0;
+      let mateCloser = 0;
+      let myScoreWins = 0;
+      let mateScoreWins = 0;
+      let myThrows = 0;
+      let mateThrows = 0;
+      let myFiveKs = 0;
+      let mateFiveKs = 0;
+      const closerDrill = [];
+      const higherScoreDrill = [];
+      const fewerThrowsDrill = [];
+      const moreFiveKDrill = [];
+      const byGame = /* @__PURE__ */ new Map();
+      const gameTsById = /* @__PURE__ */ new Map();
+      let timedRounds = 0;
+      let timePlayedMs = 0;
+      const timedRoundsDrill = [];
+      for (const r of compareRounds) {
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (gid) {
+          const arr = byGame.get(gid) ?? [];
+          arr.push(r);
+          byGame.set(gid, arr);
         }
-        if (gap > sessionGapMs) {
-          sessionTotalGames += curGames;
-          if (curGames > longestSessionGames) {
-            longestSessionGames = curGames;
-            longestSessionStart = curStart;
-            longestSessionEnd = prevTs;
+        const ts = asFiniteNumber2(r?.playedAt ?? r?.ts);
+        if (gid && ts !== null) {
+          const cur = gameTsById.get(gid);
+          if (cur === void 0 || ts < cur) gameTsById.set(gid, ts);
+        }
+        const selfDist = asFiniteNumber2(r?.player_self_distanceKm ?? r?.distanceKm);
+        const mateDist = asFiniteNumber2(r?.player_mate_distanceKm);
+        if (selfDist !== null && mateDist !== null) {
+          closerDrill.push(r);
+          if (selfDist < mateDist) myCloser++;
+          else if (selfDist > mateDist) mateCloser++;
+        }
+        const selfScore = asFiniteNumber2(r?.player_self_score ?? r?.score);
+        const mateScore = asFiniteNumber2(r?.player_mate_score);
+        if (selfScore !== null && mateScore !== null) {
+          higherScoreDrill.push(r);
+          if (selfScore > mateScore) myScoreWins++;
+          else if (selfScore < mateScore) mateScoreWins++;
+          if (selfScore < 50) myThrows++;
+          if (mateScore < 50) mateThrows++;
+          if (selfScore < 50 || mateScore < 50) fewerThrowsDrill.push(r);
+          if (selfScore >= 5e3) myFiveKs++;
+          if (mateScore >= 5e3) mateFiveKs++;
+          if (selfScore >= 5e3 || mateScore >= 5e3) moreFiveKDrill.push(r);
+        }
+        const durSec = asFiniteNumber2(r?.durationSeconds ?? r?.guessDurationSec ?? r?.timeSec);
+        if (durSec !== null && durSec >= 0) {
+          timedRounds++;
+          timePlayedMs += durSec * 1e3;
+          timedRoundsDrill.push(r);
+        }
+      }
+      const decideLeader = (youValue, mateValue, neutralLabel = "Tie") => {
+        const decisive = youValue + mateValue;
+        if (decisive === 0) return `${neutralLabel} (-)`;
+        if (youValue === mateValue) return `${neutralLabel} (50.0%)`;
+        const youWin = youValue > mateValue;
+        const leader = youWin ? "You" : selectedMate || "Mate";
+        const share = youWin ? youValue / decisive : mateValue / decisive;
+        return `${leader} (${formatPct01(share)})`;
+      };
+      const games = Array.from(byGame.keys());
+      const gameTimes = games.map((id) => ({ gameId: id, ts: gameTsById.get(id) })).filter((x) => typeof x.ts === "number" && Number.isFinite(x.ts)).sort((a, b) => a.ts - b.ts);
+      const firstGameId = gameTimes[0]?.gameId;
+      const lastGameId = gameTimes.length ? gameTimes[gameTimes.length - 1].gameId : void 0;
+      const firstTogether = gameTimes[0]?.ts;
+      const lastTogether = gameTimes.length ? gameTimes[gameTimes.length - 1].ts : void 0;
+      const sessionGapMs = 45 * 60 * 1e3;
+      let sessionCount = 0;
+      let sessionTotalGames = 0;
+      let longestSessionGames = 0;
+      let longestSessionStart;
+      let longestSessionEnd;
+      let longestSessionIds = [];
+      let longestBreakMs;
+      let longestBreakPrevGameId;
+      let longestBreakNextGameId;
+      if (gameTimes.length > 0) {
+        sessionCount = 1;
+        let curStart = gameTimes[0].ts;
+        let curGames = 1;
+        let curIds = [gameTimes[0].gameId];
+        let prevTs = gameTimes[0].ts;
+        let prevGameId = gameTimes[0].gameId;
+        for (let i = 1; i < gameTimes.length; i++) {
+          const ts = gameTimes[i].ts;
+          const gap = ts - prevTs;
+          if (Number.isFinite(gap) && gap > 0) {
+            if (longestBreakMs === void 0 || gap > longestBreakMs) {
+              longestBreakMs = gap;
+              longestBreakPrevGameId = prevGameId;
+              longestBreakNextGameId = gameTimes[i].gameId;
+            }
           }
-          sessionCount++;
-          curStart = ts;
-          curGames = 1;
-        } else {
-          curGames++;
+          if (gap > sessionGapMs) {
+            sessionTotalGames += curGames;
+            if (curGames > longestSessionGames) {
+              longestSessionGames = curGames;
+              longestSessionStart = curStart;
+              longestSessionEnd = prevTs;
+              longestSessionIds = [...curIds];
+            }
+            sessionCount++;
+            curStart = ts;
+            curGames = 1;
+            curIds = [gameTimes[i].gameId];
+          } else {
+            curGames++;
+            curIds.push(gameTimes[i].gameId);
+          }
+          prevTs = ts;
+          prevGameId = gameTimes[i].gameId;
         }
-        prevTs = ts;
+        sessionTotalGames += curGames;
+        if (curGames > longestSessionGames) {
+          longestSessionGames = curGames;
+          longestSessionStart = curStart;
+          longestSessionEnd = prevTs;
+          longestSessionIds = [...curIds];
+        }
       }
-      sessionTotalGames += curGames;
-      if (curGames > longestSessionGames) {
-        longestSessionGames = curGames;
-        longestSessionStart = curStart;
-        longestSessionEnd = prevTs;
-      }
-    }
-    const avgGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
-    const facts = mkBox(doc, "Team facts:");
-    addRow(doc, facts.box, "Games together", String(games.length));
-    addRow(doc, facts.box, "Rounds together", String(rows.length));
-    addRow(
-      doc,
-      facts.box,
-      "Time played together",
-      timedRounds > 0 ? `${formatDurationHuman2(timePlayedMs)}${timedRounds > 0 && timedRounds < rows.length ? ` (from ${timedRounds}/${rows.length} rounds with time data)` : ""}` : "-"
-    );
-    addRow(doc, facts.box, "First game together", typeof firstTogether === "number" ? formatShortDateTime2(firstTogether) : "-");
-    addRow(doc, facts.box, "Most recent game together", typeof lastTogether === "number" ? formatShortDateTime2(lastTogether) : "-");
-    addRow(
-      doc,
-      facts.box,
-      "Longest session together",
-      longestSessionGames > 0 && longestSessionStart !== void 0 && longestSessionEnd !== void 0 ? `${longestSessionGames} games (${formatShortDateTime2(longestSessionStart)} -> ${formatShortDateTime2(longestSessionEnd)})` : "-"
-    );
-    addRow(doc, facts.box, "Avg games per session together", typeof avgGamesPerSession === "number" ? avgGamesPerSession.toFixed(1) : "-");
-    addRow(doc, facts.box, "Longest break between games together", typeof longestBreakMs === "number" ? formatDurationHuman2(longestBreakMs) : "-");
-    const grid = doc.createElement("div");
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = "repeat(12, minmax(0, 1fr))";
-    grid.style.gap = "10px";
-    const left = doc.createElement("div");
-    left.style.gridColumn = "1 / span 12";
-    left.appendChild(h2h.wrap);
-    const right = doc.createElement("div");
-    right.style.gridColumn = "1 / span 12";
-    right.appendChild(facts.wrap);
-    grid.appendChild(left);
-    grid.appendChild(right);
-    wrap.appendChild(grid);
+      const avgGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
+      const roundsTogetherDrill = compareRounds;
+      const firstGameDrill = firstGameId ? byGame.get(firstGameId) ?? [] : [];
+      const lastGameDrill = lastGameId ? byGame.get(lastGameId) ?? [] : [];
+      const longestSessionDrill = longestSessionIds.flatMap((id) => byGame.get(id) ?? []);
+      const longestBreakDrill = longestBreakPrevGameId && longestBreakNextGameId ? [...byGame.get(longestBreakPrevGameId) ?? [], ...byGame.get(longestBreakNextGameId) ?? []] : [];
+      const h2h = mkBox(doc, "Head-to-head questions:");
+      addRowWithDrill(h2h.box, "Closer guesses", decideLeader(myCloser, mateCloser), "Closer guesses - Rounds", closerDrill);
+      addRowWithDrill(h2h.box, "Higher score rounds", decideLeader(myScoreWins, mateScoreWins), "Higher score rounds - Rounds", higherScoreDrill);
+      addRowWithDrill(h2h.box, "Fewer throws (<50)", decideLeader(mateThrows, myThrows), "Throws (<50) - Rounds", fewerThrowsDrill);
+      addRowWithDrill(h2h.box, "More 5k rounds", decideLeader(myFiveKs, mateFiveKs), "Perfect 5k - Rounds", moreFiveKDrill);
+      const facts = mkBox(doc, "Team facts:");
+      addRowWithDrill(facts.box, "Games together", String(games.length), "Games together - Rounds", roundsTogetherDrill);
+      addRowWithDrill(facts.box, "Rounds together", String(compareRounds.length), "Rounds together - Rounds", roundsTogetherDrill);
+      addRowWithDrill(
+        facts.box,
+        "Time played together",
+        timedRounds > 0 ? `${formatDurationHuman2(timePlayedMs)}${timedRounds > 0 && timedRounds < compareRounds.length ? ` (from ${timedRounds}/${compareRounds.length} rounds with time data)` : ""}` : "-",
+        "Time played together - Rounds",
+        timedRoundsDrill
+      );
+      addRowWithDrill(
+        facts.box,
+        "First game together",
+        typeof firstTogether === "number" ? formatShortDateTime2(firstTogether) : "-",
+        "First game together - Rounds",
+        firstGameDrill
+      );
+      addRowWithDrill(
+        facts.box,
+        "Most recent game together",
+        typeof lastTogether === "number" ? formatShortDateTime2(lastTogether) : "-",
+        "Most recent game together - Rounds",
+        lastGameDrill
+      );
+      addRowWithDrill(
+        facts.box,
+        "Longest session together",
+        longestSessionGames > 0 && longestSessionStart !== void 0 && longestSessionEnd !== void 0 ? `${longestSessionGames} games (${formatShortDateTime2(longestSessionStart)} -> ${formatShortDateTime2(longestSessionEnd)})` : "-",
+        "Longest session together - Rounds",
+        longestSessionDrill
+      );
+      addRowWithDrill(
+        facts.box,
+        "Avg games per session together",
+        typeof avgGamesPerSession === "number" ? avgGamesPerSession.toFixed(1) : "-",
+        "Avg games per session together - Rounds",
+        roundsTogetherDrill
+      );
+      addRowWithDrill(
+        facts.box,
+        "Longest break between games together",
+        typeof longestBreakMs === "number" ? formatDurationHuman2(longestBreakMs) : "-",
+        "Longest break between games together - Rounds",
+        longestBreakDrill
+      );
+      const grid = doc.createElement("div");
+      grid.style.display = "grid";
+      grid.style.gridTemplateColumns = "repeat(12, minmax(0, 1fr))";
+      grid.style.gap = "10px";
+      const left = doc.createElement("div");
+      left.style.gridColumn = "1 / span 12";
+      left.appendChild(h2h.wrap);
+      const right = doc.createElement("div");
+      right.style.gridColumn = "1 / span 12";
+      right.appendChild(facts.wrap);
+      grid.appendChild(left);
+      grid.appendChild(right);
+      host.appendChild(grid);
+    };
+    renderForMate();
     return wrap;
   }
 
@@ -45804,7 +45938,6 @@
     body.appendChild(dashboardHost);
     const spec = dashboard.dashboard.globalFilters;
     const store = createGlobalFilterStore(spec);
-    let activeSectionId = dashboard.dashboard.sections[0]?.id ?? "";
     if (spec?.enabled) {
       const bounds = await getGamePlayedAtBounds();
       if (bounds.minTs !== null && bounds.maxTs !== null) {
@@ -45822,6 +45955,16 @@
     const renderNow = async () => {
       const specFilters = spec;
       let state = store.getState();
+      await renderGlobalFiltersBar({
+        container: filtersHost,
+        semantic,
+        spec,
+        state,
+        setValue: store.setValue,
+        setAll: store.setAll,
+        reset: store.reset,
+        getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
+      });
       const resolveControlIdsForSection = (section) => {
         if (!specFilters?.enabled) return void 0;
         const all = specFilters.controls.map((c) => c.id);
@@ -45833,54 +45976,6 @@
       };
       const hasTeamDuels = await hasAnyTeamDuels();
       const sections = hasTeamDuels ? dashboard.dashboard.sections : dashboard.dashboard.sections.filter((s) => s.id !== "team");
-      if (!sections.some((s) => s.id === activeSectionId)) {
-        activeSectionId = sections[0]?.id ?? "";
-      }
-      const getTeammateOptionsStable = async () => {
-        if (!specFilters?.enabled) return [];
-        const mateControl = specFilters.controls.find((c) => c.type === "select" && c.id === "teammate");
-        if (!mateControl) return [];
-        const st = { ...store.getState() };
-        delete st.dateRange;
-        return await getSelectOptionsForControl({ control: mateControl, spec: specFilters, state: st });
-      };
-      if (hasTeamDuels && specFilters?.enabled) {
-        const mateControl = specFilters.controls.find((c) => c.type === "select" && c.id === "teammate");
-        if (mateControl) {
-          const current = String(store.getState()["teammate"] ?? "all");
-          const opts2 = await getTeammateOptionsStable();
-          const values = new Set(opts2.map((o) => o.value));
-          const next = current && current !== "all" && values.has(current) ? current : opts2[0]?.value ?? "";
-          if (next && next !== current) store.setValue("teammate", next);
-        }
-      }
-      state = store.getState();
-      const renderFiltersForSection = async (sectionId) => {
-        const section = sections.find((s) => s.id === sectionId) ?? sections[0];
-        const controlIds = section ? resolveControlIdsForSection(section) : void 0;
-        await renderGlobalFiltersBar({
-          container: filtersHost,
-          semantic,
-          spec,
-          state: store.getState(),
-          setValue: store.setValue,
-          setAll: store.setAll,
-          reset: store.reset,
-          getDistinctOptions: async ({ control, spec: s, state: st }) => {
-            if (section?.id === "team" && control.id === "teammate") {
-              const stable = { ...st };
-              delete stable.dateRange;
-              return await getSelectOptionsForControl({ control, spec: s, state: stable });
-            }
-            return await getSelectOptionsForControl({ control, spec: s, state: st });
-          },
-          controlIds,
-          constraints: {
-            teammate: { required: section?.id === "team" }
-          }
-        });
-      };
-      await renderFiltersForSection(activeSectionId);
       const datasetsBySection = {};
       const contextBySection = {};
       for (const section of sections) {
@@ -45994,11 +46089,7 @@
         datasets: datasetsAll,
         datasetsBySection,
         context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
-        contextBySection,
-        onActiveSectionChange: (sectionId) => {
-          activeSectionId = sectionId;
-          void renderFiltersForSection(sectionId);
-        }
+        contextBySection
       });
     };
     store.subscribe(() => {

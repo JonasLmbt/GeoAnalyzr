@@ -47,7 +47,6 @@ export async function renderAnalysisApp(opts: {
 
   const spec = dashboard.dashboard.globalFilters;
   const store = createGlobalFilterStore(spec);
-  let activeSectionId = dashboard.dashboard.sections[0]?.id ?? "";
 
   // If date-range defaults are unspecified, initialize them to the full dataset span.
   if (spec?.enabled) {
@@ -72,6 +71,17 @@ export async function renderAnalysisApp(opts: {
     const specFilters = spec;
     let state = store.getState();
 
+    await renderGlobalFiltersBar({
+      container: filtersHost,
+      semantic,
+      spec,
+      state,
+      setValue: store.setValue,
+      setAll: store.setAll,
+      reset: store.reset,
+      getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
+    });
+
     const resolveControlIdsForSection = (section: any): string[] | undefined => {
       if (!specFilters?.enabled) return undefined;
       const all = specFilters.controls.map((c) => c.id);
@@ -86,62 +96,6 @@ export async function renderAnalysisApp(opts: {
     const sections = hasTeamDuels
       ? dashboard.dashboard.sections
       : dashboard.dashboard.sections.filter((s) => s.id !== "team");
-
-    if (!sections.some((s) => s.id === activeSectionId)) {
-      activeSectionId = sections[0]?.id ?? "";
-    }
-
-    // Ensure "team" has a selected mate (local filter semantics via filterScope).
-    const getTeammateOptionsStable = async () => {
-      if (!specFilters?.enabled) return [];
-      const mateControl = specFilters.controls.find((c) => c.type === "select" && c.id === "teammate") as any;
-      if (!mateControl) return [];
-      const st = { ...store.getState() } as any;
-      // Keep teammate options stable even when date range filters to zero Team Duel games.
-      delete st.dateRange;
-      return await getSelectOptionsForControl({ control: mateControl, spec: specFilters, state: st });
-    };
-
-    if (hasTeamDuels && specFilters?.enabled) {
-      const mateControl = specFilters.controls.find((c) => c.type === "select" && c.id === "teammate") as any;
-      if (mateControl) {
-        const current = String(store.getState()["teammate"] ?? "all");
-        const opts = await getTeammateOptionsStable();
-        const values = new Set(opts.map((o) => o.value));
-        const next = (current && current !== "all" && values.has(current)) ? current : (opts[0]?.value ?? "");
-        if (next && next !== current) store.setValue("teammate", next);
-      }
-    }
-
-    state = store.getState();
-
-    const renderFiltersForSection = async (sectionId: string) => {
-      const section = sections.find((s) => s.id === sectionId) ?? sections[0];
-      const controlIds = section ? resolveControlIdsForSection(section) : undefined;
-      await renderGlobalFiltersBar({
-        container: filtersHost,
-        semantic,
-        spec,
-        state: store.getState(),
-        setValue: store.setValue,
-        setAll: store.setAll,
-        reset: store.reset,
-        getDistinctOptions: async ({ control, spec: s, state: st }) => {
-          if (section?.id === "team" && control.id === "teammate") {
-            const stable = { ...st } as any;
-            delete stable.dateRange;
-            return await getSelectOptionsForControl({ control, spec: s, state: stable });
-          }
-          return await getSelectOptionsForControl({ control, spec: s, state: st });
-        },
-        controlIds,
-        constraints: {
-          teammate: { required: section?.id === "team" }
-        }
-      });
-    };
-
-    await renderFiltersForSection(activeSectionId);
 
     const datasetsBySection: Record<string, Partial<Record<Grain, any[]>>> = {};
     const contextBySection: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }> = {};
@@ -272,11 +226,7 @@ export async function renderAnalysisApp(opts: {
       datasets: datasetsAll,
       datasetsBySection,
       context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
-      contextBySection,
-      onActiveSectionChange: (sectionId) => {
-        activeSectionId = sectionId;
-        void renderFiltersForSection(sectionId);
-      }
+      contextBySection
     });
   };
 

@@ -129,7 +129,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       display:flex;
       justify-content:space-between;
       gap:10px;
-      padding:10px 10px 0;
+      padding:10px 10px 6px;
       flex-wrap:wrap;
     }
     .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
@@ -212,8 +212,8 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
 
     /* GeoGuessr-like section tabs (top navigation vibe) */
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs {
-      padding: 8px 10px;
-      gap: 18px;
+      padding: 6px 10px;
+      gap: 12px;
       border-radius: 14px;
       background: linear-gradient(180deg, rgba(16, 16, 28, 0.42) 0%, rgba(16, 16, 28, 0.18) 100%);
       border: 1px solid rgba(255,255,255,0.08);
@@ -221,6 +221,9 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       backdrop-filter: blur(14px);
       overflow-x: auto;
       scrollbar-width: none;
+      width: fit-content;
+      max-width: 100%;
+      margin: 4px 10px 0;
     }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs::-webkit-scrollbar { display: none; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab {
@@ -228,7 +231,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border: 0;
       box-shadow: none;
       border-radius: 10px;
-      padding: 10px 4px;
+      padding: 8px 4px;
       font-size: 12px;
       font-weight: 800;
       letter-spacing: 0.9px;
@@ -236,6 +239,15 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       color: rgba(243,244,255,0.70);
       transition: color 160ms ease, background 160ms ease;
     }
+
+    .ga-team-local-filters {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      margin: 6px 0 10px;
+    }
+    .ga-team-local-filters .ga-filter { min-width: 240px; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
       background: rgba(255,255,255,0.04);
       color: rgba(255,255,255,0.88);
