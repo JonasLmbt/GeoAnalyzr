@@ -364,7 +364,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size:12px;
     }
     .ga-chart-host { width:100%; }
-    .ga-chart-svg { width:100%; max-width:100%; display:block; }
+    .ga-chart-svg { width:100%; max-width:100%; display:block; overflow: visible; }
     .ga-chart-bar { transform-box: view-box; }
     .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
       transform: scaleY(0);
@@ -457,8 +457,8 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size:12px;
       max-width: min(360px, 62vw);
     }
-    .ga-breakdown { --ga-breakdown-label-w: clamp(160px, 28%, 360px); }
-    .ga-breakdown-row { display:flex; gap:10px; align-items:center; justify-content:flex-start; }
+    .ga-breakdown { --ga-breakdown-label-w: clamp(120px, 20%, 260px); }
+    .ga-breakdown-row { display:flex; gap:8px; align-items:center; justify-content:flex-start; }
     .ga-breakdown-label {
       flex: 0 0 var(--ga-breakdown-label-w);
       max-width: var(--ga-breakdown-label-w);
