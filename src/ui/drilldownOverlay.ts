@@ -360,6 +360,29 @@ export class DrilldownOverlay {
       }
     }
 
+    if (key === "endRating") {
+      const mf = String((row as any)?.modeFamily ?? "").toLowerCase();
+      if (mf === "teamduels" || (mf.includes("team") && mf.includes("duel")) || (row as any)?.isTeamDuels === true) {
+        return (
+          pickWithAliases(row, "teamOneEndRating", semantic.columnAliases) ??
+          pickWithAliases(row, "player_self_endRating", semantic.columnAliases) ??
+          pickWithAliases(row, "playerOneEndRating", semantic.columnAliases)
+        );
+      }
+      return pickWithAliases(row, "player_self_endRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneEndRating", semantic.columnAliases);
+    }
+
+    if (key === "ratingDelta") {
+      const mf = String((row as any)?.modeFamily ?? "").toLowerCase();
+      const isTeam = mf === "teamduels" || (mf.includes("team") && mf.includes("duel")) || (row as any)?.isTeamDuels === true;
+      const start = isTeam
+        ? (pickWithAliases(row, "teamOneStartRating", semantic.columnAliases) ?? pickWithAliases(row, "player_self_startRating", semantic.columnAliases))
+        : (pickWithAliases(row, "player_self_startRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneStartRating", semantic.columnAliases));
+      const end = this.getCellRawValue(row, "endRating", semantic);
+      if (typeof start === "number" && Number.isFinite(start) && typeof end === "number" && Number.isFinite(end)) return end - start;
+      return undefined;
+    }
+
     return pickWithAliases(row, key, semantic.columnAliases);
   }
 
@@ -373,11 +396,32 @@ export class DrilldownOverlay {
     const key = col.key;
     const raw = this.getCellRawValue(row, key, semantic);
 
-    if (key === "opponentName" && typeof raw === "string" && raw.trim()) {
-      const span = this.doc.createElement("span");
-      span.className = "ga-dd-link";
-      span.textContent = raw;
-      td.appendChild(span);
+    const mkProfileUrl = (id: unknown): string => {
+      const s = typeof id === "string" ? id.trim() : "";
+      return s ? `https://www.geoguessr.com/user/${s}` : "";
+    };
+
+    const maybeRenderProfileLink = (nameKey: string, idKey: string) => {
+      if (key !== nameKey) return false;
+      if (typeof raw !== "string" || !raw.trim()) return true;
+      const id = pickWithAliases(row, idKey, semantic.columnAliases);
+      const href = mkProfileUrl(id);
+      if (!href) return false;
+      const a = this.doc.createElement("a");
+      a.className = "ga-dd-link";
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = raw;
+      td.appendChild(a);
+      return true;
+    };
+
+    if (
+      maybeRenderProfileLink("player_opponent_name", "player_opponent_id") ||
+      maybeRenderProfileLink("player_opponent_mate_name", "player_opponent_mate_id") ||
+      maybeRenderProfileLink("player_mate_name", "player_mate_id")
+    ) {
       return;
     }
 
@@ -418,6 +462,10 @@ export class DrilldownOverlay {
       const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
       text = signed;
     }
+    if (key === "ratingDelta" && typeof raw === "number" && Number.isFinite(raw)) {
+      const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
+      text = signed;
+    }
     if (
       (key === "true_country" ||
         key === "trueCountry" ||
@@ -445,6 +493,10 @@ export class DrilldownOverlay {
         else if (s === "loss" || s === "l" || s === "false") span.classList.add("ga-dd-neg");
       }
       if (key === "damage" && typeof raw === "number" && Number.isFinite(raw)) {
+        if (raw > 0) span.classList.add("ga-dd-pos");
+        else if (raw < 0) span.classList.add("ga-dd-neg");
+      }
+      if (key === "ratingDelta" && typeof raw === "number" && Number.isFinite(raw)) {
         if (raw > 0) span.classList.add("ga-dd-pos");
         else if (raw < 0) span.classList.add("ga-dd-neg");
       }

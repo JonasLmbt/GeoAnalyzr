@@ -30,6 +30,8 @@ export interface MeasureDef {
   grain: Grain;
   allowedCharts: ChartType[];
   formulaId: string;
+  // For time_day charts: how to handle missing days (buckets without rows).
+  timeDayFill?: "none" | "carry_forward";
   // Optional drilldown defaults for widgets (to avoid per-widget actionsByMeasure boilerplate).
   drilldown?: {
     filterFromPoint?: boolean;

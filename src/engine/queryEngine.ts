@@ -206,16 +206,23 @@ function pickGameTs(g: any): number | null {
 }
 
 function extractGameRatings(g: any): { start?: number; end?: number } {
-  const mf = typeof g?.modeFamily === "string" ? g.modeFamily.trim().toLowerCase() : "";
-  if (mf === "teamduels") {
-    const start = typeof g?.teamOneStartRating === "number" ? g.teamOneStartRating : typeof g?.player_self_startRating === "number" ? g.player_self_startRating : undefined;
-    const end = typeof g?.teamOneEndRating === "number" ? g.teamOneEndRating : typeof g?.player_self_endRating === "number" ? g.player_self_endRating : undefined;
+  const mfRaw = asTrimmedString(g?.modeFamily ?? g?.mode_family) ?? "";
+  const mf = mfRaw.toLowerCase();
+  const isTeam = g?.isTeamDuels === true || mf === "teamduels" || (mf.includes("team") && mf.includes("duel"));
+
+  const pickNum = (keys: string[]): number | undefined => {
+    const v = pickFirst(g, keys);
+    return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  };
+
+  if (isTeam) {
+    const start = pickNum(["teamOneStartRating", "player_self_startRating", "playerOneStartRating", "team1StartRating"]);
+    const end = pickNum(["teamOneEndRating", "player_self_endRating", "playerOneEndRating", "team1EndRating"]);
     return { start, end };
   }
-  const start =
-    typeof g?.player_self_startRating === "number" ? g.player_self_startRating : typeof g?.playerOneStartRating === "number" ? g.playerOneStartRating : undefined;
-  const end =
-    typeof g?.player_self_endRating === "number" ? g.player_self_endRating : typeof g?.playerOneEndRating === "number" ? g.playerOneEndRating : undefined;
+
+  const start = pickNum(["player_self_startRating", "playerOneStartRating"]);
+  const end = pickNum(["player_self_endRating", "playerOneEndRating"]);
   return { start, end };
 }
 
@@ -445,10 +452,20 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
   const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
 
   const roundsCountByGame = new Map<string, number>();
+  const movementByGame = new Map<string, string>();
   for (const r of rounds as any[]) {
     const gid = typeof r?.gameId === "string" ? r.gameId : "";
     if (!gid) continue;
     roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
+
+    const mv = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
+    const cur = movementByGame.get(gid);
+    if (!mv) continue;
+    if (!cur) {
+      movementByGame.set(gid, mv);
+    } else if (cur !== mv && cur !== "mixed") {
+      movementByGame.set(gid, "mixed");
+    }
   }
 
   const detailsByGame = new Map<string, any>();
@@ -464,6 +481,27 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       out.ts = g.playedAt;
     }
     out.roundsCount = roundsCountByGame.get(g.gameId) ?? 0;
+    if (typeof out.movementType !== "string" || !out.movementType) {
+      const mv = movementByGame.get(g.gameId);
+      if (mv) out.movementType = mv;
+    }
+
+    // Best-effort normalize teammateName for team duels.
+    if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
+      const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
+      if (!hasMate) {
+        const selfId = asTrimmedString(out.player_self_id ?? out.player_self_playerId);
+        const t1id = asTrimmedString(out.teamOnePlayerOneId);
+        const t2id = asTrimmedString(out.teamOnePlayerTwoId);
+        const t1name = asTrimmedString(out.teamOnePlayerOneName);
+        const t2name = asTrimmedString(out.teamOnePlayerTwoName);
+        let mateName: string | undefined;
+        if (selfId && selfId === t1id) mateName = t2name;
+        else if (selfId && selfId === t2id) mateName = t1name;
+        else mateName = asTrimmedString(pickFirst(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+        if (mateName) out.teammateName = mateName;
+      }
+    }
 
     // Best-effort normalize a result string for the "result" dimension.
     const v =

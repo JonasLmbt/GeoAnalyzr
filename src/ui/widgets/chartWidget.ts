@@ -671,14 +671,23 @@ export async function renderChartWidget(
         return out;
       }
 
-      const out: Datum[] = buckets.map((b) => {
+      const fillMode = measDef.timeDayFill ?? "none";
+      let lastY: number | null = null;
+      const out: Datum[] = [];
+      for (const b of buckets) {
         const bucketRows: any[] = [];
         for (const k of b.keys) {
           const dayRows = grouped.get(k) ?? [];
           if (dayRows.length) bucketRows.push(...dayRows);
         }
-        return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(bucketRows)), rows: bucketRows };
-      });
+        if (bucketRows.length === 0 && fillMode === "carry_forward" && lastY !== null) {
+          out.push({ x: b.label, y: lastY, rows: [] });
+          continue;
+        }
+        const y = clampForMeasure(semantic, measureId, yForRows(bucketRows));
+        lastY = y;
+        out.push({ x: b.label, y, rows: bucketRows });
+      }
       return out;
     }
 

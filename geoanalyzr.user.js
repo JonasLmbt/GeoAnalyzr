@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.24
+// @version      1.6.25
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15197,8 +15197,20 @@
     return void 0;
   }
   function getSelfScore(r) {
-    const v = legacy(r, "player_self_score", "p1_score", "score");
-    return typeof v === "number" ? v : void 0;
+    const mf = String(r?.modeFamily ?? "").trim().toLowerCase();
+    const selfRaw = legacy(r, "player_self_score", "p1_score", "score");
+    const self2 = typeof selfRaw === "number" ? selfRaw : void 0;
+    if (mf === "teamduels") {
+      const mateRaw = legacy(r, "player_mate_score", "p2_score");
+      const mate = typeof mateRaw === "number" ? mateRaw : void 0;
+      const selfBest = legacy(r, "player_self_isBestGuess", "p1_isBestGuess");
+      const mateBest = legacy(r, "player_mate_isBestGuess", "p2_isBestGuess");
+      if (mateBest === true && selfBest !== true && typeof mate === "number") return mate;
+      if (selfBest === true && mateBest !== true && typeof self2 === "number") return self2;
+      if (typeof self2 === "number" && typeof mate === "number") return Math.max(self2, mate);
+      if (typeof mate === "number") return mate;
+    }
+    return typeof self2 === "number" ? self2 : void 0;
   }
   function getPlayedAt(r) {
     return r.playedAt;
@@ -15706,14 +15718,20 @@
     return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
   }
   function extractGameRatings(g) {
-    const mf = typeof g?.modeFamily === "string" ? g.modeFamily.trim().toLowerCase() : "";
-    if (mf === "teamduels") {
-      const start2 = typeof g?.teamOneStartRating === "number" ? g.teamOneStartRating : typeof g?.player_self_startRating === "number" ? g.player_self_startRating : void 0;
-      const end2 = typeof g?.teamOneEndRating === "number" ? g.teamOneEndRating : typeof g?.player_self_endRating === "number" ? g.player_self_endRating : void 0;
+    const mfRaw = asTrimmedString2(g?.modeFamily ?? g?.mode_family) ?? "";
+    const mf = mfRaw.toLowerCase();
+    const isTeam = g?.isTeamDuels === true || mf === "teamduels" || mf.includes("team") && mf.includes("duel");
+    const pickNum = (keys2) => {
+      const v = pickFirst3(g, keys2);
+      return typeof v === "number" && Number.isFinite(v) ? v : void 0;
+    };
+    if (isTeam) {
+      const start2 = pickNum(["teamOneStartRating", "player_self_startRating", "playerOneStartRating", "team1StartRating"]);
+      const end2 = pickNum(["teamOneEndRating", "player_self_endRating", "playerOneEndRating", "team1EndRating"]);
       return { start: start2, end: end2 };
     }
-    const start = typeof g?.player_self_startRating === "number" ? g.player_self_startRating : typeof g?.playerOneStartRating === "number" ? g.playerOneStartRating : void 0;
-    const end = typeof g?.player_self_endRating === "number" ? g.player_self_endRating : typeof g?.playerOneEndRating === "number" ? g.playerOneEndRating : void 0;
+    const start = pickNum(["player_self_startRating", "playerOneStartRating"]);
+    const end = pickNum(["player_self_endRating", "playerOneEndRating"]);
     return { start, end };
   }
   async function attachRatingsToSessions(sessions) {
@@ -15893,10 +15911,19 @@
     if (gamesRawCache) return gamesRawCache;
     const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
     const roundsCountByGame = /* @__PURE__ */ new Map();
+    const movementByGame = /* @__PURE__ */ new Map();
     for (const r of rounds) {
       const gid = typeof r?.gameId === "string" ? r.gameId : "";
       if (!gid) continue;
       roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
+      const mv = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
+      const cur = movementByGame.get(gid);
+      if (!mv) continue;
+      if (!cur) {
+        movementByGame.set(gid, mv);
+      } else if (cur !== mv && cur !== "mixed") {
+        movementByGame.set(gid, "mixed");
+      }
     }
     const detailsByGame = /* @__PURE__ */ new Map();
     for (const d of details) {
@@ -15910,6 +15937,25 @@
         out.ts = g.playedAt;
       }
       out.roundsCount = roundsCountByGame.get(g.gameId) ?? 0;
+      if (typeof out.movementType !== "string" || !out.movementType) {
+        const mv = movementByGame.get(g.gameId);
+        if (mv) out.movementType = mv;
+      }
+      if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
+        const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
+        if (!hasMate) {
+          const selfId = asTrimmedString2(out.player_self_id ?? out.player_self_playerId);
+          const t1id = asTrimmedString2(out.teamOnePlayerOneId);
+          const t2id = asTrimmedString2(out.teamOnePlayerTwoId);
+          const t1name = asTrimmedString2(out.teamOnePlayerOneName);
+          const t2name = asTrimmedString2(out.teamOnePlayerTwoName);
+          let mateName;
+          if (selfId && selfId === t1id) mateName = t2name;
+          else if (selfId && selfId === t2id) mateName = t1name;
+          else mateName = asTrimmedString2(pickFirst3(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+          if (mateName) out.teammateName = mateName;
+        }
+      }
       const v = typeof out.player_self_victory === "boolean" ? out.player_self_victory : typeof out.teamOneVictory === "boolean" ? out.teamOneVictory : typeof out.playerOneVictory === "boolean" ? out.playerOneVictory : void 0;
       if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
       return out;
@@ -40585,6 +40631,7 @@
         grain: "game",
         allowedCharts: ["bar", "line"],
         formulaId: "last_player_self_end_rating",
+        timeDayFill: "carry_forward",
         range: { min: 0 }
       },
       rating_trend: {
@@ -40862,6 +40909,12 @@
       true_country: ["trueCountry", "true_country"],
       player_self_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
       player_self_score: ["player_self_score", "p1_score", "score"],
+      player_opponent_name: ["player_opponent_name", "playerTwoName", "playerOpponentName"],
+      player_opponent_id: ["player_opponent_id", "playerTwoId", "playerOpponentId"],
+      player_opponent_mate_name: ["player_opponent_mate_name", "teamTwoPlayerTwoName", "playerOpponentMateName"],
+      player_opponent_mate_id: ["player_opponent_mate_id", "teamTwoPlayerTwoId", "playerOpponentMateId"],
+      player_mate_name: ["player_mate_name", "teamOnePlayerTwoName", "playerMateName"],
+      player_mate_id: ["player_mate_id", "teamOnePlayerTwoId", "playerMateId"],
       player_self_guessLat: ["p1_guessLat", "player_self_guessLat"],
       player_self_guessLng: ["p1_guessLng", "player_self_guessLng"],
       player_self_isBestGuess: ["p1_isBestGuess", "player_self_isBestGuess"],
@@ -40906,11 +40959,15 @@
         columnsPresets: {
           opponentMode: [
             { key: "ts", label: "Date", sortable: true },
-            { key: "opponentName", label: "Opponent", sortable: true },
+            { key: "modeFamily", label: "Game Mode", sortable: true },
+            { key: "movementType", label: "Movement", sortable: true },
+            { key: "roundsCount", label: "Game Length", sortable: true },
+            { key: "teammateName", label: "Mate", sortable: true },
             { key: "result", label: "Result", sortable: true, colored: true },
-            { key: "matchups", label: "Match-ups", sortable: true },
-            { key: "opponentCountry", label: "Country", sortable: true },
-            { key: "game_mode", label: "Game Mode", sortable: true },
+            { key: "player_opponent_name", label: "Opponent", sortable: true },
+            { key: "player_opponent_mate_name", label: "Opponent Mate", sortable: true },
+            { key: "endRating", label: "End Rating", sortable: true },
+            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
             { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
           ]
         },
@@ -44342,16 +44399,46 @@
           if (typeof g.score === "number") return g.score;
         }
       }
+      if (key === "endRating") {
+        const mf = String(row?.modeFamily ?? "").toLowerCase();
+        if (mf === "teamduels" || mf.includes("team") && mf.includes("duel") || row?.isTeamDuels === true) {
+          return pickWithAliases(row, "teamOneEndRating", semantic.columnAliases) ?? pickWithAliases(row, "player_self_endRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneEndRating", semantic.columnAliases);
+        }
+        return pickWithAliases(row, "player_self_endRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneEndRating", semantic.columnAliases);
+      }
+      if (key === "ratingDelta") {
+        const mf = String(row?.modeFamily ?? "").toLowerCase();
+        const isTeam = mf === "teamduels" || mf.includes("team") && mf.includes("duel") || row?.isTeamDuels === true;
+        const start = isTeam ? pickWithAliases(row, "teamOneStartRating", semantic.columnAliases) ?? pickWithAliases(row, "player_self_startRating", semantic.columnAliases) : pickWithAliases(row, "player_self_startRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneStartRating", semantic.columnAliases);
+        const end = this.getCellRawValue(row, "endRating", semantic);
+        if (typeof start === "number" && Number.isFinite(start) && typeof end === "number" && Number.isFinite(end)) return end - start;
+        return void 0;
+      }
       return pickWithAliases(row, key, semantic.columnAliases);
     }
     renderCell(td, row, col, semantic, dateMode) {
       const key = col.key;
       const raw = this.getCellRawValue(row, key, semantic);
-      if (key === "opponentName" && typeof raw === "string" && raw.trim()) {
-        const span2 = this.doc.createElement("span");
-        span2.className = "ga-dd-link";
-        span2.textContent = raw;
-        td.appendChild(span2);
+      const mkProfileUrl = (id) => {
+        const s = typeof id === "string" ? id.trim() : "";
+        return s ? `https://www.geoguessr.com/user/${s}` : "";
+      };
+      const maybeRenderProfileLink = (nameKey, idKey) => {
+        if (key !== nameKey) return false;
+        if (typeof raw !== "string" || !raw.trim()) return true;
+        const id = pickWithAliases(row, idKey, semantic.columnAliases);
+        const href = mkProfileUrl(id);
+        if (!href) return false;
+        const a = this.doc.createElement("a");
+        a.className = "ga-dd-link";
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = raw;
+        td.appendChild(a);
+        return true;
+      };
+      if (maybeRenderProfileLink("player_opponent_name", "player_opponent_id") || maybeRenderProfileLink("player_opponent_mate_name", "player_opponent_mate_id") || maybeRenderProfileLink("player_mate_name", "player_mate_id")) {
         return;
       }
       if (col.type === "link" || key === "guess_maps" || key === "street_view") {
@@ -44387,6 +44474,10 @@
         const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
         text = signed;
       }
+      if (key === "ratingDelta" && typeof raw === "number" && Number.isFinite(raw)) {
+        const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
+        text = signed;
+      }
       if ((key === "true_country" || key === "trueCountry" || key === "player_self_country" || key === "player_self_guessCountry" || key === "opponentCountry") && typeof raw === "string") {
         text = this.formatCountry(raw);
       }
@@ -44404,6 +44495,10 @@
           else if (s === "loss" || s === "l" || s === "false") span.classList.add("ga-dd-neg");
         }
         if (key === "damage" && typeof raw === "number" && Number.isFinite(raw)) {
+          if (raw > 0) span.classList.add("ga-dd-pos");
+          else if (raw < 0) span.classList.add("ga-dd-neg");
+        }
+        if (key === "ratingDelta" && typeof raw === "number" && Number.isFinite(raw)) {
           if (raw > 0) span.classList.add("ga-dd-pos");
           else if (raw < 0) span.classList.add("ga-dd-neg");
         }
@@ -45641,14 +45736,23 @@
           }
           return out2;
         }
-        const out = buckets.map((b) => {
+        const fillMode = measDef.timeDayFill ?? "none";
+        let lastY = null;
+        const out = [];
+        for (const b of buckets) {
           const bucketRows = [];
           for (const k of b.keys) {
             const dayRows = grouped2.get(k) ?? [];
             if (dayRows.length) bucketRows.push(...dayRows);
           }
-          return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(bucketRows)), rows: bucketRows };
-        });
+          if (bucketRows.length === 0 && fillMode === "carry_forward" && lastY !== null) {
+            out.push({ x: b.label, y: lastY, rows: [] });
+            continue;
+          }
+          const y = clampForMeasure(semantic, measureId, yForRows(bucketRows));
+          lastY = y;
+          out.push({ x: b.label, y, rows: bucketRows });
+        }
         return out;
       }
       const grouped = groupByKey(rows, keyFn);

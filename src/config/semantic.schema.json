@@ -164,6 +164,7 @@
           "items": { "$ref": "#/$defs/chartType" }
         },
         "formulaId": { "type": "string", "minLength": 1 },
+        "timeDayFill": { "enum": ["none", "carry_forward"] },
         "drilldown": {
           "type": "object",
           "additionalProperties": false,
