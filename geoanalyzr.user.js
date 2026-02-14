@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.1
+// @version      2.0.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6694,17 +6694,39 @@
     const style = document.createElement("style");
     style.id = id;
     style.textContent = `
-    .ga-overlay {
+    .ga-ov-root{
       position: fixed;
-      right: 14px;
+      left: 14px;
       bottom: 14px;
       z-index: 2147483647;
-      width: 320px;
-      max-width: calc(100vw - 28px);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       color: rgba(243,244,255,0.92);
     }
+    .ga-ov-launcher{
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background:
+        radial-gradient(320px 220px at 20% 0%, rgba(121, 80, 229, 0.18), transparent 60%),
+        radial-gradient(320px 220px at 90% 0%, rgba(0, 162, 254, 0.14), transparent 62%),
+        rgba(16, 16, 28, 0.78);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+      cursor: pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight: 850;
+      letter-spacing: 0.2px;
+      color: rgba(243,244,255,0.94);
+    }
+    .ga-ov-launcher:hover{ filter: brightness(1.08); transform: translateY(-1px); }
+    .ga-ov-launcher:active{ transform: translateY(0px); }
+
     .ga-ov-card{
+      width: 360px;
+      max-width: calc(100vw - 28px);
       border-radius: 14px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.14);
@@ -6714,6 +6736,7 @@
         rgba(16, 16, 28, 0.72);
       backdrop-filter: blur(12px);
       box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+      margin-bottom: 10px;
     }
     .ga-ov-head{
       display:flex; align-items:center; justify-content:space-between;
@@ -6721,6 +6744,20 @@
       border-bottom: 1px solid rgba(255,255,255,0.12);
       font-weight: 750;
     }
+    .ga-ov-head-left{ display:flex; align-items:center; gap:8px; min-width: 0; }
+    .ga-ov-title{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ga-ov-close{
+      border: 0;
+      background: rgba(0,0,0,0.18);
+      color: rgba(243,244,255,0.86);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 5px 8px;
+      border-radius: 10px;
+    }
+    .ga-ov-close:hover{ background: rgba(0,0,0,0.28); }
+
     .ga-ov-body{ padding: 10px 12px 12px; display:flex; flex-direction:column; gap:10px; }
     .ga-ov-row{ display:flex; gap:8px; flex-wrap:wrap; }
     .ga-ov-meta{ font-size: 12px; color: rgba(208, 214, 238, 0.74); line-height: 1.35; }
@@ -6739,9 +6776,7 @@
     }
     .ga-ov-btn:hover{ filter: brightness(1.08); transform: translateY(-1px); }
     .ga-ov-btn:active{ transform: translateY(0px); }
-    .ga-ov-btn-secondary{
-      background: rgba(16, 16, 28, 0.45);
-    }
+    .ga-ov-btn-secondary{ background: rgba(16, 16, 28, 0.45); }
     .ga-ov-btn-danger{
       border-color: rgba(255, 107, 107, 0.35);
       background: linear-gradient(180deg, rgba(255, 107, 107, 0.26) 0%, rgba(86, 59, 154, 0.18) 100%);
@@ -6788,20 +6823,41 @@
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const host = el("div", "ga-overlay");
-    const card = el("div", "ga-ov-card");
-    host.appendChild(card);
-    const mount = () => {
-      cssOnce();
-      if (!host.isConnected) (document.documentElement ?? document.body ?? document).appendChild(host);
+    const STORAGE_KEY = "geoanalyzr_overlay_open";
+    const readOpen = () => {
+      try {
+        const v = localStorage.getItem(STORAGE_KEY);
+        return v === null ? true : v === "1";
+      } catch {
+        return true;
+      }
     };
+    const writeOpen = (open) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, open ? "1" : "0");
+      } catch {
+      }
+    };
+    const root = el("div", "ga-ov-root");
+    const launcher = el("button", "ga-ov-launcher");
+    launcher.type = "button";
+    launcher.title = "GeoAnalyzr";
+    launcher.textContent = "GA";
+    const card = el("div", "ga-ov-card");
     const head = el("div", "ga-ov-head");
-    const title = el("div");
+    const headLeft = el("div", "ga-ov-head-left");
+    const title = el("div", "ga-ov-title");
     title.textContent = "GeoAnalyzr";
+    const closeBtn = el("button", "ga-ov-close");
+    closeBtn.type = "button";
+    closeBtn.title = "Close";
+    closeBtn.textContent = "x";
+    headLeft.appendChild(title);
+    headLeft.appendChild(closeBtn);
     const openBtn = el("button", "ga-ov-btn");
     openBtn.type = "button";
     openBtn.textContent = "Dashboard";
-    head.appendChild(title);
+    head.appendChild(headLeft);
     head.appendChild(openBtn);
     card.appendChild(head);
     const body = el("div", "ga-ov-body");
@@ -6830,11 +6886,24 @@
     body.appendChild(meta);
     body.appendChild(status);
     body.appendChild(row1);
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", mount, { once: true });
-    } else {
-      mount();
-    }
+    root.appendChild(card);
+    root.appendChild(launcher);
+    let isOpen = readOpen();
+    const applyOpenState = (open) => {
+      isOpen = open;
+      writeOpen(open);
+      card.style.display = open ? "block" : "none";
+      launcher.style.display = open ? "none" : "flex";
+    };
+    launcher.addEventListener("click", () => applyOpenState(true));
+    closeBtn.addEventListener("click", () => applyOpenState(false));
+    const mount = () => {
+      cssOnce();
+      if (!root.isConnected) (document.documentElement ?? document.body ?? document).appendChild(root);
+      applyOpenState(isOpen);
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+    else mount();
     let updateHandler = null;
     let resetHandler = null;
     let exportHandler = null;
@@ -6913,10 +6982,11 @@
     };
     return {
       setVisible(visible) {
-        host.style.display = visible ? "block" : "none";
+        root.style.display = visible ? "block" : "none";
       },
       setStatus(msg) {
         status.textContent = msg;
+        if (msg && !isOpen) applyOpenState(true);
       },
       setCounts(value) {
         meta.textContent = `Data: ${value.games} games, ${value.rounds} rounds (details ok ${value.detailsOk}, missing ${value.detailsMissing}, error ${value.detailsError}).`;
@@ -39931,7 +40001,6 @@ ${error instanceof Error ? error.message : String(error)}`;
     await refreshUI(ui);
     watchRoutes(() => {
       ui.setVisible(true);
-      void isInGame();
     });
   }
 

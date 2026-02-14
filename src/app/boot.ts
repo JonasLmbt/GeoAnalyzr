@@ -11,6 +11,5 @@ export async function bootApp(): Promise<void> {
   // Always keep a dashboard trigger available, even on /game routes.
   watchRoutes(() => {
     ui.setVisible(true);
-    void isInGame(); // keep route polling side-effects (if any) without hiding UI
   });
 }
