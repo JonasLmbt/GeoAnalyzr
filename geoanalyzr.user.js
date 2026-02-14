@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.36
+// @version      2.0.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6682,6 +6682,257 @@
     }
   });
 
+  // src/uiOverlay.ts
+  function el(tag, cls) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    return node;
+  }
+  function cssOnce() {
+    const id = "geoanalyzr-overlay-css";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+    .ga-overlay {
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 2147483647;
+      width: 320px;
+      max-width: calc(100vw - 28px);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      color: rgba(243,244,255,0.92);
+    }
+    .ga-ov-card{
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.14);
+      background:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
+        rgba(16, 16, 28, 0.72);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 54px rgba(0,0,0,0.22);
+    }
+    .ga-ov-head{
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      font-weight: 750;
+    }
+    .ga-ov-body{ padding: 10px 12px 12px; display:flex; flex-direction:column; gap:10px; }
+    .ga-ov-row{ display:flex; gap:8px; flex-wrap:wrap; }
+    .ga-ov-meta{ font-size: 12px; color: rgba(208, 214, 238, 0.74); line-height: 1.35; }
+    .ga-ov-status{ font-size: 12px; color: rgba(208, 214, 238, 0.86); min-height: 16px; }
+    .ga-ov-btn{
+      border: 1px solid rgba(255,255,255,0.16);
+      background: linear-gradient(180deg, rgba(121, 80, 229, 0.38) 0%, rgba(86, 59, 154, 0.26) 100%);
+      color: rgba(243,244,255,0.94);
+      border-radius: 999px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font-weight: 650;
+      letter-spacing: 0.15px;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .ga-ov-btn:hover{ filter: brightness(1.08); transform: translateY(-1px); }
+    .ga-ov-btn:active{ transform: translateY(0px); }
+    .ga-ov-btn-secondary{
+      background: rgba(16, 16, 28, 0.45);
+    }
+    .ga-ov-btn-danger{
+      border-color: rgba(255, 107, 107, 0.35);
+      background: linear-gradient(180deg, rgba(255, 107, 107, 0.26) 0%, rgba(86, 59, 154, 0.18) 100%);
+    }
+    .ga-ov-btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px rgba(0,162,254,0.30); }
+
+    .ga-ov-modal{
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      background: rgba(0,0,0,0.62);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 16px;
+    }
+    .ga-ov-modal-card{
+      width: 520px;
+      max-width: calc(100vw - 32px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(16, 16, 28, 0.92);
+      box-shadow: 0 22px 70px rgba(0,0,0,0.35);
+      color: rgba(243,244,255,0.92);
+      padding: 12px;
+    }
+    .ga-ov-modal-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 10px; }
+    .ga-ov-modal-title{ font-weight: 750; }
+    .ga-ov-x{ border:0; background: transparent; color: rgba(243,244,255,0.86); cursor:pointer; font-size: 18px; line-height: 1; }
+    .ga-ov-input{
+      width: 100%;
+      box-sizing:border-box;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      padding: 10px 12px;
+      background: rgba(16,16,28,0.55);
+      color: rgba(243,244,255,0.92);
+      font: inherit;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    .ga-ov-help{ font-size: 12px; color: rgba(208, 214, 238, 0.70); margin-top: 8px; white-space: pre-wrap; }
+  `;
+    document.head.appendChild(style);
+  }
+  function createUIOverlay() {
+    cssOnce();
+    const host = el("div", "ga-overlay");
+    const card = el("div", "ga-ov-card");
+    host.appendChild(card);
+    const head = el("div", "ga-ov-head");
+    const title = el("div");
+    title.textContent = "GeoAnalyzr";
+    const openBtn = el("button", "ga-ov-btn");
+    openBtn.type = "button";
+    openBtn.textContent = "Dashboard";
+    head.appendChild(title);
+    head.appendChild(openBtn);
+    card.appendChild(head);
+    const body = el("div", "ga-ov-body");
+    card.appendChild(body);
+    const meta = el("div", "ga-ov-meta");
+    meta.textContent = "Data: -";
+    const status = el("div", "ga-ov-status");
+    status.textContent = "";
+    const row1 = el("div", "ga-ov-row");
+    const updateBtn = el("button", "ga-ov-btn");
+    updateBtn.type = "button";
+    updateBtn.textContent = "Update";
+    const exportBtn = el("button", "ga-ov-btn ga-ov-btn-secondary");
+    exportBtn.type = "button";
+    exportBtn.textContent = "Export";
+    const tokenBtn = el("button", "ga-ov-btn ga-ov-btn-secondary");
+    tokenBtn.type = "button";
+    tokenBtn.textContent = "NCFA";
+    const resetBtn = el("button", "ga-ov-btn ga-ov-btn-danger");
+    resetBtn.type = "button";
+    resetBtn.textContent = "Reset DB";
+    row1.appendChild(updateBtn);
+    row1.appendChild(exportBtn);
+    row1.appendChild(tokenBtn);
+    row1.appendChild(resetBtn);
+    body.appendChild(meta);
+    body.appendChild(status);
+    body.appendChild(row1);
+    document.documentElement.appendChild(host);
+    let updateHandler = null;
+    let resetHandler = null;
+    let exportHandler = null;
+    let tokenHandler = null;
+    let openHandler = null;
+    updateBtn.addEventListener("click", () => void updateHandler?.());
+    resetBtn.addEventListener("click", () => void resetHandler?.());
+    exportBtn.addEventListener("click", () => void exportHandler?.());
+    tokenBtn.addEventListener("click", () => void tokenHandler?.());
+    openBtn.addEventListener("click", () => void openHandler?.());
+    const openNcfaManager = (args) => {
+      const overlay = el("div", "ga-ov-modal");
+      const modal = el("div", "ga-ov-modal-card");
+      overlay.appendChild(modal);
+      const head2 = el("div", "ga-ov-modal-head");
+      const t = el("div", "ga-ov-modal-title");
+      t.textContent = "NCFA token";
+      const x = el("button", "ga-ov-x");
+      x.type = "button";
+      x.textContent = "\xD7";
+      head2.appendChild(t);
+      head2.appendChild(x);
+      const input = el("input", "ga-ov-input");
+      input.placeholder = "_ncfa value";
+      input.value = args.initialToken || "";
+      const help = el("div", "ga-ov-help");
+      help.textContent = "Set manually or use auto-detect.";
+      const actions = el("div", "ga-ov-row");
+      const save = el("button", "ga-ov-btn");
+      save.type = "button";
+      save.textContent = "Save";
+      const auto = el("button", "ga-ov-btn ga-ov-btn-secondary");
+      auto.type = "button";
+      auto.textContent = "Auto-detect";
+      const docs = el("button", "ga-ov-btn ga-ov-btn-secondary");
+      docs.type = "button";
+      docs.textContent = "Help";
+      actions.appendChild(save);
+      actions.appendChild(auto);
+      actions.appendChild(docs);
+      modal.appendChild(head2);
+      modal.appendChild(input);
+      modal.appendChild(actions);
+      modal.appendChild(help);
+      const close = () => overlay.remove();
+      x.addEventListener("click", close);
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) close();
+      });
+      docs.addEventListener("click", () => window.open(args.repoUrl, "_blank"));
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        try {
+          const res = await args.onSave(input.value);
+          input.value = res.token || "";
+          help.textContent = res.message || "Saved.";
+        } catch (e) {
+          help.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+          save.disabled = false;
+        }
+      });
+      auto.addEventListener("click", async () => {
+        auto.disabled = true;
+        try {
+          const res = await args.onAutoDetect();
+          if (res.token) input.value = res.token;
+          help.textContent = res.message || `Auto-detect: ${res.source}`;
+        } catch (e) {
+          help.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
+        } finally {
+          auto.disabled = false;
+        }
+      });
+      document.documentElement.appendChild(overlay);
+    };
+    return {
+      setVisible(visible) {
+        host.style.display = visible ? "block" : "none";
+      },
+      setStatus(msg) {
+        status.textContent = msg;
+      },
+      setCounts(value) {
+        meta.textContent = `Data: ${value.games} games, ${value.rounds} rounds (details ok ${value.detailsOk}, missing ${value.detailsMissing}, error ${value.detailsError}).`;
+      },
+      onUpdateClick(fn) {
+        updateHandler = fn;
+      },
+      onResetClick(fn) {
+        resetHandler = fn;
+      },
+      onExportClick(fn) {
+        exportHandler = fn;
+      },
+      onTokenClick(fn) {
+        tokenHandler = fn;
+      },
+      onOpenAnalysisClick(fn) {
+        openHandler = fn;
+      },
+      openNcfaManager
+    };
+  }
+
   // node_modules/dexie/import-wrapper.mjs
   var import_dexie = __toESM(require_dexie(), 1);
   var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
@@ -6756,6430 +7007,6 @@
     }
   };
   var db = new GGDB();
-
-  // design.json
-  var design_default = {
-    $schema: "./design.schema.json",
-    schemaVersion: "1.0.0",
-    window: {
-      titleTemplate: "GeoAnalyzr - Full Analysis for {{playerName}}",
-      appearance: {
-        settingsStorageKey: "geoanalyzr:analysis:settings:v1",
-        defaults: {
-          theme: "dark",
-          accent: "#66a8ff"
-        },
-        themeOptions: [
-          "dark",
-          "light"
-        ],
-        accentFormat: "#RRGGBB"
-      },
-      filters: {
-        dateRange: {
-          fromTs: "number|undefined",
-          toTs: "number|undefined"
-        },
-        gameMode: {
-          key: "gameMode",
-          options: [
-            "all",
-            "duels",
-            "teamduels"
-          ],
-          labelMap: {
-            all: "all",
-            duels: "Duel",
-            teamduels: "Team Duel"
-          }
-        },
-        movementType: {
-          key: "movementType",
-          options: [
-            "all",
-            "moving",
-            "no_move",
-            "nmpz",
-            "unknown"
-          ],
-          displayOptions: "dynamic (unknown hidden unless implied by all)"
-        },
-        teammate: {
-          key: "teammateId",
-          options: "dynamic + all"
-        },
-        country: {
-          key: "country",
-          options: "dynamic + all (top countries)"
-        }
-      },
-      toc: {
-        source: "sections",
-        labelOverrides: {
-          teammate_battle: "Team",
-          country_spotlight: "Country Spotlight"
-        }
-      }
-    },
-    section_layout: {
-      order: [
-        "overview",
-        "personal_records",
-        "time_patterns",
-        "session_quality",
-        "tempo_vs_quality",
-        "scores",
-        "rounds",
-        "country_stats",
-        "opponents",
-        "rating_history",
-        "teammate_battle",
-        "country_spotlight"
-      ]
-    },
-    drilldownOverlay: {
-      triggerRules: {
-        lineValueClickable: "true if lineLabel exists in section.lineDrilldowns",
-        barClickable: "true if clicked bar has drilldown.length > 0"
-      },
-      sorting: {
-        keys: [
-          "date",
-          "round",
-          "score",
-          "country",
-          "result",
-          "duration",
-          "damage",
-          "movement",
-          "game_mode",
-          "mate"
-        ],
-        defaultDir: {
-          date: "desc",
-          round: "desc",
-          score: "desc",
-          country: "asc",
-          result: "desc",
-          duration: "desc",
-          damage: "desc",
-          movement: "asc",
-          game_mode: "asc",
-          mate: "asc"
-        },
-        toggleBehavior: "first click uses defaultDir[key], second click toggles"
-      },
-      columns: {
-        opponentMode: [
-          "Date(sortable)",
-          "Opponent(profile-link if available)",
-          "Result(sortable)",
-          "Match-ups",
-          "Country(sortable)",
-          "Game Mode(sortable, conditional)",
-          "Game (short id, tooltip full id)"
-        ],
-        roundMode: [
-          "Date(sortable)",
-          "Result(sortable)",
-          "Round(sortable)",
-          "Score(sortable)",
-          "Country(sortable, full English name)",
-          "Guess Duration(sortable, conditional)",
-          "Damage(sortable, conditional, green/red/gray)",
-          "Movement(sortable, conditional)",
-          "Game Mode(sortable, conditional)",
-          "Mate(sortable, conditional)",
-          "Game (short id, tooltip full id)",
-          "Guess Maps(link, conditional)",
-          "True Street View(link, conditional)"
-        ]
-      }
-    },
-    charts: {
-      types: [
-        "line",
-        "bar",
-        "selectableBar",
-        "selectableLine"
-      ],
-      commonActions: [
-        "Zoom",
-        "New Tab",
-        "Save SVG",
-        "Save PNG"
-      ],
-      selectableBarSortOptions: [
-        "chronological",
-        "desc",
-        "asc"
-      ]
-    },
-    sections: [
-      {
-        id: "overview",
-        title: "Overview",
-        group: "Overview",
-        appliesFilters: [
-          "date",
-          "mode",
-          "movement",
-          "teammate",
-          "country"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "box",
-              id: "results_win_rate_streaks"
-            },
-            {
-              kind: "box",
-              id: "mode_breakdown"
-            },
-            {
-              kind: "box",
-              id: "movement_breakdown"
-            },
-            {
-              kind: "graph",
-              id: "overview_time_progression"
-            }
-          ]
-        },
-        objects: {
-          singles: [],
-          boxes: [
-            {
-              id: "results_win_rate_streaks",
-              title: "Results, Win Rate & Streaks",
-              lines: [
-                {
-                  label: "Games with result data",
-                  type: "amount_games_with_result"
-                },
-                {
-                  label: "Wins",
-                  type: "wins"
-                },
-                {
-                  label: "Avg score",
-                  type: "avg_score"
-                },
-                {
-                  label: "Avg distance",
-                  type: "avg_distance"
-                },
-                {
-                  label: "Avg time",
-                  type: "avg_time"
-                },
-                {
-                  label: "Time played",
-                  type: "time_played"
-                },
-                {
-                  label: "Perfect 5k rounds",
-                  type: "perfect_5k"
-                },
-                {
-                  label: "Throws (<50)",
-                  type: "throws_lt_50"
-                },
-                {
-                  label: "Longest win streak",
-                  type: "longest_win_streak"
-                },
-                {
-                  label: "Longest loss streak",
-                  type: "longest_loss_streak"
-                }
-              ]
-            },
-            {
-              id: "mode_breakdown",
-              title: "Mode Breakdown",
-              lines: [
-                {
-                  label: "Duel",
-                  type: "amount_duels"
-                },
-                {
-                  label: "Team Duel",
-                  type: "amount_team_duels"
-                }
-              ]
-            },
-            {
-              id: "movement_breakdown",
-              title: "Movement Breakdown",
-              lines: [
-                {
-                  label: "Moving",
-                  type: "amount_moving_games"
-                },
-                {
-                  label: "No Move",
-                  type: "amount_no_move_games"
-                },
-                {
-                  label: "NMPZ",
-                  type: "amount_nmpz_games"
-                },
-                {
-                  label: "Unknown",
-                  type: "amount_unknown_games"
-                }
-              ]
-            }
-          ],
-          graphs: [
-            {
-              id: "overview_time_progression",
-              sourceIndex: 0,
-              type: "line",
-              yLabel: "Games/day (or aggregated bucket)",
-              content: "overview_time_progression",
-              hoverable: true,
-              clickable: true,
-              sortable: false,
-              sorts: [
-                "chronological"
-              ],
-              title: "Time progression metrics",
-              metrics: [
-                "games",
-                "rounds",
-                "avg_score",
-                "avg_score_correct_only",
-                "avg_distance",
-                "avg_time",
-                "throw_rate",
-                "amount_throws",
-                "fivek_rate",
-                "amount_fiveks",
-                "hit_rate",
-                "amount_hits",
-                "win_rate",
-                "amount_wins",
-                "avg_damage_dealt",
-                "damage_dealt",
-                "avg_damage_taken",
-                "damage_taken",
-                "rating"
-              ],
-              defaultMetric: "avg_score",
-              compareMode: "period_to_date",
-              compareModeOptions: [
-                "per_period",
-                "to_date",
-                "both"
-              ],
-              defaultCompareMode: "to_date",
-              compareCandidates: [
-                {
-                  key: "cumulative",
-                  label: "To date"
-                }
-              ],
-              defaultCompareKeys: [
-                "cumulative"
-              ]
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "overview"
-        }
-      },
-      {
-        id: "time_patterns",
-        title: "Time Patterns",
-        group: "Overview",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: true,
-          order: [
-            {
-              kind: "graph",
-              id: "time_patterns_weekday"
-            },
-            {
-              kind: "graph",
-              id: "time_patterns_hour"
-            }
-          ]
-        },
-        objects: {
-          singles: [],
-          boxes: [],
-          graphs: [
-            {
-              id: "time_patterns_weekday",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Weekday patterns",
-              orientation: "horizontal",
-              initialBars: 7,
-              defaultMetric: "games",
-              defaultSort: "chronological",
-              metrics: [
-                "games",
-                "rounds",
-                "avg_score",
-                "avg_score_correct_only",
-                "avg_distance",
-                "avg_duration",
-                "throw_rate",
-                "amount_throws",
-                "fivek_rate",
-                "amount_fiveks",
-                "hit_rate",
-                "amount_hits",
-                "win_rate",
-                "amount_wins",
-                "avg_damage_dealt",
-                "damage_dealt",
-                "avg_damage_taken",
-                "damage_taken"
-              ],
-              barClick: "opens matching rounds for that weekday",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "time_patterns_weekday",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            },
-            {
-              id: "time_patterns_hour",
-              sourceIndex: 1,
-              type: "bar",
-              title: "Hour-of-day patterns",
-              orientation: "horizontal",
-              initialBars: 24,
-              defaultMetric: "games",
-              defaultSort: "chronological",
-              metrics: [
-                "games",
-                "avg_score",
-                "avg_time",
-                "throw_rate",
-                "fivek_rate"
-              ],
-              barClick: "opens matching rounds for that hour",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "time_patterns_hour",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "time_patterns"
-        }
-      },
-      {
-        id: "session_quality",
-        title: "Sessions",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate",
-          "country"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "sessions_detected_gap_45m"
-            },
-            {
-              kind: "single",
-              id: "longest_break_between_sessions"
-            },
-            {
-              kind: "single",
-              id: "avg_games_per_session"
-            },
-            {
-              kind: "graph",
-              id: "sessions"
-            },
-            {
-              kind: "graph",
-              id: "sessions_progression"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "sessions_detected_gap_45m",
-              label: "Sessions detected (gap >45m)",
-              type: "sessions_detected_gap_45m"
-            },
-            {
-              id: "longest_break_between_sessions",
-              label: "Longest break between sessions",
-              type: "longest_break_between_sessions"
-            },
-            {
-              id: "avg_games_per_session",
-              label: "Avg games per session",
-              type: "avg_games_per_session"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "sessions",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Sessions",
-              orientation: "horizontal",
-              initialBars: 10,
-              defaultMetric: "avg_score",
-              defaultSort: "desc",
-              metrics: [
-                "avg_score",
-                "throw_rate",
-                "fivek_rate",
-                "avg_duration",
-                "games",
-                "rounds",
-                "win_rate"
-              ],
-              barClick: "opens all rounds in selected session",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "sessions",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            },
-            {
-              id: "sessions_progression",
-              sourceIndex: 1,
-              type: "line",
-              title: "Sessions progression metrics",
-              defaultMetric: "avg_score",
-              metrics: [
-                "games",
-                "rounds",
-                "avg_score",
-                "avg_score_correct_only",
-                "avg_distance",
-                "avg_time",
-                "avg_duration",
-                "throw_rate",
-                "amount_throws",
-                "fivek_rate",
-                "amount_fiveks",
-                "hit_rate",
-                "amount_hits",
-                "win_rate",
-                "amount_wins",
-                "avg_damage_dealt",
-                "damage_dealt",
-                "damage_dealt_share",
-                "avg_damage_taken",
-                "damage_taken",
-                "damage_taken_share"
-              ],
-              content: "sessions_progression",
-              xDomain: "index",
-              maxPoints: 50,
-              hoverable: true,
-              clickable: false,
-              sortable: false
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "sessions"
-        }
-      },
-      {
-        id: "tempo_vs_quality",
-        title: "Tempo",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate",
-          "country"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "fastest_guess"
-            },
-            {
-              kind: "single",
-              id: "slowest_guess"
-            },
-            {
-              kind: "single",
-              id: "fastest_5k"
-            },
-            {
-              kind: "single",
-              id: "slowest_throw_50"
-            },
-            {
-              kind: "graph",
-              id: "tempo_buckets"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "fastest_guess",
-              label: "Fastest guess",
-              type: "fastest_guess"
-            },
-            {
-              id: "slowest_guess",
-              label: "Slowest guess",
-              type: "slowest_guess"
-            },
-            {
-              id: "fastest_5k",
-              label: "Fastest 5k",
-              type: "fastest_5k"
-            },
-            {
-              id: "slowest_throw_50",
-              label: "Slowest throw (<50)",
-              type: "slowest_throw_lt_50"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "tempo_buckets",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Time bucket metrics",
-              orientation: "horizontal",
-              defaultMetric: "avg_score",
-              defaultSort: "chronological",
-              buckets: [
-                "<20 sec",
-                "20-30 sec",
-                "30-45 sec",
-                "45-60 sec",
-                "60-90 sec",
-                "90-180 sec",
-                ">180 sec"
-              ],
-              metrics: [
-                "avg_score",
-                "avg_distance",
-                "throw_rate",
-                "fivek_rate",
-                "rounds"
-              ],
-              barClick: "opens matching rounds in this time bucket",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "tempo_buckets",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "tempo"
-        }
-      },
-      {
-        id: "scores",
-        title: "Scores",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate",
-          "country"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "perfect_5k"
-            },
-            {
-              kind: "single",
-              id: "near_perfect_4500"
-            },
-            {
-              kind: "single",
-              id: "low_scores_500"
-            },
-            {
-              kind: "single",
-              id: "throws_50"
-            },
-            {
-              kind: "graph",
-              id: "score_distribution"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "perfect_5k",
-              label: "Perfect 5k",
-              type: "scores_perfect_5k"
-            },
-            {
-              id: "near_perfect_4500",
-              label: "Near-perfect (>=4500)",
-              type: "scores_near_perfect_4500"
-            },
-            {
-              id: "low_scores_500",
-              label: "Low scores (<500)",
-              type: "scores_low_scores_500"
-            },
-            {
-              id: "throws_50",
-              label: "Throws (<50)",
-              type: "scores_throws_lt_50"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "score_distribution",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Score distribution (smoothed)",
-              orientation: "vertical",
-              xRange: "0..5000 buckets",
-              barClick: "opens rounds in clicked score bucket",
-              content: "score_distribution",
-              hoverable: true,
-              clickable: true,
-              sortable: false,
-              sorts: [
-                "chronological"
-              ],
-              expandable: false,
-              initialBars: "max",
-              drilldownType: "rounds"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "scores"
-        }
-      },
-      {
-        id: "rounds",
-        title: "Rounds",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "game_with_most_rounds"
-            },
-            {
-              kind: "single",
-              id: "games_with_fewest_rounds"
-            },
-            {
-              kind: "single",
-              id: "largest_score_spread_max_min_in_one_game"
-            },
-            {
-              kind: "single",
-              id: "fastest_round_streak_20s"
-            },
-            {
-              kind: "single",
-              id: "damage_dealt_streak"
-            },
-            {
-              kind: "single",
-              id: "damage_taken_streak"
-            },
-            {
-              kind: "single",
-              id: "longest_same_country_streak"
-            },
-            {
-              kind: "single",
-              id: "correct_country_streak"
-            },
-            {
-              kind: "graph",
-              id: "rounds_progression"
-            },
-            {
-              kind: "graph",
-              id: "rounds_by_game_length"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "game_with_most_rounds",
-              label: "Game with most rounds",
-              type: "rounds_game_with_most_rounds"
-            },
-            {
-              id: "games_with_fewest_rounds",
-              label: "Games with fewest rounds",
-              type: "rounds_games_with_fewest_rounds"
-            },
-            {
-              id: "largest_score_spread_max_min_in_one_game",
-              label: "Largest score spread (max-min in one game)",
-              type: "rounds_largest_score_spread"
-            },
-            {
-              id: "fastest_round_streak_20s",
-              label: "Fastest round streak (<20s)",
-              type: "rounds_fastest_round_streak"
-            },
-            {
-              id: "damage_dealt_streak",
-              label: "Damage dealt streak",
-              type: "rounds_damage_dealt_streak"
-            },
-            {
-              id: "damage_taken_streak",
-              label: "Damage taken streak",
-              type: "rounds_damage_taken_streak"
-            },
-            {
-              id: "longest_same_country_streak",
-              label: "Longest same-country streak",
-              type: "rounds_longest_same_country_streak"
-            },
-            {
-              id: "correct_country_streak",
-              label: "Correct-country streak",
-              type: "rounds_correct_country_streak"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "rounds_progression",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Round progression metrics",
-              orientation: "vertical",
-              defaultMetric: "avg_score",
-              defaultSort: "chronological",
-              allowSort: false,
-              metrics: [
-                "avg_score",
-                "hit_rate",
-                "throw_rate",
-                "fivek_rate",
-                "avg_distance",
-                "avg_time",
-                "rounds"
-              ],
-              x: "round number (#1, #2, ...)",
-              barClick: "opens rounds with this round number across all games",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "rounds_progression",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            },
-            {
-              id: "rounds_by_game_length",
-              sourceIndex: 1,
-              type: "bar",
-              title: "Performance by game length (rounds per game, 2+)",
-              orientation: "vertical",
-              defaultMetric: "win_rate",
-              defaultSort: "chronological",
-              allowSort: false,
-              metrics: [
-                "games",
-                "avg_score",
-                "hit_rate",
-                "throw_rate",
-                "fivek_rate",
-                "avg_distance",
-                "avg_time"
-              ],
-              x: "game length (2,3,4... rounds)",
-              barClick: "opens rounds from games with this length",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "rounds_by_game_length",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "rounds"
-        }
-      },
-      {
-        id: "country_stats",
-        title: "Countries",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "graph",
-              id: "country_metrics"
-            },
-            {
-              kind: "graph",
-              id: "country_confusion_matrix"
-            }
-          ]
-        },
-        objects: {
-          singles: [],
-          boxes: [],
-          graphs: [
-            {
-              id: "country_metrics",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Country metrics",
-              orientation: "horizontal",
-              initialBars: 25,
-              defaultMetric: "avg_score",
-              defaultSort: "desc",
-              metrics: [
-                "avg_score",
-                "avg_score_correct_only",
-                "hit_rate",
-                "avg_distance",
-                "throw_rate",
-                "fivek_rate",
-                "damage_dealt",
-                "damage_taken",
-                "damage_dealt_share",
-                "damage_taken_share",
-                "rounds"
-              ],
-              barClick: "opens matching rounds for clicked country/metric subset",
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              content: "country_metrics",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              drilldownType: "rounds"
-            },
-            {
-              id: "country_confusion_matrix",
-              sourceIndex: 1,
-              type: "bar",
-              title: "Confusion matrix (top pairs)",
-              orientation: "vertical",
-              initialBars: 12,
-              barClick: "opens rounds for clicked confusion pair truth->guess",
-              content: "country_confusion_matrix",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              drilldownType: "rounds"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "countries"
-        }
-      },
-      {
-        id: "opponents",
-        title: "Opponents",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "box",
-              id: "top_3_opponents"
-            },
-            {
-              kind: "box",
-              id: "scope"
-            },
-            {
-              kind: "graph",
-              id: "opponents_country"
-            }
-          ]
-        },
-        objects: {
-          singles: [],
-          boxes: [
-            {
-              id: "top_3_opponents",
-              title: "Top 3 opponents",
-              lines: []
-            },
-            {
-              id: "scope",
-              title: "Scope",
-              lines: [
-                {
-                  label: "Unique opponents",
-                  type: "opponents_unique_opponents"
-                },
-                {
-                  label: "Unique countries",
-                  type: "opponents_unique_countries"
-                }
-              ]
-            }
-          ],
-          graphs: [
-            {
-              id: "opponents_country",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Match-ups by opponent country",
-              orientation: "vertical",
-              barClick: "opens opponent drilldown filtered to clicked country",
-              content: "opponents_country",
-              hoverable: true,
-              clickable: true,
-              sortable: true,
-              sorts: [
-                "chronological",
-                "desc",
-                "asc"
-              ],
-              drilldownType: "players"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "opponents"
-        }
-      },
-      {
-        id: "rating_history",
-        title: "Rating",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "trend"
-            },
-            {
-              kind: "single",
-              id: "biggest_session_rating_gain"
-            },
-            {
-              kind: "single",
-              id: "biggest_session_rating_loss"
-            },
-            {
-              kind: "graph",
-              id: "rating_history"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "trend",
-              label: "Trend",
-              type: "rating_trend"
-            },
-            {
-              id: "biggest_session_rating_gain",
-              label: "Biggest session rating gain",
-              type: "rating_biggest_session_gain"
-            },
-            {
-              id: "biggest_session_rating_loss",
-              label: "Biggest session rating loss",
-              type: "rating_biggest_session_loss"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "rating_history",
-              sourceIndex: 0,
-              type: "line",
-              title: "Rating",
-              if: "rating points > 1",
-              content: "rating_history",
-              hoverable: true,
-              clickable: false,
-              sortable: false,
-              sorts: [
-                "chronological"
-              ]
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "rating"
-        }
-      },
-      {
-        id: "teammate_battle",
-        titleTemplate: "Team: You + {{mateName}}",
-        tocTitle: "Team",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "box",
-              id: "head_to_head_questions"
-            },
-            {
-              kind: "box",
-              id: "team_facts"
-            }
-          ]
-        },
-        objects: {
-          singles: [],
-          boxes: [
-            {
-              id: "head_to_head_questions",
-              title: "Head-to-head questions",
-              lines: [
-                {
-                  label: "Closer guesses",
-                  type: "team_closer_guesses"
-                },
-                {
-                  label: "Higher score rounds",
-                  type: "team_higher_score_rounds"
-                },
-                {
-                  label: "Fewer throws (<50)",
-                  type: "team_fewer_throws_lt_50"
-                },
-                {
-                  label: "More 5k rounds",
-                  type: "team_more_5k_rounds"
-                }
-              ]
-            },
-            {
-              id: "team_facts",
-              title: "Team facts",
-              lines: [
-                {
-                  label: "Games together",
-                  type: "team_games_together"
-                },
-                {
-                  label: "Rounds together",
-                  type: "team_rounds_together"
-                },
-                {
-                  label: "Time played together",
-                  type: "team_time_played_together"
-                },
-                {
-                  label: "First game together",
-                  type: "team_first_game_together"
-                },
-                {
-                  label: "Most recent game together",
-                  type: "team_most_recent_game_together"
-                },
-                {
-                  label: "Longest session together",
-                  type: "team_longest_session_together"
-                },
-                {
-                  label: "Avg games per session together",
-                  type: "team_avg_games_per_session_together"
-                },
-                {
-                  label: "Longest break between games together",
-                  type: "team_longest_break_between_games_together"
-                }
-              ]
-            }
-          ],
-          graphs: []
-        },
-        tocIcon: {
-          enabled: true,
-          key: "team"
-        },
-        requiredFilters: {
-          teammate: {
-            enabled: true,
-            default: "top_games",
-            label: "Mate"
-          }
-        }
-      },
-      {
-        id: "country_spotlight",
-        titleTemplate: "Country Spotlight: {{countryName}}",
-        tocTitle: "Country Spotlight",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate",
-          "country"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "rounds"
-            },
-            {
-              kind: "single",
-              id: "hit_rate"
-            },
-            {
-              kind: "single",
-              id: "avg_score"
-            },
-            {
-              kind: "single",
-              id: "avg_distance"
-            },
-            {
-              kind: "single",
-              id: "perfect_5k_in_this_country"
-            },
-            {
-              kind: "single",
-              id: "throws_50_in_this_country"
-            },
-            {
-              kind: "graph",
-              id: "spotlight_distribution"
-            },
-            {
-              kind: "graph",
-              id: "spotlight_trend"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "rounds",
-              label: "Rounds",
-              type: "country_spotlight_rounds"
-            },
-            {
-              id: "hit_rate",
-              label: "Hit rate",
-              type: "country_spotlight_hit_rate"
-            },
-            {
-              id: "avg_score",
-              label: "Avg score",
-              type: "country_spotlight_avg_score"
-            },
-            {
-              id: "avg_distance",
-              label: "Avg distance",
-              type: "country_spotlight_avg_distance"
-            },
-            {
-              id: "perfect_5k_in_this_country",
-              label: "Perfect 5k in this country",
-              type: "country_spotlight_perfect_5k"
-            },
-            {
-              id: "throws_50_in_this_country",
-              label: "Throws (<50) in this country",
-              type: "country_spotlight_throws_lt_50"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "spotlight_distribution",
-              sourceIndex: 0,
-              type: "bar",
-              title: "Score distribution (smoothed)",
-              orientation: "vertical",
-              allowSort: false,
-              defaultSort: "chronological",
-              barClick: "opens rounds in clicked score bucket",
-              sorts: [
-                "chronological"
-              ],
-              content: "spotlight_distribution",
-              hoverable: true,
-              clickable: true,
-              sortable: false,
-              drilldownType: "rounds"
-            },
-            {
-              id: "spotlight_trend",
-              sourceIndex: 1,
-              type: "line",
-              title: "Country trend comparison",
-              defaultMetric: "damage_dealt_share",
-              primaryCountry: "{{selectedCountry}}",
-              maxCompare: 4,
-              metrics: [
-                "damage_dealt_share",
-                "damage_taken_share",
-                "avg_score",
-                "hit_rate",
-                "throw_rate",
-                "fivek_rate",
-                "avg_damage_dealt",
-                "avg_damage_taken",
-                "rounds"
-              ],
-              noDataBehavior: "carry forward previous value; if no previous value then fallback to overall baseline",
-              rateSmoothing: {
-                enabled: true,
-                method: "beta-like smoothing",
-                priorStrength: 12,
-                minBucketRoundsForRate: 5
-              },
-              content: "spotlight_trend",
-              hoverable: true,
-              clickable: false,
-              sortable: false,
-              sorts: [
-                "chronological"
-              ]
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "spotlight"
-        },
-        requiredFilters: {
-          country: {
-            enabled: true,
-            default: "top_rounds",
-            label: "Country"
-          }
-        }
-      },
-      {
-        id: "personal_records",
-        title: "Personal Records",
-        appliesFilters: [
-          "date",
-          "mode",
-          "teammate",
-          "country"
-        ],
-        layout: {
-          mode: "object_order",
-          preserveUnmatched: false,
-          order: [
-            {
-              kind: "single",
-              id: "best_day"
-            },
-            {
-              kind: "single",
-              id: "hardest_day"
-            },
-            {
-              kind: "single",
-              id: "best_avg_score_in_a_game"
-            },
-            {
-              kind: "single",
-              id: "worst_avg_score_in_a_game"
-            },
-            {
-              kind: "single",
-              id: "fastest_day"
-            },
-            {
-              kind: "single",
-              id: "slowest_day"
-            },
-            {
-              kind: "single",
-              id: "best_5k_streak"
-            },
-            {
-              kind: "single",
-              id: "worst_throw_streak_50"
-            },
-            {
-              kind: "graph",
-              id: "records_daily"
-            }
-          ]
-        },
-        objects: {
-          singles: [
-            {
-              id: "best_day",
-              label: "Best day",
-              type: "record_best_day"
-            },
-            {
-              id: "hardest_day",
-              label: "Hardest day",
-              type: "record_hardest_day"
-            },
-            {
-              id: "best_avg_score_in_a_game",
-              label: "Best avg score in a game",
-              type: "record_best_avg_score_in_game"
-            },
-            {
-              id: "worst_avg_score_in_a_game",
-              label: "Worst avg score in a game",
-              type: "record_worst_avg_score_in_game"
-            },
-            {
-              id: "fastest_day",
-              label: "Fastest day",
-              type: "record_fastest_day"
-            },
-            {
-              id: "slowest_day",
-              label: "Slowest day",
-              type: "record_slowest_day"
-            },
-            {
-              id: "best_5k_streak",
-              label: "Best 5k streak",
-              type: "record_best_5k_streak"
-            },
-            {
-              id: "worst_throw_streak_50",
-              label: "Worst throw streak (<50)",
-              type: "record_worst_throw_streak_lt_50"
-            }
-          ],
-          boxes: [],
-          graphs: [
-            {
-              id: "records_daily",
-              sourceIndex: 0,
-              type: "line",
-              title: "Avg daily score",
-              smoothing: "auto bucketed over long ranges",
-              content: "records_daily",
-              hoverable: true,
-              clickable: true,
-              sortable: false,
-              sorts: [
-                "chronological"
-              ],
-              drilldownType: "rounds"
-            }
-          ]
-        },
-        tocIcon: {
-          enabled: true,
-          key: "records"
-        }
-      }
-    ]
-  };
-
-  // design.schema.json
-  var design_schema_default = {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://geoanalyzr.local/design.schema.json",
-    title: "GeoAnalyzr Design Template",
-    type: "object",
-    required: ["sections"],
-    properties: {
-      $schema: { type: "string" },
-      schemaVersion: { type: "string" },
-      window: {
-        type: "object",
-        properties: {
-          titleTemplate: { type: "string" },
-          appearance: {
-            type: "object",
-            properties: {
-              defaults: {
-                type: "object",
-                properties: {
-                  theme: { enum: ["dark", "light"] },
-                  accent: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }
-                },
-                additionalProperties: true
-              }
-            },
-            additionalProperties: true
-          },
-          toc: {
-            type: "object",
-            properties: {
-              labelOverrides: {
-                type: "object",
-                additionalProperties: { type: "string" }
-              }
-            },
-            additionalProperties: true
-          }
-        },
-        additionalProperties: true
-      },
-      sections: {
-        type: "array",
-        items: { $ref: "#/$defs/section" }
-      },
-      section_layout: {
-        type: "object",
-        properties: {
-          order: {
-            type: "array",
-            items: { type: "string", minLength: 1 }
-          }
-        },
-        additionalProperties: true
-      }
-    },
-    $defs: {
-      lineRef: {
-        type: "object",
-        required: ["label"],
-        properties: {
-          label: { type: "string" }
-        },
-        additionalProperties: true
-      },
-      graphObject: {
-        type: "object",
-        required: ["id"],
-        properties: {
-          id: { type: "string", minLength: 1 },
-          sourceIndex: { type: "integer", minimum: 0 },
-          type: { enum: ["line", "bar"] },
-          title: { type: "string" },
-          yLabel: { type: "string" },
-          content: { type: "string" },
-          hoverable: { type: "boolean" },
-          clickable: { type: "boolean" },
-          metrics: {
-            type: "array",
-            items: { type: "string" }
-          },
-          defaultMetric: { type: "string" },
-          defaultSort: { enum: ["chronological", "desc", "asc"] },
-          sorts: {
-            type: "array",
-            items: { enum: ["chronological", "desc", "asc"] }
-          },
-          orientation: { enum: ["vertical", "horizontal"] },
-          sortable: { type: "boolean" },
-          allowSort: { type: "boolean" },
-          initialBars: {
-            oneOf: [
-              { type: "integer", minimum: 1 },
-              { const: "max" }
-            ]
-          },
-          expandable: { type: "boolean" },
-          maxCompare: { type: "integer", minimum: 1, maximum: 4 },
-          compareMode: { enum: ["selectors", "period_to_date"] },
-          compareModeOptions: {
-            type: "array",
-            items: { enum: ["per_period", "to_date", "both"] }
-          },
-          defaultCompareMode: { enum: ["per_period", "to_date", "both"] },
-          compareCandidates: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["key", "label"],
-              properties: {
-                key: { type: "string", minLength: 1 },
-                label: { type: "string", minLength: 1 }
-              },
-              additionalProperties: false
-            }
-          },
-          defaultCompareKeys: { type: "array", items: { type: "string" } },
-          xDomain: { enum: ["time", "index"] },
-          maxPoints: { type: "integer", minimum: 2 },
-          drilldownType: { enum: ["rounds", "players"] },
-          drilldownColumns: { type: "array", items: { type: "string" } },
-          drilldownColored: { type: "array", items: { type: "string" } },
-          drilldownClickable: { type: "array", items: { type: "string" } }
-        },
-        additionalProperties: true
-      },
-      section: {
-        type: "object",
-        required: ["id"],
-        properties: {
-          id: { type: "string", minLength: 1 },
-          sourceSectionId: { type: "string" },
-          tocLabel: { type: "string" },
-          tocTitle: { type: "string" },
-          tocIcon: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean" },
-              key: { enum: ["overview", "time_patterns", "sessions", "tempo", "scores", "rounds", "countries", "opponents", "rating", "team", "spotlight", "records", "default"] },
-              svg: { type: "string" }
-            },
-            additionalProperties: true
-          },
-          requiredFilters: {
-            type: "object",
-            properties: {
-              teammate: {
-                type: "object",
-                properties: {
-                  enabled: { type: "boolean" },
-                  default: { enum: ["top_games"] },
-                  label: { type: "string" }
-                },
-                additionalProperties: true
-              },
-              country: {
-                type: "object",
-                properties: {
-                  enabled: { type: "boolean" },
-                  default: { enum: ["top_rounds"] },
-                  label: { type: "string" }
-                },
-                additionalProperties: true
-              }
-            },
-            additionalProperties: true
-          },
-          title: { type: "string" },
-          titleTemplate: { type: "string" },
-          group: { enum: ["Overview", "Performance", "Rounds", "Countries", "Opponents", "Rating"] },
-          appliesFilters: {
-            type: "array",
-            items: { enum: ["date", "mode", "gameMode", "movement", "teammate", "country"] }
-          },
-          objects: {
-            type: "object",
-            properties: {
-              singles: {
-                type: "array",
-                items: {
-                  type: "object",
-                  required: ["id", "label"],
-                  properties: {
-                    id: { type: "string", minLength: 1 },
-                    label: { type: "string", minLength: 1 },
-                    type: { type: "string" },
-                    sourceSectionId: { type: "string" }
-                  },
-                  additionalProperties: true
-                }
-              },
-              boxes: {
-                type: "array",
-                items: {
-                  type: "object",
-                  required: ["id", "title"],
-                  properties: {
-                    id: { type: "string", minLength: 1 },
-                    title: { type: "string", minLength: 1 },
-                    lines: {
-                      type: "array",
-                      items: {
-                        allOf: [
-                          { $ref: "#/$defs/lineRef" },
-                          {
-                            type: "object",
-                            properties: {
-                              type: { type: "string" },
-                              sourceSectionId: { type: "string" }
-                            },
-                            additionalProperties: true
-                          }
-                        ]
-                      }
-                    }
-                  },
-                  additionalProperties: true
-                }
-              },
-              graphs: {
-                type: "array",
-                items: { $ref: "#/$defs/graphObject" }
-              }
-            },
-            additionalProperties: true
-          },
-          layout: {
-            oneOf: [
-              {
-                type: "object",
-                required: ["mode", "order"],
-                properties: {
-                  mode: { const: "object_order" },
-                  preserveUnmatched: { type: "boolean" },
-                  order: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      required: ["kind", "id"],
-                      properties: {
-                        kind: { enum: ["single", "box", "graph"] },
-                        id: { type: "string", minLength: 1 }
-                      },
-                      additionalProperties: false
-                    }
-                  }
-                },
-                additionalProperties: true
-              },
-              {
-                type: "object",
-                required: ["mode"],
-                properties: {
-                  mode: { enum: ["legacy_colon", "header_blocks"] }
-                },
-                additionalProperties: true
-              }
-            ]
-          },
-          render: {
-            type: "object",
-            properties: {
-              chartIndices: { type: "array", items: { type: "integer", minimum: 0 } },
-              chartTitles: { type: "array", items: { type: "string" } },
-              includeLineLabels: { type: "array", items: { type: "string" } },
-              excludeLineLabels: { type: "array", items: { type: "string" } },
-              preserveUnmatchedLines: { type: "boolean" },
-              preserveUnmatchedCharts: { type: "boolean" }
-            },
-            additionalProperties: true
-          }
-        },
-        additionalProperties: true
-      }
-    },
-    additionalProperties: true
-  };
-
-  // design.capabilities.json
-  var design_capabilities_default = {
-    $schema: "./design.capabilities.schema.json",
-    schemaVersion: "1.0",
-    graphTypes: [
-      "line",
-      "bar"
-    ],
-    metricSuggestions: [
-      "amount_fiveks",
-      "amount_hits",
-      "amount_throws",
-      "amount_wins",
-      "avg_damage_dealt",
-      "avg_damage_taken",
-      "avg_distance",
-      "avg_duration",
-      "avg_score",
-      "avg_score_correct_only",
-      "damage_dealt",
-      "damage_dealt_share",
-      "damage_taken",
-      "damage_taken_share",
-      "fivek_rate",
-      "games",
-      "hit_rate",
-      "rating",
-      "rounds",
-      "throw_rate",
-      "win_rate"
-    ],
-    graphContentDefinitions: {
-      weekdays: {
-        title: "Weekday patterns",
-        type: "bar",
-        orientation: "horizontal",
-        initialBars: 7,
-        hoverable: true,
-        clickable: true,
-        sortable: true,
-        drilldownType: "rounds",
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken"
-        ],
-        defaultMetric: "games",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ],
-        defaultSort: "chronological"
-      },
-      time_patterns_hour: {
-        title: "Hour-of-day patterns",
-        type: "bar",
-        orientation: "horizontal",
-        initialBars: 24,
-        hoverable: true,
-        clickable: true,
-        sortable: true,
-        drilldownType: "rounds",
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken"
-        ],
-        defaultMetric: "games",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ],
-        defaultSort: "chronological"
-      },
-      sessions: {
-        title: "Sessions",
-        type: "bar",
-        orientation: "horizontal",
-        initialBars: 10,
-        hoverable: true,
-        clickable: true,
-        sortable: true,
-        drilldownType: "rounds",
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken"
-        ],
-        defaultMetric: "avg_score",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ],
-        defaultSort: "chronological"
-      },
-      sessions_progression: {
-        title: "Sessions progression metrics",
-        type: "line",
-        initialBars: 10,
-        hoverable: true,
-        clickable: true,
-        sortable: true,
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken",
-          "rating"
-        ],
-        defaultMetric: "avg_score",
-        xDomain: "index",
-        maxPoints: 50
-      },
-      tempo_buckets: {
-        metrics: [
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      score_distribution: {
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      rounds_progression: {
-        metrics: [
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      rounds_by_game_length: {
-        metrics: [
-          "games",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken"
-        ],
-        defaultMetric: "win_rate",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      country_metrics: {
-        metrics: [
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "damage_dealt_share",
-          "avg_damage_taken",
-          "damage_taken",
-          "damage_taken_share"
-        ],
-        defaultMetric: "avg_score",
-        defaultSort: "desc",
-        sorts: [
-          "chronological",
-          "desc",
-          "asc"
-        ]
-      },
-      country_confusion_matrix: {
-        defaultSort: "desc",
-        sorts: [
-          "desc",
-          "asc"
-        ]
-      },
-      opponents_country: {
-        defaultSort: "desc",
-        sorts: [
-          "desc",
-          "asc"
-        ]
-      },
-      rating_history: {
-        metrics: [
-          "rating"
-        ],
-        defaultMetric: "rating",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      spotlight_distribution: {
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      spotlight_trend: {
-        metrics: [
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "damage_dealt_share",
-          "avg_damage_taken",
-          "damage_taken",
-          "damage_taken_share"
-        ],
-        defaultMetric: "avg_score",
-        compareMode: "period_to_date",
-        compareModeOptions: [
-          "per_period",
-          "to_date",
-          "both"
-        ],
-        defaultCompareMode: "to_date",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      records_daily: {
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      },
-      overview_time_progression: {
-        metrics: [
-          "games",
-          "rounds",
-          "avg_score",
-          "avg_score_correct_only",
-          "avg_distance",
-          "avg_duration",
-          "throw_rate",
-          "amount_throws",
-          "fivek_rate",
-          "amount_fiveks",
-          "hit_rate",
-          "amount_hits",
-          "win_rate",
-          "amount_wins",
-          "avg_damage_dealt",
-          "damage_dealt",
-          "avg_damage_taken",
-          "damage_taken",
-          "rating"
-        ],
-        defaultMetric: "avg_score",
-        compareMode: "period_to_date",
-        compareModeOptions: [
-          "per_period",
-          "to_date",
-          "both"
-        ],
-        defaultCompareMode: "to_date",
-        defaultSort: "chronological",
-        sorts: [
-          "chronological"
-        ]
-      }
-    }
-  };
-
-  // src/ui.legacy.ts
-  var DEFAULT_ANALYSIS_DESIGN = typeof design_default === "object" && design_default ? design_default : {};
-  var ANALYSIS_CAPABILITIES = typeof design_capabilities_default === "object" && design_capabilities_default ? design_capabilities_default : {};
-  var analysisDesign = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
-  var ANALYSIS_TEMPLATE_META_KEY = "analysis:window-template:v1";
-  async function loadPersistedAnalysisDesign() {
-    try {
-      const row = await db.meta.get(ANALYSIS_TEMPLATE_META_KEY);
-      if (!row || !row.value || typeof row.value !== "object") return null;
-      return row.value;
-    } catch {
-      return null;
-    }
-  }
-  async function persistAnalysisDesign() {
-    try {
-      await db.meta.put({
-        key: ANALYSIS_TEMPLATE_META_KEY,
-        value: analysisDesign,
-        updatedAt: Date.now()
-      });
-    } catch {
-    }
-  }
-  function replaceAnalysisDesign(next) {
-    analysisDesign = next && typeof next === "object" ? next : JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN));
-    rebuildSectionTemplateCache();
-  }
-  function getDesignDefaultTheme() {
-    const fromWindow = analysisDesign.window?.appearance?.defaults?.theme;
-    if (fromWindow === "dark" || fromWindow === "light") return fromWindow;
-    const fromRoot = analysisDesign.appearance?.defaultTheme;
-    if (fromRoot === "dark" || fromRoot === "light") return fromRoot;
-    return "dark";
-  }
-  function getDesignDefaultAccent() {
-    const fromWindow = analysisDesign.window?.appearance?.defaults?.accent;
-    if (typeof fromWindow === "string") return fromWindow;
-    const fromRoot = analysisDesign.appearance?.defaultAccent;
-    if (typeof fromRoot === "string") return fromRoot;
-    return "#66a8ff";
-  }
-  function getDesignDefaultVisibleFilters() {
-    const visible = analysisDesign.window?.filters?.visible;
-    return {
-      date: visible?.date !== false,
-      mode: visible?.mode !== false,
-      movement: visible?.movement !== false,
-      teammate: visible?.teammate !== false,
-      country: visible?.country !== false
-    };
-  }
-  function normalizeSectionTemplate(raw) {
-    const normalizeGraphTemplate = (graphRaw) => {
-      if (!graphRaw || typeof graphRaw !== "object") return void 0;
-      const type = graphRaw.type;
-      const defaultSort = graphRaw.defaultSort;
-      const metrics = Array.isArray(graphRaw.metrics) ? graphRaw.metrics.map((m) => typeof m === "string" ? m.trim() : "").filter((m) => m.length > 0) : void 0;
-      const sorts = Array.isArray(graphRaw.sorts) ? graphRaw.sorts.filter((s) => s === "chronological" || s === "desc" || s === "asc") : void 0;
-      const mappedType = type === "line" || type === "selectableLine" ? "line" : type === "bar" || type === "verticalBar" || type === "horizontalBar" || type === "selectableBar" ? "bar" : void 0;
-      const mappedOrientation = type === "horizontalBar" ? "horizontal" : type === "verticalBar" ? "vertical" : graphRaw.orientation === "vertical" || graphRaw.orientation === "horizontal" ? graphRaw.orientation : void 0;
-      const drilldownType = graphRaw.drilldownType;
-      const toStringList = (v) => Array.isArray(v) ? v.map((x) => typeof x === "string" ? x.trim() : "").filter((x) => x.length > 0) : void 0;
-      const compareMode = graphRaw.compareMode === "selectors" || graphRaw.compareMode === "period_to_date" ? graphRaw.compareMode : void 0;
-      const compareModeOptions = Array.isArray(graphRaw.compareModeOptions) ? graphRaw.compareModeOptions.filter(
-        (m) => m === "per_period" || m === "to_date" || m === "both"
-      ) : void 0;
-      const defaultCompareMode = graphRaw.defaultCompareMode === "per_period" || graphRaw.defaultCompareMode === "to_date" || graphRaw.defaultCompareMode === "both" ? graphRaw.defaultCompareMode : void 0;
-      const xDomain = graphRaw.xDomain === "time" || graphRaw.xDomain === "index" ? graphRaw.xDomain : void 0;
-      const maxPoints = typeof graphRaw.maxPoints === "number" && Number.isFinite(graphRaw.maxPoints) && graphRaw.maxPoints > 1 ? Math.floor(graphRaw.maxPoints) : void 0;
-      const compareCandidates = Array.isArray(graphRaw.compareCandidates) ? graphRaw.compareCandidates.map((c) => ({
-        key: typeof c?.key === "string" ? c.key.trim() : "",
-        label: typeof c?.label === "string" ? c.label.trim() : ""
-      })).filter((c) => c.key.length > 0).map((c) => ({ key: c.key, label: c.label || c.key })) : void 0;
-      return {
-        type: mappedType,
-        title: typeof graphRaw.title === "string" ? graphRaw.title : void 0,
-        yLabel: typeof graphRaw.yLabel === "string" ? graphRaw.yLabel : void 0,
-        content: typeof graphRaw.content === "string" ? graphRaw.content : void 0,
-        hoverable: typeof graphRaw.hoverable === "boolean" ? graphRaw.hoverable : void 0,
-        clickable: typeof graphRaw.clickable === "boolean" ? graphRaw.clickable : void 0,
-        metrics,
-        defaultMetric: typeof graphRaw.defaultMetric === "string" ? graphRaw.defaultMetric : void 0,
-        defaultSort: defaultSort === "chronological" || defaultSort === "desc" || defaultSort === "asc" ? defaultSort : void 0,
-        sorts: sorts && sorts.length > 0 ? sorts : void 0,
-        orientation: mappedOrientation,
-        sortable: typeof graphRaw.sortable === "boolean" ? graphRaw.sortable : void 0,
-        allowSort: typeof graphRaw.allowSort === "boolean" ? graphRaw.allowSort : void 0,
-        initialBars: typeof graphRaw.initialBars === "number" || graphRaw.initialBars === "max" ? graphRaw.initialBars : void 0,
-        expandable: typeof graphRaw.expandable === "boolean" ? graphRaw.expandable : void 0,
-        maxCompare: typeof graphRaw.maxCompare === "number" ? graphRaw.maxCompare : void 0,
-        compareMode,
-        compareModeOptions: compareModeOptions && compareModeOptions.length > 0 ? compareModeOptions : void 0,
-        defaultCompareMode,
-        xDomain,
-        maxPoints,
-        compareCandidates: compareCandidates && compareCandidates.length > 0 ? compareCandidates : void 0,
-        defaultCompareKeys: toStringList(graphRaw.defaultCompareKeys),
-        drilldownType: drilldownType === "players" || drilldownType === "rounds" ? drilldownType : void 0,
-        drilldownColumns: toStringList(graphRaw.drilldownColumns),
-        drilldownColored: toStringList(graphRaw.drilldownColored),
-        drilldownClickable: toStringList(graphRaw.drilldownClickable)
-      };
-    };
-    const normalizeGraphTemplates = (items) => {
-      if (!Array.isArray(items) || items.length === 0) return void 0;
-      const list = items.map(normalizeGraphTemplate).filter((g) => !!g);
-      return list.length > 0 ? list : void 0;
-    };
-    const base = {
-      id: raw.id,
-      sourceSectionId: typeof raw.sourceSectionId === "string" ? raw.sourceSectionId : void 0,
-      tocLabel: raw.tocLabel ?? raw.tocTitle,
-      icon: raw.icon,
-      tocIcon: raw.tocIcon && typeof raw.tocIcon === "object" ? {
-        enabled: typeof raw.tocIcon.enabled === "boolean" ? raw.tocIcon.enabled : void 0,
-        key: raw.tocIcon.key === "overview" || raw.tocIcon.key === "time_patterns" || raw.tocIcon.key === "sessions" || raw.tocIcon.key === "tempo" || raw.tocIcon.key === "scores" || raw.tocIcon.key === "rounds" || raw.tocIcon.key === "countries" || raw.tocIcon.key === "opponents" || raw.tocIcon.key === "rating" || raw.tocIcon.key === "team" || raw.tocIcon.key === "spotlight" || raw.tocIcon.key === "records" || raw.tocIcon.key === "default" ? raw.tocIcon.key : void 0,
-        svg: typeof raw.tocIcon.svg === "string" ? raw.tocIcon.svg : void 0
-      } : void 0,
-      titleTemplate: typeof raw.titleTemplate === "string" ? raw.titleTemplate : void 0,
-      title: typeof raw.title === "string" ? raw.title : void 0,
-      group: raw.group,
-      appliesFilters: raw.appliesFilters,
-      static: raw.static,
-      render: raw.render,
-      graphTemplates: normalizeGraphTemplates(raw.graphTemplates),
-      objects: void 0,
-      requiredFilters: raw.requiredFilters && typeof raw.requiredFilters === "object" ? {
-        teammate: raw.requiredFilters.teammate && typeof raw.requiredFilters.teammate === "object" ? {
-          enabled: typeof raw.requiredFilters.teammate.enabled === "boolean" ? raw.requiredFilters.teammate.enabled : void 0,
-          default: raw.requiredFilters.teammate.default === "top_games" ? "top_games" : void 0,
-          label: typeof raw.requiredFilters.teammate.label === "string" ? raw.requiredFilters.teammate.label : void 0
-        } : void 0,
-        country: raw.requiredFilters.country && typeof raw.requiredFilters.country === "object" ? {
-          enabled: typeof raw.requiredFilters.country.enabled === "boolean" ? raw.requiredFilters.country.enabled : void 0,
-          default: raw.requiredFilters.country.default === "top_rounds" ? "top_rounds" : void 0,
-          label: typeof raw.requiredFilters.country.label === "string" ? raw.requiredFilters.country.label : void 0
-        } : void 0
-      } : void 0
-    };
-    const rawLayout = raw.layout;
-    const rawObjects = raw.objects;
-    if (rawObjects) {
-      const singles = (rawObjects.singles || []).map((s) => ({
-        id: typeof s?.id === "string" ? s.id : "",
-        label: typeof s?.label === "string" ? s.label : "",
-        type: typeof s?.type === "string" ? s.type : void 0,
-        sourceSectionId: typeof s?.sourceSectionId === "string" ? s.sourceSectionId : void 0
-      })).filter((s) => s.id && s.label);
-      const boxes = (rawObjects.boxes || []).map((b) => ({
-        id: typeof b?.id === "string" ? b.id : "",
-        title: typeof b?.title === "string" ? b.title : "",
-        lines: (b?.lines || []).map((l) => ({
-          label: typeof l?.label === "string" ? l.label : "",
-          type: typeof l?.type === "string" ? l.type : void 0,
-          sourceSectionId: typeof l?.sourceSectionId === "string" ? l.sourceSectionId : void 0
-        })).filter((l) => l.label)
-      })).filter((b) => b.id && b.title);
-      const graphs = normalizeGraphTemplates(rawObjects.graphs)?.map((g, idx) => ({
-        id: typeof rawObjects.graphs?.[idx]?.id === "string" ? rawObjects.graphs?.[idx]?.id : "",
-        ...g
-      })).filter((g) => g.id);
-      base.objects = {
-        singles,
-        boxes,
-        graphs
-      };
-    }
-    if (rawLayout?.mode) {
-      if (rawLayout.mode === "header_blocks") {
-        base.layout = {
-          mode: "header_blocks",
-          headers: rawLayout.headers || [],
-          preserveUnmatched: rawLayout.preserveUnmatched,
-          boxes: (rawLayout.boxes || []).map((b) => ({
-            title: typeof b?.title === "string" ? b.title : "",
-            lines: (b?.lines || []).map((l) => ({ label: typeof l?.label === "string" ? l.label : "" })).filter((l) => l.label)
-          })).filter((b) => b.title),
-          single: (rawLayout.single || []).map((s) => ({ label: typeof s?.label === "string" ? s.label : "" })).filter((s) => s.label),
-          graphs: normalizeGraphTemplates(rawLayout.graphs)
-        };
-      } else if (rawLayout.mode === "object_order") {
-        const order = (rawLayout.order || []).map((item) => ({
-          kind: item?.kind === "single" || item?.kind === "box" || item?.kind === "graph" ? item.kind : void 0,
-          id: typeof item?.id === "string" ? item.id : ""
-        })).filter((item) => !!item.kind && !!item.id);
-        base.layout = {
-          mode: "object_order",
-          order,
-          preserveUnmatched: rawLayout.preserveUnmatched
-        };
-      } else {
-        base.layout = { mode: "legacy_colon" };
-      }
-      if (!base.graphTemplates && base.layout.mode === "header_blocks") {
-        const headerLayout = base.layout;
-        base.graphTemplates = headerLayout.graphs;
-      }
-      return base;
-    }
-    if (base.objects) {
-      const order = [];
-      for (const s of base.objects.singles || []) order.push({ kind: "single", id: s.id });
-      for (const b of base.objects.boxes || []) order.push({ kind: "box", id: b.id });
-      for (const g of base.objects.graphs || []) order.push({ kind: "graph", id: g.id });
-      base.layout = { mode: "object_order", order, preserveUnmatched: true };
-      if (!base.graphTemplates && base.objects.graphs) base.graphTemplates = base.objects.graphs;
-      return base;
-    }
-    base.layout = { mode: "legacy_colon" };
-    const headerLayoutRaw = rawLayout;
-    if (!base.graphTemplates && headerLayoutRaw?.mode === "header_blocks") {
-      base.graphTemplates = normalizeGraphTemplates(headerLayoutRaw.graphs);
-    }
-    return base;
-  }
-  var sectionTemplateById = /* @__PURE__ */ new Map();
-  function rebuildSectionTemplateCache() {
-    sectionTemplateById = new Map(
-      (analysisDesign.sections || []).map((s) => [s.id, normalizeSectionTemplate(s)])
-    );
-  }
-  rebuildSectionTemplateCache();
-  function getSectionTemplate(section) {
-    return sectionTemplateById.get(section.id);
-  }
-  function getLineLabel(line) {
-    const idx = line.indexOf(":");
-    if (idx > 0) return line.slice(0, idx).trim();
-    return line.trim();
-  }
-  function matchesLineLabel(line, label) {
-    const want = label.trim().toLowerCase();
-    if (!want) return false;
-    return getLineLabel(line).toLowerCase() === want;
-  }
-  function buildDesignSourceLineLookup(sections) {
-    const lookup = /* @__PURE__ */ new Map();
-    for (const section of sections) {
-      const drillByLabel = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel.toLowerCase(), d.items]));
-      const linkByLabel = new Map((section.lineLinks || []).map((d) => [d.lineLabel.toLowerCase(), d.url]));
-      const byLabel = /* @__PURE__ */ new Map();
-      for (const line of section.lines || []) {
-        const sep = line.indexOf(":");
-        const label = (sep > 0 ? line.slice(0, sep) : line).trim();
-        const value = sep > 0 ? line.slice(sep + 1).trim() : "";
-        byLabel.set(label.toLowerCase(), {
-          line,
-          label,
-          value,
-          drilldown: drillByLabel.get(label.toLowerCase()),
-          link: linkByLabel.get(label.toLowerCase())
-        });
-      }
-      lookup.set(section.id, byLabel);
-    }
-    return lookup;
-  }
-  function materializeSections(data) {
-    const source = data.sections || [];
-    const sourceById = new Map(source.map((s) => [s.id, s]));
-    const sectionOrder = Array.isArray(analysisDesign.section_layout?.order) ? analysisDesign.section_layout?.order?.filter((x) => typeof x === "string" && x.trim().length > 0).map((x) => x.trim()) : [];
-    const templateList = analysisDesign.sections || [];
-    const templateById = new Map(templateList.map((t) => [t.id, t]));
-    const orderedTemplates = sectionOrder.length > 0 ? [
-      ...sectionOrder.map((id) => templateById.get(id)).filter((t) => !!t),
-      ...templateList.filter((t) => !sectionOrder.includes(t.id))
-    ] : templateList;
-    if (orderedTemplates.length === 0) return source;
-    const out = [];
-    const usedSourceIds = /* @__PURE__ */ new Set();
-    const cloneSection = (section) => ({
-      ...section,
-      lines: section.lines.slice(),
-      lineDrilldowns: section.lineDrilldowns ? section.lineDrilldowns.map((d) => ({ lineLabel: d.lineLabel, items: d.items.slice() })) : void 0,
-      lineLinks: section.lineLinks ? section.lineLinks.map((d) => ({ lineLabel: d.lineLabel, url: d.url })) : void 0,
-      charts: section.charts ? section.charts.slice() : void 0
-    });
-    for (const templRaw of orderedTemplates) {
-      const templ = normalizeSectionTemplate(templRaw);
-      const sourceId = templ.sourceSectionId || templ.id;
-      const src = sourceById.get(sourceId);
-      if (!src) {
-        if (templ.static?.lines && templ.static.lines.length > 0) {
-          out.push({
-            id: templ.id,
-            title: templ.title || templ.id,
-            group: templ.group,
-            appliesFilters: templ.appliesFilters,
-            lines: templ.static.lines.slice()
-          });
-        }
-        continue;
-      }
-      usedSourceIds.add(sourceId);
-      const next = cloneSection(src);
-      next.id = templ.id;
-      if (templ.title) next.title = templ.title;
-      if (templ.group) next.group = templ.group;
-      if (templ.appliesFilters) next.appliesFilters = templ.appliesFilters;
-      const includeLabels = templ.render?.includeLineLabels || [];
-      const excludeLabels = templ.render?.excludeLineLabels || [];
-      if (includeLabels.length > 0 || excludeLabels.length > 0) {
-        const includeSet = includeLabels.map((l) => l.trim().toLowerCase()).filter(Boolean);
-        const excludeSet = new Set(excludeLabels.map((l) => l.trim().toLowerCase()).filter(Boolean));
-        next.lines = next.lines.filter((line) => {
-          const label = getLineLabel(line).toLowerCase();
-          if (excludeSet.has(label)) return false;
-          if (includeSet.length > 0) return includeSet.includes(label);
-          return true;
-        });
-        const keepLabel = (label) => next.lines.some((line) => matchesLineLabel(line, label));
-        if (next.lineDrilldowns) next.lineDrilldowns = next.lineDrilldowns.filter((d) => keepLabel(d.lineLabel));
-        if (next.lineLinks) next.lineLinks = next.lineLinks.filter((d) => keepLabel(d.lineLabel));
-      }
-      const allCharts = next.charts ? next.charts.slice() : next.chart ? [next.chart] : [];
-      if (templ.render?.chartIndices && templ.render.chartIndices.length > 0) {
-        const picked = templ.render.chartIndices.map((idx) => allCharts[idx]).filter((c) => !!c);
-        next.charts = picked;
-        if (picked.length === 1) next.chart = picked[0];
-        else next.chart = void 0;
-      } else if (templ.render?.chartTitles && templ.render.chartTitles.length > 0) {
-        const wanted = new Set(templ.render.chartTitles.map((t) => t.toLowerCase()));
-        const picked = allCharts.filter((c) => {
-          const yl = ("yLabel" in c && typeof c.yLabel === "string" ? c.yLabel : "") || "";
-          return wanted.has(yl.toLowerCase());
-        });
-        next.charts = picked;
-        if (picked.length === 1) next.chart = picked[0];
-        else next.chart = void 0;
-      }
-      out.push(next);
-    }
-    const appendUnspecified = analysisDesign.section_layout?.appendUnspecified !== false;
-    if (appendUnspecified) {
-      for (const src of source) {
-        if (usedSourceIds.has(src.id)) continue;
-        out.push(src);
-      }
-    }
-    return out;
-  }
-  function getSectionTocLabel(section) {
-    const templ = getSectionTemplate(section);
-    if (templ?.tocLabel) return templ.tocLabel;
-    const override = analysisDesign.window?.toc?.labelOverrides?.[section.id];
-    if (typeof override === "string" && override.trim()) return override.trim();
-    if (section.id === "teammate_battle") return "Team";
-    if (section.id === "country_spotlight") return "Country Spotlight";
-    return section.title;
-  }
-  function getSectionTemplateVars(section) {
-    const vars = {};
-    if (section.id === "teammate_battle") {
-      const m = /^Team:\s*You\s*\+\s*(.+)$/i.exec(section.title.trim());
-      if (m?.[1]) vars.mateName = m[1].trim();
-    }
-    if (section.id === "country_spotlight") {
-      const m = /^Country Spotlight:\s*(.+)$/i.exec(section.title.trim());
-      if (m?.[1]) vars.countryName = m[1].trim();
-    }
-    return vars;
-  }
-  function applyTemplate(input, vars) {
-    return input.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_full, key) => vars[key] ?? "");
-  }
-  function getGraphContentDefinition(content) {
-    if (!content) return void 0;
-    return ANALYSIS_CAPABILITIES.graphContentDefinitions?.[content] || analysisDesign.graphContentDefinitions?.[content];
-  }
-  function prettifyMetricKey(metricKey) {
-    return metricKey.replace(/_/g, " ").replace(/\bavg\b/gi, "Avg").replace(/\bfivek\b/gi, "5k").replace(/\brate\b/gi, "rate").replace(/\bkm\b/gi, "km").replace(/\bsec\b/gi, "sec").replace(/\bto\b/gi, "to").replace(/\b[a-z]/g, (c) => c.toUpperCase());
-  }
-  function getMetricLabel(metricKey) {
-    const explicit = ANALYSIS_CAPABILITIES.metricLabels?.[metricKey];
-    if (typeof explicit === "string" && explicit.trim().length > 0) return explicit.trim();
-    return prettifyMetricKey(metricKey);
-  }
-  function getSectionRenderTitle(section) {
-    const templ = getSectionTemplate(section);
-    if (!templ?.titleTemplate) return section.title;
-    const rendered = applyTemplate(templ.titleTemplate, getSectionTemplateVars(section)).trim();
-    return rendered || section.title;
-  }
-  function applyGraphTemplateToChart(chart, template) {
-    if (!template) return { chart };
-    const contentDef = getGraphContentDefinition(template.content);
-    if (template.type) {
-      const wantsLine = template.type === "line";
-      const wantsBar = template.type === "bar";
-      const isLineChart = chart.type === "line" || chart.type === "selectableLine";
-      const isBarChart = chart.type === "bar" || chart.type === "selectableBar";
-      if (wantsLine && !isLineChart || wantsBar && !isBarChart) return { chart };
-    }
-    if (template.yLabel && chart.yLabel && template.yLabel !== chart.yLabel) return { chart };
-    if (chart.type === "bar") {
-      const next = {
-        ...chart,
-        orientation: template.orientation || chart.orientation,
-        initialBars: typeof template.initialBars === "number" ? template.initialBars : chart.initialBars
-      };
-      return { chart: next, title: template.title };
-    }
-    if (chart.type === "line") {
-      const next = {
-        ...chart,
-        xDomain: template.xDomain || contentDef?.xDomain || chart.xDomain,
-        maxPoints: typeof template.maxPoints === "number" ? template.maxPoints : typeof contentDef?.maxPoints === "number" ? contentDef.maxPoints : chart.maxPoints
-      };
-      return { chart: next, title: template.title };
-    }
-    if (chart.type === "selectableBar") {
-      const sourceOptions = chart.options.slice();
-      let options = sourceOptions;
-      const desiredMetricKeys = template.metrics && template.metrics.length > 0 ? template.metrics : contentDef?.metrics;
-      if (desiredMetricKeys && desiredMetricKeys.length > 0) {
-        const byKey = new Map(sourceOptions.map((o) => [o.key, o]));
-        const picked = desiredMetricKeys.map((k) => byKey.get(k)).filter((o) => !!o);
-        if (picked.length > 0) options = picked;
-      }
-      const wantedDefaultMetric = template.defaultMetric || contentDef?.defaultMetric;
-      const hasDefaultMetric = wantedDefaultMetric && options.some((o) => o.key === wantedDefaultMetric);
-      const next = {
-        ...chart,
-        options,
-        orientation: template.orientation || chart.orientation,
-        initialBars: typeof template.initialBars === "number" ? template.initialBars : chart.initialBars,
-        allowSort: typeof template.sortable === "boolean" ? template.sortable : typeof template.allowSort === "boolean" ? template.allowSort : chart.allowSort,
-        defaultSort: template.defaultSort || contentDef?.defaultSort || chart.defaultSort,
-        defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey
-      };
-      next.sorts = template.sorts || contentDef?.sorts;
-      return { chart: next, title: template.title };
-    }
-    if (chart.type === "selectableLine") {
-      const sourceOptions = chart.options.slice();
-      let options = sourceOptions;
-      const desiredMetricKeys = template.metrics && template.metrics.length > 0 ? template.metrics : contentDef?.metrics;
-      if (desiredMetricKeys && desiredMetricKeys.length > 0) {
-        const byKey = new Map(sourceOptions.map((o) => [o.key, o]));
-        const picked = desiredMetricKeys.map((k) => byKey.get(k)).filter((o) => !!o);
-        if (picked.length > 0) options = picked;
-      }
-      const wantedDefaultMetric = template.defaultMetric || contentDef?.defaultMetric;
-      const hasDefaultMetric = wantedDefaultMetric && options.some((o) => o.key === wantedDefaultMetric);
-      const next = {
-        ...chart,
-        options,
-        xDomain: template.xDomain || contentDef?.xDomain || chart.xDomain,
-        maxPoints: typeof template.maxPoints === "number" ? template.maxPoints : typeof contentDef?.maxPoints === "number" ? contentDef.maxPoints : chart.maxPoints,
-        maxCompare: typeof template.maxCompare === "number" ? template.maxCompare : chart.maxCompare,
-        defaultMetricKey: hasDefaultMetric ? wantedDefaultMetric : chart.defaultMetricKey,
-        compareMode: template.compareMode || contentDef?.compareMode || chart.compareMode,
-        compareModeOptions: template.compareModeOptions && template.compareModeOptions.length > 0 ? template.compareModeOptions : contentDef?.compareModeOptions && contentDef.compareModeOptions.length > 0 ? contentDef.compareModeOptions : chart.compareModeOptions,
-        defaultCompareMode: template.defaultCompareMode || contentDef?.defaultCompareMode || chart.defaultCompareMode,
-        compareCandidates: template.compareCandidates && template.compareCandidates.length > 0 ? template.compareCandidates : chart.compareCandidates,
-        defaultCompareKeys: template.defaultCompareKeys && template.defaultCompareKeys.length > 0 ? template.defaultCompareKeys : chart.defaultCompareKeys
-      };
-      return { chart: next, title: template.title };
-    }
-    return { chart, title: template.title };
-  }
-  function getWindowRenderTitle(data) {
-    const tpl = analysisDesign.window?.titleTemplate;
-    if (typeof tpl === "string" && tpl.trim()) {
-      const rendered = applyTemplate(tpl, { playerName: data.playerName || "" }).trim();
-      if (rendered) return rendered;
-    }
-    return data.playerName ? `GeoAnalyzr - Full Analysis for ${data.playerName}` : "GeoAnalyzr - Full Analysis";
-  }
-  function resolveTypedLine(type, currentSectionId, sourceSectionId, fallbackLabel, lookup) {
-    if (!type) return void 0;
-    const sectionId = sourceSectionId || currentSectionId;
-    const label = fallbackLabel;
-    if (!sectionId || !label) return void 0;
-    const byLabel = lookup.get(sectionId);
-    const ref = byLabel?.get(label.toLowerCase());
-    if (!ref) return void 0;
-    return {
-      label: fallbackLabel || ref.label,
-      value: ref.value,
-      drilldown: ref.drilldown,
-      link: ref.link
-    };
-  }
-  var ANALYSIS_SETTINGS_STORAGE_KEY = "geoanalyzr:analysis:settings:v1";
-  var ANALYSIS_UI_SETTINGS_META_KEY = "analysis:window-ui-settings:v1";
-  var defaultAnalysisSettings = {
-    theme: getDesignDefaultTheme(),
-    accent: normalizeAccent(getDesignDefaultAccent()),
-    visibleFilters: getDesignDefaultVisibleFilters()
-  };
-  function normalizeAccent(value) {
-    if (typeof value !== "string") return "#66a8ff";
-    const v = value.trim();
-    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#66a8ff";
-  }
-  function loadAnalysisSettings() {
-    const designVisible = analysisDesign.window?.filters?.visible;
-    try {
-      const raw = localStorage.getItem(ANALYSIS_SETTINGS_STORAGE_KEY);
-      if (!raw) return { ...defaultAnalysisSettings };
-      const parsed = JSON.parse(raw);
-      const theme = parsed.theme === "light" ? "light" : "dark";
-      const accent = normalizeAccent(parsed.accent);
-      const visibleFilters = {
-        date: parsed.visibleFilters?.date ?? designVisible?.date ?? true,
-        mode: parsed.visibleFilters?.mode ?? designVisible?.mode ?? true,
-        movement: parsed.visibleFilters?.movement ?? designVisible?.movement ?? true,
-        teammate: parsed.visibleFilters?.teammate ?? designVisible?.teammate ?? true,
-        country: parsed.visibleFilters?.country ?? designVisible?.country ?? true
-      };
-      return { theme, accent, visibleFilters };
-    } catch {
-      return { ...defaultAnalysisSettings };
-    }
-  }
-  function saveAnalysisSettings() {
-    try {
-      localStorage.setItem(ANALYSIS_SETTINGS_STORAGE_KEY, JSON.stringify(analysisSettings));
-    } catch {
-    }
-    void db.meta.put({
-      key: ANALYSIS_UI_SETTINGS_META_KEY,
-      value: analysisSettings,
-      updatedAt: Date.now()
-    }).catch(() => {
-    });
-  }
-  var analysisSettings = loadAnalysisSettings();
-  function getThemePalette() {
-    if (analysisSettings.theme === "light") {
-      return {
-        bg: "#f3f6fb",
-        text: "#111827",
-        panel: "#ffffff",
-        panelAlt: "#eef2f8",
-        border: "#d0d9e6",
-        axis: "#9aa8bf",
-        textMuted: "#4b5a73",
-        buttonBg: "#edf1f7",
-        buttonText: "#1e2a40",
-        chipBg: "#e7edf8",
-        chipText: "#2a466e"
-      };
-    }
-    return {
-      bg: "#111",
-      text: "#fff",
-      panel: "#171717",
-      panelAlt: "#121212",
-      border: "#2d2d2d",
-      axis: "#3a3a3a",
-      textMuted: "#aaa",
-      buttonBg: "#303030",
-      buttonText: "#fff",
-      chipBg: "#1f3452",
-      chipText: "#bcd7ff"
-    };
-  }
-  function gameModeSelectLabel(mode) {
-    const normalized = mode.trim().toLowerCase();
-    if (normalized === "all") return "all";
-    if (normalized === "duels" || normalized === "duel") return "Duel";
-    if (normalized === "teamduels" || normalized === "team duel" || normalized === "team_duels" || normalized === "teamduel") return "Team Duel";
-    return mode;
-  }
-  function isoDateLocal(ts) {
-    if (!ts) return "";
-    const d = new Date(ts);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-  function parseDateInput(v, endOfDay = false) {
-    if (!v) return void 0;
-    const d = /* @__PURE__ */ new Date(`${v}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}`);
-    const t = d.getTime();
-    return Number.isFinite(t) ? t : void 0;
-  }
-  function sanitizeFileName(input) {
-    return input.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/\s+/g, "_").slice(0, 80);
-  }
-  function escapeSvgText(input) {
-    return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function triggerDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 500);
-  }
-  function prepareSvgForExport(svg) {
-    const clone = svg.cloneNode(true);
-    if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    if (!clone.getAttribute("xmlns:xlink")) clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
-    let width = parseFloat(clone.getAttribute("width") || "");
-    let height = parseFloat(clone.getAttribute("height") || "");
-    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
-      const vb = (clone.getAttribute("viewBox") || "").trim().split(/\s+/).map(Number);
-      if (vb.length === 4 && Number.isFinite(vb[2]) && Number.isFinite(vb[3]) && vb[2] > 0 && vb[3] > 0) {
-        width = vb[2];
-        height = vb[3];
-      }
-    }
-    if (!Number.isFinite(width) || width <= 0) width = 1200;
-    if (!Number.isFinite(height) || height <= 0) height = 420;
-    clone.setAttribute("width", String(Math.round(width)));
-    clone.setAttribute("height", String(Math.round(height)));
-    const text = new XMLSerializer().serializeToString(clone);
-    return { text, width: Math.round(width), height: Math.round(height) };
-  }
-  async function downloadSvg(svg, title) {
-    const svgText = prepareSvgForExport(svg).text;
-    const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
-    triggerDownload(blob, `${sanitizeFileName(title)}.svg`);
-  }
-  async function downloadPng(svg, title) {
-    const prepared = prepareSvgForExport(svg);
-    const svgText = prepared.text;
-    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
-    const svgUrl = URL.createObjectURL(svgBlob);
-    try {
-      const img = new Image();
-      await new Promise((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("SVG image load failed"));
-        img.src = svgUrl;
-      });
-      const width = Math.max(1200, img.width || prepared.width || 1200);
-      const height = Math.max(420, img.height || prepared.height || 420);
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context not available");
-      ctx.fillStyle = "#101010";
-      ctx.fillRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-      if (blob) {
-        triggerDownload(blob, `${sanitizeFileName(title)}.png`);
-        return;
-      }
-      const dataUrl = canvas.toDataURL("image/png");
-      const fallbackBlob = await (await fetch(dataUrl)).blob();
-      triggerDownload(fallbackBlob, `${sanitizeFileName(title)}.png`);
-    } finally {
-      URL.revokeObjectURL(svgUrl);
-    }
-  }
-  function openChartInNewTab(svg, title, hostWindow = window) {
-    const win = hostWindow.open("about:blank", "_blank");
-    if (!win) return;
-    const svgMarkup = svg.outerHTML;
-    const safeTitle = title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    win.document.write(`<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>${safeTitle}</title>
-    <style>
-      body { margin: 0; background: #101010; color: #fff; font-family: system-ui, sans-serif; }
-      .wrap { padding: 20px; }
-      h1 { margin: 0 0 14px; font-size: 18px; }
-      .chart { border: 1px solid #2a2a2a; border-radius: 10px; padding: 8px; background: #141414; }
-      svg { width: 100%; height: auto; min-height: 420px; }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <h1>${safeTitle}</h1>
-      <div class="chart">${svgMarkup}</div>
-    </div>
-  </body>
-</html>`);
-    win.document.close();
-  }
-  function openZoomOverlay(svg, title) {
-    const doc = svg.ownerDocument;
-    const hostWindow = doc.defaultView ?? window;
-    const overlay = doc.createElement("div");
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.background = "rgba(0,0,0,0.82)";
-    overlay.style.zIndex = "1000005";
-    overlay.style.display = "grid";
-    overlay.style.placeItems = "center";
-    overlay.style.padding = "20px";
-    const card = doc.createElement("div");
-    card.style.width = "min(1500px, 96vw)";
-    card.style.maxHeight = "92vh";
-    card.style.overflow = "auto";
-    card.style.background = "#111";
-    card.style.border = "1px solid #2a2a2a";
-    card.style.borderRadius = "12px";
-    card.style.padding = "12px";
-    const header = doc.createElement("div");
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "center";
-    header.style.marginBottom = "8px";
-    header.innerHTML = `<div style="font-size:14px;font-weight:700;color:#fff">${title}</div>`;
-    const closeBtn = doc.createElement("button");
-    closeBtn.textContent = "Close";
-    closeBtn.style.background = "#303030";
-    closeBtn.style.color = "#fff";
-    closeBtn.style.border = "1px solid #444";
-    closeBtn.style.borderRadius = "6px";
-    closeBtn.style.padding = "4px 8px";
-    closeBtn.style.cursor = "pointer";
-    header.appendChild(closeBtn);
-    const svgClone = svg.cloneNode(true);
-    svgClone.setAttribute("width", "100%");
-    svgClone.setAttribute("height", "640");
-    const chartWrap = doc.createElement("div");
-    chartWrap.style.border = "1px solid #2a2a2a";
-    chartWrap.style.borderRadius = "10px";
-    chartWrap.style.background = "#121212";
-    chartWrap.style.padding = "8px";
-    chartWrap.appendChild(svgClone);
-    const actions = doc.createElement("div");
-    actions.style.display = "flex";
-    actions.style.gap = "8px";
-    actions.style.marginBottom = "10px";
-    function mkAction(label, onClick) {
-      const b = doc.createElement("button");
-      b.textContent = label;
-      b.style.background = "#214a78";
-      b.style.color = "white";
-      b.style.border = "1px solid #2f6096";
-      b.style.borderRadius = "6px";
-      b.style.padding = "5px 9px";
-      b.style.cursor = "pointer";
-      b.addEventListener("click", onClick);
-      return b;
-    }
-    actions.appendChild(mkAction("New Tab", () => openChartInNewTab(svgClone, title, hostWindow)));
-    actions.appendChild(mkAction("Save SVG", () => void downloadSvg(svgClone, title)));
-    actions.appendChild(mkAction("Save PNG", () => void downloadPng(svgClone, title)));
-    closeBtn.addEventListener("click", () => overlay.remove());
-    overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) overlay.remove();
-    });
-    card.appendChild(header);
-    card.appendChild(actions);
-    card.appendChild(chartWrap);
-    overlay.appendChild(card);
-    doc.body.appendChild(overlay);
-  }
-  function formatDrilldownDate(ts) {
-    if (typeof ts !== "number" || !Number.isFinite(ts)) return "-";
-    const d = new Date(ts);
-    const day = String(d.getDate()).padStart(2, "0");
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const year = d.getFullYear();
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${day}/${month}/${year} ${hh}:${mm}`;
-  }
-  function formatGuessDuration(sec) {
-    if (typeof sec !== "number" || !Number.isFinite(sec)) return "-";
-    return `${sec.toFixed(1)}s`;
-  }
-  function formatDamageValue(value) {
-    if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-    const rounded = Math.round(value);
-    return `${rounded >= 0 ? "+" : ""}${rounded}`;
-  }
-  var regionNameDisplay = typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
-  function countryNameFromCode(code) {
-    if (typeof code !== "string") return "-";
-    const normalized = code.trim().toLowerCase();
-    if (!normalized) return "-";
-    if (normalized.length === 2 && regionNameDisplay) {
-      try {
-        const label = regionNameDisplay.of(normalized.toUpperCase());
-        if (typeof label === "string" && label.trim()) return label;
-      } catch {
-      }
-    }
-    return normalized.toUpperCase();
-  }
-  function shortGameId(gameId) {
-    if (gameId.length <= 14) return gameId;
-    return `${gameId.slice(0, 8)}...`;
-  }
-  function openDrilldownOverlay(doc, title, subtitle, drilldown, options) {
-    if (drilldown.length === 0) return;
-    const palette = getThemePalette();
-    const overlay = doc.createElement("div");
-    overlay.style.position = "fixed";
-    overlay.style.inset = "0";
-    overlay.style.background = "rgba(0,0,0,0.66)";
-    overlay.style.zIndex = "2147483647";
-    overlay.style.display = "flex";
-    overlay.style.justifyContent = "center";
-    overlay.style.alignItems = "flex-start";
-    overlay.style.padding = "28px 16px";
-    const card = doc.createElement("div");
-    card.style.width = "min(1840px, 99vw)";
-    card.style.maxHeight = "90vh";
-    card.style.overflow = "auto";
-    card.style.background = palette.panel;
-    card.style.color = palette.text;
-    card.style.border = `1px solid ${palette.border}`;
-    card.style.borderRadius = "10px";
-    card.style.boxShadow = "0 10px 30px rgba(0,0,0,.4)";
-    card.style.padding = "10px 10px 12px";
-    const header = doc.createElement("div");
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "center";
-    header.style.marginBottom = "8px";
-    const headTitle = doc.createElement("div");
-    headTitle.style.fontWeight = "800";
-    headTitle.style.fontSize = "14px";
-    headTitle.textContent = `${title} - ${subtitle} (${drilldown.length})`;
-    header.appendChild(headTitle);
-    const closeBtn = doc.createElement("button");
-    closeBtn.textContent = "x";
-    closeBtn.style.background = "transparent";
-    closeBtn.style.color = palette.textMuted;
-    closeBtn.style.border = "none";
-    closeBtn.style.fontSize = "18px";
-    closeBtn.style.cursor = "pointer";
-    closeBtn.style.lineHeight = "1";
-    closeBtn.style.padding = "0 4px";
-    closeBtn.addEventListener("click", () => overlay.remove());
-    header.appendChild(closeBtn);
-    card.appendChild(header);
-    const table = doc.createElement("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    table.style.fontSize = "12px";
-    card.appendChild(table);
-    const defaultSortDir = {
-      date: "desc",
-      round: "desc",
-      score: "desc",
-      country: "asc",
-      result: "desc",
-      duration: "desc",
-      damage: "desc",
-      movement: "asc",
-      game_mode: "asc",
-      mate: "asc"
-    };
-    const sortLabel3 = (label, active, dir) => active ? `${label} ${dir === "asc" ? "^" : "v"}` : label;
-    let sortKey = "date";
-    let sortDir = "desc";
-    const sortable = options?.sortable !== false;
-    const selectedColumns = new Set((options?.columns || []).map((x) => x.trim().toLowerCase()).filter(Boolean));
-    const selectedColored = new Set((options?.colored || []).map((x) => x.trim().toLowerCase()).filter(Boolean));
-    const selectedClickable = new Set((options?.clickable || []).map((x) => x.trim().toLowerCase()).filter(Boolean));
-    const hasOpponentItems = options?.drilldownType ? options.drilldownType === "players" : drilldown.some((d) => typeof d.opponentId === "string" || typeof d.opponentName === "string");
-    const movementValues = [...new Set(drilldown.map((d) => d.movement).filter((x) => typeof x === "string" && x.trim().length > 0))];
-    const modeValues = [...new Set(drilldown.map((d) => d.gameMode).filter((x) => typeof x === "string" && x.trim().length > 0))];
-    const showMovement = movementValues.length > 1;
-    const showGameMode = modeValues.length > 1;
-    const showMate = drilldown.some((d) => typeof d.teammate === "string" && d.teammate.trim().length > 0);
-    const showDuration = drilldown.some((d) => typeof d.guessDurationSec === "number" && Number.isFinite(d.guessDurationSec));
-    const showDamage = drilldown.some((d) => typeof d.damage === "number" && Number.isFinite(d.damage));
-    const showGuessMaps = drilldown.some((d) => typeof d.googleMapsUrl === "string" && d.googleMapsUrl.length > 0);
-    const showStreetView = drilldown.some((d) => typeof d.streetViewUrl === "string" && d.streetViewUrl.length > 0);
-    const mkTextCell = (text, muted = false) => {
-      const span = doc.createElement("span");
-      span.textContent = text;
-      if (muted) span.style.color = palette.textMuted;
-      return span;
-    };
-    const mkLinkCell = (url) => {
-      if (!url) return mkTextCell("-", true);
-      const a = doc.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = "Open";
-      a.style.color = analysisSettings.accent;
-      return a;
-    };
-    const columns = [{ key: "date", label: "Date", sortKey: sortable ? "date" : void 0, width: "150px", render: (item) => mkTextCell(formatDrilldownDate(item.ts)) }];
-    if (hasOpponentItems) {
-      columns.push({
-        key: "opponent",
-        label: "Opponent",
-        width: "180px",
-        render: (item) => {
-          const name = item.opponentName || (item.opponentId ? shortGameId(item.opponentId) : "-");
-          const canClickOpponent = selectedClickable.size === 0 || selectedClickable.has("opponent") || selectedClickable.has("player");
-          if (canClickOpponent && item.opponentProfileUrl) {
-            const a = doc.createElement("a");
-            a.href = item.opponentProfileUrl;
-            a.target = "_blank";
-            a.rel = "noopener noreferrer";
-            a.textContent = name;
-            a.style.color = analysisSettings.accent;
-            return a;
-          }
-          return mkTextCell(name, !item.opponentName);
-        }
-      });
-      columns.push({
-        key: "result",
-        label: "Result",
-        sortKey: sortable ? "result" : void 0,
-        width: "80px",
-        render: (item) => {
-          const span = mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result);
-          if (selectedColored.has("result")) {
-            const val = item.result;
-            if (val === "W") span.style.color = "#22c55e";
-            else if (val === "L") span.style.color = "#ef4444";
-            else if (val === "T") span.style.color = palette.textMuted;
-          }
-          return span;
-        }
-      });
-      columns.push({
-        key: "matchups",
-        label: "Match-ups",
-        width: "90px",
-        render: (item) => mkTextCell(typeof item.matchups === "number" ? String(item.matchups) : "-", typeof item.matchups !== "number")
-      });
-      columns.push({
-        key: "country",
-        label: "Country",
-        sortKey: sortable ? "country" : void 0,
-        width: "160px",
-        render: (item) => mkTextCell(item.opponentCountry || countryNameFromCode(item.trueCountry))
-      });
-      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: sortable ? "game_mode" : void 0, width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-    } else {
-      columns.push({
-        key: "result",
-        label: "Result",
-        sortKey: sortable ? "result" : void 0,
-        width: "80px",
-        render: (item) => {
-          const span = mkTextCell(item.result === "W" ? "Win" : item.result === "L" ? "Loss" : item.result === "T" ? "Tie" : "-", !item.result);
-          if (selectedColored.has("result")) {
-            const val = item.result;
-            if (val === "W") span.style.color = "#22c55e";
-            else if (val === "L") span.style.color = "#ef4444";
-            else if (val === "T") span.style.color = palette.textMuted;
-          }
-          return span;
-        }
-      });
-      columns.push({ key: "round", label: "Round", sortKey: sortable ? "round" : void 0, width: "70px", render: (item) => mkTextCell(String(item.roundNumber)) });
-      columns.push({
-        key: "score",
-        label: "Score",
-        sortKey: sortable ? "score" : void 0,
-        width: "80px",
-        render: (item) => {
-          const span = mkTextCell(typeof item.score === "number" ? String(Math.round(item.score)) : "-");
-          if (selectedColored.has("score") && typeof item.score === "number") {
-            span.style.color = item.score >= 4500 ? "#22c55e" : item.score < 500 ? "#ef4444" : palette.text;
-            span.style.fontWeight = "700";
-          }
-          return span;
-        }
-      });
-      columns.push({ key: "country", label: "Country", sortKey: sortable ? "country" : void 0, width: "160px", render: (item) => mkTextCell(countryNameFromCode(item.trueCountry)) });
-      if (showDuration) columns.push({ key: "duration", label: "Guess Duration", sortKey: sortable ? "duration" : void 0, width: "120px", render: (item) => mkTextCell(formatGuessDuration(item.guessDurationSec)) });
-      if (showDamage) {
-        columns.push({
-          key: "damage",
-          label: "Damage",
-          sortKey: sortable ? "damage" : void 0,
-          width: "90px",
-          render: (item) => {
-            const span = mkTextCell(formatDamageValue(item.damage), typeof item.damage !== "number");
-            if (typeof item.damage === "number" && Number.isFinite(item.damage)) {
-              span.style.fontWeight = "700";
-              span.style.color = item.damage > 0 ? "#22c55e" : item.damage < 0 ? "#ef4444" : palette.textMuted;
-            }
-            return span;
-          }
-        });
-      }
-      if (showMovement) columns.push({ key: "movement", label: "Movement", sortKey: sortable ? "movement" : void 0, width: "110px", render: (item) => mkTextCell(item.movement || "-", !item.movement) });
-      if (showGameMode) columns.push({ key: "game_mode", label: "Game Mode", sortKey: sortable ? "game_mode" : void 0, width: "110px", render: (item) => mkTextCell(item.gameMode || "-", !item.gameMode) });
-      if (showMate) columns.push({ key: "mate", label: "Mate", sortKey: sortable ? "mate" : void 0, width: "130px", render: (item) => mkTextCell(item.teammate || "-", !item.teammate) });
-    }
-    columns.push({
-      key: "game",
-      label: "Game",
-      width: "120px",
-      muted: true,
-      render: (item) => {
-        const span = mkTextCell(shortGameId(item.gameId), true);
-        span.title = item.gameId;
-        return span;
-      }
-    });
-    if (!hasOpponentItems && showGuessMaps) columns.push({ key: "guess_maps", label: "Guess Maps", width: "110px", render: (item) => mkLinkCell(item.googleMapsUrl) });
-    if (!hasOpponentItems && showStreetView) columns.push({ key: "street_view", label: "True Street View", width: "130px", render: (item) => mkLinkCell(item.streetViewUrl) });
-    const visibleColumns = selectedColumns.size > 0 ? columns.filter((c) => selectedColumns.has(c.key.toLowerCase())) : columns;
-    const thead = doc.createElement("thead");
-    const headRow = doc.createElement("tr");
-    const thBySort = /* @__PURE__ */ new Map();
-    for (const col of visibleColumns) {
-      const th = doc.createElement("th");
-      th.textContent = col.label;
-      th.style.textAlign = "left";
-      th.style.padding = "7px 8px";
-      th.style.borderBottom = `1px solid ${palette.border}`;
-      th.style.color = palette.textMuted;
-      th.style.position = "sticky";
-      th.style.top = "0";
-      th.style.background = palette.panel;
-      if (col.width) th.style.minWidth = col.width;
-      if (col.sortKey && sortable) {
-        th.style.cursor = "pointer";
-        th.style.userSelect = "none";
-        const colSortKey = col.sortKey;
-        thBySort.set(colSortKey, th);
-        th.addEventListener("click", () => {
-          if (sortKey === colSortKey) {
-            sortDir = sortDir === "asc" ? "desc" : "asc";
-          } else {
-            sortKey = colSortKey;
-            sortDir = defaultSortDir[colSortKey];
-          }
-          shown = 0;
-          renderRows(true);
-        });
-      }
-      headRow.appendChild(th);
-    }
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-    const tbody = doc.createElement("tbody");
-    table.appendChild(tbody);
-    const getSortedItems = () => {
-      const items = drilldown.slice();
-      items.sort((a, b) => {
-        if (sortKey === "date") {
-          const av2 = typeof a.ts === "number" ? a.ts : Number.NEGATIVE_INFINITY;
-          const bv2 = typeof b.ts === "number" ? b.ts : Number.NEGATIVE_INFINITY;
-          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
-        }
-        if (sortKey === "round") {
-          const av2 = Number.isFinite(a.roundNumber) ? a.roundNumber : Number.NEGATIVE_INFINITY;
-          const bv2 = Number.isFinite(b.roundNumber) ? b.roundNumber : Number.NEGATIVE_INFINITY;
-          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
-        }
-        if (sortKey === "score") {
-          const av2 = typeof a.score === "number" ? a.score : Number.NEGATIVE_INFINITY;
-          const bv2 = typeof b.score === "number" ? b.score : Number.NEGATIVE_INFINITY;
-          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
-        }
-        if (sortKey === "result") {
-          const rv = (r) => r === "W" ? 3 : r === "T" ? 2 : r === "L" ? 1 : 0;
-          const av2 = rv(a.result);
-          const bv2 = rv(b.result);
-          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
-        }
-        if (sortKey === "duration") {
-          const av2 = typeof a.guessDurationSec === "number" ? a.guessDurationSec : Number.NEGATIVE_INFINITY;
-          const bv2 = typeof b.guessDurationSec === "number" ? b.guessDurationSec : Number.NEGATIVE_INFINITY;
-          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
-        }
-        if (sortKey === "damage") {
-          const av2 = typeof a.damage === "number" ? a.damage : Number.NEGATIVE_INFINITY;
-          const bv2 = typeof b.damage === "number" ? b.damage : Number.NEGATIVE_INFINITY;
-          return sortDir === "asc" ? av2 - bv2 : bv2 - av2;
-        }
-        if (sortKey === "movement") {
-          const av2 = (a.movement || "").toLowerCase();
-          const bv2 = (b.movement || "").toLowerCase();
-          return sortDir === "asc" ? av2.localeCompare(bv2) : bv2.localeCompare(av2);
-        }
-        if (sortKey === "game_mode") {
-          const av2 = (a.gameMode || "").toLowerCase();
-          const bv2 = (b.gameMode || "").toLowerCase();
-          return sortDir === "asc" ? av2.localeCompare(bv2) : bv2.localeCompare(av2);
-        }
-        if (sortKey === "mate") {
-          const av2 = (a.teammate || "").toLowerCase();
-          const bv2 = (b.teammate || "").toLowerCase();
-          return sortDir === "asc" ? av2.localeCompare(bv2) : bv2.localeCompare(av2);
-        }
-        const av = (a.opponentCountry || countryNameFromCode(a.trueCountry)).toLowerCase();
-        const bv = (b.opponentCountry || countryNameFromCode(b.trueCountry)).toLowerCase();
-        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-      });
-      return items;
-    };
-    const updateHeaderLabels = () => {
-      const dateTh = thBySort.get("date");
-      const roundTh = thBySort.get("round");
-      const scoreTh = thBySort.get("score");
-      const countryTh = thBySort.get("country");
-      const resultTh = thBySort.get("result");
-      const durationTh = thBySort.get("duration");
-      const damageTh = thBySort.get("damage");
-      const movementTh = thBySort.get("movement");
-      const gameModeTh = thBySort.get("game_mode");
-      const mateTh = thBySort.get("mate");
-      if (dateTh) dateTh.textContent = sortLabel3("Date", sortKey === "date", sortDir);
-      if (roundTh) roundTh.textContent = sortLabel3("Round", sortKey === "round", sortDir);
-      if (scoreTh) scoreTh.textContent = sortLabel3("Score", sortKey === "score", sortDir);
-      if (countryTh) countryTh.textContent = sortLabel3("Country", sortKey === "country", sortDir);
-      if (resultTh) resultTh.textContent = sortLabel3("Result", sortKey === "result", sortDir);
-      if (durationTh) durationTh.textContent = sortLabel3("Guess Duration", sortKey === "duration", sortDir);
-      if (damageTh) damageTh.textContent = sortLabel3("Damage", sortKey === "damage", sortDir);
-      if (movementTh) movementTh.textContent = sortLabel3("Movement", sortKey === "movement", sortDir);
-      if (gameModeTh) gameModeTh.textContent = sortLabel3("Game Mode", sortKey === "game_mode", sortDir);
-      if (mateTh) mateTh.textContent = sortLabel3("Mate", sortKey === "mate", sortDir);
-    };
-    let shown = 0;
-    const pageSize = 60;
-    const renderRows = (resetBody = false) => {
-      const sorted = getSortedItems();
-      if (resetBody) tbody.innerHTML = "";
-      const next = Math.min(sorted.length, shown + pageSize);
-      for (let i = shown; i < next; i++) {
-        const item = sorted[i];
-        const tr = doc.createElement("tr");
-        const nextItem = sorted[i + 1];
-        tr.style.borderBottom = nextItem && nextItem.gameId === item.gameId ? "none" : `1px solid ${palette.border}`;
-        for (const col of visibleColumns) {
-          const td = doc.createElement("td");
-          td.style.padding = "6px 8px";
-          if (col.width) td.style.minWidth = col.width;
-          if (col.muted) td.style.color = palette.textMuted;
-          td.appendChild(col.render(item));
-          tr.appendChild(td);
-        }
-        tbody.appendChild(tr);
-      }
-      shown = next;
-      if (shown >= sorted.length) {
-        moreBtn.remove();
-      } else {
-        if (!moreBtn.isConnected) card.appendChild(moreBtn);
-        moreBtn.textContent = `Show more (${sorted.length - shown} left)`;
-      }
-      updateHeaderLabels();
-    };
-    const moreBtn = doc.createElement("button");
-    moreBtn.textContent = "";
-    moreBtn.style.marginTop = "10px";
-    moreBtn.style.background = palette.buttonBg;
-    moreBtn.style.color = palette.buttonText;
-    moreBtn.style.border = `1px solid ${palette.border}`;
-    moreBtn.style.borderRadius = "6px";
-    moreBtn.style.padding = "5px 10px";
-    moreBtn.style.cursor = "pointer";
-    moreBtn.style.fontSize = "12px";
-    moreBtn.addEventListener("click", () => renderRows(false));
-    card.appendChild(moreBtn);
-    renderRows(true);
-    overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) overlay.remove();
-    });
-    overlay.appendChild(card);
-    doc.body.appendChild(overlay);
-  }
-  function openBarDrilldownOverlay(doc, title, barLabel, bars, barIndex, options) {
-    const bar = bars[barIndex];
-    const drilldown = bar?.drilldown || [];
-    if (!bar || drilldown.length === 0) return;
-    openDrilldownOverlay(doc, title, barLabel, drilldown, options);
-  }
-  function createChartActions(svg, title) {
-    const palette = getThemePalette();
-    const doc = svg.ownerDocument;
-    const hostWindow = doc.defaultView ?? window;
-    const row = doc.createElement("div");
-    row.style.display = "flex";
-    row.style.justifyContent = "flex-end";
-    row.style.gap = "6px";
-    row.style.marginBottom = "6px";
-    function mkBtn2(label, onClick) {
-      const b = doc.createElement("button");
-      b.textContent = label;
-      b.style.background = palette.buttonBg;
-      b.style.color = palette.buttonText;
-      b.style.border = `1px solid ${palette.border}`;
-      b.style.borderRadius = "6px";
-      b.style.padding = "3px 7px";
-      b.style.fontSize = "11px";
-      b.style.cursor = "pointer";
-      b.addEventListener("click", onClick);
-      return b;
-    }
-    row.appendChild(mkBtn2("Zoom", () => openZoomOverlay(svg, title)));
-    row.appendChild(mkBtn2("New Tab", () => openChartInNewTab(svg, title, hostWindow)));
-    row.appendChild(mkBtn2("Save SVG", () => void downloadSvg(svg, title)));
-    row.appendChild(mkBtn2("Save PNG", () => void downloadPng(svg, title)));
-    return row;
-  }
-  function aggregateLinePoints(points, opts) {
-    const xDomain = opts?.xDomain === "index" ? "index" : "time";
-    const maxPoints = typeof opts?.maxPoints === "number" && Number.isFinite(opts.maxPoints) ? Math.max(2, Math.floor(opts.maxPoints)) : 120;
-    if (points.length <= maxPoints) return points;
-    const sorted = points.slice().sort((a, b) => a.x - b.x);
-    if (xDomain === "index") {
-      const stride = Math.ceil(sorted.length / maxPoints);
-      const compressed = [];
-      for (let i = 0; i < sorted.length; i += stride) {
-        const chunk = sorted.slice(i, i + stride);
-        const avgY = chunk.reduce((acc, p) => acc + p.y, 0) / Math.max(1, chunk.length);
-        const last = chunk[chunk.length - 1];
-        compressed.push(last.label !== void 0 ? { x: last.x, y: avgY, label: last.label } : { x: last.x, y: avgY });
-      }
-      const srcLast = sorted[sorted.length - 1];
-      const cmpLast = compressed[compressed.length - 1];
-      if (!cmpLast || cmpLast.x !== srcLast.x || cmpLast.y !== srcLast.y) compressed.push(srcLast);
-      return compressed;
-    }
-    const span = Math.max(1, sorted[sorted.length - 1].x - sorted[0].x);
-    const spanDays = span / (24 * 60 * 60 * 1e3);
-    let bucketMs = 24 * 60 * 60 * 1e3;
-    if (spanDays > 365 * 2) bucketMs = 30 * 24 * 60 * 60 * 1e3;
-    else if (spanDays > 365) bucketMs = 14 * 24 * 60 * 60 * 1e3;
-    else if (spanDays > 120) bucketMs = 7 * 24 * 60 * 60 * 1e3;
-    else if (spanDays > 31) bucketMs = 2 * 24 * 60 * 60 * 1e3;
-    const buckets = /* @__PURE__ */ new Map();
-    for (const p of sorted) {
-      const key = Math.floor(p.x / bucketMs) * bucketMs;
-      const cur = buckets.get(key) || { y: p.y, x: p.x, label: p.label };
-      cur.y = p.y;
-      cur.x = p.x;
-      cur.label = p.label;
-      buckets.set(key, cur);
-    }
-    let out = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v.label !== void 0 ? { x: v.x, y: v.y, label: v.label } : { x: v.x, y: v.y });
-    const hardLimit = maxPoints;
-    if (out.length > hardLimit) {
-      const stride = Math.ceil(out.length / hardLimit);
-      const compressed = [];
-      for (let i = 0; i < out.length; i += stride) {
-        const chunk = out.slice(i, i + stride);
-        const last = chunk[chunk.length - 1];
-        compressed.push(last.label !== void 0 ? { x: last.x, y: last.y, label: last.label } : { x: last.x, y: last.y });
-      }
-      const srcLast = out[out.length - 1];
-      const cmpLast = compressed[compressed.length - 1];
-      if (!cmpLast || cmpLast.x !== srcLast.x || cmpLast.y !== srcLast.y) {
-        compressed.push(srcLast);
-      }
-      out = compressed;
-    }
-    return out.length > 1 ? out : points;
-  }
-  function renderLineChart(chart, title, doc, graphCfg) {
-    const palette = getThemePalette();
-    const chartWrap = doc.createElement("div");
-    chartWrap.style.marginBottom = "8px";
-    chartWrap.style.border = `1px solid ${palette.border}`;
-    chartWrap.style.borderRadius = "8px";
-    chartWrap.style.background = palette.panelAlt;
-    chartWrap.style.padding = "6px";
-    const chartHeading = doc.createElement("div");
-    chartHeading.textContent = title;
-    chartHeading.style.fontSize = "12px";
-    chartHeading.style.color = palette.textMuted;
-    chartHeading.style.margin = "2px 4px 6px";
-    chartWrap.appendChild(chartHeading);
-    const colorPalette = [
-      analysisSettings.accent,
-      "#ff6b6b",
-      "#22c55e",
-      "#f59e0b",
-      "#a78bfa",
-      "#06b6d4",
-      "#f97316",
-      "#84cc16",
-      "#e879f9",
-      "#60a5fa"
-    ];
-    const baseSeries = chart.series && chart.series.length > 0 ? chart.series : [{ key: "main", label: chart.yLabel || title, points: chart.points }];
-    const series = baseSeries.map((s, idx) => ({
-      ...s,
-      color: colorPalette[idx % colorPalette.length],
-      points: aggregateLinePoints(s.points, {
-        xDomain: chart.xDomain || (graphCfg?.xDomain === "index" || graphCfg?.xDomain === "time" ? graphCfg.xDomain : void 0),
-        maxPoints: typeof graphCfg?.maxPoints === "number" ? graphCfg.maxPoints : typeof chart.maxPoints === "number" ? chart.maxPoints : void 0
-      })
-    })).filter((s) => s.points.length > 1);
-    if (series.length === 0) return chartWrap;
-    const allPoints = series.flatMap((s) => s.points);
-    const w = 1500;
-    const h = 300;
-    const ml = 60;
-    const mr = 20;
-    const mt = 16;
-    const mb = 42;
-    const minX = Math.min(...allPoints.map((p) => p.x));
-    const maxX = Math.max(...allPoints.map((p) => p.x));
-    const minY = Math.min(...allPoints.map((p) => p.y));
-    const maxY = Math.max(...allPoints.map((p) => p.y));
-    const xSpan = Math.max(1, maxX - minX);
-    const ySpan = Math.max(1, maxY - minY);
-    const mapX = (x) => ml + (x - minX) / xSpan * (w - ml - mr);
-    const mapY = (y) => h - mb - (y - minY) / ySpan * (h - mt - mb);
-    let lineMarkup = "";
-    let pointMarkup = "";
-    for (let i = 0; i < series.length; i++) {
-      const s = series[i];
-      const poly = s.points.map((p) => `${mapX(p.x).toFixed(2)},${mapY(p.y).toFixed(2)}`).join(" ");
-      lineMarkup += `<polyline class="ga-line-main ga-line-${i}" fill="none" stroke="${s.color}" stroke-width="${series.length > 1 ? 2.4 : 3}" points="${poly}"><title>${escapeSvgText(`${s.label} (${title})`)}</title></polyline>`;
-      pointMarkup += s.points.map((p) => {
-        const x = mapX(p.x).toFixed(2);
-        const y = mapY(p.y).toFixed(2);
-        const label = p.label ? `${p.label} - ` : "";
-        const value = Number.isFinite(p.y) ? Math.abs(p.y) >= 100 ? p.y.toFixed(1) : p.y.toFixed(2) : String(p.y);
-        const tip = escapeSvgText(`${s.label}: ${label}${value}`);
-        return `<circle class="ga-line-point ga-line-point-${i}" cx="${x}" cy="${y}" r="${series.length > 1 ? 2 : 2.5}" fill="${s.color}"><title>${tip}</title></circle>`;
-      }).join("");
-    }
-    const yMid = (minY + maxY) / 2;
-    const startCandidates = allPoints.filter((p) => p.x === minX);
-    const endCandidates = allPoints.filter((p) => p.x === maxX);
-    const xStartLabel = startCandidates.find((p) => p.label)?.label || "";
-    const xEndLabel = endCandidates.find((p) => p.label)?.label || "";
-    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("height", "300");
-    const lineHoverCss = graphCfg?.hoverable === false ? "" : `.ga-line-main:hover { stroke-width: 4; opacity: 1; }`;
-    const pointHoverCss = graphCfg?.hoverable === false ? "" : `.ga-line-point:hover { r: 5; opacity: 1; }`;
-    svg.innerHTML = `
-    <style>
-      .ga-line-main { transition: stroke-width .12s ease, opacity .12s ease; }
-      ${lineHoverCss}
-      .ga-line-point { transition: r .12s ease, opacity .12s ease; opacity: .72; }
-      ${pointHoverCss}
-    </style>
-    <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-    ${lineMarkup}
-    ${pointMarkup}
-    <text x="${ml - 6}" y="${mapY(maxY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-    <text x="${ml - 6}" y="${mapY(yMid) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(yMid)}</text>
-    <text x="${ml - 6}" y="${mapY(minY) + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(minY)}</text>
-    <text x="${ml}" y="${h - 8}" text-anchor="start" font-size="12" fill="${palette.textMuted}">${xStartLabel}</text>
-    <text x="${w - mr}" y="${h - 8}" text-anchor="end" font-size="12" fill="${palette.textMuted}">${xEndLabel}</text>
-  `;
-    chartWrap.appendChild(createChartActions(svg, title));
-    chartWrap.appendChild(svg);
-    if (series.length > 1) {
-      const legend = doc.createElement("div");
-      legend.style.display = "flex";
-      legend.style.flexWrap = "wrap";
-      legend.style.gap = "8px 12px";
-      legend.style.margin = "6px 4px 2px";
-      for (const s of series) {
-        const item = doc.createElement("div");
-        item.style.display = "inline-flex";
-        item.style.alignItems = "center";
-        item.style.gap = "6px";
-        item.style.fontSize = "11px";
-        item.style.color = palette.textMuted;
-        const swatch = doc.createElement("span");
-        swatch.style.width = "10px";
-        swatch.style.height = "10px";
-        swatch.style.borderRadius = "2px";
-        swatch.style.background = s.color;
-        item.appendChild(swatch);
-        item.appendChild(doc.createTextNode(s.label));
-        legend.appendChild(item);
-      }
-      chartWrap.appendChild(legend);
-    }
-    return chartWrap;
-  }
-  function renderBarChart(chart, title, doc, graphCfg) {
-    const palette = getThemePalette();
-    const chartWrap = doc.createElement("div");
-    chartWrap.style.marginBottom = "8px";
-    chartWrap.style.border = `1px solid ${palette.border}`;
-    chartWrap.style.borderRadius = "8px";
-    chartWrap.style.background = palette.panelAlt;
-    chartWrap.style.padding = "6px";
-    const chartHeading = doc.createElement("div");
-    chartHeading.textContent = title;
-    chartHeading.style.fontSize = "12px";
-    chartHeading.style.color = palette.textMuted;
-    chartHeading.style.margin = "2px 4px 6px";
-    chartWrap.appendChild(chartHeading);
-    const allBars = chart.bars.slice(0, 240);
-    const isScoreDistribution = /score distribution/i.test(title);
-    const requestedInitial = graphCfg?.initialBars === "max" ? allBars.length : graphCfg?.initialBars;
-    const initialBars = Math.max(1, Math.min((typeof requestedInitial === "number" ? requestedInitial : chart.initialBars) ?? 40, allBars.length || 1));
-    let expanded = isScoreDistribution ? true : allBars.length <= initialBars;
-    if (graphCfg?.expandable === false) expanded = true;
-    const content = doc.createElement("div");
-    chartWrap.appendChild(content);
-    const render = () => {
-      content.innerHTML = "";
-      const bars = expanded ? allBars : allBars.slice(0, initialBars);
-      const horizontal = chart.orientation === "horizontal" || /avg score by country/i.test(title);
-      const w = 1700;
-      const accent = analysisSettings.accent;
-      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("width", "100%");
-      if (horizontal) {
-        const rowH = 16;
-        const barH = 14;
-        const ml = 250;
-        const mr = 22;
-        const mt = 6;
-        const mb = 10;
-        const contentHeight = mt + mb + bars.length * rowH;
-        const defaultMinHeight = Math.max(80, contentHeight);
-        const requestedMinHeight = chart.minHeight;
-        const h = Math.max(typeof requestedMinHeight === "number" ? requestedMinHeight : defaultMinHeight, contentHeight);
-        const maxY = Math.max(1, ...bars.map((b) => b.value));
-        const innerW = w - ml - mr;
-        const rects = bars.map((b, i) => {
-          const y = mt + i * rowH + (rowH - barH) / 2;
-          const bw = b.value / maxY * innerW;
-          const label = b.label.length > 34 ? `${b.label.slice(0, 34)}..` : b.label;
-          const tip = escapeSvgText(`${b.label}: ${Number.isFinite(b.value) ? b.value.toFixed(2) : b.value}`);
-          return `
-            <text x="${ml - 8}" y="${(y + barH / 2 + 3).toFixed(2)}" text-anchor="end" font-size="11" fill="${palette.textMuted}">${label}</text>
-            <rect class="ga-bar" data-bar-index="${i}" x="${ml}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${barH}" fill="${accent}" opacity="0.85">
-              <title>${tip}</title>
-            </rect>
-          `;
-        }).join("");
-        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-        svg.setAttribute("height", `${h}`);
-        const hoverCss = graphCfg?.hoverable === false ? "" : `.ga-bar:hover { opacity: 1; filter: brightness(1.15); }`;
-        svg.innerHTML = `
-        <style>
-          .ga-bar { transition: opacity .12s ease, filter .12s ease; }
-          ${hoverCss}
-        </style>
-        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-        <text x="${ml}" y="${h - 4}" text-anchor="start" font-size="10" fill="${palette.textMuted}">0</text>
-        <text x="${w - mr}" y="${h - 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-        ${rects}
-      `;
-      } else {
-        const h = 320;
-        const ml = 52;
-        const mr = 16;
-        const mt = 14;
-        const mb = 80;
-        const maxY = Math.max(1, ...bars.map((b) => b.value));
-        const innerW = w - ml - mr;
-        const innerH = h - mt - mb;
-        const step = bars.length > 0 ? innerW / bars.length : innerW;
-        const bw = Math.max(4, step * 0.66);
-        const rects = bars.map((b, i) => {
-          const x = ml + i * step + (step - bw) / 2;
-          const bh = b.value / maxY * innerH;
-          const y = mt + innerH - bh;
-          const label = isScoreDistribution ? i === 0 ? "0" : i === bars.length - 1 ? "5000" : "" : b.label.length > 14 ? `${b.label.slice(0, 14)}..` : b.label;
-          const tip = escapeSvgText(`${b.label}: ${Number.isFinite(b.value) ? b.value.toFixed(2) : b.value}`);
-          return `
-            <rect class="ga-bar" data-bar-index="${i}" x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" fill="${accent}" opacity="0.85">
-              <title>${tip}</title>
-            </rect>
-            <text x="${(x + bw / 2).toFixed(2)}" y="${h - mb + 16}" text-anchor="middle" font-size="11" fill="${palette.textMuted}">${label}</text>
-          `;
-        }).join("");
-        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-        svg.setAttribute("height", "320");
-        const hoverCss = graphCfg?.hoverable === false ? "" : `.ga-bar:hover { opacity: 1; filter: brightness(1.15); }`;
-        svg.innerHTML = `
-        <style>
-          .ga-bar { transition: opacity .12s ease, filter .12s ease; }
-          ${hoverCss}
-        </style>
-        <line x1="${ml}" y1="${h - mb}" x2="${w - mr}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-        <line x1="${ml}" y1="${mt}" x2="${ml}" y2="${h - mb}" stroke="${palette.axis}" stroke-width="1"/>
-        <text x="${ml - 5}" y="${mt + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">${Math.round(maxY)}</text>
-        <text x="${ml - 5}" y="${h - mb + 4}" text-anchor="end" font-size="10" fill="${palette.textMuted}">0</text>
-        ${rects}
-      `;
-      }
-      content.appendChild(createChartActions(svg, title));
-      if (!isScoreDistribution && graphCfg?.expandable !== false && allBars.length > initialBars) {
-        const toggle = doc.createElement("button");
-        toggle.textContent = expanded ? "Show less" : `Show all (${allBars.length})`;
-        toggle.style.background = palette.buttonBg;
-        toggle.style.color = palette.buttonText;
-        toggle.style.border = `1px solid ${palette.border}`;
-        toggle.style.borderRadius = "6px";
-        toggle.style.padding = "3px 8px";
-        toggle.style.fontSize = "11px";
-        toggle.style.cursor = "pointer";
-        toggle.style.marginBottom = "6px";
-        toggle.addEventListener("click", () => {
-          expanded = !expanded;
-          render();
-        });
-        content.appendChild(toggle);
-      }
-      content.appendChild(svg);
-      const clickableBars = svg.querySelectorAll(".ga-bar[data-bar-index]");
-      clickableBars.forEach((rect) => {
-        const idx = Number(rect.getAttribute("data-bar-index"));
-        const bar = bars[idx];
-        if (!Number.isFinite(idx) || !bar || !bar.drilldown || bar.drilldown.length === 0) return;
-        if (graphCfg?.clickable === false) return;
-        rect.style.cursor = "pointer";
-        rect.addEventListener(
-          "click",
-          () => openBarDrilldownOverlay(doc, title, bar.label, bars, idx, {
-            drilldownType: graphCfg?.drilldownType,
-            columns: graphCfg?.drilldownColumns,
-            colored: graphCfg?.drilldownColored,
-            clickable: graphCfg?.drilldownClickable,
-            sortable: graphCfg?.sortable !== false
-          })
-        );
-      });
-    };
-    render();
-    return chartWrap;
-  }
-  function renderSelectableBarChart(chart, title, doc, graphCfg) {
-    const palette = getThemePalette();
-    const allowSort = graphCfg?.sortable !== false && chart.allowSort !== false;
-    const configuredSorts = Array.isArray(chart.sorts) ? chart.sorts.filter((s) => s === "chronological" || s === "desc" || s === "asc") : ["chronological", "desc", "asc"];
-    const selectableSorts = configuredSorts.length > 0 ? configuredSorts : ["chronological", "desc", "asc"];
-    const wrap = doc.createElement("div");
-    wrap.style.marginBottom = "8px";
-    wrap.style.border = `1px solid ${palette.border}`;
-    wrap.style.borderRadius = "8px";
-    wrap.style.background = palette.panelAlt;
-    wrap.style.padding = "6px";
-    const head = doc.createElement("div");
-    head.style.display = "flex";
-    head.style.flexWrap = "wrap";
-    head.style.alignItems = "center";
-    head.style.gap = "8px";
-    head.style.margin = "2px 4px 6px";
-    wrap.appendChild(head);
-    const heading = doc.createElement("div");
-    heading.textContent = title;
-    heading.style.fontSize = "12px";
-    heading.style.fontWeight = "700";
-    heading.style.color = palette.textMuted;
-    head.appendChild(heading);
-    const metricSelect = doc.createElement("select");
-    metricSelect.style.background = palette.buttonBg;
-    metricSelect.style.color = palette.buttonText;
-    metricSelect.style.border = `1px solid ${palette.border}`;
-    metricSelect.style.borderRadius = "7px";
-    metricSelect.style.padding = "2px 6px";
-    metricSelect.style.fontSize = "11px";
-    for (const o of chart.options) {
-      const opt = doc.createElement("option");
-      opt.value = o.key;
-      opt.textContent = o.label;
-      metricSelect.appendChild(opt);
-    }
-    metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
-    head.appendChild(metricSelect);
-    let sortSelect = null;
-    if (allowSort) {
-      sortSelect = doc.createElement("select");
-      sortSelect.style.background = palette.buttonBg;
-      sortSelect.style.color = palette.buttonText;
-      sortSelect.style.border = `1px solid ${palette.border}`;
-      sortSelect.style.borderRadius = "7px";
-      sortSelect.style.padding = "2px 6px";
-      sortSelect.style.fontSize = "11px";
-      for (const key of selectableSorts) {
-        const opt = doc.createElement("option");
-        opt.value = key;
-        opt.textContent = key === "chronological" ? "Chronological" : key === "desc" ? "Descending" : "Ascending";
-        sortSelect.appendChild(opt);
-      }
-      sortSelect.value = chart.defaultSort || "chronological";
-      head.appendChild(sortSelect);
-    }
-    const content = doc.createElement("div");
-    wrap.appendChild(content);
-    const render = () => {
-      content.innerHTML = "";
-      const selected = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
-      if (!selected) return;
-      let bars = selected.bars.slice();
-      if (allowSort && sortSelect?.value === "desc") bars.sort((a, b) => b.value - a.value);
-      else if (allowSort && sortSelect?.value === "asc") bars.sort((a, b) => a.value - b.value);
-      const barChart = {
-        type: "bar",
-        yLabel: selected.label,
-        initialBars: graphCfg?.initialBars ?? chart.initialBars ?? 10,
-        orientation: graphCfg?.orientation || chart.orientation || "horizontal",
-        minHeight: chart.minHeight,
-        bars
-      };
-      content.appendChild(renderBarChart(barChart, `${title} - ${selected.label}`, doc, graphCfg));
-    };
-    metricSelect.addEventListener("change", render);
-    if (sortSelect) sortSelect.addEventListener("change", render);
-    render();
-    return wrap;
-  }
-  function renderSelectableLineChart(chart, title, doc, graphCfg) {
-    const palette = getThemePalette();
-    const maxCompare = Math.max(1, Math.min(chart.maxCompare ?? 4, 4));
-    const cumulativeKey = chart.compareCandidates.find((c) => c.key === "cumulative")?.key || chart.compareCandidates[0]?.key;
-    const compareMode = chart.compareMode || "selectors";
-    const compareModeOptions = chart.compareModeOptions && chart.compareModeOptions.length > 0 ? chart.compareModeOptions : ["per_period", "to_date", "both"];
-    const compareModeLabel = {
-      per_period: "Per period",
-      to_date: "To date",
-      both: "Both"
-    };
-    const supportsModeSelect = compareMode === "period_to_date" && !!cumulativeKey;
-    const wrap = doc.createElement("div");
-    wrap.style.marginBottom = "8px";
-    wrap.style.border = `1px solid ${palette.border}`;
-    wrap.style.borderRadius = "8px";
-    wrap.style.background = palette.panelAlt;
-    wrap.style.padding = "6px";
-    const head = doc.createElement("div");
-    head.style.display = "flex";
-    head.style.flexWrap = "wrap";
-    head.style.alignItems = "center";
-    head.style.gap = "8px";
-    head.style.margin = "2px 4px 6px";
-    wrap.appendChild(head);
-    const heading = doc.createElement("div");
-    heading.textContent = title;
-    heading.style.fontSize = "12px";
-    heading.style.fontWeight = "700";
-    heading.style.color = palette.textMuted;
-    head.appendChild(heading);
-    const metricSelect = doc.createElement("select");
-    metricSelect.style.background = palette.buttonBg;
-    metricSelect.style.color = palette.buttonText;
-    metricSelect.style.border = `1px solid ${palette.border}`;
-    metricSelect.style.borderRadius = "7px";
-    metricSelect.style.padding = "2px 6px";
-    metricSelect.style.fontSize = "11px";
-    for (const o of chart.options) {
-      const opt = doc.createElement("option");
-      opt.value = o.key;
-      opt.textContent = o.label;
-      metricSelect.appendChild(opt);
-    }
-    metricSelect.value = chart.defaultMetricKey && chart.options.some((o) => o.key === chart.defaultMetricKey) ? chart.defaultMetricKey : chart.options[0]?.key || "";
-    head.appendChild(metricSelect);
-    const compareSelectors = [];
-    let compareModeSelect = null;
-    if (supportsModeSelect) {
-      compareModeSelect = doc.createElement("select");
-      compareModeSelect.style.background = palette.buttonBg;
-      compareModeSelect.style.color = palette.buttonText;
-      compareModeSelect.style.border = `1px solid ${palette.border}`;
-      compareModeSelect.style.borderRadius = "7px";
-      compareModeSelect.style.padding = "2px 6px";
-      compareModeSelect.style.fontSize = "11px";
-      for (const mode of compareModeOptions) {
-        const opt = doc.createElement("option");
-        opt.value = mode;
-        opt.textContent = compareModeLabel[mode];
-        compareModeSelect.appendChild(opt);
-      }
-      compareModeSelect.value = chart.defaultCompareMode && compareModeOptions.includes(chart.defaultCompareMode) ? chart.defaultCompareMode : compareModeOptions.includes("to_date") ? "to_date" : compareModeOptions[0];
-      head.appendChild(compareModeSelect);
-    } else {
-      const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
-      for (let i = 0; i < maxCompare; i++) {
-        const sel = doc.createElement("select");
-        sel.style.background = palette.buttonBg;
-        sel.style.color = palette.buttonText;
-        sel.style.border = `1px solid ${palette.border}`;
-        sel.style.borderRadius = "7px";
-        sel.style.padding = "2px 6px";
-        sel.style.fontSize = "11px";
-        const noneOpt = doc.createElement("option");
-        noneOpt.value = "";
-        noneOpt.textContent = i === 0 ? "Compare series" : `Compare series ${i + 1}`;
-        sel.appendChild(noneOpt);
-        for (const c of chart.compareCandidates) {
-          const opt = doc.createElement("option");
-          opt.value = c.key;
-          opt.textContent = c.label;
-          sel.appendChild(opt);
-        }
-        sel.value = defaultCompare[i] || "";
-        compareSelectors.push(sel);
-        head.appendChild(sel);
-      }
-    }
-    const content = doc.createElement("div");
-    wrap.appendChild(content);
-    const render = () => {
-      content.innerHTML = "";
-      const selectedMetric = chart.options.find((o) => o.key === metricSelect.value) || chart.options[0];
-      if (!selectedMetric) return;
-      const keyOrder = supportsModeSelect ? (() => {
-        const mode = compareModeSelect?.value || "to_date";
-        if (mode === "per_period") return [chart.primaryKey];
-        if (mode === "to_date") return cumulativeKey ? [cumulativeKey] : [chart.primaryKey];
-        return cumulativeKey ? [chart.primaryKey, cumulativeKey] : [chart.primaryKey];
-      })() : [chart.primaryKey, ...compareSelectors.map((s) => s.value).filter((v) => v !== "")];
-      const uniqueKeys = [];
-      for (const key of keyOrder) {
-        if (!uniqueKeys.includes(key)) uniqueKeys.push(key);
-      }
-      const series = uniqueKeys.map((key) => selectedMetric.series.find((s) => s.key === key)).filter((s) => !!s);
-      if (series.length === 0) return;
-      const lineChart = {
-        type: "line",
-        yLabel: selectedMetric.label,
-        xDomain: chart.xDomain,
-        maxPoints: chart.maxPoints,
-        points: series[0].points,
-        series
-      };
-      content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc, graphCfg));
-    };
-    metricSelect.addEventListener("change", render);
-    for (const sel of compareSelectors) sel.addEventListener("change", render);
-    compareModeSelect?.addEventListener("change", render);
-    render();
-    return wrap;
-  }
-  function createUI() {
-    const iconBtn = document.createElement("button");
-    iconBtn.title = "GeoAnalyzr";
-    iconBtn.style.position = "fixed";
-    iconBtn.style.left = "16px";
-    iconBtn.style.bottom = "16px";
-    iconBtn.style.zIndex = "999999";
-    iconBtn.style.width = "44px";
-    iconBtn.style.height = "44px";
-    iconBtn.style.borderRadius = "999px";
-    iconBtn.style.border = "1px solid rgba(255,255,255,0.25)";
-    iconBtn.style.background = "rgba(20,20,20,0.95)";
-    iconBtn.style.color = "white";
-    iconBtn.style.cursor = "pointer";
-    iconBtn.style.display = "flex";
-    iconBtn.style.alignItems = "center";
-    iconBtn.style.justifyContent = "center";
-    iconBtn.style.boxShadow = "0 6px 20px rgba(0,0,0,0.35)";
-    iconBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><polyline points="3,16 9,10 14,15 21,8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="16,8 21,8 21,13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>';
-    const panel = document.createElement("div");
-    panel.style.position = "fixed";
-    panel.style.left = "16px";
-    panel.style.bottom = "68px";
-    panel.style.zIndex = "999999";
-    panel.style.width = "360px";
-    panel.style.maxWidth = "calc(100vw - 32px)";
-    panel.style.borderRadius = "14px";
-    panel.style.border = "1px solid rgba(255,255,255,0.2)";
-    panel.style.background = "rgba(20,20,20,0.92)";
-    panel.style.color = "white";
-    panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
-    panel.style.boxShadow = "0 10px 30px rgba(0,0,0,0.45)";
-    panel.style.padding = "10px";
-    panel.style.display = "none";
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.justifyContent = "space-between";
-    header.style.alignItems = "center";
-    header.style.marginBottom = "8px";
-    const title = document.createElement("div");
-    title.textContent = "GeoAnalyzr";
-    title.style.fontWeight = "700";
-    title.style.fontSize = "14px";
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "x";
-    closeBtn.style.border = "none";
-    closeBtn.style.background = "transparent";
-    closeBtn.style.color = "white";
-    closeBtn.style.cursor = "pointer";
-    closeBtn.style.fontSize = "18px";
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    const status = document.createElement("div");
-    status.textContent = "Ready.";
-    status.style.fontSize = "12px";
-    status.style.opacity = "0.95";
-    status.style.whiteSpace = "pre-wrap";
-    status.style.marginBottom = "10px";
-    function mkBtn2(label, bg) {
-      const b = document.createElement("button");
-      b.textContent = label;
-      b.style.width = "100%";
-      b.style.padding = "10px 12px";
-      b.style.borderRadius = "12px";
-      b.style.border = "1px solid rgba(255,255,255,0.25)";
-      b.style.background = bg;
-      b.style.color = "white";
-      b.style.cursor = "pointer";
-      b.style.fontWeight = "600";
-      b.style.marginTop = "8px";
-      return b;
-    }
-    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
-    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
-    const tokenBtn = mkBtn2("Set NCFA Token", "rgba(95,95,30,0.35)");
-    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
-    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
-    const counts = document.createElement("div");
-    counts.style.marginTop = "10px";
-    counts.style.fontSize = "12px";
-    counts.style.opacity = "0.92";
-    counts.style.whiteSpace = "normal";
-    counts.textContent = "Data: 0 games, 0 rounds.";
-    panel.appendChild(header);
-    panel.appendChild(status);
-    panel.appendChild(updateBtn);
-    panel.appendChild(analysisBtn);
-    panel.appendChild(tokenBtn);
-    panel.appendChild(exportBtn);
-    panel.appendChild(resetBtn);
-    panel.appendChild(counts);
-    const ANALYSIS_ROOT_ID = "geoanalyzr-analysis-root";
-    let analysisWindow = null;
-    let lastAnalysisData = null;
-    let designSourceLineLookup = /* @__PURE__ */ new Map();
-    loadPersistedAnalysisDesign().then((persisted) => {
-      if (!persisted) return;
-      replaceAnalysisDesign(persisted);
-      if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-    }).catch(() => {
-    });
-    db.meta.get(ANALYSIS_UI_SETTINGS_META_KEY).then((row) => {
-      if (!row || !row.value || typeof row.value !== "object") return;
-      const parsed = row.value;
-      analysisSettings.theme = parsed.theme === "light" ? "light" : "dark";
-      analysisSettings.accent = normalizeAccent(parsed.accent);
-      analysisSettings.visibleFilters = {
-        date: parsed.visibleFilters?.date !== false,
-        mode: parsed.visibleFilters?.mode !== false,
-        movement: parsed.visibleFilters?.movement !== false,
-        teammate: parsed.visibleFilters?.teammate !== false,
-        country: parsed.visibleFilters?.country !== false
-      };
-      if (analysisWindow) {
-        applyThemeToWindow(analysisWindow);
-        applyFilterVisibility(analysisWindow);
-        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-      }
-    }).catch(() => {
-    });
-    function styleInput(el) {
-      const palette = getThemePalette();
-      el.style.background = palette.panelAlt;
-      el.style.color = palette.text;
-      el.style.border = `1px solid ${palette.border}`;
-      el.style.borderRadius = "8px";
-      el.style.padding = "6px 8px";
-    }
-    function applyThemeToWindow(refs) {
-      const palette = getThemePalette();
-      refs.doc.body.style.background = palette.bg;
-      refs.doc.body.style.color = palette.text;
-      refs.shell.style.background = palette.bg;
-      refs.controls.style.background = palette.bg;
-      refs.controls.style.borderBottom = `1px solid ${palette.border}`;
-      refs.tocWrap.style.background = palette.panelAlt;
-      refs.tocWrap.style.borderBottom = `1px solid ${palette.border}`;
-      styleInput(refs.fromInput);
-      styleInput(refs.toInput);
-      styleInput(refs.modeSelect);
-      styleInput(refs.movementSelect);
-      styleInput(refs.teammateSelect);
-      styleInput(refs.countrySelect);
-      refs.settingsBtn.style.background = palette.buttonBg;
-      refs.settingsBtn.style.color = palette.buttonText;
-      refs.settingsBtn.style.border = `1px solid ${palette.border}`;
-    }
-    function applyFilterVisibility(refs) {
-      const visible = analysisSettings.visibleFilters;
-      refs.filterControlWrappers.date.style.display = visible.date ? "inline-flex" : "none";
-      refs.filterControlWrappers.mode.style.display = visible.mode ? "inline-flex" : "none";
-      refs.filterControlWrappers.movement.style.display = visible.movement ? "inline-flex" : "none";
-      refs.filterControlWrappers.teammate.style.display = visible.teammate ? "inline-flex" : "none";
-      refs.filterControlWrappers.country.style.display = visible.country ? "inline-flex" : "none";
-    }
-    function getActiveFilterPayload(refs) {
-      const movement = refs.movementSelect.value === "moving" || refs.movementSelect.value === "no_move" || refs.movementSelect.value === "nmpz" || refs.movementSelect.value === "unknown" ? refs.movementSelect.value : "all";
-      return {
-        fromTs: parseDateInput(refs.fromInput.value, false),
-        toTs: parseDateInput(refs.toInput.value, true),
-        gameMode: refs.modeSelect.value || "all",
-        movementType: movement,
-        teammateId: refs.teammateSelect.value || "all",
-        country: refs.countrySelect.value || "all"
-      };
-    }
-    function downloadJsonFile(doc, value, fileName) {
-      const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = doc.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 500);
-    }
-    function openSettingsOverlay(refs) {
-      const doc = refs.doc;
-      const palette = getThemePalette();
-      const overlay = refs.settingsOverlay;
-      overlay.innerHTML = "";
-      overlay.style.display = "flex";
-      const modal = doc.createElement("div");
-      modal.style.width = "min(1200px, 96vw)";
-      modal.style.maxHeight = "88vh";
-      modal.style.overflow = "auto";
-      modal.style.background = palette.panel;
-      modal.style.border = `1px solid ${palette.border}`;
-      modal.style.borderRadius = "12px";
-      modal.style.boxShadow = "0 14px 45px rgba(0,0,0,0.45)";
-      const head = doc.createElement("div");
-      head.style.display = "flex";
-      head.style.alignItems = "center";
-      head.style.justifyContent = "space-between";
-      head.style.padding = "10px 12px";
-      head.style.borderBottom = `1px solid ${palette.border}`;
-      const title2 = doc.createElement("div");
-      title2.textContent = "Analysis Settings";
-      title2.style.fontWeight = "700";
-      const closeBtn2 = doc.createElement("button");
-      closeBtn2.textContent = "Close";
-      closeBtn2.style.background = palette.buttonBg;
-      closeBtn2.style.color = palette.buttonText;
-      closeBtn2.style.border = `1px solid ${palette.border}`;
-      closeBtn2.style.borderRadius = "8px";
-      closeBtn2.style.padding = "5px 10px";
-      closeBtn2.style.cursor = "pointer";
-      closeBtn2.addEventListener("click", () => {
-        overlay.style.display = "none";
-      });
-      head.appendChild(title2);
-      head.appendChild(closeBtn2);
-      const tabBar = doc.createElement("div");
-      tabBar.style.display = "flex";
-      tabBar.style.gap = "8px";
-      tabBar.style.flexWrap = "wrap";
-      tabBar.style.padding = "10px 12px";
-      tabBar.style.borderBottom = `1px solid ${palette.border}`;
-      const body = doc.createElement("div");
-      body.style.padding = "12px";
-      body.style.display = "grid";
-      body.style.gap = "12px";
-      const mkTabButton = (label) => {
-        const b = doc.createElement("button");
-        b.textContent = label;
-        b.style.background = palette.buttonBg;
-        b.style.color = palette.buttonText;
-        b.style.border = `1px solid ${palette.border}`;
-        b.style.borderRadius = "999px";
-        b.style.padding = "5px 10px";
-        b.style.cursor = "pointer";
-        return b;
-      };
-      const appearanceBtn = mkTabButton("Appearance");
-      const filterBtn = mkTabButton("Filter");
-      const layoutBtn = mkTabButton("Layout");
-      const templateBtn = mkTabButton("Template");
-      tabBar.append(appearanceBtn, filterBtn, layoutBtn, templateBtn);
-      const tabContent = doc.createElement("div");
-      body.appendChild(tabContent);
-      const rerenderAll = () => {
-        saveAnalysisSettings();
-        applyThemeToWindow(refs);
-        applyFilterVisibility(refs);
-        if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-      };
-      const mkFieldWrap = (labelText) => {
-        const wrap = doc.createElement("label");
-        wrap.style.display = "grid";
-        wrap.style.gap = "6px";
-        const lbl = doc.createElement("span");
-        lbl.textContent = labelText;
-        lbl.style.fontSize = "12px";
-        lbl.style.color = palette.textMuted;
-        wrap.appendChild(lbl);
-        return wrap;
-      };
-      const ensureSectionContainer = (sectionId) => {
-        let section = (analysisDesign.sections || []).find((s) => s.id === sectionId);
-        if (!section) {
-          section = {
-            id: sectionId,
-            sourceSectionId: sectionId,
-            title: sectionId,
-            tocLabel: sectionId,
-            objects: { singles: [], boxes: [], graphs: [] },
-            layout: { mode: "object_order", order: [], preserveUnmatched: false }
-          };
-          analysisDesign.sections = [...analysisDesign.sections || [], section];
-        }
-        if (!section.objects) section.objects = { singles: [], boxes: [], graphs: [] };
-        if (!section.objects.singles) section.objects.singles = [];
-        if (!section.objects.boxes) section.objects.boxes = [];
-        if (!section.objects.graphs) section.objects.graphs = [];
-        if (!section.layout || section.layout.mode !== "object_order") {
-          section.layout = { mode: "object_order", order: [], preserveUnmatched: false };
-        }
-        return section;
-      };
-      const renderAppearanceTab = () => {
-        tabContent.innerHTML = "";
-        const grid = doc.createElement("div");
-        grid.style.display = "grid";
-        grid.style.gridTemplateColumns = "repeat(auto-fit,minmax(220px,1fr))";
-        grid.style.gap = "10px";
-        const themeWrap = mkFieldWrap("Theme");
-        const themeSelect = doc.createElement("select");
-        styleInput(themeSelect);
-        themeSelect.innerHTML = `<option value="dark">Dark</option><option value="light">Light</option>`;
-        themeSelect.value = analysisSettings.theme;
-        themeSelect.addEventListener("change", () => {
-          analysisSettings.theme = themeSelect.value === "light" ? "light" : "dark";
-          if (!analysisDesign.window) analysisDesign.window = {};
-          if (!analysisDesign.window.appearance) analysisDesign.window.appearance = {};
-          if (!analysisDesign.window.appearance.defaults) analysisDesign.window.appearance.defaults = {};
-          analysisDesign.window.appearance.defaults.theme = analysisSettings.theme;
-          persistAnalysisDesign();
-          rerenderAll();
-        });
-        themeWrap.appendChild(themeSelect);
-        const accentWrap = mkFieldWrap("Graph accent");
-        const accentInput = doc.createElement("input");
-        accentInput.type = "color";
-        accentInput.value = analysisSettings.accent;
-        accentInput.style.width = "56px";
-        accentInput.style.height = "34px";
-        accentInput.style.borderRadius = "8px";
-        accentInput.style.border = `1px solid ${palette.border}`;
-        accentInput.style.cursor = "pointer";
-        accentInput.addEventListener("input", () => {
-          analysisSettings.accent = normalizeAccent(accentInput.value);
-          if (!analysisDesign.window) analysisDesign.window = {};
-          if (!analysisDesign.window.appearance) analysisDesign.window.appearance = {};
-          if (!analysisDesign.window.appearance.defaults) analysisDesign.window.appearance.defaults = {};
-          analysisDesign.window.appearance.defaults.accent = analysisSettings.accent;
-          persistAnalysisDesign();
-          rerenderAll();
-        });
-        accentWrap.appendChild(accentInput);
-        grid.append(themeWrap, accentWrap);
-        tabContent.appendChild(grid);
-      };
-      const renderFilterTab = () => {
-        tabContent.innerHTML = "";
-        const keys2 = [
-          { key: "date", label: "Date (From/To)" },
-          { key: "mode", label: "Game mode" },
-          { key: "movement", label: "Movement" },
-          { key: "teammate", label: "Teammate" },
-          { key: "country", label: "Country" }
-        ];
-        const box = doc.createElement("div");
-        box.style.display = "grid";
-        box.style.gap = "8px";
-        for (const item of keys2) {
-          const row = doc.createElement("label");
-          row.style.display = "inline-flex";
-          row.style.alignItems = "center";
-          row.style.gap = "8px";
-          row.style.fontSize = "14px";
-          const input = doc.createElement("input");
-          input.type = "checkbox";
-          input.checked = analysisSettings.visibleFilters[item.key];
-          input.addEventListener("change", () => {
-            analysisSettings.visibleFilters[item.key] = input.checked;
-            if (!analysisDesign.window) analysisDesign.window = {};
-            const winAny = analysisDesign.window;
-            if (!winAny.filters) winAny.filters = {};
-            winAny.filters.visible = { ...analysisSettings.visibleFilters };
-            persistAnalysisDesign();
-            rerenderAll();
-          });
-          const text = doc.createElement("span");
-          text.textContent = item.label;
-          row.append(input, text);
-          box.appendChild(row);
-        }
-        tabContent.appendChild(box);
-      };
-      const renderLayoutTab = () => {
-        tabContent.innerHTML = "";
-        const wrapper = doc.createElement("div");
-        wrapper.style.display = "grid";
-        wrapper.style.gap = "14px";
-        const betaNote = doc.createElement("div");
-        betaNote.textContent = "Beta feature: Layout editing can create invalid templates. Please change carefully.";
-        betaNote.style.fontSize = "12px";
-        betaNote.style.color = palette.textMuted;
-        betaNote.style.background = palette.panelAlt;
-        betaNote.style.border = `1px solid ${palette.border}`;
-        betaNote.style.borderRadius = "8px";
-        betaNote.style.padding = "8px 10px";
-        wrapper.appendChild(betaNote);
-        const styleActionBtn = (b) => {
-          b.style.background = palette.buttonBg;
-          b.style.color = palette.buttonText;
-          b.style.border = `1px solid ${palette.border}`;
-          b.style.borderRadius = "8px";
-          b.style.padding = "5px 10px";
-          b.style.cursor = "pointer";
-        };
-        const parseCsv = (value) => value.split(",").map((v) => v.trim()).filter((v) => v.length > 0);
-        const collectSuggestions = () => {
-          const singleTypes = /* @__PURE__ */ new Set();
-          const graphContents = /* @__PURE__ */ new Set();
-          const metrics = /* @__PURE__ */ new Set();
-          const addType = (t) => {
-            if (typeof t === "string" && t.trim()) singleTypes.add(t.trim());
-          };
-          const walkSections = (list) => {
-            for (const sec of list || []) {
-              for (const s of sec.objects?.singles || []) addType(s.type);
-              for (const b of sec.objects?.boxes || []) {
-                for (const ln of b.lines || []) addType(ln.type);
-              }
-              for (const g of sec.objects?.graphs || []) {
-                if (typeof g.content === "string" && g.content.trim()) graphContents.add(g.content.trim());
-              }
-            }
-          };
-          walkSections(DEFAULT_ANALYSIS_DESIGN.sections);
-          walkSections(analysisDesign.sections);
-          for (const s of ANALYSIS_CAPABILITIES.singleTypeSuggestions || []) {
-            addType(s);
-          }
-          for (const [contentKey, def] of Object.entries(ANALYSIS_CAPABILITIES.graphContentDefinitions || {})) {
-            graphContents.add(contentKey);
-            for (const m of def.metrics || []) if (typeof m === "string" && m.trim()) metrics.add(m.trim());
-          }
-          for (const m of ANALYSIS_CAPABILITIES.metricSuggestions || []) {
-            if (typeof m === "string" && m.trim()) metrics.add(m.trim());
-          }
-          return {
-            singleTypes: Array.from(singleTypes).sort(),
-            graphContents: Array.from(graphContents).sort(),
-            metrics: Array.from(metrics).sort()
-          };
-        };
-        const suggestionData = collectSuggestions();
-        const createDataList = (id, values) => {
-          const dl = doc.createElement("datalist");
-          dl.id = id;
-          for (const v of values) {
-            const opt = doc.createElement("option");
-            opt.value = v;
-            dl.appendChild(opt);
-          }
-          wrapper.appendChild(dl);
-        };
-        createDataList("ga-single-type-suggestions", suggestionData.singleTypes);
-        createDataList("ga-graph-content-suggestions", suggestionData.graphContents);
-        createDataList("ga-metric-suggestions", suggestionData.metrics);
-        const sections = analysisDesign.sections || [];
-        const currentOrder = Array.isArray(analysisDesign.section_layout?.order) ? analysisDesign.section_layout.order.slice() : sections.map((s) => s.id);
-        if (!analysisDesign.section_layout) analysisDesign.section_layout = {};
-        if (!analysisDesign.section_layout.order || analysisDesign.section_layout.order.length === 0) {
-          analysisDesign.section_layout.order = currentOrder.slice();
-        }
-        const orderTitle = doc.createElement("div");
-        orderTitle.textContent = "Sections order";
-        orderTitle.style.fontWeight = "700";
-        wrapper.appendChild(orderTitle);
-        const resetLayoutBtn = doc.createElement("button");
-        resetLayoutBtn.textContent = "Reset Layout";
-        styleActionBtn(resetLayoutBtn);
-        resetLayoutBtn.addEventListener("click", () => {
-          analysisDesign.sections = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN.sections || []));
-          analysisDesign.section_layout = JSON.parse(JSON.stringify(DEFAULT_ANALYSIS_DESIGN.section_layout || {}));
-          rebuildSectionTemplateCache();
-          persistAnalysisDesign();
-          renderLayoutTab();
-          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-        });
-        wrapper.appendChild(resetLayoutBtn);
-        const orderList = doc.createElement("div");
-        orderList.style.display = "grid";
-        orderList.style.gap = "6px";
-        wrapper.appendChild(orderList);
-        const renderSectionOrderRows = () => {
-          orderList.innerHTML = "";
-          const order = analysisDesign.section_layout?.order || [];
-          for (let i = 0; i < order.length; i++) {
-            const sectionId = order[i];
-            const row = doc.createElement("div");
-            row.style.display = "grid";
-            row.style.gridTemplateColumns = "1fr auto auto auto";
-            row.style.gap = "6px";
-            row.style.alignItems = "center";
-            row.style.background = palette.panelAlt;
-            row.style.border = `1px solid ${palette.border}`;
-            row.style.borderRadius = "8px";
-            row.style.padding = "6px 8px";
-            row.style.cursor = "pointer";
-            const label = doc.createElement("div");
-            const section = sections.find((s) => s.id === sectionId);
-            label.textContent = section?.title || sectionId;
-            label.style.fontSize = "13px";
-            label.style.fontWeight = "600";
-            label.style.color = palette.text;
-            const upBtn = doc.createElement("button");
-            upBtn.textContent = "Up";
-            upBtn.disabled = i === 0;
-            const downBtn = doc.createElement("button");
-            downBtn.textContent = "Down";
-            downBtn.disabled = i === order.length - 1;
-            const removeBtn = doc.createElement("button");
-            removeBtn.textContent = "Hide";
-            for (const b of [upBtn, downBtn, removeBtn]) {
-              b.style.background = palette.buttonBg;
-              b.style.color = palette.buttonText;
-              b.style.border = `1px solid ${palette.border}`;
-              b.style.borderRadius = "6px";
-              b.style.padding = "3px 8px";
-              b.style.cursor = "pointer";
-              b.addEventListener("click", (ev) => ev.stopPropagation());
-            }
-            upBtn.addEventListener("click", () => {
-              const arr = analysisDesign.section_layout?.order || [];
-              [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
-              rebuildSectionTemplateCache();
-              persistAnalysisDesign();
-              renderSectionOrderRows();
-              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-            });
-            downBtn.addEventListener("click", () => {
-              const arr = analysisDesign.section_layout?.order || [];
-              [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
-              rebuildSectionTemplateCache();
-              persistAnalysisDesign();
-              renderSectionOrderRows();
-              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-            });
-            removeBtn.addEventListener("click", () => {
-              analysisDesign.section_layout.order = (analysisDesign.section_layout.order || []).filter((x) => x !== sectionId);
-              rebuildSectionTemplateCache();
-              persistAnalysisDesign();
-              renderSectionOrderRows();
-              if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-            });
-            row.append(label, upBtn, downBtn, removeBtn);
-            orderList.appendChild(row);
-            const editor = doc.createElement("div");
-            editor.style.display = "none";
-            editor.style.background = palette.panel;
-            editor.style.border = `1px solid ${palette.border}`;
-            editor.style.borderRadius = "8px";
-            editor.style.padding = "8px";
-            editor.style.marginTop = "-2px";
-            editor.style.marginBottom = "6px";
-            editor.style.display = "none";
-            editor.style.gap = "8px";
-            editor.style.gridTemplateColumns = "minmax(220px, 1fr) minmax(220px, 1fr)";
-            orderList.appendChild(editor);
-            const toggleEditor = () => {
-              if (editor.style.display !== "none") {
-                editor.style.display = "none";
-                editor.innerHTML = "";
-                return;
-              }
-              editor.innerHTML = "";
-              editor.style.display = "grid";
-              const currentSection = (analysisDesign.sections || []).find((s) => s.id === sectionId);
-              if (!currentSection) return;
-              const mkField2 = (name, input, colSpan = false) => {
-                const wrap = doc.createElement("label");
-                wrap.style.display = "grid";
-                wrap.style.gap = "4px";
-                if (colSpan) wrap.style.gridColumn = "1 / -1";
-                const n = doc.createElement("span");
-                n.textContent = name;
-                n.style.fontSize = "12px";
-                n.style.color = palette.textMuted;
-                wrap.append(n, input);
-                editor.appendChild(wrap);
-              };
-              const mkCheck = (text, checked) => {
-                const wrap = doc.createElement("label");
-                wrap.style.display = "inline-flex";
-                wrap.style.alignItems = "center";
-                wrap.style.gap = "6px";
-                wrap.style.fontSize = "12px";
-                const cb = doc.createElement("input");
-                cb.type = "checkbox";
-                cb.checked = checked;
-                const t = doc.createElement("span");
-                t.textContent = text;
-                wrap.append(cb, t);
-                return { wrap, cb };
-              };
-              const idInput = doc.createElement("input");
-              idInput.value = currentSection.id;
-              styleInput(idInput);
-              mkField2("Section id", idInput);
-              const titleInput = doc.createElement("input");
-              titleInput.value = currentSection.title || "";
-              styleInput(titleInput);
-              mkField2("Label / title", titleInput);
-              const tocInput = doc.createElement("input");
-              tocInput.value = currentSection.tocLabel || "";
-              styleInput(tocInput);
-              mkField2("TOC label", tocInput);
-              const sourceInput = doc.createElement("input");
-              sourceInput.value = currentSection.sourceSectionId || "";
-              sourceInput.placeholder = "(same as section id)";
-              styleInput(sourceInput);
-              mkField2("Source section id", sourceInput);
-              const possibleFiltersInput = doc.createElement("input");
-              possibleFiltersInput.value = (currentSection.appliesFilters || []).join(", ");
-              possibleFiltersInput.placeholder = "date, mode, movement, teammate, country";
-              styleInput(possibleFiltersInput);
-              mkField2("Possible filters (csv)", possibleFiltersInput, true);
-              const forcedWrap = doc.createElement("div");
-              forcedWrap.style.gridColumn = "1 / -1";
-              forcedWrap.style.display = "grid";
-              forcedWrap.style.gridTemplateColumns = "1fr 1fr";
-              forcedWrap.style.gap = "8px";
-              const forcedTitle = doc.createElement("div");
-              forcedTitle.textContent = "Forced filters";
-              forcedTitle.style.gridColumn = "1 / -1";
-              forcedTitle.style.fontWeight = "600";
-              forcedWrap.appendChild(forcedTitle);
-              const forcedTeammate = mkCheck("Force teammate selector", !!currentSection.requiredFilters?.teammate?.enabled);
-              const forcedCountry = mkCheck("Force country selector", !!currentSection.requiredFilters?.country?.enabled);
-              forcedWrap.append(forcedTeammate.wrap, forcedCountry.wrap);
-              const teammateLabelInput = doc.createElement("input");
-              teammateLabelInput.value = currentSection.requiredFilters?.teammate?.label || "Mate";
-              styleInput(teammateLabelInput);
-              const countryLabelInput = doc.createElement("input");
-              countryLabelInput.value = currentSection.requiredFilters?.country?.label || "Country";
-              styleInput(countryLabelInput);
-              const teammateLblWrap = doc.createElement("label");
-              teammateLblWrap.style.display = "grid";
-              teammateLblWrap.style.gap = "4px";
-              const teammateLblText = doc.createElement("span");
-              teammateLblText.textContent = "Forced teammate label";
-              teammateLblText.style.fontSize = "12px";
-              teammateLblText.style.color = palette.textMuted;
-              teammateLblWrap.append(teammateLblText, teammateLabelInput);
-              const countryLblWrap = doc.createElement("label");
-              countryLblWrap.style.display = "grid";
-              countryLblWrap.style.gap = "4px";
-              const countryLblText = doc.createElement("span");
-              countryLblText.textContent = "Forced country label";
-              countryLblText.style.fontSize = "12px";
-              countryLblText.style.color = palette.textMuted;
-              countryLblWrap.append(countryLblText, countryLabelInput);
-              forcedWrap.append(teammateLblWrap, countryLblWrap);
-              editor.appendChild(forcedWrap);
-              const saveBtn = doc.createElement("button");
-              saveBtn.textContent = "Save section";
-              styleActionBtn(saveBtn);
-              saveBtn.style.gridColumn = "1 / -1";
-              saveBtn.addEventListener("click", () => {
-                const nextId = idInput.value.trim();
-                if (!nextId) return;
-                if (nextId !== currentSection.id && (analysisDesign.sections || []).some((s) => s.id === nextId)) return;
-                const oldId = currentSection.id;
-                currentSection.id = nextId;
-                currentSection.title = titleInput.value.trim() || nextId;
-                currentSection.tocLabel = tocInput.value.trim() || void 0;
-                currentSection.sourceSectionId = sourceInput.value.trim() || void 0;
-                currentSection.appliesFilters = parseCsv(possibleFiltersInput.value);
-                currentSection.requiredFilters = {
-                  teammate: {
-                    enabled: forcedTeammate.cb.checked,
-                    default: "top_games",
-                    label: teammateLabelInput.value.trim() || "Mate"
-                  },
-                  country: {
-                    enabled: forcedCountry.cb.checked,
-                    default: "top_rounds",
-                    label: countryLabelInput.value.trim() || "Country"
-                  }
-                };
-                if (!currentSection.requiredFilters.teammate?.enabled) {
-                  delete currentSection.requiredFilters.teammate;
-                }
-                if (!currentSection.requiredFilters.country?.enabled) {
-                  delete currentSection.requiredFilters.country;
-                }
-                if (!currentSection.requiredFilters.teammate && !currentSection.requiredFilters.country) {
-                  currentSection.requiredFilters = void 0;
-                }
-                if (nextId !== oldId) {
-                  const arr = analysisDesign.section_layout?.order || [];
-                  for (let j = 0; j < arr.length; j++) {
-                    if (arr[j] === oldId) arr[j] = nextId;
-                  }
-                }
-                rebuildSectionTemplateCache();
-                persistAnalysisDesign();
-                renderLayoutTab();
-                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-              });
-              editor.appendChild(saveBtn);
-            };
-            row.addEventListener("click", toggleEditor);
-          }
-        };
-        renderSectionOrderRows();
-        const addWrap = doc.createElement("div");
-        addWrap.style.display = "inline-flex";
-        addWrap.style.gap = "8px";
-        addWrap.style.alignItems = "center";
-        const addSelect = doc.createElement("select");
-        styleInput(addSelect);
-        const hidden = sections.filter((s) => !(analysisDesign.section_layout?.order || []).includes(s.id));
-        for (const s of hidden) {
-          const opt = doc.createElement("option");
-          opt.value = s.id;
-          opt.textContent = s.title || s.id;
-          addSelect.appendChild(opt);
-        }
-        const addBtn = doc.createElement("button");
-        addBtn.textContent = "Add section";
-        addBtn.style.background = palette.buttonBg;
-        addBtn.style.color = palette.buttonText;
-        addBtn.style.border = `1px solid ${palette.border}`;
-        addBtn.style.borderRadius = "8px";
-        addBtn.style.padding = "5px 10px";
-        addBtn.style.cursor = "pointer";
-        addBtn.addEventListener("click", () => {
-          const id = addSelect.value;
-          if (!id) return;
-          const order = analysisDesign.section_layout?.order || [];
-          if (!order.includes(id)) order.push(id);
-          analysisDesign.section_layout.order = order;
-          rebuildSectionTemplateCache();
-          persistAnalysisDesign();
-          renderLayoutTab();
-          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-        });
-        addWrap.append(addSelect, addBtn);
-        wrapper.appendChild(addWrap);
-        const createWrap = doc.createElement("div");
-        createWrap.style.display = "inline-flex";
-        createWrap.style.flexWrap = "wrap";
-        createWrap.style.gap = "8px";
-        createWrap.style.alignItems = "center";
-        const newId = doc.createElement("input");
-        newId.placeholder = "new_section_id";
-        styleInput(newId);
-        const newTitle = doc.createElement("input");
-        newTitle.placeholder = "Section title";
-        styleInput(newTitle);
-        const sourceSelect = doc.createElement("select");
-        styleInput(sourceSelect);
-        const srcDefault = doc.createElement("option");
-        srcDefault.value = "";
-        srcDefault.textContent = "Source section (optional)";
-        sourceSelect.appendChild(srcDefault);
-        for (const s of sections) {
-          const opt = doc.createElement("option");
-          opt.value = s.id;
-          opt.textContent = s.title || s.id;
-          sourceSelect.appendChild(opt);
-        }
-        const createBtn = doc.createElement("button");
-        createBtn.textContent = "Create section";
-        createBtn.style.background = palette.buttonBg;
-        createBtn.style.color = palette.buttonText;
-        createBtn.style.border = `1px solid ${palette.border}`;
-        createBtn.style.borderRadius = "8px";
-        createBtn.style.padding = "5px 10px";
-        createBtn.style.cursor = "pointer";
-        createBtn.addEventListener("click", () => {
-          const id = newId.value.trim();
-          if (!id) return;
-          if ((analysisDesign.sections || []).some((s) => s.id === id)) return;
-          const created = {
-            id,
-            sourceSectionId: sourceSelect.value || void 0,
-            title: newTitle.value.trim() || id,
-            tocLabel: newTitle.value.trim() || id,
-            objects: { singles: [], boxes: [], graphs: [] },
-            layout: { mode: "object_order", order: [], preserveUnmatched: false }
-          };
-          analysisDesign.sections = [...analysisDesign.sections || [], created];
-          const order = analysisDesign.section_layout?.order || [];
-          order.push(id);
-          if (!analysisDesign.section_layout) analysisDesign.section_layout = {};
-          analysisDesign.section_layout.order = order;
-          newId.value = "";
-          newTitle.value = "";
-          sourceSelect.value = "";
-          rebuildSectionTemplateCache();
-          persistAnalysisDesign();
-          renderLayoutTab();
-          if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-        });
-        createWrap.append(newId, newTitle, sourceSelect, createBtn);
-        wrapper.appendChild(createWrap);
-        const compTitle = doc.createElement("div");
-        compTitle.textContent = "Components by section";
-        compTitle.style.fontWeight = "700";
-        wrapper.appendChild(compTitle);
-        const detailsWrap = doc.createElement("div");
-        detailsWrap.style.display = "grid";
-        detailsWrap.style.gap = "8px";
-        wrapper.appendChild(detailsWrap);
-        for (const sectionId of analysisDesign.section_layout?.order || []) {
-          const section = ensureSectionContainer(sectionId);
-          const inferBoxLinesFromSource = (boxObj) => {
-            if ((boxObj.lines || []).length > 0) return;
-            const sourceId = boxObj.lines?.[0]?.sourceSectionId || section.sourceSectionId || section.id;
-            const sourceSection = (lastAnalysisData?.sections || []).find((s) => s.id === sourceId);
-            if (!sourceSection || !sourceSection.lines || sourceSection.lines.length === 0) return;
-            const headerIdx = sourceSection.lines.findIndex((line) => matchesLineLabel(line, boxObj.title));
-            if (headerIdx < 0) return;
-            const inferred = [];
-            for (let i = headerIdx + 1; i < sourceSection.lines.length; i++) {
-              const raw = sourceSection.lines[i];
-              if (/:\s*$/.test(raw.trim())) break;
-              const label = getLineLabel(raw);
-              if (!label) continue;
-              inferred.push({ label, sourceSectionId: sourceId });
-            }
-            if (inferred.length > 0) boxObj.lines = inferred;
-          };
-          const details = doc.createElement("details");
-          details.style.border = `1px solid ${palette.border}`;
-          details.style.borderRadius = "8px";
-          details.style.background = palette.panelAlt;
-          const summary = doc.createElement("summary");
-          summary.textContent = section.title || section.id;
-          summary.style.cursor = "pointer";
-          summary.style.padding = "8px";
-          summary.style.fontWeight = "600";
-          details.appendChild(summary);
-          const list = doc.createElement("div");
-          list.style.display = "grid";
-          list.style.gap = "6px";
-          list.style.padding = "8px";
-          details.appendChild(list);
-          const order = section.layout?.mode === "object_order" ? section.layout.order : [];
-          const renderComponentRows = () => {
-            list.innerHTML = "";
-            for (let i = 0; i < order.length; i++) {
-              const entry = order[i];
-              const row = doc.createElement("div");
-              row.style.display = "grid";
-              row.style.gridTemplateColumns = "1fr auto auto auto";
-              row.style.gap = "6px";
-              row.style.alignItems = "center";
-              row.style.background = palette.panel;
-              row.style.border = `1px solid ${palette.border}`;
-              row.style.borderRadius = "6px";
-              row.style.padding = "6px 8px";
-              row.style.cursor = "pointer";
-              const label = doc.createElement("div");
-              label.textContent = `${entry.kind}: ${entry.id}`;
-              label.style.fontSize = "12px";
-              label.style.fontWeight = "600";
-              const upBtn = doc.createElement("button");
-              upBtn.textContent = "Up";
-              upBtn.disabled = i === 0;
-              const downBtn = doc.createElement("button");
-              downBtn.textContent = "Down";
-              downBtn.disabled = i === order.length - 1;
-              const delBtn = doc.createElement("button");
-              delBtn.textContent = "Remove";
-              for (const b of [upBtn, downBtn, delBtn]) {
-                styleActionBtn(b);
-                b.style.padding = "3px 8px";
-                b.addEventListener("click", (ev) => ev.stopPropagation());
-              }
-              upBtn.addEventListener("click", () => {
-                [order[i - 1], order[i]] = [order[i], order[i - 1]];
-                rebuildSectionTemplateCache();
-                persistAnalysisDesign();
-                renderComponentRows();
-                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-              });
-              downBtn.addEventListener("click", () => {
-                [order[i + 1], order[i]] = [order[i], order[i + 1]];
-                rebuildSectionTemplateCache();
-                persistAnalysisDesign();
-                renderComponentRows();
-                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-              });
-              delBtn.addEventListener("click", () => {
-                order.splice(i, 1);
-                if (entry.kind === "single") section.objects.singles = (section.objects.singles || []).filter((x) => x.id !== entry.id);
-                if (entry.kind === "box") section.objects.boxes = (section.objects.boxes || []).filter((x) => x.id !== entry.id);
-                if (entry.kind === "graph") section.objects.graphs = (section.objects.graphs || []).filter((x) => x.id !== entry.id);
-                rebuildSectionTemplateCache();
-                persistAnalysisDesign();
-                renderComponentRows();
-                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-              });
-              row.append(label, upBtn, downBtn, delBtn);
-              list.appendChild(row);
-              const findSingle = () => (section.objects?.singles || []).find((x) => x.id === entry.id);
-              const findBox = () => (section.objects?.boxes || []).find((x) => x.id === entry.id);
-              const findGraph = () => (section.objects?.graphs || []).find((x) => x.id === entry.id);
-              const editor = doc.createElement("div");
-              editor.style.display = "none";
-              editor.style.background = palette.panelAlt;
-              editor.style.border = `1px solid ${palette.border}`;
-              editor.style.borderRadius = "8px";
-              editor.style.padding = "8px";
-              editor.style.marginTop = "-2px";
-              editor.style.marginBottom = "6px";
-              editor.style.display = "none";
-              editor.style.gap = "8px";
-              editor.style.gridTemplateColumns = "minmax(180px, 1fr) minmax(180px, 1fr)";
-              list.appendChild(editor);
-              const closeEditor = () => {
-                editor.style.display = "none";
-                editor.innerHTML = "";
-              };
-              const saveAndRefresh = () => {
-                rebuildSectionTemplateCache();
-                persistAnalysisDesign();
-                renderComponentRows();
-                if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-              };
-              row.addEventListener("click", () => {
-                if (editor.style.display !== "none") {
-                  closeEditor();
-                  return;
-                }
-                editor.innerHTML = "";
-                editor.style.display = "grid";
-                const title3 = doc.createElement("div");
-                title3.textContent = `Edit ${entry.kind}: ${entry.id}`;
-                title3.style.gridColumn = "1 / -1";
-                title3.style.fontWeight = "700";
-                editor.appendChild(title3);
-                const mkField2 = (name, input, colSpan = false) => {
-                  const wrap = doc.createElement("label");
-                  wrap.style.display = "grid";
-                  wrap.style.gap = "4px";
-                  if (colSpan) wrap.style.gridColumn = "1 / -1";
-                  const n = doc.createElement("span");
-                  n.textContent = name;
-                  n.style.fontSize = "12px";
-                  n.style.color = palette.textMuted;
-                  wrap.append(n, input);
-                  editor.appendChild(wrap);
-                };
-                if (entry.kind === "single") {
-                  const single = findSingle();
-                  if (!single) return;
-                  const labelInput2 = doc.createElement("input");
-                  labelInput2.value = single.label || "";
-                  styleInput(labelInput2);
-                  mkField2("Label", labelInput2);
-                  const typeInputSingle = doc.createElement("input");
-                  typeInputSingle.value = single.type || "";
-                  typeInputSingle.placeholder = "type (optional)";
-                  typeInputSingle.setAttribute("list", "ga-single-type-suggestions");
-                  styleInput(typeInputSingle);
-                  mkField2("Type", typeInputSingle);
-                  const saveBtn2 = doc.createElement("button");
-                  saveBtn2.textContent = "Save";
-                  styleActionBtn(saveBtn2);
-                  saveBtn2.style.gridColumn = "1 / -1";
-                  saveBtn2.addEventListener("click", () => {
-                    single.label = labelInput2.value.trim() || single.id;
-                    single.type = typeInputSingle.value.trim() || void 0;
-                    saveAndRefresh();
-                  });
-                  editor.appendChild(saveBtn2);
-                  return;
-                }
-                if (entry.kind === "box") {
-                  const boxObj = findBox();
-                  if (!boxObj) return;
-                  inferBoxLinesFromSource(boxObj);
-                  const titleInput2 = doc.createElement("input");
-                  titleInput2.value = boxObj.title || "";
-                  styleInput(titleInput2);
-                  mkField2("Box title", titleInput2, true);
-                  const linesWrap = doc.createElement("div");
-                  linesWrap.style.gridColumn = "1 / -1";
-                  linesWrap.style.display = "grid";
-                  linesWrap.style.gap = "0";
-                  const linesTitle = doc.createElement("div");
-                  linesTitle.textContent = "Lines";
-                  linesTitle.style.fontWeight = "600";
-                  linesTitle.style.marginBottom = "4px";
-                  linesWrap.appendChild(linesTitle);
-                  const lines = boxObj.lines || [];
-                  const renderLines = () => {
-                    while (linesWrap.children.length > 1) linesWrap.removeChild(linesWrap.lastChild);
-                    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-                      const line = lines[lineIdx];
-                      const row2 = doc.createElement("div");
-                      row2.style.display = "grid";
-                      row2.style.gridTemplateColumns = "1fr 1fr auto";
-                      row2.style.gap = "6px";
-                      row2.style.padding = "4px 0";
-                      const input = doc.createElement("input");
-                      input.value = line.label || "";
-                      styleInput(input);
-                      input.addEventListener("input", () => {
-                        line.label = input.value;
-                      });
-                      const typeInputLine = doc.createElement("input");
-                      typeInputLine.value = line.type || "";
-                      typeInputLine.placeholder = "type (optional)";
-                      typeInputLine.setAttribute("list", "ga-single-type-suggestions");
-                      styleInput(typeInputLine);
-                      typeInputLine.addEventListener("input", () => {
-                        line.type = typeInputLine.value;
-                      });
-                      const rm = doc.createElement("button");
-                      rm.textContent = "Remove";
-                      styleActionBtn(rm);
-                      rm.addEventListener("click", () => {
-                        lines.splice(lineIdx, 1);
-                        renderLines();
-                      });
-                      row2.append(input, typeInputLine, rm);
-                      linesWrap.appendChild(row2);
-                    }
-                    const addLineBtn = doc.createElement("button");
-                    addLineBtn.textContent = "Add line";
-                    styleActionBtn(addLineBtn);
-                    addLineBtn.addEventListener("click", () => {
-                      lines.push({ label: "New line", type: void 0 });
-                      renderLines();
-                    });
-                    linesWrap.appendChild(addLineBtn);
-                  };
-                  renderLines();
-                  editor.appendChild(linesWrap);
-                  const saveBtn2 = doc.createElement("button");
-                  saveBtn2.textContent = "Save";
-                  styleActionBtn(saveBtn2);
-                  saveBtn2.style.gridColumn = "1 / -1";
-                  saveBtn2.addEventListener("click", () => {
-                    boxObj.title = titleInput2.value.trim() || boxObj.id;
-                    for (const ln of lines) {
-                      ln.label = (ln.label || "").trim() || "Line";
-                      const lnt = ln;
-                      lnt.type = lnt.type?.trim() || void 0;
-                    }
-                    boxObj.lines = lines;
-                    saveAndRefresh();
-                  });
-                  editor.appendChild(saveBtn2);
-                  return;
-                }
-                const graphObj = findGraph();
-                if (!graphObj) return;
-                const titleInput = doc.createElement("input");
-                titleInput.value = graphObj.title || "";
-                styleInput(titleInput);
-                mkField2("Title", titleInput, true);
-                const contentInput = doc.createElement("input");
-                contentInput.value = graphObj.content || "";
-                contentInput.setAttribute("list", "ga-graph-content-suggestions");
-                styleInput(contentInput);
-                mkField2("Content key", contentInput);
-                const typeSelect = doc.createElement("select");
-                const graphTypeOptions = ANALYSIS_CAPABILITIES.graphTypes && ANALYSIS_CAPABILITIES.graphTypes.length > 0 ? ANALYSIS_CAPABILITIES.graphTypes : ["line", "bar"];
-                typeSelect.innerHTML = `<option value="">(auto)</option>${graphTypeOptions.map((t) => `<option value="${t}">${t}</option>`).join("")}`;
-                typeSelect.value = graphObj.type === "line" || graphObj.type === "selectableLine" ? "line" : graphObj.type === "bar" || graphObj.type === "selectableBar" || graphObj.type === "horizontalBar" || graphObj.type === "verticalBar" ? "bar" : "";
-                styleInput(typeSelect);
-                mkField2("Type", typeSelect);
-                const orientationSelect = doc.createElement("select");
-                orientationSelect.innerHTML = `<option value="">(auto)</option><option value="horizontal">horizontal</option><option value="vertical">vertical</option>`;
-                orientationSelect.value = graphObj.orientation || "";
-                styleInput(orientationSelect);
-                mkField2("Orientation", orientationSelect);
-                const xDomainSelect = doc.createElement("select");
-                xDomainSelect.innerHTML = `<option value="">(auto)</option><option value="time">time</option><option value="index">index</option>`;
-                xDomainSelect.value = graphObj.xDomain || "";
-                styleInput(xDomainSelect);
-                mkField2("X domain", xDomainSelect);
-                const metricsWrap = doc.createElement("div");
-                metricsWrap.style.gridColumn = "1 / -1";
-                metricsWrap.style.display = "grid";
-                metricsWrap.style.gap = "6px";
-                const metricsTitle = doc.createElement("div");
-                metricsTitle.textContent = "Metrics";
-                metricsTitle.style.fontSize = "12px";
-                metricsTitle.style.color = palette.textMuted;
-                metricsWrap.appendChild(metricsTitle);
-                const hasExplicitMetrics = Array.isArray(graphObj.metrics) && graphObj.metrics.length > 0;
-                let metricsTouched = false;
-                const selectedMetrics = new Set((graphObj.metrics || []).filter((m) => !!m));
-                const defaultMetricSelect = doc.createElement("select");
-                styleInput(defaultMetricSelect);
-                const metricsHint = doc.createElement("div");
-                metricsHint.style.fontSize = "11px";
-                metricsHint.style.color = palette.textMuted;
-                const metricsAccent = normalizeAccent(analysisSettings.accent);
-                const resolveAllowedMetrics = () => {
-                  const contentKey = (contentInput.value || graphObj.content || "").trim();
-                  const def = getGraphContentDefinition(contentKey);
-                  const allowed = (def?.metrics || []).filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim());
-                  if (allowed.length > 0) return Array.from(new Set(allowed));
-                  return suggestionData.metrics;
-                };
-                const metricsDetails = doc.createElement("details");
-                metricsDetails.style.border = `1px solid ${palette.border}`;
-                metricsDetails.style.borderRadius = "8px";
-                metricsDetails.style.background = palette.panelAlt;
-                const metricsSummary = doc.createElement("summary");
-                metricsSummary.style.cursor = "pointer";
-                metricsSummary.style.padding = "8px 10px";
-                metricsSummary.style.fontSize = "12px";
-                metricsSummary.style.userSelect = "none";
-                const metricsList = doc.createElement("div");
-                metricsList.style.display = "grid";
-                metricsList.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))";
-                metricsList.style.gap = "6px";
-                metricsList.style.padding = "8px";
-                metricsList.style.borderTop = `1px solid ${palette.border}`;
-                metricsList.style.maxHeight = "260px";
-                metricsList.style.overflowY = "auto";
-                metricsDetails.append(metricsSummary, metricsList);
-                const renderDefaultMetricOptions = (allowed) => {
-                  const prev = defaultMetricSelect.value || graphObj.defaultMetric || "";
-                  defaultMetricSelect.innerHTML = "";
-                  const auto = doc.createElement("option");
-                  auto.value = "";
-                  auto.textContent = "(auto)";
-                  defaultMetricSelect.appendChild(auto);
-                  for (const metric of allowed) {
-                    const opt = doc.createElement("option");
-                    opt.value = metric;
-                    opt.textContent = getMetricLabel(metric);
-                    defaultMetricSelect.appendChild(opt);
-                  }
-                  if ([...defaultMetricSelect.options].some((o) => o.value === prev)) {
-                    defaultMetricSelect.value = prev;
-                  }
-                };
-                const makeMetricPillBg = () => {
-                  const r = Number.parseInt(metricsAccent.slice(1, 3), 16);
-                  const g = Number.parseInt(metricsAccent.slice(3, 5), 16);
-                  const b = Number.parseInt(metricsAccent.slice(5, 7), 16);
-                  return Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b) ? `rgba(${r}, ${g}, ${b}, 0.22)` : palette.buttonBg;
-                };
-                const renderMetricChecklist = () => {
-                  metricsList.innerHTML = "";
-                  const allowedMetrics = resolveAllowedMetrics().sort();
-                  const allowedSet = new Set(allowedMetrics);
-                  const contentKey = (contentInput.value || graphObj.content || "").trim();
-                  metricsHint.textContent = contentKey ? `Content "${contentKey}": ${allowedMetrics.length} metrics available` : `Metrics available: ${allowedMetrics.length}`;
-                  for (const metric of Array.from(selectedMetrics)) {
-                    if (!allowedMetrics.includes(metric)) selectedMetrics.delete(metric);
-                  }
-                  if (!hasExplicitMetrics && !metricsTouched && allowedMetrics.length > 0) {
-                    selectedMetrics.clear();
-                    for (const metric of allowedMetrics) selectedMetrics.add(metric);
-                  }
-                  const defaultPool = selectedMetrics.size > 0 ? allowedMetrics.filter((m) => selectedMetrics.has(m)) : allowedMetrics;
-                  renderDefaultMetricOptions(defaultPool.length > 0 ? defaultPool : allowedMetrics);
-                  const allMetrics = allowedMetrics;
-                  const activeBg = makeMetricPillBg();
-                  for (const metric of allMetrics) {
-                    const isAllowed = allowedSet.has(metric);
-                    const isActive = selectedMetrics.has(metric);
-                    const rowMetric = doc.createElement("button");
-                    rowMetric.type = "button";
-                    const metricLabel = getMetricLabel(metric);
-                    rowMetric.textContent = metricLabel === metric ? metricLabel : `${metricLabel} (${metric})`;
-                    rowMetric.style.textAlign = "left";
-                    rowMetric.style.fontSize = "12px";
-                    rowMetric.style.padding = "6px 8px";
-                    rowMetric.style.borderRadius = "8px";
-                    rowMetric.style.border = `1px solid ${palette.border}`;
-                    rowMetric.style.background = isActive ? activeBg : palette.panel;
-                    rowMetric.style.color = isAllowed ? palette.text : palette.textMuted;
-                    rowMetric.style.opacity = isAllowed ? "1" : "0.5";
-                    rowMetric.style.cursor = isAllowed ? "pointer" : "not-allowed";
-                    rowMetric.title = isAllowed ? "Click to toggle metric" : "Metric not available for selected content";
-                    if (isAllowed) {
-                      rowMetric.addEventListener("click", () => {
-                        metricsTouched = true;
-                        if (selectedMetrics.has(metric)) selectedMetrics.delete(metric);
-                        else selectedMetrics.add(metric);
-                        renderMetricChecklist();
-                      });
-                    }
-                    metricsList.appendChild(rowMetric);
-                  }
-                  const selectedSorted = Array.from(selectedMetrics).sort();
-                  metricsSummary.textContent = selectedSorted.length > 0 ? `Metrics (${selectedSorted.length}): ${selectedSorted.map(getMetricLabel).join(", ")}` : "Metrics (0): defaulting to all allowed from capabilities";
-                };
-                renderMetricChecklist();
-                contentInput.addEventListener("input", () => renderMetricChecklist());
-                const defaultMetricWrap = doc.createElement("label");
-                defaultMetricWrap.style.display = "grid";
-                defaultMetricWrap.style.gap = "4px";
-                defaultMetricWrap.style.gridColumn = "1 / -1";
-                const defaultMetricText = doc.createElement("span");
-                defaultMetricText.textContent = "Default metric";
-                defaultMetricText.style.fontSize = "12px";
-                defaultMetricText.style.color = palette.textMuted;
-                defaultMetricWrap.append(defaultMetricText, defaultMetricSelect);
-                metricsWrap.append(metricsHint, metricsDetails, defaultMetricWrap);
-                editor.appendChild(metricsWrap);
-                const defaultSortSelect = doc.createElement("select");
-                defaultSortSelect.innerHTML = `<option value="">(auto)</option><option value="chronological">chronological</option><option value="desc">descending</option><option value="asc">ascending</option>`;
-                defaultSortSelect.value = graphObj.defaultSort || "";
-                styleInput(defaultSortSelect);
-                mkField2("Default sort", defaultSortSelect);
-                const sortsInput = doc.createElement("input");
-                sortsInput.value = (graphObj.sorts || []).join(", ");
-                styleInput(sortsInput);
-                mkField2("Sorts (csv)", sortsInput);
-                const defaultInitialBars = graphObj.initialBars === "max" ? "max" : String(graphObj.initialBars ?? "");
-                const initialBarsInput = doc.createElement("input");
-                initialBarsInput.value = defaultInitialBars;
-                initialBarsInput.placeholder = "number | max";
-                styleInput(initialBarsInput);
-                mkField2("Initial bars", initialBarsInput);
-                const maxPointsInput = doc.createElement("input");
-                maxPointsInput.value = typeof graphObj.maxPoints === "number" ? String(graphObj.maxPoints) : "";
-                maxPointsInput.placeholder = "line max points";
-                styleInput(maxPointsInput);
-                mkField2("Max points", maxPointsInput);
-                const maxCompareInput = doc.createElement("input");
-                maxCompareInput.value = typeof graphObj.maxCompare === "number" ? String(graphObj.maxCompare) : "";
-                maxCompareInput.placeholder = "1..4 (optional)";
-                styleInput(maxCompareInput);
-                mkField2("Max compare", maxCompareInput);
-                const compareModeSelect = doc.createElement("select");
-                compareModeSelect.innerHTML = `<option value="">(auto)</option><option value="selectors">selectors</option><option value="period_to_date">period_to_date</option>`;
-                compareModeSelect.value = graphObj.compareMode || "";
-                styleInput(compareModeSelect);
-                mkField2("Compare mode", compareModeSelect);
-                const compareModeOptionsInput = doc.createElement("input");
-                compareModeOptionsInput.value = (graphObj.compareModeOptions || []).join(", ");
-                compareModeOptionsInput.placeholder = "per_period, to_date, both";
-                styleInput(compareModeOptionsInput);
-                mkField2("Compare mode options (csv)", compareModeOptionsInput);
-                const defaultCompareModeSelect = doc.createElement("select");
-                defaultCompareModeSelect.innerHTML = `<option value="">(auto)</option><option value="per_period">per_period</option><option value="to_date">to_date</option><option value="both">both</option>`;
-                defaultCompareModeSelect.value = graphObj.defaultCompareMode || "";
-                styleInput(defaultCompareModeSelect);
-                mkField2("Default compare mode", defaultCompareModeSelect);
-                const compareCandidatesInput = doc.createElement("input");
-                compareCandidatesInput.value = (graphObj.compareCandidates || []).map((c) => `${c.key}:${c.label}`).join(", ");
-                compareCandidatesInput.placeholder = "key:label, key2:label2";
-                styleInput(compareCandidatesInput);
-                mkField2("Compare candidates (csv)", compareCandidatesInput, true);
-                const defaultCompareKeysInput = doc.createElement("input");
-                defaultCompareKeysInput.value = (graphObj.defaultCompareKeys || []).join(", ");
-                styleInput(defaultCompareKeysInput);
-                mkField2("Default compare keys (csv)", defaultCompareKeysInput, true);
-                const drilldownTypeSelect = doc.createElement("select");
-                drilldownTypeSelect.innerHTML = `<option value="">(none)</option><option value="rounds">rounds</option><option value="players">players</option>`;
-                drilldownTypeSelect.value = graphObj.drilldownType || "";
-                styleInput(drilldownTypeSelect);
-                mkField2("Drilldown type", drilldownTypeSelect);
-                const drilldownColsInput = doc.createElement("input");
-                drilldownColsInput.value = (graphObj.drilldownColumns || []).join(", ");
-                styleInput(drilldownColsInput);
-                mkField2("Drilldown columns (csv)", drilldownColsInput, true);
-                const drilldownColoredInput = doc.createElement("input");
-                drilldownColoredInput.value = (graphObj.drilldownColored || []).join(", ");
-                styleInput(drilldownColoredInput);
-                mkField2("Colored columns (csv)", drilldownColoredInput);
-                const drilldownClickableInput = doc.createElement("input");
-                drilldownClickableInput.value = (graphObj.drilldownClickable || []).join(", ");
-                styleInput(drilldownClickableInput);
-                mkField2("Clickable columns (csv)", drilldownClickableInput);
-                const mkCheck = (labelText, checked) => {
-                  const wrap = doc.createElement("label");
-                  wrap.style.display = "inline-flex";
-                  wrap.style.alignItems = "center";
-                  wrap.style.gap = "6px";
-                  const cb = doc.createElement("input");
-                  cb.type = "checkbox";
-                  cb.checked = checked;
-                  const t = doc.createElement("span");
-                  t.textContent = labelText;
-                  wrap.append(cb, t);
-                  return { wrap, cb };
-                };
-                const clickable = mkCheck("clickable", !!graphObj.clickable);
-                const hoverable = mkCheck("hoverable", !!graphObj.hoverable);
-                const sortable = mkCheck("sortable", graphObj.sortable !== false);
-                const expandable = mkCheck("expandable", !!graphObj.expandable);
-                for (const w of [clickable.wrap, hoverable.wrap, sortable.wrap, expandable.wrap]) {
-                  w.style.fontSize = "12px";
-                  editor.appendChild(w);
-                }
-                const saveBtn = doc.createElement("button");
-                saveBtn.textContent = "Save";
-                styleActionBtn(saveBtn);
-                saveBtn.style.gridColumn = "1 / -1";
-                saveBtn.addEventListener("click", () => {
-                  graphObj.title = titleInput.value.trim() || graphObj.id;
-                  graphObj.content = contentInput.value.trim() || void 0;
-                  graphObj.type = typeSelect.value || void 0;
-                  graphObj.orientation = orientationSelect.value || void 0;
-                  graphObj.xDomain = xDomainSelect.value || void 0;
-                  graphObj.defaultMetric = defaultMetricSelect.value.trim() || void 0;
-                  const allowedMetrics = resolveAllowedMetrics().sort();
-                  const allAllowedSelected = allowedMetrics.length > 0 && selectedMetrics.size === allowedMetrics.length && allowedMetrics.every((m) => selectedMetrics.has(m));
-                  if (!hasExplicitMetrics && !metricsTouched || allAllowedSelected || selectedMetrics.size === 0) {
-                    graphObj.metrics = void 0;
-                  } else {
-                    graphObj.metrics = Array.from(selectedMetrics);
-                  }
-                  graphObj.defaultSort = defaultSortSelect.value || void 0;
-                  graphObj.sorts = parseCsv(sortsInput.value).filter(
-                    (s) => s === "chronological" || s === "desc" || s === "asc"
-                  );
-                  const ibRaw = initialBarsInput.value.trim().toLowerCase();
-                  if (!ibRaw) graphObj.initialBars = void 0;
-                  else if (ibRaw === "max") graphObj.initialBars = "max";
-                  else {
-                    const n = Number.parseInt(ibRaw, 10);
-                    graphObj.initialBars = Number.isFinite(n) ? n : void 0;
-                  }
-                  const maxCompareRaw = Number.parseInt(maxCompareInput.value.trim(), 10);
-                  graphObj.maxCompare = Number.isFinite(maxCompareRaw) ? Math.max(1, Math.min(4, maxCompareRaw)) : void 0;
-                  const maxPointsRaw = Number.parseInt(maxPointsInput.value.trim(), 10);
-                  graphObj.maxPoints = Number.isFinite(maxPointsRaw) ? Math.max(2, maxPointsRaw) : void 0;
-                  graphObj.compareMode = compareModeSelect.value || void 0;
-                  graphObj.compareModeOptions = parseCsv(compareModeOptionsInput.value).filter(
-                    (x) => x === "per_period" || x === "to_date" || x === "both"
-                  );
-                  if (!graphObj.compareModeOptions || graphObj.compareModeOptions.length === 0) graphObj.compareModeOptions = void 0;
-                  graphObj.defaultCompareMode = defaultCompareModeSelect.value || void 0;
-                  graphObj.compareCandidates = parseCsv(compareCandidatesInput.value).map((entry2) => {
-                    const idx = entry2.indexOf(":");
-                    if (idx <= 0) {
-                      const key2 = entry2.trim();
-                      return key2 ? { key: key2, label: key2 } : void 0;
-                    }
-                    const key = entry2.slice(0, idx).trim();
-                    const label2 = entry2.slice(idx + 1).trim();
-                    if (!key) return void 0;
-                    return { key, label: label2 || key };
-                  }).filter((x) => !!x);
-                  if (!graphObj.compareCandidates || graphObj.compareCandidates.length === 0) graphObj.compareCandidates = void 0;
-                  graphObj.defaultCompareKeys = parseCsv(defaultCompareKeysInput.value);
-                  if (!graphObj.defaultCompareKeys || graphObj.defaultCompareKeys.length === 0) graphObj.defaultCompareKeys = void 0;
-                  graphObj.drilldownType = drilldownTypeSelect.value || void 0;
-                  graphObj.drilldownColumns = parseCsv(drilldownColsInput.value);
-                  graphObj.drilldownColored = parseCsv(drilldownColoredInput.value);
-                  graphObj.drilldownClickable = parseCsv(drilldownClickableInput.value);
-                  graphObj.clickable = clickable.cb.checked;
-                  graphObj.hoverable = hoverable.cb.checked;
-                  graphObj.sortable = sortable.cb.checked;
-                  graphObj.expandable = expandable.cb.checked;
-                  saveAndRefresh();
-                });
-                editor.appendChild(saveBtn);
-              });
-            }
-          };
-          renderComponentRows();
-          const addRow = doc.createElement("div");
-          addRow.style.display = "inline-flex";
-          addRow.style.flexWrap = "wrap";
-          addRow.style.gap = "8px";
-          addRow.style.padding = "8px";
-          const kindSelect = doc.createElement("select");
-          kindSelect.innerHTML = `<option value="single">Single</option><option value="box">Box</option><option value="graph">Graph</option>`;
-          styleInput(kindSelect);
-          const idInput = doc.createElement("input");
-          idInput.placeholder = "component_id";
-          styleInput(idInput);
-          const labelInput = doc.createElement("input");
-          labelInput.placeholder = "label / title";
-          styleInput(labelInput);
-          const typeInput = doc.createElement("input");
-          typeInput.placeholder = "type (optional)";
-          typeInput.setAttribute("list", "ga-single-type-suggestions");
-          styleInput(typeInput);
-          const addCompBtn = doc.createElement("button");
-          addCompBtn.textContent = "Add component";
-          addCompBtn.style.background = palette.buttonBg;
-          addCompBtn.style.color = palette.buttonText;
-          addCompBtn.style.border = `1px solid ${palette.border}`;
-          addCompBtn.style.borderRadius = "8px";
-          addCompBtn.style.padding = "5px 10px";
-          addCompBtn.style.cursor = "pointer";
-          addCompBtn.addEventListener("click", () => {
-            const kind = kindSelect.value || "single";
-            const id = idInput.value.trim();
-            if (!id) return;
-            const label = labelInput.value.trim() || id;
-            const type = typeInput.value.trim();
-            if (kind === "single") {
-              section.objects.singles.push({ id, label, type: type || void 0 });
-            } else if (kind === "box") {
-              section.objects.boxes.push({ id, title: label, lines: [] });
-            } else {
-              section.objects.graphs.push({ id, title: label, type });
-            }
-            order.push({ kind, id });
-            idInput.value = "";
-            labelInput.value = "";
-            typeInput.value = "";
-            rebuildSectionTemplateCache();
-            persistAnalysisDesign();
-            renderComponentRows();
-            if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-          });
-          addRow.append(kindSelect, idInput, labelInput, typeInput, addCompBtn);
-          details.appendChild(addRow);
-          detailsWrap.appendChild(details);
-        }
-        tabContent.appendChild(wrapper);
-      };
-      const renderTemplateTab = () => {
-        tabContent.innerHTML = "";
-        const box = doc.createElement("div");
-        box.style.display = "grid";
-        box.style.gap = "10px";
-        const betaNote = doc.createElement("div");
-        betaNote.textContent = "Beta feature: Template import/export may break layout if fields are invalid. Keep backups.";
-        betaNote.style.fontSize = "12px";
-        betaNote.style.color = palette.textMuted;
-        betaNote.style.background = palette.panelAlt;
-        betaNote.style.border = `1px solid ${palette.border}`;
-        betaNote.style.borderRadius = "8px";
-        betaNote.style.padding = "8px 10px";
-        box.appendChild(betaNote);
-        const downloadTemplateBtn = doc.createElement("button");
-        downloadTemplateBtn.textContent = "Download Current Template";
-        const downloadSchemaBtn = doc.createElement("button");
-        downloadSchemaBtn.textContent = "Download Schema";
-        const uploadWrap = doc.createElement("label");
-        uploadWrap.textContent = "Upload Template JSON";
-        uploadWrap.style.display = "grid";
-        uploadWrap.style.gap = "6px";
-        const uploadInput = doc.createElement("input");
-        uploadInput.type = "file";
-        uploadInput.accept = ".json,application/json";
-        uploadWrap.appendChild(uploadInput);
-        for (const b of [downloadTemplateBtn, downloadSchemaBtn]) {
-          b.style.background = palette.buttonBg;
-          b.style.color = palette.buttonText;
-          b.style.border = `1px solid ${palette.border}`;
-          b.style.borderRadius = "8px";
-          b.style.padding = "7px 10px";
-          b.style.cursor = "pointer";
-          b.style.width = "fit-content";
-        }
-        downloadTemplateBtn.addEventListener("click", () => {
-          const exportTemplate = {
-            ...analysisDesign,
-            $schema: "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/design.schema.json"
-          };
-          downloadJsonFile(doc, exportTemplate, "analysis-template.json");
-        });
-        downloadSchemaBtn.addEventListener("click", () => {
-          downloadJsonFile(doc, design_schema_default, "analysis-template.schema.json");
-        });
-        uploadInput.addEventListener("change", async () => {
-          const file = uploadInput.files?.[0];
-          if (!file) return;
-          try {
-            const text = await file.text();
-            const parsed = JSON.parse(text);
-            replaceAnalysisDesign(parsed);
-            await persistAnalysisDesign();
-            if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-            renderLayoutTab();
-          } catch (err) {
-            console.error("[GeoAnalyzr] Template import failed", err);
-          } finally {
-            uploadInput.value = "";
-          }
-        });
-        box.append(downloadTemplateBtn, downloadSchemaBtn, uploadWrap);
-        tabContent.appendChild(box);
-      };
-      const tabs = [
-        { button: appearanceBtn, render: renderAppearanceTab },
-        { button: filterBtn, render: renderFilterTab },
-        { button: layoutBtn, render: renderLayoutTab },
-        { button: templateBtn, render: renderTemplateTab }
-      ];
-      const activateTab = (target, render) => {
-        for (const tab of tabs) {
-          tab.button.style.outline = "none";
-          tab.button.style.boxShadow = "none";
-        }
-        target.style.boxShadow = `inset 0 0 0 2px ${analysisSettings.accent}`;
-        render();
-      };
-      for (const tab of tabs) {
-        tab.button.addEventListener("click", () => activateTab(tab.button, tab.render));
-      }
-      activateTab(appearanceBtn, renderAppearanceTab);
-      modal.append(head, tabBar, body);
-      overlay.appendChild(modal);
-    }
-    function resolveSectionIconKey(section) {
-      const templ = getSectionTemplate(section);
-      if (templ?.tocIcon?.key) return templ.tocIcon.key;
-      if (templ?.icon) return templ.icon;
-      const title2 = section.title.toLowerCase();
-      if (title2.includes("overview")) return "overview";
-      if (title2.includes("sessions")) return "sessions";
-      if (title2.includes("time patterns")) return "time_patterns";
-      if (title2.includes("tempo")) return "tempo";
-      if (title2.includes("scores")) return "scores";
-      if (title2.includes("rounds")) return "rounds";
-      if (title2.includes("countries") || title2.includes("country spotlight")) return "countries";
-      if (title2.includes("opponents")) return "opponents";
-      if (title2 === "rating" || title2.includes("rating")) return "rating";
-      if (title2.includes("team")) return "team";
-      if (title2.includes("personal records")) return "records";
-      return "default";
-    }
-    function createSectionIcon(section, doc) {
-      const templ = getSectionTemplate(section);
-      if (templ?.tocIcon?.enabled === false) return null;
-      const palette = getThemePalette();
-      const wrap = doc.createElement("span");
-      wrap.style.display = "inline-flex";
-      wrap.style.alignItems = "center";
-      wrap.style.justifyContent = "center";
-      wrap.style.width = "14px";
-      wrap.style.height = "14px";
-      wrap.style.flex = "0 0 auto";
-      const stroke = palette.buttonText;
-      if (templ?.tocIcon?.svg && templ.tocIcon.svg.trim()) {
-        wrap.innerHTML = templ.tocIcon.svg;
-        return wrap;
-      }
-      const iconKey = resolveSectionIconKey(section);
-      const svgBase = (paths) => `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-      if (iconKey === "overview") wrap.innerHTML = svgBase('<path d="M3 12l9-9 9 9"/><path d="M9 21V9h6v12"/>');
-      else if (iconKey === "sessions") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="8"/><path d="M12 8v5"/><path d="M12 12l3 2"/>');
-      else if (iconKey === "time_patterns") wrap.innerHTML = svgBase('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M4 10h16"/>');
-      else if (iconKey === "tempo") wrap.innerHTML = svgBase('<path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 14l4-4"/><path d="M12 14h0"/>');
-      else if (iconKey === "scores") wrap.innerHTML = svgBase('<path d="M4 20V8"/><path d="M10 20V4"/><path d="M16 20v-9"/><path d="M22 20v-6"/>');
-      else if (iconKey === "rounds") wrap.innerHTML = svgBase('<path d="M4 12h16"/><path d="M4 7h16"/><path d="M4 17h16"/><circle cx="7" cy="7" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="17" cy="17" r="1"/>');
-      else if (iconKey === "countries" || iconKey === "spotlight") wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>');
-      else if (iconKey === "opponents") wrap.innerHTML = svgBase('<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><path d="M3 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/><path d="M11 18c.8-2.5 2.8-4 5-4s4.2 1.5 5 4"/>');
-      else if (iconKey === "rating") wrap.innerHTML = svgBase('<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.4 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>');
-      else if (iconKey === "team") wrap.innerHTML = svgBase('<circle cx="9" cy="8" r="2.5"/><circle cx="15" cy="8" r="2.5"/><path d="M4 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/><path d="M10 18c1-3 3-4.5 5-4.5s4 1.5 5 4.5"/>');
-      else if (iconKey === "records") wrap.innerHTML = svgBase('<path d="M8 4h8v4a4 4 0 0 1-8 0z"/><path d="M10 14h4"/><path d="M9 18h6"/>');
-      else wrap.innerHTML = svgBase('<circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><circle cx="12" cy="16" r="1"/>');
-      return wrap;
-    }
-    function populateAnalysisWindow(data) {
-      const refs = analysisWindow;
-      if (!refs || refs.win.closed) return;
-      const palette = getThemePalette();
-      const windowTitle = getWindowRenderTitle(data);
-      refs.doc.title = windowTitle;
-      refs.modalTitle.textContent = windowTitle;
-      designSourceLineLookup = buildDesignSourceLineLookup(data.sections || []);
-      const { fromInput, toInput, modeSelect, movementSelect, teammateSelect, countrySelect, modalBody, tocWrap, doc } = refs;
-      if (!fromInput.value && data.minPlayedAt) fromInput.value = isoDateLocal(data.minPlayedAt);
-      if (!toInput.value && data.maxPlayedAt) toInput.value = isoDateLocal(data.maxPlayedAt);
-      const prevMode = modeSelect.value || "all";
-      const prevMovement = movementSelect.value || "all";
-      const prevTeammate = teammateSelect.value || "all";
-      const prevCountry = countrySelect.value || "all";
-      modeSelect.innerHTML = "";
-      for (const mode of data.availableGameModes) {
-        const opt = doc.createElement("option");
-        opt.value = mode;
-        opt.textContent = gameModeSelectLabel(mode);
-        modeSelect.appendChild(opt);
-      }
-      if ([...modeSelect.options].some((o) => o.value === prevMode)) modeSelect.value = prevMode;
-      movementSelect.innerHTML = "";
-      for (const movement of data.availableMovementTypes) {
-        const opt = doc.createElement("option");
-        opt.value = movement.key;
-        opt.textContent = movement.label;
-        movementSelect.appendChild(opt);
-      }
-      if ([...movementSelect.options].some((o) => o.value === prevMovement)) movementSelect.value = prevMovement;
-      teammateSelect.innerHTML = "";
-      for (const teammate of data.availableTeammates) {
-        const opt = doc.createElement("option");
-        opt.value = teammate.id;
-        opt.textContent = teammate.label;
-        teammateSelect.appendChild(opt);
-      }
-      if ([...teammateSelect.options].some((o) => o.value === prevTeammate)) teammateSelect.value = prevTeammate;
-      countrySelect.innerHTML = "";
-      for (const country of data.availableCountries) {
-        const opt = doc.createElement("option");
-        opt.value = country.code;
-        opt.textContent = country.label;
-        countrySelect.appendChild(opt);
-      }
-      if ([...countrySelect.options].some((o) => o.value === prevCountry)) countrySelect.value = prevCountry;
-      const renderSections = materializeSections(data);
-      tocWrap.innerHTML = "";
-      for (const section of renderSections) {
-        const b = doc.createElement("button");
-        b.style.background = palette.buttonBg;
-        b.style.color = palette.buttonText;
-        b.style.border = `1px solid ${palette.border}`;
-        b.style.borderRadius = "999px";
-        b.style.padding = "4px 9px";
-        b.style.cursor = "pointer";
-        b.style.fontSize = "11px";
-        b.style.fontWeight = "700";
-        b.style.display = "inline-flex";
-        b.style.alignItems = "center";
-        b.style.gap = "6px";
-        const iconEl = createSectionIcon(section, doc);
-        if (iconEl) b.appendChild(iconEl);
-        const label = doc.createElement("span");
-        label.textContent = getSectionTocLabel(section);
-        b.appendChild(label);
-        b.addEventListener("click", () => {
-          const id = `section-${section.id}`;
-          const node = doc.getElementById(id);
-          if (node) node.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-        tocWrap.appendChild(b);
-      }
-      modalBody.innerHTML = "";
-      for (const s of renderSections) modalBody.appendChild(renderSection(s, doc, getSectionRenderTitle(s)));
-    }
-    function canAccessWindow(win) {
-      if (!win) return false;
-      try {
-        void win.closed;
-        void win.location.href;
-        void win.document;
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    function hasAnalysisShell(refs) {
-      try {
-        return !!refs.doc.getElementById(ANALYSIS_ROOT_ID);
-      } catch {
-        return false;
-      }
-    }
-    function ensureAnalysisWindow() {
-      if (analysisWindow && !analysisWindow.win.closed && canAccessWindow(analysisWindow.win)) {
-        if (hasAnalysisShell(analysisWindow)) {
-          analysisWindow.win.focus();
-          return analysisWindow;
-        }
-        try {
-          analysisWindow.win.close();
-        } catch {
-        }
-        analysisWindow = null;
-      }
-      let win = window.open("about:blank", "_blank");
-      if (!canAccessWindow(win)) return null;
-      const doc = win.document;
-      doc.open();
-      doc.write('<!doctype html><html><head><meta charset="utf-8"><title>GeoAnalyzr - Full Analysis</title></head><body></body></html>');
-      doc.close();
-      if (!doc.body) return null;
-      const palette = getThemePalette();
-      doc.title = getWindowRenderTitle({ sections: [], availableGameModes: [], availableMovementTypes: [], availableTeammates: [], availableCountries: [] });
-      doc.body.innerHTML = "";
-      doc.body.style.margin = "0";
-      doc.body.style.background = palette.bg;
-      doc.body.style.color = palette.text;
-      doc.body.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial";
-      const shell = doc.createElement("div");
-      shell.id = ANALYSIS_ROOT_ID;
-      shell.style.display = "grid";
-      shell.style.gridTemplateRows = "auto auto auto 1fr";
-      shell.style.height = "100vh";
-      const modalHead = doc.createElement("div");
-      modalHead.style.display = "flex";
-      modalHead.style.justifyContent = "space-between";
-      modalHead.style.alignItems = "center";
-      modalHead.style.padding = "12px 14px";
-      modalHead.style.borderBottom = `1px solid ${palette.border}`;
-      const modalTitle = doc.createElement("div");
-      modalTitle.style.fontWeight = "700";
-      modalTitle.textContent = doc.title;
-      modalHead.appendChild(modalTitle);
-      const modalClose = doc.createElement("button");
-      modalClose.textContent = "x";
-      modalClose.style.background = "transparent";
-      modalClose.style.color = palette.text;
-      modalClose.style.border = "none";
-      modalClose.style.cursor = "pointer";
-      modalClose.style.fontSize = "18px";
-      modalHead.appendChild(modalClose);
-      const controls = doc.createElement("div");
-      controls.style.display = "flex";
-      controls.style.gap = "10px";
-      controls.style.alignItems = "center";
-      controls.style.padding = "10px 14px";
-      controls.style.borderBottom = `1px solid ${palette.border}`;
-      controls.style.flexWrap = "nowrap";
-      controls.style.whiteSpace = "nowrap";
-      controls.style.overflowX = "auto";
-      controls.style.overflowY = "hidden";
-      controls.style.background = palette.bg;
-      const fromInput = doc.createElement("input");
-      fromInput.type = "date";
-      styleInput(fromInput);
-      const toInput = doc.createElement("input");
-      toInput.type = "date";
-      styleInput(toInput);
-      const modeSelect = doc.createElement("select");
-      styleInput(modeSelect);
-      const movementSelect = doc.createElement("select");
-      styleInput(movementSelect);
-      const teammateSelect = doc.createElement("select");
-      styleInput(teammateSelect);
-      const countrySelect = doc.createElement("select");
-      styleInput(countrySelect);
-      const applyBtn = doc.createElement("button");
-      applyBtn.textContent = "Apply Filter";
-      applyBtn.style.background = "#214a78";
-      applyBtn.style.color = "white";
-      applyBtn.style.border = "1px solid #2f6096";
-      applyBtn.style.borderRadius = "8px";
-      applyBtn.style.padding = "6px 10px";
-      applyBtn.style.cursor = "pointer";
-      const resetFilterBtn = doc.createElement("button");
-      resetFilterBtn.textContent = "Reset Filter";
-      resetFilterBtn.style.background = "#303030";
-      resetFilterBtn.style.color = "white";
-      resetFilterBtn.style.border = "1px solid #444";
-      resetFilterBtn.style.borderRadius = "8px";
-      resetFilterBtn.style.padding = "6px 10px";
-      resetFilterBtn.style.cursor = "pointer";
-      const settingsBtn = doc.createElement("button");
-      settingsBtn.textContent = "\u2699";
-      settingsBtn.title = "Analysis settings";
-      settingsBtn.style.borderRadius = "8px";
-      settingsBtn.style.padding = "5px 10px";
-      settingsBtn.style.cursor = "pointer";
-      settingsBtn.style.fontSize = "18px";
-      settingsBtn.style.lineHeight = "1";
-      const mkFilterControl = (key, labelText, inputEl, extra) => {
-        const wrap = doc.createElement("span");
-        wrap.dataset.filterKey = key;
-        wrap.style.display = "inline-flex";
-        wrap.style.alignItems = "center";
-        wrap.style.gap = "6px";
-        const label = doc.createElement("span");
-        label.textContent = labelText;
-        wrap.append(label, inputEl);
-        for (const e of extra || []) {
-          const l = doc.createElement("span");
-          l.textContent = e.label;
-          wrap.append(l, e.input);
-        }
-        return wrap;
-      };
-      const filterControlWrappers = {
-        date: mkFilterControl("date", "From:", fromInput, [{ label: "To:", input: toInput }]),
-        mode: mkFilterControl("mode", "Game Mode:", modeSelect),
-        movement: mkFilterControl("movement", "Movement:", movementSelect),
-        teammate: mkFilterControl("teammate", "Teammate:", teammateSelect),
-        country: mkFilterControl("country", "Country:", countrySelect)
-      };
-      controls.appendChild(filterControlWrappers.date);
-      controls.appendChild(filterControlWrappers.mode);
-      controls.appendChild(filterControlWrappers.movement);
-      controls.appendChild(filterControlWrappers.teammate);
-      controls.appendChild(filterControlWrappers.country);
-      controls.appendChild(applyBtn);
-      controls.appendChild(resetFilterBtn);
-      controls.appendChild(settingsBtn);
-      const tocWrap = doc.createElement("div");
-      tocWrap.style.display = "flex";
-      tocWrap.style.flexWrap = "wrap";
-      tocWrap.style.gap = "6px";
-      tocWrap.style.padding = "6px 12px 8px";
-      tocWrap.style.borderBottom = `1px solid ${palette.border}`;
-      tocWrap.style.background = palette.panelAlt;
-      tocWrap.style.position = "sticky";
-      tocWrap.style.top = "0";
-      tocWrap.style.zIndex = "5";
-      const modalBody = doc.createElement("div");
-      modalBody.style.overflow = "auto";
-      modalBody.style.padding = "16px";
-      modalBody.style.display = "grid";
-      modalBody.style.gridTemplateColumns = "minmax(0, 1fr)";
-      modalBody.style.gap = "14px";
-      modalBody.style.maxWidth = "1800px";
-      modalBody.style.width = "100%";
-      modalBody.style.margin = "0 auto";
-      const settingsOverlay = doc.createElement("div");
-      settingsOverlay.style.position = "fixed";
-      settingsOverlay.style.inset = "0";
-      settingsOverlay.style.background = "rgba(0,0,0,0.45)";
-      settingsOverlay.style.display = "none";
-      settingsOverlay.style.alignItems = "center";
-      settingsOverlay.style.justifyContent = "center";
-      settingsOverlay.style.padding = "18px";
-      settingsOverlay.style.zIndex = "50";
-      settingsOverlay.addEventListener("click", (ev) => {
-        if (ev.target === settingsOverlay) settingsOverlay.style.display = "none";
-      });
-      shell.appendChild(modalHead);
-      shell.appendChild(controls);
-      shell.appendChild(tocWrap);
-      shell.appendChild(modalBody);
-      doc.body.appendChild(shell);
-      doc.body.appendChild(settingsOverlay);
-      modalClose.addEventListener("click", () => win.close());
-      const toMovementType2 = (value) => {
-        if (value === "moving" || value === "no_move" || value === "nmpz" || value === "unknown" || value === "all") {
-          return value;
-        }
-        return "all";
-      };
-      applyBtn.addEventListener("click", () => {
-        refreshAnalysisHandler?.({
-          fromTs: parseDateInput(fromInput.value, false),
-          toTs: parseDateInput(toInput.value, true),
-          gameMode: modeSelect.value || "all",
-          movementType: toMovementType2(movementSelect.value || "all"),
-          teammateId: teammateSelect.value || "all",
-          country: countrySelect.value || "all"
-        });
-      });
-      resetFilterBtn.addEventListener("click", () => {
-        fromInput.value = "";
-        toInput.value = "";
-        modeSelect.value = "all";
-        movementSelect.value = "all";
-        teammateSelect.value = "all";
-        countrySelect.value = "all";
-        refreshAnalysisHandler?.({ gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
-      });
-      settingsBtn.addEventListener("click", () => {
-        if (analysisWindow) openSettingsOverlay(analysisWindow);
-      });
-      analysisWindow = {
-        win,
-        doc,
-        shell,
-        modalTitle,
-        controls,
-        filterControlWrappers,
-        fromInput,
-        toInput,
-        modeSelect,
-        movementSelect,
-        teammateSelect,
-        countrySelect,
-        settingsBtn,
-        tocWrap,
-        modalBody,
-        settingsOverlay
-      };
-      applyThemeToWindow(analysisWindow);
-      applyFilterVisibility(analysisWindow);
-      if (lastAnalysisData) populateAnalysisWindow(lastAnalysisData);
-      return analysisWindow;
-    }
-    document.body.appendChild(iconBtn);
-    document.body.appendChild(panel);
-    let open = false;
-    function setOpen(v) {
-      open = v;
-      panel.style.display = open ? "block" : "none";
-    }
-    iconBtn.addEventListener("click", () => setOpen(!open));
-    closeBtn.addEventListener("click", () => setOpen(false));
-    let updateHandler = null;
-    let resetHandler = null;
-    let exportHandler = null;
-    let tokenHandler = null;
-    let openAnalysisHandler = null;
-    let refreshAnalysisHandler = null;
-    let openSemanticNext = true;
-    updateBtn.addEventListener("click", () => updateHandler?.());
-    tokenBtn.addEventListener("click", () => tokenHandler?.());
-    exportBtn.addEventListener("click", () => exportHandler?.());
-    resetBtn.addEventListener("click", () => resetHandler?.());
-    analysisBtn.addEventListener("click", () => {
-      try {
-        if (openSemanticNext) {
-          openSemanticNext = false;
-          openAnalysisHandler?.();
-          return;
-        }
-        openSemanticNext = true;
-        const win = ensureAnalysisWindow();
-        if (!win) {
-          status.textContent = "Could not open analysis window (popup blocked?).";
-          return;
-        }
-        refreshAnalysisHandler?.({
-          fromTs: parseDateInput(win.fromInput.value, false),
-          toTs: parseDateInput(win.toInput.value, true),
-          gameMode: win.modeSelect.value || "all",
-          movementType: toMovementType(win.movementSelect.value || "all"),
-          teammateId: win.teammateSelect.value || "all",
-          country: win.countrySelect.value || "all"
-        });
-      } catch (e) {
-        status.textContent = `Analysis open failed: ${e instanceof Error ? e.message : String(e)}`;
-        console.error("[GeoAnalyzr] Failed to open analysis window", e);
-      }
-    });
-    function renderSection(section, doc, renderTitle = section.title) {
-      const palette = getThemePalette();
-      const card = doc.createElement("div");
-      card.id = `section-${section.id}`;
-      card.style.border = `1px solid ${palette.border}`;
-      card.style.borderRadius = "12px";
-      card.style.background = palette.panel;
-      card.style.padding = "12px";
-      card.style.scrollMarginTop = "110px";
-      card.style.boxShadow = "0 10px 30px rgba(0,0,0,0.2)";
-      const topMeta = doc.createElement("div");
-      topMeta.style.display = "flex";
-      topMeta.style.gap = "8px";
-      topMeta.style.flexWrap = "wrap";
-      topMeta.style.marginBottom = "6px";
-      if (section.appliesFilters && section.appliesFilters.length > 0) {
-        const applies = doc.createElement("span");
-        applies.textContent = `Filters: ${section.appliesFilters.join(", ")}`;
-        applies.style.background = palette.panelAlt;
-        applies.style.color = palette.textMuted;
-        applies.style.border = `1px solid ${palette.border}`;
-        applies.style.borderRadius = "999px";
-        applies.style.padding = "2px 8px";
-        applies.style.fontSize = "11px";
-        topMeta.appendChild(applies);
-      }
-      const sectionTemplate = getSectionTemplate(section);
-      const requiredFilters = sectionTemplate?.requiredFilters;
-      const requiredFilterRow = doc.createElement("div");
-      requiredFilterRow.style.display = "flex";
-      requiredFilterRow.style.flexWrap = "wrap";
-      requiredFilterRow.style.gap = "8px";
-      requiredFilterRow.style.alignItems = "center";
-      requiredFilterRow.style.marginBottom = "8px";
-      const addSectionFilterSelect = (labelText, options, selectedValue, onChange) => {
-        if (options.length === 0) return;
-        const label = doc.createElement("label");
-        label.style.display = "inline-flex";
-        label.style.alignItems = "center";
-        label.style.gap = "6px";
-        label.style.fontSize = "12px";
-        label.style.color = palette.textMuted;
-        label.style.background = palette.panelAlt;
-        label.style.border = `1px solid ${palette.border}`;
-        label.style.borderRadius = "999px";
-        label.style.padding = "3px 8px";
-        const text = doc.createElement("span");
-        text.textContent = labelText;
-        const select = doc.createElement("select");
-        select.style.background = palette.buttonBg;
-        select.style.color = palette.buttonText;
-        select.style.border = `1px solid ${palette.border}`;
-        select.style.borderRadius = "999px";
-        select.style.padding = "2px 8px";
-        select.style.fontSize = "12px";
-        for (const optIn of options) {
-          const opt = doc.createElement("option");
-          opt.value = optIn.value;
-          opt.textContent = optIn.label;
-          select.appendChild(opt);
-        }
-        if ([...select.options].some((o) => o.value === selectedValue)) select.value = selectedValue;
-        select.addEventListener("change", () => onChange(select.value));
-        label.appendChild(text);
-        label.appendChild(select);
-        requiredFilterRow.appendChild(label);
-      };
-      const refs = analysisWindow;
-      const data = lastAnalysisData;
-      if (refs && data && refreshAnalysisHandler) {
-        const currentFrom = parseDateInput(refs.fromInput.value, false);
-        const currentTo = parseDateInput(refs.toInput.value, true);
-        const currentMode = refs.modeSelect.value || "all";
-        const currentMovement = refs.movementSelect.value || "all";
-        const currentTeammate = refs.teammateSelect.value || "all";
-        const currentCountry = refs.countrySelect.value || "all";
-        if (requiredFilters?.teammate?.enabled && section.id === "teammate_battle") {
-          const opts = data.availableTeammates.filter((t) => t.id !== "all");
-          const defaultMate = opts[0]?.id;
-          const selectedMate = currentTeammate !== "all" ? currentTeammate : defaultMate;
-          if (selectedMate) {
-            addSectionFilterSelect(
-              requiredFilters.teammate.label || "Mate",
-              opts.map((t) => ({ value: t.id, label: t.label })),
-              selectedMate,
-              (nextMate) => {
-                if (!nextMate || nextMate === currentTeammate) return;
-                refreshAnalysisHandler?.({
-                  fromTs: currentFrom,
-                  toTs: currentTo,
-                  gameMode: currentMode,
-                  movementType: currentMovement,
-                  teammateId: nextMate,
-                  country: currentCountry
-                });
-              }
-            );
-          }
-        }
-        if (requiredFilters?.country?.enabled && section.id === "country_spotlight") {
-          const opts = data.availableCountries.filter((c) => c.code !== "all");
-          const defaultCountry = opts[0]?.code;
-          const selectedCountry = currentCountry !== "all" ? currentCountry : defaultCountry;
-          if (selectedCountry) {
-            addSectionFilterSelect(
-              requiredFilters.country.label || "Country",
-              opts.map((c) => ({ value: c.code, label: c.label })),
-              selectedCountry,
-              (nextCountry) => {
-                if (!nextCountry || nextCountry === currentCountry) return;
-                refreshAnalysisHandler?.({
-                  fromTs: currentFrom,
-                  toTs: currentTo,
-                  gameMode: currentMode,
-                  movementType: currentMovement,
-                  teammateId: currentTeammate,
-                  country: nextCountry
-                });
-              }
-            );
-          }
-        }
-      }
-      const title2 = doc.createElement("div");
-      title2.textContent = renderTitle;
-      title2.style.fontWeight = "700";
-      title2.style.marginBottom = "8px";
-      title2.style.fontSize = "19px";
-      title2.style.letterSpacing = "0.2px";
-      title2.style.color = palette.text;
-      const body = doc.createElement("div");
-      body.style.display = "grid";
-      body.style.gap = "8px";
-      body.style.marginBottom = "10px";
-      body.style.marginTop = "2px";
-      const lineDrillMap = new Map((section.lineDrilldowns || []).map((d) => [d.lineLabel, d.items]));
-      const lineLinkMap = new Map((section.lineLinks || []).map((d) => [d.lineLabel, d.url]));
-      const layoutMode = sectionTemplate?.layout?.mode || "legacy_colon";
-      const createLineRow = (line) => {
-        const row = doc.createElement("div");
-        row.style.padding = "9px 11px";
-        row.style.display = "flex";
-        row.style.alignItems = "center";
-        row.style.justifyContent = "space-between";
-        row.style.gap = "12px";
-        const sep = line.indexOf(":");
-        if (sep > 0 && sep < line.length - 1) {
-          const leftLabel = line.slice(0, sep).trim();
-          const leftUrl = lineLinkMap.get(leftLabel);
-          const left = leftUrl ? doc.createElement("a") : doc.createElement("span");
-          left.textContent = leftLabel;
-          left.style.fontSize = "13px";
-          left.style.fontWeight = "600";
-          left.style.color = leftUrl ? analysisSettings.accent : palette.textMuted;
-          left.style.letterSpacing = "0.15px";
-          if (leftUrl) {
-            left.href = leftUrl;
-            left.target = "_blank";
-            left.rel = "noopener noreferrer";
-          }
-          const right = doc.createElement("span");
-          right.textContent = line.slice(sep + 1).trim();
-          right.style.fontSize = "14px";
-          right.style.fontWeight = "700";
-          right.style.color = palette.text;
-          right.style.textAlign = "right";
-          right.style.marginLeft = "auto";
-          right.style.maxWidth = "68%";
-          right.style.padding = "2px 8px";
-          right.style.borderRadius = "999px";
-          right.style.background = "rgba(255,255,255,0.08)";
-          const drillItems = lineDrillMap.get(leftLabel) || [];
-          if (drillItems.length > 0) {
-            right.style.cursor = "pointer";
-            right.style.textDecoration = "underline";
-            right.title = `Open ${drillItems.length} matching rounds`;
-            right.addEventListener("click", () => openDrilldownOverlay(doc, section.title, leftLabel, drillItems));
-          }
-          row.appendChild(left);
-          row.appendChild(right);
-        } else {
-          const only = doc.createElement("span");
-          only.textContent = line;
-          only.style.fontSize = "13px";
-          only.style.fontWeight = "600";
-          only.style.color = palette.text;
-          only.style.letterSpacing = "0.1px";
-          row.appendChild(only);
-        }
-        return row;
-      };
-      const createStandaloneCard = (line) => {
-        const row = createLineRow(line);
-        row.style.border = `1px solid ${palette.border}`;
-        row.style.background = palette.panelAlt;
-        row.style.borderRadius = "8px";
-        row.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
-        return row;
-      };
-      const appendGroupCard = (headerText, itemLines) => {
-        if (itemLines.length === 0) return;
-        const groupCard = doc.createElement("div");
-        groupCard.style.border = `1px solid ${palette.border}`;
-        groupCard.style.background = palette.panelAlt;
-        groupCard.style.borderRadius = "8px";
-        groupCard.style.boxShadow = "inset 2px 0 0 rgba(255,255,255,0.08)";
-        groupCard.style.overflow = "hidden";
-        const header2 = doc.createElement("div");
-        header2.textContent = headerText;
-        header2.style.padding = "9px 11px";
-        header2.style.fontSize = "13px";
-        header2.style.fontWeight = "700";
-        header2.style.color = palette.text;
-        groupCard.appendChild(header2);
-        for (const itemLine of itemLines) {
-          const itemRow = createLineRow(itemLine);
-          itemRow.style.borderTop = `1px solid ${palette.border}`;
-          groupCard.appendChild(itemRow);
-        }
-        body.appendChild(groupCard);
-      };
-      const renderLegacyColonLayout = () => {
-        for (let i = 0; i < section.lines.length; i++) {
-          const line = section.lines[i];
-          const isGroupHeader = /:\s*$/.test(line);
-          if (!isGroupHeader || i === section.lines.length - 1) {
-            body.appendChild(createStandaloneCard(line));
-            continue;
-          }
-          let end = i + 1;
-          while (end < section.lines.length && !/:\s*$/.test(section.lines[end])) {
-            end++;
-          }
-          appendGroupCard(line, section.lines.slice(i + 1, end));
-          i = end - 1;
-        }
-      };
-      const charts = section.charts ? section.charts : section.chart ? [section.chart] : [];
-      const graphTemplates = sectionTemplate?.graphTemplates || [];
-      const renderedChartIndices = /* @__PURE__ */ new Set();
-      const appendChartByIndex = (chartIndex, overrideTitle, overrideTemplate) => {
-        const srcChart = charts[chartIndex];
-        if (!srcChart) return;
-        const activeTemplate = overrideTemplate || graphTemplates[chartIndex];
-        const configured = applyGraphTemplateToChart(srcChart, activeTemplate);
-        const chart = configured.chart;
-        const baseChartTitle = chart.yLabel ? `${renderTitle} - ${chart.yLabel}` : `${renderTitle} - Chart ${chartIndex + 1}`;
-        const chartTitle = overrideTitle ? `${renderTitle} - ${overrideTitle}` : configured.title ? `${renderTitle} - ${configured.title}` : baseChartTitle;
-        if (chart.type === "line" && chart.points.length > 1) {
-          body.appendChild(renderLineChart(chart, chartTitle, doc, activeTemplate));
-          renderedChartIndices.add(chartIndex);
-        }
-        if (chart.type === "bar" && chart.bars.length > 0) {
-          body.appendChild(renderBarChart(chart, chartTitle, doc, activeTemplate));
-          renderedChartIndices.add(chartIndex);
-        }
-        if (chart.type === "selectableBar" && chart.options.length > 0) {
-          body.appendChild(renderSelectableBarChart(chart, chartTitle, doc, activeTemplate));
-          renderedChartIndices.add(chartIndex);
-        }
-        if (chart.type === "selectableLine" && chart.options.length > 0) {
-          body.appendChild(renderSelectableLineChart(chart, chartTitle, doc, activeTemplate));
-          renderedChartIndices.add(chartIndex);
-        }
-      };
-      if (layoutMode === "object_order") {
-        const layout = sectionTemplate?.layout?.mode === "object_order" ? sectionTemplate.layout : void 0;
-        const singles = new Map((sectionTemplate?.objects?.singles || []).map((s) => [s.id, s]));
-        const boxes = new Map((sectionTemplate?.objects?.boxes || []).map((b) => [b.id, b]));
-        const graphs = new Map((sectionTemplate?.objects?.graphs || []).map((g) => [g.id, g]));
-        const usedIndices = /* @__PURE__ */ new Set();
-        const consumeLineByLabel = (label) => {
-          for (let i = 0; i < section.lines.length; i++) {
-            if (usedIndices.has(i)) continue;
-            if (matchesLineLabel(section.lines[i], label)) {
-              usedIndices.add(i);
-              return section.lines[i];
-            }
-          }
-          return void 0;
-        };
-        let nextChartIndex = 0;
-        const consumeNextChartIndex = () => {
-          while (nextChartIndex < charts.length && renderedChartIndices.has(nextChartIndex)) nextChartIndex++;
-          if (nextChartIndex >= charts.length) return void 0;
-          const idx = nextChartIndex;
-          nextChartIndex++;
-          return idx;
-        };
-        for (const item of layout?.order || []) {
-          if (item.kind === "single") {
-            const single = singles.get(item.id);
-            if (!single) continue;
-            const typed = resolveTypedLine(single.type, section.id, single.sourceSectionId, single.label, designSourceLineLookup);
-            if (typed) {
-              consumeLineByLabel(single.label);
-              const lineText = `${single.label}: ${typed.value}`;
-              if (typed.drilldown) lineDrillMap.set(single.label, typed.drilldown);
-              if (typed.link) lineLinkMap.set(single.label, typed.link);
-              body.appendChild(createStandaloneCard(lineText));
-              continue;
-            }
-            const line = consumeLineByLabel(single.label);
-            if (line) body.appendChild(createStandaloneCard(line));
-            continue;
-          }
-          if (item.kind === "box") {
-            const box = boxes.get(item.id);
-            if (!box) continue;
-            consumeLineByLabel(box.title);
-            const itemLines = [];
-            const configuredLines = box.lines || [];
-            if (configuredLines.length > 0) {
-              for (const l of configuredLines) {
-                const typed = resolveTypedLine(l.type, section.id, l.sourceSectionId, l.label, designSourceLineLookup);
-                if (typed) {
-                  consumeLineByLabel(l.label);
-                  const lineText = `${l.label}: ${typed.value}`;
-                  if (typed.drilldown) lineDrillMap.set(l.label, typed.drilldown);
-                  if (typed.link) lineLinkMap.set(l.label, typed.link);
-                  itemLines.push(lineText);
-                  continue;
-                }
-                const line = consumeLineByLabel(l.label);
-                if (line) itemLines.push(line);
-              }
-            } else {
-              const headerIdx = section.lines.findIndex((line, i) => !usedIndices.has(i) && matchesLineLabel(line, box.title));
-              if (headerIdx >= 0) {
-                usedIndices.add(headerIdx);
-                let end = headerIdx + 1;
-                while (end < section.lines.length) {
-                  const nextTrim = section.lines[end].trim();
-                  if (/:\s*$/.test(nextTrim)) break;
-                  end++;
-                }
-                for (let i = headerIdx + 1; i < end; i++) {
-                  if (usedIndices.has(i)) continue;
-                  usedIndices.add(i);
-                  itemLines.push(section.lines[i]);
-                }
-              }
-            }
-            if (itemLines.length > 0) appendGroupCard(box.title.endsWith(":") ? box.title : `${box.title}:`, itemLines);
-            continue;
-          }
-          if (item.kind === "graph") {
-            const graph = graphs.get(item.id);
-            const idx = typeof graph?.sourceIndex === "number" ? graph.sourceIndex : consumeNextChartIndex();
-            if (typeof idx === "number") appendChartByIndex(idx, graph?.title, graph);
-          }
-        }
-        if (layout?.preserveUnmatched !== false || (sectionTemplate?.render?.preserveUnmatchedLines ?? true)) {
-          for (let i = 0; i < section.lines.length; i++) {
-            if (usedIndices.has(i)) continue;
-            body.appendChild(createStandaloneCard(section.lines[i]));
-          }
-        }
-      } else if (layoutMode === "header_blocks") {
-        const layout = sectionTemplate?.layout?.mode === "header_blocks" ? sectionTemplate.layout : void 0;
-        const headers = layout?.headers || [];
-        const boxes = layout?.boxes || [];
-        const singles = layout?.single || [];
-        const usedIndices = /* @__PURE__ */ new Set();
-        const consumeLineByLabel = (label) => {
-          for (let i = 0; i < section.lines.length; i++) {
-            if (usedIndices.has(i)) continue;
-            if (matchesLineLabel(section.lines[i], label)) {
-              usedIndices.add(i);
-              return section.lines[i];
-            }
-          }
-          return void 0;
-        };
-        if (boxes.length > 0 || singles.length > 0) {
-          for (const s of singles) {
-            const line = consumeLineByLabel(s.label);
-            if (line) body.appendChild(createStandaloneCard(line));
-          }
-          for (const b of boxes) {
-            const itemLines = [];
-            for (const l of b.lines || []) {
-              const line = consumeLineByLabel(l.label);
-              if (line) itemLines.push(line);
-            }
-            if (itemLines.length > 0) appendGroupCard(b.title.endsWith(":") ? b.title : `${b.title}:`, itemLines);
-          }
-        } else {
-          for (let i = 0; i < section.lines.length; i++) {
-            if (usedIndices.has(i)) continue;
-            const trimmed = section.lines[i].trim();
-            if (headers.some((h) => trimmed === `${h}:` || trimmed === h)) break;
-            body.appendChild(createStandaloneCard(section.lines[i]));
-            usedIndices.add(i);
-          }
-          for (const header2 of headers) {
-            const idx = section.lines.findIndex((line, i) => !usedIndices.has(i) && (line.trim() === `${header2}:` || line.trim() === header2));
-            if (idx < 0) continue;
-            usedIndices.add(idx);
-            let end = idx + 1;
-            while (end < section.lines.length) {
-              const nextTrim = section.lines[end].trim();
-              if (headers.some((h) => nextTrim === `${h}:` || nextTrim === h)) break;
-              end++;
-            }
-            const itemLines = [];
-            for (let i = idx + 1; i < end; i++) {
-              usedIndices.add(i);
-              itemLines.push(section.lines[i]);
-            }
-            appendGroupCard(section.lines[idx], itemLines);
-          }
-        }
-        if (layout?.preserveUnmatched !== false || (sectionTemplate?.render?.preserveUnmatchedLines ?? true)) {
-          for (let i = 0; i < section.lines.length; i++) {
-            if (usedIndices.has(i)) continue;
-            body.appendChild(createStandaloneCard(section.lines[i]));
-          }
-        }
-      } else {
-        renderLegacyColonLayout();
-      }
-      card.appendChild(topMeta);
-      if (requiredFilterRow.childElementCount > 0) card.appendChild(requiredFilterRow);
-      card.appendChild(title2);
-      card.appendChild(body);
-      const preserveUnmatchedCharts = sectionTemplate?.render && "preserveUnmatchedCharts" in sectionTemplate.render ? sectionTemplate.render.preserveUnmatchedCharts !== false : layoutMode !== "object_order";
-      if (preserveUnmatchedCharts) {
-        for (let i = 0; i < charts.length; i++) {
-          if (renderedChartIndices.has(i)) continue;
-          appendChartByIndex(i);
-        }
-      }
-      return card;
-    }
-    function showNcfaManagerModal(options) {
-      const dark = {
-        panel: "#111827",
-        panelAlt: "#0b1220",
-        border: "#334155",
-        text: "#e5e7eb",
-        textMuted: "#93a4bc"
-      };
-      const overlay = document.createElement("div");
-      overlay.style.position = "fixed";
-      overlay.style.inset = "0";
-      overlay.style.background = "rgba(0,0,0,0.75)";
-      overlay.style.zIndex = "1000006";
-      overlay.style.display = "grid";
-      overlay.style.placeItems = "center";
-      overlay.style.padding = "16px";
-      const modal = document.createElement("div");
-      modal.style.width = "min(640px, 96vw)";
-      modal.style.border = `1px solid ${dark.border}`;
-      modal.style.borderRadius = "12px";
-      modal.style.background = dark.panel;
-      modal.style.color = dark.text;
-      modal.style.boxShadow = "0 10px 30px rgba(0,0,0,0.45)";
-      modal.style.padding = "14px";
-      const head = document.createElement("div");
-      head.style.display = "flex";
-      head.style.justifyContent = "space-between";
-      head.style.alignItems = "center";
-      head.style.marginBottom = "10px";
-      const headTitle = document.createElement("div");
-      headTitle.textContent = "NCFA Token Manager";
-      headTitle.style.fontWeight = "700";
-      const closeBtn2 = document.createElement("button");
-      closeBtn2.textContent = "x";
-      closeBtn2.style.background = "transparent";
-      closeBtn2.style.border = "none";
-      closeBtn2.style.color = dark.text;
-      closeBtn2.style.cursor = "pointer";
-      closeBtn2.style.fontSize = "18px";
-      head.appendChild(headTitle);
-      head.appendChild(closeBtn2);
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = "_ncfa value";
-      input.value = options.initialToken || "";
-      input.style.width = "100%";
-      input.style.boxSizing = "border-box";
-      input.style.background = dark.panelAlt;
-      input.style.color = dark.text;
-      input.style.border = `1px solid ${dark.border}`;
-      input.style.borderRadius = "8px";
-      input.style.padding = "8px 10px";
-      input.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-      input.style.fontSize = "12px";
-      const feedback = document.createElement("div");
-      feedback.style.marginTop = "8px";
-      feedback.style.fontSize = "12px";
-      feedback.style.color = dark.textMuted;
-      feedback.textContent = "Set manually or use auto-detect.";
-      const actions = document.createElement("div");
-      actions.style.display = "grid";
-      actions.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-      actions.style.gap = "8px";
-      actions.style.marginTop = "12px";
-      function mkSmallBtn(label, bg, onClick) {
-        const b = document.createElement("button");
-        b.textContent = label;
-        b.style.padding = "9px 10px";
-        b.style.borderRadius = "8px";
-        b.style.border = "1px solid rgba(255,255,255,0.2)";
-        b.style.background = bg;
-        b.style.color = "#fff";
-        b.style.cursor = "pointer";
-        b.style.fontWeight = "600";
-        b.addEventListener("click", onClick);
-        return b;
-      }
-      const saveBtn = mkSmallBtn("Save Manually", "rgba(95,95,30,0.45)", async () => {
-        saveBtn.disabled = true;
-        try {
-          const res = await options.onSave(input.value);
-          input.value = res.token || "";
-          feedback.textContent = res.message;
-        } catch (e) {
-          feedback.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
-        } finally {
-          saveBtn.disabled = false;
-        }
-      });
-      const autoBtn = mkSmallBtn("Auto-Detect", "rgba(35,95,160,0.45)", async () => {
-        autoBtn.disabled = true;
-        try {
-          const res = await options.onAutoDetect();
-          if (res.token) input.value = res.token;
-          feedback.textContent = res.message;
-        } catch (e) {
-          feedback.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
-        } finally {
-          autoBtn.disabled = false;
-        }
-      });
-      const helpBtn = mkSmallBtn("Show Instructions", "rgba(40,120,50,0.45)", () => {
-        window.open(options.repoUrl, "_blank");
-      });
-      const closeRedBtn = mkSmallBtn("Close", "rgba(160,35,35,0.55)", () => {
-        closeModal();
-      });
-      actions.appendChild(saveBtn);
-      actions.appendChild(autoBtn);
-      actions.appendChild(helpBtn);
-      actions.appendChild(closeRedBtn);
-      const hint = document.createElement("div");
-      hint.style.marginTop = "10px";
-      hint.style.fontSize = "11px";
-      hint.style.color = dark.textMuted;
-      hint.textContent = "Auto-detect checks stored token, then cookie access, then authenticated session (cookie can be HttpOnly).";
-      modal.appendChild(head);
-      modal.appendChild(input);
-      modal.appendChild(feedback);
-      modal.appendChild(actions);
-      modal.appendChild(hint);
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-      function closeModal() {
-        overlay.remove();
-      }
-      closeBtn2.addEventListener("click", closeModal);
-      overlay.addEventListener("click", (ev) => {
-        if (ev.target === overlay) closeModal();
-      });
-    }
-    return {
-      setVisible(visible) {
-        iconBtn.style.display = visible ? "flex" : "none";
-        if (!visible) {
-          panel.style.display = "none";
-          if (analysisWindow && !analysisWindow.win.closed) {
-            analysisWindow.win.close();
-          }
-        }
-      },
-      setStatus(msg) {
-        status.textContent = msg;
-      },
-      setCounts(value) {
-        counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
-      },
-      setAnalysisWindowData(data) {
-        lastAnalysisData = data;
-        populateAnalysisWindow(data);
-      },
-      onUpdateClick(fn) {
-        updateHandler = fn;
-      },
-      onResetClick(fn) {
-        resetHandler = fn;
-      },
-      onExportClick(fn) {
-        exportHandler = fn;
-      },
-      onTokenClick(fn) {
-        tokenHandler = fn;
-      },
-      openNcfaManager(options) {
-        showNcfaManagerModal(options);
-      },
-      onOpenAnalysisClick(fn) {
-        openAnalysisHandler = fn;
-      },
-      onRefreshAnalysisClick(fn) {
-        refreshAnalysisHandler = fn;
-      }
-    };
-  }
 
   // src/http.ts
   function readNcfaFromDocumentCookie() {
@@ -16055,2782 +9882,6 @@
     return rows;
   }
 
-  // src/analysis.ts
-  function asRecord(v) {
-    return typeof v === "object" && v !== null ? v : {};
-  }
-  var LEGACY_KEY_ALIASES = {
-    player_self_id: ["playerOneId", "p1_id"],
-    player_self_name: ["playerOneName", "p1_name"],
-    player_self_country: ["playerOneCountry", "p1_country"],
-    player_self_victory: ["playerOneVictory", "p1_victory"],
-    player_self_finalHealth: ["playerOneFinalHealth", "p1_finalHealth"],
-    player_self_startRating: ["playerOneStartRating", "p1_startRating"],
-    player_self_endRating: ["playerOneEndRating", "p1_endRating"],
-    player_opponent_id: ["playerTwoId", "teamTwoPlayerOneId", "p3_id", "p2_id"],
-    player_opponent_name: ["playerTwoName", "teamTwoPlayerOneName", "p3_name", "p2_name"],
-    player_opponent_country: ["playerTwoCountry", "teamTwoPlayerOneCountry", "p3_country", "p2_country"],
-    player_opponent_victory: ["playerTwoVictory", "p2_victory"],
-    player_opponent_finalHealth: ["playerTwoFinalHealth", "p2_finalHealth"],
-    player_opponent_startRating: ["playerTwoStartRating", "p3_startRating", "p2_startRating"],
-    player_opponent_endRating: ["playerTwoEndRating", "p3_endRating", "p2_endRating"],
-    player_mate_id: ["teamOnePlayerTwoId", "p2_id"],
-    player_mate_name: ["teamOnePlayerTwoName", "p2_name"],
-    player_mate_country: ["teamOnePlayerTwoCountry", "p2_country"],
-    player_mate_startRating: ["p2_startRating"],
-    player_mate_endRating: ["p2_endRating"],
-    player_opponent_mate_id: ["teamTwoPlayerTwoId", "p4_id"],
-    player_opponent_mate_name: ["teamTwoPlayerTwoName", "p4_name"],
-    player_opponent_mate_country: ["teamTwoPlayerTwoCountry", "p4_country"],
-    player_opponent_mate_startRating: ["p4_startRating"],
-    player_opponent_mate_endRating: ["p4_endRating"],
-    player_self_playerId: ["p1_playerId"],
-    player_self_teamId: ["p1_teamId"],
-    player_self_guessLat: ["p1_guessLat"],
-    player_self_guessLng: ["p1_guessLng"],
-    player_self_guessCountry: ["p1_guessCountry", "guessCountry"],
-    player_self_distanceKm: ["p1_distanceKm"],
-    player_self_score: ["p1_score", "score"],
-    player_self_healthAfter: ["p1_healthAfter"],
-    player_self_isBestGuess: ["p1_isBestGuess"],
-    player_mate_playerId: ["p2_playerId"],
-    player_mate_teamId: ["p2_teamId"],
-    player_mate_guessLat: ["p2_guessLat"],
-    player_mate_guessLng: ["p2_guessLng"],
-    player_mate_guessCountry: ["p2_guessCountry"],
-    player_mate_distanceKm: ["p2_distanceKm"],
-    player_mate_score: ["p2_score"],
-    player_mate_healthAfter: ["p2_healthAfter"],
-    player_mate_isBestGuess: ["p2_isBestGuess"],
-    player_opponent_playerId: ["p3_playerId", "p2_playerId"],
-    player_opponent_teamId: ["p3_teamId", "p2_teamId"],
-    player_opponent_guessLat: ["p3_guessLat", "p2_guessLat"],
-    player_opponent_guessLng: ["p3_guessLng", "p2_guessLng"],
-    player_opponent_guessCountry: ["p3_guessCountry", "p2_guessCountry"],
-    player_opponent_distanceKm: ["p3_distanceKm", "p2_distanceKm"],
-    player_opponent_score: ["p3_score", "p2_score"],
-    player_opponent_healthAfter: ["p3_healthAfter", "p2_healthAfter"],
-    player_opponent_isBestGuess: ["p3_isBestGuess", "p2_isBestGuess"],
-    player_opponent_mate_playerId: ["p4_playerId"],
-    player_opponent_mate_teamId: ["p4_teamId"],
-    player_opponent_mate_guessLat: ["p4_guessLat"],
-    player_opponent_mate_guessLng: ["p4_guessLng"],
-    player_opponent_mate_guessCountry: ["p4_guessCountry"],
-    player_opponent_mate_distanceKm: ["p4_distanceKm"],
-    player_opponent_mate_score: ["p4_score"],
-    player_opponent_mate_healthAfter: ["p4_healthAfter"],
-    player_opponent_mate_isBestGuess: ["p4_isBestGuess"]
-  };
-  function pickWithLegacyAliases(rec, key) {
-    if (key in rec && rec[key] !== void 0 && rec[key] !== null) return rec[key];
-    for (const alias of LEGACY_KEY_ALIASES[key] || []) {
-      if (alias in rec && rec[alias] !== void 0 && rec[alias] !== null) return rec[alias];
-    }
-    return void 0;
-  }
-  function getString(rec, key) {
-    const v = pickWithLegacyAliases(rec, key);
-    return typeof v === "string" ? v : void 0;
-  }
-  function getNumber(rec, key) {
-    const v = pickWithLegacyAliases(rec, key);
-    return typeof v === "number" ? v : void 0;
-  }
-  function getBoolean(rec, key) {
-    const v = pickWithLegacyAliases(rec, key);
-    return typeof v === "boolean" ? v : void 0;
-  }
-  var regionDisplay2 = typeof Intl !== "undefined" && "DisplayNames" in Intl && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
-  function startOfLocalDay(ts) {
-    const d = new Date(ts);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  }
-  function formatDay(ts) {
-    const d = new Date(ts);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${day}/${m}/${y}`;
-  }
-  function formatShortDateTime(ts) {
-    const d = new Date(ts);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${day}/${m}/${y} ${hh}:${mm}`;
-  }
-  function buildGoogleMapsUrl(lat, lng) {
-    if (typeof lat !== "number" || typeof lng !== "number") return void 0;
-    return `https://www.google.com/maps?q=${lat},${lng}`;
-  }
-  function buildStreetViewUrl(lat, lng) {
-    if (typeof lat !== "number" || typeof lng !== "number") return void 0;
-    return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
-  }
-  function buildUserProfileUrl(playerId) {
-    if (typeof playerId !== "string" || !playerId.trim()) return void 0;
-    return `https://www.geoguessr.com/user/${playerId}`;
-  }
-  function toDrilldownFromRound(r, ts, score, meta) {
-    const rr = asRecord(r);
-    const trueLat = typeof r.trueLat === "number" ? r.trueLat : void 0;
-    const trueLng = typeof r.trueLng === "number" ? r.trueLng : void 0;
-    const guessLat = getNumber(rr, "player_self_guessLat");
-    const guessLng = getNumber(rr, "player_self_guessLng");
-    const timeMs = extractTimeMs(r);
-    const damage = meta?.ownPlayerId ? getRoundDamageDiff(r, meta.ownPlayerId) : void 0;
-    return {
-      gameId: r.gameId,
-      roundNumber: r.roundNumber,
-      ts,
-      score,
-      trueCountry: normalizeCountryCode(r.trueCountry),
-      guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
-      trueLat,
-      trueLng,
-      guessLat,
-      guessLng,
-      guessDurationSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
-      movement: meta?.movementLabel,
-      gameMode: meta?.gameModeLabel,
-      teammate: meta?.teammateName,
-      result: meta?.result,
-      damage,
-      googleMapsUrl: buildGoogleMapsUrl(guessLat, guessLng),
-      streetViewUrl: buildStreetViewUrl(trueLat, trueLng)
-    };
-  }
-  function sum(values) {
-    return values.reduce((a, b) => a + b, 0);
-  }
-  function avg(values) {
-    return values.length ? sum(values) / values.length : void 0;
-  }
-  function median(values) {
-    if (values.length === 0) return void 0;
-    const s = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-  }
-  function stdDev(values) {
-    if (values.length < 2) return void 0;
-    const m = avg(values);
-    if (m === void 0) return void 0;
-    const vari = avg(values.map((x) => (x - m) ** 2));
-    return vari === void 0 ? void 0 : Math.sqrt(vari);
-  }
-  function formatDurationHuman(ms) {
-    if (!Number.isFinite(ms) || ms <= 0) return "-";
-    const totalMinutes = Math.round(ms / 6e4);
-    const days2 = Math.floor(totalMinutes / (60 * 24));
-    const hours = Math.floor(totalMinutes % (60 * 24) / 60);
-    const minutes = totalMinutes % 60;
-    if (days2 > 0) return `${days2}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  }
-  function buildSmoothedScoreDistributionWithDrilldown(points, bucketSize = 100) {
-    if (points.length === 0) return [];
-    const maxScore = 5e3;
-    const bucketCount = Math.ceil((maxScore + 1) / bucketSize);
-    const buckets = new Array(bucketCount).fill(0);
-    const drillByBucket = Array.from({ length: bucketCount }, () => []);
-    for (const p of points) {
-      const s = Math.max(0, Math.min(maxScore, p.score));
-      const idx = Math.min(bucketCount - 1, Math.floor(s / bucketSize));
-      buckets[idx]++;
-      drillByBucket[idx].push(p.drill);
-    }
-    const weights = [1, 2, 3, 2, 1];
-    const radius = Math.floor(weights.length / 2);
-    return buckets.map((_, i) => {
-      let weighted = 0;
-      let weightSum = 0;
-      for (let k = -radius; k <= radius; k++) {
-        const j = i + k;
-        if (j < 0 || j >= buckets.length) continue;
-        const w = weights[k + radius];
-        weighted += buckets[j] * w;
-        weightSum += w;
-      }
-      const start = i * bucketSize;
-      const end = Math.min(maxScore, start + bucketSize - 1);
-      return {
-        label: `${start}-${end}`,
-        value: weightSum ? weighted / weightSum : 0,
-        drilldown: drillByBucket[i]
-      };
-    });
-  }
-  function fmt(n, digits = 2) {
-    if (n === void 0 || !Number.isFinite(n)) return "-";
-    return n.toFixed(digits);
-  }
-  function pct(part, total) {
-    if (!total) return 0;
-    return part / total * 100;
-  }
-  function extractScore(r) {
-    const rr = asRecord(r);
-    return getNumber(rr, "player_self_score");
-  }
-  function extractDistanceMeters(r) {
-    const rr = asRecord(r);
-    const selfDistanceKm = getNumber(rr, "player_self_distanceKm");
-    if (typeof selfDistanceKm === "number") return selfDistanceKm * 1e3;
-    return void 0;
-  }
-  function extractTimeMs(r) {
-    if (typeof r.durationSeconds === "number") return r.durationSeconds * 1e3;
-    return void 0;
-  }
-  function inTsRange(ts, fromTs, toTs2) {
-    if (fromTs !== void 0 && ts < fromTs) return false;
-    if (toTs2 !== void 0 && ts > toTs2) return false;
-    return true;
-  }
-  function getGameMode(game) {
-    return game.gameMode || game.mode || "unknown";
-  }
-  function normalizeGameModeKey(raw) {
-    const s = (raw || "").trim().toLowerCase();
-    if (s === "duels" || s === "duel") return "duels";
-    if (s === "teamduels" || s === "team_duels" || s === "team duel" || s === "teamduel") return "teamduels";
-    return "other";
-  }
-  function gameModeLabel(mode) {
-    const key = normalizeGameModeKey(mode);
-    if (key === "duels") return "Duel";
-    if (key === "teamduels") return "Team Duel";
-    return mode;
-  }
-  function normalizeMovementType2(raw) {
-    if (typeof raw !== "string") return "unknown";
-    const s = raw.trim().toLowerCase();
-    if (!s) return "unknown";
-    if (s.includes("nmpz")) return "nmpz";
-    if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
-    if (s.includes("moving")) return "moving";
-    return "unknown";
-  }
-  function movementTypeLabel(kind) {
-    if (kind === "moving") return "Moving";
-    if (kind === "no_move") return "No Move";
-    if (kind === "nmpz") return "NMPZ";
-    return "Unknown";
-  }
-  function getMovementType2(game, detail) {
-    const d = asRecord(detail);
-    const fromDetail = getString(d, "gameModeSimple");
-    if (typeof fromDetail === "string" && fromDetail.trim()) return normalizeMovementType2(fromDetail);
-    return normalizeMovementType2(game.gameMode);
-  }
-  function normalizeCountryCode(v) {
-    if (typeof v !== "string") return void 0;
-    const x = v.trim().toLowerCase();
-    return x ? x : void 0;
-  }
-  function countryLabel(code) {
-    const c = normalizeCountryCode(code);
-    if (!c) return "-";
-    if (c.length === 2 && regionDisplay2) {
-      try {
-        const name = regionDisplay2.of(c.toUpperCase());
-        if (typeof name === "string" && name.trim()) return name;
-      } catch {
-      }
-    }
-    return c.toUpperCase();
-  }
-  function extractOwnDuelRating(detail, ownPlayerId) {
-    const d = asRecord(detail);
-    const selfId = getString(d, "player_self_id");
-    const opponentId = getString(d, "player_opponent_id");
-    if (ownPlayerId && ownPlayerId === opponentId && ownPlayerId !== selfId) {
-      return {
-        start: getNumber(d, "player_opponent_startRating"),
-        end: getNumber(d, "player_opponent_endRating")
-      };
-    }
-    return {
-      start: getNumber(d, "player_self_startRating"),
-      end: getNumber(d, "player_self_endRating")
-    };
-  }
-  function extractOwnTeamRating(detail, ownPlayerId) {
-    const d = asRecord(detail);
-    if (ownPlayerId) {
-      const teamOneIds = [getString(d, "teamOnePlayerOneId"), getString(d, "teamOnePlayerTwoId")];
-      const inTeamOne = teamOneIds.includes(ownPlayerId);
-      if (!inTeamOne) {
-        return {
-          start: getNumber(d, "teamTwoStartRating"),
-          end: getNumber(d, "teamTwoEndRating")
-        };
-      }
-    }
-    return {
-      start: getNumber(d, "teamOneStartRating"),
-      end: getNumber(d, "teamOneEndRating")
-    };
-  }
-  function getPlayerStatFromRound(round, playerId) {
-    const rr = asRecord(round);
-    const roles = ["player_self", "player_mate", "player_opponent", "player_opponent_mate"];
-    for (const role of roles) {
-      const pid = getString(rr, `${role}_playerId`);
-      if (pid !== playerId) continue;
-      return {
-        score: getNumber(rr, `${role}_score`),
-        distanceKm: getNumber(rr, `${role}_distanceKm`),
-        teamId: getString(rr, `${role}_teamId`)
-      };
-    }
-    return void 0;
-  }
-  function getRoundDamageDiff(round, ownPlayerId) {
-    const rr = asRecord(round);
-    const modeFamily = getString(rr, "modeFamily");
-    if (modeFamily === "duels") {
-      const selfId = getString(rr, "player_self_playerId");
-      const opponentId = getString(rr, "player_opponent_playerId");
-      const selfScore = getNumber(rr, "player_self_score");
-      const opponentScore = getNumber(rr, "player_opponent_score");
-      if (typeof selfScore !== "number" || typeof opponentScore !== "number") return void 0;
-      if (ownPlayerId === opponentId && ownPlayerId !== selfId) return opponentScore - selfScore;
-      if (ownPlayerId === selfId || !selfId || !opponentId) return selfScore - opponentScore;
-      return void 0;
-    }
-    if (modeFamily === "teamduels") {
-      const own = getPlayerStatFromRound(round, ownPlayerId);
-      if (!own?.teamId) return void 0;
-      let ownTeamScore = 0;
-      let ownTeamN = 0;
-      let oppTeamScore = 0;
-      let oppTeamN = 0;
-      const roles = ["player_self", "player_mate", "player_opponent", "player_opponent_mate"];
-      for (const role of roles) {
-        const pid = getString(rr, `${role}_playerId`);
-        if (!pid) continue;
-        const teamId = getString(rr, `${role}_teamId`);
-        const score = getNumber(rr, `${role}_score`);
-        if (typeof score !== "number" || !teamId) continue;
-        if (teamId === own.teamId) {
-          ownTeamScore += score;
-          ownTeamN++;
-        } else {
-          oppTeamScore += score;
-          oppTeamN++;
-        }
-      }
-      if (!ownTeamN || !oppTeamN) return void 0;
-      return ownTeamScore / ownTeamN - oppTeamScore / oppTeamN;
-    }
-    return void 0;
-  }
-  function getGameResult(detail, ownPlayerId) {
-    const d = asRecord(detail);
-    const modeFamily = getString(d, "modeFamily");
-    if (modeFamily === "duels") {
-      const selfId = getString(d, "player_self_id");
-      const opponentId = getString(d, "player_opponent_id");
-      const ownIsOpponent = ownPlayerId && ownPlayerId === opponentId && ownPlayerId !== selfId;
-      const ownWin = ownIsOpponent ? getBoolean(d, "player_opponent_victory") : getBoolean(d, "player_self_victory");
-      const oppWin = ownIsOpponent ? getBoolean(d, "player_self_victory") : getBoolean(d, "player_opponent_victory");
-      if (typeof ownWin === "boolean") return ownWin ? "W" : "L";
-      if (typeof oppWin === "boolean") return oppWin ? "L" : "W";
-      const selfHp = getNumber(d, "player_self_finalHealth");
-      const opponentHp = getNumber(d, "player_opponent_finalHealth");
-      if (typeof selfHp === "number" && typeof opponentHp === "number") {
-        const ownHp = ownIsOpponent ? opponentHp : selfHp;
-        const oppHp = ownIsOpponent ? selfHp : opponentHp;
-        if (ownHp > oppHp) return "W";
-        if (ownHp < oppHp) return "L";
-        return "T";
-      }
-      if (!ownPlayerId && (selfId || opponentId)) return "T";
-      return void 0;
-    }
-    if (modeFamily === "teamduels") {
-      const t1p1 = getString(d, "teamOnePlayerOneId");
-      const t1p2 = getString(d, "teamOnePlayerTwoId");
-      const ownInTeamOne = ownPlayerId ? [t1p1, t1p2].includes(ownPlayerId) : true;
-      const ownWin = ownInTeamOne ? getBoolean(d, "teamOneVictory") : getBoolean(d, "teamTwoVictory");
-      const oppWin = ownInTeamOne ? getBoolean(d, "teamTwoVictory") : getBoolean(d, "teamOneVictory");
-      if (typeof ownWin === "boolean") return ownWin ? "W" : "L";
-      if (typeof oppWin === "boolean") return oppWin ? "L" : "W";
-      const t1Hp = getNumber(d, "teamOneFinalHealth");
-      const t2Hp = getNumber(d, "teamTwoFinalHealth");
-      if (typeof t1Hp === "number" && typeof t2Hp === "number") {
-        const ownHp = ownInTeamOne ? t1Hp : t2Hp;
-        const oppHp = ownInTeamOne ? t2Hp : t1Hp;
-        if (ownHp > oppHp) return "W";
-        if (ownHp < oppHp) return "L";
-        return "T";
-      }
-      return void 0;
-    }
-    return void 0;
-  }
-  function inferOwnPlayerId(rounds) {
-    const counts = /* @__PURE__ */ new Map();
-    for (const r of rounds) {
-      const selfPlayerId = getString(asRecord(r), "player_self_playerId");
-      if (typeof selfPlayerId === "string" && selfPlayerId.trim()) {
-        counts.set(selfPlayerId, (counts.get(selfPlayerId) || 0) + 1);
-      }
-    }
-    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-    return best?.[0];
-  }
-  function collectPlayerNames(details) {
-    const map = /* @__PURE__ */ new Map();
-    for (const d of details) {
-      const dd = asRecord(d);
-      const pairs = [
-        [getString(dd, "player_self_id"), getString(dd, "player_self_name")],
-        [getString(dd, "player_mate_id"), getString(dd, "player_mate_name")],
-        [getString(dd, "player_opponent_id"), getString(dd, "player_opponent_name")],
-        [getString(dd, "player_opponent_mate_id"), getString(dd, "player_opponent_mate_name")],
-        [getString(dd, "teamOnePlayerOneId"), getString(dd, "teamOnePlayerOneName")],
-        [getString(dd, "teamOnePlayerTwoId"), getString(dd, "teamOnePlayerTwoName")],
-        [getString(dd, "teamTwoPlayerOneId"), getString(dd, "teamTwoPlayerOneName")],
-        [getString(dd, "teamTwoPlayerTwoId"), getString(dd, "teamTwoPlayerTwoName")]
-      ];
-      for (const [id, name] of pairs) {
-        if (typeof id !== "string" || !id.trim()) continue;
-        if (typeof name !== "string" || !name.trim()) continue;
-        if (!map.has(id)) map.set(id, name.trim());
-      }
-    }
-    return map;
-  }
-  function getTeammateNameForGame(detail, ownPlayerId, nameMap) {
-    const d = asRecord(detail);
-    if (getString(d, "modeFamily") !== "teamduels" || !ownPlayerId) return void 0;
-    const t1p1 = getString(d, "teamOnePlayerOneId");
-    const t1p2 = getString(d, "teamOnePlayerTwoId");
-    const t2p1 = getString(d, "teamTwoPlayerOneId");
-    const t2p2 = getString(d, "teamTwoPlayerTwoId");
-    let mateId;
-    if (ownPlayerId === t1p1) mateId = t1p2;
-    else if (ownPlayerId === t1p2) mateId = t1p1;
-    else if (ownPlayerId === t2p1) mateId = t2p2;
-    else if (ownPlayerId === t2p2) mateId = t2p1;
-    if (!mateId) return void 0;
-    const explicitName = (mateId === t1p1 ? getString(d, "teamOnePlayerOneName") : void 0) ?? (mateId === t1p2 ? getString(d, "teamOnePlayerTwoName") : void 0) ?? (mateId === t2p1 ? getString(d, "teamTwoPlayerOneName") : void 0) ?? (mateId === t2p2 ? getString(d, "teamTwoPlayerTwoName") : void 0);
-    return explicitName || nameMap.get(mateId) || mateId.slice(0, 8);
-  }
-  var DAY_MS = 24 * 60 * 60 * 1e3;
-  var SESSION_GAP_MS = 45 * 60 * 1e3;
-  function pickOverviewBucketMs(spanMs) {
-    const spanDays = spanMs / DAY_MS;
-    if (spanDays > 900) return 30 * DAY_MS;
-    if (spanDays > 540) return 14 * DAY_MS;
-    if (spanDays > 180) return 7 * DAY_MS;
-    return void 0;
-  }
-  function smoothDailyScoreRecords(records) {
-    if (records.length === 0) return { points: [] };
-    const sorted = records.slice().sort((a, b) => a.day - b.day);
-    const spanMs = Math.max(0, sorted[sorted.length - 1].day - sorted[0].day);
-    const bucketMs = pickOverviewBucketMs(spanMs);
-    if (!bucketMs) {
-      return {
-        points: sorted.map((d) => ({ x: d.day, y: d.avgScore, label: formatDay(d.day) }))
-      };
-    }
-    const buckets = /* @__PURE__ */ new Map();
-    for (const d of sorted) {
-      const key = Math.floor(d.day / bucketMs) * bucketMs;
-      const cur = buckets.get(key) || { weighted: 0, weight: 0, endDay: d.day };
-      const w = Math.max(1, d.rounds);
-      cur.weighted += d.avgScore * w;
-      cur.weight += w;
-      cur.endDay = d.day;
-      buckets.set(key, cur);
-    }
-    return {
-      bucketDays: Math.round(bucketMs / DAY_MS),
-      points: [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => ({ x: v.endDay, y: v.weighted / Math.max(1, v.weight), label: formatDay(v.endDay) }))
-    };
-  }
-  async function getAnalysisWindowData(filter) {
-    const [allGames, allRounds, allDetails] = await Promise.all([
-      db.games.orderBy("playedAt").toArray(),
-      db.rounds.toArray(),
-      db.details.toArray()
-    ]);
-    const gameModeFilter = filter?.gameMode ?? filter?.mode;
-    const minPlayedAt = allGames.length ? allGames[0].playedAt : void 0;
-    const maxPlayedAt = allGames.length ? allGames[allGames.length - 1].playedAt : void 0;
-    const dateGames = allGames.filter((g) => {
-      if (!inTsRange(g.playedAt, filter?.fromTs, filter?.toTs)) return false;
-      return true;
-    });
-    const availableGameModes = ["all", "duels", "teamduels"].filter((mode) => {
-      if (mode === "all") return true;
-      return dateGames.some((g) => normalizeGameModeKey(getGameMode(g)) === mode);
-    });
-    const modeGames = dateGames.filter((g) => {
-      if (gameModeFilter && gameModeFilter !== "all") {
-        if (normalizeGameModeKey(getGameMode(g)) !== gameModeFilter) return false;
-      }
-      return true;
-    });
-    const detailByGameId = new Map(allDetails.map((d) => [d.gameId, d]));
-    const movementByGameId = new Map(modeGames.map((g) => [g.gameId, getMovementType2(g, detailByGameId.get(g.gameId))]));
-    const movementOrder = ["moving", "no_move", "nmpz", "unknown"];
-    const movementSet = /* @__PURE__ */ new Set();
-    for (const kind of movementByGameId.values()) movementSet.add(kind);
-    const availableMovementTypes = [
-      { key: "all", label: "All movement types" },
-      ...movementOrder.filter((k) => k !== "unknown" && movementSet.has(k)).map((k) => ({ key: k, label: movementTypeLabel(k) }))
-    ];
-    const movementFilter = filter?.movementType;
-    const baseGames = modeGames.filter((g) => {
-      if (movementFilter && movementFilter !== "all") {
-        const kind = movementByGameId.get(g.gameId) || "unknown";
-        if (kind !== movementFilter) return false;
-      }
-      return true;
-    });
-    const baseGameSet = new Set(baseGames.map((g) => g.gameId));
-    const baseRounds = allRounds.filter((r) => baseGameSet.has(r.gameId));
-    const baseDetails = allDetails.filter((d) => baseGameSet.has(d.gameId));
-    const ownPlayerId = inferOwnPlayerId(baseRounds);
-    const nameMap = collectPlayerNames(baseDetails);
-    const playerName = ownPlayerId ? nameMap.get(ownPlayerId) || ownPlayerId : void 0;
-    const teammateGames = /* @__PURE__ */ new Map();
-    const teammateRoundSamples = /* @__PURE__ */ new Map();
-    for (const d of baseDetails) {
-      const dd = asRecord(d);
-      const m = getString(dd, "modeFamily");
-      if (m !== "teamduels") continue;
-      const p1 = getString(dd, "teamOnePlayerOneId");
-      const p2 = getString(dd, "teamOnePlayerTwoId");
-      const own = ownPlayerId && [p1, p2].includes(ownPlayerId) ? ownPlayerId : p1;
-      const mate = [p1, p2].find((x) => !!x && x !== own);
-      if (!mate) continue;
-      if (!teammateGames.has(mate)) teammateGames.set(mate, /* @__PURE__ */ new Set());
-      teammateGames.get(mate)?.add(d.gameId);
-    }
-    for (const r of baseRounds) {
-      for (const [tid] of teammateGames) {
-        if (!teammateGames.get(tid)?.has(r.gameId)) continue;
-        const st = getPlayerStatFromRound(r, tid);
-        if (!st) continue;
-        if (typeof st.score === "number" || typeof st.distanceKm === "number") {
-          teammateRoundSamples.set(tid, (teammateRoundSamples.get(tid) || 0) + 1);
-        }
-      }
-    }
-    const availableTeammates = [
-      { id: "all", label: "All teammates" },
-      ...[...teammateGames.entries()].map(([id, games2]) => {
-        const name = nameMap.get(id) || id.slice(0, 8);
-        const rounds2 = teammateRoundSamples.get(id) || 0;
-        return { id, label: `${name} (${games2.size} games, ${rounds2} rounds)`, games: games2.size };
-      }).sort((a, b) => b.games - a.games || a.label.localeCompare(b.label)).map(({ id, label }) => ({ id, label }))
-    ];
-    const countryCountsBase = /* @__PURE__ */ new Map();
-    for (const r of baseRounds) {
-      const c = normalizeCountryCode(r.trueCountry);
-      if (!c) continue;
-      countryCountsBase.set(c, (countryCountsBase.get(c) || 0) + 1);
-    }
-    const availableCountries = [
-      { code: "all", label: "All countries" },
-      ...[...countryCountsBase.entries()].sort((a, b) => b[1] - a[1]).slice(0, 100).map(([code, count]) => ({ code, label: `${countryLabel(code)} (${count} rounds)` }))
-    ];
-    const selectedTeammate = filter?.teammateId && filter.teammateId !== "all" ? filter.teammateId : void 0;
-    const selectedCountry = filter?.country && filter.country !== "all" ? filter.country.toLowerCase() : void 0;
-    const teammateGameSet = selectedTeammate ? teammateGames.get(selectedTeammate) || /* @__PURE__ */ new Set() : void 0;
-    const teamGames = selectedTeammate ? baseGames.filter((g) => teammateGameSet?.has(g.gameId)) : baseGames;
-    const teamGameSet = new Set(teamGames.map((g) => g.gameId));
-    const teamRounds = baseRounds.filter((r) => teamGameSet.has(r.gameId));
-    const teamDetails = baseDetails.filter((d) => teamGameSet.has(d.gameId));
-    const teamPlayedAtByGameId = new Map(teamGames.map((g) => [g.gameId, g.playedAt]));
-    const resultByGameId = /* @__PURE__ */ new Map();
-    for (const d of teamDetails) {
-      const res = getGameResult(d, ownPlayerId);
-      if (res) resultByGameId.set(d.gameId, res);
-    }
-    const drilldownMetaByGameId = /* @__PURE__ */ new Map();
-    for (const g of teamGames) {
-      drilldownMetaByGameId.set(g.gameId, {
-        movementLabel: movementTypeLabel(movementByGameId.get(g.gameId) || "unknown"),
-        gameModeLabel: gameModeLabel(getGameMode(g)),
-        ownPlayerId,
-        result: resultByGameId.get(g.gameId)
-      });
-    }
-    for (const d of teamDetails) {
-      const meta = drilldownMetaByGameId.get(d.gameId);
-      if (!meta) continue;
-      const teammateName = getTeammateNameForGame(d, ownPlayerId, nameMap);
-      if (teammateName) meta.teammateName = teammateName;
-    }
-    const toDrilldownItem = (r, ts, score) => toDrilldownFromRound(r, ts, score, drilldownMetaByGameId.get(r.gameId));
-    const countryRounds = selectedCountry ? teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === selectedCountry) : teamRounds;
-    const countryGameSet = new Set(countryRounds.map((r) => r.gameId));
-    const countryGames = teamGames.filter((g) => countryGameSet.has(g.gameId));
-    if (countryGames.length === 0 || countryRounds.length === 0) {
-      return {
-        sections: [{ id: "empty", title: "Overview", lines: ["Keine Daten fuer den gewaehlten Filter."] }],
-        availableGameModes,
-        availableMovementTypes,
-        availableTeammates,
-        availableCountries,
-        minPlayedAt,
-        maxPlayedAt
-      };
-    }
-    const games = countryGames;
-    const rounds = countryRounds;
-    const sections = [];
-    const gameTimes = games.map((g) => g.playedAt).sort((a, b) => a - b);
-    const playedAtByGameId = new Map(games.map((g) => [g.gameId, g.playedAt]));
-    const scores = rounds.map(extractScore).filter((v) => v !== void 0);
-    const distancesKm = rounds.map((r) => extractDistanceMeters(r)).filter((v) => v !== void 0).map((m) => m / 1e3);
-    const timesSec = rounds.map(extractTimeMs).filter((v) => v !== void 0).map((ms) => ms / 1e3);
-    const overviewTimePlayedMs = rounds.map(extractTimeMs).filter((v) => typeof v === "number").reduce((acc, v) => acc + v, 0);
-    const overviewTimedRounds = rounds.reduce((acc, r) => acc + (typeof extractTimeMs(r) === "number" ? 1 : 0), 0);
-    const roundMetrics = rounds.map((r) => {
-      const ts = playedAtByGameId.get(r.gameId);
-      const score = extractScore(r);
-      const timeMs = extractTimeMs(r);
-      const distMeters = extractDistanceMeters(r);
-      if (ts === void 0 || typeof score !== "number") return void 0;
-      const item = {
-        round: r,
-        ts,
-        day: startOfLocalDay(ts),
-        gameId: r.gameId,
-        roundNumber: r.roundNumber,
-        score,
-        timeSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
-        distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0,
-        damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : void 0,
-        guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
-        trueCountry: normalizeCountryCode(r.trueCountry),
-        trueLat: typeof r.trueLat === "number" ? r.trueLat : void 0,
-        trueLng: typeof r.trueLng === "number" ? r.trueLng : void 0
-      };
-      return item;
-    }).filter((x) => x !== void 0);
-    const fiveKCount = roundMetrics.filter((x) => x.score >= 5e3).length;
-    const throwCount = roundMetrics.filter((x) => x.score < 50).length;
-    const perfectFiveKDrill = roundMetrics.filter((x) => x.score >= 5e3).map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const nearPerfectDrill = roundMetrics.filter((x) => x.score >= 4500).map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const lowScoreDrill = roundMetrics.filter((x) => x.score < 500).map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const throwDrill = roundMetrics.filter((x) => x.score < 50).map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const overviewBucketMs = pickOverviewBucketMs(Math.max(0, gameTimes[gameTimes.length - 1] - gameTimes[0]));
-    const overviewBucketDays = overviewBucketMs ? Math.round(overviewBucketMs / DAY_MS) : 1;
-    const overviewLines = [];
-    const overviewCharts = [];
-    const outcomeTimeline = ownPlayerId ? teamDetails.map((d) => {
-      const ts = teamPlayedAtByGameId.get(d.gameId);
-      const result = getGameResult(d, ownPlayerId);
-      return ts && result ? { ts, result, gameId: d.gameId } : void 0;
-    }).filter((x) => !!x).sort((a, b) => a.ts - b.ts) : [];
-    const winCount = outcomeTimeline.filter((x) => x.result === "W").length;
-    const lossCount = outcomeTimeline.filter((x) => x.result === "L").length;
-    const tieCount = outcomeTimeline.filter((x) => x.result === "T").length;
-    const decisiveGames = winCount + lossCount;
-    const totalResultGames = decisiveGames + tieCount;
-    let currentWinStreak = 0;
-    let currentLossStreak = 0;
-    let bestWinStreak = 0;
-    let worstLossStreak = 0;
-    let currentWinStreakGames = [];
-    let currentLossStreakGames = [];
-    let bestWinStreakGames = [];
-    let worstLossStreakGames = [];
-    for (const g of outcomeTimeline) {
-      if (g.result === "W") {
-        currentWinStreak++;
-        currentLossStreak = 0;
-        bestWinStreak = Math.max(bestWinStreak, currentWinStreak);
-        currentWinStreakGames.push(g.gameId);
-        currentLossStreakGames = [];
-        if (currentWinStreakGames.length > bestWinStreakGames.length) bestWinStreakGames = currentWinStreakGames.slice();
-        continue;
-      }
-      if (g.result === "L") {
-        currentLossStreak++;
-        currentWinStreak = 0;
-        worstLossStreak = Math.max(worstLossStreak, currentLossStreak);
-        currentLossStreakGames.push(g.gameId);
-        currentWinStreakGames = [];
-        if (currentLossStreakGames.length > worstLossStreakGames.length) worstLossStreakGames = currentLossStreakGames.slice();
-        continue;
-      }
-      currentWinStreak = 0;
-      currentLossStreak = 0;
-      currentWinStreakGames = [];
-      currentLossStreakGames = [];
-    }
-    const toOverviewGameDrill = (gameIds) => {
-      if (gameIds.length === 0) return [];
-      const set = new Set(gameIds);
-      return teamRounds.filter((r) => set.has(r.gameId)).map((r) => toDrilldownItem(r, teamPlayedAtByGameId.get(r.gameId), extractScore(r)));
-    };
-    const winGameIdSet = new Set(outcomeTimeline.filter((x) => x.result === "W").map((x) => x.gameId));
-    const overviewWinDrill = toOverviewGameDrill([...winGameIdSet]);
-    const overviewAvgScoreDrill = roundMetrics.map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const overviewAvgDistanceDrill = roundMetrics.filter((x) => typeof x.distKm === "number").map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const overviewAvgTimeDrill = roundMetrics.filter((x) => typeof x.timeSec === "number").map((x) => toDrilldownItem(x.round, x.ts, x.score));
-    const overviewTimePlayedDrill = overviewAvgTimeDrill;
-    const resultLines = ownPlayerId ? [
-      selectedCountry ? "Country filter is ignored here (game-level results)." : "",
-      `Games with result data: ${totalResultGames}`,
-      `Wins: ${winCount} | Losses: ${lossCount} | Ties: ${tieCount}`,
-      `Win rate: ${fmt(pct(winCount, decisiveGames), 1)}%`,
-      `Avg score: ${fmt(avg(scores), 1)} | Median: ${fmt(median(scores), 1)} | StdDev: ${fmt(stdDev(scores), 1)}`,
-      `Avg distance: ${fmt(avg(distancesKm), 2)} km | Median: ${fmt(median(distancesKm), 2)} km`,
-      `Avg time: ${fmt(avg(timesSec), 1)} s | Median: ${fmt(median(timesSec), 1)} s`,
-      `Time played: ${overviewTimedRounds > 0 ? formatDurationHuman(overviewTimePlayedMs) : "-"}${overviewTimedRounds > 0 && overviewTimedRounds < rounds.length ? ` (from ${overviewTimedRounds}/${rounds.length} rounds with time data)` : ""}`,
-      `Perfect 5k rounds: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
-      `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`,
-      `Longest win streak: ${bestWinStreak}`,
-      `Longest loss streak: ${worstLossStreak}`
-    ].filter((x) => x !== "") : ["No own player id inferred, so game-level win/loss is unavailable."];
-    const modeCounts = /* @__PURE__ */ new Map();
-    const movementCounts = /* @__PURE__ */ new Map();
-    const movementByFilteredGameId = new Map(games.map((g) => [g.gameId, movementByGameId.get(g.gameId) || "unknown"]));
-    for (const g of games) {
-      const modeKey = normalizeGameModeKey(getGameMode(g));
-      if (modeKey === "duels" || modeKey === "teamduels") modeCounts.set(modeKey, (modeCounts.get(modeKey) || 0) + 1);
-      const m = movementByFilteredGameId.get(g.gameId) || "unknown";
-      movementCounts.set(m, (movementCounts.get(m) || 0) + 1);
-    }
-    const sortedModes = [...modeCounts.entries()].sort((a, b) => b[1] - a[1]);
-    const movementOrderForBreakdown = ["moving", "no_move", "nmpz", "unknown"];
-    const movementBars = movementOrderForBreakdown.filter((m) => (movementCounts.get(m) || 0) > 0).map((m) => ({ label: movementTypeLabel(m), value: movementCounts.get(m) || 0 }));
-    const modeDrillMap = /* @__PURE__ */ new Map();
-    for (const [m] of sortedModes) {
-      const modeKey = normalizeGameModeKey(m);
-      const modeGameIds = new Set(games.filter((g) => normalizeGameModeKey(getGameMode(g)) === modeKey).map((g) => g.gameId));
-      modeDrillMap.set(gameModeLabel(m), teamRounds.filter((r) => modeGameIds.has(r.gameId)).map((r) => toDrilldownItem(r, teamPlayedAtByGameId.get(r.gameId), extractScore(r))));
-    }
-    const movementDrillMap = /* @__PURE__ */ new Map();
-    for (const m of movementBars) {
-      const modeGameIds = new Set(games.filter((g) => movementTypeLabel(movementByFilteredGameId.get(g.gameId) || "unknown") === m.label).map((g) => g.gameId));
-      movementDrillMap.set(m.label, teamRounds.filter((r) => modeGameIds.has(r.gameId)).map((r) => toDrilldownItem(r, teamPlayedAtByGameId.get(r.gameId), extractScore(r))));
-    }
-    const breakdownLines = [
-      "Mode Breakdown:",
-      ...sortedModes.map(([m, c]) => `${gameModeLabel(m)}: ${c}`),
-      "Movement Breakdown:",
-      ...movementBars.map((b) => `${b.label}: ${b.value}`)
-    ];
-    const overviewByDay = /* @__PURE__ */ new Map();
-    const ensureOverviewDay = (day) => {
-      let agg = overviewByDay.get(day);
-      if (!agg) {
-        agg = {
-          day,
-          games: 0,
-          rounds: 0,
-          scoreSum: 0,
-          scoreCorrectSum: 0,
-          hits: 0,
-          distSum: 0,
-          distN: 0,
-          timeSum: 0,
-          timeN: 0,
-          throws: 0,
-          fiveks: 0,
-          wins: 0,
-          damageDealt: 0,
-          damageTaken: 0
-        };
-        overviewByDay.set(day, agg);
-      }
-      return agg;
-    };
-    for (const g of games) {
-      ensureOverviewDay(startOfLocalDay(g.playedAt)).games++;
-    }
-    for (const rm of roundMetrics) {
-      const agg = ensureOverviewDay(rm.day);
-      agg.rounds++;
-      agg.scoreSum += rm.score;
-      if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) {
-        agg.hits++;
-        agg.scoreCorrectSum += rm.score;
-      }
-      if (typeof rm.distKm === "number" && Number.isFinite(rm.distKm)) {
-        agg.distSum += rm.distKm;
-        agg.distN++;
-      }
-      if (typeof rm.timeSec === "number" && Number.isFinite(rm.timeSec)) {
-        agg.timeSum += rm.timeSec;
-        agg.timeN++;
-      }
-      if (rm.score < 50) agg.throws++;
-      if (rm.score >= 5e3) agg.fiveks++;
-      if (typeof rm.damage === "number" && Number.isFinite(rm.damage)) {
-        if (rm.damage > 0) agg.damageDealt += rm.damage;
-        else if (rm.damage < 0) agg.damageTaken += Math.abs(rm.damage);
-      }
-    }
-    for (const x of outcomeTimeline) {
-      if (x.result !== "W") continue;
-      ensureOverviewDay(startOfLocalDay(x.ts)).wins++;
-    }
-    const overviewRatingTimeline = (selectedTeammate ? teamDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels") : teamDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels")).map((d) => {
-      const ts = teamPlayedAtByGameId.get(d.gameId);
-      const rating = selectedTeammate ? extractOwnTeamRating(d, ownPlayerId)?.end : extractOwnDuelRating(d, ownPlayerId)?.end;
-      return ts && typeof rating === "number" ? { day: startOfLocalDay(ts), rating } : void 0;
-    }).filter((x) => !!x).sort((a, b) => a.day - b.day);
-    for (const rp of overviewRatingTimeline) {
-      ensureOverviewDay(rp.day).rating = rp.rating;
-    }
-    const startDay = startOfLocalDay(gameTimes[0]);
-    const endDay = startOfLocalDay(gameTimes[gameTimes.length - 1]);
-    const allOverviewDays = [];
-    for (let day = startDay; day <= endDay; day += DAY_MS) {
-      allOverviewDays.push(ensureOverviewDay(day));
-    }
-    const buildOverviewBuckets = () => {
-      if (!overviewBucketMs) return allOverviewDays.slice().sort((a, b) => a.day - b.day);
-      const rows = /* @__PURE__ */ new Map();
-      for (const d of allOverviewDays) {
-        const key = Math.floor(d.day / overviewBucketMs) * overviewBucketMs;
-        const cur = rows.get(key) || {
-          day: d.day,
-          games: 0,
-          rounds: 0,
-          scoreSum: 0,
-          scoreCorrectSum: 0,
-          hits: 0,
-          distSum: 0,
-          distN: 0,
-          timeSum: 0,
-          timeN: 0,
-          throws: 0,
-          fiveks: 0,
-          wins: 0,
-          damageDealt: 0,
-          damageTaken: 0
-        };
-        cur.day = d.day;
-        cur.games += d.games;
-        cur.rounds += d.rounds;
-        cur.scoreSum += d.scoreSum;
-        cur.scoreCorrectSum += d.scoreCorrectSum;
-        cur.hits += d.hits;
-        cur.distSum += d.distSum;
-        cur.distN += d.distN;
-        cur.timeSum += d.timeSum;
-        cur.timeN += d.timeN;
-        cur.throws += d.throws;
-        cur.fiveks += d.fiveks;
-        cur.wins += d.wins;
-        cur.damageDealt += d.damageDealt;
-        cur.damageTaken += d.damageTaken;
-        if (typeof d.rating === "number") cur.rating = d.rating;
-        rows.set(key, cur);
-      }
-      return [...rows.values()].sort((a, b) => a.day - b.day);
-    };
-    const overviewBuckets = buildOverviewBuckets();
-    const makeOverviewPoints = (rows, pick2) => rows.map((r) => ({ x: r.day, y: pick2(r), label: formatDay(r.day) }));
-    const makeOverviewCumulativePoints = (rows, pick2) => {
-      let running = 0;
-      return rows.map((r) => {
-        running += pick2(r);
-        return { x: r.day, y: running, label: formatDay(r.day) };
-      });
-    };
-    const makeOverviewRatioPoints = (rows, num, den) => {
-      let lastValue = 0;
-      let hasLastValue = false;
-      return rows.map((r) => {
-        const d = den(r);
-        if (d > 0) {
-          lastValue = num(r) / d * 100;
-          hasLastValue = true;
-        }
-        return { x: r.day, y: hasLastValue ? lastValue : 0, label: formatDay(r.day) };
-      });
-    };
-    const makeOverviewCumulativeRatioPoints = (rows, num, den) => {
-      let n = 0;
-      let d = 0;
-      return rows.map((r) => {
-        n += num(r);
-        d += den(r);
-        return { x: r.day, y: d > 0 ? n / d * 100 : 0, label: formatDay(r.day) };
-      });
-    };
-    const makeOverviewAveragePoints = (rows, sumFn, countFn) => {
-      let lastValue = 0;
-      let hasLastValue = false;
-      return rows.map((r) => {
-        const n = countFn(r);
-        if (n > 0) {
-          lastValue = sumFn(r) / n;
-          hasLastValue = true;
-        }
-        return { x: r.day, y: hasLastValue ? lastValue : 0, label: formatDay(r.day) };
-      });
-    };
-    const makeOverviewCumulativeAveragePoints = (rows, sumFn, countFn) => {
-      let s = 0;
-      let n = 0;
-      return rows.map((r) => {
-        s += sumFn(r);
-        n += countFn(r);
-        return { x: r.day, y: n > 0 ? s / n : 0, label: formatDay(r.day) };
-      });
-    };
-    const trendPrimaryKey = "period";
-    const overviewTrendMetricOptions = [];
-    const addTrendMetric = (key, label, periodPoints, toDatePoints) => {
-      const series = [{ key: trendPrimaryKey, label: "Per period", points: periodPoints }];
-      if (toDatePoints) series.push({ key: "cumulative", label: "To date", points: toDatePoints });
-      overviewTrendMetricOptions.push({ key, label, series });
-    };
-    addTrendMetric("games", "Games", makeOverviewPoints(overviewBuckets, (x) => x.games), makeOverviewCumulativePoints(overviewBuckets, (x) => x.games));
-    addTrendMetric("rounds", "Rounds", makeOverviewPoints(overviewBuckets, (x) => x.rounds), makeOverviewCumulativePoints(overviewBuckets, (x) => x.rounds));
-    addTrendMetric("avg_score", "Avg score", makeOverviewAveragePoints(overviewBuckets, (x) => x.scoreSum, (x) => x.rounds), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.scoreSum, (x) => x.rounds));
-    addTrendMetric("avg_score_correct_only", "Avg score (correct only)", makeOverviewAveragePoints(overviewBuckets, (x) => x.scoreCorrectSum, (x) => x.hits), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.scoreCorrectSum, (x) => x.hits));
-    addTrendMetric("avg_distance", "Avg distance (km)", makeOverviewAveragePoints(overviewBuckets, (x) => x.distSum, (x) => x.distN), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.distSum, (x) => x.distN));
-    addTrendMetric("avg_time", "Avg guess time (s)", makeOverviewAveragePoints(overviewBuckets, (x) => x.timeSum, (x) => x.timeN), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.timeSum, (x) => x.timeN));
-    addTrendMetric("throw_rate", "Throw rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.throws, (x) => x.rounds), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.throws, (x) => x.rounds));
-    addTrendMetric("amount_throws", "Throws", makeOverviewPoints(overviewBuckets, (x) => x.throws), makeOverviewCumulativePoints(overviewBuckets, (x) => x.throws));
-    addTrendMetric("fivek_rate", "5k rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.fiveks, (x) => x.rounds), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.fiveks, (x) => x.rounds));
-    addTrendMetric("amount_fiveks", "5k rounds", makeOverviewPoints(overviewBuckets, (x) => x.fiveks), makeOverviewCumulativePoints(overviewBuckets, (x) => x.fiveks));
-    addTrendMetric("hit_rate", "Hit rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.hits, (x) => x.rounds), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.hits, (x) => x.rounds));
-    addTrendMetric("amount_hits", "Hits", makeOverviewPoints(overviewBuckets, (x) => x.hits), makeOverviewCumulativePoints(overviewBuckets, (x) => x.hits));
-    addTrendMetric("win_rate", "Win rate (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.wins, (x) => x.games), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.wins, (x) => x.games));
-    addTrendMetric("amount_wins", "Wins", makeOverviewPoints(overviewBuckets, (x) => x.wins), makeOverviewCumulativePoints(overviewBuckets, (x) => x.wins));
-    addTrendMetric("avg_damage_dealt", "Avg damage dealt", makeOverviewAveragePoints(overviewBuckets, (x) => x.damageDealt, (x) => x.rounds), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.damageDealt, (x) => x.rounds));
-    addTrendMetric("damage_dealt", "Damage dealt", makeOverviewPoints(overviewBuckets, (x) => x.damageDealt), makeOverviewCumulativePoints(overviewBuckets, (x) => x.damageDealt));
-    addTrendMetric("damage_dealt_share", "Damage dealt share (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.damageDealt, (x) => x.damageDealt + x.damageTaken), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.damageDealt, (x) => x.damageDealt + x.damageTaken));
-    addTrendMetric("avg_damage_taken", "Avg damage taken", makeOverviewAveragePoints(overviewBuckets, (x) => x.damageTaken, (x) => x.rounds), makeOverviewCumulativeAveragePoints(overviewBuckets, (x) => x.damageTaken, (x) => x.rounds));
-    addTrendMetric("damage_taken", "Damage taken", makeOverviewPoints(overviewBuckets, (x) => x.damageTaken), makeOverviewCumulativePoints(overviewBuckets, (x) => x.damageTaken));
-    addTrendMetric("damage_taken_share", "Damage taken share (%)", makeOverviewRatioPoints(overviewBuckets, (x) => x.damageTaken, (x) => x.damageDealt + x.damageTaken), makeOverviewCumulativeRatioPoints(overviewBuckets, (x) => x.damageTaken, (x) => x.damageDealt + x.damageTaken));
-    const ratingRows = overviewBuckets.filter((x) => typeof x.rating === "number");
-    addTrendMetric("rating", "Rating", makeOverviewPoints(ratingRows, (x) => x.rating || 0));
-    if (overviewTrendMetricOptions.length > 0) {
-      overviewCharts.push({
-        type: "selectableLine",
-        yLabel: overviewBucketMs ? `Time progression metrics (${overviewBucketDays}d aggregated)` : "Time progression metrics",
-        defaultMetricKey: "avg_score",
-        primaryKey: trendPrimaryKey,
-        maxCompare: 1,
-        compareMode: "period_to_date",
-        compareModeOptions: ["per_period", "to_date", "both"],
-        defaultCompareMode: "to_date",
-        compareCandidates: [{ key: "cumulative", label: "To date" }],
-        defaultCompareKeys: ["cumulative"],
-        options: overviewTrendMetricOptions
-      });
-    }
-    overviewLines.push("Results, Win Rate & Streaks:");
-    overviewLines.push(...resultLines);
-    overviewLines.push(...breakdownLines);
-    sections.push({
-      id: "overview",
-      title: "Overview",
-      group: "Overview",
-      appliesFilters: ["date", "mode", "movement", "teammate", "country"],
-      lines: overviewLines,
-      lineDrilldowns: [
-        { lineLabel: "Wins", items: overviewWinDrill },
-        { lineLabel: "Avg score", items: overviewAvgScoreDrill },
-        { lineLabel: "Avg distance", items: overviewAvgDistanceDrill },
-        { lineLabel: "Avg time", items: overviewAvgTimeDrill },
-        { lineLabel: "Time played", items: overviewTimePlayedDrill },
-        { lineLabel: "Perfect 5k rounds", items: perfectFiveKDrill },
-        { lineLabel: "Throws (<50)", items: throwDrill },
-        { lineLabel: "Longest win streak", items: toOverviewGameDrill(bestWinStreakGames) },
-        { lineLabel: "Longest loss streak", items: toOverviewGameDrill(worstLossStreakGames) },
-        ...sortedModes.map(([m]) => ({ lineLabel: gameModeLabel(m), items: modeDrillMap.get(gameModeLabel(m)) || [] })),
-        ...movementBars.map((m) => ({ lineLabel: m.label, items: movementDrillMap.get(m.label) || [] }))
-      ],
-      charts: overviewCharts
-    });
-    const weekday = new Array(7).fill(0);
-    const hour = new Array(24).fill(0);
-    const weekdayScoreSum = new Array(7).fill(0);
-    const weekdayScoreCount = new Array(7).fill(0);
-    const weekdayTimeSum = new Array(7).fill(0);
-    const weekdayTimeCount = new Array(7).fill(0);
-    const weekdayRounds = new Array(7).fill(0);
-    const weekdayThrows = new Array(7).fill(0);
-    const weekdayFiveKs = new Array(7).fill(0);
-    const hourScoreSum = new Array(24).fill(0);
-    const hourScoreCount = new Array(24).fill(0);
-    const hourTimeSum = new Array(24).fill(0);
-    const hourTimeCount = new Array(24).fill(0);
-    const hourRounds = new Array(24).fill(0);
-    const hourThrows = new Array(24).fill(0);
-    const hourFiveKs = new Array(24).fill(0);
-    for (const ts of gameTimes) {
-      const d = new Date(ts);
-      weekday[d.getDay()]++;
-      hour[d.getHours()]++;
-    }
-    for (const r of rounds) {
-      const ts = playedAtByGameId.get(r.gameId);
-      if (!ts) continue;
-      const d = new Date(ts);
-      const wd = d.getDay();
-      const hr = d.getHours();
-      const sc = extractScore(r);
-      const tm = extractTimeMs(r);
-      weekdayRounds[wd]++;
-      hourRounds[hr]++;
-      if (typeof sc === "number") {
-        weekdayScoreSum[wd] += sc;
-        weekdayScoreCount[wd]++;
-        hourScoreSum[hr] += sc;
-        hourScoreCount[hr]++;
-        if (sc < 50) {
-          weekdayThrows[wd]++;
-          hourThrows[hr]++;
-        }
-        if (sc >= 5e3) {
-          weekdayFiveKs[wd]++;
-          hourFiveKs[hr]++;
-        }
-      }
-      if (typeof tm === "number") {
-        weekdayTimeSum[wd] += tm;
-        weekdayTimeCount[wd]++;
-        hourTimeSum[hr] += tm;
-        hourTimeCount[hr]++;
-      }
-    }
-    const wdNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const weekdayDrilldowns = wdNames.map(() => []);
-    const hourDrilldowns = Array.from({ length: 24 }, () => []);
-    for (const r of rounds) {
-      const ts = playedAtByGameId.get(r.gameId);
-      if (typeof ts !== "number") continue;
-      const d = new Date(ts);
-      const wd = d.getDay();
-      const hr = d.getHours();
-      weekdayDrilldowns[wd].push(toDrilldownItem(r, ts, extractScore(r)));
-      hourDrilldowns[hr].push(toDrilldownItem(r, ts, extractScore(r)));
-    }
-    const weekdayMetricOptions = [
-      {
-        key: "games",
-        label: "Games",
-        bars: weekday.map((v, i) => ({ label: wdNames[i], value: v, drilldown: weekdayDrilldowns[i] }))
-      },
-      {
-        key: "avg_score",
-        label: "Avg score",
-        bars: wdNames.map((name, i) => ({
-          label: name,
-          value: weekdayScoreCount[i] ? weekdayScoreSum[i] / weekdayScoreCount[i] : 0,
-          drilldown: weekdayDrilldowns[i]
-        }))
-      },
-      {
-        key: "avg_time",
-        label: "Avg guess time (s)",
-        bars: wdNames.map((name, i) => ({
-          label: name,
-          value: weekdayTimeCount[i] ? weekdayTimeSum[i] / weekdayTimeCount[i] / 1e3 : 0,
-          drilldown: weekdayDrilldowns[i]
-        }))
-      },
-      {
-        key: "throw_rate",
-        label: "Throw rate (%)",
-        bars: wdNames.map((name, i) => ({
-          label: name,
-          value: weekdayRounds[i] ? pct(weekdayThrows[i], weekdayRounds[i]) : 0,
-          drilldown: weekdayDrilldowns[i]
-        }))
-      },
-      {
-        key: "fivek_rate",
-        label: "5k rate (%)",
-        bars: wdNames.map((name, i) => ({
-          label: name,
-          value: weekdayRounds[i] ? pct(weekdayFiveKs[i], weekdayRounds[i]) : 0,
-          drilldown: weekdayDrilldowns[i]
-        }))
-      }
-    ];
-    const hourMetricOptions = [
-      {
-        key: "games",
-        label: "Games",
-        bars: hour.map((v, h) => ({ label: String(h).padStart(2, "0"), value: v, drilldown: hourDrilldowns[h] }))
-      },
-      {
-        key: "avg_score",
-        label: "Avg score",
-        bars: hour.map((_, h) => ({
-          label: String(h).padStart(2, "0"),
-          value: hourScoreCount[h] ? hourScoreSum[h] / hourScoreCount[h] : 0,
-          drilldown: hourDrilldowns[h]
-        }))
-      },
-      {
-        key: "avg_time",
-        label: "Avg guess time (s)",
-        bars: hour.map((_, h) => ({
-          label: String(h).padStart(2, "0"),
-          value: hourTimeCount[h] ? hourTimeSum[h] / hourTimeCount[h] / 1e3 : 0,
-          drilldown: hourDrilldowns[h]
-        }))
-      },
-      {
-        key: "throw_rate",
-        label: "Throw rate (%)",
-        bars: hour.map((_, h) => ({
-          label: String(h).padStart(2, "0"),
-          value: hourRounds[h] ? pct(hourThrows[h], hourRounds[h]) : 0,
-          drilldown: hourDrilldowns[h]
-        }))
-      },
-      {
-        key: "fivek_rate",
-        label: "5k rate (%)",
-        bars: hour.map((_, h) => ({
-          label: String(h).padStart(2, "0"),
-          value: hourRounds[h] ? pct(hourFiveKs[h], hourRounds[h]) : 0,
-          drilldown: hourDrilldowns[h]
-        }))
-      }
-    ];
-    sections.push({
-      id: "time_patterns",
-      title: "Time Patterns",
-      group: "Overview",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: [],
-      charts: [
-        {
-          type: "selectableBar",
-          yLabel: "Weekday patterns",
-          orientation: "horizontal",
-          initialBars: 7,
-          minHeight: 190,
-          defaultMetricKey: "games",
-          defaultSort: "chronological",
-          options: weekdayMetricOptions
-        },
-        {
-          type: "selectableBar",
-          yLabel: "Hour-of-day patterns",
-          orientation: "horizontal",
-          initialBars: 24,
-          defaultMetricKey: "games",
-          defaultSort: "chronological",
-          options: hourMetricOptions
-        }
-      ]
-    });
-    const sessionGapMs = 45 * 60 * 1e3;
-    const sortedGameTimes = [...gameTimes].sort((a, b) => a - b);
-    const gameSessionIndex = /* @__PURE__ */ new Map();
-    let sessionIdx = -1;
-    let prevTs;
-    for (const ts of sortedGameTimes) {
-      if (prevTs === void 0 || ts - prevTs > sessionGapMs) sessionIdx++;
-      gameSessionIndex.set(ts, sessionIdx);
-      prevTs = ts;
-    }
-    const sessionBounds = /* @__PURE__ */ new Map();
-    for (const ts of sortedGameTimes) {
-      const idx = gameSessionIndex.get(ts);
-      if (idx === void 0) continue;
-      const cur = sessionBounds.get(idx);
-      if (!cur) {
-        sessionBounds.set(idx, { start: ts, end: ts, games: 1 });
-      } else {
-        cur.start = Math.min(cur.start, ts);
-        cur.end = Math.max(cur.end, ts);
-        cur.games += 1;
-        sessionBounds.set(idx, cur);
-      }
-    }
-    const sessionsAgg = /* @__PURE__ */ new Map();
-    const sessionDrillByIdx = /* @__PURE__ */ new Map();
-    for (const rm of roundMetrics) {
-      const idx = gameSessionIndex.get(rm.ts);
-      if (idx === void 0) continue;
-      const cur = sessionsAgg.get(idx) || {
-        rounds: 0,
-        scores: [],
-        scoreCorrectOnly: [],
-        fiveK: 0,
-        throws: 0,
-        hits: 0,
-        avgTimeSrc: [],
-        distSrc: [],
-        damageDealt: 0,
-        damageTaken: 0
-      };
-      cur.rounds++;
-      cur.scores.push(rm.score);
-      if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) {
-        cur.hits++;
-        cur.scoreCorrectOnly.push(rm.score);
-      }
-      if (rm.score >= 5e3) cur.fiveK++;
-      if (rm.score < 50) cur.throws++;
-      if (typeof rm.timeSec === "number") cur.avgTimeSrc.push(rm.timeSec);
-      if (typeof rm.distKm === "number") cur.distSrc.push(rm.distKm);
-      if (typeof rm.damage === "number" && Number.isFinite(rm.damage)) {
-        if (rm.damage > 0) cur.damageDealt += rm.damage;
-        else if (rm.damage < 0) cur.damageTaken += Math.abs(rm.damage);
-      }
-      sessionsAgg.set(idx, cur);
-      const drill = sessionDrillByIdx.get(idx) || [];
-      drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
-      sessionDrillByIdx.set(idx, drill);
-    }
-    const sessionRows = [...sessionsAgg.entries()].map(([idx, s]) => ({
-      idx,
-      start: sessionBounds.get(idx)?.start || 0,
-      end: sessionBounds.get(idx)?.end || 0,
-      games: sessionBounds.get(idx)?.games || 0,
-      rounds: s.rounds,
-      avgScore: avg(s.scores) || 0,
-      avgScoreCorrectOnly: avg(s.scoreCorrectOnly) || 0,
-      fiveKRate: pct(s.fiveK, s.rounds),
-      throwRate: pct(s.throws, s.rounds),
-      hitRate: pct(s.hits, s.rounds),
-      amountFiveKs: s.fiveK,
-      amountThrows: s.throws,
-      amountHits: s.hits,
-      avgTime: avg(s.avgTimeSrc),
-      avgDistance: avg(s.distSrc),
-      avgDamageDealt: s.rounds > 0 ? s.damageDealt / s.rounds : 0,
-      avgDamageTaken: s.rounds > 0 ? s.damageTaken / s.rounds : 0,
-      damageDealt: s.damageDealt,
-      damageTaken: s.damageTaken,
-      label: sessionBounds.get(idx) ? `${formatShortDateTime(sessionBounds.get(idx).start)} -> ${formatShortDateTime(sessionBounds.get(idx).end)}` : `Session ${idx + 1}`
-    })).sort((a, b) => a.start - b.start);
-    const sessionResultAgg = /* @__PURE__ */ new Map();
-    if (ownPlayerId) {
-      for (const d of teamDetails) {
-        const ts = teamPlayedAtByGameId.get(d.gameId);
-        const result = getGameResult(d, ownPlayerId);
-        if (ts === void 0 || !result) continue;
-        const idx = gameSessionIndex.get(ts);
-        if (idx === void 0) continue;
-        const cur = sessionResultAgg.get(idx) || { wins: 0, losses: 0, ties: 0 };
-        if (result === "W") cur.wins++;
-        else if (result === "L") cur.losses++;
-        else cur.ties++;
-        sessionResultAgg.set(idx, cur);
-      }
-    }
-    const sortedSessions = sessionRows.slice().sort((a, b) => a.start - b.start);
-    const longestSessionBreakMs = sortedSessions.slice(1).reduce((maxGap, cur, i) => {
-      const prev = sortedSessions[i];
-      const gap = Math.max(0, cur.start - prev.end);
-      return Math.max(maxGap, gap);
-    }, 0);
-    const longestSessionBreakLabel = longestSessionBreakMs > 24 * 60 * 60 * 1e3 ? `${fmt(longestSessionBreakMs / (24 * 60 * 60 * 1e3), 2)} days` : `${fmt(longestSessionBreakMs / (60 * 60 * 1e3), 2)} hours`;
-    const avgGamesPerSession = avg(sessionRows.map((s) => s.games));
-    const sessionWinRateBars = ownPlayerId ? sessionRows.map((s) => {
-      const res = sessionResultAgg.get(s.idx);
-      const decisive = (res?.wins || 0) + (res?.losses || 0);
-      const rate = decisive > 0 ? pct(res?.wins || 0, decisive) : 0;
-      return { label: formatShortDateTime(s.start), value: rate, drilldown: sessionDrillByIdx.get(s.idx) || [] };
-    }) : [];
-    const sessionAmountWinsBars = ownPlayerId ? sessionRows.map((s) => {
-      const res = sessionResultAgg.get(s.idx);
-      return { label: formatShortDateTime(s.start), value: res?.wins || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] };
-    }) : [];
-    const sessionMetricOptions = [
-      { key: "games", label: "Games", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.games, drilldown: sessionDrillByIdx.get(s.idx) || [] })) },
-      { key: "rounds", label: "Rounds", bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.rounds, drilldown: sessionDrillByIdx.get(s.idx) || [] })) },
-      {
-        key: "avg_score",
-        label: "Avg score",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScore, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "avg_score_correct_only",
-        label: "Avg score (correct only)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgScoreCorrectOnly, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "avg_distance",
-        label: "Avg distance (km)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgDistance || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "avg_time",
-        label: "Avg guess time (s)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "throw_rate",
-        label: "Throw rate (%)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.throwRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "fivek_rate",
-        label: "5k rate (%)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.fiveKRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "amount_throws",
-        label: "Throws",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.amountThrows, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "amount_fiveks",
-        label: "5k rounds",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.amountFiveKs, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "hit_rate",
-        label: "Hit rate (%)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.hitRate, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "amount_hits",
-        label: "Hits",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.amountHits, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "avg_damage_dealt",
-        label: "Avg damage dealt",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgDamageDealt, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "damage_dealt",
-        label: "Damage dealt",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.damageDealt, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "damage_dealt_share",
-        label: "Damage dealt share (%)",
-        bars: sessionRows.map((s) => ({
-          label: formatShortDateTime(s.start),
-          value: s.damageDealt + s.damageTaken > 0 ? pct(s.damageDealt, s.damageDealt + s.damageTaken) : 0,
-          drilldown: sessionDrillByIdx.get(s.idx) || []
-        }))
-      },
-      {
-        key: "avg_damage_taken",
-        label: "Avg damage taken",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgDamageTaken, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "damage_taken",
-        label: "Damage taken",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.damageTaken, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      },
-      {
-        key: "damage_taken_share",
-        label: "Damage taken share (%)",
-        bars: sessionRows.map((s) => ({
-          label: formatShortDateTime(s.start),
-          value: s.damageDealt + s.damageTaken > 0 ? pct(s.damageTaken, s.damageDealt + s.damageTaken) : 0,
-          drilldown: sessionDrillByIdx.get(s.idx) || []
-        }))
-      },
-      {
-        key: "avg_duration",
-        label: "Avg duration (s)",
-        bars: sessionRows.map((s) => ({ label: formatShortDateTime(s.start), value: s.avgTime || 0, drilldown: sessionDrillByIdx.get(s.idx) || [] }))
-      }
-    ];
-    if (sessionWinRateBars.length > 0) sessionMetricOptions.push({ key: "win_rate", label: "Win rate (%)", bars: sessionWinRateBars });
-    if (sessionAmountWinsBars.length > 0) sessionMetricOptions.push({ key: "amount_wins", label: "Wins", bars: sessionAmountWinsBars });
-    const toSessionSeries = (pick2) => sortedSessions.map((s, idx) => ({
-      x: idx + 1,
-      y: pick2(s),
-      label: `${idx + 1}. ${formatShortDateTime(s.start)}`
-    }));
-    const sessionLineMetricOptions = [
-      { key: "games", label: "Games", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.games) }] },
-      { key: "rounds", label: "Rounds", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.rounds) }] },
-      { key: "avg_score", label: "Avg score", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgScore) }] },
-      {
-        key: "avg_score_correct_only",
-        label: "Avg score (correct only)",
-        series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgScoreCorrectOnly) }]
-      },
-      { key: "avg_distance", label: "Avg distance (km)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDistance || 0) }] },
-      { key: "avg_time", label: "Avg guess time (s)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgTime || 0) }] },
-      { key: "avg_duration", label: "Avg duration (s)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgTime || 0) }] },
-      { key: "throw_rate", label: "Throw rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.throwRate) }] },
-      { key: "amount_throws", label: "Throws", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountThrows) }] },
-      { key: "fivek_rate", label: "5k rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.fiveKRate) }] },
-      { key: "amount_fiveks", label: "5k rounds", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountFiveKs) }] },
-      { key: "hit_rate", label: "Hit rate (%)", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.hitRate) }] },
-      { key: "amount_hits", label: "Hits", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.amountHits) }] },
-      { key: "avg_damage_dealt", label: "Avg damage dealt", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDamageDealt) }] },
-      { key: "damage_dealt", label: "Damage dealt", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt) }] },
-      {
-        key: "damage_dealt_share",
-        label: "Damage dealt share (%)",
-        series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt + s.damageTaken > 0 ? pct(s.damageDealt, s.damageDealt + s.damageTaken) : 0) }]
-      },
-      { key: "avg_damage_taken", label: "Avg damage taken", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.avgDamageTaken) }] },
-      { key: "damage_taken", label: "Damage taken", series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageTaken) }] },
-      {
-        key: "damage_taken_share",
-        label: "Damage taken share (%)",
-        series: [{ key: "period", label: "Per session", points: toSessionSeries((s) => s.damageDealt + s.damageTaken > 0 ? pct(s.damageTaken, s.damageDealt + s.damageTaken) : 0) }]
-      }
-    ];
-    if (sessionWinRateBars.length > 0) {
-      sessionLineMetricOptions.push({
-        key: "win_rate",
-        label: "Win rate (%)",
-        series: [{
-          key: "period",
-          label: "Per session",
-          points: sortedSessions.map((s, idx) => {
-            const res = sessionResultAgg.get(s.idx);
-            const decisive = (res?.wins || 0) + (res?.losses || 0);
-            return {
-              x: idx + 1,
-              y: decisive > 0 ? pct(res?.wins || 0, decisive) : 0,
-              label: `${idx + 1}. ${formatShortDateTime(s.start)}`
-            };
-          })
-        }]
-      });
-    }
-    if (sessionAmountWinsBars.length > 0) {
-      sessionLineMetricOptions.push({
-        key: "amount_wins",
-        label: "Wins",
-        series: [{
-          key: "period",
-          label: "Per session",
-          points: sortedSessions.map((s, idx) => ({
-            x: idx + 1,
-            y: sessionResultAgg.get(s.idx)?.wins || 0,
-            label: `${idx + 1}. ${formatShortDateTime(s.start)}`
-          }))
-        }]
-      });
-    }
-    sections.push({
-      id: "session_quality",
-      title: "Sessions",
-      group: "Performance",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Sessions detected (gap >45m): ${sessionRows.length}`,
-        `Longest break between sessions: ${longestSessionBreakLabel}`,
-        `Avg games per session: ${fmt(avgGamesPerSession, 2)}`
-      ],
-      charts: [
-        {
-          type: "selectableBar",
-          yLabel: "Sessions",
-          orientation: "horizontal",
-          initialBars: 10,
-          defaultMetricKey: "avg_score",
-          defaultSort: "desc",
-          options: sessionMetricOptions
-        },
-        {
-          type: "selectableLine",
-          yLabel: "Sessions progression metrics",
-          defaultMetricKey: "avg_score",
-          primaryKey: "period",
-          compareCandidates: [],
-          options: sessionLineMetricOptions
-        }
-      ]
-    });
-    const tempoBuckets = [
-      { name: "<20 sec", min: 0, max: 20 },
-      { name: "20-30 sec", min: 20, max: 30 },
-      { name: "30-45 sec", min: 30, max: 45 },
-      { name: "45-60 sec", min: 45, max: 60 },
-      { name: "60-90 sec", min: 60, max: 90 },
-      { name: "90-180 sec", min: 90, max: 180 },
-      { name: ">180 sec", min: 180, max: Infinity }
-    ];
-    const tempoAgg = tempoBuckets.map((b) => ({
-      ...b,
-      n: 0,
-      scores: [],
-      scoreCorrectOnly: [],
-      dist: [],
-      throws: 0,
-      fiveKs: 0,
-      hits: 0,
-      damageDealt: 0,
-      damageTaken: 0,
-      timeSum: 0,
-      drilldown: []
-    }));
-    for (const rm of roundMetrics) {
-      if (typeof rm.timeSec !== "number") continue;
-      const t = rm.timeSec;
-      const bucket = tempoAgg.find((b) => t >= b.min && t < b.max);
-      if (!bucket) continue;
-      bucket.n++;
-      bucket.scores.push(rm.score);
-      if (typeof rm.distKm === "number") bucket.dist.push(rm.distKm);
-      if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) {
-        bucket.hits++;
-        bucket.scoreCorrectOnly.push(rm.score);
-      }
-      if (rm.score < 50) bucket.throws++;
-      if (rm.score >= 5e3) bucket.fiveKs++;
-      if (typeof rm.damage === "number" && Number.isFinite(rm.damage)) {
-        if (rm.damage > 0) bucket.damageDealt += rm.damage;
-        else if (rm.damage < 0) bucket.damageTaken += Math.abs(rm.damage);
-      }
-      bucket.timeSum += t;
-      bucket.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
-    }
-    const timedRounds = roundMetrics.filter((r) => typeof r.timeSec === "number");
-    const fastestGuess = timedRounds.slice().sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
-    const slowestGuess = timedRounds.slice().sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
-    const fastestFiveK = timedRounds.filter((r) => r.score >= 5e3).sort((a, b) => (a.timeSec || 0) - (b.timeSec || 0))[0];
-    const slowestThrow = timedRounds.filter((r) => r.score < 50).sort((a, b) => (b.timeSec || 0) - (a.timeSec || 0))[0];
-    const tempoMetricOptions = [
-      { key: "games", label: "Games", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n > 0 ? b.drilldown.map((d) => d.gameId).filter((v, i, a) => a.indexOf(v) === i).length : 0, drilldown: b.drilldown })) },
-      { key: "avg_score", label: "Avg score", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scores) || 0, drilldown: b.drilldown })) },
-      { key: "avg_score_correct_only", label: "Avg score (correct only)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.scoreCorrectOnly) || 0, drilldown: b.drilldown })) },
-      { key: "avg_distance", label: "Avg distance (km)", bars: tempoAgg.map((b) => ({ label: b.name, value: avg(b.dist) || 0, drilldown: b.drilldown })) },
-      { key: "avg_time", label: "Avg guess time (s)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.timeSum / b.n : 0, drilldown: b.drilldown })) },
-      { key: "avg_duration", label: "Avg duration (s)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.timeSum / b.n : 0, drilldown: b.drilldown })) },
-      { key: "throw_rate", label: "Throw rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.throws, b.n) : 0, drilldown: b.drilldown })) },
-      { key: "fivek_rate", label: "5k rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.fiveKs, b.n) : 0, drilldown: b.drilldown })) },
-      { key: "amount_throws", label: "Throws", bars: tempoAgg.map((b) => ({ label: b.name, value: b.throws, drilldown: b.drilldown })) },
-      { key: "amount_fiveks", label: "5k rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.fiveKs, drilldown: b.drilldown })) },
-      { key: "hit_rate", label: "Hit rate (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? pct(b.hits, b.n) : 0, drilldown: b.drilldown })) },
-      { key: "amount_hits", label: "Hits", bars: tempoAgg.map((b) => ({ label: b.name, value: b.hits, drilldown: b.drilldown })) },
-      { key: "avg_damage_dealt", label: "Avg damage dealt", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.damageDealt / b.n : 0, drilldown: b.drilldown })) },
-      { key: "damage_dealt", label: "Damage dealt", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageDealt, drilldown: b.drilldown })) },
-      { key: "damage_dealt_share", label: "Damage dealt share (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageDealt + b.damageTaken > 0 ? pct(b.damageDealt, b.damageDealt + b.damageTaken) : 0, drilldown: b.drilldown })) },
-      { key: "avg_damage_taken", label: "Avg damage taken", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n ? b.damageTaken / b.n : 0, drilldown: b.drilldown })) },
-      { key: "damage_taken", label: "Damage taken", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageTaken, drilldown: b.drilldown })) },
-      { key: "damage_taken_share", label: "Damage taken share (%)", bars: tempoAgg.map((b) => ({ label: b.name, value: b.damageDealt + b.damageTaken > 0 ? pct(b.damageTaken, b.damageDealt + b.damageTaken) : 0, drilldown: b.drilldown })) },
-      { key: "rounds", label: "Rounds", bars: tempoAgg.map((b) => ({ label: b.name, value: b.n, drilldown: b.drilldown })) }
-    ];
-    sections.push({
-      id: "tempo_vs_quality",
-      title: "Tempo",
-      group: "Performance",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Fastest guess: ${fastestGuess ? `${fmt(fastestGuess.timeSec, 1)}s on ${formatShortDateTime(fastestGuess.ts)} (score ${fmt(fastestGuess.score, 0)})` : "-"}`,
-        `Slowest guess: ${slowestGuess ? `${fmt(slowestGuess.timeSec, 1)}s on ${formatShortDateTime(slowestGuess.ts)} (score ${fmt(slowestGuess.score, 0)})` : "-"}`,
-        `Fastest 5k: ${fastestFiveK ? `${fmt(fastestFiveK.timeSec, 1)}s on ${formatShortDateTime(fastestFiveK.ts)}` : "-"}`,
-        `Slowest throw (<50): ${slowestThrow ? `${fmt(slowestThrow.timeSec, 1)}s on ${formatShortDateTime(slowestThrow.ts)} (score ${fmt(slowestThrow.score, 0)})` : "-"}`
-      ],
-      chart: {
-        type: "selectableBar",
-        yLabel: "Time bucket metrics",
-        initialBars: tempoBuckets.length,
-        defaultMetricKey: "avg_score",
-        defaultSort: "chronological",
-        options: tempoMetricOptions
-      }
-    });
-    const nearPerfectCount = roundMetrics.filter((x) => x.score >= 4500).length;
-    const lowScoreCount = roundMetrics.filter((x) => x.score < 500).length;
-    const scoreDistributionBars = buildSmoothedScoreDistributionWithDrilldown(
-      roundMetrics.map((rm) => ({
-        score: rm.score,
-        drill: toDrilldownItem(rm.round, rm.ts, rm.score)
-      }))
-    );
-    sections.push({
-      id: "scores",
-      title: "Scores",
-      group: "Performance",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Perfect 5k: ${fiveKCount} (${fmt(pct(fiveKCount, roundMetrics.length), 1)}%)`,
-        `Near-perfect (>=4500): ${nearPerfectCount} (${fmt(pct(nearPerfectCount, roundMetrics.length), 1)}%)`,
-        `Low scores (<500): ${lowScoreCount} (${fmt(pct(lowScoreCount, roundMetrics.length), 1)}%)`,
-        `Throws (<50): ${throwCount} (${fmt(pct(throwCount, roundMetrics.length), 1)}%)`
-      ],
-      lineDrilldowns: [
-        { lineLabel: "Perfect 5k", items: perfectFiveKDrill },
-        { lineLabel: "Near-perfect (>=4500)", items: nearPerfectDrill },
-        { lineLabel: "Low scores (<500)", items: lowScoreDrill },
-        { lineLabel: "Throws (<50)", items: throwDrill }
-      ],
-      chart: {
-        type: "bar",
-        yLabel: "Score distribution (smoothed)",
-        bars: scoreDistributionBars
-      }
-    });
-    const roundMetricsForRoundSection = teamRounds.map((r) => {
-      const ts = teamPlayedAtByGameId.get(r.gameId);
-      const score = extractScore(r);
-      const timeMs = extractTimeMs(r);
-      const distMeters = extractDistanceMeters(r);
-      if (ts === void 0 || typeof score !== "number") return null;
-      const eventTs = (typeof r.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : void 0) ?? (typeof r.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : void 0) ?? ts;
-      return {
-        round: r,
-        ts,
-        eventTs,
-        gameId: r.gameId,
-        roundNumber: r.roundNumber,
-        score,
-        timeSec: typeof timeMs === "number" ? timeMs / 1e3 : void 0,
-        distKm: typeof distMeters === "number" ? distMeters / 1e3 : void 0,
-        guessCountry: normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry")),
-        trueCountry: normalizeCountryCode(r.trueCountry),
-        damage: ownPlayerId ? getRoundDamageDiff(r, ownPlayerId) : void 0
-      };
-    }).filter((x) => x !== null).sort(
-      (a, b) => a.eventTs !== b.eventTs ? a.eventTs - b.eventTs : a.ts !== b.ts ? a.ts - b.ts : a.gameId !== b.gameId ? a.gameId.localeCompare(b.gameId) : a.roundNumber - b.roundNumber
-    );
-    const roundBucketsByNumber = /* @__PURE__ */ new Map();
-    for (const rm of roundMetricsForRoundSection) {
-      const key = rm.roundNumber;
-      const b = roundBucketsByNumber.get(key) || {
-        roundNumber: key,
-        n: 0,
-        scoreSum: 0,
-        hit: 0,
-        throws: 0,
-        fiveKs: 0,
-        distSum: 0,
-        distN: 0,
-        timeSum: 0,
-        timeN: 0,
-        drilldown: []
-      };
-      b.n++;
-      b.scoreSum += rm.score;
-      if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) b.hit++;
-      if (rm.score < 50) b.throws++;
-      if (rm.score >= 5e3) b.fiveKs++;
-      if (typeof rm.distKm === "number" && Number.isFinite(rm.distKm)) {
-        b.distSum += rm.distKm;
-        b.distN++;
-      }
-      if (typeof rm.timeSec === "number" && Number.isFinite(rm.timeSec)) {
-        b.timeSum += rm.timeSec;
-        b.timeN++;
-      }
-      b.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
-      roundBucketsByNumber.set(key, b);
-    }
-    const roundBuckets = [...roundBucketsByNumber.values()].sort((a, b) => a.roundNumber - b.roundNumber);
-    const roundProgressionOptions = [
-      {
-        key: "avg_score",
-        label: "Avg score",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.n > 0 ? b.scoreSum / b.n : 0,
-          drilldown: b.drilldown
-        }))
-      },
-      {
-        key: "hit_rate",
-        label: "Hit rate (%)",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.n > 0 ? b.hit / b.n * 100 : 0,
-          drilldown: b.drilldown
-        }))
-      },
-      {
-        key: "throw_rate",
-        label: "Throw rate (%)",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.n > 0 ? b.throws / b.n * 100 : 0,
-          drilldown: b.drilldown
-        }))
-      },
-      {
-        key: "fivek_rate",
-        label: "5k rate (%)",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.n > 0 ? b.fiveKs / b.n * 100 : 0,
-          drilldown: b.drilldown
-        }))
-      },
-      {
-        key: "avg_distance",
-        label: "Avg distance (km)",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.distN > 0 ? b.distSum / b.distN : 0,
-          drilldown: b.drilldown
-        }))
-      },
-      {
-        key: "avg_time",
-        label: "Avg guess time (s)",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.timeN > 0 ? b.timeSum / b.timeN : 0,
-          drilldown: b.drilldown
-        }))
-      },
-      {
-        key: "rounds",
-        label: "Rounds",
-        bars: roundBuckets.map((b) => ({
-          label: `#${b.roundNumber}`,
-          value: b.n,
-          drilldown: b.drilldown
-        }))
-      }
-    ];
-    const roundsByGame = /* @__PURE__ */ new Map();
-    for (const rm of roundMetricsForRoundSection) {
-      if (!roundsByGame.has(rm.gameId)) roundsByGame.set(rm.gameId, []);
-      roundsByGame.get(rm.gameId).push(rm);
-    }
-    const gameRoundEntries = [...roundsByGame.entries()].map(([gameId, items]) => {
-      const maxRoundNumber = items.reduce((mx, r) => Math.max(mx, r.roundNumber), 0);
-      const hasOutOfRangeRound = maxRoundNumber > items.length;
-      return { gameId, items, n: items.length, maxRoundNumber, hasOutOfRangeRound };
-    });
-    const maxRoundsEntry = gameRoundEntries.slice().sort((a, b) => b.n - a.n)[0];
-    const minRoundsEligibleEntries = gameRoundEntries.filter((x) => x.n >= 2 && !x.hasOutOfRangeRound);
-    const minRoundsSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
-    const minRounds = minRoundsSource.length > 0 ? Math.min(...minRoundsSource.map((x) => x.n)) : 0;
-    const minRoundsEntries = minRoundsSource.filter((x) => x.n === minRounds);
-    const maxSpreadEntry = gameRoundEntries.map((x) => {
-      const scores2 = x.items.map((r) => r.score);
-      const spread = scores2.length > 0 ? Math.max(...scores2) - Math.min(...scores2) : 0;
-      return { ...x, spread };
-    }).sort((a, b) => b.spread - a.spread)[0];
-    const avgScoreSource = minRoundsEligibleEntries.length > 0 ? minRoundsEligibleEntries : gameRoundEntries;
-    const bestAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => b.avgScore - a.avgScore)[0];
-    const worstAvgEntry = avgScoreSource.map((x) => ({ ...x, avgScore: x.n > 0 ? x.items.reduce((sum2, r) => sum2 + r.score, 0) / x.n : 0 })).sort((a, b) => a.avgScore - b.avgScore)[0];
-    const isChronologicallyAdjacent = (prev, next) => {
-      if (next.eventTs < prev.eventTs) return false;
-      if (next.gameId === prev.gameId) return next.roundNumber === prev.roundNumber + 1;
-      return next.roundNumber === 1;
-    };
-    const bestBooleanRun = (pred) => {
-      let best = { length: 0, items: [] };
-      let current = [];
-      for (const rm of roundMetricsForRoundSection) {
-        const last = current.length > 0 ? current[current.length - 1] : void 0;
-        if (pred(rm) && (!last || isChronologicallyAdjacent(last, rm))) {
-          current.push(rm);
-        } else {
-          if (current.length > best.length) best = { length: current.length, items: current.slice() };
-          current = pred(rm) ? [rm] : [];
-        }
-      }
-      if (current.length > best.length) best = { length: current.length, items: current.slice() };
-      return best;
-    };
-    const bestSameCountryRun = () => {
-      let best = { length: 0, items: [] };
-      let currentCountry;
-      let current = [];
-      for (const rm of roundMetricsForRoundSection) {
-        const last = current.length > 0 ? current[current.length - 1] : void 0;
-        const c = rm.trueCountry;
-        if (!c) {
-          if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
-          current = [];
-          currentCountry = void 0;
-          continue;
-        }
-        if (c === currentCountry && (!last || isChronologicallyAdjacent(last, rm))) {
-          current.push(rm);
-        } else {
-          if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
-          current = [rm];
-          currentCountry = c;
-        }
-      }
-      if (current.length > best.length) best = { length: current.length, items: current.slice(), country: currentCountry };
-      return best;
-    };
-    const fastestRoundRun = bestBooleanRun((x) => typeof x.timeSec === "number" && x.timeSec < 20);
-    const damageDealtRun = bestBooleanRun((x) => typeof x.damage === "number" && x.damage > 0);
-    const damageTakenRun = bestBooleanRun((x) => typeof x.damage === "number" && x.damage < 0);
-    const sameCountryRun = bestSameCountryRun();
-    const correctCountryRun = bestBooleanRun((x) => !!x.guessCountry && !!x.trueCountry && x.guessCountry === x.trueCountry);
-    const gameEntryDrill = (entry, enforceRoundCap = false) => entry ? entry.items.filter((r) => !enforceRoundCap || r.roundNumber <= entry.n).map((r) => toDrilldownItem(r.round, r.ts, r.score)) : [];
-    const gameDateLabel = (entry) => {
-      if (!entry || entry.items.length === 0) return "-";
-      const first = entry.items[0];
-      return first ? formatShortDateTime(first.ts) : "-";
-    };
-    const runDateLabel = (run) => run.items.length > 0 ? formatShortDateTime(run.items[0].ts) : "-";
-    const runDrill = (run) => run.items.map((r) => toDrilldownItem(r.round, r.ts, r.score));
-    const lengthAgg = /* @__PURE__ */ new Map();
-    const consistentLengthEntries = gameRoundEntries.filter((x) => !x.hasOutOfRangeRound && x.n > 1);
-    for (const entry of consistentLengthEntries) {
-      const len = entry.n;
-      const agg = lengthAgg.get(len) || {
-        games: 0,
-        wins: 0,
-        losses: 0,
-        ties: 0,
-        scoreSum: 0,
-        scoreN: 0,
-        hit: 0,
-        throws: 0,
-        fiveKs: 0,
-        distSum: 0,
-        distN: 0,
-        timeSum: 0,
-        timeN: 0,
-        drilldown: []
-      };
-      agg.games++;
-      const result = resultByGameId.get(entry.gameId);
-      if (result === "W") agg.wins++;
-      else if (result === "L") agg.losses++;
-      else if (result === "T") agg.ties++;
-      for (const rm of entry.items) {
-        agg.scoreSum += rm.score;
-        agg.scoreN++;
-        if (rm.guessCountry && rm.trueCountry && rm.guessCountry === rm.trueCountry) agg.hit++;
-        if (rm.score < 50) agg.throws++;
-        if (rm.score >= 5e3) agg.fiveKs++;
-        if (typeof rm.distKm === "number" && Number.isFinite(rm.distKm)) {
-          agg.distSum += rm.distKm;
-          agg.distN++;
-        }
-        if (typeof rm.timeSec === "number" && Number.isFinite(rm.timeSec)) {
-          agg.timeSum += rm.timeSec;
-          agg.timeN++;
-        }
-        agg.drilldown.push(toDrilldownItem(rm.round, rm.ts, rm.score));
-      }
-      lengthAgg.set(len, agg);
-    }
-    const lengthRows = [...lengthAgg.entries()].sort((a, b) => a[0] - b[0]).map(([len, a]) => ({ len, ...a }));
-    const lengthMetricOptions = [
-      { key: "games", label: "Games", bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.games, drilldown: x.drilldown })) },
-      {
-        key: "win_rate",
-        label: "Win rate (%)",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.wins + x.losses > 0 ? pct(x.wins, x.wins + x.losses) : 0, drilldown: x.drilldown }))
-      },
-      {
-        key: "avg_score",
-        label: "Avg score",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.scoreN > 0 ? x.scoreSum / x.scoreN : 0, drilldown: x.drilldown }))
-      },
-      {
-        key: "hit_rate",
-        label: "Hit rate (%)",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.scoreN > 0 ? pct(x.hit, x.scoreN) : 0, drilldown: x.drilldown }))
-      },
-      {
-        key: "throw_rate",
-        label: "Throw rate (%)",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.scoreN > 0 ? pct(x.throws, x.scoreN) : 0, drilldown: x.drilldown }))
-      },
-      {
-        key: "fivek_rate",
-        label: "5k rate (%)",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.scoreN > 0 ? pct(x.fiveKs, x.scoreN) : 0, drilldown: x.drilldown }))
-      },
-      {
-        key: "avg_distance",
-        label: "Avg distance (km)",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.distN > 0 ? x.distSum / x.distN : 0, drilldown: x.drilldown }))
-      },
-      {
-        key: "avg_time",
-        label: "Avg guess time (s)",
-        bars: lengthRows.map((x) => ({ label: `${x.len}`, value: x.timeN > 0 ? x.timeSum / x.timeN : 0, drilldown: x.drilldown }))
-      }
-    ];
-    sections.push({
-      id: "rounds",
-      title: "Rounds",
-      group: "Rounds",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: [
-        `Game with most rounds: ${maxRoundsEntry ? `${maxRoundsEntry.n} rounds (${gameDateLabel(maxRoundsEntry)})` : "-"}`,
-        `Games with fewest rounds: ${minRoundsEntries.length > 0 ? `${minRounds} rounds (${minRoundsEntries.length} game(s))` : "-"}`,
-        `Largest score spread (max-min in one game): ${maxSpreadEntry ? `${fmt(maxSpreadEntry.spread, 0)} points (${gameDateLabel(maxSpreadEntry)})` : "-"}`,
-        `Fastest round streak (<20s): ${fastestRoundRun.length} rounds${fastestRoundRun.length > 0 ? ` (${runDateLabel(fastestRoundRun)})` : ""}`,
-        `Damage dealt streak: ${damageDealtRun.length} rounds in a row${damageDealtRun.length > 0 ? ` (${runDateLabel(damageDealtRun)})` : ""}`,
-        `Damage taken streak: ${damageTakenRun.length} rounds in a row${damageTakenRun.length > 0 ? ` (${runDateLabel(damageTakenRun)})` : ""}`,
-        `Longest same-country streak: ${sameCountryRun.length} rounds${sameCountryRun.country ? ` in ${countryLabel(sameCountryRun.country)}` : ""}${sameCountryRun.length > 0 ? ` (${runDateLabel(sameCountryRun)})` : ""}`,
-        `Correct-country streak: ${correctCountryRun.length} rounds in a row${correctCountryRun.length > 0 ? ` (${runDateLabel(correctCountryRun)})` : ""}`
-      ],
-      lineDrilldowns: [
-        { lineLabel: "Game with most rounds", items: gameEntryDrill(maxRoundsEntry) },
-        { lineLabel: "Games with fewest rounds", items: minRoundsEntries.flatMap((entry) => gameEntryDrill(entry, true)) },
-        { lineLabel: "Largest score spread (max-min in one game)", items: gameEntryDrill(maxSpreadEntry) },
-        { lineLabel: "Fastest round streak (<20s)", items: runDrill(fastestRoundRun) },
-        { lineLabel: "Damage dealt streak", items: runDrill(damageDealtRun) },
-        { lineLabel: "Damage taken streak", items: runDrill(damageTakenRun) },
-        { lineLabel: "Longest same-country streak", items: runDrill(sameCountryRun) },
-        { lineLabel: "Correct-country streak", items: runDrill(correctCountryRun) }
-      ],
-      charts: [
-        ...roundProgressionOptions.length > 0 ? [
-          {
-            type: "selectableBar",
-            yLabel: "Round progression metrics",
-            initialBars: 50,
-            orientation: "vertical",
-            allowSort: false,
-            defaultSort: "chronological",
-            defaultMetricKey: "avg_score",
-            options: roundProgressionOptions
-          }
-        ] : [],
-        ...lengthMetricOptions.length > 0 && lengthRows.length > 0 ? [
-          {
-            type: "selectableBar",
-            yLabel: "Performance by game length (rounds per game, 2+)",
-            initialBars: 40,
-            orientation: "vertical",
-            allowSort: false,
-            defaultSort: "chronological",
-            defaultMetricKey: "win_rate",
-            options: lengthMetricOptions
-          }
-        ] : []
-      ]
-    });
-    const countryAgg = /* @__PURE__ */ new Map();
-    const countryDrilldowns = /* @__PURE__ */ new Map();
-    const confusionDrilldowns = /* @__PURE__ */ new Map();
-    for (const r of teamRounds) {
-      const t = normalizeCountryCode(r.trueCountry);
-      if (!t) continue;
-      const ts = teamPlayedAtByGameId.get(r.gameId);
-      const sc = extractScore(r);
-      const drillItem = toDrilldownItem(r, ts, sc);
-      if (!countryDrilldowns.has(t)) countryDrilldowns.set(t, []);
-      countryDrilldowns.get(t).push(drillItem);
-      const entry = countryAgg.get(t) || {
-        n: 0,
-        score: [],
-        scoreCorrectOnly: [],
-        dist: [],
-        correct: 0,
-        guessed: /* @__PURE__ */ new Map(),
-        throws: 0,
-        fiveKs: 0,
-        damageDealt: 0,
-        damageTaken: 0,
-        damageN: 0
-      };
-      entry.n++;
-      if (typeof sc === "number") {
-        entry.score.push(sc);
-        if (sc < 50) entry.throws++;
-        if (sc >= 5e3) entry.fiveKs++;
-      }
-      const dm = extractDistanceMeters(r);
-      if (typeof dm === "number") entry.dist.push(dm / 1e3);
-      const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
-      if (guess) {
-        entry.guessed.set(guess, (entry.guessed.get(guess) || 0) + 1);
-        if (guess === t) {
-          entry.correct++;
-          if (typeof sc === "number") entry.scoreCorrectOnly.push(sc);
-        } else {
-          const cKey = `${t}|${guess}`;
-          if (!confusionDrilldowns.has(cKey)) confusionDrilldowns.set(cKey, []);
-          confusionDrilldowns.get(cKey).push(drillItem);
-        }
-      }
-      if (ownPlayerId) {
-        const diff = getRoundDamageDiff(r, ownPlayerId);
-        if (typeof diff === "number" && Number.isFinite(diff)) {
-          if (diff > 0) entry.damageDealt += diff;
-          if (diff < 0) entry.damageTaken += -diff;
-          entry.damageN++;
-        }
-      }
-      countryAgg.set(t, entry);
-    }
-    const topCountries = [...countryAgg.entries()].sort((a, b) => b[1].n - a[1].n);
-    const totalDamageDealt = topCountries.reduce((acc, [, v]) => acc + v.damageDealt, 0);
-    const totalDamageTaken = topCountries.reduce((acc, [, v]) => acc + v.damageTaken, 0);
-    const countryMetricRows = topCountries.map(([c, v]) => ({
-      country: c,
-      n: v.n,
-      avgScore: avg(v.score) || 0,
-      avgScoreCorrectOnly: avg(v.scoreCorrectOnly) || 0,
-      avgDist: avg(v.dist),
-      hitRate: v.n > 0 ? v.correct / v.n : 0,
-      throwRate: v.score.length > 0 ? v.throws / v.score.length : 0,
-      fiveKRate: v.score.length > 0 ? v.fiveKs / v.score.length : 0,
-      avgDamageDealt: v.damageN > 0 ? v.damageDealt / v.damageN : 0,
-      avgDamageTaken: v.damageN > 0 ? v.damageTaken / v.damageN : 0,
-      damageDealtShare: totalDamageDealt > 0 ? v.damageDealt / totalDamageDealt * 100 : 0,
-      damageTakenShare: totalDamageTaken > 0 ? v.damageTaken / totalDamageTaken * 100 : 0
-    }));
-    const countryMetricOptions = [
-      {
-        key: "avg_score",
-        label: "Avg score",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgScore, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "avg_score_correct_only",
-        label: "Avg score (correct guesses only)",
-        bars: countryMetricRows.map((x) => ({
-          label: countryLabel(x.country),
-          value: x.avgScoreCorrectOnly,
-          drilldown: (countryDrilldowns.get(x.country) || []).filter(
-            (d) => d.trueCountry && d.guessCountry && d.trueCountry === d.guessCountry
-          )
-        }))
-      },
-      {
-        key: "hit_rate",
-        label: "Hit rate (%)",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.hitRate * 100, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "avg_distance",
-        label: "Avg distance (km)",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDist || 0, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "throw_rate",
-        label: "Throw rate (%)",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.throwRate * 100, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "fivek_rate",
-        label: "5k rate (%)",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.fiveKRate * 100, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "damage_dealt",
-        label: "Avg damage dealt",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageDealt, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "damage_taken",
-        label: "Avg damage taken",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.avgDamageTaken, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "damage_dealt_share",
-        label: "Damage dealt share (%)",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageDealtShare, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "damage_taken_share",
-        label: "Damage taken share (%)",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.damageTakenShare, drilldown: countryDrilldowns.get(x.country) || [] }))
-      },
-      {
-        key: "rounds",
-        label: "Rounds",
-        bars: countryMetricRows.map((x) => ({ label: countryLabel(x.country), value: x.n, drilldown: countryDrilldowns.get(x.country) || [] }))
-      }
-    ];
-    const confusionMap = /* @__PURE__ */ new Map();
-    for (const r of teamRounds) {
-      const truth = normalizeCountryCode(r.trueCountry);
-      const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
-      if (!truth || !guess || truth === guess) continue;
-      const key = `${truth}|${guess}`;
-      confusionMap.set(key, (confusionMap.get(key) || 0) + 1);
-    }
-    const confusions = [...confusionMap.entries()].map(([k, n]) => {
-      const [truth, guess] = k.split("|");
-      return { truth, guess, n };
-    }).sort((a, b) => b.n - a.n);
-    const confusionRows = [...new Set(confusions.map((x) => x.truth))].slice(0, 10).map((truth) => {
-      const row = confusions.filter((x) => x.truth === truth).slice(0, 3);
-      return `${countryLabel(truth)} -> ${row.map((r) => `${countryLabel(r.guess)} (${r.n})`).join(", ")}`;
-    });
-    sections.push({
-      id: "country_stats",
-      title: "Countries",
-      group: "Countries",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: [selectedCountry ? "Country filter is ignored here (global country comparison)." : ""].filter((x) => x !== ""),
-      charts: [
-        {
-          type: "selectableBar",
-          yLabel: "Country metrics",
-          orientation: "horizontal",
-          initialBars: 25,
-          defaultMetricKey: "avg_score",
-          defaultSort: "desc",
-          options: countryMetricOptions
-        },
-        {
-          type: "bar",
-          yLabel: "Confusion matrix (top pairs)",
-          initialBars: 12,
-          orientation: "vertical",
-          bars: confusions.slice(0, 24).map((x) => ({
-            label: `${x.truth.toUpperCase()} -> ${x.guess.toUpperCase()}`,
-            value: x.n,
-            drilldown: confusionDrilldowns.get(`${x.truth}|${x.guess}`) || []
-          }))
-        }
-      ]
-    });
-    const opponentCounts = /* @__PURE__ */ new Map();
-    const opponentEncounters = [];
-    for (const d of teamDetails) {
-      const dd = asRecord(d);
-      const ids = [];
-      const modeFamily = getString(dd, "modeFamily");
-      const ts = teamPlayedAtByGameId.get(d.gameId);
-      const result = getGameResult(d, ownPlayerId);
-      const modeLabel = drilldownMetaByGameId.get(d.gameId)?.gameModeLabel;
-      if (modeFamily === "duels") {
-        ids.push({
-          id: getString(dd, "player_opponent_id") ?? getString(dd, "playerTwoId"),
-          name: getString(dd, "player_opponent_name") ?? getString(dd, "playerTwoName"),
-          country: getString(dd, "player_opponent_country") ?? getString(dd, "playerTwoCountry")
-        });
-      } else if (modeFamily === "teamduels") {
-        ids.push({
-          id: getString(dd, "player_opponent_id") ?? getString(dd, "teamTwoPlayerOneId"),
-          name: getString(dd, "player_opponent_name") ?? getString(dd, "teamTwoPlayerOneName"),
-          country: getString(dd, "player_opponent_country") ?? getString(dd, "teamTwoPlayerOneCountry")
-        });
-        ids.push({
-          id: getString(dd, "player_opponent_mate_id") ?? getString(dd, "teamTwoPlayerTwoId"),
-          name: getString(dd, "player_opponent_mate_name") ?? getString(dd, "teamTwoPlayerTwoName"),
-          country: getString(dd, "player_opponent_mate_country") ?? getString(dd, "teamTwoPlayerTwoCountry")
-        });
-      }
-      for (const x of ids) {
-        if (!x.id) continue;
-        const cur = opponentCounts.get(x.id) || { games: 0 };
-        cur.games += 1;
-        if (x.name) cur.name = x.name;
-        if (x.country) cur.country = x.country;
-        opponentCounts.set(x.id, cur);
-        opponentEncounters.push({
-          opponentId: x.id,
-          opponentName: x.name || nameMap.get(x.id) || x.id.slice(0, 8),
-          opponentCountry: x.country?.trim() || "Unknown",
-          gameId: d.gameId,
-          ts,
-          result,
-          gameMode: modeLabel
-        });
-      }
-    }
-    const topOpp = [...opponentCounts.entries()].sort((a, b) => b[1].games - a[1].games).slice(0, 20);
-    const oppCountryCounts = /* @__PURE__ */ new Map();
-    for (const [, v] of opponentCounts) {
-      const c = typeof v.country === "string" && v.country.trim() ? v.country.trim() : "Unknown";
-      oppCountryCounts.set(c, (oppCountryCounts.get(c) || 0) + v.games);
-    }
-    const drillForOpponent = (e) => {
-      const count = opponentCounts.get(e.opponentId)?.games || 0;
-      return {
-        gameId: e.gameId,
-        roundNumber: 0,
-        ts: e.ts,
-        gameMode: e.gameMode,
-        result: e.result,
-        matchups: count,
-        opponentId: e.opponentId,
-        opponentName: e.opponentName,
-        opponentCountry: e.opponentCountry,
-        opponentProfileUrl: buildUserProfileUrl(e.opponentId)
-      };
-    };
-    const opponentDrilldowns = /* @__PURE__ */ new Map();
-    const countryOpponentDrilldowns = /* @__PURE__ */ new Map();
-    for (const e of opponentEncounters) {
-      const byOpponent = opponentDrilldowns.get(e.opponentId) || [];
-      byOpponent.push(drillForOpponent(e));
-      opponentDrilldowns.set(e.opponentId, byOpponent);
-      const c = e.opponentCountry?.trim() || "Unknown";
-      const byCountry = countryOpponentDrilldowns.get(c) || [];
-      byCountry.push(drillForOpponent(e));
-      countryOpponentDrilldowns.set(c, byCountry);
-    }
-    const top3LineEntries = topOpp.slice(0, 3).map(([id, v], i) => {
-      const displayName = v.name || id.slice(0, 8);
-      return {
-        lineLabel: `${i + 1}. ${displayName}`,
-        lineText: `${i + 1}. ${displayName}: ${v.games} match-ups${v.country ? ` (${v.country})` : ""}`,
-        profileUrl: buildUserProfileUrl(id),
-        drill: opponentDrilldowns.get(id) || []
-      };
-    });
-    sections.push({
-      id: "opponents",
-      title: "Opponents",
-      group: "Opponents",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: [
-        selectedCountry ? `Country filter is ignored here (showing all countries for selected time/mode/team).` : "",
-        "Top 3 opponents:",
-        ...top3LineEntries.map((x) => x.lineText),
-        "Scope:",
-        `Unique opponents: ${opponentCounts.size}`,
-        `Unique countries: ${oppCountryCounts.size}`
-      ].filter((x) => x !== ""),
-      lineLinks: top3LineEntries.filter((x) => typeof x.profileUrl === "string").map((x) => ({ lineLabel: x.lineLabel, url: x.profileUrl })),
-      lineDrilldowns: top3LineEntries.map((x) => ({ lineLabel: x.lineLabel, items: x.drill })),
-      chart: {
-        type: "bar",
-        yLabel: "Match-ups by opponent country",
-        bars: [...oppCountryCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([c, n]) => ({ label: c, value: n, drilldown: countryOpponentDrilldowns.get(c) || [] }))
-      }
-    });
-    const basePlayedAtByGameId = new Map(baseGames.map((g) => [g.gameId, g.playedAt]));
-    const duelRatingTimeline = baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels").map((d) => {
-      const ts = basePlayedAtByGameId.get(d.gameId);
-      const r = extractOwnDuelRating(d, ownPlayerId);
-      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : void 0;
-    }).filter((x) => !!x).sort((a, b) => a.x - b.x);
-    const teammateRatingTimeline = selectedTeammate && teammateGames.get(selectedTeammate) ? baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(selectedTeammate)?.has(d.gameId) || false)).map((d) => {
-      const ts = basePlayedAtByGameId.get(d.gameId);
-      const r = extractOwnTeamRating(d, ownPlayerId);
-      return ts && typeof r?.end === "number" ? { x: ts, y: r.end, label: formatDay(ts) } : void 0;
-    }).filter((x) => !!x).sort((a, b) => a.x - b.x) : [];
-    const duelDelta = duelRatingTimeline.length > 1 ? duelRatingTimeline[duelRatingTimeline.length - 1].y - duelRatingTimeline[0].y : void 0;
-    const teammateDelta = teammateRatingTimeline.length > 1 ? teammateRatingTimeline[teammateRatingTimeline.length - 1].y - teammateRatingTimeline[0].y : void 0;
-    const ratingPoints = selectedTeammate ? teammateRatingTimeline : duelRatingTimeline;
-    const ratingDelta = selectedTeammate ? teammateDelta : duelDelta;
-    const ratingScopeGameSet = new Set(
-      (selectedTeammate ? baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "teamduels" && (teammateGames.get(selectedTeammate)?.has(d.gameId) || false)) : baseDetails.filter((d) => getString(asRecord(d), "modeFamily") === "duels")).map((d) => d.gameId)
-    );
-    const ratingScopeRoundDrill = baseRounds.filter((r) => ratingScopeGameSet.has(r.gameId)).map((r) => toDrilldownItem(r, basePlayedAtByGameId.get(r.gameId), extractScore(r)));
-    let bestGain;
-    let worstLoss;
-    if (ratingPoints.length > 1) {
-      let sessionStartIdx = 0;
-      for (let i = 1; i <= ratingPoints.length; i++) {
-        const reachedEnd = i === ratingPoints.length;
-        const gapBreak = !reachedEnd && ratingPoints[i].x - ratingPoints[i - 1].x > SESSION_GAP_MS;
-        if (!reachedEnd && !gapBreak) continue;
-        const sessionEndIdx = i - 1;
-        if (sessionEndIdx > sessionStartIdx) {
-          const start = ratingPoints[sessionStartIdx];
-          const end = ratingPoints[sessionEndIdx];
-          const delta = end.y - start.y;
-          const summary = { delta, startTs: start.x, endTs: end.x };
-          if (!bestGain || delta > bestGain.delta) bestGain = summary;
-          if (!worstLoss || delta < worstLoss.delta) worstLoss = summary;
-        }
-        sessionStartIdx = i;
-      }
-    }
-    sections.push({
-      id: "rating_history",
-      title: "Rating",
-      group: "Rating",
-      appliesFilters: ["date", "mode", "teammate"],
-      lines: [
-        ratingDelta !== void 0 ? `Trend: ${ratingDelta >= 0 ? "+" : ""}${fmt(ratingDelta, 0)}` : "Trend: -",
-        bestGain ? `Biggest session rating gain: ${bestGain.delta >= 0 ? "+" : ""}${fmt(bestGain.delta, 0)} (${formatShortDateTime(bestGain.startTs)} -> ${formatShortDateTime(bestGain.endTs)})` : "Biggest session rating gain: -",
-        worstLoss ? `Biggest session rating loss: ${worstLoss.delta >= 0 ? "+" : ""}${fmt(worstLoss.delta, 0)} (${formatShortDateTime(worstLoss.startTs)} -> ${formatShortDateTime(worstLoss.endTs)})` : "Biggest session rating loss: -"
-      ],
-      lineDrilldowns: [
-        { lineLabel: "Trend", items: ratingScopeRoundDrill },
-        {
-          lineLabel: "Biggest session rating gain",
-          items: bestGain !== void 0 ? ratingScopeRoundDrill.filter((x) => typeof x.ts === "number" && x.ts >= bestGain.startTs && x.ts <= bestGain.endTs) : []
-        },
-        {
-          lineLabel: "Biggest session rating loss",
-          items: worstLoss !== void 0 ? ratingScopeRoundDrill.filter((x) => typeof x.ts === "number" && x.ts >= worstLoss.startTs && x.ts <= worstLoss.endTs) : []
-        }
-      ],
-      charts: ratingPoints.length > 1 ? [{ type: "line", yLabel: "Rating", points: ratingPoints }] : void 0
-    });
-    const teammateToUse = selectedTeammate || [...teammateGames.entries()].sort((a, b) => b[1].size - a[1].size)[0]?.[0];
-    if (teammateToUse && ownPlayerId) {
-      const mateName = nameMap.get(teammateToUse) || teammateToUse.slice(0, 8);
-      const teammateGameSet2 = teammateGames.get(teammateToUse) || /* @__PURE__ */ new Set();
-      const gamesTogether = baseGames.filter((g) => teammateGameSet2.has(g.gameId)).sort((a, b) => a.playedAt - b.playedAt);
-      const roundsTogether = baseRounds.filter((r) => teammateGameSet2.has(r.gameId));
-      const teamTimePlayedMs = roundsTogether.map(extractTimeMs).filter((v) => typeof v === "number").reduce((acc, v) => acc + v, 0);
-      const teamTimedRounds = roundsTogether.reduce((acc, r) => acc + (typeof extractTimeMs(r) === "number" ? 1 : 0), 0);
-      const compareRounds = rounds.filter((r) => {
-        const mine = getPlayerStatFromRound(r, ownPlayerId);
-        const mate = getPlayerStatFromRound(r, teammateToUse);
-        return !!mine && !!mate;
-      });
-      let myScoreWins = 0;
-      let mateScoreWins = 0;
-      let scoreTies = 0;
-      let myCloser = 0;
-      let mateCloser = 0;
-      let distanceTies = 0;
-      let myThrows = 0;
-      let mateThrows = 0;
-      let myFiveKs = 0;
-      let mateFiveKs = 0;
-      let myScored = 0;
-      let mateScored = 0;
-      const closerDrill = [];
-      const higherScoreDrill = [];
-      const fewerThrowsDrill = [];
-      const moreFiveKDrill = [];
-      const roundsTogetherDrill = [];
-      const timedRoundsTogetherDrill = [];
-      for (const r of compareRounds) {
-        const mine = getPlayerStatFromRound(r, ownPlayerId);
-        const mate = getPlayerStatFromRound(r, teammateToUse);
-        const ts = basePlayedAtByGameId.get(r.gameId);
-        const score = extractScore(r);
-        const baseDrill = toDrilldownItem(r, ts, score);
-        if (typeof mine.score === "number" && typeof mate.score === "number") {
-          higherScoreDrill.push(baseDrill);
-          if (mine.score > mate.score) myScoreWins++;
-          else if (mine.score < mate.score) mateScoreWins++;
-          else scoreTies++;
-          if (mine.score < 50) myThrows++;
-          if (mate.score < 50) mateThrows++;
-          if (mine.score < 50 || mate.score < 50) fewerThrowsDrill.push(baseDrill);
-          if (mine.score >= 5e3) myFiveKs++;
-          if (mate.score >= 5e3) mateFiveKs++;
-          if (mine.score >= 5e3 || mate.score >= 5e3) moreFiveKDrill.push(baseDrill);
-          myScored++;
-          mateScored++;
-        }
-        if (typeof mine.distanceKm === "number" && typeof mate.distanceKm === "number") {
-          closerDrill.push(baseDrill);
-          if (mine.distanceKm < mate.distanceKm) myCloser++;
-          else if (mine.distanceKm > mate.distanceKm) mateCloser++;
-          else distanceTies++;
-        }
-      }
-      for (const r of roundsTogether) {
-        const ts = basePlayedAtByGameId.get(r.gameId);
-        const item = toDrilldownItem(r, ts, extractScore(r));
-        roundsTogetherDrill.push(item);
-        if (typeof extractTimeMs(r) === "number") timedRoundsTogetherDrill.push(item);
-      }
-      const decideLeader = (youValue, mateValue, neutralLabel = "Tie") => {
-        const decisive = youValue + mateValue;
-        if (decisive === 0) return `${neutralLabel} (-)`;
-        if (youValue === mateValue) return `${neutralLabel} (50.0%)`;
-        const youWin = youValue > mateValue;
-        const leader = youWin ? "You" : mateName;
-        const share = youWin ? pct(youValue, decisive) : pct(mateValue, decisive);
-        return `${leader} (${fmt(share, 1)}%)`;
-      };
-      const pairGames = gamesTogether.map((g) => ({ gameId: g.gameId, ts: g.playedAt }));
-      const pairTimes = pairGames.map((g) => g.ts);
-      let firstTogether;
-      let lastTogether;
-      let longestPairSessionGames = 0;
-      let longestPairSessionStart;
-      let longestPairSessionEnd;
-      let avgPairGamesPerSession;
-      let longestPairBreak;
-      let longestPairBreakPrevGameId;
-      let longestPairBreakNextGameId;
-      if (pairTimes.length > 0) {
-        firstTogether = pairTimes[0];
-        lastTogether = pairTimes[pairTimes.length - 1];
-        let start = pairTimes[0];
-        let prev = pairTimes[0];
-        let gamesInSession = 1;
-        let sessionCount = 0;
-        let sessionTotalGames = 0;
-        for (let i = 1; i < pairGames.length; i++) {
-          const ts = pairGames[i].ts;
-          const gap = ts - prev;
-          if ((longestPairBreak || 0) < gap) {
-            longestPairBreak = gap;
-            longestPairBreakPrevGameId = pairGames[i - 1].gameId;
-            longestPairBreakNextGameId = pairGames[i].gameId;
-          }
-          if (gap > 45 * 60 * 1e3) {
-            sessionCount++;
-            sessionTotalGames += gamesInSession;
-            if (gamesInSession > longestPairSessionGames) {
-              longestPairSessionGames = gamesInSession;
-              longestPairSessionStart = start;
-              longestPairSessionEnd = prev;
-            }
-            start = ts;
-            gamesInSession = 1;
-          } else {
-            gamesInSession++;
-          }
-          prev = ts;
-        }
-        sessionCount++;
-        sessionTotalGames += gamesInSession;
-        if (gamesInSession > longestPairSessionGames) {
-          longestPairSessionGames = gamesInSession;
-          longestPairSessionStart = start;
-          longestPairSessionEnd = prev;
-        }
-        avgPairGamesPerSession = sessionCount ? sessionTotalGames / sessionCount : void 0;
-      }
-      const firstTogetherDrill = firstTogether !== void 0 ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts === firstTogether) : [];
-      const lastTogetherDrill = lastTogether !== void 0 ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts === lastTogether) : [];
-      const longestSessionDrill = longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? roundsTogetherDrill.filter((x) => typeof x.ts === "number" && x.ts >= longestPairSessionStart && x.ts <= longestPairSessionEnd) : [];
-      const longestBreakDrill = longestPairBreakPrevGameId && longestPairBreakNextGameId ? roundsTogetherDrill.filter((x) => x.gameId === longestPairBreakPrevGameId || x.gameId === longestPairBreakNextGameId) : [];
-      sections.push({
-        id: "teammate_battle",
-        title: `Team: You + ${mateName}`,
-        group: "Performance",
-        appliesFilters: ["date", "mode", "teammate"],
-        lines: [
-          selectedCountry ? "Country filter is ignored here (team perspective)." : "",
-          "Head-to-head questions:",
-          `Closer guesses: ${decideLeader(myCloser, mateCloser)}`,
-          `Higher score rounds: ${decideLeader(myScoreWins, mateScoreWins)}`,
-          `Fewer throws (<50): ${decideLeader(mateThrows, myThrows)}`,
-          `More 5k rounds: ${decideLeader(myFiveKs, mateFiveKs)}`,
-          "Team facts:",
-          `Games together: ${gamesTogether.length}`,
-          `Rounds together: ${roundsTogether.length}`,
-          `Time played together: ${teamTimedRounds > 0 ? formatDurationHuman(teamTimePlayedMs) : "-"}${teamTimedRounds > 0 && teamTimedRounds < roundsTogether.length ? ` (from ${teamTimedRounds}/${roundsTogether.length} rounds with time data)` : ""}`,
-          `First game together: ${firstTogether ? formatShortDateTime(firstTogether) : "-"}`,
-          `Most recent game together: ${lastTogether ? formatShortDateTime(lastTogether) : "-"}`,
-          `Longest session together: ${longestPairSessionGames > 0 && longestPairSessionStart !== void 0 && longestPairSessionEnd !== void 0 ? `${longestPairSessionGames} games (${formatShortDateTime(longestPairSessionStart)} -> ${formatShortDateTime(longestPairSessionEnd)})` : "-"}`,
-          `Avg games per session together: ${fmt(avgPairGamesPerSession, 1)}`,
-          `Longest break between games together: ${longestPairBreak ? formatDurationHuman(longestPairBreak) : "-"}`
-        ].filter((x) => x !== ""),
-        lineDrilldowns: [
-          { lineLabel: "Closer guesses", items: closerDrill },
-          { lineLabel: "Higher score rounds", items: higherScoreDrill },
-          { lineLabel: "Fewer throws (<50)", items: fewerThrowsDrill },
-          { lineLabel: "More 5k rounds", items: moreFiveKDrill },
-          { lineLabel: "Games together", items: roundsTogetherDrill },
-          { lineLabel: "Rounds together", items: roundsTogetherDrill },
-          { lineLabel: "Time played together", items: timedRoundsTogetherDrill },
-          { lineLabel: "First game together", items: firstTogetherDrill },
-          { lineLabel: "Most recent game together", items: lastTogetherDrill },
-          { lineLabel: "Longest session together", items: longestSessionDrill },
-          { lineLabel: "Avg games per session together", items: roundsTogetherDrill },
-          { lineLabel: "Longest break between games together", items: longestBreakDrill }
-        ]
-      });
-    }
-    const spotlightCountry = selectedCountry || topCountries[0]?.[0];
-    if (spotlightCountry && countryAgg.has(spotlightCountry)) {
-      const agg = countryAgg.get(spotlightCountry);
-      const countryRounds2 = teamRounds.filter((r) => normalizeCountryCode(r.trueCountry) === spotlightCountry);
-      const countryRoundMetrics = countryRounds2.map((r) => {
-        const ts = teamPlayedAtByGameId.get(r.gameId);
-        const score = extractScore(r);
-        if (typeof ts !== "number" || typeof score !== "number") return void 0;
-        const guessCountry = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
-        const trueCountry = normalizeCountryCode(r.trueCountry);
-        return {
-          score,
-          guessCountry,
-          trueCountry,
-          drill: toDrilldownItem(r, ts, score)
-        };
-      }).filter(
-        (x) => x !== void 0
-      );
-      const countryScores = countryRounds2.map(extractScore).filter((x) => typeof x === "number");
-      const countryFiveK = countryScores.filter((s) => s >= 5e3).length;
-      const countryThrows = countryScores.filter((s) => s < 50).length;
-      const distributionAll = buildSmoothedScoreDistributionWithDrilldown(countryRoundMetrics.map((x) => ({ score: x.score, drill: x.drill })));
-      const spotlightCandidates = [
-        spotlightCountry,
-        ...topCountries.map(([country]) => country).filter((country) => country !== spotlightCountry).slice(0, 24)
-      ];
-      const spanStartRaw = teamGames[0]?.playedAt ?? gameTimes[0];
-      const spanEndRaw = teamGames[teamGames.length - 1]?.playedAt ?? gameTimes[gameTimes.length - 1];
-      const spanStart = typeof spanStartRaw === "number" && Number.isFinite(spanStartRaw) ? spanStartRaw : 0;
-      const spanEnd = typeof spanEndRaw === "number" && Number.isFinite(spanEndRaw) ? spanEndRaw : spanStart;
-      const timelineBucketMs = pickOverviewBucketMs(Math.max(0, spanEnd - spanStart));
-      const countryTimeline = /* @__PURE__ */ new Map();
-      const totalDamageByBucket = /* @__PURE__ */ new Map();
-      const bucketSet = /* @__PURE__ */ new Set();
-      for (const r of teamRounds) {
-        const ts = teamPlayedAtByGameId.get(r.gameId);
-        const country = normalizeCountryCode(r.trueCountry);
-        if (!ts || !country || !spotlightCandidates.includes(country)) continue;
-        const day = startOfLocalDay(ts);
-        const bucket = timelineBucketMs ? Math.floor(day / timelineBucketMs) * timelineBucketMs : day;
-        bucketSet.add(bucket);
-        if (!countryTimeline.has(country)) countryTimeline.set(country, /* @__PURE__ */ new Map());
-        const byBucket = countryTimeline.get(country);
-        const cur = byBucket.get(bucket) || { rounds: 0, scoreSum: 0, correct: 0, throws: 0, fiveKs: 0, damageDealt: 0, damageTaken: 0 };
-        cur.rounds += 1;
-        const sc = extractScore(r);
-        if (typeof sc === "number") {
-          cur.scoreSum += sc;
-          if (sc < 50) cur.throws += 1;
-          if (sc >= 5e3) cur.fiveKs += 1;
-        }
-        const guess = normalizeCountryCode(getString(asRecord(r), "player_self_guessCountry"));
-        if (guess && guess === country) cur.correct += 1;
-        if (ownPlayerId) {
-          const diff = getRoundDamageDiff(r, ownPlayerId);
-          if (typeof diff === "number" && Number.isFinite(diff)) {
-            if (diff > 0) {
-              cur.damageDealt += diff;
-              const total = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
-              total.dealt += diff;
-              totalDamageByBucket.set(bucket, total);
-            } else if (diff < 0) {
-              cur.damageTaken += -diff;
-              const total = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
-              total.taken += -diff;
-              totalDamageByBucket.set(bucket, total);
-            }
-          }
-        }
-        byBucket.set(bucket, cur);
-      }
-      const sortedBuckets = [...bucketSet].sort((a, b) => a - b);
-      const MIN_BUCKET_ROUNDS_FOR_RATE = 5;
-      const PRIOR_STRENGTH = 12;
-      const smoothFraction = (success, total, prior, strength = PRIOR_STRENGTH) => {
-        if (total <= 0) return prior;
-        const s = Math.max(0, Math.min(1, prior));
-        return (success + s * strength) / (total + strength);
-      };
-      const makeCountrySeries = (metric) => spotlightCandidates.map((country) => {
-        const byBucket = countryTimeline.get(country) || /* @__PURE__ */ new Map();
-        const overall = countryAgg.get(country);
-        const overallRounds = overall?.n || 0;
-        const overallAvgScore = overall && overall.score.length > 0 ? overall.score.reduce((a, b) => a + b, 0) / overall.score.length : 0;
-        const overallHitRate = overall && overallRounds > 0 ? overall.correct / overallRounds : 0;
-        const overallThrowRate = overall && overall.score.length > 0 ? overall.throws / overall.score.length : 0;
-        const overallFiveKRate = overall && overall.score.length > 0 ? overall.fiveKs / overall.score.length : 0;
-        const overallAvgDamageDealt = overall && overallRounds > 0 ? overall.damageDealt / overallRounds : 0;
-        const overallAvgDamageTaken = overall && overallRounds > 0 ? overall.damageTaken / overallRounds : 0;
-        const overallDealtShare = totalDamageDealt > 0 && overall ? overall.damageDealt / totalDamageDealt : 0;
-        const overallTakenShare = totalDamageTaken > 0 && overall ? overall.damageTaken / totalDamageTaken : 0;
-        let lastY;
-        const points = sortedBuckets.map((bucket) => {
-          const v = byBucket.get(bucket) || {
-            rounds: 0,
-            scoreSum: 0,
-            correct: 0,
-            throws: 0,
-            fiveKs: 0,
-            damageDealt: 0,
-            damageTaken: 0
-          };
-          const totals = totalDamageByBucket.get(bucket) || { dealt: 0, taken: 0 };
-          let y;
-          if (metric === "rounds") {
-            y = v.rounds;
-          } else if (metric === "avg_score") {
-            y = v.rounds > 0 ? v.scoreSum / v.rounds : void 0;
-          } else if (metric === "avg_damage_dealt") {
-            y = v.rounds > 0 ? v.damageDealt / v.rounds : void 0;
-          } else if (metric === "avg_damage_taken") {
-            y = v.rounds > 0 ? v.damageTaken / v.rounds : void 0;
-          } else if (metric === "hit_rate") {
-            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE) {
-              y = smoothFraction(v.correct, v.rounds, overallHitRate) * 100;
-            }
-          } else if (metric === "throw_rate") {
-            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE) {
-              y = smoothFraction(v.throws, v.rounds, overallThrowRate) * 100;
-            }
-          } else if (metric === "fivek_rate") {
-            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE) {
-              y = smoothFraction(v.fiveKs, v.rounds, overallFiveKRate) * 100;
-            }
-          } else if (metric === "damage_dealt_share") {
-            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE && totals.dealt > 0) {
-              y = smoothFraction(v.damageDealt, totals.dealt, overallDealtShare) * 100;
-            }
-          } else if (metric === "damage_taken_share") {
-            if (v.rounds >= MIN_BUCKET_ROUNDS_FOR_RATE && totals.taken > 0) {
-              y = smoothFraction(v.damageTaken, totals.taken, overallTakenShare) * 100;
-            }
-          }
-          if (y === void 0) {
-            if (lastY !== void 0) {
-              y = lastY;
-            } else if (metric === "rounds") {
-              y = 0;
-            } else if (metric === "avg_score") {
-              y = overallAvgScore;
-            } else if (metric === "avg_damage_dealt") {
-              y = overallAvgDamageDealt;
-            } else if (metric === "avg_damage_taken") {
-              y = overallAvgDamageTaken;
-            } else if (metric === "hit_rate") {
-              y = overallHitRate * 100;
-            } else if (metric === "throw_rate") {
-              y = overallThrowRate * 100;
-            } else if (metric === "fivek_rate") {
-              y = overallFiveKRate * 100;
-            } else if (metric === "damage_dealt_share") {
-              y = overallDealtShare * 100;
-            } else if (metric === "damage_taken_share") {
-              y = overallTakenShare * 100;
-            } else {
-              y = 0;
-            }
-          }
-          lastY = y;
-          return { x: bucket, y, label: formatDay(bucket) };
-        });
-        return {
-          key: country,
-          label: countryLabel(country),
-          points
-        };
-      });
-      sections.push({
-        id: "country_spotlight",
-        title: `Country Spotlight: ${countryLabel(spotlightCountry)}`,
-        group: "Countries",
-        appliesFilters: ["date", "mode", "teammate", "country"],
-        lines: [
-          `Rounds: ${agg.n}`,
-          `Hit rate: ${fmt((agg.n > 0 ? agg.correct / agg.n : 0) * 100, 1)}%`,
-          `Avg score: ${fmt(avg(agg.score), 1)} | Median score: ${fmt(median(agg.score), 1)}`,
-          `Avg distance: ${fmt(avg(agg.dist), 2)} km`,
-          `Perfect 5k in this country: ${countryFiveK} (${fmt(pct(countryFiveK, countryScores.length), 1)}%)`,
-          `Throws (<50) in this country: ${countryThrows} (${fmt(pct(countryThrows, countryScores.length), 1)}%)`
-        ],
-        charts: [
-          {
-            type: "bar",
-            yLabel: "Score distribution (smoothed)",
-            orientation: "vertical",
-            bars: distributionAll
-          },
-          {
-            type: "selectableLine",
-            yLabel: "Country trend comparison",
-            defaultMetricKey: "damage_dealt_share",
-            primaryKey: spotlightCountry,
-            maxCompare: 4,
-            compareCandidates: spotlightCandidates.filter((country) => country !== spotlightCountry).map((country) => ({ key: country, label: countryLabel(country) })),
-            defaultCompareKeys: spotlightCandidates.filter((country) => country !== spotlightCountry).slice(0, 4),
-            options: [
-              { key: "damage_dealt_share", label: "Damage dealt share (%)", series: makeCountrySeries("damage_dealt_share") },
-              { key: "damage_taken_share", label: "Damage taken share (%)", series: makeCountrySeries("damage_taken_share") },
-              { key: "avg_score", label: "Avg score", series: makeCountrySeries("avg_score") },
-              { key: "hit_rate", label: "Hit rate (%)", series: makeCountrySeries("hit_rate") },
-              { key: "throw_rate", label: "Throw rate (%)", series: makeCountrySeries("throw_rate") },
-              { key: "fivek_rate", label: "5k rate (%)", series: makeCountrySeries("fivek_rate") },
-              { key: "avg_damage_dealt", label: "Avg damage dealt", series: makeCountrySeries("avg_damage_dealt") },
-              { key: "avg_damage_taken", label: "Avg damage taken", series: makeCountrySeries("avg_damage_taken") },
-              { key: "rounds", label: "Rounds", series: makeCountrySeries("rounds") }
-            ]
-          }
-        ]
-      });
-    }
-    const scoresByDay = /* @__PURE__ */ new Map();
-    const timesByDay = /* @__PURE__ */ new Map();
-    const recordsDrillByDay = /* @__PURE__ */ new Map();
-    for (const rm of roundMetrics) {
-      const s = scoresByDay.get(rm.day) || [];
-      s.push(rm.score);
-      scoresByDay.set(rm.day, s);
-      if (typeof rm.timeSec === "number") {
-        const t = timesByDay.get(rm.day) || [];
-        t.push(rm.timeSec);
-        timesByDay.set(rm.day, t);
-      }
-      const drill = recordsDrillByDay.get(rm.day) || [];
-      drill.push(toDrilldownItem(rm.round, rm.ts, rm.score));
-      recordsDrillByDay.set(rm.day, drill);
-    }
-    const dayRecords = [...scoresByDay.entries()].map(([day, vals]) => ({
-      day,
-      avgScore: avg(vals) || 0,
-      rounds: vals.length,
-      avgTime: avg(timesByDay.get(day) || [])
-    }));
-    const bestDay = [...dayRecords].sort((a, b) => b.avgScore - a.avgScore)[0];
-    const worstDay = [...dayRecords].sort((a, b) => a.avgScore - b.avgScore)[0];
-    const fastestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (a.avgTime || 0) - (b.avgTime || 0))[0];
-    const slowestDayRecord = [...dayRecords].filter((d) => typeof d.avgTime === "number").sort((a, b) => (b.avgTime || 0) - (a.avgTime || 0))[0];
-    const smoothedDaily = smoothDailyScoreRecords(dayRecords);
-    let fivekStreak = 0;
-    let bestFivekStreak = 0;
-    let bestFivekStreakItems = [];
-    let currentFivekItems = [];
-    let throwStreak = 0;
-    let worstThrowStreak = 0;
-    let worstThrowStreakItems = [];
-    let currentThrowItems = [];
-    for (const rm of roundMetrics) {
-      const s = rm.score;
-      if (s >= 5e3) {
-        fivekStreak++;
-        currentFivekItems.push(rm);
-        bestFivekStreak = Math.max(bestFivekStreak, fivekStreak);
-        if (currentFivekItems.length > bestFivekStreakItems.length) bestFivekStreakItems = currentFivekItems.slice();
-      } else {
-        fivekStreak = 0;
-        currentFivekItems = [];
-      }
-      if (s < 50) {
-        throwStreak++;
-        currentThrowItems.push(rm);
-        worstThrowStreak = Math.max(worstThrowStreak, throwStreak);
-        if (currentThrowItems.length > worstThrowStreakItems.length) worstThrowStreakItems = currentThrowItems.slice();
-      } else {
-        throwStreak = 0;
-        currentThrowItems = [];
-      }
-    }
-    sections.push({
-      id: "personal_records",
-      title: "Personal Records",
-      group: "Performance",
-      appliesFilters: ["date", "mode", "teammate", "country"],
-      lines: [
-        `Best day: ${bestDay ? `${formatDay(bestDay.day)} (avg ${fmt(bestDay.avgScore, 1)}, n=${bestDay.rounds})` : "-"}`,
-        `Hardest day: ${worstDay ? `${formatDay(worstDay.day)} (avg ${fmt(worstDay.avgScore, 1)}, n=${worstDay.rounds})` : "-"}`,
-        `Best avg score in a game: ${bestAvgEntry ? `${fmt(bestAvgEntry.avgScore, 1)} (${bestAvgEntry.n} rounds, ${gameDateLabel(bestAvgEntry)})` : "-"}`,
-        `Worst avg score in a game: ${worstAvgEntry ? `${fmt(worstAvgEntry.avgScore, 1)} (${worstAvgEntry.n} rounds, ${gameDateLabel(worstAvgEntry)})` : "-"}`,
-        `Fastest day: ${fastestDayRecord ? `${formatDay(fastestDayRecord.day)} (${fmt(fastestDayRecord.avgTime, 1)} s)` : "-"}`,
-        `Slowest day: ${slowestDayRecord ? `${formatDay(slowestDayRecord.day)} (${fmt(slowestDayRecord.avgTime, 1)} s)` : "-"}`,
-        `Best 5k streak: ${bestFivekStreak} rounds in a row`,
-        `Worst throw streak (<50): ${worstThrowStreak} rounds in a row`
-      ],
-      lineDrilldowns: [
-        { lineLabel: "Best day", items: bestDay ? recordsDrillByDay.get(bestDay.day) || [] : [] },
-        { lineLabel: "Hardest day", items: worstDay ? recordsDrillByDay.get(worstDay.day) || [] : [] },
-        { lineLabel: "Best avg score in a game", items: gameEntryDrill(bestAvgEntry) },
-        { lineLabel: "Worst avg score in a game", items: gameEntryDrill(worstAvgEntry) },
-        { lineLabel: "Fastest day", items: fastestDayRecord ? recordsDrillByDay.get(fastestDayRecord.day) || [] : [] },
-        { lineLabel: "Slowest day", items: slowestDayRecord ? recordsDrillByDay.get(slowestDayRecord.day) || [] : [] },
-        { lineLabel: "Best 5k streak", items: bestFivekStreakItems.map((x) => toDrilldownItem(x.round, x.ts, x.score)) },
-        { lineLabel: "Worst throw streak (<50)", items: worstThrowStreakItems.map((x) => toDrilldownItem(x.round, x.ts, x.score)) }
-      ],
-      chart: {
-        type: "line",
-        yLabel: smoothedDaily.bucketDays ? `Avg daily score (${smoothedDaily.bucketDays}d smoothed)` : "Avg daily score",
-        points: smoothedDaily.points
-      }
-    });
-    return {
-      sections,
-      availableGameModes,
-      availableMovementTypes,
-      availableTeammates,
-      availableCountries,
-      playerName,
-      minPlayedAt,
-      maxPlayedAt
-    };
-  }
-
   // node_modules/xlsx/xlsx.mjs
   var XLSX = {};
   XLSX.version = "0.18.5";
@@ -19405,14 +10456,14 @@
     if (date < 60) dow = (dow + 6) % 7;
     return dow;
   }
-  function SSF_write_date(type, fmt2, val, ss0) {
+  function SSF_write_date(type, fmt, val, ss0) {
     var o = "", ss = 0, tt = 0, y = val.y, out, outl = 0;
     switch (type) {
       case 98:
         y = val.y + 543;
       /* falls through */
       case 121:
-        switch (fmt2.length) {
+        switch (fmt.length) {
           case 1:
           case 2:
             out = y % 100;
@@ -19425,11 +10476,11 @@
         }
         break;
       case 109:
-        switch (fmt2.length) {
+        switch (fmt.length) {
           case 1:
           case 2:
             out = val.m;
-            outl = fmt2.length;
+            outl = fmt.length;
             break;
           case 3:
             return months[val.m - 1][1];
@@ -19440,11 +10491,11 @@
         }
         break;
       case 100:
-        switch (fmt2.length) {
+        switch (fmt.length) {
           case 1:
           case 2:
             out = val.d;
-            outl = fmt2.length;
+            outl = fmt.length;
             break;
           case 3:
             return days[val.q][0];
@@ -19453,51 +10504,51 @@
         }
         break;
       case 104:
-        switch (fmt2.length) {
+        switch (fmt.length) {
           case 1:
           case 2:
             out = 1 + (val.H + 11) % 12;
-            outl = fmt2.length;
+            outl = fmt.length;
             break;
           default:
-            throw "bad hour format: " + fmt2;
+            throw "bad hour format: " + fmt;
         }
         break;
       case 72:
-        switch (fmt2.length) {
+        switch (fmt.length) {
           case 1:
           case 2:
             out = val.H;
-            outl = fmt2.length;
+            outl = fmt.length;
             break;
           default:
-            throw "bad hour format: " + fmt2;
+            throw "bad hour format: " + fmt;
         }
         break;
       case 77:
-        switch (fmt2.length) {
+        switch (fmt.length) {
           case 1:
           case 2:
             out = val.M;
-            outl = fmt2.length;
+            outl = fmt.length;
             break;
           default:
-            throw "bad minute format: " + fmt2;
+            throw "bad minute format: " + fmt;
         }
         break;
       case 115:
-        if (fmt2 != "s" && fmt2 != "ss" && fmt2 != ".0" && fmt2 != ".00" && fmt2 != ".000") throw "bad second format: " + fmt2;
-        if (val.u === 0 && (fmt2 == "s" || fmt2 == "ss")) return pad0(val.S, fmt2.length);
+        if (fmt != "s" && fmt != "ss" && fmt != ".0" && fmt != ".00" && fmt != ".000") throw "bad second format: " + fmt;
+        if (val.u === 0 && (fmt == "s" || fmt == "ss")) return pad0(val.S, fmt.length);
         if (ss0 >= 2) tt = ss0 === 3 ? 1e3 : 100;
         else tt = ss0 === 1 ? 10 : 1;
         ss = Math.round(tt * (val.S + val.u));
         if (ss >= 60 * tt) ss = 0;
-        if (fmt2 === "s") return ss === 0 ? "0" : "" + ss / tt;
+        if (fmt === "s") return ss === 0 ? "0" : "" + ss / tt;
         o = pad0(ss, 2 + ss0);
-        if (fmt2 === "ss") return o.substr(0, 2);
-        return "." + o.substr(2, fmt2.length - 1);
+        if (fmt === "ss") return o.substr(0, 2);
+        return "." + o.substr(2, fmt.length - 1);
       case 90:
-        switch (fmt2) {
+        switch (fmt) {
           case "[h]":
           case "[hh]":
             out = val.D * 24 + val.H;
@@ -19511,9 +10562,9 @@
             out = ((val.D * 24 + val.H) * 60 + val.M) * 60 + Math.round(val.S + val.u);
             break;
           default:
-            throw "bad abstime format: " + fmt2;
+            throw "bad abstime format: " + fmt;
         }
-        outl = fmt2.length === 3 ? 1 : 2;
+        outl = fmt.length === 3 ? 1 : 2;
         break;
       case 101:
         out = y;
@@ -19531,23 +10582,23 @@
     return o;
   }
   var pct1 = /%/g;
-  function write_num_pct(type, fmt2, val) {
-    var sfmt = fmt2.replace(pct1, ""), mul = fmt2.length - sfmt.length;
+  function write_num_pct(type, fmt, val) {
+    var sfmt = fmt.replace(pct1, ""), mul = fmt.length - sfmt.length;
     return write_num(type, sfmt, val * Math.pow(10, 2 * mul)) + fill("%", mul);
   }
-  function write_num_cm(type, fmt2, val) {
-    var idx = fmt2.length - 1;
-    while (fmt2.charCodeAt(idx - 1) === 44) --idx;
-    return write_num(type, fmt2.substr(0, idx), val / Math.pow(10, 3 * (fmt2.length - idx)));
+  function write_num_cm(type, fmt, val) {
+    var idx = fmt.length - 1;
+    while (fmt.charCodeAt(idx - 1) === 44) --idx;
+    return write_num(type, fmt.substr(0, idx), val / Math.pow(10, 3 * (fmt.length - idx)));
   }
-  function write_num_exp(fmt2, val) {
+  function write_num_exp(fmt, val) {
     var o;
-    var idx = fmt2.indexOf("E") - fmt2.indexOf(".") - 1;
-    if (fmt2.match(/^#+0.0E\+0$/)) {
+    var idx = fmt.indexOf("E") - fmt.indexOf(".") - 1;
+    if (fmt.match(/^#+0.0E\+0$/)) {
       if (val == 0) return "0.0E+0";
-      else if (val < 0) return "-" + write_num_exp(fmt2, -val);
-      var period = fmt2.indexOf(".");
-      if (period === -1) period = fmt2.indexOf("E");
+      else if (val < 0) return "-" + write_num_exp(fmt, -val);
+      var period = fmt.indexOf(".");
+      if (period === -1) period = fmt.indexOf("E");
       var ee = Math.floor(Math.log(val) * Math.LOG10E) % period;
       if (ee < 0) ee += period;
       o = (val / Math.pow(10, ee)).toPrecision(idx + 1 + (period + ee) % period);
@@ -19565,8 +10616,8 @@
         return $1 + $2 + $3.substr(0, (period + ee) % period) + "." + $3.substr(ee) + "E";
       });
     } else o = val.toExponential(idx);
-    if (fmt2.match(/E\+00$/) && o.match(/e[+-]\d$/)) o = o.substr(0, o.length - 1) + "0" + o.charAt(o.length - 1);
-    if (fmt2.match(/E\-/) && o.match(/e\+/)) o = o.replace(/e\+/, "e");
+    if (fmt.match(/E\+00$/) && o.match(/e[+-]\d$/)) o = o.substr(0, o.length - 1) + "0" + o.charAt(o.length - 1);
+    if (fmt.match(/E\-/) && o.match(/e\+/)) o = o.replace(/e\+/, "e");
     return o.replace("e", "E");
   }
   var frac1 = /# (\?+)( ?)\/( ?)(\d+)/;
@@ -19616,57 +10667,57 @@
     if (val < 2147483647 && val > -2147483648) return "" + (val >= 0 ? val | 0 : val - 1 | 0);
     return "" + Math.floor(val);
   }
-  function write_num_flt(type, fmt2, val) {
-    if (type.charCodeAt(0) === 40 && !fmt2.match(closeparen)) {
-      var ffmt = fmt2.replace(/\( */, "").replace(/ \)/, "").replace(/\)/, "");
+  function write_num_flt(type, fmt, val) {
+    if (type.charCodeAt(0) === 40 && !fmt.match(closeparen)) {
+      var ffmt = fmt.replace(/\( */, "").replace(/ \)/, "").replace(/\)/, "");
       if (val >= 0) return write_num_flt("n", ffmt, val);
       return "(" + write_num_flt("n", ffmt, -val) + ")";
     }
-    if (fmt2.charCodeAt(fmt2.length - 1) === 44) return write_num_cm(type, fmt2, val);
-    if (fmt2.indexOf("%") !== -1) return write_num_pct(type, fmt2, val);
-    if (fmt2.indexOf("E") !== -1) return write_num_exp(fmt2, val);
-    if (fmt2.charCodeAt(0) === 36) return "$" + write_num_flt(type, fmt2.substr(fmt2.charAt(1) == " " ? 2 : 1), val);
+    if (fmt.charCodeAt(fmt.length - 1) === 44) return write_num_cm(type, fmt, val);
+    if (fmt.indexOf("%") !== -1) return write_num_pct(type, fmt, val);
+    if (fmt.indexOf("E") !== -1) return write_num_exp(fmt, val);
+    if (fmt.charCodeAt(0) === 36) return "$" + write_num_flt(type, fmt.substr(fmt.charAt(1) == " " ? 2 : 1), val);
     var o;
     var r, ri, ff, aval = Math.abs(val), sign = val < 0 ? "-" : "";
-    if (fmt2.match(/^00+$/)) return sign + pad0r(aval, fmt2.length);
-    if (fmt2.match(/^[#?]+$/)) {
+    if (fmt.match(/^00+$/)) return sign + pad0r(aval, fmt.length);
+    if (fmt.match(/^[#?]+$/)) {
       o = pad0r(val, 0);
       if (o === "0") o = "";
-      return o.length > fmt2.length ? o : hashq(fmt2.substr(0, fmt2.length - o.length)) + o;
+      return o.length > fmt.length ? o : hashq(fmt.substr(0, fmt.length - o.length)) + o;
     }
-    if (r = fmt2.match(frac1)) return write_num_f1(r, aval, sign);
-    if (fmt2.match(/^#+0+$/)) return sign + pad0r(aval, fmt2.length - fmt2.indexOf("0"));
-    if (r = fmt2.match(dec1)) {
+    if (r = fmt.match(frac1)) return write_num_f1(r, aval, sign);
+    if (fmt.match(/^#+0+$/)) return sign + pad0r(aval, fmt.length - fmt.indexOf("0"));
+    if (r = fmt.match(dec1)) {
       o = rnd(val, r[1].length).replace(/^([^\.]+)$/, "$1." + hashq(r[1])).replace(/\.$/, "." + hashq(r[1])).replace(/\.(\d*)$/, function($$, $1) {
         return "." + $1 + fill("0", hashq(
           /*::(*/
           r[1]
         ).length - $1.length);
       });
-      return fmt2.indexOf("0.") !== -1 ? o : o.replace(/^0\./, ".");
+      return fmt.indexOf("0.") !== -1 ? o : o.replace(/^0\./, ".");
     }
-    fmt2 = fmt2.replace(/^#+([0.])/, "$1");
-    if (r = fmt2.match(/^(0*)\.(#*)$/)) {
+    fmt = fmt.replace(/^#+([0.])/, "$1");
+    if (r = fmt.match(/^(0*)\.(#*)$/)) {
       return sign + rnd(aval, r[2].length).replace(/\.(\d*[1-9])0*$/, ".$1").replace(/^(-?\d*)$/, "$1.").replace(/^0\./, r[1].length ? "0." : ".");
     }
-    if (r = fmt2.match(/^#{1,3},##0(\.?)$/)) return sign + commaify(pad0r(aval, 0));
-    if (r = fmt2.match(/^#,##0\.([#0]*0)$/)) {
-      return val < 0 ? "-" + write_num_flt(type, fmt2, -val) : commaify("" + (Math.floor(val) + carry(val, r[1].length))) + "." + pad0(dec(val, r[1].length), r[1].length);
+    if (r = fmt.match(/^#{1,3},##0(\.?)$/)) return sign + commaify(pad0r(aval, 0));
+    if (r = fmt.match(/^#,##0\.([#0]*0)$/)) {
+      return val < 0 ? "-" + write_num_flt(type, fmt, -val) : commaify("" + (Math.floor(val) + carry(val, r[1].length))) + "." + pad0(dec(val, r[1].length), r[1].length);
     }
-    if (r = fmt2.match(/^#,#*,#0/)) return write_num_flt(type, fmt2.replace(/^#,#*,/, ""), val);
-    if (r = fmt2.match(/^([0#]+)(\\?-([0#]+))+$/)) {
-      o = _strrev(write_num_flt(type, fmt2.replace(/[\\-]/g, ""), val));
+    if (r = fmt.match(/^#,#*,#0/)) return write_num_flt(type, fmt.replace(/^#,#*,/, ""), val);
+    if (r = fmt.match(/^([0#]+)(\\?-([0#]+))+$/)) {
+      o = _strrev(write_num_flt(type, fmt.replace(/[\\-]/g, ""), val));
       ri = 0;
-      return _strrev(_strrev(fmt2.replace(/\\/g, "")).replace(/[0#]/g, function(x2) {
+      return _strrev(_strrev(fmt.replace(/\\/g, "")).replace(/[0#]/g, function(x2) {
         return ri < o.length ? o.charAt(ri++) : x2 === "0" ? "0" : "";
       }));
     }
-    if (fmt2.match(phone)) {
+    if (fmt.match(phone)) {
       o = write_num_flt(type, "##########", val);
       return "(" + o.substr(0, 3) + ") " + o.substr(3, 3) + "-" + o.substr(6);
     }
     var oa = "";
-    if (r = fmt2.match(/^([#0?]+)( ?)\/( ?)([#0?]+)/)) {
+    if (r = fmt.match(/^([#0?]+)( ?)\/( ?)([#0?]+)/)) {
       ri = Math.min(
         /*::String(*/
         r[4].length,
@@ -19689,29 +10740,29 @@
       o += oa;
       return o;
     }
-    if (r = fmt2.match(/^# ([#0?]+)( ?)\/( ?)([#0?]+)/)) {
+    if (r = fmt.match(/^# ([#0?]+)( ?)\/( ?)([#0?]+)/)) {
       ri = Math.min(Math.max(r[1].length, r[4].length), 7);
       ff = SSF_frac(aval, Math.pow(10, ri) - 1, true);
       return sign + (ff[0] || (ff[1] ? "" : "0")) + " " + (ff[1] ? pad_(ff[1], ri) + r[2] + "/" + r[3] + rpad_(ff[2], ri) : fill(" ", 2 * ri + 1 + r[2].length + r[3].length));
     }
-    if (r = fmt2.match(/^[#0?]+$/)) {
+    if (r = fmt.match(/^[#0?]+$/)) {
       o = pad0r(val, 0);
-      if (fmt2.length <= o.length) return o;
-      return hashq(fmt2.substr(0, fmt2.length - o.length)) + o;
+      if (fmt.length <= o.length) return o;
+      return hashq(fmt.substr(0, fmt.length - o.length)) + o;
     }
-    if (r = fmt2.match(/^([#0?]+)\.([#0]+)$/)) {
+    if (r = fmt.match(/^([#0?]+)\.([#0]+)$/)) {
       o = "" + val.toFixed(Math.min(r[2].length, 10)).replace(/([^0])0+$/, "$1");
       ri = o.indexOf(".");
-      var lres = fmt2.indexOf(".") - ri, rres = fmt2.length - o.length - lres;
-      return hashq(fmt2.substr(0, lres) + o + fmt2.substr(fmt2.length - rres));
+      var lres = fmt.indexOf(".") - ri, rres = fmt.length - o.length - lres;
+      return hashq(fmt.substr(0, lres) + o + fmt.substr(fmt.length - rres));
     }
-    if (r = fmt2.match(/^00,000\.([#0]*0)$/)) {
+    if (r = fmt.match(/^00,000\.([#0]*0)$/)) {
       ri = dec(val, r[1].length);
-      return val < 0 ? "-" + write_num_flt(type, fmt2, -val) : commaify(flr(val)).replace(/^\d,\d{3}$/, "0$&").replace(/^\d*$/, function($$) {
+      return val < 0 ? "-" + write_num_flt(type, fmt, -val) : commaify(flr(val)).replace(/^\d,\d{3}$/, "0$&").replace(/^\d*$/, function($$) {
         return "00," + ($$.length < 3 ? pad0(0, 3 - $$.length) : "") + $$;
       }) + "." + pad0(ri, r[1].length);
     }
-    switch (fmt2) {
+    switch (fmt) {
       case "###,##0.00":
         return write_num_flt(type, "#,##0.00", val);
       case "###,###":
@@ -19725,25 +10776,25 @@
         return write_num_flt(type, "#,##0.00", val).replace(/^0\./, ".");
       default:
     }
-    throw new Error("unsupported format |" + fmt2 + "|");
+    throw new Error("unsupported format |" + fmt + "|");
   }
-  function write_num_cm2(type, fmt2, val) {
-    var idx = fmt2.length - 1;
-    while (fmt2.charCodeAt(idx - 1) === 44) --idx;
-    return write_num(type, fmt2.substr(0, idx), val / Math.pow(10, 3 * (fmt2.length - idx)));
+  function write_num_cm2(type, fmt, val) {
+    var idx = fmt.length - 1;
+    while (fmt.charCodeAt(idx - 1) === 44) --idx;
+    return write_num(type, fmt.substr(0, idx), val / Math.pow(10, 3 * (fmt.length - idx)));
   }
-  function write_num_pct2(type, fmt2, val) {
-    var sfmt = fmt2.replace(pct1, ""), mul = fmt2.length - sfmt.length;
+  function write_num_pct2(type, fmt, val) {
+    var sfmt = fmt.replace(pct1, ""), mul = fmt.length - sfmt.length;
     return write_num(type, sfmt, val * Math.pow(10, 2 * mul)) + fill("%", mul);
   }
-  function write_num_exp2(fmt2, val) {
+  function write_num_exp2(fmt, val) {
     var o;
-    var idx = fmt2.indexOf("E") - fmt2.indexOf(".") - 1;
-    if (fmt2.match(/^#+0.0E\+0$/)) {
+    var idx = fmt.indexOf("E") - fmt.indexOf(".") - 1;
+    if (fmt.match(/^#+0.0E\+0$/)) {
       if (val == 0) return "0.0E+0";
-      else if (val < 0) return "-" + write_num_exp2(fmt2, -val);
-      var period = fmt2.indexOf(".");
-      if (period === -1) period = fmt2.indexOf("E");
+      else if (val < 0) return "-" + write_num_exp2(fmt, -val);
+      var period = fmt.indexOf(".");
+      if (period === -1) period = fmt.indexOf("E");
       var ee = Math.floor(Math.log(val) * Math.LOG10E) % period;
       if (ee < 0) ee += period;
       o = (val / Math.pow(10, ee)).toPrecision(idx + 1 + (period + ee) % period);
@@ -19757,59 +10808,59 @@
         return $1 + $2 + $3.substr(0, (period + ee) % period) + "." + $3.substr(ee) + "E";
       });
     } else o = val.toExponential(idx);
-    if (fmt2.match(/E\+00$/) && o.match(/e[+-]\d$/)) o = o.substr(0, o.length - 1) + "0" + o.charAt(o.length - 1);
-    if (fmt2.match(/E\-/) && o.match(/e\+/)) o = o.replace(/e\+/, "e");
+    if (fmt.match(/E\+00$/) && o.match(/e[+-]\d$/)) o = o.substr(0, o.length - 1) + "0" + o.charAt(o.length - 1);
+    if (fmt.match(/E\-/) && o.match(/e\+/)) o = o.replace(/e\+/, "e");
     return o.replace("e", "E");
   }
-  function write_num_int(type, fmt2, val) {
-    if (type.charCodeAt(0) === 40 && !fmt2.match(closeparen)) {
-      var ffmt = fmt2.replace(/\( */, "").replace(/ \)/, "").replace(/\)/, "");
+  function write_num_int(type, fmt, val) {
+    if (type.charCodeAt(0) === 40 && !fmt.match(closeparen)) {
+      var ffmt = fmt.replace(/\( */, "").replace(/ \)/, "").replace(/\)/, "");
       if (val >= 0) return write_num_int("n", ffmt, val);
       return "(" + write_num_int("n", ffmt, -val) + ")";
     }
-    if (fmt2.charCodeAt(fmt2.length - 1) === 44) return write_num_cm2(type, fmt2, val);
-    if (fmt2.indexOf("%") !== -1) return write_num_pct2(type, fmt2, val);
-    if (fmt2.indexOf("E") !== -1) return write_num_exp2(fmt2, val);
-    if (fmt2.charCodeAt(0) === 36) return "$" + write_num_int(type, fmt2.substr(fmt2.charAt(1) == " " ? 2 : 1), val);
+    if (fmt.charCodeAt(fmt.length - 1) === 44) return write_num_cm2(type, fmt, val);
+    if (fmt.indexOf("%") !== -1) return write_num_pct2(type, fmt, val);
+    if (fmt.indexOf("E") !== -1) return write_num_exp2(fmt, val);
+    if (fmt.charCodeAt(0) === 36) return "$" + write_num_int(type, fmt.substr(fmt.charAt(1) == " " ? 2 : 1), val);
     var o;
     var r, ri, ff, aval = Math.abs(val), sign = val < 0 ? "-" : "";
-    if (fmt2.match(/^00+$/)) return sign + pad0(aval, fmt2.length);
-    if (fmt2.match(/^[#?]+$/)) {
+    if (fmt.match(/^00+$/)) return sign + pad0(aval, fmt.length);
+    if (fmt.match(/^[#?]+$/)) {
       o = "" + val;
       if (val === 0) o = "";
-      return o.length > fmt2.length ? o : hashq(fmt2.substr(0, fmt2.length - o.length)) + o;
+      return o.length > fmt.length ? o : hashq(fmt.substr(0, fmt.length - o.length)) + o;
     }
-    if (r = fmt2.match(frac1)) return write_num_f2(r, aval, sign);
-    if (fmt2.match(/^#+0+$/)) return sign + pad0(aval, fmt2.length - fmt2.indexOf("0"));
-    if (r = fmt2.match(dec1)) {
+    if (r = fmt.match(frac1)) return write_num_f2(r, aval, sign);
+    if (fmt.match(/^#+0+$/)) return sign + pad0(aval, fmt.length - fmt.indexOf("0"));
+    if (r = fmt.match(dec1)) {
       o = ("" + val).replace(/^([^\.]+)$/, "$1." + hashq(r[1])).replace(/\.$/, "." + hashq(r[1]));
       o = o.replace(/\.(\d*)$/, function($$, $1) {
         return "." + $1 + fill("0", hashq(r[1]).length - $1.length);
       });
-      return fmt2.indexOf("0.") !== -1 ? o : o.replace(/^0\./, ".");
+      return fmt.indexOf("0.") !== -1 ? o : o.replace(/^0\./, ".");
     }
-    fmt2 = fmt2.replace(/^#+([0.])/, "$1");
-    if (r = fmt2.match(/^(0*)\.(#*)$/)) {
+    fmt = fmt.replace(/^#+([0.])/, "$1");
+    if (r = fmt.match(/^(0*)\.(#*)$/)) {
       return sign + ("" + aval).replace(/\.(\d*[1-9])0*$/, ".$1").replace(/^(-?\d*)$/, "$1.").replace(/^0\./, r[1].length ? "0." : ".");
     }
-    if (r = fmt2.match(/^#{1,3},##0(\.?)$/)) return sign + commaify("" + aval);
-    if (r = fmt2.match(/^#,##0\.([#0]*0)$/)) {
-      return val < 0 ? "-" + write_num_int(type, fmt2, -val) : commaify("" + val) + "." + fill("0", r[1].length);
+    if (r = fmt.match(/^#{1,3},##0(\.?)$/)) return sign + commaify("" + aval);
+    if (r = fmt.match(/^#,##0\.([#0]*0)$/)) {
+      return val < 0 ? "-" + write_num_int(type, fmt, -val) : commaify("" + val) + "." + fill("0", r[1].length);
     }
-    if (r = fmt2.match(/^#,#*,#0/)) return write_num_int(type, fmt2.replace(/^#,#*,/, ""), val);
-    if (r = fmt2.match(/^([0#]+)(\\?-([0#]+))+$/)) {
-      o = _strrev(write_num_int(type, fmt2.replace(/[\\-]/g, ""), val));
+    if (r = fmt.match(/^#,#*,#0/)) return write_num_int(type, fmt.replace(/^#,#*,/, ""), val);
+    if (r = fmt.match(/^([0#]+)(\\?-([0#]+))+$/)) {
+      o = _strrev(write_num_int(type, fmt.replace(/[\\-]/g, ""), val));
       ri = 0;
-      return _strrev(_strrev(fmt2.replace(/\\/g, "")).replace(/[0#]/g, function(x2) {
+      return _strrev(_strrev(fmt.replace(/\\/g, "")).replace(/[0#]/g, function(x2) {
         return ri < o.length ? o.charAt(ri++) : x2 === "0" ? "0" : "";
       }));
     }
-    if (fmt2.match(phone)) {
+    if (fmt.match(phone)) {
       o = write_num_int(type, "##########", val);
       return "(" + o.substr(0, 3) + ") " + o.substr(3, 3) + "-" + o.substr(6);
     }
     var oa = "";
-    if (r = fmt2.match(/^([#0?]+)( ?)\/( ?)([#0?]+)/)) {
+    if (r = fmt.match(/^([#0?]+)( ?)\/( ?)([#0?]+)/)) {
       ri = Math.min(
         /*::String(*/
         r[4].length,
@@ -19832,47 +10883,47 @@
       o += oa;
       return o;
     }
-    if (r = fmt2.match(/^# ([#0?]+)( ?)\/( ?)([#0?]+)/)) {
+    if (r = fmt.match(/^# ([#0?]+)( ?)\/( ?)([#0?]+)/)) {
       ri = Math.min(Math.max(r[1].length, r[4].length), 7);
       ff = SSF_frac(aval, Math.pow(10, ri) - 1, true);
       return sign + (ff[0] || (ff[1] ? "" : "0")) + " " + (ff[1] ? pad_(ff[1], ri) + r[2] + "/" + r[3] + rpad_(ff[2], ri) : fill(" ", 2 * ri + 1 + r[2].length + r[3].length));
     }
-    if (r = fmt2.match(/^[#0?]+$/)) {
+    if (r = fmt.match(/^[#0?]+$/)) {
       o = "" + val;
-      if (fmt2.length <= o.length) return o;
-      return hashq(fmt2.substr(0, fmt2.length - o.length)) + o;
+      if (fmt.length <= o.length) return o;
+      return hashq(fmt.substr(0, fmt.length - o.length)) + o;
     }
-    if (r = fmt2.match(/^([#0]+)\.([#0]+)$/)) {
+    if (r = fmt.match(/^([#0]+)\.([#0]+)$/)) {
       o = "" + val.toFixed(Math.min(r[2].length, 10)).replace(/([^0])0+$/, "$1");
       ri = o.indexOf(".");
-      var lres = fmt2.indexOf(".") - ri, rres = fmt2.length - o.length - lres;
-      return hashq(fmt2.substr(0, lres) + o + fmt2.substr(fmt2.length - rres));
+      var lres = fmt.indexOf(".") - ri, rres = fmt.length - o.length - lres;
+      return hashq(fmt.substr(0, lres) + o + fmt.substr(fmt.length - rres));
     }
-    if (r = fmt2.match(/^00,000\.([#0]*0)$/)) {
-      return val < 0 ? "-" + write_num_int(type, fmt2, -val) : commaify("" + val).replace(/^\d,\d{3}$/, "0$&").replace(/^\d*$/, function($$) {
+    if (r = fmt.match(/^00,000\.([#0]*0)$/)) {
+      return val < 0 ? "-" + write_num_int(type, fmt, -val) : commaify("" + val).replace(/^\d,\d{3}$/, "0$&").replace(/^\d*$/, function($$) {
         return "00," + ($$.length < 3 ? pad0(0, 3 - $$.length) : "") + $$;
       }) + "." + pad0(0, r[1].length);
     }
-    switch (fmt2) {
+    switch (fmt) {
       case "###,###":
       case "##,###":
       case "#,###":
         var x = commaify("" + aval);
         return x !== "0" ? sign + x : "";
       default:
-        if (fmt2.match(/\.[0#?]*$/)) return write_num_int(type, fmt2.slice(0, fmt2.lastIndexOf(".")), val) + hashq(fmt2.slice(fmt2.lastIndexOf(".")));
+        if (fmt.match(/\.[0#?]*$/)) return write_num_int(type, fmt.slice(0, fmt.lastIndexOf(".")), val) + hashq(fmt.slice(fmt.lastIndexOf(".")));
     }
-    throw new Error("unsupported format |" + fmt2 + "|");
+    throw new Error("unsupported format |" + fmt + "|");
   }
-  function write_num(type, fmt2, val) {
-    return (val | 0) === val ? write_num_int(type, fmt2, val) : write_num_flt(type, fmt2, val);
+  function write_num(type, fmt, val) {
+    return (val | 0) === val ? write_num_int(type, fmt, val) : write_num_flt(type, fmt, val);
   }
-  function SSF_split_fmt(fmt2) {
+  function SSF_split_fmt(fmt) {
     var out = [];
     var in_str = false;
-    for (var i = 0, j = 0; i < fmt2.length; ++i) switch (
+    for (var i = 0, j = 0; i < fmt.length; ++i) switch (
       /*cc=*/
-      fmt2.charCodeAt(i)
+      fmt.charCodeAt(i)
     ) {
       case 34:
         in_str = !in_str;
@@ -19883,27 +10934,27 @@
         ++i;
         break;
       case 59:
-        out[out.length] = fmt2.substr(j, i - j);
+        out[out.length] = fmt.substr(j, i - j);
         j = i + 1;
     }
-    out[out.length] = fmt2.substr(j);
-    if (in_str === true) throw new Error("Format |" + fmt2 + "| unterminated string ");
+    out[out.length] = fmt.substr(j);
+    if (in_str === true) throw new Error("Format |" + fmt + "| unterminated string ");
     return out;
   }
   var SSF_abstime = /\[[HhMmSs\u0E0A\u0E19\u0E17]*\]/;
-  function fmt_is_date(fmt2) {
+  function fmt_is_date(fmt) {
     var i = 0, c = "", o = "";
-    while (i < fmt2.length) {
-      switch (c = fmt2.charAt(i)) {
+    while (i < fmt.length) {
+      switch (c = fmt.charAt(i)) {
         case "G":
-          if (SSF_isgeneral(fmt2, i)) i += 6;
+          if (SSF_isgeneral(fmt, i)) i += 6;
           i++;
           break;
         case '"':
           for (
             ;
             /*cc=*/
-            fmt2.charCodeAt(++i) !== 34 && i < fmt2.length;
+            fmt.charCodeAt(++i) !== 34 && i < fmt.length;
           ) {
           }
           ++i;
@@ -19919,7 +10970,7 @@
           break;
         case "B":
         case "b":
-          if (fmt2.charAt(i + 1) === "1" || fmt2.charAt(i + 1) === "2") return true;
+          if (fmt.charAt(i + 1) === "1" || fmt.charAt(i + 1) === "2") return true;
         /* falls through */
         case "M":
         case "D":
@@ -19939,30 +10990,30 @@
         case "A":
         case "a":
         case "\u4E0A":
-          if (fmt2.substr(i, 3).toUpperCase() === "A/P") return true;
-          if (fmt2.substr(i, 5).toUpperCase() === "AM/PM") return true;
-          if (fmt2.substr(i, 5).toUpperCase() === "\u4E0A\u5348/\u4E0B\u5348") return true;
+          if (fmt.substr(i, 3).toUpperCase() === "A/P") return true;
+          if (fmt.substr(i, 5).toUpperCase() === "AM/PM") return true;
+          if (fmt.substr(i, 5).toUpperCase() === "\u4E0A\u5348/\u4E0B\u5348") return true;
           ++i;
           break;
         case "[":
           o = c;
-          while (fmt2.charAt(i++) !== "]" && i < fmt2.length) o += fmt2.charAt(i);
+          while (fmt.charAt(i++) !== "]" && i < fmt.length) o += fmt.charAt(i);
           if (o.match(SSF_abstime)) return true;
           break;
         case ".":
         /* falls through */
         case "0":
         case "#":
-          while (i < fmt2.length && ("0#?.,E+-%".indexOf(c = fmt2.charAt(++i)) > -1 || c == "\\" && fmt2.charAt(i + 1) == "-" && "0#".indexOf(fmt2.charAt(i + 2)) > -1)) {
+          while (i < fmt.length && ("0#?.,E+-%".indexOf(c = fmt.charAt(++i)) > -1 || c == "\\" && fmt.charAt(i + 1) == "-" && "0#".indexOf(fmt.charAt(i + 2)) > -1)) {
           }
           break;
         case "?":
-          while (fmt2.charAt(++i) === c) {
+          while (fmt.charAt(++i) === c) {
           }
           break;
         case "*":
           ++i;
-          if (fmt2.charAt(i) == " " || fmt2.charAt(i) == "*") ++i;
+          if (fmt.charAt(i) == " " || fmt.charAt(i) == "*") ++i;
           break;
         case "(":
         case ")":
@@ -19977,7 +11028,7 @@
         case "7":
         case "8":
         case "9":
-          while (i < fmt2.length && "0123456789".indexOf(fmt2.charAt(++i)) > -1) {
+          while (i < fmt.length && "0123456789".indexOf(fmt.charAt(++i)) > -1) {
           }
           break;
         case " ":
@@ -19990,23 +11041,23 @@
     }
     return false;
   }
-  function eval_fmt(fmt2, v, opts, flen) {
+  function eval_fmt(fmt, v, opts, flen) {
     var out = [], o = "", i = 0, c = "", lst = "t", dt, j, cc;
     var hr = "H";
-    while (i < fmt2.length) {
-      switch (c = fmt2.charAt(i)) {
+    while (i < fmt.length) {
+      switch (c = fmt.charAt(i)) {
         case "G":
-          if (!SSF_isgeneral(fmt2, i)) throw new Error("unrecognized character " + c + " in " + fmt2);
+          if (!SSF_isgeneral(fmt, i)) throw new Error("unrecognized character " + c + " in " + fmt);
           out[out.length] = { t: "G", v: "General" };
           i += 7;
           break;
         case '"':
-          for (o = ""; (cc = fmt2.charCodeAt(++i)) !== 34 && i < fmt2.length; ) o += String.fromCharCode(cc);
+          for (o = ""; (cc = fmt.charCodeAt(++i)) !== 34 && i < fmt.length; ) o += String.fromCharCode(cc);
           out[out.length] = { t: "t", v: o };
           ++i;
           break;
         case "\\":
-          var w = fmt2.charAt(++i), t = w === "(" || w === ")" ? w : "t";
+          var w = fmt.charAt(++i), t = w === "(" || w === ")" ? w : "t";
           out[out.length] = { t, v: w };
           ++i;
           break;
@@ -20020,12 +11071,12 @@
           break;
         case "B":
         case "b":
-          if (fmt2.charAt(i + 1) === "1" || fmt2.charAt(i + 1) === "2") {
+          if (fmt.charAt(i + 1) === "1" || fmt.charAt(i + 1) === "2") {
             if (dt == null) {
-              dt = SSF_parse_date_code(v, opts, fmt2.charAt(i + 1) === "2");
+              dt = SSF_parse_date_code(v, opts, fmt.charAt(i + 1) === "2");
               if (dt == null) return "";
             }
-            out[out.length] = { t: "X", v: fmt2.substr(i, 2) };
+            out[out.length] = { t: "X", v: fmt.substr(i, 2) };
             lst = c;
             i += 2;
             break;
@@ -20052,7 +11103,7 @@
             if (dt == null) return "";
           }
           o = c;
-          while (++i < fmt2.length && fmt2.charAt(i).toLowerCase() === c) o += c;
+          while (++i < fmt.length && fmt.charAt(i).toLowerCase() === c) o += c;
           if (c === "m" && lst.toLowerCase() === "h") c = "M";
           if (c === "h") c = hr;
           out[out.length] = { t: c, v: o };
@@ -20063,17 +11114,17 @@
         case "\u4E0A":
           var q = { t: c, v: c };
           if (dt == null) dt = SSF_parse_date_code(v, opts);
-          if (fmt2.substr(i, 3).toUpperCase() === "A/P") {
+          if (fmt.substr(i, 3).toUpperCase() === "A/P") {
             if (dt != null) q.v = dt.H >= 12 ? "P" : "A";
             q.t = "T";
             hr = "h";
             i += 3;
-          } else if (fmt2.substr(i, 5).toUpperCase() === "AM/PM") {
+          } else if (fmt.substr(i, 5).toUpperCase() === "AM/PM") {
             if (dt != null) q.v = dt.H >= 12 ? "PM" : "AM";
             q.t = "T";
             i += 5;
             hr = "h";
-          } else if (fmt2.substr(i, 5).toUpperCase() === "\u4E0A\u5348/\u4E0B\u5348") {
+          } else if (fmt.substr(i, 5).toUpperCase() === "\u4E0A\u5348/\u4E0B\u5348") {
             if (dt != null) q.v = dt.H >= 12 ? "\u4E0B\u5348" : "\u4E0A\u5348";
             q.t = "T";
             i += 5;
@@ -20088,7 +11139,7 @@
           break;
         case "[":
           o = c;
-          while (fmt2.charAt(i++) !== "]" && i < fmt2.length) o += fmt2.charAt(i);
+          while (fmt.charAt(i++) !== "]" && i < fmt.length) o += fmt.charAt(i);
           if (o.slice(-1) !== "]") throw 'unterminated "[" block: |' + o + "|";
           if (o.match(SSF_abstime)) {
             if (dt == null) {
@@ -20099,14 +11150,14 @@
             lst = o.charAt(1);
           } else if (o.indexOf("$") > -1) {
             o = (o.match(/\$([^-\[\]]*)/) || [])[1] || "$";
-            if (!fmt_is_date(fmt2)) out[out.length] = { t: "t", v: o };
+            if (!fmt_is_date(fmt)) out[out.length] = { t: "t", v: o };
           }
           break;
         /* Numbers */
         case ".":
           if (dt != null) {
             o = c;
-            while (++i < fmt2.length && (c = fmt2.charAt(i)) === "0") o += c;
+            while (++i < fmt.length && (c = fmt.charAt(i)) === "0") o += c;
             out[out.length] = { t: "s", v: o };
             break;
           }
@@ -20114,18 +11165,18 @@
         case "0":
         case "#":
           o = c;
-          while (++i < fmt2.length && "0#?.,E+-%".indexOf(c = fmt2.charAt(i)) > -1) o += c;
+          while (++i < fmt.length && "0#?.,E+-%".indexOf(c = fmt.charAt(i)) > -1) o += c;
           out[out.length] = { t: "n", v: o };
           break;
         case "?":
           o = c;
-          while (fmt2.charAt(++i) === c) o += c;
+          while (fmt.charAt(++i) === c) o += c;
           out[out.length] = { t: c, v: o };
           lst = c;
           break;
         case "*":
           ++i;
-          if (fmt2.charAt(i) == " " || fmt2.charAt(i) == "*") ++i;
+          if (fmt.charAt(i) == " " || fmt.charAt(i) == "*") ++i;
           break;
         // **
         case "(":
@@ -20143,7 +11194,7 @@
         case "8":
         case "9":
           o = c;
-          while (i < fmt2.length && "0123456789".indexOf(fmt2.charAt(++i)) > -1) o += fmt2.charAt(i);
+          while (i < fmt.length && "0123456789".indexOf(fmt.charAt(++i)) > -1) o += fmt.charAt(i);
           out[out.length] = { t: "D", v: o };
           break;
         case " ":
@@ -20155,7 +11206,7 @@
           ++i;
           break;
         default:
-          if (",$-+/():!^&'~{}<>=\u20ACacfijklopqrtuvwxzP".indexOf(c) === -1) throw new Error("unrecognized character " + c + " in " + fmt2);
+          if (",$-+/():!^&'~{}<>=\u20ACacfijklopqrtuvwxzP".indexOf(c) === -1) throw new Error("unrecognized character " + c + " in " + fmt);
           out[out.length] = { t: "t", v: c };
           ++i;
           break;
@@ -20363,46 +11414,46 @@
     return false;
   }
   function choose_fmt(f, v) {
-    var fmt2 = SSF_split_fmt(f);
-    var l = fmt2.length, lat = fmt2[l - 1].indexOf("@");
+    var fmt = SSF_split_fmt(f);
+    var l = fmt.length, lat = fmt[l - 1].indexOf("@");
     if (l < 4 && lat > -1) --l;
-    if (fmt2.length > 4) throw new Error("cannot find right format for |" + fmt2.join("|") + "|");
-    if (typeof v !== "number") return [4, fmt2.length === 4 || lat > -1 ? fmt2[fmt2.length - 1] : "@"];
-    switch (fmt2.length) {
+    if (fmt.length > 4) throw new Error("cannot find right format for |" + fmt.join("|") + "|");
+    if (typeof v !== "number") return [4, fmt.length === 4 || lat > -1 ? fmt[fmt.length - 1] : "@"];
+    switch (fmt.length) {
       case 1:
-        fmt2 = lat > -1 ? ["General", "General", "General", fmt2[0]] : [fmt2[0], fmt2[0], fmt2[0], "@"];
+        fmt = lat > -1 ? ["General", "General", "General", fmt[0]] : [fmt[0], fmt[0], fmt[0], "@"];
         break;
       case 2:
-        fmt2 = lat > -1 ? [fmt2[0], fmt2[0], fmt2[0], fmt2[1]] : [fmt2[0], fmt2[1], fmt2[0], "@"];
+        fmt = lat > -1 ? [fmt[0], fmt[0], fmt[0], fmt[1]] : [fmt[0], fmt[1], fmt[0], "@"];
         break;
       case 3:
-        fmt2 = lat > -1 ? [fmt2[0], fmt2[1], fmt2[0], fmt2[2]] : [fmt2[0], fmt2[1], fmt2[2], "@"];
+        fmt = lat > -1 ? [fmt[0], fmt[1], fmt[0], fmt[2]] : [fmt[0], fmt[1], fmt[2], "@"];
         break;
       case 4:
         break;
     }
-    var ff = v > 0 ? fmt2[0] : v < 0 ? fmt2[1] : fmt2[2];
-    if (fmt2[0].indexOf("[") === -1 && fmt2[1].indexOf("[") === -1) return [l, ff];
-    if (fmt2[0].match(/\[[=<>]/) != null || fmt2[1].match(/\[[=<>]/) != null) {
-      var m1 = fmt2[0].match(cfregex2);
-      var m2 = fmt2[1].match(cfregex2);
-      return chkcond(v, m1) ? [l, fmt2[0]] : chkcond(v, m2) ? [l, fmt2[1]] : [l, fmt2[m1 != null && m2 != null ? 2 : 1]];
+    var ff = v > 0 ? fmt[0] : v < 0 ? fmt[1] : fmt[2];
+    if (fmt[0].indexOf("[") === -1 && fmt[1].indexOf("[") === -1) return [l, ff];
+    if (fmt[0].match(/\[[=<>]/) != null || fmt[1].match(/\[[=<>]/) != null) {
+      var m1 = fmt[0].match(cfregex2);
+      var m2 = fmt[1].match(cfregex2);
+      return chkcond(v, m1) ? [l, fmt[0]] : chkcond(v, m2) ? [l, fmt[1]] : [l, fmt[m1 != null && m2 != null ? 2 : 1]];
     }
     return [l, ff];
   }
-  function SSF_format(fmt2, v, o) {
+  function SSF_format(fmt, v, o) {
     if (o == null) o = {};
     var sfmt = "";
-    switch (typeof fmt2) {
+    switch (typeof fmt) {
       case "string":
-        if (fmt2 == "m/d/yy" && o.dateNF) sfmt = o.dateNF;
-        else sfmt = fmt2;
+        if (fmt == "m/d/yy" && o.dateNF) sfmt = o.dateNF;
+        else sfmt = fmt;
         break;
       case "number":
-        if (fmt2 == 14 && o.dateNF) sfmt = o.dateNF;
-        else sfmt = (o.table != null ? o.table : table_fmt)[fmt2];
-        if (sfmt == null) sfmt = o.table && o.table[SSF_default_map[fmt2]] || table_fmt[SSF_default_map[fmt2]];
-        if (sfmt == null) sfmt = SSF_default_str[fmt2] || "General";
+        if (fmt == 14 && o.dateNF) sfmt = o.dateNF;
+        else sfmt = (o.table != null ? o.table : table_fmt)[fmt];
+        if (sfmt == null) sfmt = o.table && o.table[SSF_default_map[fmt]] || table_fmt[SSF_default_map[fmt]];
+        if (sfmt == null) sfmt = SSF_default_str[fmt] || "General";
         break;
     }
     if (SSF_isgeneral(sfmt, 0)) return SSF_general(v, o);
@@ -20414,7 +11465,7 @@
     else if (v === "" || v == null) return "";
     return eval_fmt(f[1], v, o, f[0]);
   }
-  function SSF_load(fmt2, idx) {
+  function SSF_load(fmt, idx) {
     if (typeof idx != "number") {
       idx = +idx || -1;
       for (var i = 0; i < 392; ++i) {
@@ -20422,14 +11473,14 @@
           if (idx < 0) idx = i;
           continue;
         }
-        if (table_fmt[i] == fmt2) {
+        if (table_fmt[i] == fmt) {
           idx = i;
           break;
         }
       }
       if (idx < 0) idx = 391;
     }
-    table_fmt[idx] = fmt2;
+    table_fmt[idx] = fmt;
     return idx;
   }
   function SSF_load_table(tbl) {
@@ -20441,9 +11492,9 @@
   }
   var dateNFregex = /[dD]+|[mM]+|[yYeE]+|[Hh]+|[Ss]+/g;
   function dateNF_regex(dateNF) {
-    var fmt2 = typeof dateNF == "number" ? table_fmt[dateNF] : dateNF;
-    fmt2 = fmt2.replace(dateNFregex, "(\\d+)");
-    return new RegExp("^" + fmt2 + "$");
+    var fmt = typeof dateNF == "number" ? table_fmt[dateNF] : dateNF;
+    fmt = fmt.replace(dateNFregex, "(\\d+)");
+    return new RegExp("^" + fmt + "$");
   }
   function dateNF_fix(str, dateNF, match) {
     var Y = -1, m = -1, d = -1, H = -1, M = -1, S = -1;
@@ -39236,8 +30287,8 @@
     }
     wb.Workbook.Sheets[idx].Hidden = vis;
   }
-  function cell_set_number_format(cell, fmt2) {
-    cell.z = fmt2;
+  function cell_set_number_format(cell, fmt) {
+    cell.z = fmt;
     return cell;
   }
   function cell_set_hyperlink(cell, target, tooltip) {
@@ -39313,7 +30364,7 @@
   var version = XLSX.version;
 
   // src/export.ts
-  var LEGACY_KEY_ALIASES2 = {
+  var LEGACY_KEY_ALIASES = {
     player_self_id: ["playerOneId", "p1_id"],
     player_self_name: ["playerOneName", "p1_name"],
     player_self_country: ["playerOneCountry", "p1_country"],
@@ -39377,7 +30428,7 @@
   };
   function pickWithAliases2(obj, key) {
     if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
-    for (const alias of LEGACY_KEY_ALIASES2[key] || []) {
+    for (const alias of LEGACY_KEY_ALIASES[key] || []) {
       if (obj && obj[alias] !== void 0 && obj[alias] !== null) return obj[alias];
     }
     return void 0;
@@ -39434,11 +30485,11 @@
     }
     return void 0;
   }
-  function buildGoogleMapsUrl2(lat, lng) {
+  function buildGoogleMapsUrl(lat, lng) {
     if (!isLatLngInRange2(lat, lng)) return "";
     return `https://www.google.com/maps?q=${lat},${lng}`;
   }
-  function buildStreetViewUrl2(lat, lng, heading) {
+  function buildStreetViewUrl(lat, lng, heading) {
     if (!isLatLngInRange2(lat, lng)) return "";
     const base = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
     if (typeof heading === "number" && Number.isFinite(heading)) {
@@ -39664,14 +30715,14 @@
         true_lat: r.trueLat ?? "",
         true_lng: r.trueLng ?? "",
         true_heading_deg: trueHeading ?? "",
-        true_googleMaps_url: buildGoogleMapsUrl2(r.trueLat, r.trueLng),
-        true_streetView_url: buildStreetViewUrl2(r.trueLat, r.trueLng, trueHeading),
+        true_googleMaps_url: buildGoogleMapsUrl(r.trueLat, r.trueLng),
+        true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, trueHeading),
         damage_multiplier: r.damageMultiplier ?? "",
         is_healing_round: r.isHealingRound ? 1 : 0,
         player_self_playerId: pickWithAliases2(r, "player_self_playerId") ?? "",
         player_self_guessLat: selfLat ?? "",
         player_self_guessLng: selfLng ?? "",
-        player_self_googleMaps_url: buildGoogleMapsUrl2(selfLat, selfLng),
+        player_self_googleMaps_url: buildGoogleMapsUrl(selfLat, selfLng),
         player_self_guessCountry: selfCountry,
         player_self_distance_km: pickWithAliases2(r, "player_self_distanceKm") ?? "",
         player_self_score: pickWithAliases2(r, "player_self_score") ?? "",
@@ -39680,7 +30731,7 @@
         player_opponent_playerId: pickWithAliases2(r, "player_opponent_playerId") ?? "",
         player_opponent_guessLat: pickWithAliases2(r, "player_opponent_guessLat") ?? "",
         player_opponent_guessLng: pickWithAliases2(r, "player_opponent_guessLng") ?? "",
-        player_opponent_googleMaps_url: buildGoogleMapsUrl2(pickWithAliases2(r, "player_opponent_guessLat"), pickWithAliases2(r, "player_opponent_guessLng")),
+        player_opponent_googleMaps_url: buildGoogleMapsUrl(pickWithAliases2(r, "player_opponent_guessLat"), pickWithAliases2(r, "player_opponent_guessLng")),
         player_opponent_guessCountry: await resolveGuessCountryForExport(
           pickWithAliases2(r, "player_opponent_guessCountry"),
           pickWithAliases2(r, "player_opponent_guessLat"),
@@ -39700,7 +30751,7 @@
         rowBase.player_mate_teamId = pickWithAliases2(r, "player_mate_teamId") ?? "";
         rowBase.player_mate_guessLat = pickWithAliases2(r, "player_mate_guessLat") ?? "";
         rowBase.player_mate_guessLng = pickWithAliases2(r, "player_mate_guessLng") ?? "";
-        rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases2(r, "player_mate_guessLat"), pickWithAliases2(r, "player_mate_guessLng"));
+        rowBase.player_mate_googleMaps_url = buildGoogleMapsUrl(pickWithAliases2(r, "player_mate_guessLat"), pickWithAliases2(r, "player_mate_guessLng"));
         rowBase.player_mate_guessCountry = mateCountry;
         rowBase.player_mate_distance_km = pickWithAliases2(r, "player_mate_distanceKm") ?? "";
         rowBase.player_mate_score = pickWithAliases2(r, "player_mate_score") ?? "";
@@ -39710,7 +30761,7 @@
         rowBase.player_opponent_teamId = pickWithAliases2(r, "player_opponent_teamId") ?? "";
         rowBase.player_opponent_guessLat = pickWithAliases2(r, "player_opponent_guessLat") ?? "";
         rowBase.player_opponent_guessLng = pickWithAliases2(r, "player_opponent_guessLng") ?? "";
-        rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl2(pickWithAliases2(r, "player_opponent_guessLat"), pickWithAliases2(r, "player_opponent_guessLng"));
+        rowBase.player_opponent_googleMaps_url = buildGoogleMapsUrl(pickWithAliases2(r, "player_opponent_guessLat"), pickWithAliases2(r, "player_opponent_guessLng"));
         rowBase.player_opponent_guessCountry = oppCountry;
         rowBase.player_opponent_distance_km = pickWithAliases2(r, "player_opponent_distanceKm") ?? "";
         rowBase.player_opponent_score = pickWithAliases2(r, "player_opponent_score") ?? "";
@@ -39720,7 +30771,7 @@
         rowBase.player_opponent_mate_teamId = pickWithAliases2(r, "player_opponent_mate_teamId") ?? "";
         rowBase.player_opponent_mate_guessLat = pickWithAliases2(r, "player_opponent_mate_guessLat") ?? "";
         rowBase.player_opponent_mate_guessLng = pickWithAliases2(r, "player_opponent_mate_guessLng") ?? "";
-        rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl2(
+        rowBase.player_opponent_mate_googleMaps_url = buildGoogleMapsUrl(
           pickWithAliases2(r, "player_opponent_mate_guessLat"),
           pickWithAliases2(r, "player_opponent_mate_guessLng")
         );
@@ -44232,15 +35283,15 @@
       sessionField.appendChild(sessionInput);
       const countryField = doc.createElement("div");
       countryField.className = "ga-settings-field";
-      const countryLabel2 = doc.createElement("label");
-      countryLabel2.textContent = "Country format";
+      const countryLabel = doc.createElement("label");
+      countryLabel.textContent = "Country format";
       const countrySelect = doc.createElement("select");
       countrySelect.innerHTML = `
       <option value="iso2">ISO2 (e.g. US)</option>
       <option value="english">English (e.g. United States)</option>
     `;
       countrySelect.value = settings.standards.countryFormat;
-      countryField.appendChild(countryLabel2);
+      countryField.appendChild(countryLabel);
       countryField.appendChild(countrySelect);
       standardsGrid.appendChild(dateField);
       standardsGrid.appendChild(sessionField);
@@ -44938,16 +35989,16 @@
     share_damage_dealt: (_rows) => 1,
     share_damage_taken: (_rows) => 1,
     mean_player_self_score: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const s = getSelfScore(r);
         if (typeof s === "number") {
-          sum2 += s;
+          sum += s;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     median_player_self_score: (rows) => medianOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
     stddev_player_self_score: (rows) => stddevOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
@@ -45012,38 +36063,38 @@
       return k;
     },
     mean_player_self_score_hit_only: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         if (!isHit(r)) continue;
         const s = getSelfScore(r);
         if (typeof s === "number") {
-          sum2 += s;
+          sum += s;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     mean_duration_seconds: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const v = getDurationSeconds(r);
         if (typeof v === "number" && Number.isFinite(v)) {
-          sum2 += v;
+          sum += v;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     median_duration_seconds: (rows) => medianOf(rows.map((r) => getDurationSeconds(r)).filter((v) => typeof v === "number")),
     sum_duration_seconds: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       for (const r of rows) {
         const v = getDurationSeconds(r);
-        if (typeof v === "number" && Number.isFinite(v)) sum2 += v;
+        if (typeof v === "number" && Number.isFinite(v)) sum += v;
       }
-      return sum2;
+      return sum;
     },
     count_rounds_with_duration: (rows) => {
       let k = 0;
@@ -45054,41 +36105,41 @@
       return k;
     },
     mean_player_self_distance_km: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const v = getDistanceKm(r);
         if (typeof v === "number" && Number.isFinite(v)) {
-          sum2 += v;
+          sum += v;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     median_player_self_distance_km: (rows) => medianOf(rows.map((r) => getDistanceKm(r)).filter((v) => typeof v === "number")),
     mean_damage_dealt: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const dmg = r.damage;
         if (typeof dmg === "number" && Number.isFinite(dmg)) {
-          sum2 += Math.max(0, dmg);
+          sum += Math.max(0, dmg);
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     mean_damage_taken: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const dmg = r.damage;
         if (typeof dmg === "number" && Number.isFinite(dmg)) {
-          sum2 += Math.max(0, -dmg);
+          sum += Math.max(0, -dmg);
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     }
   };
   var GAME_MEASURES_BY_FORMULA_ID = {
@@ -45110,16 +36161,16 @@
       return set.size;
     },
     mean_game_length_rounds: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const g of rows) {
         const v = g?.roundsCount;
         if (typeof v === "number" && Number.isFinite(v) && v > 0) {
-          sum2 += v;
+          sum += v;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     rate_player_self_win: (rows) => {
       let n = 0;
@@ -45133,16 +36184,16 @@
       return n ? k / n : 0;
     },
     mean_player_self_end_rating: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const g of rows) {
         const v = getGameSelfEndRating(g);
         if (typeof v === "number") {
-          sum2 += v;
+          sum += v;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     last_player_self_end_rating: (rows) => {
       const sorted = [...rows].sort((a, b) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
@@ -45165,17 +36216,17 @@
       return 0;
     },
     mean_player_self_rating_delta: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const g of rows) {
         const start = getGameSelfStartRating(g);
         const end = getGameSelfEndRating(g);
         if (typeof start === "number" && typeof end === "number") {
-          sum2 += end - start;
+          sum += end - start;
           n++;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     count_win_game: (rows) => {
       let k = 0;
@@ -45266,8 +36317,8 @@
     count_sessions: (rows) => rows.length,
     mean_games_per_session: (rows) => {
       if (!rows.length) return 0;
-      const sum2 = rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0);
-      return sum2 / rows.length;
+      const sum = rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0);
+      return sum / rows.length;
     },
     max_break_between_sessions_seconds: (rows) => {
       const sorted = [...rows].sort((a, b) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
@@ -45283,43 +36334,43 @@
     session_games_count: (rows) => rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0),
     session_rounds_count: (rows) => rows.reduce((a, r) => a + (typeof r.roundsCount === "number" ? r.roundsCount : 0), 0),
     session_avg_score: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const ss = r.scoreSum;
         const sc = r.scoreCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
-          sum2 += ss;
+          sum += ss;
           n += sc;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     session_avg_guess_duration: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const ss = r.durationSum;
         const sc = r.durationCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
-          sum2 += ss;
+          sum += ss;
           n += sc;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     session_avg_distance_km: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       let n = 0;
       for (const r of rows) {
         const ss = r.distanceSum;
         const sc = r.distanceCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
-          sum2 += ss;
+          sum += ss;
           n += sc;
         }
       }
-      return n ? sum2 / n : 0;
+      return n ? sum / n : 0;
     },
     session_fivek_rate: (rows) => {
       let fivek = 0;
@@ -45361,12 +36412,12 @@
       return n ? k / n : 0;
     },
     session_delta_rating: (rows) => {
-      let sum2 = 0;
+      let sum = 0;
       for (const r of rows) {
         const d = r?.ratingDelta;
-        if (typeof d === "number" && Number.isFinite(d)) sum2 += d;
+        if (typeof d === "number" && Number.isFinite(d)) sum += d;
       }
-      return sum2;
+      return sum;
     }
   };
   var MEASURES_BY_GRAIN = {
@@ -45440,7 +36491,7 @@
     if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
     return fn(rows);
   }
-  function attachClickIfAny(el, actions, overlay, semantic, title, baseRows, grain, filters, measureId) {
+  function attachClickIfAny(el2, actions, overlay, semantic, title, baseRows, grain, filters, measureId) {
     const clickBase = actions?.click;
     const click = clickBase && clickBase.type === "drilldown" ? {
       ...clickBase,
@@ -45451,8 +36502,8 @@
       ]
     } : clickBase;
     if (!click) return;
-    el.style.cursor = "pointer";
-    el.addEventListener("click", async () => {
+    el2.style.cursor = "pointer";
+    el2.addEventListener("click", async () => {
       if (click.type === "drilldown") {
         const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
         const mergedFilters = [...filters ?? [], ...click.extraFilters ?? []];
@@ -45617,14 +36668,14 @@
     return null;
   }
   function sumDamage(rows, kind) {
-    let sum2 = 0;
+    let sum = 0;
     for (const r of rows) {
       const dmg = r?.damage;
       if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
-      if (kind === "dealt") sum2 += Math.max(0, dmg);
-      else sum2 += Math.max(0, -dmg);
+      if (kind === "dealt") sum += Math.max(0, dmg);
+      else sum += Math.max(0, -dmg);
     }
-    return sum2;
+    return sum;
   }
   function sortKeysChronological(keys2) {
     const weekdayRank = (k) => {
@@ -45917,11 +36968,11 @@
     );
     obs.observe(svg);
   }
-  function sanitizeFileName2(name) {
+  function sanitizeFileName(name) {
     const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
     return out.length > 0 ? out : "chart";
   }
-  function triggerDownload2(doc, blob, filename) {
+  function triggerDownload(doc, blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = doc.createElement("a");
     a.href = url;
@@ -45942,12 +36993,12 @@
     clone.setAttribute("height", String(height));
     return { text: new XMLSerializer().serializeToString(clone), width, height };
   }
-  async function downloadSvg2(doc, svg, title) {
+  async function downloadSvg(doc, svg, title) {
     const { text } = serializeSvg(svg);
     const blob = new Blob([text], { type: "image/svg+xml;charset=utf-8" });
-    triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.svg`);
+    triggerDownload(doc, blob, `${sanitizeFileName(title)}.svg`);
   }
-  async function downloadPng2(doc, svg, title) {
+  async function downloadPng(doc, svg, title) {
     const prepared = serializeSvg(svg);
     const svgBlob = new Blob([prepared.text], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(svgBlob);
@@ -45966,12 +37017,12 @@
       ctx.drawImage(img, 0, 0, prepared.width, prepared.height);
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
       if (blob) {
-        triggerDownload2(doc, blob, `${sanitizeFileName2(title)}.png`);
+        triggerDownload(doc, blob, `${sanitizeFileName(title)}.png`);
         return;
       }
       const dataUrl = canvas.toDataURL("image/png");
       const fallbackBlob = await (await fetch(dataUrl)).blob();
-      triggerDownload2(doc, fallbackBlob, `${sanitizeFileName2(title)}.png`);
+      triggerDownload(doc, fallbackBlob, `${sanitizeFileName(title)}.png`);
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -46034,12 +37085,12 @@
     };
     actionsRight.appendChild(
       mkActionBtn("Save PNG", () => {
-        if (currentSvg) void downloadPng2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+        if (currentSvg) void downloadPng(doc, currentSvg, `${widget.title}_${activeMeasure}`);
       })
     );
     actionsRight.appendChild(
       mkActionBtn("Save SVG", () => {
-        if (currentSvg) void downloadSvg2(doc, currentSvg, `${widget.title}_${activeMeasure}`);
+        if (currentSvg) void downloadSvg(doc, currentSvg, `${widget.title}_${activeMeasure}`);
       })
     );
     if (sortModes.length > 1) {
@@ -46524,14 +37575,14 @@
     return null;
   }
   function sumDamage2(rows, kind) {
-    let sum2 = 0;
+    let sum = 0;
     for (const r of rows) {
       const dmg = r?.damage;
       if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
-      if (kind === "dealt") sum2 += Math.max(0, dmg);
-      else sum2 += Math.max(0, -dmg);
+      if (kind === "dealt") sum += Math.max(0, dmg);
+      else sum += Math.max(0, -dmg);
     }
-    return sum2;
+    return sum;
   }
   function normalizeHexColor2(value) {
     if (typeof value !== "string") return void 0;
@@ -47171,11 +38222,11 @@
     return getRounds({});
   }
   function attachClickIfAny2(args) {
-    const { el, actions, overlay, semantic, title, grain, rows } = args;
+    const { el: el2, actions, overlay, semantic, title, grain, rows } = args;
     const click = actions?.click;
     if (!click) return;
-    el.style.cursor = "pointer";
-    el.addEventListener("click", () => {
+    el2.style.cursor = "pointer";
+    el2.addEventListener("click", () => {
       if (click.type !== "drilldown") return;
       const filteredRows = applyFilters(rows, click.extraFilters, grain);
       overlay.open(semantic, {
@@ -47425,16 +38476,16 @@
     const refreshActive = () => {
       for (const [iso2, list] of pathsByIso2.entries()) {
         const active = !!selected && iso2 === selected;
-        for (const el of list) el.classList.toggle("active", active);
+        for (const el2 of list) el2.classList.toggle("active", active);
       }
     };
     refreshActive();
     for (const [iso2, list] of pathsByIso2.entries()) {
       const isSelectable = !hasSelectableFilter || selectableMap.has(iso2);
       if (!isSelectable) continue;
-      for (const el of list) {
-        el.addEventListener("pointerenter", () => el.classList.add("hover"));
-        el.addEventListener("pointerleave", () => el.classList.remove("hover"));
+      for (const el2 of list) {
+        el2.addEventListener("pointerenter", () => el2.classList.add("hover"));
+        el2.addEventListener("pointerleave", () => el2.classList.remove("hover"));
       }
     }
     let vp = { scale: 1, tx: 0, ty: 0 };
@@ -47602,10 +38653,10 @@
       right.className = "ga-filters-right";
       bar.appendChild(right);
       const renderControlLabel2 = (label) => {
-        const el = doc.createElement("div");
-        el.className = "ga-filter-label";
-        el.textContent = label;
-        return el;
+        const el2 = doc.createElement("div");
+        el2.className = "ga-filter-label";
+        el2.textContent = label;
+        return el2;
       };
       const durationOrder2 = ["<20 sec", "20-30 sec", "30-45 sec", "45-60 sec", "60-90 sec", "90-180 sec", ">180 sec"];
       const durationRank2 = new Map(durationOrder2.map((k, i) => [k, i]));
@@ -47931,10 +38982,10 @@
     };
   }
   function renderControlLabel(doc, label) {
-    const el = doc.createElement("div");
-    el.className = "ga-filter-label";
-    el.textContent = label;
-    return el;
+    const el2 = doc.createElement("div");
+    el2.className = "ga-filter-label";
+    el2.textContent = label;
+    return el2;
   }
   function readCountryFormatMode3(doc) {
     const root = doc.querySelector(".ga-root");
@@ -48697,10 +39748,6 @@ ${error instanceof Error ? error.message : String(error)}`;
     ]);
     ui.setCounts({ games, rounds, detailsOk, detailsError, detailsMissing });
   }
-  async function refreshAnalysisWindow(ui, filter) {
-    const data = await getAnalysisWindowData(filter);
-    ui.setAnalysisWindowData(data);
-  }
   function registerUiActions(ui) {
     ui.onUpdateClick(async () => {
       try {
@@ -48833,7 +39880,7 @@ ${error instanceof Error ? error.message : String(error)}`;
     ui.onOpenAnalysisClick(async () => {
       let semanticStatus = "";
       try {
-        ui.setStatus("Loading analysis...");
+        ui.setStatus("Opening dashboard...");
         const semanticTab = window.open("about:blank", "_blank");
         if (!semanticTab) {
           semanticStatus = " Semantic dashboard popup was blocked.";
@@ -48845,18 +39892,7 @@ ${error instanceof Error ? error.message : String(error)}`;
             console.error("Failed to initialize semantic dashboard tab", semanticError);
           }
         }
-        await refreshAnalysisWindow(ui, { gameMode: "all", movementType: "all", teammateId: "all", country: "all" });
-        ui.setStatus(`Analysis loaded.${semanticStatus}`);
-      } catch (e) {
-        ui.setStatus("Error: " + errorText(e));
-        console.error(e);
-      }
-    });
-    ui.onRefreshAnalysisClick(async (filter) => {
-      try {
-        ui.setStatus("Refreshing analysis...");
-        await refreshAnalysisWindow(ui, filter);
-        ui.setStatus("Analysis refreshed.");
+        ui.setStatus(`Dashboard opened.${semanticStatus}`);
       } catch (e) {
         ui.setStatus("Error: " + errorText(e));
         console.error(e);
@@ -48887,7 +39923,7 @@ ${error instanceof Error ? error.message : String(error)}`;
 
   // src/app/boot.ts
   async function bootApp() {
-    const ui = createUI();
+    const ui = createUIOverlay();
     registerUiActions(ui);
     await refreshUI(ui);
     watchRoutes(() => {
