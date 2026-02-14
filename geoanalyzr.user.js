@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.29
+// @version      1.6.30
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -14647,19 +14647,25 @@
     }
     return map;
   }
+  function readPlayerId(player) {
+    const v = player?.playerId ?? player?.id ?? player?.userId ?? player?.user?.id;
+    return typeof v === "string" && v.trim() ? v.trim() : void 0;
+  }
   function orderedPlayers(gameData, ownPlayerId) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
     if (teams.length === 0) return [];
     let ownTeamIndex = 0;
     if (ownPlayerId) {
-      const found = teams.findIndex((t) => Array.isArray(t?.players) && t.players.some((p) => p?.playerId === ownPlayerId));
+      const found = teams.findIndex(
+        (t) => Array.isArray(t?.players) && t.players.some((p) => readPlayerId(p) === ownPlayerId)
+      );
       if (found >= 0) {
         ownTeamIndex = found;
       } else {
         console.warn("[GeoAnalyzr] ownPlayerId not found in teams for game detail payload.", {
           ownPlayerId,
           teamIds: teams.map((t) => String(t?.id || "")),
-          teamPlayers: teams.map((t) => Array.isArray(t?.players) ? t.players.map((p) => p?.playerId) : [])
+          teamPlayers: teams.map((t) => Array.isArray(t?.players) ? t.players.map((p) => readPlayerId(p)) : [])
         });
       }
     }
@@ -14669,8 +14675,8 @@
     const ownHealth = healthByRound(ownTeam);
     if (ownPlayerId) {
       ownPlayers.sort((a, b) => {
-        if (a?.playerId === ownPlayerId) return -1;
-        if (b?.playerId === ownPlayerId) return 1;
+        if (readPlayerId(a) === ownPlayerId) return -1;
+        if (readPlayerId(b) === ownPlayerId) return 1;
         return 0;
       });
     }
@@ -14765,7 +14771,7 @@
     };
     const players = orderedPlayers(gameData, ownPlayerId);
     if (family === "teamduels" && ownPlayerId) {
-      const p1IdDebug = typeof players[0]?.player?.playerId === "string" ? players[0].player.playerId : void 0;
+      const p1IdDebug = readPlayerId(players[0]?.player);
       if (p1IdDebug !== ownPlayerId) {
         console.warn("[GeoAnalyzr] TeamDuel ordering mismatch: p1 is not own player.", {
           gameId: game.gameId,
@@ -14780,10 +14786,10 @@
     const p2 = players[1]?.player;
     const p3 = players[2]?.player;
     const p4 = players[3]?.player;
-    const p1Id = typeof p1?.playerId === "string" ? p1.playerId : void 0;
-    const p2Id = typeof p2?.playerId === "string" ? p2.playerId : void 0;
-    const p3Id = typeof p3?.playerId === "string" ? p3.playerId : void 0;
-    const p4Id = typeof p4?.playerId === "string" ? p4.playerId : void 0;
+    const p1Id = readPlayerId(p1);
+    const p2Id = readPlayerId(p2);
+    const p3Id = readPlayerId(p3);
+    const p4Id = readPlayerId(p4);
     const uniqueIds = [...new Set([p1Id, p2Id, p3Id, p4Id].filter((x) => !!x))];
     const profiles = /* @__PURE__ */ new Map();
     await Promise.all(
@@ -14935,7 +14941,7 @@
           const guessLat = guessPos.lat;
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
-          round[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
+          round[`${role}_playerId`] = readPlayerId(player);
           round[`${role}_teamId`] = teamId || void 0;
           round[`${role}_guessLat`] = guessLat;
           round[`${role}_guessLng`] = guessLng;
@@ -14956,7 +14962,7 @@
           const guessLat = guessPos.lat;
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
-          round[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : void 0;
+          round[`${role}_playerId`] = readPlayerId(player);
           round[`${role}_guessLat`] = guessLat;
           round[`${role}_guessLng`] = guessLng;
           round[`${role}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
@@ -15895,15 +15901,23 @@
         const v = typeof d.player_self_victory === "boolean" ? d.player_self_victory : typeof d.teamOneVictory === "boolean" ? d.teamOneVictory : typeof d.playerOneVictory === "boolean" ? d.playerOneVictory : void 0;
         if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
         if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
-          const selfId = asTrimmedString2(out.player_self_playerId);
+          const selfId = asTrimmedString2(out.player_self_playerId) ?? asTrimmedString2(out.player_self_id);
+          const selfName = asTrimmedString2(out.player_self_name) ?? asTrimmedString2(d.player_self_name);
           const t1id = asTrimmedString2(d.teamOnePlayerOneId);
           const t2id = asTrimmedString2(d.teamOnePlayerTwoId);
           const t1name = asTrimmedString2(d.teamOnePlayerOneName);
           const t2name = asTrimmedString2(d.teamOnePlayerTwoName);
+          const u1id = asTrimmedString2(d.teamTwoPlayerOneId);
+          const u2id = asTrimmedString2(d.teamTwoPlayerTwoId);
+          const u1name = asTrimmedString2(d.teamTwoPlayerOneName);
+          const u2name = asTrimmedString2(d.teamTwoPlayerTwoName);
           let mateName;
           if (selfId && selfId === t1id) mateName = t2name;
           else if (selfId && selfId === t2id) mateName = t1name;
+          else if (selfId && selfId === u1id) mateName = u2name;
+          else if (selfId && selfId === u2id) mateName = u1name;
           else mateName = asTrimmedString2(pickFirst3(d, ["player_mate_name", "teamOnePlayerTwoName", "p2_name"]));
+          if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
       }
@@ -15994,14 +16008,22 @@
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
         if (!hasMate) {
           const selfId = asTrimmedString2(out.player_self_id ?? out.player_self_playerId);
+          const selfName = asTrimmedString2(out.player_self_name) ?? asTrimmedString2(out.playerOneName);
           const t1id = asTrimmedString2(out.teamOnePlayerOneId);
           const t2id = asTrimmedString2(out.teamOnePlayerTwoId);
           const t1name = asTrimmedString2(out.teamOnePlayerOneName);
           const t2name = asTrimmedString2(out.teamOnePlayerTwoName);
+          const u1id = asTrimmedString2(out.teamTwoPlayerOneId);
+          const u2id = asTrimmedString2(out.teamTwoPlayerTwoId);
+          const u1name = asTrimmedString2(out.teamTwoPlayerOneName);
+          const u2name = asTrimmedString2(out.teamTwoPlayerTwoName);
           let mateName;
           if (selfId && selfId === t1id) mateName = t2name;
           else if (selfId && selfId === t2id) mateName = t1name;
+          else if (selfId && selfId === u1id) mateName = u2name;
+          else if (selfId && selfId === u2id) mateName = u1name;
           else mateName = asTrimmedString2(pickFirst3(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+          if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
       }
@@ -41188,8 +41210,7 @@
                                 type: "drilldown",
                                 target: "players",
                                 columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                                filterFromPoint: false
                               }
                             }
                           },
@@ -41201,8 +41222,7 @@
                                 type: "drilldown",
                                 target: "players",
                                 columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
+                                filterFromPoint: false
                               }
                             }
                           },
@@ -45224,7 +45244,14 @@
     }
     const decimals = unit.decimals ?? 1;
     const txt = value.toFixed(decimals);
-    return unit.showSign && value > 0 ? `+${txt}` : txt;
+    const base = unit.showSign && value > 0 ? `+${txt}` : txt;
+    const suffix = (() => {
+      const u = String(m.unit ?? "").trim().toLowerCase();
+      if (u === "km") return " km";
+      if (u === "seconds") return " s";
+      return "";
+    })();
+    return `${base}${suffix}`;
   }
   async function computeMeasure(semantic, measureId, baseRows, grain, filters) {
     const m = semantic.measures[measureId];
@@ -45251,7 +45278,62 @@
       if (click.type === "drilldown") {
         const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
         const mergedFilters = [...filters ?? [], ...click.extraFilters ?? []];
-        const rows = applyFilters(rowsAll, mergedFilters, grain);
+        let rows = applyFilters(rowsAll, mergedFilters, grain);
+        const meas = measureId ? semantic.measures[measureId] : void 0;
+        const formulaId = meas?.formulaId ?? "";
+        if (grain === "game" && formulaId === "max_player_self_end_rating") {
+          const mode = (() => {
+            for (const g of rows) {
+              if (String(g?.modeFamily ?? "").trim().toLowerCase() === "duels") return "duel";
+            }
+            return "team";
+          })();
+          const getNum = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
+          const endRatingOf = (g) => {
+            if (mode === "duel") {
+              return getNum(g.player_self_endRating) ?? getNum(g.playerOneEndRating) ?? getNum(g.player_self_end_rating) ?? null;
+            }
+            return getNum(g.teamOneEndRating) ?? getNum(g.player_self_endRating) ?? getNum(g.player_self_end_rating) ?? null;
+          };
+          let best = -Infinity;
+          for (const g of rows) {
+            const v = endRatingOf(g);
+            if (typeof v === "number") best = Math.max(best, v);
+          }
+          if (Number.isFinite(best)) {
+            const candidates = rows.filter((g) => endRatingOf(g) === best);
+            const tsOf = (g) => typeof g.ts === "number" ? g.ts : typeof g.playedAt === "number" ? g.playedAt : 0;
+            const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
+            rows = bestOne ? [bestOne] : candidates;
+          }
+        }
+        if (grain === "game" && (formulaId === "max_win_streak" || formulaId === "max_loss_streak")) {
+          const want = formulaId === "max_win_streak" ? "Win" : "Loss";
+          const outcomeKey = DIMENSION_EXTRACTORS.game?.result;
+          const tsOf = (g) => typeof g.ts === "number" ? g.ts : typeof g.playedAt === "number" ? g.playedAt : 0;
+          const mergedFiltersForStreak = mergedFilters.filter((c) => c?.dimension !== "result");
+          const rowsForStreak = applyFilters(rowsAll, mergedFiltersForStreak, grain);
+          const sorted = [...rowsForStreak].sort((a, b) => tsOf(a) - tsOf(b));
+          let bestLen = 0;
+          let bestEnd = -1;
+          let cur = 0;
+          for (let i = 0; i < sorted.length; i++) {
+            const o = outcomeKey ? outcomeKey(sorted[i]) : sorted[i]?.result;
+            if (!o) continue;
+            if (o === want) {
+              cur++;
+              if (cur > bestLen) {
+                bestLen = cur;
+                bestEnd = i;
+              }
+            } else {
+              cur = 0;
+            }
+          }
+          if (bestLen > 0 && bestEnd >= 0) {
+            rows = sorted.slice(bestEnd - bestLen + 1, bestEnd + 1);
+          }
+        }
         overlay.open(semantic, {
           title,
           target: click.target,

@@ -308,20 +308,27 @@ function guessByRound(player: any): Map<number, any> {
   return map;
 }
 
+function readPlayerId(player: any): string | undefined {
+  const v = player?.playerId ?? player?.id ?? player?.userId ?? player?.user?.id;
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
 function orderedPlayers(gameData: any, ownPlayerId?: string): Array<{ teamId: string; player: any; healthMap: Map<number, number> }> {
   const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
   if (teams.length === 0) return [];
 
   let ownTeamIndex = 0;
   if (ownPlayerId) {
-    const found = teams.findIndex((t: any) => Array.isArray(t?.players) && t.players.some((p: any) => p?.playerId === ownPlayerId));
+    const found = teams.findIndex(
+      (t: any) => Array.isArray(t?.players) && t.players.some((p: any) => readPlayerId(p) === ownPlayerId)
+    );
     if (found >= 0) {
       ownTeamIndex = found;
     } else {
       console.warn("[GeoAnalyzr] ownPlayerId not found in teams for game detail payload.", {
         ownPlayerId,
         teamIds: teams.map((t: any) => String(t?.id || "")),
-        teamPlayers: teams.map((t: any) => (Array.isArray(t?.players) ? t.players.map((p: any) => p?.playerId) : []))
+        teamPlayers: teams.map((t: any) => (Array.isArray(t?.players) ? t.players.map((p: any) => readPlayerId(p)) : []))
       });
     }
   }
@@ -333,8 +340,8 @@ function orderedPlayers(gameData: any, ownPlayerId?: string): Array<{ teamId: st
 
   if (ownPlayerId) {
     ownPlayers.sort((a: any, b: any) => {
-      if (a?.playerId === ownPlayerId) return -1;
-      if (b?.playerId === ownPlayerId) return 1;
+      if (readPlayerId(a) === ownPlayerId) return -1;
+      if (readPlayerId(b) === ownPlayerId) return 1;
       return 0;
     });
   }
@@ -468,7 +475,7 @@ async function normalizeGameAndRounds(
 
   const players = orderedPlayers(gameData, ownPlayerId);
   if (family === "teamduels" && ownPlayerId) {
-    const p1IdDebug = typeof players[0]?.player?.playerId === "string" ? players[0].player.playerId : undefined;
+    const p1IdDebug = readPlayerId(players[0]?.player);
     if (p1IdDebug !== ownPlayerId) {
       console.warn("[GeoAnalyzr] TeamDuel ordering mismatch: p1 is not own player.", {
         gameId: game.gameId,
@@ -484,10 +491,10 @@ async function normalizeGameAndRounds(
   const p2 = players[1]?.player;
   const p3 = players[2]?.player;
   const p4 = players[3]?.player;
-  const p1Id = typeof p1?.playerId === "string" ? p1.playerId : undefined;
-  const p2Id = typeof p2?.playerId === "string" ? p2.playerId : undefined;
-  const p3Id = typeof p3?.playerId === "string" ? p3.playerId : undefined;
-  const p4Id = typeof p4?.playerId === "string" ? p4.playerId : undefined;
+  const p1Id = readPlayerId(p1);
+  const p2Id = readPlayerId(p2);
+  const p3Id = readPlayerId(p3);
+  const p4Id = readPlayerId(p4);
 
   const uniqueIds = [...new Set([p1Id, p2Id, p3Id, p4Id].filter((x): x is string => !!x))];
   const profiles = new Map<string, { nick?: string; countryCode?: string; countryName?: string }>();
@@ -660,7 +667,7 @@ async function normalizeGameAndRounds(
         const guessLng = guessPos.lng;
         const distanceMeters = asNum(guess?.distance);
 
-        (round as any)[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : undefined;
+        (round as any)[`${role}_playerId`] = readPlayerId(player);
         (round as any)[`${role}_teamId`] = teamId || undefined;
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
@@ -683,7 +690,7 @@ async function normalizeGameAndRounds(
         const guessLng = guessPos.lng;
         const distanceMeters = asNum(guess?.distance);
 
-        (round as any)[`${role}_playerId`] = typeof player?.playerId === "string" ? player.playerId : undefined;
+        (round as any)[`${role}_playerId`] = readPlayerId(player);
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
         (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;

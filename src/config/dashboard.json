@@ -154,8 +154,7 @@
                               "type": "drilldown",
                               "target": "players",
                               "columnsPreset": "opponentMode",
-                              "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                              "filterFromPoint": false
                             }
                           }
                         },
@@ -167,8 +166,7 @@
                               "type": "drilldown",
                               "target": "players",
                               "columnsPreset": "opponentMode",
-                              "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Loss" }]
+                              "filterFromPoint": false
                             }
                           }
                         },

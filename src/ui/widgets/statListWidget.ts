@@ -5,6 +5,7 @@ import { getRounds, getGames, getSessions } from "../../engine/queryEngine";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
+import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 
 function readDateFormatMode(doc: Document): "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale" {
   const root = doc.querySelector(".ga-root") as HTMLElement | null;
@@ -58,7 +59,14 @@ function formatValue(doc: Document, semantic: SemanticRegistry, measureId: strin
   }
   const decimals = unit.decimals ?? 1;
   const txt = value.toFixed(decimals);
-  return unit.showSign && value > 0 ? `+${txt}` : txt;
+  const base = unit.showSign && value > 0 ? `+${txt}` : txt;
+  const suffix = (() => {
+    const u = String(m.unit ?? "").trim().toLowerCase();
+    if (u === "km") return " km";
+    if (u === "seconds") return " s";
+    return "";
+  })();
+  return `${base}${suffix}`;
 }
 
 async function computeMeasure(
@@ -109,7 +117,77 @@ function attachClickIfAny(
       const rowsAll =
         baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
       const mergedFilters = [...(filters ?? []), ...(click.extraFilters ?? [])];
-      const rows = applyFilters(rowsAll, mergedFilters, grain);
+      let rows = applyFilters(rowsAll, mergedFilters, grain);
+
+      // Special handling for certain measures so drilldowns match user intent.
+      const meas = measureId ? semantic.measures[measureId] : undefined;
+      const formulaId = meas?.formulaId ?? "";
+      if (grain === "game" && formulaId === "max_player_self_end_rating") {
+        // Mirror `ratingModeForRows()` + getters from `src/engine/measures.ts`.
+        const mode: "duel" | "team" = (() => {
+          for (const g of rows as any[]) {
+            if (String((g as any)?.modeFamily ?? "").trim().toLowerCase() === "duels") return "duel";
+          }
+          return "team";
+        })();
+        const getNum = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+        const endRatingOf = (g: any): number | null => {
+          if (mode === "duel") {
+            return (
+              getNum((g as any).player_self_endRating) ??
+              getNum((g as any).playerOneEndRating) ??
+              getNum((g as any).player_self_end_rating) ??
+              null
+            );
+          }
+          return (
+            getNum((g as any).teamOneEndRating) ??
+            getNum((g as any).player_self_endRating) ??
+            getNum((g as any).player_self_end_rating) ??
+            null
+          );
+        };
+        let best = -Infinity;
+        for (const g of rows) {
+          const v = endRatingOf(g);
+          if (typeof v === "number") best = Math.max(best, v);
+        }
+        if (Number.isFinite(best)) {
+          const candidates = rows.filter((g) => endRatingOf(g) === best);
+          // If multiple games share the same max, pick the most recent one.
+          const tsOf = (g: any): number => (typeof (g as any).ts === "number" ? (g as any).ts : typeof (g as any).playedAt === "number" ? (g as any).playedAt : 0);
+          const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
+          rows = bestOne ? [bestOne] : candidates;
+        }
+      }
+      if (grain === "game" && (formulaId === "max_win_streak" || formulaId === "max_loss_streak")) {
+        const want = formulaId === "max_win_streak" ? "Win" : "Loss";
+        const outcomeKey = DIMENSION_EXTRACTORS.game?.result;
+        const tsOf = (g: any): number => (typeof (g as any).ts === "number" ? (g as any).ts : typeof (g as any).playedAt === "number" ? (g as any).playedAt : 0);
+        // Streaks must be computed on the full timeline (not a pre-filtered Win/Loss subset).
+        const mergedFiltersForStreak = mergedFilters.filter((c) => c?.dimension !== "result");
+        const rowsForStreak = applyFilters(rowsAll, mergedFiltersForStreak, grain);
+        const sorted = [...rowsForStreak].sort((a, b) => tsOf(a) - tsOf(b));
+        let bestLen = 0;
+        let bestEnd = -1;
+        let cur = 0;
+        for (let i = 0; i < sorted.length; i++) {
+          const o = outcomeKey ? outcomeKey(sorted[i]) : (sorted[i] as any)?.result;
+          if (!o) continue;
+          if (o === want) {
+            cur++;
+            if (cur > bestLen) {
+              bestLen = cur;
+              bestEnd = i;
+            }
+          } else {
+            cur = 0;
+          }
+        }
+        if (bestLen > 0 && bestEnd >= 0) {
+          rows = sorted.slice(bestEnd - bestLen + 1, bestEnd + 1);
+        }
+      }
       overlay.open(semantic, {
         title,
         target: click.target,

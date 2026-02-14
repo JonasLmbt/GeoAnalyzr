@@ -394,15 +394,23 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
 
       if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
         // Prefer resolving teammate name based on self playerId when possible.
-        const selfId = asTrimmedString(out.player_self_playerId);
+        const selfId = asTrimmedString(out.player_self_playerId) ?? asTrimmedString((out as any).player_self_id);
+        const selfName = asTrimmedString((out as any).player_self_name) ?? asTrimmedString((d as any).player_self_name);
         const t1id = asTrimmedString(d.teamOnePlayerOneId);
         const t2id = asTrimmedString(d.teamOnePlayerTwoId);
         const t1name = asTrimmedString(d.teamOnePlayerOneName);
         const t2name = asTrimmedString(d.teamOnePlayerTwoName);
+        const u1id = asTrimmedString((d as any).teamTwoPlayerOneId);
+        const u2id = asTrimmedString((d as any).teamTwoPlayerTwoId);
+        const u1name = asTrimmedString((d as any).teamTwoPlayerOneName);
+        const u2name = asTrimmedString((d as any).teamTwoPlayerTwoName);
         let mateName: string | undefined;
         if (selfId && selfId === t1id) mateName = t2name;
         else if (selfId && selfId === t2id) mateName = t1name;
+        else if (selfId && selfId === u1id) mateName = u2name;
+        else if (selfId && selfId === u2id) mateName = u1name;
         else mateName = asTrimmedString(pickFirst(d, ["player_mate_name", "teamOnePlayerTwoName", "p2_name"]));
+        if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = undefined;
         if (mateName) out.teammateName = mateName;
       }
     }
@@ -511,14 +519,22 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
       if (!hasMate) {
         const selfId = asTrimmedString(out.player_self_id ?? out.player_self_playerId);
+        const selfName = asTrimmedString((out as any).player_self_name) ?? asTrimmedString((out as any).playerOneName);
         const t1id = asTrimmedString(out.teamOnePlayerOneId);
         const t2id = asTrimmedString(out.teamOnePlayerTwoId);
         const t1name = asTrimmedString(out.teamOnePlayerOneName);
         const t2name = asTrimmedString(out.teamOnePlayerTwoName);
+        const u1id = asTrimmedString((out as any).teamTwoPlayerOneId);
+        const u2id = asTrimmedString((out as any).teamTwoPlayerTwoId);
+        const u1name = asTrimmedString((out as any).teamTwoPlayerOneName);
+        const u2name = asTrimmedString((out as any).teamTwoPlayerTwoName);
         let mateName: string | undefined;
         if (selfId && selfId === t1id) mateName = t2name;
         else if (selfId && selfId === t2id) mateName = t1name;
+        else if (selfId && selfId === u1id) mateName = u2name;
+        else if (selfId && selfId === u2id) mateName = u1name;
         else mateName = asTrimmedString(pickFirst(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+        if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = undefined;
         if (mateName) out.teammateName = mateName;
       }
     }
