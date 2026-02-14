@@ -51,6 +51,7 @@ export interface MeasureDef {
 export interface UnitDef {
   format: "int" | "float" | "percent" | "duration" | "datetime";
   decimals?: number;
+  showSign?: boolean;
 }
 
 export interface DrilldownPresetDef {

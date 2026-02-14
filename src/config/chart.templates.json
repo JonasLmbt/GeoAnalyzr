@@ -54,7 +54,7 @@
         "grain": "game",
         "type": "line",
         "x": { "dimension": "time_day" },
-        "y": { "measure": "end_rating_avg" },
+        "y": { "measure": "end_rating" },
         "actions": { "hover": true }
       }
     },

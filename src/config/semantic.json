@@ -479,13 +479,20 @@
       "formulaId": "count_tie_game",
       "range": { "min": 0 }
     },
-    "end_rating_avg": {
-      "label": "Avg end rating",
+    "end_rating": {
+      "label": "End rating",
       "unit": "rating",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_player_self_end_rating",
+      "formulaId": "last_player_self_end_rating",
       "range": { "min": 0 }
+    },
+    "rating_trend": {
+      "label": "Trend",
+      "unit": "rating_delta",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "trend_player_self_rating"
     },
     "best_end_rating": {
       "label": "Best rating",
@@ -496,11 +503,10 @@
     },
     "rating_delta_avg": {
       "label": "Avg rating delta",
-      "unit": "rating",
+      "unit": "rating_delta",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_player_self_rating_delta",
-      "range": { "min": 0 }
+      "formulaId": "mean_player_self_rating_delta"
     },
     "longest_win_streak": {
       "label": "Longest win streak",
@@ -732,6 +738,13 @@
       "grain": "session",
       "allowedCharts": ["bar", "line"],
       "formulaId": "session_throw_rate"
+    },
+    "session_delta_rating": {
+      "label": "Session rating delta",
+      "unit": "rating_delta",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_delta_rating"
     }
   },
 
@@ -743,6 +756,7 @@
     "duration": { "format": "duration" },
     "datetime": { "format": "datetime" },
     "rating": { "format": "float", "decimals": 0 },
+    "rating_delta": { "format": "float", "decimals": 0, "showSign": true },
     "km": { "format": "float", "decimals": 1 },
     "float": { "format": "float", "decimals": 2 }
   },

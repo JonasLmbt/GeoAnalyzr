@@ -33,8 +33,12 @@ function formatMetricValue(semantic: SemanticRegistry, measureId: string, value:
     if (mins > 0) return `${mins}m ${s % 60}s`;
     return `${Math.max(0, value).toFixed(1)}s`;
   }
-  if (unit.format === "int") return String(Math.round(value));
-  return value.toFixed(unit.decimals ?? 1);
+  if (unit.format === "int") {
+    const v = Math.round(value);
+    return unit.showSign && v > 0 ? `+${v}` : String(v);
+  }
+  const txt = value.toFixed(unit.decimals ?? 1);
+  return unit.showSign && value > 0 ? `+${txt}` : txt;
 }
 
 function formatTs(ts: number): string {
@@ -117,6 +121,14 @@ function buildGroupExtreme(
     displayKey === "first_ts" || displayKey === "first_ts_score"
       ? (firstTs !== null ? formatTs(firstTs) : bestKey)
       : bestKey;
+
+  if (grain === "session" && metricId === "session_delta_rating") {
+    const row = bestRows[0] as any;
+    const start = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : null;
+    const end = typeof row?.sessionEndTs === "number" ? row.sessionEndTs : null;
+    const rangeText = start !== null && end !== null ? `${formatTs(start)} -> ${formatTs(end)}` : keyText;
+    return { keyText, valueText: `${metricText} (${rangeText})`, rows: bestRows, click: rec.actions?.click };
+  }
 
   // Special-case a few legacy-style "Rounds" records so the value reads naturally.
   if (groupById === "game_id" && metricId === "rounds_count") {

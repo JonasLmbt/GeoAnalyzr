@@ -192,7 +192,8 @@
       "required": ["format"],
       "properties": {
         "format": { "enum": ["int", "float", "percent", "duration", "datetime"] },
-        "decimals": { "type": "integer", "minimum": 0, "maximum": 6 }
+        "decimals": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "showSign": { "type": "boolean" }
       }
     },
 

@@ -212,8 +212,12 @@ function formatMeasureValue(doc: Document, semantic: SemanticRegistry, measureId
     if (mins > 0) return `${mins}m ${s % 60}s`;
     return `${(Math.max(0, value)).toFixed(1)}s`;
   }
-  if (unit.format === "int") return `${Math.round(value)}`;
-  return value.toFixed(unit.decimals ?? 1);
+  if (unit.format === "int") {
+    const v = Math.round(value);
+    return unit.showSign && v > 0 ? `+${v}` : `${v}`;
+  }
+  const txt = value.toFixed(unit.decimals ?? 1);
+  return unit.showSign && value > 0 ? `+${txt}` : txt;
 }
 
 function clampForMeasure(semantic: SemanticRegistry, measureId: string, value: number): number {

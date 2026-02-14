@@ -16,6 +16,24 @@
           "appliesTo": ["round", "game", "session"]
         },
         {
+          "id": "modeFamily",
+          "type": "select",
+          "label": "Mode",
+          "dimension": "mode_family",
+          "default": "all",
+          "options": "auto_distinct",
+          "appliesTo": ["game"]
+        },
+        {
+          "id": "teammate",
+          "type": "select",
+          "label": "Teammate",
+          "dimension": "teammate_name",
+          "default": "all",
+          "options": "auto_teammates",
+          "appliesTo": ["round"]
+        },
+        {
           "id": "movement",
           "type": "select",
           "label": "Movement",
@@ -199,7 +217,7 @@
                           "hit_count",
                           "win_rate",
                           "win_count",
-                          "end_rating_avg",
+                          "end_rating",
                           "damage_dealt_avg",
                           "damage_taken_avg"
                         ],
@@ -209,6 +227,94 @@
                       },
                       "sort": { "mode": "chronological" },
                       "actions": { "hover": true }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "rating",
+        "title": "Rating",
+        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_rating",
+              "title": "Rating",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 16,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_rating_kpis",
+                    "type": "stat_list",
+                    "title": "Rating",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 4 },
+                    "spec": {
+                      "rows": [
+                        { "label": "Current rating", "measure": "end_rating" },
+                        { "label": "Trend", "measure": "rating_trend" },
+                        { "label": "Avg rating delta", "measure": "rating_delta_avg" }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_rating_session_records",
+                    "type": "record_list",
+                    "title": "Sessions",
+                    "grain": "session",
+                    "placement": { "x": 0, "y": 4, "w": 12, "h": 4 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "biggest_session_rating_gain",
+                          "label": "Biggest session rating gain",
+                          "metric": "session_delta_rating",
+                          "groupBy": "session_start",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "biggest_session_rating_loss",
+                          "label": "Biggest session rating loss",
+                          "metric": "session_delta_rating",
+                          "groupBy": "session_start",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_rating_over_time",
+                    "type": "chart",
+                    "title": "Rating over time",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 8, "w": 12, "h": 8 },
+                    "spec": {
+                      "type": "line",
+                      "maxPoints": 220,
+                      "x": { "dimension": "time_day" },
+                      "y": { "measures": ["end_rating"], "activeMeasure": "end_rating" },
+                      "sort": { "mode": "chronological" },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "players",
+                          "columnsPreset": "opponentMode",
+                          "filterFromPoint": true
+                        }
+                      }
                     }
                   }
                 ]

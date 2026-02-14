@@ -197,20 +197,52 @@ export async function renderAnalysisApp(opts: {
       const filters = { global: { spec: specFilters, state, controlIds } };
       const datasets: Partial<Record<Grain, any[]>> = {};
       const isOpponentsSection = section.id === "opponents";
+      const isRatingSection = section.id === "rating";
+      const teammateSelected = (() => {
+        const v = state?.["teammate"];
+        if (v === "all") return false;
+        if (typeof v !== "string") return false;
+        return v.trim().length > 0;
+      })();
       if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
       if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
+
+      if (isRatingSection && Array.isArray(datasets.round)) {
+        const want = teammateSelected ? "teamduels" : "duels";
+        datasets.round = (datasets.round as any[]).filter((r) => String((r as any)?.modeFamily ?? "").toLowerCase() === want);
+      }
+      if (isRatingSection && Array.isArray(datasets.game)) {
+        const want = teammateSelected ? "teamduels" : "duels";
+        datasets.game = (datasets.game as any[]).filter((g) => String((g as any)?.modeFamily ?? "").toLowerCase() === want);
+      }
+
+      // If we have any round-grain filters active (e.g. country/teammate/movement), ensure they influence game-grain datasets
+      // by restricting games to those that are present in the filtered rounds.
+      if (Array.isArray(datasets.round) && Array.isArray(datasets.game) && specFilters?.enabled) {
+        const allowedSet = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
+        const hasActiveRoundOnly = specFilters.controls.some((c) => {
+          if (allowedSet && !allowedSet.has(c.id)) return false;
+          const appliesRound = Array.isArray((c as any).appliesTo) && (c as any).appliesTo.includes("round");
+          const appliesGame = Array.isArray((c as any).appliesTo) && (c as any).appliesTo.includes("game");
+          if (!appliesRound || appliesGame) return false;
+          const v = state[c.id];
+          return typeof v === "string" ? v !== "all" && v.trim().length > 0 : false;
+        });
+
+        if (hasActiveRoundOnly) {
+          const rr = datasets.round as any[];
+          if (rr.length) {
+            const allowedGames = new Set(rr.map((r) => (r as any)?.gameId).filter((x) => typeof x === "string" && x));
+            datasets.game = (datasets.game as any[]).filter((g) => allowedGames.has((g as any)?.gameId));
+          }
+        }
+      }
       if (used.has("session")) {
         const gap = getSessionGapMinutes();
         datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
       }
 
       if (isOpponentsSection && Array.isArray(datasets.game)) {
-        // Ensure round-grain filters like teammate/country influence opponent stats by filtering games to those present in rounds.
-        const rr = Array.isArray(datasets.round) ? (datasets.round as any[]) : [];
-        if (rr.length) {
-          const allowed = new Set(rr.map((r) => (r as any)?.gameId).filter((x) => typeof x === "string" && x));
-          datasets.game = (datasets.game as any[]).filter((g) => allowed.has((g as any)?.gameId));
-        }
         // Explode each game into one row per opponent (opponent + opponent_mate).
         datasets.game = explodeOpponentsFromGames(datasets.game as any[]);
       }

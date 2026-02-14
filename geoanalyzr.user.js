@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.23
+// @version      1.6.24
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15701,6 +15701,48 @@
     flush();
     return sessions;
   }
+  function pickGameTs(g) {
+    const ts = typeof g?.ts === "number" ? g.ts : typeof g?.playedAt === "number" ? g.playedAt : null;
+    return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
+  }
+  function extractGameRatings(g) {
+    const mf = typeof g?.modeFamily === "string" ? g.modeFamily.trim().toLowerCase() : "";
+    if (mf === "teamduels") {
+      const start2 = typeof g?.teamOneStartRating === "number" ? g.teamOneStartRating : typeof g?.player_self_startRating === "number" ? g.player_self_startRating : void 0;
+      const end2 = typeof g?.teamOneEndRating === "number" ? g.teamOneEndRating : typeof g?.player_self_endRating === "number" ? g.player_self_endRating : void 0;
+      return { start: start2, end: end2 };
+    }
+    const start = typeof g?.player_self_startRating === "number" ? g.player_self_startRating : typeof g?.playerOneStartRating === "number" ? g.playerOneStartRating : void 0;
+    const end = typeof g?.player_self_endRating === "number" ? g.player_self_endRating : typeof g?.playerOneEndRating === "number" ? g.playerOneEndRating : void 0;
+    return { start, end };
+  }
+  async function attachRatingsToSessions(sessions) {
+    if (!sessions.length) return sessions;
+    const games = await getGamesRaw();
+    const byId = /* @__PURE__ */ new Map();
+    for (const g of games) {
+      const id = typeof g?.gameId === "string" ? g.gameId : "";
+      if (id) byId.set(id, g);
+    }
+    for (const s of sessions) {
+      const ids = Array.isArray(s.gameIds) ? s.gameIds : [];
+      const gs = ids.map((id) => byId.get(id)).filter(Boolean);
+      if (!gs.length) continue;
+      const sorted = [...gs].sort((a, b) => (pickGameTs(a) ?? 0) - (pickGameTs(b) ?? 0));
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const firstRat = extractGameRatings(first);
+      const lastRat = extractGameRatings(last);
+      const start = typeof firstRat.start === "number" ? firstRat.start : typeof firstRat.end === "number" ? firstRat.end : void 0;
+      const end = typeof lastRat.end === "number" ? lastRat.end : void 0;
+      if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) {
+        s.ratingStart = start;
+        s.ratingEnd = end;
+        s.ratingDelta = end - start;
+      }
+    }
+    return sessions;
+  }
   function buildSessionsFromRoundsForUi(rounds, gapMinutes) {
     const mins = typeof gapMinutes === "number" && Number.isFinite(gapMinutes) ? Math.max(1, Math.min(360, Math.round(gapMinutes))) : 45;
     return buildSessionsFromRounds(rounds, mins);
@@ -15708,7 +15750,8 @@
   async function getSessionsRaw(gapMinutes) {
     if (sessionsRawCache) return sessionsRawCache;
     const rounds = await getRoundsRaw();
-    sessionsRawCache = buildSessionsFromRounds(rounds, gapMinutes);
+    const sessions = buildSessionsFromRounds(rounds, gapMinutes);
+    sessionsRawCache = await attachRatingsToSessions(sessions);
     return sessionsRawCache;
   }
   async function getSessions(filters, opts) {
@@ -15720,7 +15763,7 @@
     const key = normalizeGlobalFilterKey(spec, state, "session", controlIds) + `|gap=${gapMinutes}`;
     const cached = sessionsFilteredCache.get(key);
     if (cached) return cached;
-    const raw = opts?.rounds ? buildSessionsFromRounds(opts.rounds, gapMinutes) : await getSessionsRaw(gapMinutes);
+    const raw = opts?.rounds ? await attachRatingsToSessions(buildSessionsFromRounds(opts.rounds, gapMinutes)) : await getSessionsRaw(gapMinutes);
     const applied = buildAppliedFilters(spec, state, "session", controlIds);
     let rows = raw;
     if (applied.date) {
@@ -40536,13 +40579,20 @@
         formulaId: "count_tie_game",
         range: { min: 0 }
       },
-      end_rating_avg: {
-        label: "Avg end rating",
+      end_rating: {
+        label: "End rating",
         unit: "rating",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_end_rating",
+        formulaId: "last_player_self_end_rating",
         range: { min: 0 }
+      },
+      rating_trend: {
+        label: "Trend",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "trend_player_self_rating"
       },
       best_end_rating: {
         label: "Best rating",
@@ -40553,11 +40603,10 @@
       },
       rating_delta_avg: {
         label: "Avg rating delta",
-        unit: "rating",
+        unit: "rating_delta",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_rating_delta",
-        range: { min: 0 }
+        formulaId: "mean_player_self_rating_delta"
       },
       longest_win_streak: {
         label: "Longest win streak",
@@ -40786,6 +40835,13 @@
         grain: "session",
         allowedCharts: ["bar", "line"],
         formulaId: "session_throw_rate"
+      },
+      session_delta_rating: {
+        label: "Session rating delta",
+        unit: "rating_delta",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_delta_rating"
       }
     },
     units: {
@@ -40796,6 +40852,7 @@
       duration: { format: "duration" },
       datetime: { format: "datetime" },
       rating: { format: "float", decimals: 0 },
+      rating_delta: { format: "float", decimals: 0, showSign: true },
       km: { format: "float", decimals: 1 },
       float: { format: "float", decimals: 2 }
     },
@@ -40885,6 +40942,24 @@
             label: "From / To",
             default: { fromTs: null, toTs: null },
             appliesTo: ["round", "game", "session"]
+          },
+          {
+            id: "modeFamily",
+            type: "select",
+            label: "Mode",
+            dimension: "mode_family",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["game"]
+          },
+          {
+            id: "teammate",
+            type: "select",
+            label: "Teammate",
+            dimension: "teammate_name",
+            default: "all",
+            options: "auto_teammates",
+            appliesTo: ["round"]
           },
           {
             id: "movement",
@@ -41067,7 +41142,7 @@
                             "hit_count",
                             "win_rate",
                             "win_count",
-                            "end_rating_avg",
+                            "end_rating",
                             "damage_dealt_avg",
                             "damage_taken_avg"
                           ],
@@ -41077,6 +41152,94 @@
                         },
                         sort: { mode: "chronological" },
                         actions: { hover: true }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "rating",
+          title: "Rating",
+          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_rating",
+                title: "Rating",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 16,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_rating_kpis",
+                      type: "stat_list",
+                      title: "Rating",
+                      grain: "game",
+                      placement: { x: 0, y: 0, w: 12, h: 4 },
+                      spec: {
+                        rows: [
+                          { label: "Current rating", measure: "end_rating" },
+                          { label: "Trend", measure: "rating_trend" },
+                          { label: "Avg rating delta", measure: "rating_delta_avg" }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_rating_session_records",
+                      type: "record_list",
+                      title: "Sessions",
+                      grain: "session",
+                      placement: { x: 0, y: 4, w: 12, h: 4 },
+                      spec: {
+                        records: [
+                          {
+                            id: "biggest_session_rating_gain",
+                            label: "Biggest session rating gain",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "biggest_session_rating_loss",
+                            label: "Biggest session rating loss",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_rating_over_time",
+                      type: "chart",
+                      title: "Rating over time",
+                      grain: "game",
+                      placement: { x: 0, y: 8, w: 12, h: 8 },
+                      spec: {
+                        type: "line",
+                        maxPoints: 220,
+                        x: { dimension: "time_day" },
+                        y: { measures: ["end_rating"], activeMeasure: "end_rating" },
+                        sort: { mode: "chronological" },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
                       }
                     }
                   ]
@@ -44300,6 +44463,32 @@
     const v = pick(g, "player_self_endRating") ?? pick(g, "playerOneEndRating") ?? pick(g, "teamOneEndRating");
     return typeof v === "number" ? v : void 0;
   }
+  function getGameModeFamily(g) {
+    const v = pick(g, "modeFamily") ?? pick(g, "mode_family");
+    return typeof v === "string" ? v.trim().toLowerCase() : "";
+  }
+  function getGameDuelStartRating(g) {
+    const v = pick(g, "player_self_startRating") ?? pick(g, "playerOneStartRating");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getGameDuelEndRating(g) {
+    const v = pick(g, "player_self_endRating") ?? pick(g, "playerOneEndRating");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getGameTeamStartRating(g) {
+    const v = pick(g, "teamOneStartRating") ?? pick(g, "player_self_startRating");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getGameTeamEndRating(g) {
+    const v = pick(g, "teamOneEndRating") ?? pick(g, "player_self_endRating");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getGameEffectiveStartRating(g) {
+    return getGameModeFamily(g) === "teamduels" ? getGameTeamStartRating(g) : getGameDuelStartRating(g);
+  }
+  function getGameEffectiveEndRating(g) {
+    return getGameModeFamily(g) === "teamduels" ? getGameTeamEndRating(g) : getGameDuelEndRating(g);
+  }
   function getGameOutcome(g) {
     const v = getGameSelfVictory(g);
     if (typeof v === "boolean") return v ? "win" : "loss";
@@ -44560,6 +44749,24 @@
       }
       return n ? sum2 / n : 0;
     },
+    last_player_self_end_rating: (rows) => {
+      const sorted = [...rows].sort((a, b) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const v = getGameEffectiveEndRating(sorted[i]);
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+      }
+      return 0;
+    },
+    trend_player_self_rating: (rows) => {
+      const sorted = [...rows].sort((a, b) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
+      if (sorted.length === 0) return 0;
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const start = getGameEffectiveStartRating(first) ?? getGameEffectiveEndRating(first);
+      const end = getGameEffectiveEndRating(last);
+      if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) return end - start;
+      return 0;
+    },
     mean_player_self_rating_delta: (rows) => {
       let sum2 = 0;
       let n = 0;
@@ -44731,6 +44938,14 @@
         }
       }
       return n ? k / n : 0;
+    },
+    session_delta_rating: (rows) => {
+      let sum2 = 0;
+      for (const r of rows) {
+        const d = r?.ratingDelta;
+        if (typeof d === "number" && Number.isFinite(d)) sum2 += d;
+      }
+      return sum2;
     }
   };
   var MEASURES_BY_GRAIN = {
@@ -44780,9 +44995,13 @@
       if (mins > 0) return `${mins}m ${s % 60}s`;
       return `${Math.max(0, value).toFixed(1)}s`;
     }
-    if (unit.format === "int") return String(Math.round(value));
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
     const decimals = unit.decimals ?? 1;
-    return value.toFixed(decimals);
+    const txt = value.toFixed(decimals);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
   }
   async function computeMeasure(semantic, measureId, baseRows, grain, filters) {
     const m = semantic.measures[measureId];
@@ -45057,8 +45276,12 @@
       if (mins > 0) return `${mins}m ${s % 60}s`;
       return `${Math.max(0, value).toFixed(1)}s`;
     }
-    if (unit.format === "int") return `${Math.round(value)}`;
-    return value.toFixed(unit.decimals ?? 1);
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : `${v}`;
+    }
+    const txt = value.toFixed(unit.decimals ?? 1);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
   }
   function clampForMeasure(semantic, measureId, value) {
     const measure = semantic.measures[measureId];
@@ -45852,9 +46075,13 @@
       if (mins > 0) return `${mins}m ${s % 60}s`;
       return `${Math.max(0, value).toFixed(1)}s`;
     }
-    if (unit.format === "int") return String(Math.round(value));
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
     const decimals = unit.decimals ?? 1;
-    return value.toFixed(decimals);
+    const txt = value.toFixed(decimals);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
   }
   function clampForMeasure2(semantic, measureId, value) {
     const m = semantic.measures[measureId];
@@ -46137,8 +46364,12 @@
       if (mins > 0) return `${mins}m ${s % 60}s`;
       return `${Math.max(0, value).toFixed(1)}s`;
     }
-    if (unit.format === "int") return String(Math.round(value));
-    return value.toFixed(unit.decimals ?? 1);
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
+    const txt = value.toFixed(unit.decimals ?? 1);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
   }
   function formatTs(ts) {
     const d = new Date(ts);
@@ -46200,6 +46431,13 @@
       return ts.length ? Math.min(...ts) : null;
     })();
     const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
+    if (grain === "session" && metricId === "session_delta_rating") {
+      const row = bestRows[0];
+      const start = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : null;
+      const end = typeof row?.sessionEndTs === "number" ? row.sessionEndTs : null;
+      const rangeText = start !== null && end !== null ? `${formatTs(start)} -> ${formatTs(end)}` : keyText;
+      return { keyText, valueText: `${metricText} (${rangeText})`, rows: bestRows, click: rec.actions?.click };
+    }
     if (groupById === "game_id" && metricId === "rounds_count") {
       if (extreme === "max") {
         return { keyText, valueText: `${metricText} rounds (${keyText})`, rows: bestRows, click: rec.actions?.click };
@@ -47192,18 +47430,46 @@
         const filters = { global: { spec: specFilters, state, controlIds } };
         const datasets = {};
         const isOpponentsSection = section.id === "opponents";
+        const isRatingSection = section.id === "rating";
+        const teammateSelected = (() => {
+          const v = state?.["teammate"];
+          if (v === "all") return false;
+          if (typeof v !== "string") return false;
+          return v.trim().length > 0;
+        })();
         if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
         if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
+        if (isRatingSection && Array.isArray(datasets.round)) {
+          const want = teammateSelected ? "teamduels" : "duels";
+          datasets.round = datasets.round.filter((r) => String(r?.modeFamily ?? "").toLowerCase() === want);
+        }
+        if (isRatingSection && Array.isArray(datasets.game)) {
+          const want = teammateSelected ? "teamduels" : "duels";
+          datasets.game = datasets.game.filter((g) => String(g?.modeFamily ?? "").toLowerCase() === want);
+        }
+        if (Array.isArray(datasets.round) && Array.isArray(datasets.game) && specFilters?.enabled) {
+          const allowedSet = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
+          const hasActiveRoundOnly = specFilters.controls.some((c) => {
+            if (allowedSet && !allowedSet.has(c.id)) return false;
+            const appliesRound = Array.isArray(c.appliesTo) && c.appliesTo.includes("round");
+            const appliesGame = Array.isArray(c.appliesTo) && c.appliesTo.includes("game");
+            if (!appliesRound || appliesGame) return false;
+            const v = state[c.id];
+            return typeof v === "string" ? v !== "all" && v.trim().length > 0 : false;
+          });
+          if (hasActiveRoundOnly) {
+            const rr = datasets.round;
+            if (rr.length) {
+              const allowedGames = new Set(rr.map((r) => r?.gameId).filter((x) => typeof x === "string" && x));
+              datasets.game = datasets.game.filter((g) => allowedGames.has(g?.gameId));
+            }
+          }
+        }
         if (used.has("session")) {
           const gap = getSessionGapMinutes();
           datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
         }
         if (isOpponentsSection && Array.isArray(datasets.game)) {
-          const rr = Array.isArray(datasets.round) ? datasets.round : [];
-          if (rr.length) {
-            const allowed = new Set(rr.map((r) => r?.gameId).filter((x) => typeof x === "string" && x));
-            datasets.game = datasets.game.filter((g) => allowed.has(g?.gameId));
-          }
           datasets.game = explodeOpponentsFromGames(datasets.game);
         }
         datasetsBySection[section.id] = datasets;

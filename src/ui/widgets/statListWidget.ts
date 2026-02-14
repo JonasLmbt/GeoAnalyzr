@@ -52,9 +52,13 @@ function formatValue(doc: Document, semantic: SemanticRegistry, measureId: strin
     if (mins > 0) return `${mins}m ${s % 60}s`;
     return `${(Math.max(0, value)).toFixed(1)}s`;
   }
-  if (unit.format === "int") return String(Math.round(value));
+  if (unit.format === "int") {
+    const v = Math.round(value);
+    return unit.showSign && v > 0 ? `+${v}` : String(v);
+  }
   const decimals = unit.decimals ?? 1;
-  return value.toFixed(decimals);
+  const txt = value.toFixed(decimals);
+  return unit.showSign && value > 0 ? `+${txt}` : txt;
 }
 
 async function computeMeasure(

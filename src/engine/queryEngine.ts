@@ -85,6 +85,11 @@ export type SessionRow = {
   // For drilldowns.
   gameIds: string[];
   rounds: RoundRow[];
+
+  // Rating context for the session (computed from the first/last game in this session).
+  ratingStart?: number;
+  ratingEnd?: number;
+  ratingDelta?: number;
 };
 
 function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): SessionRow[] {
@@ -195,6 +200,55 @@ function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): Sessio
   return sessions;
 }
 
+function pickGameTs(g: any): number | null {
+  const ts = typeof g?.ts === "number" ? g.ts : typeof g?.playedAt === "number" ? g.playedAt : null;
+  return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
+}
+
+function extractGameRatings(g: any): { start?: number; end?: number } {
+  const mf = typeof g?.modeFamily === "string" ? g.modeFamily.trim().toLowerCase() : "";
+  if (mf === "teamduels") {
+    const start = typeof g?.teamOneStartRating === "number" ? g.teamOneStartRating : typeof g?.player_self_startRating === "number" ? g.player_self_startRating : undefined;
+    const end = typeof g?.teamOneEndRating === "number" ? g.teamOneEndRating : typeof g?.player_self_endRating === "number" ? g.player_self_endRating : undefined;
+    return { start, end };
+  }
+  const start =
+    typeof g?.player_self_startRating === "number" ? g.player_self_startRating : typeof g?.playerOneStartRating === "number" ? g.playerOneStartRating : undefined;
+  const end =
+    typeof g?.player_self_endRating === "number" ? g.player_self_endRating : typeof g?.playerOneEndRating === "number" ? g.playerOneEndRating : undefined;
+  return { start, end };
+}
+
+async function attachRatingsToSessions(sessions: SessionRow[]): Promise<SessionRow[]> {
+  if (!sessions.length) return sessions;
+  const games = await getGamesRaw();
+  const byId = new Map<string, any>();
+  for (const g of games as any[]) {
+    const id = typeof (g as any)?.gameId === "string" ? (g as any).gameId : "";
+    if (id) byId.set(id, g);
+  }
+
+  for (const s of sessions as any[]) {
+    const ids = Array.isArray(s.gameIds) ? (s.gameIds as string[]) : [];
+    const gs = ids.map((id) => byId.get(id)).filter(Boolean);
+    if (!gs.length) continue;
+    const sorted = [...gs].sort((a, b) => (pickGameTs(a) ?? 0) - (pickGameTs(b) ?? 0));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const firstRat = extractGameRatings(first);
+    const lastRat = extractGameRatings(last);
+    const start = typeof firstRat.start === "number" ? firstRat.start : typeof firstRat.end === "number" ? firstRat.end : undefined;
+    const end = typeof lastRat.end === "number" ? lastRat.end : undefined;
+    if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) {
+      s.ratingStart = start;
+      s.ratingEnd = end;
+      s.ratingDelta = end - start;
+    }
+  }
+
+  return sessions;
+}
+
 // UI helper: allow building sessions from an already-filtered round list (e.g. section-local filters).
 export function buildSessionsFromRoundsForUi(rounds: RoundRow[], gapMinutes: number): SessionRow[] {
   const mins = typeof gapMinutes === "number" && Number.isFinite(gapMinutes) ? Math.max(1, Math.min(360, Math.round(gapMinutes))) : 45;
@@ -204,7 +258,8 @@ export function buildSessionsFromRoundsForUi(rounds: RoundRow[], gapMinutes: num
 async function getSessionsRaw(gapMinutes: number): Promise<SessionRow[]> {
   if (sessionsRawCache) return sessionsRawCache as SessionRow[];
   const rounds = await getRoundsRaw();
-  sessionsRawCache = buildSessionsFromRounds(rounds, gapMinutes);
+  const sessions = buildSessionsFromRounds(rounds, gapMinutes);
+  sessionsRawCache = await attachRatingsToSessions(sessions);
   return sessionsRawCache as SessionRow[];
 }
 
@@ -220,7 +275,7 @@ export async function getSessions(filters: GlobalFilters, opts?: { rounds?: Roun
   if (cached) return cached as SessionRow[];
 
   // If prefiltered rounds are provided, build sessions from them (so round-grain filters affect sessionization).
-  const raw = opts?.rounds ? buildSessionsFromRounds(opts.rounds, gapMinutes) : await getSessionsRaw(gapMinutes);
+  const raw = opts?.rounds ? await attachRatingsToSessions(buildSessionsFromRounds(opts.rounds, gapMinutes)) : await getSessionsRaw(gapMinutes);
 
   const applied = buildAppliedFilters(spec, state, "session", controlIds);
   let rows = raw as any[];

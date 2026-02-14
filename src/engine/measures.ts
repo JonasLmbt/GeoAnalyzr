@@ -69,6 +69,39 @@ function getGameSelfEndRating(g: GameFactRow): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+function getGameModeFamily(g: GameFactRow): string {
+  const v = pick(g as any, "modeFamily") ?? pick(g as any, "mode_family");
+  return typeof v === "string" ? v.trim().toLowerCase() : "";
+}
+
+function getGameDuelStartRating(g: GameFactRow): number | undefined {
+  const v = pick(g as any, "player_self_startRating") ?? pick(g as any, "playerOneStartRating");
+  return typeof v === "number" ? v : undefined;
+}
+
+function getGameDuelEndRating(g: GameFactRow): number | undefined {
+  const v = pick(g as any, "player_self_endRating") ?? pick(g as any, "playerOneEndRating");
+  return typeof v === "number" ? v : undefined;
+}
+
+function getGameTeamStartRating(g: GameFactRow): number | undefined {
+  const v = pick(g as any, "teamOneStartRating") ?? pick(g as any, "player_self_startRating");
+  return typeof v === "number" ? v : undefined;
+}
+
+function getGameTeamEndRating(g: GameFactRow): number | undefined {
+  const v = pick(g as any, "teamOneEndRating") ?? pick(g as any, "player_self_endRating");
+  return typeof v === "number" ? v : undefined;
+}
+
+function getGameEffectiveStartRating(g: GameFactRow): number | undefined {
+  return getGameModeFamily(g) === "teamduels" ? getGameTeamStartRating(g) : getGameDuelStartRating(g);
+}
+
+function getGameEffectiveEndRating(g: GameFactRow): number | undefined {
+  return getGameModeFamily(g) === "teamduels" ? getGameTeamEndRating(g) : getGameDuelEndRating(g);
+}
+
 function getGameOutcome(g: GameFactRow): "win" | "loss" | "tie" | null {
   const v = getGameSelfVictory(g);
   if (typeof v === "boolean") return v ? "win" : "loss";
@@ -361,6 +394,27 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
     return n ? sum / n : 0;
   },
 
+  last_player_self_end_rating: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const v = getGameEffectiveEndRating(sorted[i] as any);
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+    return 0;
+  },
+
+  trend_player_self_rating: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
+    if (sorted.length === 0) return 0;
+
+    const first = sorted[0] as any;
+    const last = sorted[sorted.length - 1] as any;
+    const start = getGameEffectiveStartRating(first) ?? getGameEffectiveEndRating(first);
+    const end = getGameEffectiveEndRating(last);
+    if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) return end - start;
+    return 0;
+  },
+
   mean_player_self_rating_delta: (rows) => {
     let sum = 0;
     let n = 0;
@@ -534,6 +588,15 @@ export const SESSION_MEASURES_BY_FORMULA_ID: Record<string, (rows: SessionRow[])
       }
     }
     return n ? k / n : 0;
+  }
+  ,
+  session_delta_rating: (rows) => {
+    let sum = 0;
+    for (const r of rows as any[]) {
+      const d = (r as any)?.ratingDelta;
+      if (typeof d === "number" && Number.isFinite(d)) sum += d;
+    }
+    return sum;
   }
 };
 
