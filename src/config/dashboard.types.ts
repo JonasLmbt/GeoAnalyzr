@@ -188,13 +188,17 @@ export interface TeamSectionSpec {
   // Reserved for future options (e.g., session gap override).
 }
 
+export interface CountryInsightSpec {
+  // Reserved for future options.
+}
+
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list" | "team_section";
+  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list" | "team_section" | "country_insight";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec | TeamSectionSpec;
+  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec | TeamSectionSpec | CountryInsightSpec;
 }
 
 export interface CompositeCardDef {

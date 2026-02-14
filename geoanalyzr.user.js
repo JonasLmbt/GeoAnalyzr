@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.15
+// @version      1.6.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -41908,6 +41908,38 @@
               }
             ]
           }
+        },
+        {
+          id: "country_insight",
+          title: "Country Insight",
+          filterScope: { exclude: ["country"] },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_country_insight",
+                title: "Country Insight",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_insight",
+                      type: "country_insight",
+                      title: "Country Insight",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 18 },
+                      spec: {}
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
       ]
     }
@@ -42155,14 +42187,14 @@
       transition: color 160ms ease, background 160ms ease;
     }
 
-    .ga-team-local-filters {
+    .ga-team-local-filters, .ga-country-local-filters {
       display:flex;
       gap:10px;
       flex-wrap:wrap;
       align-items:flex-end;
       margin: 6px 0 10px;
     }
-    .ga-team-local-filters .ga-filter { min-width: 240px; }
+    .ga-team-local-filters .ga-filter, .ga-country-local-filters .ga-filter { min-width: 240px; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
       background: rgba(255,255,255,0.04);
       color: rgba(255,255,255,0.88);
@@ -45926,7 +45958,7 @@
     const openRoundsDrill = (drillTitle, rows) => {
       overlay.open(semantic, { title: drillTitle, target: "rounds", columnsPreset: "roundMode", rows });
     };
-    const addRowWithDrill = (box, label, value, drillTitle, drillRows) => {
+    const addRowWithDrill2 = (box, label, value, drillTitle, drillRows) => {
       const line = doc.createElement("div");
       line.className = "ga-statrow";
       const left = doc.createElement("div");
@@ -46092,49 +46124,49 @@
       const longestSessionDrill = longestSessionIds.flatMap((id) => byGame.get(id) ?? []);
       const longestBreakDrill = longestBreakPrevGameId && longestBreakNextGameId ? [...byGame.get(longestBreakPrevGameId) ?? [], ...byGame.get(longestBreakNextGameId) ?? []] : [];
       const h2h = mkBox(doc, "Head-to-head questions:");
-      addRowWithDrill(h2h.box, "Closer guesses", decideLeader(myCloser, mateCloser), "Closer guesses - Rounds", closerDrill);
-      addRowWithDrill(h2h.box, "Higher score rounds", decideLeader(myScoreWins, mateScoreWins), "Higher score rounds - Rounds", higherScoreDrill);
-      addRowWithDrill(h2h.box, "Fewer throws (<50)", decideLeader(mateThrows, myThrows), "Throws (<50) - Rounds", fewerThrowsDrill);
-      addRowWithDrill(h2h.box, "More 5k rounds", decideLeader(myFiveKs, mateFiveKs), "Perfect 5k - Rounds", moreFiveKDrill);
+      addRowWithDrill2(h2h.box, "Closer guesses", decideLeader(myCloser, mateCloser), "Closer guesses - Rounds", closerDrill);
+      addRowWithDrill2(h2h.box, "Higher score rounds", decideLeader(myScoreWins, mateScoreWins), "Higher score rounds - Rounds", higherScoreDrill);
+      addRowWithDrill2(h2h.box, "Fewer throws (<50)", decideLeader(mateThrows, myThrows), "Throws (<50) - Rounds", fewerThrowsDrill);
+      addRowWithDrill2(h2h.box, "More 5k rounds", decideLeader(myFiveKs, mateFiveKs), "Perfect 5k - Rounds", moreFiveKDrill);
       const facts = mkBox(doc, "Team facts:");
-      addRowWithDrill(facts.box, "Games together", String(games.length), "Games together - Rounds", roundsTogetherDrill);
-      addRowWithDrill(facts.box, "Rounds together", String(compareRounds.length), "Rounds together - Rounds", roundsTogetherDrill);
-      addRowWithDrill(
+      addRowWithDrill2(facts.box, "Games together", String(games.length), "Games together - Rounds", roundsTogetherDrill);
+      addRowWithDrill2(facts.box, "Rounds together", String(compareRounds.length), "Rounds together - Rounds", roundsTogetherDrill);
+      addRowWithDrill2(
         facts.box,
         "Time played together",
         timedRounds > 0 ? `${formatDurationHuman2(timePlayedMs)}${timedRounds > 0 && timedRounds < compareRounds.length ? ` (from ${timedRounds}/${compareRounds.length} rounds with time data)` : ""}` : "-",
         "Time played together - Rounds",
         timedRoundsDrill
       );
-      addRowWithDrill(
+      addRowWithDrill2(
         facts.box,
         "First game together",
         typeof firstTogether === "number" ? formatShortDateTime2(firstTogether) : "-",
         "First game together - Rounds",
         firstGameDrill
       );
-      addRowWithDrill(
+      addRowWithDrill2(
         facts.box,
         "Most recent game together",
         typeof lastTogether === "number" ? formatShortDateTime2(lastTogether) : "-",
         "Most recent game together - Rounds",
         lastGameDrill
       );
-      addRowWithDrill(
+      addRowWithDrill2(
         facts.box,
         "Longest session together",
         longestSessionGames > 0 && longestSessionStart !== void 0 && longestSessionEnd !== void 0 ? `${longestSessionGames} games (${formatShortDateTime2(longestSessionStart)} -> ${formatShortDateTime2(longestSessionEnd)})` : "-",
         "Longest session together - Rounds",
         longestSessionDrill
       );
-      addRowWithDrill(
+      addRowWithDrill2(
         facts.box,
         "Avg games per session together",
         typeof avgGamesPerSession === "number" ? avgGamesPerSession.toFixed(1) : "-",
         "Avg games per session together - Rounds",
         roundsTogetherDrill
       );
-      addRowWithDrill(
+      addRowWithDrill2(
         facts.box,
         "Longest break between games together",
         typeof longestBreakMs === "number" ? formatDurationHuman2(longestBreakMs) : "-",
@@ -46156,6 +46188,326 @@
       host.appendChild(grid);
     };
     renderForMate();
+    return wrap;
+  }
+
+  // src/ui/widgets/countryInsightWidget.ts
+  function asTrimmedString3(v) {
+    return typeof v === "string" ? v.trim() : "";
+  }
+  function normalizeCountryCode2(v) {
+    return asTrimmedString3(v).toLowerCase();
+  }
+  function pickGuessCountry(row) {
+    return asTrimmedString3(row?.player_self_guessCountry ?? row?.p1_guessCountry ?? row?.guessCountry ?? row?.player_self_country);
+  }
+  function pickScore(row) {
+    const v = row?.player_self_score ?? row?.p1_score ?? row?.score;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  }
+  function isHit2(row) {
+    const truth = normalizeCountryCode2(row?.trueCountry ?? row?.true_country);
+    const guess = normalizeCountryCode2(pickGuessCountry(row));
+    return !!truth && !!guess && truth === guess;
+  }
+  function isThrow(row) {
+    const s = pickScore(row);
+    return typeof s === "number" && s < 50;
+  }
+  function isFiveK(row) {
+    const s = pickScore(row);
+    return typeof s === "number" && s >= 5e3;
+  }
+  function formatPct012(v) {
+    const clamped = Math.max(0, Math.min(1, v));
+    return `${(clamped * 100).toFixed(1)}%`;
+  }
+  function formatNumber(v, decimals = 1) {
+    if (!Number.isFinite(v)) return "-";
+    return v.toFixed(decimals);
+  }
+  function countryDisplayName(code) {
+    const trimmed = code.trim();
+    const iso2 = /^[a-z]{2}$/i.test(trimmed) ? trimmed.toUpperCase() : "";
+    if (!iso2) return trimmed || "-";
+    const dn = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+    const name = dn ? dn.of(iso2) : null;
+    return name ? String(name) : iso2;
+  }
+  function mkBox2(doc, titleText) {
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-statlist";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = titleText;
+    wrap.appendChild(title);
+    const box = doc.createElement("div");
+    box.className = "ga-statlist-box";
+    wrap.appendChild(box);
+    return { wrap, box };
+  }
+  function addRowWithDrill(args) {
+    const { doc, box, label, value, drill, open } = args;
+    const line = doc.createElement("div");
+    line.className = "ga-statrow";
+    const left = doc.createElement("div");
+    left.className = "ga-statrow-label";
+    left.textContent = label;
+    const right = doc.createElement("div");
+    right.className = "ga-statrow-value";
+    right.textContent = value;
+    if (drill && Array.isArray(drill.rows) && drill.rows.length > 0) {
+      line.style.cursor = "pointer";
+      right.style.textDecoration = "underline";
+      right.style.textUnderlineOffset = "2px";
+      right.style.textDecorationThickness = "1px";
+      line.addEventListener("click", () => open(drill.title, drill.rows));
+    }
+    line.appendChild(left);
+    line.appendChild(right);
+    box.appendChild(line);
+  }
+  function computeMeasure2(semantic, measureId, rows) {
+    const m = semantic.measures[measureId];
+    if (!m) return 0;
+    const grain = m.grain;
+    const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
+    if (!fn) return 0;
+    return fn(rows);
+  }
+  function fmtMeasure(semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    if (!m) return String(value);
+    const unit = semantic.units[m.unit];
+    if (!unit) return String(value);
+    if (unit.format === "percent") return formatPct012(value);
+    if (unit.format === "int") return String(Math.round(value));
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${s}s`;
+    }
+    const decimals = unit.decimals ?? 1;
+    return formatNumber(value, decimals);
+  }
+  async function renderCountryInsightWidget(semantic, widget, overlay, baseRows) {
+    const _spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-country-insight";
+    const grain = widget.grain;
+    if (grain !== "round") {
+      const ph = doc.createElement("div");
+      ph.className = "ga-widget ga-placeholder";
+      ph.textContent = "Country insight requires round grain";
+      return ph;
+    }
+    const all = Array.isArray(baseRows) ? baseRows : [];
+    const available = /* @__PURE__ */ new Map();
+    for (const r of all) {
+      const code = normalizeCountryCode2(r?.trueCountry ?? r?.true_country);
+      if (!code) continue;
+      available.set(code, (available.get(code) ?? 0) + 1);
+    }
+    const options = Array.from(available.entries()).map(([code, n]) => ({ code, n })).sort((a, b) => b.n - a.n || a.code.localeCompare(b.code)).map(({ code, n }) => ({
+      value: code,
+      label: `${countryDisplayName(code)} (${n} rounds)`
+    }));
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = "Country Insight";
+    wrap.appendChild(title);
+    if (options.length === 0) {
+      const empty = doc.createElement("div");
+      empty.className = "ga-statlist-box";
+      empty.textContent = "No country data available for the current global filters.";
+      wrap.appendChild(empty);
+      return wrap;
+    }
+    const storageKey = "geoanalyzr:semantic:country:spotlight";
+    const ls = doc.defaultView?.localStorage;
+    let selected = typeof ls?.getItem(storageKey) === "string" ? String(ls?.getItem(storageKey) ?? "").trim().toLowerCase() : "";
+    const valueSet = new Set(options.map((o) => o.value));
+    if (!selected || !valueSet.has(selected)) selected = options[0].value;
+    ls?.setItem(storageKey, selected);
+    const localFilters = doc.createElement("div");
+    localFilters.className = "ga-country-local-filters";
+    const filterBox = doc.createElement("div");
+    filterBox.className = "ga-filter";
+    const filterLabel = doc.createElement("div");
+    filterLabel.className = "ga-filter-label";
+    filterLabel.textContent = "Country (local)";
+    const filterRow = doc.createElement("div");
+    filterRow.className = "ga-filter-row";
+    const sel = doc.createElement("select");
+    sel.className = "ga-filter-select";
+    for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
+    sel.value = selected;
+    filterRow.appendChild(sel);
+    filterBox.appendChild(filterLabel);
+    filterBox.appendChild(filterRow);
+    localFilters.appendChild(filterBox);
+    const note = doc.createElement("div");
+    note.className = "ga-settings-note";
+    note.textContent = "Note: Global 'Country' filter is ignored here. Use this local selector instead.";
+    localFilters.appendChild(note);
+    wrap.appendChild(localFilters);
+    const host = doc.createElement("div");
+    wrap.appendChild(host);
+    const openRounds = (drillTitle, rows) => {
+      overlay.open(semantic, { title: drillTitle, target: "rounds", columnsPreset: "roundMode", rows });
+    };
+    const renderFor = async (countryCode) => {
+      host.innerHTML = "";
+      const rows = all.filter((r) => normalizeCountryCode2(r?.trueCountry ?? r?.true_country) === countryCode);
+      const display = countryDisplayName(countryCode);
+      const header = doc.createElement("div");
+      header.className = "ga-widget-title";
+      header.textContent = `Country Spotlight: ${display}`;
+      host.appendChild(header);
+      if (!rows.length) {
+        const empty = doc.createElement("div");
+        empty.className = "ga-statlist-box";
+        empty.textContent = "No rounds for this country in the current global filters.";
+        host.appendChild(empty);
+        return;
+      }
+      const roundsCount = rows.length;
+      const hitRows = rows.filter(isHit2);
+      const throwRows = rows.filter(isThrow);
+      const fiveKRows = rows.filter(isFiveK);
+      const avgScore = computeMeasure2(semantic, "avg_score", rows);
+      const medianScore = computeMeasure2(semantic, "score_median", rows);
+      const avgDist = computeMeasure2(semantic, "avg_distance_km", rows);
+      const hitRate = roundsCount ? hitRows.length / roundsCount : 0;
+      const throwRate = roundsCount ? throwRows.length / roundsCount : 0;
+      const fiveKRate = roundsCount ? fiveKRows.length / roundsCount : 0;
+      const confusionCounts = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const truth = normalizeCountryCode2(r?.trueCountry ?? r?.true_country);
+        const guessRaw = pickGuessCountry(r);
+        const guess = normalizeCountryCode2(guessRaw);
+        if (!truth || !guess || truth === guess) continue;
+        const cur = confusionCounts.get(guess) ?? { n: 0, rows: [] };
+        cur.n += 1;
+        cur.rows.push(r);
+        confusionCounts.set(guess, cur);
+      }
+      const topConfusions = Array.from(confusionCounts.entries()).map(([guess, data]) => ({ guess, n: data.n, rows: data.rows })).sort((a2, b2) => b2.n - a2.n || a2.guess.localeCompare(b2.guess)).slice(0, 3);
+      const stats = mkBox2(doc, "Country insight:");
+      addRowWithDrill({ doc, box: stats.box, label: "Rounds", value: String(roundsCount), drill: { title: `${display} - Rounds`, rows }, open: openRounds });
+      addRowWithDrill({
+        doc,
+        box: stats.box,
+        label: "Hit rate",
+        value: formatPct012(hitRate),
+        drill: { title: `${display} - Hits`, rows: hitRows },
+        open: openRounds
+      });
+      addRowWithDrill({
+        doc,
+        box: stats.box,
+        label: "Avg score",
+        value: `${fmtMeasure(semantic, "avg_score", avgScore)} | Median score: ${fmtMeasure(semantic, "score_median", medianScore)}`,
+        drill: { title: `${display} - Rounds`, rows },
+        open: openRounds
+      });
+      addRowWithDrill({
+        doc,
+        box: stats.box,
+        label: "Avg distance",
+        value: `${fmtMeasure(semantic, "avg_distance_km", avgDist)} km`,
+        drill: { title: `${display} - Rounds`, rows },
+        open: openRounds
+      });
+      addRowWithDrill({
+        doc,
+        box: stats.box,
+        label: "Perfect 5k in this country",
+        value: `${fiveKRows.length} (${formatPct012(fiveKRate)})`,
+        drill: { title: `${display} - Perfect 5k`, rows: fiveKRows },
+        open: openRounds
+      });
+      addRowWithDrill({
+        doc,
+        box: stats.box,
+        label: "Throws (<50) in this country",
+        value: `${throwRows.length} (${formatPct012(throwRate)})`,
+        drill: { title: `${display} - Throws (<50)`, rows: throwRows },
+        open: openRounds
+      });
+      const confBox = mkBox2(doc, "Top confusions (guess country):");
+      if (topConfusions.length === 0) {
+        const line = doc.createElement("div");
+        line.className = "ga-statrow";
+        const left = doc.createElement("div");
+        left.className = "ga-statrow-label";
+        left.textContent = "No confusions found";
+        const right = doc.createElement("div");
+        right.className = "ga-statrow-value";
+        right.textContent = "-";
+        line.appendChild(left);
+        line.appendChild(right);
+        confBox.box.appendChild(line);
+      } else {
+        for (const c of topConfusions) {
+          const name = countryDisplayName(c.guess);
+          addRowWithDrill({
+            doc,
+            box: confBox.box,
+            label: name,
+            value: String(c.n),
+            drill: { title: `${display} confused with ${name}`, rows: c.rows },
+            open: openRounds
+          });
+        }
+      }
+      const distWidget = {
+        widgetId: "w_country_spotlight_distribution",
+        type: "chart",
+        title: `Country Spotlight: ${display} - Score distribution`,
+        grain: "round",
+        spec: {
+          type: "bar",
+          limit: 200,
+          x: { dimension: "score_bucket" },
+          y: { measure: "rounds_count" },
+          sort: { mode: "chronological" },
+          actions: {
+            hover: true,
+            click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+          }
+        }
+      };
+      const chartEl = await renderChartWidget(semantic, distWidget, overlay, { round: rows }, void 0);
+      const grid = doc.createElement("div");
+      grid.style.display = "grid";
+      grid.style.gridTemplateColumns = "repeat(12, minmax(0, 1fr))";
+      grid.style.gap = "10px";
+      const a = doc.createElement("div");
+      a.style.gridColumn = "1 / span 12";
+      a.appendChild(stats.wrap);
+      a.appendChild(confBox.wrap);
+      const b = doc.createElement("div");
+      b.style.gridColumn = "1 / span 12";
+      b.appendChild(chartEl);
+      grid.appendChild(a);
+      grid.appendChild(b);
+      host.appendChild(grid);
+    };
+    sel.addEventListener("change", () => {
+      const next = sel.value;
+      if (!next) return;
+      selected = next;
+      ls?.setItem(storageKey, next);
+      void renderFor(next);
+    });
+    await renderFor(selected);
     return wrap;
   }
 
@@ -46202,6 +46554,7 @@
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "team_section") return await renderTeamSectionWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "country_insight") return await renderCountryInsightWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;

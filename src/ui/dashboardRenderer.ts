@@ -9,6 +9,7 @@ import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
 import { renderTeamSectionWidget } from "./widgets/teamSectionWidget";
+import { renderCountryInsightWidget } from "./widgets/countryInsightWidget";
 
 
 export async function renderDashboard(
@@ -72,6 +73,7 @@ export async function renderDashboard(
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "team_section") return await renderTeamSectionWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "country_insight") return await renderCountryInsightWidget(semantic, widget, overlay, baseRows as any);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");

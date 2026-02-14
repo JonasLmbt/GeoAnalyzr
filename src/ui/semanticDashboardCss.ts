@@ -240,14 +240,14 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       transition: color 160ms ease, background 160ms ease;
     }
 
-    .ga-team-local-filters {
+    .ga-team-local-filters, .ga-country-local-filters {
       display:flex;
       gap:10px;
       flex-wrap:wrap;
       align-items:flex-end;
       margin: 6px 0 10px;
     }
-    .ga-team-local-filters .ga-filter { min-width: 240px; }
+    .ga-team-local-filters .ga-filter, .ga-country-local-filters .ga-filter { min-width: 240px; }
     .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
       background: rgba(255,255,255,0.04);
       color: rgba(255,255,255,0.88);

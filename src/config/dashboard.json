@@ -1249,6 +1249,39 @@
           ]
         }
       }
+      ,
+      {
+        "id": "country_insight",
+        "title": "Country Insight",
+        "filterScope": { "exclude": ["country"] },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_country_insight",
+              "title": "Country Insight",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 18,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_country_insight",
+                    "type": "country_insight",
+                    "title": "Country Insight",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 18 },
+                    "spec": {}
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
     ]
   }
 }
