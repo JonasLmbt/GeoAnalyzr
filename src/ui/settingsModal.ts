@@ -18,23 +18,25 @@ type SettingsModalOptions = {
   openButton: HTMLButtonElement;
   semantic: SemanticRegistry;
   getDashboard: () => DashboardDoc;
+  getDefaultDashboard: () => DashboardDoc;
   applyDashboard: (next: DashboardDoc) => Promise<void>;
   getSettings: () => SemanticDashboardSettings;
   applySettings: (next: SemanticDashboardSettings) => Promise<void> | void;
 };
 
 export function attachSettingsModal(opts: SettingsModalOptions): void {
-  const {
-    doc,
-    targetWindow,
-    root,
-    openButton,
-    semantic,
-    getDashboard,
-    applyDashboard,
-    getSettings,
-    applySettings
-  } = opts;
+    const {
+      doc,
+      targetWindow,
+      root,
+      openButton,
+      semantic,
+      getDashboard,
+      getDefaultDashboard,
+      applyDashboard,
+      getSettings,
+      applySettings
+    } = opts;
 
   const cloneDashboard = (value: DashboardDoc): DashboardDoc => {
     if (typeof structuredClone === "function") return structuredClone(value);
@@ -228,6 +230,16 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     templateField.appendChild(templateLabel);
     templateField.appendChild(templateEditor);
     templatePane.appendChild(templateField);
+
+    const templateActions = doc.createElement("div");
+    templateActions.className = "ga-settings-actions";
+    const templateReset = doc.createElement("button");
+    templateReset.type = "button";
+    templateReset.className = "ga-filter-btn";
+    templateReset.textContent = "Reset to latest";
+    templateReset.title = "Reset template to the latest bundled dashboard.json";
+    templateActions.appendChild(templateReset);
+    templatePane.appendChild(templateActions);
     templatePane.appendChild(templateStatus);
 
     const layoutPane = doc.createElement("div");
@@ -338,6 +350,24 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         templateStatus.classList.add("error");
       }
     };
+    templateReset.addEventListener("click", () => {
+      void (async () => {
+        templateStatus.textContent = "";
+        templateStatus.className = "ga-settings-status";
+        try {
+          const next = cloneDashboard(getDefaultDashboard());
+          validateDashboardAgainstSemantic(semantic, next);
+          await applyDashboard(next);
+          dashboard = next;
+          templateEditor.value = JSON.stringify(next, null, 2);
+          templateStatus.textContent = "Template reset to latest version.";
+          templateStatus.classList.add("ok");
+        } catch (error) {
+          templateStatus.textContent = error instanceof Error ? error.message : String(error);
+          templateStatus.classList.add("error");
+        }
+      })();
+    });
     templateEditor.addEventListener("input", () => {
       if (templateDebounce !== null) {
         targetWindow.clearTimeout(templateDebounce);

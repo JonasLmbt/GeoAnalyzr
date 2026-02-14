@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.31
+// @version      1.6.32
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -42822,13 +42822,37 @@
         rgba(22,22,38,0.60);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
-    .ga-country-map .leaflet-container { background: transparent; }
-    .ga-country-map .leaflet-control-zoom a {
+    .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
+    .ga-country-map-toolbar { display:flex; gap:8px; align-items:center; }
+    .ga-country-map-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.16);
       background: rgba(20,20,32,0.78);
-      color: rgba(255,255,255,0.90);
-      border-color: rgba(255,255,255,0.16);
+      color: rgba(255,255,255,0.92);
+      cursor: pointer;
+      font-weight: 800;
+      line-height: 1;
     }
-    .ga-country-map .leaflet-control-zoom a:hover { background: rgba(30,30,48,0.88); }
+    .ga-country-map-btn:hover { background: rgba(30,30,48,0.88); }
+    .ga-country-map-hint { font-size: 11px; color: rgba(243,244,255,0.66); }
+    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; }
+    .ga-country-shape {
+      fill: rgba(255,255,255,0.06);
+      stroke: rgba(255,255,255,0.22);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      cursor: pointer;
+      transition: fill 120ms ease, stroke 120ms ease;
+    }
+    .ga-country-shape.hover { fill: rgba(255,255,255,0.12); }
+    .ga-country-shape.active {
+      fill: rgba(254,205,25,0.40);
+      stroke: rgba(254,205,25,0.72);
+      stroke-width: 2;
+    }
+    .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
     .ga-filter-btn {
       background: var(--ga-control-bg);
       border:1px solid var(--ga-control-border);
@@ -43288,6 +43312,7 @@
     .ga-settings-status { margin-top: 8px; font-size:12px; }
     .ga-settings-status.error { color: #ff8f8f; }
     .ga-settings-status.ok { color: #8fe3a1; }
+    .ga-settings-actions { display:flex; gap:8px; margin-top: 8px; flex-wrap:wrap; }
 
     /* Layout editor (Settings -> Layout) */
     .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }
@@ -44022,6 +44047,7 @@
       openButton,
       semantic,
       getDashboard,
+      getDefaultDashboard,
       applyDashboard,
       getSettings,
       applySettings
@@ -44191,6 +44217,15 @@
       templateField.appendChild(templateLabel);
       templateField.appendChild(templateEditor);
       templatePane.appendChild(templateField);
+      const templateActions = doc.createElement("div");
+      templateActions.className = "ga-settings-actions";
+      const templateReset = doc.createElement("button");
+      templateReset.type = "button";
+      templateReset.className = "ga-filter-btn";
+      templateReset.textContent = "Reset to latest";
+      templateReset.title = "Reset template to the latest bundled dashboard.json";
+      templateActions.appendChild(templateReset);
+      templatePane.appendChild(templateActions);
       templatePane.appendChild(templateStatus);
       const layoutPane = doc.createElement("div");
       layoutPane.className = "ga-settings-pane";
@@ -44293,6 +44328,24 @@
           templateStatus.classList.add("error");
         }
       };
+      templateReset.addEventListener("click", () => {
+        void (async () => {
+          templateStatus.textContent = "";
+          templateStatus.className = "ga-settings-status";
+          try {
+            const next = cloneDashboard(getDefaultDashboard());
+            validateDashboardAgainstSemantic(semantic, next);
+            await applyDashboard(next);
+            dashboard = next;
+            templateEditor.value = JSON.stringify(next, null, 2);
+            templateStatus.textContent = "Template reset to latest version.";
+            templateStatus.classList.add("ok");
+          } catch (error) {
+            templateStatus.textContent = error instanceof Error ? error.message : String(error);
+            templateStatus.classList.add("error");
+          }
+        })();
+      });
       templateEditor.addEventListener("input", () => {
         if (templateDebounce !== null) {
           targetWindow.clearTimeout(templateDebounce);
@@ -47147,142 +47200,237 @@
   }
 
   // src/ui/countryMapPicker.ts
-  var LEAFLET_JS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js";
-  var LEAFLET_CSS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
-  var leafletPromise = null;
-  var worldPromise = null;
-  function ensureLink(doc, href) {
-    const head = doc.head ?? doc.querySelector("head");
-    if (!head) return;
-    const exists = Array.from(head.querySelectorAll('link[rel="stylesheet"]')).some((l) => l.href === href);
-    if (exists) return;
-    const link = doc.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    head.appendChild(link);
+  var dataPromise = null;
+  function hasGmXhr2() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function ensureScript(doc, src) {
-    const head = doc.head ?? doc.querySelector("head");
-    if (!head) return Promise.resolve();
-    const exists = Array.from(head.querySelectorAll("script")).some((s) => s.src === src);
-    if (exists) return Promise.resolve();
+  function gmGetText(url, accept) {
     return new Promise((resolve, reject) => {
-      const s = doc.createElement("script");
-      s.src = src;
-      s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-      head.appendChild(s);
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
     });
   }
-  async function ensureLeaflet(doc) {
-    const w = doc.defaultView;
-    if (w?.L) return w.L;
-    if (!leafletPromise) {
-      leafletPromise = (async () => {
-        ensureLink(doc, LEAFLET_CSS);
-        await ensureScript(doc, LEAFLET_JS);
-      })();
+  async function fetchJson(url) {
+    if (hasGmXhr2()) {
+      const txt = await gmGetText(url, "application/json");
+      return JSON.parse(txt);
     }
-    await leafletPromise;
-    return doc.defaultView?.L;
-  }
-  async function loadIso3ToIso2() {
-    const res = await fetch(ISO_MAP_URL);
-    if (!res.ok) throw new Error(`Failed to fetch ISO map (${res.status})`);
-    const data = await res.json();
-    const iso3ToIso2 = /* @__PURE__ */ new Map();
-    if (Array.isArray(data)) {
-      for (const c of data) {
-        const iso2 = typeof c?.cca2 === "string" ? c.cca2.trim().toLowerCase() : "";
-        const iso3 = typeof c?.cca3 === "string" ? c.cca3.trim().toUpperCase() : "";
-        if (iso2 && iso3) iso3ToIso2.set(iso3, iso2);
-      }
-    }
-    return iso3ToIso2;
-  }
-  async function loadWorldData() {
-    if (!worldPromise) {
-      worldPromise = (async () => {
-        const [geoRes, iso3ToIso2] = await Promise.all([fetch(WORLD_GEOJSON_URL), loadIso3ToIso2()]);
-        if (!geoRes.ok) throw new Error(`Failed to fetch world geojson (${geoRes.status})`);
-        const geojson = await geoRes.json();
-        return { geojson, iso3ToIso2 };
-      })();
-    }
-    return worldPromise;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
   }
   function normalizeIso24(v) {
     if (typeof v !== "string") return null;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : null;
   }
+  async function loadData() {
+    if (!dataPromise) {
+      dataPromise = (async () => {
+        const [geojson, countries] = await Promise.all([fetchJson(WORLD_GEOJSON_URL), fetchJson(ISO_MAP_URL)]);
+        const iso3ToIso2 = /* @__PURE__ */ new Map();
+        if (Array.isArray(countries)) {
+          for (const c of countries) {
+            const iso2 = typeof c?.cca2 === "string" ? c.cca2.trim().toLowerCase() : "";
+            const iso3 = typeof c?.cca3 === "string" ? c.cca3.trim().toUpperCase() : "";
+            if (iso2 && iso3) iso3ToIso2.set(iso3, iso2);
+          }
+        }
+        return { geojson, iso3ToIso2 };
+      })();
+    }
+    return dataPromise;
+  }
+  function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+  function project(lon, lat, w, h) {
+    const x = (lon + 180) / 360 * w;
+    const y = (90 - lat) / 180 * h;
+    return [x, y];
+  }
+  function pathFromGeo(geometry, w, h) {
+    const d = [];
+    const addRing = (ring) => {
+      if (!Array.isArray(ring) || ring.length < 2) return;
+      const pts = ring.map((p) => Array.isArray(p) && p.length >= 2 ? [Number(p[0]), Number(p[1])] : null).filter((p) => !!p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      if (pts.length < 2) return;
+      const [x0, y0] = project(pts[0][0], pts[0][1], w, h);
+      d.push(`M${x0.toFixed(2)},${y0.toFixed(2)}`);
+      for (let i = 1; i < pts.length; i++) {
+        const [x, y] = project(pts[i][0], pts[i][1], w, h);
+        d.push(`L${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+      d.push("Z");
+    };
+    const type = geometry?.type;
+    const coords = geometry?.coordinates;
+    if (!type || !coords) return "";
+    if (type === "Polygon") {
+      for (const ring of coords) addRing(ring);
+      return d.join(" ");
+    }
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        for (const ring of poly) addRing(ring);
+      }
+      return d.join(" ");
+    }
+    return "";
+  }
+  function applyViewport(g, vp) {
+    g.setAttribute("transform", `translate(${vp.tx.toFixed(2)} ${vp.ty.toFixed(2)}) scale(${vp.scale.toFixed(4)})`);
+  }
   async function renderCountryMapPicker(args) {
     const { container, value, onChange } = args;
     const doc = container.ownerDocument;
     container.innerHTML = "";
-    const L = await ensureLeaflet(doc);
-    if (!L) {
-      container.textContent = "Map failed to load.";
-      return;
+    let geojson;
+    let iso3ToIso2;
+    try {
+      ({ geojson, iso3ToIso2 } = await loadData());
+    } catch (e) {
+      const msg = doc.createElement("div");
+      msg.className = "ga-filter-map-error";
+      msg.textContent = "Map unavailable (network/CSP).";
+      container.appendChild(msg);
+      throw e;
     }
-    const { geojson, iso3ToIso2 } = await loadWorldData();
-    const mapEl = doc.createElement("div");
-    mapEl.className = "ga-country-map";
-    container.appendChild(mapEl);
-    const map = L.map(mapEl, {
-      zoomControl: true,
-      attributionControl: false,
-      worldCopyJump: true,
-      preferCanvas: true
-    });
-    map.setView([20, 0], 2);
-    let selectedIso2 = normalizeIso24(value);
-    const baseStyle = (isActive) => ({
-      color: "rgba(255,255,255,0.22)",
-      weight: isActive ? 2 : 1,
-      fillColor: isActive ? "rgba(254,205,25,0.40)" : "rgba(255,255,255,0.06)",
-      fillOpacity: isActive ? 0.65 : 0.25
-    });
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-country-map-wrap";
+    container.appendChild(wrap);
+    const toolbar = doc.createElement("div");
+    toolbar.className = "ga-country-map-toolbar";
+    wrap.appendChild(toolbar);
+    const btnMinus = doc.createElement("button");
+    btnMinus.type = "button";
+    btnMinus.className = "ga-country-map-btn";
+    btnMinus.textContent = "\u2212";
+    btnMinus.title = "Zoom out";
+    const btnPlus = doc.createElement("button");
+    btnPlus.type = "button";
+    btnPlus.className = "ga-country-map-btn";
+    btnPlus.textContent = "+";
+    btnPlus.title = "Zoom in";
+    const hint = doc.createElement("div");
+    hint.className = "ga-country-map-hint";
+    hint.textContent = "Scroll to zoom, drag to pan, click to select.";
+    toolbar.appendChild(btnMinus);
+    toolbar.appendChild(btnPlus);
+    toolbar.appendChild(hint);
+    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("ga-country-map-svg");
+    wrap.appendChild(svg);
+    const W = 1e3;
+    const H = 500;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+    svg.appendChild(g);
     const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    const pathsByIso2 = /* @__PURE__ */ new Map();
     for (const f of features) {
       const iso3 = typeof f?.id === "string" ? String(f.id).trim().toUpperCase() : "";
       const iso2 = iso3 ? iso3ToIso2.get(iso3) : void 0;
-      if (iso2) {
-        if (!f.properties || typeof f.properties !== "object") f.properties = {};
-        f.properties.iso2 = iso2;
-      }
+      if (!iso2) continue;
+      const d = pathFromGeo(f.geometry, W, H);
+      if (!d) continue;
+      const p = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      p.setAttribute("fill-rule", "evenodd");
+      p.dataset.iso2 = iso2;
+      p.classList.add("ga-country-shape");
+      g.appendChild(p);
+      const list = pathsByIso2.get(iso2) ?? [];
+      list.push(p);
+      pathsByIso2.set(iso2, list);
     }
-    const layer = L.geoJSON(geojson, {
-      style: (feature2) => {
-        const iso2 = normalizeIso24(feature2?.properties?.iso2);
-        const active = !!iso2 && !!selectedIso2 && iso2 === selectedIso2;
-        return baseStyle(active);
-      },
-      onEachFeature: (feature2, lyr) => {
-        const iso2 = normalizeIso24(feature2?.properties?.iso2);
-        if (!iso2) return;
-        lyr.on("mouseover", () => lyr.setStyle({ fillOpacity: 0.45 }));
-        lyr.on("mouseout", () => lyr.setStyle(baseStyle(iso2 === selectedIso2)));
-        lyr.on("click", () => {
-          selectedIso2 = iso2;
-          layer.eachLayer((l) => {
-            const f = l?.feature;
-            const i2 = normalizeIso24(f?.properties?.iso2);
-            if (!i2) return;
-            l.setStyle(baseStyle(i2 === selectedIso2));
-          });
+    let selected = normalizeIso24(value);
+    const refreshActive = () => {
+      for (const [iso2, list] of pathsByIso2.entries()) {
+        const active = !!selected && iso2 === selected;
+        for (const el of list) el.classList.toggle("active", active);
+      }
+    };
+    refreshActive();
+    for (const [iso2, list] of pathsByIso2.entries()) {
+      for (const el of list) {
+        el.addEventListener("mouseenter", () => el.classList.add("hover"));
+        el.addEventListener("mouseleave", () => el.classList.remove("hover"));
+        el.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          selected = iso2;
+          refreshActive();
           onChange(iso2);
         });
       }
-    }).addTo(map);
-    try {
-      const bounds = layer.getBounds?.();
-      if (bounds && bounds.isValid?.()) map.fitBounds(bounds, { padding: [6, 6] });
-    } catch {
     }
+    let vp = { scale: 1, tx: 0, ty: 0 };
+    applyViewport(g, vp);
+    const zoomAt = (px, py, nextScale) => {
+      const s0 = vp.scale;
+      const sx = (px - vp.tx) / s0;
+      const sy = (py - vp.ty) / s0;
+      vp = {
+        scale: nextScale,
+        tx: px - nextScale * sx,
+        ty: py - nextScale * sy
+      };
+      applyViewport(g, vp);
+    };
+    const rectPoint = (clientX, clientY) => {
+      const r = svg.getBoundingClientRect();
+      const x = (clientX - r.left) / Math.max(1, r.width) * W;
+      const y = (clientY - r.top) / Math.max(1, r.height) * H;
+      return { x, y };
+    };
+    svg.addEventListener(
+      "wheel",
+      (ev) => {
+        ev.preventDefault();
+        const { x, y } = rectPoint(ev.clientX, ev.clientY);
+        const dir = ev.deltaY > 0 ? 0.9 : 1.1;
+        const nextScale = clamp(vp.scale * dir, 1, 8);
+        zoomAt(x, y, nextScale);
+      },
+      { passive: false }
+    );
+    let dragging = false;
+    let dragStart = null;
+    svg.addEventListener("pointerdown", (ev) => {
+      dragging = true;
+      svg.setPointerCapture?.(ev.pointerId);
+      const { x, y } = rectPoint(ev.clientX, ev.clientY);
+      dragStart = { x, y, tx: vp.tx, ty: vp.ty };
+    });
+    svg.addEventListener("pointermove", (ev) => {
+      if (!dragging || !dragStart) return;
+      const { x, y } = rectPoint(ev.clientX, ev.clientY);
+      vp = { ...vp, tx: dragStart.tx + (x - dragStart.x), ty: dragStart.ty + (y - dragStart.y) };
+      applyViewport(g, vp);
+    });
+    const stopDrag = () => {
+      dragging = false;
+      dragStart = null;
+    };
+    svg.addEventListener("pointerup", stopDrag);
+    svg.addEventListener("pointercancel", stopDrag);
+    btnPlus.addEventListener("click", () => {
+      zoomAt(W / 2, H / 2, clamp(vp.scale * 1.25, 1, 8));
+    });
+    btnMinus.addEventListener("click", () => {
+      zoomAt(W / 2, H / 2, clamp(vp.scale / 1.25, 1, 8));
+    });
   }
 
   // src/ui/dashboardRenderer.ts
@@ -47465,15 +47613,31 @@
           const mapHost = doc.createElement("div");
           mapHost.className = "ga-filter-map-host";
           wrap.appendChild(mapHost);
-          await renderCountryMapPicker({
-            container: mapHost,
-            value: next,
-            onChange: (iso2) => {
-              nextState[control.id] = iso2;
+          try {
+            await renderCountryMapPicker({
+              container: mapHost,
+              value: next,
+              onChange: (iso2) => {
+                nextState[control.id] = iso2;
+                localStateBySection.set(sectionId, { ...nextState });
+                onChange();
+              }
+            });
+          } catch {
+            wrap.innerHTML = "";
+            wrap.appendChild(renderControlLabel2(control.label));
+            const sel2 = doc.createElement("select");
+            sel2.className = "ga-filter-select";
+            if (!isRequired) sel2.appendChild(new Option("All", "all"));
+            for (const opt of options) sel2.appendChild(new Option(opt.label, opt.value));
+            if (next) sel2.value = next;
+            sel2.addEventListener("change", () => {
+              nextState[control.id] = sel2.value;
               localStateBySection.set(sectionId, { ...nextState });
               onChange();
-            }
-          });
+            });
+            wrap.appendChild(sel2);
+          }
         } else {
           const sel2 = doc.createElement("select");
           sel2.className = "ga-filter-select";
@@ -48212,6 +48376,7 @@
         openButton: settingsBtn,
         semantic,
         getDashboard: () => dashboard,
+        getDefaultDashboard: () => cloneTemplate2(dashboard_default),
         applyDashboard: async (next) => {
           dashboard = next;
           saveDashboardTemplate(doc, dashboard);

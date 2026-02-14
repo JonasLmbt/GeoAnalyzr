@@ -1,82 +1,115 @@
-const LEAFLET_JS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js";
-const LEAFLET_CSS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";
-
 const WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
 const ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
 
-let leafletPromise: Promise<any> | null = null;
-let worldPromise: Promise<{ geojson: any; iso3ToIso2: Map<string, string> }> | null = null;
+let dataPromise: Promise<{ geojson: any; iso3ToIso2: Map<string, string> }> | null = null;
 
-function ensureLink(doc: Document, href: string): void {
-  const head = doc.head ?? doc.querySelector("head");
-  if (!head) return;
-  const exists = Array.from(head.querySelectorAll("link[rel=\"stylesheet\"]")).some((l) => (l as HTMLLinkElement).href === href);
-  if (exists) return;
-  const link = doc.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  head.appendChild(link);
+function hasGmXhr(): boolean {
+  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
 }
 
-function ensureScript(doc: Document, src: string): Promise<void> {
-  const head = doc.head ?? doc.querySelector("head");
-  if (!head) return Promise.resolve();
-  const exists = Array.from(head.querySelectorAll("script")).some((s) => (s as HTMLScriptElement).src === src);
-  if (exists) return Promise.resolve();
+function gmGetText(url: string, accept?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const s = doc.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    head.appendChild(s);
+    const gm = (globalThis as any).GM_xmlhttpRequest;
+    gm({
+      method: "GET",
+      url,
+      headers: { Accept: accept ?? "application/json" },
+      onload: (res: any) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+      onerror: (err: any) => reject(err),
+      ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+    });
   });
 }
 
-async function ensureLeaflet(doc: Document): Promise<any> {
-  const w = doc.defaultView as any;
-  if (w?.L) return w.L;
-  if (!leafletPromise) {
-    leafletPromise = (async () => {
-      ensureLink(doc, LEAFLET_CSS);
-      await ensureScript(doc, LEAFLET_JS);
-    })();
+async function fetchJson(url: string): Promise<any> {
+  if (hasGmXhr()) {
+    const txt = await gmGetText(url, "application/json");
+    return JSON.parse(txt);
   }
-  await leafletPromise;
-  return (doc.defaultView as any)?.L;
-}
-
-async function loadIso3ToIso2(): Promise<Map<string, string>> {
-  const res = await fetch(ISO_MAP_URL);
-  if (!res.ok) throw new Error(`Failed to fetch ISO map (${res.status})`);
-  const data = await res.json();
-  const iso3ToIso2 = new Map<string, string>();
-  if (Array.isArray(data)) {
-    for (const c of data) {
-      const iso2 = typeof c?.cca2 === "string" ? c.cca2.trim().toLowerCase() : "";
-      const iso3 = typeof c?.cca3 === "string" ? c.cca3.trim().toUpperCase() : "";
-      if (iso2 && iso3) iso3ToIso2.set(iso3, iso2);
-    }
-  }
-  return iso3ToIso2;
-}
-
-async function loadWorldData(): Promise<{ geojson: any; iso3ToIso2: Map<string, string> }> {
-  if (!worldPromise) {
-    worldPromise = (async () => {
-      const [geoRes, iso3ToIso2] = await Promise.all([fetch(WORLD_GEOJSON_URL), loadIso3ToIso2()]);
-      if (!geoRes.ok) throw new Error(`Failed to fetch world geojson (${geoRes.status})`);
-      const geojson = await geoRes.json();
-      return { geojson, iso3ToIso2 };
-    })();
-  }
-  return worldPromise;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json();
 }
 
 function normalizeIso2(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const x = v.trim().toLowerCase();
   return /^[a-z]{2}$/.test(x) ? x : null;
+}
+
+async function loadData(): Promise<{ geojson: any; iso3ToIso2: Map<string, string> }> {
+  if (!dataPromise) {
+    dataPromise = (async () => {
+      const [geojson, countries] = await Promise.all([fetchJson(WORLD_GEOJSON_URL), fetchJson(ISO_MAP_URL)]);
+      const iso3ToIso2 = new Map<string, string>();
+      if (Array.isArray(countries)) {
+        for (const c of countries) {
+          const iso2 = typeof c?.cca2 === "string" ? c.cca2.trim().toLowerCase() : "";
+          const iso3 = typeof c?.cca3 === "string" ? c.cca3.trim().toUpperCase() : "";
+          if (iso2 && iso3) iso3ToIso2.set(iso3, iso2);
+        }
+      }
+      return { geojson, iso3ToIso2 };
+    })();
+  }
+  return dataPromise;
+}
+
+type Viewport = { scale: number; tx: number; ty: number };
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function project(lon: number, lat: number, w: number, h: number): [number, number] {
+  // Simple equirectangular projection.
+  const x = ((lon + 180) / 360) * w;
+  const y = ((90 - lat) / 180) * h;
+  return [x, y];
+}
+
+function pathFromGeo(
+  geometry: any,
+  w: number,
+  h: number
+): string {
+  const d: string[] = [];
+  const addRing = (ring: any[]) => {
+    if (!Array.isArray(ring) || ring.length < 2) return;
+    const pts = ring
+      .map((p) => (Array.isArray(p) && p.length >= 2 ? [Number(p[0]), Number(p[1])] : null))
+      .filter((p): p is [number, number] => !!p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (pts.length < 2) return;
+    const [x0, y0] = project(pts[0][0], pts[0][1], w, h);
+    d.push(`M${x0.toFixed(2)},${y0.toFixed(2)}`);
+    for (let i = 1; i < pts.length; i++) {
+      const [x, y] = project(pts[i][0], pts[i][1], w, h);
+      d.push(`L${x.toFixed(2)},${y.toFixed(2)}`);
+    }
+    d.push("Z");
+  };
+
+  const type = geometry?.type;
+  const coords = geometry?.coordinates;
+  if (!type || !coords) return "";
+
+  if (type === "Polygon") {
+    for (const ring of coords as any[]) addRing(ring);
+    return d.join(" ");
+  }
+
+  if (type === "MultiPolygon") {
+    for (const poly of coords as any[]) {
+      for (const ring of poly as any[]) addRing(ring);
+    }
+    return d.join(" ");
+  }
+
+  return "";
+}
+
+function applyViewport(g: SVGGElement, vp: Viewport): void {
+  g.setAttribute("transform", `translate(${vp.tx.toFixed(2)} ${vp.ty.toFixed(2)}) scale(${vp.scale.toFixed(4)})`);
 }
 
 export async function renderCountryMapPicker(args: {
@@ -88,76 +121,165 @@ export async function renderCountryMapPicker(args: {
   const doc = container.ownerDocument;
   container.innerHTML = "";
 
-  const L = await ensureLeaflet(doc);
-  if (!L) {
-    container.textContent = "Map failed to load.";
-    return;
+  let geojson: any;
+  let iso3ToIso2: Map<string, string>;
+  try {
+    ({ geojson, iso3ToIso2 } = await loadData());
+  } catch (e) {
+    const msg = doc.createElement("div");
+    msg.className = "ga-filter-map-error";
+    msg.textContent = "Map unavailable (network/CSP).";
+    container.appendChild(msg);
+    throw e;
   }
 
-  const { geojson, iso3ToIso2 } = await loadWorldData();
+  const wrap = doc.createElement("div");
+  wrap.className = "ga-country-map-wrap";
+  container.appendChild(wrap);
 
-  const mapEl = doc.createElement("div");
-  mapEl.className = "ga-country-map";
-  container.appendChild(mapEl);
+  const toolbar = doc.createElement("div");
+  toolbar.className = "ga-country-map-toolbar";
+  wrap.appendChild(toolbar);
 
-  const map = L.map(mapEl, {
-    zoomControl: true,
-    attributionControl: false,
-    worldCopyJump: true,
-    preferCanvas: true
-  });
+  const btnMinus = doc.createElement("button");
+  btnMinus.type = "button";
+  btnMinus.className = "ga-country-map-btn";
+  btnMinus.textContent = "−";
+  btnMinus.title = "Zoom out";
 
-  map.setView([20, 0], 2);
+  const btnPlus = doc.createElement("button");
+  btnPlus.type = "button";
+  btnPlus.className = "ga-country-map-btn";
+  btnPlus.textContent = "+";
+  btnPlus.title = "Zoom in";
 
-  let selectedIso2 = normalizeIso2(value);
+  const hint = doc.createElement("div");
+  hint.className = "ga-country-map-hint";
+  hint.textContent = "Scroll to zoom, drag to pan, click to select.";
 
-  const baseStyle = (isActive: boolean) => ({
-    color: "rgba(255,255,255,0.22)",
-    weight: isActive ? 2 : 1,
-    fillColor: isActive ? "rgba(254,205,25,0.40)" : "rgba(255,255,255,0.06)",
-    fillOpacity: isActive ? 0.65 : 0.25
-  });
+  toolbar.appendChild(btnMinus);
+  toolbar.appendChild(btnPlus);
+  toolbar.appendChild(hint);
+
+  const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("ga-country-map-svg");
+  wrap.appendChild(svg);
+
+  const W = 1000;
+  const H = 500;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(g);
 
   const features = Array.isArray(geojson?.features) ? geojson.features : [];
+  const pathsByIso2 = new Map<string, SVGPathElement[]>();
+
   for (const f of features) {
     const iso3 = typeof f?.id === "string" ? String(f.id).trim().toUpperCase() : "";
     const iso2 = iso3 ? iso3ToIso2.get(iso3) : undefined;
-    if (iso2) {
-      if (!f.properties || typeof f.properties !== "object") f.properties = {};
-      f.properties.iso2 = iso2;
-    }
+    if (!iso2) continue;
+
+    const d = pathFromGeo(f.geometry, W, H);
+    if (!d) continue;
+
+    const p = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    p.setAttribute("fill-rule", "evenodd");
+    p.dataset.iso2 = iso2;
+    p.classList.add("ga-country-shape");
+    g.appendChild(p);
+
+    const list = pathsByIso2.get(iso2) ?? [];
+    list.push(p);
+    pathsByIso2.set(iso2, list);
   }
 
-  const layer = L.geoJSON(geojson, {
-    style: (feature: any) => {
-      const iso2 = normalizeIso2(feature?.properties?.iso2);
-      const active = !!iso2 && !!selectedIso2 && iso2 === selectedIso2;
-      return baseStyle(active);
-    },
-    onEachFeature: (feature: any, lyr: any) => {
-      const iso2 = normalizeIso2(feature?.properties?.iso2);
-      if (!iso2) return;
+  let selected = normalizeIso2(value);
 
-      lyr.on("mouseover", () => lyr.setStyle({ fillOpacity: 0.45 }));
-      lyr.on("mouseout", () => lyr.setStyle(baseStyle(iso2 === selectedIso2)));
-      lyr.on("click", () => {
-        selectedIso2 = iso2;
-        layer.eachLayer((l: any) => {
-          const f = l?.feature;
-          const i2 = normalizeIso2(f?.properties?.iso2);
-          if (!i2) return;
-          l.setStyle(baseStyle(i2 === selectedIso2));
-        });
+  const refreshActive = () => {
+    for (const [iso2, list] of pathsByIso2.entries()) {
+      const active = !!selected && iso2 === selected;
+      for (const el of list) el.classList.toggle("active", active);
+    }
+  };
+  refreshActive();
+
+  for (const [iso2, list] of pathsByIso2.entries()) {
+    for (const el of list) {
+      el.addEventListener("mouseenter", () => el.classList.add("hover"));
+      el.addEventListener("mouseleave", () => el.classList.remove("hover"));
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        selected = iso2;
+        refreshActive();
         onChange(iso2);
       });
     }
-  }).addTo(map);
-
-  try {
-    const bounds = layer.getBounds?.();
-    if (bounds && bounds.isValid?.()) map.fitBounds(bounds, { padding: [6, 6] });
-  } catch {
-    // ignore
   }
+
+  let vp: Viewport = { scale: 1, tx: 0, ty: 0 };
+  applyViewport(g, vp);
+
+  const zoomAt = (px: number, py: number, nextScale: number) => {
+    const s0 = vp.scale;
+    const sx = (px - vp.tx) / s0;
+    const sy = (py - vp.ty) / s0;
+    vp = {
+      scale: nextScale,
+      tx: px - nextScale * sx,
+      ty: py - nextScale * sy
+    };
+    applyViewport(g, vp);
+  };
+
+  const rectPoint = (clientX: number, clientY: number): { x: number; y: number } => {
+    const r = svg.getBoundingClientRect();
+    const x = ((clientX - r.left) / Math.max(1, r.width)) * W;
+    const y = ((clientY - r.top) / Math.max(1, r.height)) * H;
+    return { x, y };
+  };
+
+  svg.addEventListener(
+    "wheel",
+    (ev) => {
+      ev.preventDefault();
+      const { x, y } = rectPoint((ev as WheelEvent).clientX, (ev as WheelEvent).clientY);
+      const dir = (ev as WheelEvent).deltaY > 0 ? 0.9 : 1.1;
+      const nextScale = clamp(vp.scale * dir, 1, 8);
+      zoomAt(x, y, nextScale);
+    },
+    { passive: false }
+  );
+
+  let dragging = false;
+  let dragStart: { x: number; y: number; tx: number; ty: number } | null = null;
+  svg.addEventListener("pointerdown", (ev) => {
+    dragging = true;
+    (svg as any).setPointerCapture?.((ev as PointerEvent).pointerId);
+    const { x, y } = rectPoint((ev as PointerEvent).clientX, (ev as PointerEvent).clientY);
+    dragStart = { x, y, tx: vp.tx, ty: vp.ty };
+  });
+  svg.addEventListener("pointermove", (ev) => {
+    if (!dragging || !dragStart) return;
+    const { x, y } = rectPoint((ev as PointerEvent).clientX, (ev as PointerEvent).clientY);
+    vp = { ...vp, tx: dragStart.tx + (x - dragStart.x), ty: dragStart.ty + (y - dragStart.y) };
+    applyViewport(g, vp);
+  });
+  const stopDrag = () => {
+    dragging = false;
+    dragStart = null;
+  };
+  svg.addEventListener("pointerup", stopDrag);
+  svg.addEventListener("pointercancel", stopDrag);
+
+  btnPlus.addEventListener("click", () => {
+    zoomAt(W / 2, H / 2, clamp(vp.scale * 1.25, 1, 8));
+  });
+  btnMinus.addEventListener("click", () => {
+    zoomAt(W / 2, H / 2, clamp(vp.scale / 1.25, 1, 8));
+  });
 }
 

@@ -188,13 +188,37 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
         rgba(22,22,38,0.60);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
-    .ga-country-map .leaflet-container { background: transparent; }
-    .ga-country-map .leaflet-control-zoom a {
+    .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
+    .ga-country-map-toolbar { display:flex; gap:8px; align-items:center; }
+    .ga-country-map-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.16);
       background: rgba(20,20,32,0.78);
-      color: rgba(255,255,255,0.90);
-      border-color: rgba(255,255,255,0.16);
+      color: rgba(255,255,255,0.92);
+      cursor: pointer;
+      font-weight: 800;
+      line-height: 1;
     }
-    .ga-country-map .leaflet-control-zoom a:hover { background: rgba(30,30,48,0.88); }
+    .ga-country-map-btn:hover { background: rgba(30,30,48,0.88); }
+    .ga-country-map-hint { font-size: 11px; color: rgba(243,244,255,0.66); }
+    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; }
+    .ga-country-shape {
+      fill: rgba(255,255,255,0.06);
+      stroke: rgba(255,255,255,0.22);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      cursor: pointer;
+      transition: fill 120ms ease, stroke 120ms ease;
+    }
+    .ga-country-shape.hover { fill: rgba(255,255,255,0.12); }
+    .ga-country-shape.active {
+      fill: rgba(254,205,25,0.40);
+      stroke: rgba(254,205,25,0.72);
+      stroke-width: 2;
+    }
+    .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
     .ga-filter-btn {
       background: var(--ga-control-bg);
       border:1px solid var(--ga-control-border);
@@ -654,6 +678,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-settings-status { margin-top: 8px; font-size:12px; }
     .ga-settings-status.error { color: #ff8f8f; }
     .ga-settings-status.ok { color: #8fe3a1; }
+    .ga-settings-actions { display:flex; gap:8px; margin-top: 8px; flex-wrap:wrap; }
 
     /* Layout editor (Settings -> Layout) */
     .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }

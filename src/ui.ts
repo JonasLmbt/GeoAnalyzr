@@ -95,6 +95,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
       openButton: settingsBtn,
       semantic,
       getDashboard: () => dashboard,
+      getDefaultDashboard: () => cloneTemplate(dashboardTemplate) as DashboardDoc,
       applyDashboard: async (next) => {
         dashboard = next;
         saveDashboardTemplate(doc, dashboard);
