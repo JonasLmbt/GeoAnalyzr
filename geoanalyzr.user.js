@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.33
+// @version      1.6.34
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -42680,6 +42680,22 @@
       --ga-link: var(--ga-accent2);
       --ga-overlay-bg: rgba(0,0,0,0.62);
       --ga-focus-ring: color-mix(in srgb, var(--ga-accent2) 55%, transparent);
+      --ga-map-border: rgba(255,255,255,0.10);
+      --ga-map-toolbar-bg: rgba(20,20,32,0.78);
+      --ga-map-toolbar-border: rgba(255,255,255,0.16);
+      --ga-map-hint: rgba(243,244,255,0.66);
+      --ga-map-fill: rgba(255,255,255,0.03);
+      --ga-map-stroke: rgba(255,255,255,0.16);
+      --ga-map-selectable-fill: rgba(0, 162, 254, 0.11);
+      --ga-map-selectable-hover: rgba(0, 162, 254, 0.20);
+      --ga-map-disabled-fill: rgba(255,255,255,0.02);
+      --ga-map-disabled-stroke: rgba(255,255,255,0.08);
+      --ga-map-active-fill: rgba(254,205,25,0.40);
+      --ga-map-active-stroke: rgba(254,205,25,0.72);
+      --ga-map-bg:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
+        rgba(22,22,38,0.60);
       min-height: 100vh;
       background: var(--ga-bg);
       color: var(--ga-text);
@@ -42703,6 +42719,22 @@
       --ga-link: #563B9A;
       --ga-overlay-bg: rgba(10,12,18,0.35);
       --ga-focus-ring: color-mix(in srgb, var(--ga-accent) 55%, transparent);
+      --ga-map-border: rgba(0,0,0,0.12);
+      --ga-map-toolbar-bg: rgba(255,255,255,0.86);
+      --ga-map-toolbar-border: rgba(0,0,0,0.12);
+      --ga-map-hint: rgba(31,42,56,0.68);
+      --ga-map-fill: rgba(31,42,56,0.05);
+      --ga-map-stroke: rgba(31,42,56,0.18);
+      --ga-map-selectable-fill: rgba(0, 162, 254, 0.16);
+      --ga-map-selectable-hover: rgba(0, 162, 254, 0.24);
+      --ga-map-disabled-fill: rgba(31,42,56,0.03);
+      --ga-map-disabled-stroke: rgba(31,42,56,0.10);
+      --ga-map-active-fill: rgba(121, 80, 229, 0.34);
+      --ga-map-active-stroke: rgba(121, 80, 229, 0.74);
+      --ga-map-bg:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.10), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.10), transparent 62%),
+        rgba(255,255,255,0.92);
     }
     .ga-root[data-ga-theme="geoguessr"] {
       --ga-font: "Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
@@ -42785,7 +42817,7 @@
       padding:10px 10px 6px;
       flex-wrap:wrap;
     }
-    .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+    .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; flex: 1 1 auto; min-width: 0; }
     .ga-filters-right { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
     .ga-filter {
       display:flex;
@@ -42810,7 +42842,7 @@
     }
 
     .ga-filter.ga-filter-map { min-width: 340px; }
-    .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; min-width: 520px; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; width: 100%; min-width: 520px; }
     .ga-filter-map-selected {
       font-size: 12px;
       color: var(--ga-text-muted);
@@ -42823,11 +42855,8 @@
       width: 100%;
       border-radius: 14px;
       overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.10);
-      background:
-        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
-        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
-        rgba(22,22,38,0.60);
+      border: 1px solid var(--ga-map-border);
+      background: var(--ga-map-bg);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
@@ -42836,30 +42865,30 @@
       width: 30px;
       height: 30px;
       border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(20,20,32,0.78);
-      color: rgba(255,255,255,0.92);
+      border: 1px solid var(--ga-map-toolbar-border);
+      background: var(--ga-map-toolbar-bg);
+      color: var(--ga-control-text);
       cursor: pointer;
       font-weight: 800;
       line-height: 1;
     }
-    .ga-country-map-btn:hover { background: rgba(30,30,48,0.88); }
-    .ga-country-map-hint { font-size: 11px; color: rgba(243,244,255,0.66); }
+    .ga-country-map-btn:hover { background: color-mix(in srgb, var(--ga-map-toolbar-bg) 78%, #000); }
+    .ga-country-map-hint { font-size: 11px; color: var(--ga-map-hint); }
     .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; touch-action: none; display:block; }
     .ga-country-shape {
-      fill: rgba(255,255,255,0.03);
-      stroke: rgba(255,255,255,0.16);
+      fill: var(--ga-map-fill);
+      stroke: var(--ga-map-stroke);
       stroke-width: 1;
       vector-effect: non-scaling-stroke;
       cursor: grab;
       transition: fill 120ms ease, stroke 120ms ease;
     }
-    .ga-country-shape.selectable { fill: rgba(58, 232, 189, 0.10); stroke: rgba(255,255,255,0.22); cursor: pointer; }
-    .ga-country-shape.disabled { fill: rgba(255,255,255,0.02); stroke: rgba(255,255,255,0.08); opacity: 0.45; pointer-events: none; }
-    .ga-country-shape.selectable.hover { fill: rgba(58, 232, 189, 0.20); }
+    .ga-country-shape.selectable { fill: var(--ga-map-selectable-fill); stroke: var(--ga-map-stroke); cursor: pointer; }
+    .ga-country-shape.disabled { fill: var(--ga-map-disabled-fill); stroke: var(--ga-map-disabled-stroke); opacity: 0.45; pointer-events: none; }
+    .ga-country-shape.selectable.hover { fill: var(--ga-map-selectable-hover); }
     .ga-country-shape.active {
-      fill: rgba(254,205,25,0.40);
-      stroke: rgba(254,205,25,0.72);
+      fill: var(--ga-map-active-fill);
+      stroke: var(--ga-map-active-stroke);
       stroke-width: 2;
     }
     .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
