@@ -75,7 +75,7 @@
     "mode_family": {
       "label": "Mode",
       "kind": "category",
-      "grain": "game",
+      "grain": ["game", "round"],
       "allowedCharts": ["bar", "line"],
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 10 }
@@ -141,7 +141,7 @@
     "teammate_name": {
       "label": "Teammate",
       "kind": "category",
-      "grain": "round",
+      "grain": ["round", "game"],
       "allowedCharts": ["bar"],
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 15, "selectorRequired": true }

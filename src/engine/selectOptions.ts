@@ -41,28 +41,22 @@ export async function getSelectOptionsForControl(opts: {
 
   const rows = await getRounds({ global: { spec, state: stateWithoutSelf } });
 
-  if (control.options === "auto_teammates" || control.options === "auto_teammates_with_solo") {
+  if (control.options === "auto_teammates") {
     // Count unique games per teammate, based on the currently active global filters.
     const gamesByMate = new Map<string, Set<string>>();
     const roundsByMate = new Map<string, number>();
-    const soloGames = new Set<string>();
-    let soloRounds = 0;
     for (const r of rows) {
       const mate = (r as any).teammateName;
       const name = typeof mate === "string" ? mate.trim() : "";
       const gameId = String((r as any).gameId ?? "");
       if (!gameId) continue;
-      if (!name) {
-        soloGames.add(gameId);
-        soloRounds++;
-        continue;
-      }
+      if (!name) continue;
       const set = gamesByMate.get(name) ?? new Set<string>();
       set.add(gameId);
       gamesByMate.set(name, set);
       roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
     }
-    const mates = Array.from(gamesByMate.entries())
+    const out = Array.from(gamesByMate.entries())
       .map(([name, games]) => ({
         value: name,
         label: `${name} (${games.size} games, ${roundsByMate.get(name) ?? 0} rounds)`,
@@ -70,16 +64,8 @@ export async function getSelectOptionsForControl(opts: {
       }))
       .sort((a, b) => (b.n - a.n) || a.value.localeCompare(b.value))
       .map(({ value, label }) => ({ value, label }));
-    if (control.options === "auto_teammates_with_solo") {
-      const out = [
-        { value: "none", label: `None (Solo) (${soloGames.size} games, ${soloRounds} rounds)` },
-        ...mates
-      ];
-      cache.set(key, out);
-      return out;
-    }
-    cache.set(key, mates);
-    return mates;
+    cache.set(key, out);
+    return out;
   }
 
   // auto_distinct

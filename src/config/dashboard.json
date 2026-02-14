@@ -18,11 +18,11 @@
         {
           "id": "modeFamily",
           "type": "select",
-          "label": "Mode",
+          "label": "Game mode",
           "dimension": "mode_family",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["game"]
+          "appliesTo": ["round", "game"]
         },
         {
           "id": "teammate",
@@ -30,7 +30,7 @@
           "label": "Teammate",
           "dimension": "teammate_name",
           "default": "all",
-          "options": "auto_teammates_with_solo",
+          "options": "auto_teammates",
           "appliesTo": ["round", "game"]
         },
         {
@@ -136,17 +136,41 @@
                         {
                           "label": "Best rating",
                           "measure": "best_end_rating",
-                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "initialSort": { "key": "endRating", "dir": "desc" }
+                            }
+                          }
                         },
                         {
                           "label": "Longest win streak",
                           "measure": "longest_win_streak",
-                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
                         },
                         {
                           "label": "Longest loss streak",
                           "measure": "longest_loss_streak",
-                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Loss" }]
+                            }
+                          }
                         },
                         {
                           "label": "Avg score (pts)",
@@ -247,6 +271,7 @@
                         "measures": [
                           "games_count",
                           "rounds_count",
+                          "time_played_seconds",
                           "avg_score",
                           "avg_score_hit_only",
                           "avg_distance_km",

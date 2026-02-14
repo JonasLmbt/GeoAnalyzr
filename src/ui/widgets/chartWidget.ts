@@ -240,6 +240,20 @@ function mergeDrilldownDefaults<T extends { extraFilters?: any[]; filterFromPoin
   } as T;
 }
 
+function normalizeClickForActiveMeasure(semantic: SemanticRegistry, activeMeasureId: string, click: any): any {
+  if (!click || click.type !== "drilldown") return click;
+  const meas = semantic.measures[activeMeasureId];
+  const grain = (meas?.grain ?? "") as any;
+  if (grain === "game") {
+    return {
+      ...click,
+      target: "players",
+      columnsPreset: "opponentMode"
+    };
+  }
+  return click;
+}
+
 function computeYBounds(opts: {
   unitFormat: "int" | "float" | "percent" | "duration";
   values: number[];
@@ -934,7 +948,8 @@ export async function renderChartWidget(
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
         tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
-        const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
+        const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
+        const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
@@ -951,7 +966,8 @@ export async function renderChartWidget(
               target: click.target,
               columnsPreset: click.columnsPreset,
               rows: filteredRows,
-              extraFilters: click.extraFilters
+              extraFilters: click.extraFilters,
+              initialSort: click.initialSort
             });
           });
         }
@@ -987,7 +1003,8 @@ export async function renderChartWidget(
         tooltip.textContent = `${formatDimensionKey(doc, dimId, d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
-        const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
+        const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
+        const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
         if (click?.type === "drilldown") {
           rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
           rect.addEventListener("click", () => {
@@ -1004,7 +1021,8 @@ export async function renderChartWidget(
               target: click.target,
               columnsPreset: click.columnsPreset,
               rows: filteredRows,
-              extraFilters: click.extraFilters
+              extraFilters: click.extraFilters,
+              initialSort: click.initialSort
             });
           });
         }

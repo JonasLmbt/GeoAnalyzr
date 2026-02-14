@@ -40,6 +40,7 @@ export function buildAppliedFilters(
   if (!spec?.enabled) return out;
 
   const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
+  let teammateSelected: string | null = null;
 
   for (const control of spec.controls) {
     if (allowed && !allowed.has(control.id)) continue;
@@ -56,13 +57,20 @@ export function buildAppliedFilters(
       const c = control as SelectControlSpec;
       const selected = normalizeAllString(state[c.id] ?? c.default);
       if (!selected) continue;
-      // Allow "none" as a sentinel value for "no value selected" for specific option generators.
-      if (c.options === "auto_teammates_with_solo" && selected === "none") {
-        out.clauses.push({ dimension: c.dimension, op: "eq", value: null });
-      } else {
-        out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
-      }
+      out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+      if (c.dimension === "teammate_name") teammateSelected = selected;
       continue;
+    }
+  }
+
+  // If a teammate is selected, enforce Team Duel mode (so teammate + Duel can't happen).
+  if (teammateSelected) {
+    const forced = "Team Duel";
+    const hasModeClause = out.clauses.some((cl) => cl.dimension === "mode_family");
+    const isAlreadyForced = hasModeClause && out.clauses.some((cl) => cl.dimension === "mode_family" && cl.op === "eq" && cl.value === forced);
+    if (!isAlreadyForced) {
+      out.clauses = out.clauses.filter((cl) => cl.dimension !== "mode_family");
+      out.clauses.push({ dimension: "mode_family", op: "eq", value: forced });
     }
   }
 

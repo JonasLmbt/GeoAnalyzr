@@ -115,7 +115,8 @@ function attachClickIfAny(
         target: click.target,
         columnsPreset: click.columnsPreset,
         rows,
-        extraFilters: click.extraFilters
+        extraFilters: click.extraFilters,
+        initialSort: (click as any).initialSort
       });
     }
   });

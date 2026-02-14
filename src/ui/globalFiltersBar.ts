@@ -111,6 +111,26 @@ export async function renderGlobalFiltersBar(args: {
 
   const updatePending = (id: string, value: unknown) => {
     pending = { ...pending, [id]: value };
+
+    // Enforce: if a teammate is selected, game mode must be Team Duel.
+    if (id === "teammate") {
+      const v = typeof value === "string" ? value.trim() : "";
+      if (v && v !== "all") {
+        pending = { ...pending, modeFamily: "Team Duel" };
+        if (!applyMode) setValue("modeFamily", "Team Duel");
+      }
+    }
+
+    // If user switches to Duel mode, teammate selection no longer applies.
+    if (id === "modeFamily") {
+      const v = typeof value === "string" ? value.trim() : "";
+      const mate = typeof pending.teammate === "string" ? pending.teammate.trim() : "";
+      if (v === "Duel" && mate && mate !== "all") {
+        pending = { ...pending, teammate: "all" };
+        if (!applyMode) setValue("teammate", "all");
+      }
+    }
+
     if (!applyMode) setValue(id, value);
   };
 

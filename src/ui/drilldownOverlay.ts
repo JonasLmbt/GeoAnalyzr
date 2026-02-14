@@ -12,6 +12,7 @@ export interface DrilldownRequest {
   columnsPreset: string;
   rows: any[];
   extraFilters?: FilterClause[];
+  initialSort?: { key: string; dir?: "asc" | "desc" };
 }
 
 export class DrilldownOverlay {
@@ -69,6 +70,12 @@ export class DrilldownOverlay {
     // Sorting state is per-overlay instance.
     let sortKey = cols.find((c) => c.sortable)?.key ?? cols[0]?.key ?? "";
     let sortDir: "asc" | "desc" = "desc";
+    const initKey = req.initialSort?.key;
+    const initDir = req.initialSort?.dir;
+    if (typeof initKey === "string" && initKey.trim().length > 0 && cols.some((c) => c.key === initKey)) {
+      sortKey = initKey;
+      if (initDir === "asc" || initDir === "desc") sortDir = initDir;
+    }
 
     const sortRankForResult = (v: unknown): number => {
       const s = typeof v === "string" ? v.trim().toLowerCase() : "";

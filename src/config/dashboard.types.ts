@@ -54,7 +54,7 @@ export type DateRangeControlSpec = {
   appliesTo: GlobalFilterGrain[];
 };
 
-export type SelectOptionsSpec = "auto_distinct" | "auto_teammates" | "auto_teammates_with_solo";
+export type SelectOptionsSpec = "auto_distinct" | "auto_teammates";
 
 export type SelectControlSpec = {
   id: string;
@@ -96,6 +96,7 @@ export interface DrilldownClickAction {
   columnsPreset: string;
   filterFromPoint?: boolean;
   extraFilters?: FilterClause[];
+  initialSort?: { key: string; dir?: "asc" | "desc" };
 }
 
 export interface Actions {

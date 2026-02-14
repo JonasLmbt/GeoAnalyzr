@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.27
+// @version      1.6.28
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15457,6 +15457,13 @@
       confused_countries: confusedCountriesKey,
       guess_country: guessCountryKey,
       teammate_name: teammateNameKey,
+      mode_family: (r) => {
+        const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
+        if (!v) return null;
+        if (v === "duels") return "Duel";
+        if (v === "teamduels") return "Team Duel";
+        return v;
+      },
       team_closer_winner: (r) => winnerLabelForCompare(r, getDistanceKm(r), getMateDistanceKm(r), "min"),
       team_higher_score_winner: (r) => winnerLabelForCompare(r, getSelfScore(r), getMateScore(r), "max"),
       team_fewer_throw_winner: (r) => {
@@ -15563,6 +15570,7 @@
     const out = { clauses: [] };
     if (!spec?.enabled) return out;
     const allowed = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
+    let teammateSelected = null;
     for (const control of spec.controls) {
       if (allowed && !allowed.has(control.id)) continue;
       if (!control.appliesTo.includes(grain)) continue;
@@ -15576,12 +15584,18 @@
         const c = control;
         const selected = normalizeAllString(state[c.id] ?? c.default);
         if (!selected) continue;
-        if (c.options === "auto_teammates_with_solo" && selected === "none") {
-          out.clauses.push({ dimension: c.dimension, op: "eq", value: null });
-        } else {
-          out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
-        }
+        out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+        if (c.dimension === "teammate_name") teammateSelected = selected;
         continue;
+      }
+    }
+    if (teammateSelected) {
+      const forced = "Team Duel";
+      const hasModeClause = out.clauses.some((cl) => cl.dimension === "mode_family");
+      const isAlreadyForced = hasModeClause && out.clauses.some((cl) => cl.dimension === "mode_family" && cl.op === "eq" && cl.value === forced);
+      if (!isAlreadyForced) {
+        out.clauses = out.clauses.filter((cl) => cl.dimension !== "mode_family");
+        out.clauses.push({ dimension: "mode_family", op: "eq", value: forced });
       }
     }
     return out;
@@ -39933,9 +39947,9 @@
         assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
         assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
         assert(
-          c.options === "auto_distinct" || c.options === "auto_teammates" || c.options === "auto_teammates_with_solo",
+          c.options === "auto_distinct" || c.options === "auto_teammates",
           "E_BAD_SPEC",
-          `select '${c.id}' options must be 'auto_distinct' | 'auto_teammates' | 'auto_teammates_with_solo'`
+          `select '${c.id}' options must be 'auto_distinct' | 'auto_teammates'`
         );
         assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
         const dimId = String(c.dimension);
@@ -39965,9 +39979,9 @@
       assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
       assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
       assert(
-        c.options === "auto_distinct" || c.options === "auto_teammates" || c.options === "auto_teammates_with_solo",
+        c.options === "auto_distinct" || c.options === "auto_teammates",
         "E_BAD_SPEC",
-        `Local filter '${c.id}' options must be 'auto_distinct' | 'auto_teammates' | 'auto_teammates_with_solo'`
+        `Local filter '${c.id}' options must be 'auto_distinct' | 'auto_teammates'`
       );
       assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
       assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);
@@ -40261,7 +40275,7 @@
       mode_family: {
         label: "Mode",
         kind: "category",
-        grain: "game",
+        grain: ["game", "round"],
         allowedCharts: ["bar", "line"],
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 10 }
@@ -40326,7 +40340,7 @@
       teammate_name: {
         label: "Teammate",
         kind: "category",
-        grain: "round",
+        grain: ["round", "game"],
         allowedCharts: ["bar"],
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 15, selectorRequired: true }
@@ -41038,11 +41052,11 @@
           {
             id: "modeFamily",
             type: "select",
-            label: "Mode",
+            label: "Game mode",
             dimension: "mode_family",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["game"]
+            appliesTo: ["round", "game"]
           },
           {
             id: "teammate",
@@ -41050,7 +41064,7 @@
             label: "Teammate",
             dimension: "teammate_name",
             default: "all",
-            options: "auto_teammates_with_solo",
+            options: "auto_teammates",
             appliesTo: ["round", "game"]
           },
           {
@@ -41156,17 +41170,41 @@
                           {
                             label: "Best rating",
                             measure: "best_end_rating",
-                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                initialSort: { key: "endRating", dir: "desc" }
+                              }
+                            }
                           },
                           {
                             label: "Longest win streak",
                             measure: "longest_win_streak",
-                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
                           },
                           {
                             label: "Longest loss streak",
                             measure: "longest_loss_streak",
-                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
+                              }
+                            }
                           },
                           {
                             label: "Avg score (pts)",
@@ -41264,6 +41302,7 @@
                           measures: [
                             "games_count",
                             "rounds_count",
+                            "time_played_seconds",
                             "avg_score",
                             "avg_score_hit_only",
                             "avg_distance_km",
@@ -44245,6 +44284,12 @@
       const cols = rawCols.map((c) => typeof c === "string" ? { key: c } : c);
       let sortKey = cols.find((c) => c.sortable)?.key ?? cols[0]?.key ?? "";
       let sortDir = "desc";
+      const initKey = req.initialSort?.key;
+      const initDir = req.initialSort?.dir;
+      if (typeof initKey === "string" && initKey.trim().length > 0 && cols.some((c) => c.key === initKey)) {
+        sortKey = initKey;
+        if (initDir === "asc" || initDir === "desc") sortDir = initDir;
+      }
       const sortRankForResult = (v) => {
         const s = typeof v === "string" ? v.trim().toLowerCase() : "";
         if (s === "win" || s === "w" || s === "true") return 2;
@@ -45212,7 +45257,8 @@
           target: click.target,
           columnsPreset: click.columnsPreset,
           rows,
-          extraFilters: click.extraFilters
+          extraFilters: click.extraFilters,
+          initialSort: click.initialSort
         });
       }
     });
@@ -45475,6 +45521,19 @@
       filterFromPoint: base.filterFromPoint ?? defs.filterFromPoint,
       extraFilters: [...defs.extraFilters ?? [], ...base.extraFilters ?? []]
     };
+  }
+  function normalizeClickForActiveMeasure(semantic, activeMeasureId, click) {
+    if (!click || click.type !== "drilldown") return click;
+    const meas = semantic.measures[activeMeasureId];
+    const grain = meas?.grain ?? "";
+    if (grain === "game") {
+      return {
+        ...click,
+        target: "players",
+        columnsPreset: "opponentMode"
+      };
+    }
+    return click;
   }
   function computeYBounds(opts) {
     const { unitFormat, values, preferZero, hardMin, hardMax } = opts;
@@ -46040,7 +46099,8 @@
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
-          const click = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
+          const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
+          const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -46056,7 +46116,8 @@
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,
-                extraFilters: click.extraFilters
+                extraFilters: click.extraFilters,
+                initialSort: click.initialSort
               });
             });
           }
@@ -46089,7 +46150,8 @@
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           tooltip.textContent = `${formatDimensionKey(doc, dimId, d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
           rect.appendChild(tooltip);
-          const click = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
+          const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
+          const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
           if (click?.type === "drilldown") {
             rect.setAttribute("style", `${rect.getAttribute("style") ?? ""};cursor:pointer;`);
             rect.addEventListener("click", () => {
@@ -46105,7 +46167,8 @@
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,
-                extraFilters: click.extraFilters
+                extraFilters: click.extraFilters,
+                initialSort: click.initialSort
               });
             });
           }
@@ -47307,6 +47370,21 @@
     const commit = () => setAll(pending);
     const updatePending = (id, value) => {
       pending = { ...pending, [id]: value };
+      if (id === "teammate") {
+        const v = typeof value === "string" ? value.trim() : "";
+        if (v && v !== "all") {
+          pending = { ...pending, modeFamily: "Team Duel" };
+          if (!applyMode) setValue("modeFamily", "Team Duel");
+        }
+      }
+      if (id === "modeFamily") {
+        const v = typeof value === "string" ? value.trim() : "";
+        const mate = typeof pending.teammate === "string" ? pending.teammate.trim() : "";
+        if (v === "Duel" && mate && mate !== "all") {
+          pending = { ...pending, teammate: "all" };
+          if (!applyMode) setValue("teammate", "all");
+        }
+      }
       if (!applyMode) setValue(id, value);
     };
     const renderDateRange = (control) => {
@@ -47428,41 +47506,27 @@
     const stateWithoutSelf = { ...state };
     delete stateWithoutSelf[control.id];
     const rows = await getRounds({ global: { spec, state: stateWithoutSelf } });
-    if (control.options === "auto_teammates" || control.options === "auto_teammates_with_solo") {
+    if (control.options === "auto_teammates") {
       const gamesByMate = /* @__PURE__ */ new Map();
       const roundsByMate = /* @__PURE__ */ new Map();
-      const soloGames = /* @__PURE__ */ new Set();
-      let soloRounds = 0;
       for (const r of rows) {
         const mate = r.teammateName;
         const name = typeof mate === "string" ? mate.trim() : "";
         const gameId = String(r.gameId ?? "");
         if (!gameId) continue;
-        if (!name) {
-          soloGames.add(gameId);
-          soloRounds++;
-          continue;
-        }
+        if (!name) continue;
         const set = gamesByMate.get(name) ?? /* @__PURE__ */ new Set();
         set.add(gameId);
         gamesByMate.set(name, set);
         roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
       }
-      const mates = Array.from(gamesByMate.entries()).map(([name, games]) => ({
+      const out2 = Array.from(gamesByMate.entries()).map(([name, games]) => ({
         value: name,
         label: `${name} (${games.size} games, ${roundsByMate.get(name) ?? 0} rounds)`,
         n: games.size
       })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)).map(({ value, label }) => ({ value, label }));
-      if (control.options === "auto_teammates_with_solo") {
-        const out2 = [
-          { value: "none", label: `None (Solo) (${soloGames.size} games, ${soloRounds} rounds)` },
-          ...mates
-        ];
-        cache.set(key, out2);
-        return out2;
-      }
-      cache.set(key, mates);
-      return mates;
+      cache.set(key, out2);
+      return out2;
     }
     const dimId = control.dimension;
     const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];

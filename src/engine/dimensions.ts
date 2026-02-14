@@ -249,6 +249,13 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     confused_countries: confusedCountriesKey,
     guess_country: guessCountryKey,
     teammate_name: teammateNameKey,
+    mode_family: (r: any) => {
+      const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
+      if (!v) return null;
+      if (v === "duels") return "Duel";
+      if (v === "teamduels") return "Team Duel";
+      return v;
+    },
     team_closer_winner: (r: any) => winnerLabelForCompare(r, getDistanceKm(r as any), getMateDistanceKm(r as any), "min"),
     team_higher_score_winner: (r: any) => winnerLabelForCompare(r, getSelfScore(r as any), getMateScore(r as any), "max"),
     team_fewer_throw_winner: (r: any) => {
