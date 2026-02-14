@@ -437,7 +437,14 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       letter-spacing: 0.15px;
       color: color-mix(in srgb, var(--ga-text) 78%, transparent);
     }
-    .ga-breakdown-header-left { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight: 650; }
+    .ga-breakdown-header-left {
+      flex: 0 0 var(--ga-breakdown-label-w);
+      max-width: var(--ga-breakdown-label-w);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-weight: 650;
+    }
     .ga-breakdown-header-right { flex:1; text-align:right; font-weight: 650; }
     .ga-breakdown-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
     .ga-breakdown-ctl-label { opacity: 0.9; font-weight: 650; }
@@ -450,9 +457,16 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size:12px;
       max-width: min(360px, 62vw);
     }
-    .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
-    .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
+    .ga-breakdown { --ga-breakdown-label-w: clamp(160px, 28%, 360px); }
+    .ga-breakdown-row { display:flex; gap:10px; align-items:center; justify-content:flex-start; }
+    .ga-breakdown-label {
+      flex: 0 0 var(--ga-breakdown-label-w);
+      max-width: var(--ga-breakdown-label-w);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .ga-breakdown-right { flex:1; min-width:0; display:flex; align-items:center; gap:10px; }
     .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
     .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
     .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }

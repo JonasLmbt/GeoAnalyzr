@@ -667,7 +667,8 @@ export async function renderChartWidget(
     const PAD_L = 72;
     const PAD_B = 58;
     const PAD_T = 16;
-    const PAD_R = 44;
+    // Give extra room on the right so last bar/dot isn't visually clipped by rounded containers.
+    const PAD_R = 72;
     const innerW = W - PAD_L - PAD_R;
     const innerH = H - PAD_T - PAD_B;
 

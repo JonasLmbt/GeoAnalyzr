@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.16
+// @version      1.6.17
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -41214,7 +41214,23 @@
                       placement: { x: 0, y: 6, w: 12, h: 8 },
                       spec: {
                         dimension: "duration_bucket",
-                        measures: ["avg_score", "fivek_rate", "throw_rate", "hit_rate", "avg_guess_duration"],
+                        measures: [
+                          "rounds_count",
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "fivek_rate",
+                          "fivek_count",
+                          "throw_rate",
+                          "throw_count",
+                          "hit_rate",
+                          "hit_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg",
+                          "damage_dealt_share",
+                          "damage_taken_share"
+                        ],
                         activeMeasure: "avg_score",
                         sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
                         activeSort: { mode: "chronological" },
@@ -41330,7 +41346,17 @@
                         type: "bar",
                         limit: 200,
                         x: { dimension: "score_bucket" },
-                        y: { measure: "rounds_count" },
+                        y: {
+                          measures: [
+                            "rounds_count",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "hit_rate",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "rounds_count"
+                        },
                         sort: { mode: "chronological" },
                         actions: {
                           hover: true,
@@ -41482,11 +41508,17 @@
                             "avg_score_hit_only",
                             "avg_distance_km",
                             "avg_guess_duration",
+                            "rounds_count",
                             "fivek_rate",
+                            "fivek_count",
                             "throw_rate",
+                            "throw_count",
                             "hit_rate",
+                            "hit_count",
                             "damage_dealt_avg",
-                            "damage_taken_avg"
+                            "damage_taken_avg",
+                            "damage_dealt_share",
+                            "damage_taken_share"
                           ],
                           activeMeasure: "avg_score"
                         },
@@ -41509,7 +41541,25 @@
                         type: "bar",
                         x: { dimension: "game_length" },
                         y: {
-                          measures: ["games_count", "win_rate", "win_count", "loss_count", "tie_count", "best_end_rating"],
+                          measures: [
+                            "games_count",
+                            "win_rate",
+                            "win_count",
+                            "loss_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "fivek_rate",
+                            "fivek_count",
+                            "throw_rate",
+                            "throw_count",
+                            "hit_rate",
+                            "hit_count",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
                           activeMeasure: "games_count"
                         },
                         sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
@@ -42384,7 +42434,14 @@
       letter-spacing: 0.15px;
       color: color-mix(in srgb, var(--ga-text) 78%, transparent);
     }
-    .ga-breakdown-header-left { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight: 650; }
+    .ga-breakdown-header-left {
+      flex: 0 0 var(--ga-breakdown-label-w);
+      max-width: var(--ga-breakdown-label-w);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-weight: 650;
+    }
     .ga-breakdown-header-right { flex:1; text-align:right; font-weight: 650; }
     .ga-breakdown-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
     .ga-breakdown-ctl-label { opacity: 0.9; font-weight: 650; }
@@ -42397,9 +42454,16 @@
       font-size:12px;
       max-width: min(360px, 62vw);
     }
-    .ga-breakdown-row { display:flex; justify-content:space-between; gap:10px; align-items:center; }
-    .ga-breakdown-label { max-width:40%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .ga-breakdown-right { flex:1; display:flex; align-items:center; gap:10px; }
+    .ga-breakdown { --ga-breakdown-label-w: clamp(160px, 28%, 360px); }
+    .ga-breakdown-row { display:flex; gap:10px; align-items:center; justify-content:flex-start; }
+    .ga-breakdown-label {
+      flex: 0 0 var(--ga-breakdown-label-w);
+      max-width: var(--ga-breakdown-label-w);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .ga-breakdown-right { flex:1; min-width:0; display:flex; align-items:center; gap:10px; }
     .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
     .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
     .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
@@ -44995,7 +45059,7 @@
       const PAD_L = 72;
       const PAD_B = 58;
       const PAD_T = 16;
-      const PAD_R = 44;
+      const PAD_R = 72;
       const innerW = W - PAD_L - PAD_R;
       const innerH = H - PAD_T - PAD_B;
       const effectiveLimit = spec.type === "bar" && !(typeof spec.limit === "number" && Number.isFinite(spec.limit) && spec.limit > 0) ? (() => {
@@ -46063,7 +46127,12 @@
       const lastGameId = gameTimes.length ? gameTimes[gameTimes.length - 1].gameId : void 0;
       const firstTogether = gameTimes[0]?.ts;
       const lastTogether = gameTimes.length ? gameTimes[gameTimes.length - 1].ts : void 0;
-      const sessionGapMs = 45 * 60 * 1e3;
+      const sessionGapMs = (() => {
+        const root = doc.querySelector(".ga-root");
+        const raw = Number(root?.dataset.gaSessionGapMinutes);
+        const minutes = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
+        return minutes * 60 * 1e3;
+      })();
       let sessionCount = 0;
       let sessionTotalGames = 0;
       let longestSessionGames = 0;
@@ -46915,6 +46984,12 @@
     const { body, semantic, dashboard } = opts;
     const doc = body.ownerDocument;
     body.innerHTML = "";
+    const root = body.closest(".ga-root");
+    const getSessionGapMinutes = () => {
+      const raw = Number(root?.dataset.gaSessionGapMinutes);
+      if (Number.isFinite(raw)) return Math.max(1, Math.min(360, Math.round(raw)));
+      return semantic.settings?.sessionGapMinutesDefault ?? 45;
+    };
     const filtersHost = doc.createElement("div");
     filtersHost.className = "ga-filters-host";
     body.appendChild(filtersHost);
@@ -47026,7 +47101,7 @@
         if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
         if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
         if (used.has("session")) {
-          const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+          const gap = getSessionGapMinutes();
           datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
         }
         if (isOpponentsSection && Array.isArray(datasets.game)) {
@@ -47057,7 +47132,7 @@
       if (usedAll.has("round") || usedAll.has("session")) datasetsAll.round = await getRounds(filtersAll);
       if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
       if (usedAll.has("session")) {
-        const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+        const gap = getSessionGapMinutes();
         datasetsAll.session = await getSessions({ global: { spec: specFilters, state, controlIds: allControlIds, sessionGapMinutes: gap } }, { rounds: datasetsAll.round });
       }
       const dateValAll = state["dateRange"];

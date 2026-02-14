@@ -37,6 +37,13 @@ export async function renderAnalysisApp(opts: {
 
   body.innerHTML = "";
 
+  const root = body.closest(".ga-root") as HTMLDivElement | null;
+  const getSessionGapMinutes = (): number => {
+    const raw = Number(root?.dataset.gaSessionGapMinutes);
+    if (Number.isFinite(raw)) return Math.max(1, Math.min(360, Math.round(raw)));
+    return semantic.settings?.sessionGapMinutesDefault ?? 45;
+  };
+
   const filtersHost = doc.createElement("div");
   filtersHost.className = "ga-filters-host";
   body.appendChild(filtersHost);
@@ -168,7 +175,7 @@ export async function renderAnalysisApp(opts: {
       if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
       if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
       if (used.has("session")) {
-        const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+        const gap = getSessionGapMinutes();
         datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
       }
 
@@ -207,7 +214,7 @@ export async function renderAnalysisApp(opts: {
     if (usedAll.has("round") || usedAll.has("session")) datasetsAll.round = await getRounds(filtersAll);
     if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
     if (usedAll.has("session")) {
-      const gap = semantic.settings?.sessionGapMinutesDefault ?? 45;
+      const gap = getSessionGapMinutes();
       datasetsAll.session = await getSessions({ global: { spec: specFilters, state, controlIds: allControlIds, sessionGapMinutes: gap } }, { rounds: datasetsAll.round as any });
     }
     const dateValAll = state["dateRange"] as any;

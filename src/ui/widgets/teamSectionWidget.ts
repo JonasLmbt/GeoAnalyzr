@@ -333,7 +333,12 @@ export async function renderTeamSectionWidget(
     const firstTogether = gameTimes[0]?.ts;
     const lastTogether = gameTimes.length ? gameTimes[gameTimes.length - 1].ts : undefined;
 
-    const sessionGapMs = 45 * 60 * 1000;
+    const sessionGapMs = (() => {
+      const root = doc.querySelector<HTMLDivElement>(".ga-root");
+      const raw = Number(root?.dataset.gaSessionGapMinutes);
+      const minutes = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
+      return minutes * 60 * 1000;
+    })();
     let sessionCount = 0;
     let sessionTotalGames = 0;
     let longestSessionGames = 0;
