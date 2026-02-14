@@ -129,15 +129,18 @@ function cssOnce(): void {
     }
     .ga-ov-help{ font-size: 12px; color: rgba(208, 214, 238, 0.70); margin-top: 8px; white-space: pre-wrap; }
   `;
-  document.head.appendChild(style);
+  (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style as any);
 }
 
 export function createUIOverlay(): UIOverlay {
-  cssOnce();
-
   const host = el("div", "ga-overlay");
   const card = el("div", "ga-ov-card");
   host.appendChild(card);
+
+  const mount = () => {
+    cssOnce();
+    if (!host.isConnected) (document.documentElement ?? document.body ?? document).appendChild(host as any);
+  };
 
   const head = el("div", "ga-ov-head");
   const title = el("div");
@@ -184,7 +187,11 @@ export function createUIOverlay(): UIOverlay {
   body.appendChild(status);
   body.appendChild(row1);
 
-  document.documentElement.appendChild(host);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mount, { once: true });
+  } else {
+    mount();
+  }
 
   let updateHandler: (() => void | Promise<void>) | null = null;
   let resetHandler: (() => void | Promise<void>) | null = null;
@@ -273,7 +280,7 @@ export function createUIOverlay(): UIOverlay {
       }
     });
 
-    document.documentElement.appendChild(overlay);
+    (document.documentElement ?? document.body ?? document).appendChild(overlay as any);
   };
 
   return {
@@ -304,4 +311,3 @@ export function createUIOverlay(): UIOverlay {
     openNcfaManager
   };
 }
-

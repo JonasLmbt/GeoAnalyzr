@@ -1,6 +1,6 @@
 import { createUIOverlay } from "../uiOverlay";
 import { registerUiActions, refreshUI } from "./uiActions";
-import { isInGame, watchRoutes } from "./routing";
+import { watchRoutes } from "./routing";
 
 export async function bootApp(): Promise<void> {
   const ui = createUIOverlay();
@@ -8,7 +8,9 @@ export async function bootApp(): Promise<void> {
   registerUiActions(ui);
   await refreshUI(ui);
 
+  // Always keep a dashboard trigger available, even on /game routes.
   watchRoutes(() => {
-    ui.setVisible(!isInGame());
+    ui.setVisible(true);
+    void isInGame(); // keep route polling side-effects (if any) without hiding UI
   });
 }

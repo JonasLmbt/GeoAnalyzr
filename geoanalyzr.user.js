@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.0
+// @version      2.0.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6785,13 +6785,16 @@
     }
     .ga-ov-help{ font-size: 12px; color: rgba(208, 214, 238, 0.70); margin-top: 8px; white-space: pre-wrap; }
   `;
-    document.head.appendChild(style);
+    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    cssOnce();
     const host = el("div", "ga-overlay");
     const card = el("div", "ga-ov-card");
     host.appendChild(card);
+    const mount = () => {
+      cssOnce();
+      if (!host.isConnected) (document.documentElement ?? document.body ?? document).appendChild(host);
+    };
     const head = el("div", "ga-ov-head");
     const title = el("div");
     title.textContent = "GeoAnalyzr";
@@ -6827,7 +6830,11 @@
     body.appendChild(meta);
     body.appendChild(status);
     body.appendChild(row1);
-    document.documentElement.appendChild(host);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", mount, { once: true });
+    } else {
+      mount();
+    }
     let updateHandler = null;
     let resetHandler = null;
     let exportHandler = null;
@@ -6902,7 +6909,7 @@
           auto.disabled = false;
         }
       });
-      document.documentElement.appendChild(overlay);
+      (document.documentElement ?? document.body ?? document).appendChild(overlay);
     };
     return {
       setVisible(visible) {
@@ -39901,10 +39908,6 @@ ${error instanceof Error ? error.message : String(error)}`;
   }
 
   // src/app/routing.ts
-  function isInGame() {
-    const p = location.pathname;
-    return p.startsWith("/game/") || p.startsWith("/challenge/") || p.startsWith("/duels/") || p.startsWith("/team-duels/") || p.startsWith("/battle-royale/") || p.startsWith("/live-challenge/");
-  }
   function watchRoutes(onRoute) {
     const origPush = history.pushState;
     const origReplace = history.replaceState;
@@ -39927,7 +39930,8 @@ ${error instanceof Error ? error.message : String(error)}`;
     registerUiActions(ui);
     await refreshUI(ui);
     watchRoutes(() => {
-      ui.setVisible(!isInGame());
+      ui.setVisible(true);
+      void isInGame();
     });
   }
 
