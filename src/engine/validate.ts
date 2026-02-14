@@ -65,9 +65,9 @@ function validateGlobalFiltersSpec(semantic: SemanticRegistry, dash: DashboardDo
       const dimId = String(c.dimension);
       const dim = semantic.dimensions[dimId];
       assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in global filter '${c.id}'`);
-      const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
-      for (const g of grains) {
-        assert(c.appliesTo.includes(g), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo missing dimension grain '${g}'`);
+      const dimGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+      for (const g of c.appliesTo as any[]) {
+        assert(dimGrains.includes(g), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo includes unsupported grain '${g}' for dimension '${dimId}'`);
       }
       continue;
     }
@@ -103,9 +103,9 @@ function validateLocalFiltersSpec(semantic: SemanticRegistry, section: any): voi
     const dimId = String(c.dimension);
     const dim = semantic.dimensions[dimId];
     assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in local filter '${c.id}' (section '${section.id}')`);
-    const grains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
-    for (const g of grains) {
-      assert(c.appliesTo.includes(g), "E_GRAIN_MISMATCH", `Local filter '${c.id}' appliesTo missing dimension grain '${g}'`);
+    const dimGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+    for (const g of c.appliesTo as any[]) {
+      assert(dimGrains.includes(g), "E_GRAIN_MISMATCH", `Local filter '${c.id}' appliesTo includes unsupported grain '${g}' for dimension '${dimId}'`);
     }
   }
 }
