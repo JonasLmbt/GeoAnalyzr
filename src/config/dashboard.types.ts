@@ -61,6 +61,8 @@ export type SelectControlSpec = {
   type: "select";
   label: string;
   dimension: string;
+  // Optional UI hint. Default: dropdown.
+  presentation?: "dropdown" | "map";
   default: "all" | string;
   options: SelectOptionsSpec;
   appliesTo: GlobalFilterGrain[];
@@ -82,6 +84,8 @@ export type LocalFilterControlSpec = {
   type: "select";
   label: string;
   dimension: string;
+  // Optional UI hint. Default: dropdown.
+  presentation?: "dropdown" | "map";
   // "auto_top" = pick the most frequent option in the current section dataset.
   default: "auto_top" | string;
   options: LocalSelectOptionsSpec;

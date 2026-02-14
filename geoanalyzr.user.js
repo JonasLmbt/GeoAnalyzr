@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.30
+// @version      1.6.31
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10635,26 +10635,26 @@
     } else {
       const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
       for (let i = 0; i < maxCompare; i++) {
-        const sel = doc.createElement("select");
-        sel.style.background = palette.buttonBg;
-        sel.style.color = palette.buttonText;
-        sel.style.border = `1px solid ${palette.border}`;
-        sel.style.borderRadius = "7px";
-        sel.style.padding = "2px 6px";
-        sel.style.fontSize = "11px";
+        const sel2 = doc.createElement("select");
+        sel2.style.background = palette.buttonBg;
+        sel2.style.color = palette.buttonText;
+        sel2.style.border = `1px solid ${palette.border}`;
+        sel2.style.borderRadius = "7px";
+        sel2.style.padding = "2px 6px";
+        sel2.style.fontSize = "11px";
         const noneOpt = doc.createElement("option");
         noneOpt.value = "";
         noneOpt.textContent = i === 0 ? "Compare series" : `Compare series ${i + 1}`;
-        sel.appendChild(noneOpt);
+        sel2.appendChild(noneOpt);
         for (const c of chart.compareCandidates) {
           const opt = doc.createElement("option");
           opt.value = c.key;
           opt.textContent = c.label;
-          sel.appendChild(opt);
+          sel2.appendChild(opt);
         }
-        sel.value = defaultCompare[i] || "";
-        compareSelectors.push(sel);
-        head.appendChild(sel);
+        sel2.value = defaultCompare[i] || "";
+        compareSelectors.push(sel2);
+        head.appendChild(sel2);
       }
     }
     const content = doc.createElement("div");
@@ -10686,7 +10686,7 @@
       content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc, graphCfg));
     };
     metricSelect.addEventListener("change", render);
-    for (const sel of compareSelectors) sel.addEventListener("change", render);
+    for (const sel2 of compareSelectors) sel2.addEventListener("change", render);
     compareModeSelect?.addEventListener("change", render);
     render();
     return wrap;
@@ -40511,6 +40511,20 @@
         allowedCharts: ["bar", "line"],
         formulaId: "count_games"
       },
+      strongest_opponent_rating: {
+        label: "Strongest opponent (rating)",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_opponent_start_rating"
+      },
+      strongest_defeated_opponent_rating: {
+        label: "Strongest defeated opponent (rating)",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_defeated_opponent_start_rating"
+      },
       unique_opponents_count: {
         label: "Unique opponents",
         unit: "count",
@@ -42319,7 +42333,17 @@
                       spec: {
                         rows: [
                           { label: "Unique opponents", measure: "unique_opponents_count" },
-                          { label: "Unique countries", measure: "unique_opponent_countries_count" }
+                          { label: "Unique countries", measure: "unique_opponent_countries_count" },
+                          {
+                            label: "Strongest opponent (rating)",
+                            measure: "strongest_opponent_rating",
+                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Strongest defeated opponent (rating)",
+                            measure: "strongest_defeated_opponent_rating",
+                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                          }
                         ]
                       }
                     },
@@ -42499,6 +42523,7 @@
                 type: "select",
                 label: "Country",
                 dimension: "true_country",
+                presentation: "map",
                 default: "auto_top",
                 options: "auto_distinct",
                 required: true,
@@ -42777,6 +42802,33 @@
       font: inherit;
       font-size: 12px;
     }
+
+    .ga-filter.ga-filter-map { min-width: 340px; }
+    .ga-filter-map-selected {
+      font-size: 12px;
+      color: var(--ga-text-muted);
+      margin-bottom: 2px;
+    }
+    .ga-filter-map-host { width: 340px; max-width: 100%; }
+    .ga-country-map {
+      height: 240px;
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.10);
+      background:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
+        rgba(22,22,38,0.60);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .ga-country-map .leaflet-container { background: transparent; }
+    .ga-country-map .leaflet-control-zoom a {
+      background: rgba(20,20,32,0.78);
+      color: rgba(255,255,255,0.90);
+      border-color: rgba(255,255,255,0.16);
+    }
+    .ga-country-map .leaflet-control-zoom a:hover { background: rgba(30,30,48,0.88); }
     .ga-filter-btn {
       background: var(--ga-control-bg);
       border:1px solid var(--ga-control-border);
@@ -43494,25 +43546,25 @@
   }
   function mkSelect(doc, label, value, options, onChange) {
     const f = mkField(doc, label);
-    const sel = doc.createElement("select");
-    for (const o of options) sel.appendChild(new Option(o.label, o.value));
-    if (options.some((o) => o.value === value)) sel.value = value;
-    sel.addEventListener("change", () => onChange(sel.value));
-    f.inputHost.appendChild(sel);
+    const sel2 = doc.createElement("select");
+    for (const o of options) sel2.appendChild(new Option(o.label, o.value));
+    if (options.some((o) => o.value === value)) sel2.value = value;
+    sel2.addEventListener("change", () => onChange(sel2.value));
+    f.inputHost.appendChild(sel2);
     return f.wrap;
   }
   function mkMultiSelect(doc, label, values, options, onChange) {
     const f = mkField(doc, label);
-    const sel = doc.createElement("select");
-    sel.multiple = true;
-    sel.size = Math.min(10, Math.max(3, options.length));
+    const sel2 = doc.createElement("select");
+    sel2.multiple = true;
+    sel2.size = Math.min(10, Math.max(3, options.length));
     for (const o of options) {
       const opt = new Option(o.label, o.value);
       opt.selected = values.includes(o.value);
-      sel.appendChild(opt);
+      sel2.appendChild(opt);
     }
-    sel.addEventListener("change", () => onChange(Array.from(sel.selectedOptions).map((o) => o.value)));
-    f.inputHost.appendChild(sel);
+    sel2.addEventListener("change", () => onChange(Array.from(sel2.selectedOptions).map((o) => o.value)));
+    f.inputHost.appendChild(sel2);
     return f.wrap;
   }
   function mkHr(doc) {
@@ -45082,6 +45134,29 @@
         }
       }
       return best;
+    },
+    max_opponent_start_rating: (rows) => {
+      let best = -Infinity;
+      for (const g of rows) {
+        const mode = String(g?.modeFamily ?? "").trim().toLowerCase();
+        const vals = mode === "teamduels" ? [g.player_opponent_startRating, g.player_opponent_mate_startRating] : [g.player_opponent_startRating, g.playerTwoStartRating];
+        for (const v of vals) {
+          if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
+        }
+      }
+      return Number.isFinite(best) ? best : 0;
+    },
+    max_defeated_opponent_start_rating: (rows) => {
+      let best = -Infinity;
+      for (const g of rows) {
+        if (getGameOutcome(g) !== "win") continue;
+        const mode = String(g?.modeFamily ?? "").trim().toLowerCase();
+        const vals = mode === "teamduels" ? [g.player_opponent_startRating, g.player_opponent_mate_startRating] : [g.player_opponent_startRating, g.playerTwoStartRating];
+        for (const v of vals) {
+          if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
+        }
+      }
+      return Number.isFinite(best) ? best : 0;
     }
   };
   var SESSION_MEASURES_BY_FORMULA_ID = {
@@ -45332,6 +45407,38 @@
           }
           if (bestLen > 0 && bestEnd >= 0) {
             rows = sorted.slice(bestEnd - bestLen + 1, bestEnd + 1);
+          }
+        }
+        if (grain === "game" && (formulaId === "max_opponent_start_rating" || formulaId === "max_defeated_opponent_start_rating")) {
+          const filtered = formulaId === "max_defeated_opponent_start_rating" ? rows.filter((g) => (DIMENSION_EXTRACTORS.game?.result?.(g) ?? g.result) === "Win") : rows;
+          const opponentStartOf = (g) => {
+            const mode = String(g?.modeFamily ?? "").trim().toLowerCase();
+            const nums = [];
+            const pushNum = (v) => {
+              if (typeof v === "number" && Number.isFinite(v)) nums.push(v);
+            };
+            if (mode === "teamduels") {
+              pushNum(g.player_opponent_startRating);
+              pushNum(g.player_opponent_mate_startRating);
+            } else {
+              pushNum(g.player_opponent_startRating);
+              pushNum(g.playerTwoStartRating);
+            }
+            if (!nums.length) return null;
+            return Math.max(...nums);
+          };
+          let best = -Infinity;
+          for (const g of filtered) {
+            const v = opponentStartOf(g);
+            if (typeof v === "number") best = Math.max(best, v);
+          }
+          if (Number.isFinite(best)) {
+            const candidates = filtered.filter((g) => opponentStartOf(g) === best);
+            const tsOf = (g) => typeof g.ts === "number" ? g.ts : typeof g.playedAt === "number" ? g.playedAt : 0;
+            const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
+            rows = bestOne ? [bestOne] : candidates;
+          } else {
+            rows = [];
           }
         }
         overlay.open(semantic, {
@@ -47039,6 +47146,145 @@
     return wrap;
   }
 
+  // src/ui/countryMapPicker.ts
+  var LEAFLET_JS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js";
+  var LEAFLET_CSS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";
+  var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
+  var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
+  var leafletPromise = null;
+  var worldPromise = null;
+  function ensureLink(doc, href) {
+    const head = doc.head ?? doc.querySelector("head");
+    if (!head) return;
+    const exists = Array.from(head.querySelectorAll('link[rel="stylesheet"]')).some((l) => l.href === href);
+    if (exists) return;
+    const link = doc.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    head.appendChild(link);
+  }
+  function ensureScript(doc, src) {
+    const head = doc.head ?? doc.querySelector("head");
+    if (!head) return Promise.resolve();
+    const exists = Array.from(head.querySelectorAll("script")).some((s) => s.src === src);
+    if (exists) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = doc.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      head.appendChild(s);
+    });
+  }
+  async function ensureLeaflet(doc) {
+    const w = doc.defaultView;
+    if (w?.L) return w.L;
+    if (!leafletPromise) {
+      leafletPromise = (async () => {
+        ensureLink(doc, LEAFLET_CSS);
+        await ensureScript(doc, LEAFLET_JS);
+      })();
+    }
+    await leafletPromise;
+    return doc.defaultView?.L;
+  }
+  async function loadIso3ToIso2() {
+    const res = await fetch(ISO_MAP_URL);
+    if (!res.ok) throw new Error(`Failed to fetch ISO map (${res.status})`);
+    const data = await res.json();
+    const iso3ToIso2 = /* @__PURE__ */ new Map();
+    if (Array.isArray(data)) {
+      for (const c of data) {
+        const iso2 = typeof c?.cca2 === "string" ? c.cca2.trim().toLowerCase() : "";
+        const iso3 = typeof c?.cca3 === "string" ? c.cca3.trim().toUpperCase() : "";
+        if (iso2 && iso3) iso3ToIso2.set(iso3, iso2);
+      }
+    }
+    return iso3ToIso2;
+  }
+  async function loadWorldData() {
+    if (!worldPromise) {
+      worldPromise = (async () => {
+        const [geoRes, iso3ToIso2] = await Promise.all([fetch(WORLD_GEOJSON_URL), loadIso3ToIso2()]);
+        if (!geoRes.ok) throw new Error(`Failed to fetch world geojson (${geoRes.status})`);
+        const geojson = await geoRes.json();
+        return { geojson, iso3ToIso2 };
+      })();
+    }
+    return worldPromise;
+  }
+  function normalizeIso24(v) {
+    if (typeof v !== "string") return null;
+    const x = v.trim().toLowerCase();
+    return /^[a-z]{2}$/.test(x) ? x : null;
+  }
+  async function renderCountryMapPicker(args) {
+    const { container, value, onChange } = args;
+    const doc = container.ownerDocument;
+    container.innerHTML = "";
+    const L = await ensureLeaflet(doc);
+    if (!L) {
+      container.textContent = "Map failed to load.";
+      return;
+    }
+    const { geojson, iso3ToIso2 } = await loadWorldData();
+    const mapEl = doc.createElement("div");
+    mapEl.className = "ga-country-map";
+    container.appendChild(mapEl);
+    const map = L.map(mapEl, {
+      zoomControl: true,
+      attributionControl: false,
+      worldCopyJump: true,
+      preferCanvas: true
+    });
+    map.setView([20, 0], 2);
+    let selectedIso2 = normalizeIso24(value);
+    const baseStyle = (isActive) => ({
+      color: "rgba(255,255,255,0.22)",
+      weight: isActive ? 2 : 1,
+      fillColor: isActive ? "rgba(254,205,25,0.40)" : "rgba(255,255,255,0.06)",
+      fillOpacity: isActive ? 0.65 : 0.25
+    });
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    for (const f of features) {
+      const iso3 = typeof f?.id === "string" ? String(f.id).trim().toUpperCase() : "";
+      const iso2 = iso3 ? iso3ToIso2.get(iso3) : void 0;
+      if (iso2) {
+        if (!f.properties || typeof f.properties !== "object") f.properties = {};
+        f.properties.iso2 = iso2;
+      }
+    }
+    const layer = L.geoJSON(geojson, {
+      style: (feature2) => {
+        const iso2 = normalizeIso24(feature2?.properties?.iso2);
+        const active = !!iso2 && !!selectedIso2 && iso2 === selectedIso2;
+        return baseStyle(active);
+      },
+      onEachFeature: (feature2, lyr) => {
+        const iso2 = normalizeIso24(feature2?.properties?.iso2);
+        if (!iso2) return;
+        lyr.on("mouseover", () => lyr.setStyle({ fillOpacity: 0.45 }));
+        lyr.on("mouseout", () => lyr.setStyle(baseStyle(iso2 === selectedIso2)));
+        lyr.on("click", () => {
+          selectedIso2 = iso2;
+          layer.eachLayer((l) => {
+            const f = l?.feature;
+            const i2 = normalizeIso24(f?.properties?.iso2);
+            if (!i2) return;
+            l.setStyle(baseStyle(i2 === selectedIso2));
+          });
+          onChange(iso2);
+        });
+      }
+    }).addTo(map);
+    try {
+      const bounds = layer.getBounds?.();
+      if (bounds && bounds.isValid?.()) map.fitBounds(bounds, { padding: [6, 6] });
+    } catch {
+    }
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
@@ -47195,8 +47441,6 @@
         const wrap = doc.createElement("div");
         wrap.className = "ga-filter";
         wrap.appendChild(renderControlLabel2(control.label));
-        const sel = doc.createElement("select");
-        sel.className = "ga-filter-select";
         const stateWithoutSelf = { ...nextState };
         delete stateWithoutSelf[control.id];
         const options = computeOptions(control, stateWithoutSelf);
@@ -47207,14 +47451,42 @@
         const hasCurrent = options.some((o) => o.value === current);
         const desiredDefault = control.default === "auto_top" ? "" : control.default;
         const next = hasCurrent ? current : desiredDefault && options.some((o) => o.value === desiredDefault) ? desiredDefault : isRequired ? options[0]?.value ?? "" : "all";
-        if (next) sel.value = next;
         if (next && next !== current) nextState[control.id] = next;
-        sel.addEventListener("change", () => {
-          nextState[control.id] = sel.value;
-          localStateBySection.set(sectionId, { ...nextState });
-          onChange();
-        });
-        wrap.appendChild(sel);
+        const isCountryDim = control.dimension === "true_country" || control.dimension === "guess_country" || control.dimension === "opponent_country";
+        const presentation = control.presentation;
+        const useMap = presentation === "map" && isCountryDim;
+        if (useMap) {
+          wrap.classList.add("ga-filter-map");
+          const selected = doc.createElement("div");
+          selected.className = "ga-filter-map-selected";
+          const txt = next && next !== "all" ? formatCountry4(next) : "";
+          selected.textContent = txt ? `Selected: ${txt}` : "Click a country on the map";
+          wrap.appendChild(selected);
+          const mapHost = doc.createElement("div");
+          mapHost.className = "ga-filter-map-host";
+          wrap.appendChild(mapHost);
+          await renderCountryMapPicker({
+            container: mapHost,
+            value: next,
+            onChange: (iso2) => {
+              nextState[control.id] = iso2;
+              localStateBySection.set(sectionId, { ...nextState });
+              onChange();
+            }
+          });
+        } else {
+          const sel2 = doc.createElement("select");
+          sel2.className = "ga-filter-select";
+          if (!isRequired) sel2.appendChild(new Option("All", "all"));
+          for (const opt of options) sel2.appendChild(new Option(opt.label, opt.value));
+          if (next) sel2.value = next;
+          sel2.addEventListener("change", () => {
+            nextState[control.id] = sel2.value;
+            localStateBySection.set(sectionId, { ...nextState });
+            onChange();
+          });
+          wrap.appendChild(sel2);
+        }
         left.appendChild(wrap);
       }
       const showReset = spec.buttons?.reset !== false;
@@ -47507,24 +47779,24 @@
       const wrap = doc.createElement("div");
       wrap.className = "ga-filter";
       wrap.appendChild(renderControlLabel(doc, control.label));
-      const sel = doc.createElement("select");
-      sel.className = "ga-filter-select";
+      const sel2 = doc.createElement("select");
+      sel2.className = "ga-filter-select";
       const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
-      if (!isRequired) sel.appendChild(new Option("All", "all"));
+      if (!isRequired) sel2.appendChild(new Option("All", "all"));
       for (const opt of options) {
         const label = control.dimension === "true_country" ? formatCountry3(doc, opt.label) : opt.label;
-        sel.appendChild(new Option(label, opt.value));
+        sel2.appendChild(new Option(label, opt.value));
       }
       const hasCurrent = options.some((o) => o.value === current);
       const nextValue = hasCurrent ? current : isRequired ? options[0]?.value ?? "" : "all";
-      if (nextValue) sel.value = nextValue;
+      if (nextValue) sel2.value = nextValue;
       if (isRequired && nextValue && nextValue !== current) {
         updatePending(id, nextValue);
       }
-      sel.addEventListener("change", () => {
-        updatePending(id, sel.value);
+      sel2.addEventListener("change", () => {
+        updatePending(id, sel2.value);
       });
-      wrap.appendChild(sel);
+      wrap.appendChild(sel2);
       left.appendChild(wrap);
     };
     const controls = spec.controls;

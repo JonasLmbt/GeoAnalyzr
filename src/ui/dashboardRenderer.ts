@@ -9,6 +9,7 @@ import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
 import { renderLeaderListWidget } from "./widgets/leaderListWidget";
+import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
 import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
 import { applyFilters } from "../engine/filters";
@@ -230,9 +231,6 @@ export async function renderDashboard(
       wrap.className = "ga-filter";
       wrap.appendChild(renderControlLabel(control.label));
 
-      const sel = doc.createElement("select");
-      sel.className = "ga-filter-select";
-
       const stateWithoutSelf: Record<string, string> = { ...nextState };
       delete stateWithoutSelf[control.id];
       const options = computeOptions(control, stateWithoutSelf);
@@ -253,16 +251,50 @@ export async function renderDashboard(
               ? (options[0]?.value ?? "")
               : "all";
 
-      if (next) sel.value = next;
       if (next && next !== current) nextState[control.id] = next;
 
-      sel.addEventListener("change", () => {
-        nextState[control.id] = sel.value;
-        localStateBySection.set(sectionId, { ...nextState });
-        onChange();
-      });
+      const isCountryDim = control.dimension === "true_country" || control.dimension === "guess_country" || control.dimension === "opponent_country";
+      const presentation = (control as any).presentation;
+      const useMap = presentation === "map" && isCountryDim;
 
-      wrap.appendChild(sel);
+      if (useMap) {
+        wrap.classList.add("ga-filter-map");
+        const selected = doc.createElement("div");
+        selected.className = "ga-filter-map-selected";
+        const txt = next && next !== "all" ? formatCountry(next) : "";
+        selected.textContent = txt ? `Selected: ${txt}` : "Click a country on the map";
+        wrap.appendChild(selected);
+
+        const mapHost = doc.createElement("div");
+        mapHost.className = "ga-filter-map-host";
+        wrap.appendChild(mapHost);
+
+        await renderCountryMapPicker({
+          container: mapHost,
+          value: next,
+          onChange: (iso2) => {
+            nextState[control.id] = iso2;
+            localStateBySection.set(sectionId, { ...nextState });
+            onChange();
+          }
+        });
+      } else {
+        const sel = doc.createElement("select");
+        sel.className = "ga-filter-select";
+
+        if (!isRequired) sel.appendChild(new Option("All", "all"));
+        for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
+
+        if (next) sel.value = next;
+
+        sel.addEventListener("change", () => {
+          nextState[control.id] = sel.value;
+          localStateBySection.set(sectionId, { ...nextState });
+          onChange();
+        });
+
+        wrap.appendChild(sel);
+      }
       left.appendChild(wrap);
     }
 

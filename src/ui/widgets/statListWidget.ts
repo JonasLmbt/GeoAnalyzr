@@ -188,6 +188,38 @@ function attachClickIfAny(
           rows = sorted.slice(bestEnd - bestLen + 1, bestEnd + 1);
         }
       }
+      if (grain === "game" && (formulaId === "max_opponent_start_rating" || formulaId === "max_defeated_opponent_start_rating")) {
+        const filtered = formulaId === "max_defeated_opponent_start_rating" ? rows.filter((g) => (DIMENSION_EXTRACTORS.game?.result?.(g) ?? (g as any).result) === "Win") : rows;
+        const opponentStartOf = (g: any): number | null => {
+          const mode = String(g?.modeFamily ?? "").trim().toLowerCase();
+          const nums: number[] = [];
+          const pushNum = (v: any) => {
+            if (typeof v === "number" && Number.isFinite(v)) nums.push(v);
+          };
+          if (mode === "teamduels") {
+            pushNum(g.player_opponent_startRating);
+            pushNum(g.player_opponent_mate_startRating);
+          } else {
+            pushNum(g.player_opponent_startRating);
+            pushNum(g.playerTwoStartRating);
+          }
+          if (!nums.length) return null;
+          return Math.max(...nums);
+        };
+        let best = -Infinity;
+        for (const g of filtered) {
+          const v = opponentStartOf(g);
+          if (typeof v === "number") best = Math.max(best, v);
+        }
+        if (Number.isFinite(best)) {
+          const candidates = filtered.filter((g) => opponentStartOf(g) === best);
+          const tsOf = (g: any): number => (typeof (g as any).ts === "number" ? (g as any).ts : typeof (g as any).playedAt === "number" ? (g as any).playedAt : 0);
+          const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
+          rows = bestOne ? [bestOne] : candidates;
+        } else {
+          rows = [];
+        }
+      }
       overlay.open(semantic, {
         title,
         target: click.target,

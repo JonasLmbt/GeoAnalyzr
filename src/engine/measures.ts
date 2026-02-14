@@ -511,6 +511,37 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
       }
     }
     return best;
+  },
+
+  max_opponent_start_rating: (rows) => {
+    let best = -Infinity;
+    for (const g of rows as any[]) {
+      const mode = String((g as any)?.modeFamily ?? "").trim().toLowerCase();
+      const vals: unknown[] =
+        mode === "teamduels"
+          ? [(g as any).player_opponent_startRating, (g as any).player_opponent_mate_startRating]
+          : [(g as any).player_opponent_startRating, (g as any).playerTwoStartRating];
+      for (const v of vals) {
+        if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
+      }
+    }
+    return Number.isFinite(best) ? best : 0;
+  },
+
+  max_defeated_opponent_start_rating: (rows) => {
+    let best = -Infinity;
+    for (const g of rows as any[]) {
+      if (getGameOutcome(g as any) !== "win") continue;
+      const mode = String((g as any)?.modeFamily ?? "").trim().toLowerCase();
+      const vals: unknown[] =
+        mode === "teamduels"
+          ? [(g as any).player_opponent_startRating, (g as any).player_opponent_mate_startRating]
+          : [(g as any).player_opponent_startRating, (g as any).playerTwoStartRating];
+      for (const v of vals) {
+        if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
+      }
+    }
+    return Number.isFinite(best) ? best : 0;
   }
 };
 

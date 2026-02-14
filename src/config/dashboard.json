@@ -1273,7 +1273,17 @@
                     "spec": {
                       "rows": [
                         { "label": "Unique opponents", "measure": "unique_opponents_count" },
-                        { "label": "Unique countries", "measure": "unique_opponent_countries_count" }
+                        { "label": "Unique countries", "measure": "unique_opponent_countries_count" },
+                        {
+                          "label": "Strongest opponent (rating)",
+                          "measure": "strongest_opponent_rating",
+                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Strongest defeated opponent (rating)",
+                          "measure": "strongest_defeated_opponent_rating",
+                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                        }
                       ]
                     }
                   },
@@ -1455,6 +1465,7 @@
               "type": "select",
               "label": "Country",
               "dimension": "true_country",
+              "presentation": "map",
               "default": "auto_top",
               "options": "auto_distinct",
               "required": true,

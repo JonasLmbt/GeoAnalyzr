@@ -168,6 +168,33 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font: inherit;
       font-size: 12px;
     }
+
+    .ga-filter.ga-filter-map { min-width: 340px; }
+    .ga-filter-map-selected {
+      font-size: 12px;
+      color: var(--ga-text-muted);
+      margin-bottom: 2px;
+    }
+    .ga-filter-map-host { width: 340px; max-width: 100%; }
+    .ga-country-map {
+      height: 240px;
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.10);
+      background:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
+        rgba(22,22,38,0.60);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .ga-country-map .leaflet-container { background: transparent; }
+    .ga-country-map .leaflet-control-zoom a {
+      background: rgba(20,20,32,0.78);
+      color: rgba(255,255,255,0.90);
+      border-color: rgba(255,255,255,0.16);
+    }
+    .ga-country-map .leaflet-control-zoom a:hover { background: rgba(30,30,48,0.88); }
     .ga-filter-btn {
       background: var(--ga-control-bg);
       border:1px solid var(--ga-control-border);

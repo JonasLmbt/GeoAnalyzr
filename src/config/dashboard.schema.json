@@ -82,6 +82,7 @@
         "label": { "$ref": "#/$defs/title" },
         "default": {},
         "dimension": { "type": "string", "minLength": 1 },
+        "presentation": { "enum": ["dropdown", "map"] },
         "options": { "enum": ["auto_distinct", "auto_teammates"] },
         "appliesTo": {
           "type": "array",
@@ -112,6 +113,7 @@
             "required": ["dimension", "options"],
             "properties": {
               "dimension": { "type": "string", "minLength": 1 },
+              "presentation": { "enum": ["dropdown", "map"] },
               "default": { "type": "string", "minLength": 1 },
               "options": { "enum": ["auto_distinct", "auto_teammates"] }
             }
@@ -170,6 +172,7 @@
         "type": { "const": "select" },
         "label": { "$ref": "#/$defs/title" },
         "dimension": { "type": "string", "minLength": 1 },
+        "presentation": { "enum": ["dropdown", "map"] },
         "default": { "type": "string", "minLength": 1 },
         "options": { "enum": ["auto_distinct", "auto_teammates"] },
         "appliesTo": {

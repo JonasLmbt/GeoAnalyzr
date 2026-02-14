@@ -292,6 +292,20 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_games"
     },
+    "strongest_opponent_rating": {
+      "label": "Strongest opponent (rating)",
+      "unit": "rating",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_opponent_start_rating"
+    },
+    "strongest_defeated_opponent_rating": {
+      "label": "Strongest defeated opponent (rating)",
+      "unit": "rating",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_defeated_opponent_start_rating"
+    },
     "unique_opponents_count": {
       "label": "Unique opponents",
       "unit": "count",
