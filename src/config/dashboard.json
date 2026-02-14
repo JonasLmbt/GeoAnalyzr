@@ -30,8 +30,8 @@
           "label": "Teammate",
           "dimension": "teammate_name",
           "default": "all",
-          "options": "auto_teammates",
-          "appliesTo": ["round"]
+          "options": "auto_teammates_with_solo",
+          "appliesTo": ["round", "game"]
         },
         {
           "id": "movement",
@@ -133,15 +133,57 @@
                             }
                           }
                         },
-                        { "label": "Best rating", "measure": "best_end_rating" },
-                        { "label": "Longest win streak", "measure": "longest_win_streak" },
-                        { "label": "Longest loss streak", "measure": "longest_loss_streak" },
-                        { "label": "Avg score", "measure": "avg_score", "grain": "round" },
-                        { "label": "Avg distance", "measure": "avg_distance_km", "grain": "round" },
-                        { "label": "Avg time", "measure": "avg_guess_duration", "grain": "round" },
-                        { "label": "Time played", "measure": "time_played_seconds", "grain": "round" },
-                        { "label": "Perfect 5k rounds", "measure": "fivek_count", "grain": "round" },
-                        { "label": "Throws (<50)", "measure": "throw_count", "grain": "round" }
+                        {
+                          "label": "Best rating",
+                          "measure": "best_end_rating",
+                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Longest win streak",
+                          "measure": "longest_win_streak",
+                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Longest loss streak",
+                          "measure": "longest_loss_streak",
+                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Avg score (pts)",
+                          "measure": "avg_score",
+                          "grain": "round",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Avg distance (km)",
+                          "measure": "avg_distance_km",
+                          "grain": "round",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Avg time (s)",
+                          "measure": "avg_guess_duration",
+                          "grain": "round",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Time played",
+                          "measure": "time_played_seconds",
+                          "grain": "round",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Perfect 5k rounds",
+                          "measure": "fivek_count",
+                          "grain": "round",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        },
+                        {
+                          "label": "Throws (<50)",
+                          "measure": "throw_count",
+                          "grain": "round",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        }
                       ]
                     }
                   },
@@ -226,7 +268,10 @@
                         "activeAccumulation": "to_date"
                       },
                       "sort": { "mode": "chronological" },
-                      "actions": { "hover": true }
+                      "actions": {
+                        "hover": true,
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
                     }
                   }
                 ]

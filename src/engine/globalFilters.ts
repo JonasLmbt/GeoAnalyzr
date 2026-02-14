@@ -56,7 +56,12 @@ export function buildAppliedFilters(
       const c = control as SelectControlSpec;
       const selected = normalizeAllString(state[c.id] ?? c.default);
       if (!selected) continue;
-      out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+      // Allow "none" as a sentinel value for "no value selected" for specific option generators.
+      if (c.options === "auto_teammates_with_solo" && selected === "none") {
+        out.clauses.push({ dimension: c.dimension, op: "eq", value: null });
+      } else {
+        out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+      }
       continue;
     }
   }

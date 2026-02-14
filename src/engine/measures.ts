@@ -102,6 +102,14 @@ function getGameEffectiveEndRating(g: GameFactRow): number | undefined {
   return getGameModeFamily(g) === "teamduels" ? getGameTeamEndRating(g) : getGameDuelEndRating(g);
 }
 
+function ratingModeForRows(rows: any[]): "duel" | "team" {
+  // Default to duel rating when the dataset mixes modes.
+  for (const g of rows as any[]) {
+    if (getGameModeFamily(g as any) === "duels") return "duel";
+  }
+  return "team";
+}
+
 function getGameOutcome(g: GameFactRow): "win" | "loss" | "tie" | null {
   const v = getGameSelfVictory(g);
   if (typeof v === "boolean") return v ? "win" : "loss";
@@ -396,8 +404,12 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
 
   last_player_self_end_rating: (rows) => {
     const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
+    const mode = ratingModeForRows(sorted as any[]);
     for (let i = sorted.length - 1; i >= 0; i--) {
-      const v = getGameEffectiveEndRating(sorted[i] as any);
+      const v =
+        mode === "duel"
+          ? getGameDuelEndRating(sorted[i] as any)
+          : getGameTeamEndRating(sorted[i] as any);
       if (typeof v === "number" && Number.isFinite(v)) return v;
     }
     return 0;
@@ -407,10 +419,17 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
     const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
     if (sorted.length === 0) return 0;
 
+    const mode = ratingModeForRows(sorted as any[]);
     const first = sorted[0] as any;
     const last = sorted[sorted.length - 1] as any;
-    const start = getGameEffectiveStartRating(first) ?? getGameEffectiveEndRating(first);
-    const end = getGameEffectiveEndRating(last);
+    const start =
+      mode === "duel"
+        ? (getGameDuelStartRating(first) ?? getGameDuelEndRating(first))
+        : (getGameTeamStartRating(first) ?? getGameTeamEndRating(first));
+    const end =
+      mode === "duel"
+        ? getGameDuelEndRating(last)
+        : getGameTeamEndRating(last);
     if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) return end - start;
     return 0;
   },
@@ -451,8 +470,12 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
   },
   max_player_self_end_rating: (rows) => {
     let best = -Infinity;
+    const mode = ratingModeForRows(rows as any[]);
     for (const g of rows) {
-      const v = getGameSelfEndRating(g);
+      const v =
+        mode === "duel"
+          ? getGameDuelEndRating(g as any)
+          : getGameTeamEndRating(g as any);
       if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
     }
     return Number.isFinite(best) ? best : 0;

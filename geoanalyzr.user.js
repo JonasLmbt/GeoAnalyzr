@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.26
+// @version      1.6.27
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -15395,6 +15395,19 @@
     if (typeof v === "boolean") return v ? "Win" : "Loss";
     return null;
   }
+  function teammateKeyAny(row) {
+    const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
+    return v ? v : null;
+  }
+  function movementTypeKeyAny(row) {
+    const v = asTrimmedString(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
+    if (!v) return null;
+    const k = v.toLowerCase();
+    if (k.includes("nmpz")) return "nmpz";
+    if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
+    if (k.includes("moving")) return "moving";
+    return v;
+  }
   function guessCountryKey(r) {
     const guess = getGuessCountrySelf(r);
     const v = typeof guess === "string" ? guess.trim() : "";
@@ -15479,6 +15492,8 @@
         const s = typeof g?.opponentCountry === "string" ? g.opponentCountry.trim() : "";
         return s ? s : null;
       },
+      movement_type: movementTypeKeyAny,
+      teammate_name: teammateKeyAny,
       game_mode: gameModeKeyAny,
       mode_family: modeFamilyKeyAny,
       result: resultKeyAny,
@@ -15561,7 +15576,11 @@
         const c = control;
         const selected = normalizeAllString(state[c.id] ?? c.default);
         if (!selected) continue;
-        out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+        if (c.options === "auto_teammates_with_solo" && selected === "none") {
+          out.clauses.push({ dimension: c.dimension, op: "eq", value: null });
+        } else {
+          out.clauses.push({ dimension: c.dimension, op: "eq", value: selected });
+        }
         continue;
       }
     }
@@ -39914,9 +39933,9 @@
         assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
         assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
         assert(
-          c.options === "auto_distinct" || c.options === "auto_teammates",
+          c.options === "auto_distinct" || c.options === "auto_teammates" || c.options === "auto_teammates_with_solo",
           "E_BAD_SPEC",
-          `select '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+          `select '${c.id}' options must be 'auto_distinct' | 'auto_teammates' | 'auto_teammates_with_solo'`
         );
         assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
         const dimId = String(c.dimension);
@@ -39946,9 +39965,9 @@
       assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
       assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
       assert(
-        c.options === "auto_distinct" || c.options === "auto_teammates",
+        c.options === "auto_distinct" || c.options === "auto_teammates" || c.options === "auto_teammates_with_solo",
         "E_BAD_SPEC",
-        `Local filter '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+        `Local filter '${c.id}' options must be 'auto_distinct' | 'auto_teammates' | 'auto_teammates_with_solo'`
       );
       assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
       assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);
@@ -41031,8 +41050,8 @@
             label: "Teammate",
             dimension: "teammate_name",
             default: "all",
-            options: "auto_teammates",
-            appliesTo: ["round"]
+            options: "auto_teammates_with_solo",
+            appliesTo: ["round", "game"]
           },
           {
             id: "movement",
@@ -41134,15 +41153,57 @@
                               }
                             }
                           },
-                          { label: "Best rating", measure: "best_end_rating" },
-                          { label: "Longest win streak", measure: "longest_win_streak" },
-                          { label: "Longest loss streak", measure: "longest_loss_streak" },
-                          { label: "Avg score", measure: "avg_score", grain: "round" },
-                          { label: "Avg distance", measure: "avg_distance_km", grain: "round" },
-                          { label: "Avg time", measure: "avg_guess_duration", grain: "round" },
-                          { label: "Time played", measure: "time_played_seconds", grain: "round" },
-                          { label: "Perfect 5k rounds", measure: "fivek_count", grain: "round" },
-                          { label: "Throws (<50)", measure: "throw_count", grain: "round" }
+                          {
+                            label: "Best rating",
+                            measure: "best_end_rating",
+                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Longest win streak",
+                            measure: "longest_win_streak",
+                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Longest loss streak",
+                            measure: "longest_loss_streak",
+                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Avg score (pts)",
+                            measure: "avg_score",
+                            grain: "round",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Avg distance (km)",
+                            measure: "avg_distance_km",
+                            grain: "round",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Avg time (s)",
+                            measure: "avg_guess_duration",
+                            grain: "round",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Time played",
+                            measure: "time_played_seconds",
+                            grain: "round",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Perfect 5k rounds",
+                            measure: "fivek_count",
+                            grain: "round",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          },
+                          {
+                            label: "Throws (<50)",
+                            measure: "throw_count",
+                            grain: "round",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          }
                         ]
                       }
                     },
@@ -41224,7 +41285,10 @@
                           activeAccumulation: "to_date"
                         },
                         sort: { mode: "chronological" },
-                        actions: { hover: true }
+                        actions: {
+                          hover: true,
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
                       }
                     }
                   ]
@@ -44594,11 +44658,11 @@
     const v = pick(g, "teamOneEndRating") ?? pick(g, "player_self_endRating");
     return typeof v === "number" ? v : void 0;
   }
-  function getGameEffectiveStartRating(g) {
-    return getGameModeFamily(g) === "teamduels" ? getGameTeamStartRating(g) : getGameDuelStartRating(g);
-  }
-  function getGameEffectiveEndRating(g) {
-    return getGameModeFamily(g) === "teamduels" ? getGameTeamEndRating(g) : getGameDuelEndRating(g);
+  function ratingModeForRows(rows) {
+    for (const g of rows) {
+      if (getGameModeFamily(g) === "duels") return "duel";
+    }
+    return "team";
   }
   function getGameOutcome(g) {
     const v = getGameSelfVictory(g);
@@ -44862,8 +44926,9 @@
     },
     last_player_self_end_rating: (rows) => {
       const sorted = [...rows].sort((a, b) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
+      const mode = ratingModeForRows(sorted);
       for (let i = sorted.length - 1; i >= 0; i--) {
-        const v = getGameEffectiveEndRating(sorted[i]);
+        const v = mode === "duel" ? getGameDuelEndRating(sorted[i]) : getGameTeamEndRating(sorted[i]);
         if (typeof v === "number" && Number.isFinite(v)) return v;
       }
       return 0;
@@ -44871,10 +44936,11 @@
     trend_player_self_rating: (rows) => {
       const sorted = [...rows].sort((a, b) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
       if (sorted.length === 0) return 0;
+      const mode = ratingModeForRows(sorted);
       const first = sorted[0];
       const last = sorted[sorted.length - 1];
-      const start = getGameEffectiveStartRating(first) ?? getGameEffectiveEndRating(first);
-      const end = getGameEffectiveEndRating(last);
+      const start = mode === "duel" ? getGameDuelStartRating(first) ?? getGameDuelEndRating(first) : getGameTeamStartRating(first) ?? getGameTeamEndRating(first);
+      const end = mode === "duel" ? getGameDuelEndRating(last) : getGameTeamEndRating(last);
       if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) return end - start;
       return 0;
     },
@@ -44913,8 +44979,9 @@
     },
     max_player_self_end_rating: (rows) => {
       let best = -Infinity;
+      const mode = ratingModeForRows(rows);
       for (const g of rows) {
-        const v = getGameSelfEndRating(g);
+        const v = mode === "duel" ? getGameDuelEndRating(g) : getGameTeamEndRating(g);
         if (typeof v === "number" && Number.isFinite(v)) best = Math.max(best, v);
       }
       return Number.isFinite(best) ? best : 0;
@@ -47361,27 +47428,41 @@
     const stateWithoutSelf = { ...state };
     delete stateWithoutSelf[control.id];
     const rows = await getRounds({ global: { spec, state: stateWithoutSelf } });
-    if (control.options === "auto_teammates") {
+    if (control.options === "auto_teammates" || control.options === "auto_teammates_with_solo") {
       const gamesByMate = /* @__PURE__ */ new Map();
       const roundsByMate = /* @__PURE__ */ new Map();
+      const soloGames = /* @__PURE__ */ new Set();
+      let soloRounds = 0;
       for (const r of rows) {
         const mate = r.teammateName;
         const name = typeof mate === "string" ? mate.trim() : "";
-        if (!name) continue;
         const gameId = String(r.gameId ?? "");
         if (!gameId) continue;
+        if (!name) {
+          soloGames.add(gameId);
+          soloRounds++;
+          continue;
+        }
         const set = gamesByMate.get(name) ?? /* @__PURE__ */ new Set();
         set.add(gameId);
         gamesByMate.set(name, set);
         roundsByMate.set(name, (roundsByMate.get(name) ?? 0) + 1);
       }
-      const out2 = Array.from(gamesByMate.entries()).map(([name, games]) => ({
+      const mates = Array.from(gamesByMate.entries()).map(([name, games]) => ({
         value: name,
         label: `${name} (${games.size} games, ${roundsByMate.get(name) ?? 0} rounds)`,
         n: games.size
       })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)).map(({ value, label }) => ({ value, label }));
-      cache.set(key, out2);
-      return out2;
+      if (control.options === "auto_teammates_with_solo") {
+        const out2 = [
+          { value: "none", label: `None (Solo) (${soloGames.size} games, ${soloRounds} rounds)` },
+          ...mates
+        ];
+        cache.set(key, out2);
+        return out2;
+      }
+      cache.set(key, mates);
+      return mates;
     }
     const dimId = control.dimension;
     const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];

@@ -56,9 +56,9 @@ function validateGlobalFiltersSpec(semantic: SemanticRegistry, dash: DashboardDo
       assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
       assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
       assert(
-        c.options === "auto_distinct" || c.options === "auto_teammates",
+        c.options === "auto_distinct" || c.options === "auto_teammates" || c.options === "auto_teammates_with_solo",
         "E_BAD_SPEC",
-        `select '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+        `select '${c.id}' options must be 'auto_distinct' | 'auto_teammates' | 'auto_teammates_with_solo'`
       );
       assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
 
@@ -93,9 +93,9 @@ function validateLocalFiltersSpec(semantic: SemanticRegistry, section: any): voi
     assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
     assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
     assert(
-      c.options === "auto_distinct" || c.options === "auto_teammates",
+      c.options === "auto_distinct" || c.options === "auto_teammates" || c.options === "auto_teammates_with_solo",
       "E_BAD_SPEC",
-      `Local filter '${c.id}' options must be 'auto_distinct' or 'auto_teammates'`
+      `Local filter '${c.id}' options must be 'auto_distinct' | 'auto_teammates' | 'auto_teammates_with_solo'`
     );
     assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
     assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);

@@ -177,6 +177,21 @@ function resultKeyAny(row: any): GroupKey | null {
   return null;
 }
 
+function teammateKeyAny(row: any): GroupKey | null {
+  const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
+  return v ? v : null;
+}
+
+function movementTypeKeyAny(row: any): GroupKey | null {
+  const v = asTrimmedString(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
+  if (!v) return null;
+  const k = v.toLowerCase();
+  if (k.includes("nmpz")) return "nmpz";
+  if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
+  if (k.includes("moving")) return "moving";
+  return v;
+}
+
 export function guessCountryKey(r: RoundRow): GroupKey | null {
   const guess = getGuessCountrySelf(r);
   const v = typeof guess === "string" ? guess.trim() : "";
@@ -269,6 +284,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
       const s = typeof g?.opponentCountry === "string" ? g.opponentCountry.trim() : "";
       return s ? s : null;
     },
+    movement_type: movementTypeKeyAny,
+    teammate_name: teammateKeyAny,
     game_mode: gameModeKeyAny,
     mode_family: modeFamilyKeyAny,
     result: resultKeyAny,

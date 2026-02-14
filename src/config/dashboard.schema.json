@@ -82,7 +82,7 @@
         "label": { "$ref": "#/$defs/title" },
         "default": {},
         "dimension": { "type": "string", "minLength": 1 },
-        "options": { "enum": ["auto_distinct", "auto_teammates"] },
+        "options": { "enum": ["auto_distinct", "auto_teammates", "auto_teammates_with_solo"] },
         "appliesTo": {
           "type": "array",
           "minItems": 1,
@@ -113,7 +113,7 @@
             "properties": {
               "dimension": { "type": "string", "minLength": 1 },
               "default": { "type": "string", "minLength": 1 },
-              "options": { "enum": ["auto_distinct", "auto_teammates"] }
+              "options": { "enum": ["auto_distinct", "auto_teammates", "auto_teammates_with_solo"] }
             }
           }
         }
@@ -171,7 +171,7 @@
         "label": { "$ref": "#/$defs/title" },
         "dimension": { "type": "string", "minLength": 1 },
         "default": { "type": "string", "minLength": 1 },
-        "options": { "enum": ["auto_distinct", "auto_teammates"] },
+        "options": { "enum": ["auto_distinct", "auto_teammates", "auto_teammates_with_solo"] },
         "appliesTo": {
           "type": "array",
           "minItems": 1,

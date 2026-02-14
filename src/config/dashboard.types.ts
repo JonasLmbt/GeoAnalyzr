@@ -54,7 +54,7 @@ export type DateRangeControlSpec = {
   appliesTo: GlobalFilterGrain[];
 };
 
-export type SelectOptionsSpec = "auto_distinct" | "auto_teammates";
+export type SelectOptionsSpec = "auto_distinct" | "auto_teammates" | "auto_teammates_with_solo";
 
 export type SelectControlSpec = {
   id: string;
