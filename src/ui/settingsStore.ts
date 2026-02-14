@@ -2,6 +2,7 @@ import type { DashboardDoc } from "../config/dashboard.types";
 
 export type ThemeMode = "dark" | "light" | "geoguessr";
 export type DateFormatMode = "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale";
+export type CountryFormatMode = "iso2" | "english";
 
 export type SemanticDashboardSettings = {
   appearance: {
@@ -12,6 +13,7 @@ export type SemanticDashboardSettings = {
   standards: {
     dateFormat: DateFormatMode;
     sessionGapMinutes: number;
+    countryFormat: CountryFormatMode;
   };
 };
 
@@ -27,7 +29,8 @@ export const DEFAULT_SETTINGS: SemanticDashboardSettings = {
   },
   standards: {
     dateFormat: "dd/mm/yyyy",
-    sessionGapMinutes: 45
+    sessionGapMinutes: 45,
+    countryFormat: "iso2"
   }
 };
 
@@ -58,6 +61,10 @@ export function normalizeDateFormat(value: unknown): DateFormatMode {
   return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
 }
 
+export function normalizeCountryFormat(value: unknown): CountryFormatMode {
+  return value === "english" ? "english" : "iso2";
+}
+
 function normalizeSettings(raw: unknown): SemanticDashboardSettings {
   const r = typeof raw === "object" && raw ? (raw as Record<string, unknown>) : {};
   const appearance = typeof r.appearance === "object" && r.appearance ? (r.appearance as Record<string, unknown>) : {};
@@ -71,7 +78,8 @@ function normalizeSettings(raw: unknown): SemanticDashboardSettings {
     },
     standards: {
       dateFormat: normalizeDateFormat(standards.dateFormat),
-      sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes
+      sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes,
+      countryFormat: normalizeCountryFormat(standards.countryFormat)
     }
   };
 }
@@ -172,6 +180,7 @@ export function applySettingsToRoot(root: HTMLDivElement, settings: SemanticDash
   root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
   root.dataset.gaDateFormat = settings.standards.dateFormat;
   root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
+  root.dataset.gaCountryFormat = settings.standards.countryFormat;
   // GeoGuessr theme uses brand-tuned graph color regardless of the user's picker selection.
   root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
 }

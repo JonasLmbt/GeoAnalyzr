@@ -73,6 +73,31 @@ function readDateFormatMode(doc: Document): "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-
   return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
 }
 
+function readCountryFormatMode(doc: Document): "iso2" | "english" {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+}
+
+function formatCountry(doc: Document, isoOrName: string): string {
+  const mode = readCountryFormatMode(doc);
+  if (mode === "iso2") return isoOrName;
+  const iso2 = isoOrName.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+  if (typeof Intl === "undefined" || !(Intl as any).DisplayNames) return isoOrName;
+  try {
+    const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
+    return dn.of(iso2) ?? isoOrName;
+  } catch {
+    return isoOrName;
+  }
+}
+
+function formatDimensionKey(doc: Document, dimId: string, key: string): string {
+  if (dimId === "confused_countries") return key; // always iso2 for space reasons
+  if (dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country") return formatCountry(doc, key);
+  return key;
+}
+
 function formatDateTime(doc: Document, ts: number): string {
   const d = new Date(ts);
   if (!Number.isFinite(d.getTime())) return String(ts);
@@ -354,7 +379,7 @@ export async function renderBreakdownWidget(
 
       const left = doc.createElement("div");
       left.className = "ga-breakdown-label";
-      left.textContent = r.key;
+      left.textContent = formatDimensionKey(doc, dimId, r.key);
 
       const right = doc.createElement("div");
       right.className = "ga-breakdown-right";

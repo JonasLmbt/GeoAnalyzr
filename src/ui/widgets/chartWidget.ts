@@ -168,6 +168,31 @@ function formatDateTime(doc: Document, ts: number): string {
   return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
 }
 
+function readCountryFormatMode(doc: Document): "iso2" | "english" {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+}
+
+function formatCountry(doc: Document, isoOrName: string): string {
+  const mode = readCountryFormatMode(doc);
+  if (mode === "iso2") return isoOrName;
+  const iso2 = isoOrName.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+  if (typeof Intl === "undefined" || !(Intl as any).DisplayNames) return isoOrName;
+  try {
+    const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
+    return dn.of(iso2) ?? isoOrName;
+  } catch {
+    return isoOrName;
+  }
+}
+
+function formatDimensionKey(doc: Document, dimId: string, key: string): string {
+  if (dimId === "confused_countries") return key; // always iso2 for space reasons
+  if (dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country") return formatCountry(doc, key);
+  return key;
+}
+
 function formatMeasureValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
   const measure = semantic.measures[measureId];
   const unit = measure ? semantic.units[measure.unit] : undefined;
@@ -872,7 +897,7 @@ export async function renderChartWidget(
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${p.d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+        tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
         if (click?.type === "drilldown") {
@@ -920,7 +945,7 @@ export async function renderChartWidget(
         rect.style.transformBox = "view-box";
 
         const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-        tooltip.textContent = `${d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
+        tooltip.textContent = `${formatDimensionKey(doc, dimId, d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
         const click = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
@@ -957,7 +982,7 @@ export async function renderChartWidget(
           tx.setAttribute("font-size", "10");
           tx.setAttribute("fill", "var(--ga-axis-text)");
           tx.setAttribute("opacity", "0.95");
-          tx.textContent = d.x;
+          tx.textContent = formatDimensionKey(doc, dimId, d.x);
           svg.appendChild(tx);
         }
       });

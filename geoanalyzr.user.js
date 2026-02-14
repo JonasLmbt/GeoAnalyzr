@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.20
+// @version      1.6.21
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -40429,14 +40429,16 @@
         unit: "km",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_distance_km"
+        formulaId: "mean_player_self_distance_km",
+        range: { min: 0 }
       },
       avg_guess_duration: {
         label: "Avg guess duration",
         unit: "seconds",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "mean_duration_seconds"
+        formulaId: "mean_duration_seconds",
+        range: { min: 0 }
       },
       fivek_rate: {
         label: "5k rate",
@@ -40444,6 +40446,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "rate_player_self_score_eq_5000",
+        range: { min: 0, max: 100 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
@@ -40455,6 +40458,7 @@
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_5k_round",
+        range: { min: 0 },
         drilldown: {
           filterFromPoint: true,
           extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
@@ -40465,42 +40469,48 @@
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "rate_near_perfect_round"
+        formulaId: "rate_near_perfect_round",
+        range: { min: 0, max: 100 }
       },
       near_perfect_count: {
         label: "Near-perfect count (>=4500)",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_near_perfect_round"
+        formulaId: "count_near_perfect_round",
+        range: { min: 0 }
       },
       low_score_rate: {
         label: "Low score rate (<500)",
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "rate_low_score_round"
+        formulaId: "rate_low_score_round",
+        range: { min: 0, max: 100 }
       },
       low_score_count: {
         label: "Low score count (<500)",
         unit: "count",
         grain: "round",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_low_score_round"
+        formulaId: "count_low_score_round",
+        range: { min: 0 }
       },
       win_rate: {
         label: "Win rate",
         unit: "percent",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "rate_player_self_win"
+        formulaId: "rate_player_self_win",
+        range: { min: 0, max: 100 }
       },
       win_count: {
         label: "Win count",
         unit: "count",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_win_game"
+        formulaId: "count_win_game",
+        range: { min: 0 }
       },
       games_with_result_count: {
         label: "Games with result data",
@@ -40804,6 +40814,7 @@
             { key: "ts", label: "Date", sortable: true },
             { key: "result", label: "Result", sortable: true, colored: true },
             { key: "roundNumber", label: "Round", sortable: true },
+            { key: "movementType", label: "Movement", sortable: true },
             { key: "player_self_score", label: "Score", sortable: true },
             { key: "true_country", label: "Country", sortable: true },
             { key: "durationSeconds", label: "Guess Duration", sortable: true },
@@ -42899,7 +42910,8 @@
     },
     standards: {
       dateFormat: "dd/mm/yyyy",
-      sessionGapMinutes: 45
+      sessionGapMinutes: 45,
+      countryFormat: "iso2"
     }
   };
   function cloneTemplate(value) {
@@ -42924,6 +42936,9 @@
   function normalizeDateFormat(value) {
     return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
   }
+  function normalizeCountryFormat(value) {
+    return value === "english" ? "english" : "iso2";
+  }
   function normalizeSettings(raw) {
     const r = typeof raw === "object" && raw ? raw : {};
     const appearance = typeof r.appearance === "object" && r.appearance ? r.appearance : {};
@@ -42937,7 +42952,8 @@
       },
       standards: {
         dateFormat: normalizeDateFormat(standards.dateFormat),
-        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes
+        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes,
+        countryFormat: normalizeCountryFormat(standards.countryFormat)
       }
     };
   }
@@ -43026,6 +43042,7 @@
     root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
     root.dataset.gaDateFormat = settings.standards.dateFormat;
     root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
+    root.dataset.gaCountryFormat = settings.standards.countryFormat;
     root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
   }
 
@@ -43688,12 +43705,25 @@
       sessionInput.value = String(settings.standards.sessionGapMinutes);
       sessionField.appendChild(sessionLabel);
       sessionField.appendChild(sessionInput);
+      const countryField = doc.createElement("div");
+      countryField.className = "ga-settings-field";
+      const countryLabel2 = doc.createElement("label");
+      countryLabel2.textContent = "Country format";
+      const countrySelect = doc.createElement("select");
+      countrySelect.innerHTML = `
+      <option value="iso2">ISO2 (e.g. US)</option>
+      <option value="english">English (e.g. United States)</option>
+    `;
+      countrySelect.value = settings.standards.countryFormat;
+      countryField.appendChild(countryLabel2);
+      countryField.appendChild(countrySelect);
       standardsGrid.appendChild(dateField);
       standardsGrid.appendChild(sessionField);
+      standardsGrid.appendChild(countryField);
       standardsPane.appendChild(standardsGrid);
       const standardsNote = doc.createElement("div");
       standardsNote.className = "ga-settings-note";
-      standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views.";
+      standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views. Country format affects country labels (confusion matrix stays ISO2).";
       standardsPane.appendChild(standardsNote);
       const templatePane = doc.createElement("div");
       templatePane.className = "ga-settings-pane";
@@ -43773,7 +43803,8 @@
             sessionGapMinutes: (() => {
               const raw = Number(sessionInput.value);
               return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes;
-            })()
+            })(),
+            countryFormat: normalizeCountryFormat(countrySelect.value)
           }
         };
         await applySettings(next);
@@ -43792,6 +43823,9 @@
         void persistSettings();
       });
       sessionInput.addEventListener("change", () => {
+        void persistSettings();
+      });
+      countrySelect.addEventListener("change", () => {
         void persistSettings();
       });
       let templateDebounce = null;
@@ -43976,6 +44010,23 @@
       const mode = root.dataset?.gaDateFormat;
       return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
     }
+    readCountryFormatMode() {
+      const root = this.root;
+      return root.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+    }
+    formatCountry(isoOrName) {
+      const mode = this.readCountryFormatMode();
+      if (mode === "iso2") return isoOrName;
+      const iso2 = isoOrName.trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+      if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
+      try {
+        const dn = new Intl.DisplayNames(["en"], { type: "region" });
+        return dn.of(iso2) ?? isoOrName;
+      } catch {
+        return isoOrName;
+      }
+    }
     formatDate(ts, mode) {
       const d = new Date(ts);
       if (!Number.isFinite(d.getTime())) return String(ts);
@@ -44135,15 +44186,8 @@
         const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
         text = signed;
       }
-      if ((key === "true_country" || key === "trueCountry") && typeof raw === "string") {
-        const iso2 = raw.trim().toUpperCase();
-        if (/^[A-Z]{2}$/.test(iso2) && typeof Intl !== "undefined" && Intl.DisplayNames) {
-          try {
-            const dn = new Intl.DisplayNames(["en"], { type: "region" });
-            text = dn.of(iso2) ?? raw;
-          } catch {
-          }
-        }
+      if ((key === "true_country" || key === "trueCountry" || key === "player_self_country" || key === "player_self_guessCountry" || key === "opponentCountry") && typeof raw === "string") {
+        text = this.formatCountry(raw);
       }
       if (key === "gameId" && col.display?.truncate) {
         const head = typeof col.display.truncateHead === "number" ? col.display.truncateHead : 8;
@@ -44934,6 +44978,28 @@
     if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
     return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
   }
+  function readCountryFormatMode(doc) {
+    const root = doc.querySelector(".ga-root");
+    return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+  }
+  function formatCountry(doc, isoOrName) {
+    const mode = readCountryFormatMode(doc);
+    if (mode === "iso2") return isoOrName;
+    const iso2 = isoOrName.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+    if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
+    try {
+      const dn = new Intl.DisplayNames(["en"], { type: "region" });
+      return dn.of(iso2) ?? isoOrName;
+    } catch {
+      return isoOrName;
+    }
+  }
+  function formatDimensionKey(doc, dimId, key) {
+    if (dimId === "confused_countries") return key;
+    if (dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country") return formatCountry(doc, key);
+    return key;
+  }
   function formatMeasureValue(doc, semantic, measureId, value) {
     const measure = semantic.measures[measureId];
     const unit = measure ? semantic.units[measure.unit] : void 0;
@@ -45512,7 +45578,7 @@
           dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${p.d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+          tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const click = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
           if (click?.type === "drilldown") {
@@ -45557,7 +45623,7 @@
           rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
           rect.style.transformBox = "view-box";
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${d.x}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
+          tooltip.textContent = `${formatDimensionKey(doc, dimId, d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
           rect.appendChild(tooltip);
           const click = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
           if (click?.type === "drilldown") {
@@ -45591,7 +45657,7 @@
             tx.setAttribute("font-size", "10");
             tx.setAttribute("fill", "var(--ga-axis-text)");
             tx.setAttribute("opacity", "0.95");
-            tx.textContent = d.x;
+            tx.textContent = formatDimensionKey(doc, dimId, d.x);
             svg.appendChild(tx);
           }
         });
@@ -45684,6 +45750,28 @@
     const root = doc.querySelector(".ga-root");
     const mode = root?.dataset?.gaDateFormat;
     return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
+  }
+  function readCountryFormatMode2(doc) {
+    const root = doc.querySelector(".ga-root");
+    return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+  }
+  function formatCountry2(doc, isoOrName) {
+    const mode = readCountryFormatMode2(doc);
+    if (mode === "iso2") return isoOrName;
+    const iso2 = isoOrName.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+    if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
+    try {
+      const dn = new Intl.DisplayNames(["en"], { type: "region" });
+      return dn.of(iso2) ?? isoOrName;
+    } catch {
+      return isoOrName;
+    }
+  }
+  function formatDimensionKey2(doc, dimId, key) {
+    if (dimId === "confused_countries") return key;
+    if (dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country") return formatCountry2(doc, key);
+    return key;
   }
   function formatDateTime3(doc, ts) {
     const d = new Date(ts);
@@ -45909,7 +45997,7 @@
         line.className = "ga-breakdown-row";
         const left = doc.createElement("div");
         left.className = "ga-breakdown-label";
-        left.textContent = r.key;
+        left.textContent = formatDimensionKey2(doc, dimId, r.key);
         const right = doc.createElement("div");
         right.className = "ga-breakdown-right";
         const val = doc.createElement("div");
@@ -46376,10 +46464,30 @@
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
       return ph;
     }
-    const interpolate = (text, localState) => {
+    const readCountryFormatMode4 = () => {
+      const rootEl = root.closest?.(".ga-root") ?? null;
+      return rootEl?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+    };
+    const formatCountry4 = (isoOrName) => {
+      if (readCountryFormatMode4() === "iso2") return isoOrName;
+      const iso2 = isoOrName.trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+      if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
+      try {
+        const dn = new Intl.DisplayNames(["en"], { type: "region" });
+        return dn.of(iso2) ?? isoOrName;
+      } catch {
+        return isoOrName;
+      }
+    };
+    const interpolate = (text, localState, dimById) => {
       return String(text).replace(/\{\{\s*local\.([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, id) => {
         const v = localState[id];
-        return typeof v === "string" && v !== "all" ? v : "";
+        const raw = typeof v === "string" && v !== "all" ? v : "";
+        const dim = dimById?.[id];
+        if (!raw) return "";
+        if (dim === "true_country" || dim === "guess_country" || dim === "opponent_country") return formatCountry4(raw);
+        return raw;
       });
     };
     const renderLocalFiltersBar = async (args) => {
@@ -46450,11 +46558,14 @@
         }
         let values = Array.from(counts.entries()).map(([value, n]) => ({ value, n })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
         if (dimId === "duration_bucket") values = values.sort((a, b) => (durationRank2.get(a.value) ?? 999) - (durationRank2.get(b.value) ?? 999));
-        return values.map((v) => ({
-          value: v.value,
-          label: `${dimId === "movement_type" ? movementLabel2(v.value) : v.value} (${v.n} rounds)`,
-          n: v.n
-        }));
+        return values.map((v) => {
+          const baseLabel = dimId === "movement_type" ? movementLabel2(v.value) : dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country" ? formatCountry4(v.value) : v.value;
+          return {
+            value: v.value,
+            label: `${baseLabel} (${v.n} rounds)`,
+            n: v.n
+          };
+        });
       };
       for (const control of spec.controls) {
         const wrap = doc.createElement("div");
@@ -46506,6 +46617,12 @@
       const localHost = doc.createElement("div");
       content.appendChild(localHost);
       const localSpec = section.localFilters;
+      const dimByLocalId = {};
+      if (localSpec && Array.isArray(localSpec.controls)) {
+        for (const c of localSpec.controls) {
+          if (c && typeof c.id === "string" && typeof c.dimension === "string") dimByLocalId[c.id] = c.dimension;
+        }
+      }
       const localState = localSpec && Array.isArray(localSpec.controls) && localSpec.controls.length ? await renderLocalFiltersBar({
         host: localHost,
         spec: localSpec,
@@ -46543,7 +46660,7 @@
         card.style.gridRow = `${placed.y + 1} / span ${placed.h}`;
         const header = doc.createElement("div");
         header.className = "ga-card-header";
-        header.textContent = interpolate(placed.title, localState);
+        header.textContent = interpolate(placed.title, localState, dimByLocalId);
         const body = doc.createElement("div");
         body.className = "ga-card-body";
         const inner = doc.createElement("div");
@@ -46557,7 +46674,7 @@
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
           container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
           container.style.gridRow = `${p.y + 1} / span ${p.h}`;
-          const wInterp = { ...w, title: interpolate(w.title, localState) };
+          const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) };
           container.appendChild(await renderWidget(wInterp));
           inner.appendChild(container);
         }
@@ -46673,6 +46790,23 @@
     el.textContent = label;
     return el;
   }
+  function readCountryFormatMode3(doc) {
+    const root = doc.querySelector(".ga-root");
+    return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+  }
+  function formatCountry3(doc, isoOrName) {
+    const mode = readCountryFormatMode3(doc);
+    if (mode === "iso2") return isoOrName;
+    const iso2 = isoOrName.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+    if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
+    try {
+      const dn = new Intl.DisplayNames(["en"], { type: "region" });
+      return dn.of(iso2) ?? isoOrName;
+    } catch {
+      return isoOrName;
+    }
+  }
   async function renderGlobalFiltersBar(args) {
     const { container, semantic, spec, state, setValue, setAll, reset, getDistinctOptions, controlIds, constraints } = args;
     const doc = container.ownerDocument;
@@ -46739,7 +46873,8 @@
       const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
       if (!isRequired) sel.appendChild(new Option("All", "all"));
       for (const opt of options) {
-        sel.appendChild(new Option(opt.label, opt.value));
+        const label = control.dimension === "true_country" ? formatCountry3(doc, opt.label) : opt.label;
+        sel.appendChild(new Option(label, opt.value));
       }
       const hasCurrent = options.some((o) => o.value === current);
       const nextValue = hasCurrent ? current : isRequired ? options[0]?.value ?? "" : "all";

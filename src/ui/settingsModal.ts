@@ -5,6 +5,7 @@ import { renderLayoutEditor } from "./layoutEditor";
 import {
   DEFAULT_SETTINGS,
   normalizeColor,
+  normalizeCountryFormat,
   normalizeDateFormat,
   normalizeTheme,
   type SemanticDashboardSettings
@@ -182,13 +183,28 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     sessionField.appendChild(sessionLabel);
     sessionField.appendChild(sessionInput);
 
+    const countryField = doc.createElement("div");
+    countryField.className = "ga-settings-field";
+    const countryLabel = doc.createElement("label");
+    countryLabel.textContent = "Country format";
+    const countrySelect = doc.createElement("select");
+    countrySelect.innerHTML = `
+      <option value="iso2">ISO2 (e.g. US)</option>
+      <option value="english">English (e.g. United States)</option>
+    `;
+    countrySelect.value = settings.standards.countryFormat;
+    countryField.appendChild(countryLabel);
+    countryField.appendChild(countrySelect);
+
     standardsGrid.appendChild(dateField);
     standardsGrid.appendChild(sessionField);
+    standardsGrid.appendChild(countryField);
     standardsPane.appendChild(standardsGrid);
 
     const standardsNote = doc.createElement("div");
     standardsNote.className = "ga-settings-note";
-    standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views.";
+    standardsNote.textContent =
+      "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views. Country format affects country labels (confusion matrix stays ISO2).";
     standardsPane.appendChild(standardsNote);
 
     const templatePane = doc.createElement("div");
@@ -279,7 +295,8 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
           sessionGapMinutes: (() => {
             const raw = Number(sessionInput.value);
             return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes;
-          })()
+          })(),
+          countryFormat: normalizeCountryFormat(countrySelect.value)
         }
       };
       await applySettings(next);
@@ -299,6 +316,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       void persistSettings();
     });
     sessionInput.addEventListener("change", () => {
+      void persistSettings();
+    });
+    countrySelect.addEventListener("change", () => {
       void persistSettings();
     });
 

@@ -51,6 +51,26 @@ function renderControlLabel(doc: Document, label: string): HTMLElement {
   return el;
 }
 
+function readCountryFormatMode(doc: Document): "iso2" | "english" {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+}
+
+function formatCountry(doc: Document, isoOrName: string): string {
+  const mode = readCountryFormatMode(doc);
+  if (mode === "iso2") return isoOrName;
+
+  const iso2 = isoOrName.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+  if (typeof Intl === "undefined" || !(Intl as any).DisplayNames) return isoOrName;
+  try {
+    const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
+    return dn.of(iso2) ?? isoOrName;
+  } catch {
+    return isoOrName;
+  }
+}
+
 export async function renderGlobalFiltersBar(args: {
   container: HTMLElement;
   semantic: SemanticRegistry;
@@ -147,7 +167,8 @@ export async function renderGlobalFiltersBar(args: {
     const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
     if (!isRequired) sel.appendChild(new Option("All", "all"));
     for (const opt of options) {
-      sel.appendChild(new Option(opt.label, opt.value));
+      const label = control.dimension === "true_country" ? formatCountry(doc, opt.label) : opt.label;
+      sel.appendChild(new Option(label, opt.value));
     }
 
     const hasCurrent = options.some((o) => o.value === current);

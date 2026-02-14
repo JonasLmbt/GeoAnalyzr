@@ -85,10 +85,32 @@ export async function renderDashboard(
     return ph;
   }
 
-  const interpolate = (text: string, localState: Record<string, string>): string => {
+  const readCountryFormatMode = (): "iso2" | "english" => {
+    const rootEl = (root.closest?.(".ga-root") as HTMLElement | null) ?? null;
+    return rootEl?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+  };
+
+  const formatCountry = (isoOrName: string): string => {
+    if (readCountryFormatMode() === "iso2") return isoOrName;
+    const iso2 = isoOrName.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+    if (typeof Intl === "undefined" || !(Intl as any).DisplayNames) return isoOrName;
+    try {
+      const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
+      return dn.of(iso2) ?? isoOrName;
+    } catch {
+      return isoOrName;
+    }
+  };
+
+  const interpolate = (text: string, localState: Record<string, string>, dimById?: Record<string, string>): string => {
     return String(text).replace(/\{\{\s*local\.([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, id: string) => {
       const v = localState[id];
-      return typeof v === "string" && v !== "all" ? v : "";
+      const raw = typeof v === "string" && v !== "all" ? v : "";
+      const dim = dimById?.[id];
+      if (!raw) return "";
+      if (dim === "true_country" || dim === "guess_country" || dim === "opponent_country") return formatCountry(raw);
+      return raw;
     });
   };
 
@@ -188,11 +210,19 @@ export async function renderDashboard(
         .sort((a, b) => (b.n - a.n) || a.value.localeCompare(b.value));
       if (dimId === "duration_bucket") values = values.sort((a, b) => (durationRank.get(a.value) ?? 999) - (durationRank.get(b.value) ?? 999));
 
-      return values.map((v) => ({
-        value: v.value,
-        label: `${dimId === "movement_type" ? movementLabel(v.value) : v.value} (${v.n} rounds)`,
-        n: v.n
-      }));
+      return values.map((v) => {
+        const baseLabel =
+          dimId === "movement_type"
+            ? movementLabel(v.value)
+            : dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country"
+              ? formatCountry(v.value)
+              : v.value;
+        return {
+          value: v.value,
+          label: `${baseLabel} (${v.n} rounds)`,
+          n: v.n
+        };
+      });
     };
 
     for (const control of spec.controls as LocalFilterControlSpec[]) {
@@ -265,6 +295,12 @@ export async function renderDashboard(
     content.appendChild(localHost);
 
     const localSpec = (section as any).localFilters as LocalFiltersSpec | undefined;
+    const dimByLocalId: Record<string, string> = {};
+    if (localSpec && Array.isArray((localSpec as any).controls)) {
+      for (const c of localSpec.controls as any[]) {
+        if (c && typeof c.id === "string" && typeof c.dimension === "string") dimByLocalId[c.id] = c.dimension;
+      }
+    }
     const localState =
       localSpec && Array.isArray((localSpec as any).controls) && (localSpec as any).controls.length
         ? await renderLocalFiltersBar({
@@ -318,7 +354,7 @@ export async function renderDashboard(
 
       const header = doc.createElement("div");
       header.className = "ga-card-header";
-      header.textContent = interpolate(placed.title, localState);
+      header.textContent = interpolate(placed.title, localState, dimByLocalId);
 
       const body = doc.createElement("div");
       body.className = "ga-card-body";
@@ -337,7 +373,7 @@ export async function renderDashboard(
         container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
         container.style.gridRow = `${p.y + 1} / span ${p.h}`;
 
-        const wInterp = { ...w, title: interpolate(w.title, localState) };
+        const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) };
         container.appendChild(await renderWidget(wInterp));
         inner.appendChild(container);
       }

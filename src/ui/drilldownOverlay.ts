@@ -191,6 +191,26 @@ export class DrilldownOverlay {
     return mode === "mm/dd/yyyy" || mode === "yyyy-mm-dd" || mode === "locale" ? mode : "dd/mm/yyyy";
   }
 
+  private readCountryFormatMode(): "iso2" | "english" {
+    const root = this.root as HTMLElement & { dataset?: DOMStringMap };
+    return root.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+  }
+
+  private formatCountry(isoOrName: string): string {
+    const mode = this.readCountryFormatMode();
+    if (mode === "iso2") return isoOrName;
+
+    const iso2 = isoOrName.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+    if (typeof Intl === "undefined" || !(Intl as any).DisplayNames) return isoOrName;
+    try {
+      const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
+      return dn.of(iso2) ?? isoOrName;
+    } catch {
+      return isoOrName;
+    }
+  }
+
   private formatDate(ts: number, mode: "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale"): string {
     const d = new Date(ts);
     if (!Number.isFinite(d.getTime())) return String(ts);
@@ -398,16 +418,15 @@ export class DrilldownOverlay {
       const signed = raw > 0 ? `+${Math.round(raw)}` : `${Math.round(raw)}`;
       text = signed;
     }
-    if ((key === "true_country" || key === "trueCountry") && typeof raw === "string") {
-      const iso2 = raw.trim().toUpperCase();
-      if (/^[A-Z]{2}$/.test(iso2) && typeof Intl !== "undefined" && (Intl as any).DisplayNames) {
-        try {
-          const dn = new (Intl as any).DisplayNames(["en"], { type: "region" });
-          text = dn.of(iso2) ?? raw;
-        } catch {
-          // keep raw
-        }
-      }
+    if (
+      (key === "true_country" ||
+        key === "trueCountry" ||
+        key === "player_self_country" ||
+        key === "player_self_guessCountry" ||
+        key === "opponentCountry") &&
+      typeof raw === "string"
+    ) {
+      text = this.formatCountry(raw);
     }
 
     if (key === "gameId" && col.display?.truncate) {

@@ -371,14 +371,16 @@
       "unit": "km",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_player_self_distance_km"
+      "formulaId": "mean_player_self_distance_km",
+      "range": { "min": 0 }
     },
     "avg_guess_duration": {
       "label": "Avg guess duration",
       "unit": "seconds",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "mean_duration_seconds"
+      "formulaId": "mean_duration_seconds",
+      "range": { "min": 0 }
     },
     "fivek_rate": {
       "label": "5k rate",
@@ -386,6 +388,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "rate_player_self_score_eq_5000",
+      "range": { "min": 0, "max": 100 },
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
@@ -397,6 +400,7 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_5k_round",
+      "range": { "min": 0},
       "drilldown": {
         "filterFromPoint": true,
         "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
@@ -407,28 +411,32 @@
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_near_perfect_round"
+      "formulaId": "rate_near_perfect_round",
+      "range": { "min": 0, "max": 100 }
     },
     "near_perfect_count": {
       "label": "Near-perfect count (>=4500)",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_near_perfect_round"
+      "formulaId": "count_near_perfect_round",
+      "range": { "min": 0}
     },
     "low_score_rate": {
       "label": "Low score rate (<500)",
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_low_score_round"
+      "formulaId": "rate_low_score_round",
+      "range": { "min": 0, "max": 100 }
     },
     "low_score_count": {
       "label": "Low score count (<500)",
       "unit": "count",
       "grain": "round",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_low_score_round"
+      "formulaId": "count_low_score_round",
+      "range": { "min": 0}
     },
 
     "win_rate": {
@@ -436,14 +444,16 @@
       "unit": "percent",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_player_self_win"
+      "formulaId": "rate_player_self_win",
+      "range": { "min": 0, "max": 100 }
     },
     "win_count": {
       "label": "Win count",
       "unit": "count",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_win_game"
+      "formulaId": "count_win_game",
+      "range": { "min": 0 }
     },
     "games_with_result_count": {
       "label": "Games with result data",
@@ -752,6 +762,7 @@
           { "key": "ts", "label": "Date", "sortable": true },
           { "key": "result", "label": "Result", "sortable": true, "colored": true },
           { "key": "roundNumber", "label": "Round", "sortable": true },
+          { "key": "movementType", "label": "Movement", "sortable": true },
           { "key": "player_self_score", "label": "Score", "sortable": true },
           { "key": "true_country", "label": "Country", "sortable": true },
           { "key": "durationSeconds", "label": "Guess Duration", "sortable": true },
