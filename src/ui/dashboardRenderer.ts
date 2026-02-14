@@ -234,10 +234,8 @@ export async function renderDashboard(
       const stateWithoutSelf: Record<string, string> = { ...nextState };
       delete stateWithoutSelf[control.id];
       const options = computeOptions(control, stateWithoutSelf);
-
+ 
       const isRequired = control.required === true;
-      if (!isRequired) sel.appendChild(new Option("All", "all"));
-      for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
 
       const current = typeof nextState[control.id] === "string" ? nextState[control.id] : "";
       const hasCurrent = options.some((o) => o.value === current);
@@ -259,6 +257,8 @@ export async function renderDashboard(
 
       if (useMap) {
         wrap.classList.add("ga-filter-map");
+        const mapSpec: any = (control as any).map;
+        if (mapSpec?.variant === "wide") wrap.classList.add("ga-filter-map-wide");
         const selected = doc.createElement("div");
         selected.className = "ga-filter-map-selected";
         const txt = next && next !== "all" ? formatCountry(next) : "";
@@ -267,12 +267,20 @@ export async function renderDashboard(
 
         const mapHost = doc.createElement("div");
         mapHost.className = "ga-filter-map-host";
+        const mapHeight = typeof mapSpec?.height === "number" && Number.isFinite(mapSpec.height) ? Math.round(mapSpec.height) : null;
+        if (mapHeight && mapHeight >= 160 && mapHeight <= 520) {
+          mapHost.style.setProperty("--ga-country-map-h", `${mapHeight}px`);
+        }
         wrap.appendChild(mapHost);
 
         try {
+          const restrictToOptions = mapSpec?.restrictToOptions === true;
+          const selectableValues = restrictToOptions ? options.map((o) => o.value) : undefined;
           await renderCountryMapPicker({
             container: mapHost,
             value: next,
+            selectableValues,
+            tintSelectable: mapSpec?.tintSelectable !== false,
             onChange: (iso2) => {
               nextState[control.id] = iso2;
               localStateBySection.set(sectionId, { ...nextState });

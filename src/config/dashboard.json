@@ -1466,6 +1466,12 @@
               "label": "Country",
               "dimension": "true_country",
               "presentation": "map",
+              "map": {
+                "variant": "wide",
+                "height": 300,
+                "restrictToOptions": true,
+                "tintSelectable": true
+              },
               "default": "auto_top",
               "options": "auto_distinct",
               "required": true,

@@ -56,6 +56,16 @@ export type DateRangeControlSpec = {
 
 export type SelectOptionsSpec = "auto_distinct" | "auto_teammates";
 
+export type MapPickerSpec = {
+  variant?: "compact" | "wide";
+  // Height in CSS px for the map container.
+  height?: number;
+  // If true, only countries present in the select options are selectable/highlighted.
+  restrictToOptions?: boolean;
+  // If true, lightly tint selectable countries.
+  tintSelectable?: boolean;
+};
+
 export type SelectControlSpec = {
   id: string;
   type: "select";
@@ -63,6 +73,7 @@ export type SelectControlSpec = {
   dimension: string;
   // Optional UI hint. Default: dropdown.
   presentation?: "dropdown" | "map";
+  map?: MapPickerSpec;
   default: "all" | string;
   options: SelectOptionsSpec;
   appliesTo: GlobalFilterGrain[];
@@ -86,6 +97,7 @@ export type LocalFilterControlSpec = {
   dimension: string;
   // Optional UI hint. Default: dropdown.
   presentation?: "dropdown" | "map";
+  map?: MapPickerSpec;
   // "auto_top" = pick the most frequent option in the current section dataset.
   default: "auto_top" | string;
   options: LocalSelectOptionsSpec;

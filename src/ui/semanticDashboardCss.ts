@@ -170,14 +170,16 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     }
 
     .ga-filter.ga-filter-map { min-width: 340px; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; min-width: 520px; }
     .ga-filter-map-selected {
       font-size: 12px;
       color: var(--ga-text-muted);
       margin-bottom: 2px;
     }
     .ga-filter-map-host { width: 340px; max-width: 100%; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-filter-map-host { width: 100%; }
     .ga-country-map {
-      height: 240px;
+      height: var(--ga-country-map-h, 240px);
       width: 100%;
       border-radius: 14px;
       overflow: hidden;
@@ -203,16 +205,18 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     }
     .ga-country-map-btn:hover { background: rgba(30,30,48,0.88); }
     .ga-country-map-hint { font-size: 11px; color: rgba(243,244,255,0.66); }
-    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; }
+    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; touch-action: none; display:block; }
     .ga-country-shape {
-      fill: rgba(255,255,255,0.06);
-      stroke: rgba(255,255,255,0.22);
+      fill: rgba(255,255,255,0.03);
+      stroke: rgba(255,255,255,0.16);
       stroke-width: 1;
       vector-effect: non-scaling-stroke;
-      cursor: pointer;
+      cursor: grab;
       transition: fill 120ms ease, stroke 120ms ease;
     }
-    .ga-country-shape.hover { fill: rgba(255,255,255,0.12); }
+    .ga-country-shape.selectable { fill: rgba(58, 232, 189, 0.10); stroke: rgba(255,255,255,0.22); cursor: pointer; }
+    .ga-country-shape.disabled { fill: rgba(255,255,255,0.02); stroke: rgba(255,255,255,0.08); opacity: 0.45; pointer-events: none; }
+    .ga-country-shape.selectable.hover { fill: rgba(58, 232, 189, 0.20); }
     .ga-country-shape.active {
       fill: rgba(254,205,25,0.40);
       stroke: rgba(254,205,25,0.72);

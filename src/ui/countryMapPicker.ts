@@ -115,11 +115,25 @@ function applyViewport(g: SVGGElement, vp: Viewport): void {
 export async function renderCountryMapPicker(args: {
   container: HTMLElement;
   value: string;
+  selectableValues?: string[];
+  tintSelectable?: boolean;
   onChange: (iso2: string) => void;
 }): Promise<void> {
   const { container, value, onChange } = args;
   const doc = container.ownerDocument;
   container.innerHTML = "";
+  container.classList.add("ga-country-map");
+
+  const selectableMap = new Map<string, string>();
+  if (Array.isArray(args.selectableValues)) {
+    for (const v of args.selectableValues) {
+      const norm = normalizeIso2(v);
+      if (!norm) continue;
+      if (!selectableMap.has(norm)) selectableMap.set(norm, String(v));
+    }
+  }
+  const hasSelectableFilter = selectableMap.size > 0;
+  const tintSelectable = args.tintSelectable !== false;
 
   let geojson: any;
   let iso3ToIso2: Map<string, string>;
@@ -189,6 +203,12 @@ export async function renderCountryMapPicker(args: {
     p.setAttribute("fill-rule", "evenodd");
     p.dataset.iso2 = iso2;
     p.classList.add("ga-country-shape");
+    const isSelectable = !hasSelectableFilter || selectableMap.has(iso2);
+    if (isSelectable) {
+      if (tintSelectable) p.classList.add("selectable");
+    } else {
+      p.classList.add("disabled");
+    }
     g.appendChild(p);
 
     const list = pathsByIso2.get(iso2) ?? [];
@@ -207,16 +227,11 @@ export async function renderCountryMapPicker(args: {
   refreshActive();
 
   for (const [iso2, list] of pathsByIso2.entries()) {
+    const isSelectable = !hasSelectableFilter || selectableMap.has(iso2);
+    if (!isSelectable) continue;
     for (const el of list) {
-      el.addEventListener("mouseenter", () => el.classList.add("hover"));
-      el.addEventListener("mouseleave", () => el.classList.remove("hover"));
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        selected = iso2;
-        refreshActive();
-        onChange(iso2);
-      });
+      el.addEventListener("pointerenter", () => el.classList.add("hover"));
+      el.addEventListener("pointerleave", () => el.classList.remove("hover"));
     }
   }
 
@@ -255,16 +270,25 @@ export async function renderCountryMapPicker(args: {
   );
 
   let dragging = false;
-  let dragStart: { x: number; y: number; tx: number; ty: number } | null = null;
+  let moved = false;
+  let dragStart: { x: number; y: number; tx: number; ty: number; hitIso2?: string | null } | null = null;
   svg.addEventListener("pointerdown", (ev) => {
     dragging = true;
+    moved = false;
     (svg as any).setPointerCapture?.((ev as PointerEvent).pointerId);
     const { x, y } = rectPoint((ev as PointerEvent).clientX, (ev as PointerEvent).clientY);
-    dragStart = { x, y, tx: vp.tx, ty: vp.ty };
+    const target = (ev as PointerEvent).target as Element | null;
+    const hit = target?.closest?.("path.ga-country-shape") as SVGPathElement | null;
+    const hitIso2 = normalizeIso2(hit?.dataset?.iso2) ?? null;
+    const isSelectable = !hasSelectableFilter || (hitIso2 ? selectableMap.has(hitIso2) : false);
+    dragStart = { x, y, tx: vp.tx, ty: vp.ty, hitIso2: isSelectable ? hitIso2 : null };
   });
   svg.addEventListener("pointermove", (ev) => {
     if (!dragging || !dragStart) return;
     const { x, y } = rectPoint((ev as PointerEvent).clientX, (ev as PointerEvent).clientY);
+    const dx = x - dragStart.x;
+    const dy = y - dragStart.y;
+    if (!moved && (dx * dx + dy * dy) > 6 * 6) moved = true;
     vp = { ...vp, tx: dragStart.tx + (x - dragStart.x), ty: dragStart.ty + (y - dragStart.y) };
     applyViewport(g, vp);
   });
@@ -272,7 +296,14 @@ export async function renderCountryMapPicker(args: {
     dragging = false;
     dragStart = null;
   };
-  svg.addEventListener("pointerup", stopDrag);
+  svg.addEventListener("pointerup", () => {
+    if (dragging && dragStart && !moved && dragStart.hitIso2) {
+      selected = dragStart.hitIso2;
+      refreshActive();
+      onChange(selectableMap.get(dragStart.hitIso2) ?? dragStart.hitIso2);
+    }
+    stopDrag();
+  });
   svg.addEventListener("pointercancel", stopDrag);
 
   btnPlus.addEventListener("click", () => {
@@ -282,4 +313,3 @@ export async function renderCountryMapPicker(args: {
     zoomAt(W / 2, H / 2, clamp(vp.scale / 1.25, 1, 8));
   });
 }
-

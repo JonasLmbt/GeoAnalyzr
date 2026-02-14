@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      1.6.32
+// @version      1.6.33
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10635,26 +10635,26 @@
     } else {
       const defaultCompare = (chart.defaultCompareKeys || []).slice(0, maxCompare);
       for (let i = 0; i < maxCompare; i++) {
-        const sel2 = doc.createElement("select");
-        sel2.style.background = palette.buttonBg;
-        sel2.style.color = palette.buttonText;
-        sel2.style.border = `1px solid ${palette.border}`;
-        sel2.style.borderRadius = "7px";
-        sel2.style.padding = "2px 6px";
-        sel2.style.fontSize = "11px";
+        const sel = doc.createElement("select");
+        sel.style.background = palette.buttonBg;
+        sel.style.color = palette.buttonText;
+        sel.style.border = `1px solid ${palette.border}`;
+        sel.style.borderRadius = "7px";
+        sel.style.padding = "2px 6px";
+        sel.style.fontSize = "11px";
         const noneOpt = doc.createElement("option");
         noneOpt.value = "";
         noneOpt.textContent = i === 0 ? "Compare series" : `Compare series ${i + 1}`;
-        sel2.appendChild(noneOpt);
+        sel.appendChild(noneOpt);
         for (const c of chart.compareCandidates) {
           const opt = doc.createElement("option");
           opt.value = c.key;
           opt.textContent = c.label;
-          sel2.appendChild(opt);
+          sel.appendChild(opt);
         }
-        sel2.value = defaultCompare[i] || "";
-        compareSelectors.push(sel2);
-        head.appendChild(sel2);
+        sel.value = defaultCompare[i] || "";
+        compareSelectors.push(sel);
+        head.appendChild(sel);
       }
     }
     const content = doc.createElement("div");
@@ -10686,7 +10686,7 @@
       content.appendChild(renderLineChart(lineChart, `${title} - ${selectedMetric.label}`, doc, graphCfg));
     };
     metricSelect.addEventListener("change", render);
-    for (const sel2 of compareSelectors) sel2.addEventListener("change", render);
+    for (const sel of compareSelectors) sel.addEventListener("change", render);
     compareModeSelect?.addEventListener("change", render);
     render();
     return wrap;
@@ -42524,6 +42524,12 @@
                 label: "Country",
                 dimension: "true_country",
                 presentation: "map",
+                map: {
+                  variant: "wide",
+                  height: 300,
+                  restrictToOptions: true,
+                  tintSelectable: true
+                },
                 default: "auto_top",
                 options: "auto_distinct",
                 required: true,
@@ -42804,14 +42810,16 @@
     }
 
     .ga-filter.ga-filter-map { min-width: 340px; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; min-width: 520px; }
     .ga-filter-map-selected {
       font-size: 12px;
       color: var(--ga-text-muted);
       margin-bottom: 2px;
     }
     .ga-filter-map-host { width: 340px; max-width: 100%; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-filter-map-host { width: 100%; }
     .ga-country-map {
-      height: 240px;
+      height: var(--ga-country-map-h, 240px);
       width: 100%;
       border-radius: 14px;
       overflow: hidden;
@@ -42837,16 +42845,18 @@
     }
     .ga-country-map-btn:hover { background: rgba(30,30,48,0.88); }
     .ga-country-map-hint { font-size: 11px; color: rgba(243,244,255,0.66); }
-    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; }
+    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; touch-action: none; display:block; }
     .ga-country-shape {
-      fill: rgba(255,255,255,0.06);
-      stroke: rgba(255,255,255,0.22);
+      fill: rgba(255,255,255,0.03);
+      stroke: rgba(255,255,255,0.16);
       stroke-width: 1;
       vector-effect: non-scaling-stroke;
-      cursor: pointer;
+      cursor: grab;
       transition: fill 120ms ease, stroke 120ms ease;
     }
-    .ga-country-shape.hover { fill: rgba(255,255,255,0.12); }
+    .ga-country-shape.selectable { fill: rgba(58, 232, 189, 0.10); stroke: rgba(255,255,255,0.22); cursor: pointer; }
+    .ga-country-shape.disabled { fill: rgba(255,255,255,0.02); stroke: rgba(255,255,255,0.08); opacity: 0.45; pointer-events: none; }
+    .ga-country-shape.selectable.hover { fill: rgba(58, 232, 189, 0.20); }
     .ga-country-shape.active {
       fill: rgba(254,205,25,0.40);
       stroke: rgba(254,205,25,0.72);
@@ -43571,25 +43581,25 @@
   }
   function mkSelect(doc, label, value, options, onChange) {
     const f = mkField(doc, label);
-    const sel2 = doc.createElement("select");
-    for (const o of options) sel2.appendChild(new Option(o.label, o.value));
-    if (options.some((o) => o.value === value)) sel2.value = value;
-    sel2.addEventListener("change", () => onChange(sel2.value));
-    f.inputHost.appendChild(sel2);
+    const sel = doc.createElement("select");
+    for (const o of options) sel.appendChild(new Option(o.label, o.value));
+    if (options.some((o) => o.value === value)) sel.value = value;
+    sel.addEventListener("change", () => onChange(sel.value));
+    f.inputHost.appendChild(sel);
     return f.wrap;
   }
   function mkMultiSelect(doc, label, values, options, onChange) {
     const f = mkField(doc, label);
-    const sel2 = doc.createElement("select");
-    sel2.multiple = true;
-    sel2.size = Math.min(10, Math.max(3, options.length));
+    const sel = doc.createElement("select");
+    sel.multiple = true;
+    sel.size = Math.min(10, Math.max(3, options.length));
     for (const o of options) {
       const opt = new Option(o.label, o.value);
       opt.selected = values.includes(o.value);
-      sel2.appendChild(opt);
+      sel.appendChild(opt);
     }
-    sel2.addEventListener("change", () => onChange(Array.from(sel2.selectedOptions).map((o) => o.value)));
-    f.inputHost.appendChild(sel2);
+    sel.addEventListener("change", () => onChange(Array.from(sel.selectedOptions).map((o) => o.value)));
+    f.inputHost.appendChild(sel);
     return f.wrap;
   }
   function mkHr(doc) {
@@ -47294,6 +47304,17 @@
     const { container, value, onChange } = args;
     const doc = container.ownerDocument;
     container.innerHTML = "";
+    container.classList.add("ga-country-map");
+    const selectableMap = /* @__PURE__ */ new Map();
+    if (Array.isArray(args.selectableValues)) {
+      for (const v of args.selectableValues) {
+        const norm = normalizeIso24(v);
+        if (!norm) continue;
+        if (!selectableMap.has(norm)) selectableMap.set(norm, String(v));
+      }
+    }
+    const hasSelectableFilter = selectableMap.size > 0;
+    const tintSelectable = args.tintSelectable !== false;
     let geojson;
     let iso3ToIso2;
     try {
@@ -47349,6 +47370,12 @@
       p.setAttribute("fill-rule", "evenodd");
       p.dataset.iso2 = iso2;
       p.classList.add("ga-country-shape");
+      const isSelectable = !hasSelectableFilter || selectableMap.has(iso2);
+      if (isSelectable) {
+        if (tintSelectable) p.classList.add("selectable");
+      } else {
+        p.classList.add("disabled");
+      }
       g.appendChild(p);
       const list = pathsByIso2.get(iso2) ?? [];
       list.push(p);
@@ -47363,16 +47390,11 @@
     };
     refreshActive();
     for (const [iso2, list] of pathsByIso2.entries()) {
+      const isSelectable = !hasSelectableFilter || selectableMap.has(iso2);
+      if (!isSelectable) continue;
       for (const el of list) {
-        el.addEventListener("mouseenter", () => el.classList.add("hover"));
-        el.addEventListener("mouseleave", () => el.classList.remove("hover"));
-        el.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          selected = iso2;
-          refreshActive();
-          onChange(iso2);
-        });
+        el.addEventListener("pointerenter", () => el.classList.add("hover"));
+        el.addEventListener("pointerleave", () => el.classList.remove("hover"));
       }
     }
     let vp = { scale: 1, tx: 0, ty: 0 };
@@ -47406,16 +47428,25 @@
       { passive: false }
     );
     let dragging = false;
+    let moved = false;
     let dragStart = null;
     svg.addEventListener("pointerdown", (ev) => {
       dragging = true;
+      moved = false;
       svg.setPointerCapture?.(ev.pointerId);
       const { x, y } = rectPoint(ev.clientX, ev.clientY);
-      dragStart = { x, y, tx: vp.tx, ty: vp.ty };
+      const target = ev.target;
+      const hit = target?.closest?.("path.ga-country-shape");
+      const hitIso2 = normalizeIso24(hit?.dataset?.iso2) ?? null;
+      const isSelectable = !hasSelectableFilter || (hitIso2 ? selectableMap.has(hitIso2) : false);
+      dragStart = { x, y, tx: vp.tx, ty: vp.ty, hitIso2: isSelectable ? hitIso2 : null };
     });
     svg.addEventListener("pointermove", (ev) => {
       if (!dragging || !dragStart) return;
       const { x, y } = rectPoint(ev.clientX, ev.clientY);
+      const dx = x - dragStart.x;
+      const dy = y - dragStart.y;
+      if (!moved && dx * dx + dy * dy > 6 * 6) moved = true;
       vp = { ...vp, tx: dragStart.tx + (x - dragStart.x), ty: dragStart.ty + (y - dragStart.y) };
       applyViewport(g, vp);
     });
@@ -47423,7 +47454,14 @@
       dragging = false;
       dragStart = null;
     };
-    svg.addEventListener("pointerup", stopDrag);
+    svg.addEventListener("pointerup", () => {
+      if (dragging && dragStart && !moved && dragStart.hitIso2) {
+        selected = dragStart.hitIso2;
+        refreshActive();
+        onChange(selectableMap.get(dragStart.hitIso2) ?? dragStart.hitIso2);
+      }
+      stopDrag();
+    });
     svg.addEventListener("pointercancel", stopDrag);
     btnPlus.addEventListener("click", () => {
       zoomAt(W / 2, H / 2, clamp(vp.scale * 1.25, 1, 8));
@@ -47593,8 +47631,6 @@
         delete stateWithoutSelf[control.id];
         const options = computeOptions(control, stateWithoutSelf);
         const isRequired = control.required === true;
-        if (!isRequired) sel.appendChild(new Option("All", "all"));
-        for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
         const current = typeof nextState[control.id] === "string" ? nextState[control.id] : "";
         const hasCurrent = options.some((o) => o.value === current);
         const desiredDefault = control.default === "auto_top" ? "" : control.default;
@@ -47605,6 +47641,8 @@
         const useMap = presentation === "map" && isCountryDim;
         if (useMap) {
           wrap.classList.add("ga-filter-map");
+          const mapSpec = control.map;
+          if (mapSpec?.variant === "wide") wrap.classList.add("ga-filter-map-wide");
           const selected = doc.createElement("div");
           selected.className = "ga-filter-map-selected";
           const txt = next && next !== "all" ? formatCountry4(next) : "";
@@ -47612,11 +47650,19 @@
           wrap.appendChild(selected);
           const mapHost = doc.createElement("div");
           mapHost.className = "ga-filter-map-host";
+          const mapHeight = typeof mapSpec?.height === "number" && Number.isFinite(mapSpec.height) ? Math.round(mapSpec.height) : null;
+          if (mapHeight && mapHeight >= 160 && mapHeight <= 520) {
+            mapHost.style.setProperty("--ga-country-map-h", `${mapHeight}px`);
+          }
           wrap.appendChild(mapHost);
           try {
+            const restrictToOptions = mapSpec?.restrictToOptions === true;
+            const selectableValues = restrictToOptions ? options.map((o) => o.value) : void 0;
             await renderCountryMapPicker({
               container: mapHost,
               value: next,
+              selectableValues,
+              tintSelectable: mapSpec?.tintSelectable !== false,
               onChange: (iso2) => {
                 nextState[control.id] = iso2;
                 localStateBySection.set(sectionId, { ...nextState });
@@ -47626,30 +47672,30 @@
           } catch {
             wrap.innerHTML = "";
             wrap.appendChild(renderControlLabel2(control.label));
-            const sel2 = doc.createElement("select");
-            sel2.className = "ga-filter-select";
-            if (!isRequired) sel2.appendChild(new Option("All", "all"));
-            for (const opt of options) sel2.appendChild(new Option(opt.label, opt.value));
-            if (next) sel2.value = next;
-            sel2.addEventListener("change", () => {
-              nextState[control.id] = sel2.value;
+            const sel = doc.createElement("select");
+            sel.className = "ga-filter-select";
+            if (!isRequired) sel.appendChild(new Option("All", "all"));
+            for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
+            if (next) sel.value = next;
+            sel.addEventListener("change", () => {
+              nextState[control.id] = sel.value;
               localStateBySection.set(sectionId, { ...nextState });
               onChange();
             });
-            wrap.appendChild(sel2);
+            wrap.appendChild(sel);
           }
         } else {
-          const sel2 = doc.createElement("select");
-          sel2.className = "ga-filter-select";
-          if (!isRequired) sel2.appendChild(new Option("All", "all"));
-          for (const opt of options) sel2.appendChild(new Option(opt.label, opt.value));
-          if (next) sel2.value = next;
-          sel2.addEventListener("change", () => {
-            nextState[control.id] = sel2.value;
+          const sel = doc.createElement("select");
+          sel.className = "ga-filter-select";
+          if (!isRequired) sel.appendChild(new Option("All", "all"));
+          for (const opt of options) sel.appendChild(new Option(opt.label, opt.value));
+          if (next) sel.value = next;
+          sel.addEventListener("change", () => {
+            nextState[control.id] = sel.value;
             localStateBySection.set(sectionId, { ...nextState });
             onChange();
           });
-          wrap.appendChild(sel2);
+          wrap.appendChild(sel);
         }
         left.appendChild(wrap);
       }
@@ -47943,24 +47989,24 @@
       const wrap = doc.createElement("div");
       wrap.className = "ga-filter";
       wrap.appendChild(renderControlLabel(doc, control.label));
-      const sel2 = doc.createElement("select");
-      sel2.className = "ga-filter-select";
+      const sel = doc.createElement("select");
+      sel.className = "ga-filter-select";
       const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
-      if (!isRequired) sel2.appendChild(new Option("All", "all"));
+      if (!isRequired) sel.appendChild(new Option("All", "all"));
       for (const opt of options) {
         const label = control.dimension === "true_country" ? formatCountry3(doc, opt.label) : opt.label;
-        sel2.appendChild(new Option(label, opt.value));
+        sel.appendChild(new Option(label, opt.value));
       }
       const hasCurrent = options.some((o) => o.value === current);
       const nextValue = hasCurrent ? current : isRequired ? options[0]?.value ?? "" : "all";
-      if (nextValue) sel2.value = nextValue;
+      if (nextValue) sel.value = nextValue;
       if (isRequired && nextValue && nextValue !== current) {
         updatePending(id, nextValue);
       }
-      sel2.addEventListener("change", () => {
-        updatePending(id, sel2.value);
+      sel.addEventListener("change", () => {
+        updatePending(id, sel.value);
       });
-      wrap.appendChild(sel2);
+      wrap.appendChild(sel);
       left.appendChild(wrap);
     };
     const controls = spec.controls;

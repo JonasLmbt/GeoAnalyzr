@@ -16,6 +16,17 @@
     "grain": { "enum": ["session", "game", "round"] },
     "chartType": { "enum": ["bar", "line"] },
 
+    "mapPickerSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "variant": { "enum": ["compact", "wide"] },
+        "height": { "type": "integer", "minimum": 160, "maximum": 520 },
+        "restrictToOptions": { "type": "boolean" },
+        "tintSelectable": { "type": "boolean" }
+      }
+    },
+
     "placementDef": {
       "type": "object",
       "additionalProperties": false,
@@ -83,6 +94,7 @@
         "default": {},
         "dimension": { "type": "string", "minLength": 1 },
         "presentation": { "enum": ["dropdown", "map"] },
+        "map": { "$ref": "#/$defs/mapPickerSpecDef" },
         "options": { "enum": ["auto_distinct", "auto_teammates"] },
         "appliesTo": {
           "type": "array",
@@ -173,6 +185,7 @@
         "label": { "$ref": "#/$defs/title" },
         "dimension": { "type": "string", "minLength": 1 },
         "presentation": { "enum": ["dropdown", "map"] },
+        "map": { "$ref": "#/$defs/mapPickerSpecDef" },
         "default": { "type": "string", "minLength": 1 },
         "options": { "enum": ["auto_distinct", "auto_teammates"] },
         "appliesTo": {
