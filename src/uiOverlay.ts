@@ -87,8 +87,8 @@ function cssOnce(): void {
       align-items: center;
       gap: 8px;
     }
-    .ga-ui-title svg { display: block; }
-    .ga-ui-icon svg { display: block; }
+    .ga-ui-title svg { display: block; filter: drop-shadow(0 0 10px rgba(0,162,254,0.35)); }
+    .ga-ui-icon svg { display: block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
     .ga-ui-close {
       border: none;
       background: transparent;
@@ -194,7 +194,7 @@ export function createUIOverlay(): UIOverlay {
   iconBtn.className = "ga-ui-icon";
   iconBtn.title = "GeoAnalyzr";
   iconBtn.type = "button";
-  iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", decorative: true });
+  iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "mark", decorative: true });
 
   const panel = el("div");
   panel.className = "ga-ui-panel";
@@ -205,7 +205,7 @@ export function createUIOverlay(): UIOverlay {
   const title = el("div");
   title.className = "ga-ui-title";
   const titleLogo = el("span");
-  titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", decorative: true });
+  titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "mark", decorative: true });
   const titleText = el("span");
   titleText.textContent = "GeoAnalyzr";
   title.appendChild(titleLogo);

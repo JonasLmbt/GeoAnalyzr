@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.4
+// @version      2.0.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6683,7 +6683,7 @@
   });
 
   // src/ui/logo.ts
-  var LOGO_SVG_INNER = `
+  var LOGO_SVG_DEFS = `
   <defs>
     <radialGradient id="bg" cx="30%" cy="20%" r="80%">
       <stop offset="0" stop-color="#7c5cff" stop-opacity="0.38"/>
@@ -6706,9 +6706,8 @@
       </feMerge>
     </filter>
   </defs>
-
-  <circle cx="128" cy="128" r="112" fill="url(#bg)"/>
-
+`;
+  var LOGO_SVG_SHAPES = `
   <path filter="url(#shadow)"
         d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
         fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)" stroke-width="4"/>
@@ -6727,6 +6726,25 @@
     <circle cx="186" cy="96" r="5.5" fill="#3AE8BD"/>
   </g>
 `;
+  var LOGO_SVG_SHAPES_MARK = `
+  <path filter="url(#shadow)"
+        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.24)" stroke-width="4"/>
+
+  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
+
+  <path filter="url(#glow)"
+        d="M88 110l26-22 20 16 22-30 30 22"
+        fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g filter="url(#glow)">
+    <circle cx="88" cy="110" r="6.2" fill="#7950E5"/>
+    <circle cx="114" cy="88" r="6.2" fill="#5f7ff0"/>
+    <circle cx="134" cy="104" r="6.2" fill="#00A2FE"/>
+    <circle cx="156" cy="74" r="6.2" fill="#22cfe0"/>
+    <circle cx="186" cy="96" r="6.2" fill="#3AE8BD"/>
+  </g>
+`;
   function replaceAll(haystack, needle, replacement) {
     return haystack.split(needle).join(replacement);
   }
@@ -6740,8 +6758,13 @@
   }
   function logoSvgMarkup(opts) {
     const { size, idPrefix, decorative, ariaLabel } = opts;
+    const variant = opts.variant ?? "full";
     const ids = ["bg", "g", "shadow", "glow"];
-    let inner = LOGO_SVG_INNER.trim();
+    const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
+    const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
+    let inner = `${LOGO_SVG_DEFS.trim()}
+${bg}
+${shapes}`.trim();
     for (const id of ids) {
       inner = replaceAll(inner, `id="${id}"`, `id="${idPrefix}-${id}"`);
       inner = replaceAll(inner, `url(#${id})`, `url(#${idPrefix}-${id})`);
@@ -6810,8 +6833,8 @@
       align-items: center;
       gap: 8px;
     }
-    .ga-ui-title svg { display: block; }
-    .ga-ui-icon svg { display: block; }
+    .ga-ui-title svg { display: block; filter: drop-shadow(0 0 10px rgba(0,162,254,0.35)); }
+    .ga-ui-icon svg { display: block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
     .ga-ui-close {
       border: none;
       background: transparent;
@@ -6915,7 +6938,7 @@
     iconBtn.className = "ga-ui-icon";
     iconBtn.title = "GeoAnalyzr";
     iconBtn.type = "button";
-    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", decorative: true });
+    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "mark", decorative: true });
     const panel = el("div");
     panel.className = "ga-ui-panel";
     const header = el("div");
@@ -6923,7 +6946,7 @@
     const title = el("div");
     title.className = "ga-ui-title";
     const titleLogo = el("span");
-    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", decorative: true });
+    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "mark", decorative: true });
     const titleText = el("span");
     titleText.textContent = "GeoAnalyzr";
     title.appendChild(titleLogo);
@@ -33992,7 +34015,7 @@
       z-index: 10;
     }
     .ga-title { font-weight: 700; display:flex; align-items:center; gap:10px; }
-    .ga-title-logo svg { display:block; }
+    .ga-title-logo svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.28)); }
     .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
     .ga-close, .ga-gear {
       background: var(--ga-control-bg);
@@ -39745,7 +39768,7 @@
       title.className = "ga-title";
       const titleLogo = doc.createElement("span");
       titleLogo.className = "ga-title-logo";
-      titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", decorative: true });
+      titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", variant: "mark", decorative: true });
       const titleText = doc.createElement("span");
       titleText.className = "ga-title-text";
       titleText.textContent = "GeoAnalyzr";
