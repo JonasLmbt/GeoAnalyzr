@@ -94,7 +94,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     title.className = "ga-title";
     const titleLogo = doc.createElement("span");
     titleLogo.className = "ga-title-logo";
-    titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", variant: "mark", decorative: true });
+    titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", variant: "light", decorative: true });
 
     const titleText = doc.createElement("span");
     titleText.className = "ga-title-text";

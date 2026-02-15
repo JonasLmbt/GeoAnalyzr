@@ -233,11 +233,33 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
 
     const templateActions = doc.createElement("div");
     templateActions.className = "ga-settings-actions";
+
+    const templateDownload = doc.createElement("button");
+    templateDownload.type = "button";
+    templateDownload.className = "ga-filter-btn";
+    templateDownload.textContent = "Download template";
+    templateDownload.title = "Download the current dashboard template as JSON";
+
+    const templateUpload = doc.createElement("button");
+    templateUpload.type = "button";
+    templateUpload.className = "ga-filter-btn";
+    templateUpload.textContent = "Upload template";
+    templateUpload.title = "Upload a dashboard template JSON file";
+
+    const templateUploadInput = doc.createElement("input");
+    templateUploadInput.type = "file";
+    templateUploadInput.accept = "application/json,.json";
+    templateUploadInput.style.display = "none";
+
     const templateReset = doc.createElement("button");
     templateReset.type = "button";
     templateReset.className = "ga-filter-btn";
     templateReset.textContent = "Reset to latest";
     templateReset.title = "Reset template to the latest bundled dashboard.json";
+
+    templateActions.appendChild(templateDownload);
+    templateActions.appendChild(templateUpload);
+    templateActions.appendChild(templateUploadInput);
     templateActions.appendChild(templateReset);
     templatePane.appendChild(templateActions);
     templatePane.appendChild(templateStatus);
@@ -350,6 +372,53 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         templateStatus.classList.add("error");
       }
     };
+
+    const downloadTextFile = (filename: string, text: string) => {
+      const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = doc.createElement("a");
+      a.href = url;
+      a.download = filename;
+      (doc.body ?? doc.documentElement).appendChild(a);
+      a.click();
+      a.remove();
+      targetWindow.setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
+
+    templateDownload.addEventListener("click", () => {
+      try {
+        const parsed = JSON.parse(templateEditor.value) as DashboardDoc;
+        validateDashboardAgainstSemantic(semantic, parsed);
+        const stamp = new Date().toISOString().slice(0, 10);
+        downloadTextFile(`geoanalyzr-dashboard-template-${stamp}.json`, JSON.stringify(parsed, null, 2));
+        templateStatus.textContent = "Template downloaded.";
+        templateStatus.className = "ga-settings-status ok";
+      } catch (error) {
+        templateStatus.textContent = error instanceof Error ? error.message : String(error);
+        templateStatus.className = "ga-settings-status error";
+      }
+    });
+
+    templateUpload.addEventListener("click", () => {
+      templateUploadInput.value = "";
+      templateUploadInput.click();
+    });
+
+    templateUploadInput.addEventListener("change", () => {
+      const f = templateUploadInput.files?.[0] ?? null;
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = typeof reader.result === "string" ? reader.result : "";
+        templateEditor.value = text;
+        void tryApplyTemplate();
+      };
+      reader.onerror = () => {
+        templateStatus.textContent = "Failed to read file.";
+        templateStatus.className = "ga-settings-status error";
+      };
+      reader.readAsText(f);
+    });
     templateReset.addEventListener("click", () => {
       void (async () => {
         templateStatus.textContent = "";

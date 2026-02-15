@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.7
+// @version      2.0.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6745,6 +6745,33 @@
     <circle cx="186" cy="96" r="6.2" fill="#3AE8BD"/>
   </g>
 `;
+  var LOGO_LIGHT_DEFS = `
+  <defs>
+    <linearGradient id="neon" x1="64" y1="64" x2="196" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#AFA2FF"/>
+      <stop offset="0.7" stop-color="#00C8FF"/>
+      <stop offset="1" stop-color="#3AE8BD"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+`;
+  var LOGO_LIGHT_SHAPES = `
+  <path d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.70)" stroke-width="9"/>
+
+  <circle cx="128" cy="98" r="54" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" stroke-width="6"/>
+
+  <path filter="url(#glow)"
+        d="M90 110l30-26 26 20 28-36 34 26"
+        fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+`;
   function replaceAll(haystack, needle, replacement) {
     return haystack.split(needle).join(replacement);
   }
@@ -6759,12 +6786,20 @@
   function logoSvgMarkup(opts) {
     const { size, idPrefix, decorative, ariaLabel } = opts;
     const variant = opts.variant ?? "full";
-    const ids = ["bg", "g", "shadow", "glow"];
-    const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
-    const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
-    let inner = `${LOGO_SVG_DEFS.trim()}
+    let inner = "";
+    let ids = [];
+    if (variant === "light") {
+      inner = `${LOGO_LIGHT_DEFS.trim()}
+${LOGO_LIGHT_SHAPES.trim()}`.trim();
+      ids = ["neon", "glow"];
+    } else {
+      const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
+      const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
+      inner = `${LOGO_SVG_DEFS.trim()}
 ${bg}
 ${shapes}`.trim();
+      ids = ["bg", "g", "shadow", "glow"];
+    }
     for (const id of ids) {
       inner = replaceAll(inner, `id="${id}"`, `id="${idPrefix}-${id}"`);
       inner = replaceAll(inner, `url(#${id})`, `url(#${idPrefix}-${id})`);
@@ -6938,7 +6973,7 @@ ${shapes}`.trim();
     iconBtn.className = "ga-ui-icon";
     iconBtn.title = "GeoAnalyzr";
     iconBtn.type = "button";
-    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "mark", decorative: true });
+    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "light", decorative: true });
     const panel = el("div");
     panel.className = "ga-ui-panel";
     const header = el("div");
@@ -6946,7 +6981,7 @@ ${shapes}`.trim();
     const title = el("div");
     title.className = "ga-ui-title";
     const titleLogo = el("span");
-    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "mark", decorative: true });
+    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "light", decorative: true });
     const titleText = el("span");
     titleText.textContent = "GeoAnalyzr";
     title.appendChild(titleLogo);
@@ -34606,6 +34641,11 @@ ${shapes}`.trim();
     .ga-settings-actions { display:flex; gap:8px; margin-top: 8px; flex-wrap:wrap; }
 
     /* Layout editor (Settings -> Layout) */
+    .ga-layout-editor-wrap { display:flex; flex-direction:column; gap:10px; }
+    .ga-le-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+    .ga-le-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ga-le-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color: var(--ga-text-muted); user-select:none; }
+    .ga-le-toggle input { width: 16px; height: 16px; }
     .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }
     @media (max-width: 820px) { .ga-layout-editor { grid-template-columns: 1fr; } }
     .ga-le-left, .ga-le-right { min-width: 0; }
@@ -34844,7 +34884,7 @@ ${shapes}`.trim();
     const input = doc.createElement("input");
     input.type = "text";
     input.value = value ?? "";
-    input.addEventListener("input", () => onChange(input.value));
+    input.addEventListener("change", () => onChange(input.value));
     f.inputHost.appendChild(input);
     return f.wrap;
   }
@@ -34958,12 +34998,81 @@ ${shapes}`.trim();
   }
   function renderLayoutEditor(args) {
     const { doc, semantic, onChange, statusEl } = args;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-layout-editor-wrap";
     const root = doc.createElement("div");
     root.className = "ga-layout-editor";
+    const head = doc.createElement("div");
+    head.className = "ga-le-head";
+    const help = doc.createElement("div");
+    help.className = "ga-settings-note";
+    help.textContent = "Make your edits, then click Apply changes. Turn on Auto-apply if you want instant updates.";
+    const headActions = doc.createElement("div");
+    headActions.className = "ga-le-head-actions";
+    let autoApply = false;
+    const autoWrap = doc.createElement("label");
+    autoWrap.className = "ga-le-toggle";
+    const auto = doc.createElement("input");
+    auto.type = "checkbox";
+    auto.checked = autoApply;
+    const autoTxt = doc.createElement("span");
+    autoTxt.textContent = "Auto-apply";
+    autoWrap.appendChild(auto);
+    autoWrap.appendChild(autoTxt);
+    head.appendChild(help);
+    head.appendChild(headActions);
+    headActions.appendChild(autoWrap);
+    wrap.appendChild(head);
+    wrap.appendChild(root);
+    let applied = cloneJson(args.dashboard);
     let draft = cloneJson(args.dashboard);
     let activeSectionIdx = 0;
+    let dirty = false;
+    const setStatus = (kind, message) => {
+      statusEl.textContent = message;
+      statusEl.className = "ga-settings-status";
+      if (kind === "ok") statusEl.classList.add("ok");
+      if (kind === "error") statusEl.classList.add("error");
+    };
+    const validateDraft = () => {
+      try {
+        validateDashboardAgainstSemantic(semantic, draft);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    };
+    const applyNow = () => {
+      const res = validateDraft();
+      if (!res.ok) return setStatus("error", res.error);
+      onChange(cloneJson(draft));
+      applied = cloneJson(draft);
+      dirty = false;
+      syncActions();
+      setStatus("ok", "Layout applied.");
+    };
+    const revertNow = () => {
+      if (!dirty) return;
+      if (!confirm("Discard unsaved layout changes?")) return;
+      draft = cloneJson(applied);
+      dirty = false;
+      syncActions();
+      setStatus("neutral", "");
+      render();
+    };
+    const applyBtn = mkBtn(doc, "Apply changes", () => applyNow(), "primary");
+    const revertBtn = mkBtn(doc, "Revert", () => revertNow(), "ghost");
+    headActions.appendChild(applyBtn);
+    headActions.appendChild(revertBtn);
+    const syncActions = () => {
+      applyBtn.disabled = !dirty;
+      revertBtn.disabled = !dirty;
+    };
+    syncActions();
     let debounce = null;
     const applyDraft = () => {
+      dirty = true;
+      syncActions();
       if (debounce !== null) doc.defaultView?.clearTimeout?.(debounce);
       debounce = doc.defaultView?.setTimeout?.(() => {
         debounce = null;
@@ -34971,15 +35080,24 @@ ${shapes}`.trim();
         statusEl.className = "ga-settings-status";
         try {
           validateDashboardAgainstSemantic(semantic, draft);
-          statusEl.textContent = "Layout applied.";
+          if (!autoApply) {
+            statusEl.textContent = "Valid. Click Apply changes to update the dashboard.";
+            statusEl.classList.add("ok");
+            return;
+          }
+          statusEl.textContent = "Applying\u2026";
           statusEl.classList.add("ok");
-          onChange(cloneJson(draft));
+          applyNow();
         } catch (e) {
           statusEl.textContent = e instanceof Error ? e.message : String(e);
           statusEl.classList.add("error");
         }
       }, 200);
     };
+    auto.addEventListener("change", () => {
+      autoApply = auto.checked;
+      if (autoApply && dirty) applyDraft();
+    });
     const render = () => {
       root.innerHTML = "";
       const sections = draft.dashboard.sections ?? [];
@@ -35261,10 +35379,10 @@ ${shapes}`.trim();
           if (w.type === "stat_list") {
             const spec = w.spec ?? { rows: [] };
             const rows = Array.isArray(spec.rows) ? spec.rows : [];
-            const head = doc.createElement("div");
-            head.className = "ga-settings-note";
-            head.textContent = `Rows: ${rows.length}`;
-            wItem.appendChild(head);
+            const head2 = doc.createElement("div");
+            head2.className = "ga-settings-note";
+            head2.textContent = `Rows: ${rows.length}`;
+            wItem.appendChild(head2);
           }
           wBox.appendChild(wItem);
         });
@@ -35326,7 +35444,7 @@ ${shapes}`.trim();
       }
     };
     render();
-    return root;
+    return wrap;
   }
 
   // src/ui/settingsModal.ts
@@ -35510,11 +35628,28 @@ ${shapes}`.trim();
       templatePane.appendChild(templateField);
       const templateActions = doc.createElement("div");
       templateActions.className = "ga-settings-actions";
+      const templateDownload = doc.createElement("button");
+      templateDownload.type = "button";
+      templateDownload.className = "ga-filter-btn";
+      templateDownload.textContent = "Download template";
+      templateDownload.title = "Download the current dashboard template as JSON";
+      const templateUpload = doc.createElement("button");
+      templateUpload.type = "button";
+      templateUpload.className = "ga-filter-btn";
+      templateUpload.textContent = "Upload template";
+      templateUpload.title = "Upload a dashboard template JSON file";
+      const templateUploadInput = doc.createElement("input");
+      templateUploadInput.type = "file";
+      templateUploadInput.accept = "application/json,.json";
+      templateUploadInput.style.display = "none";
       const templateReset = doc.createElement("button");
       templateReset.type = "button";
       templateReset.className = "ga-filter-btn";
       templateReset.textContent = "Reset to latest";
       templateReset.title = "Reset template to the latest bundled dashboard.json";
+      templateActions.appendChild(templateDownload);
+      templateActions.appendChild(templateUpload);
+      templateActions.appendChild(templateUploadInput);
       templateActions.appendChild(templateReset);
       templatePane.appendChild(templateActions);
       templatePane.appendChild(templateStatus);
@@ -35619,6 +35754,49 @@ ${shapes}`.trim();
           templateStatus.classList.add("error");
         }
       };
+      const downloadTextFile = (filename, text) => {
+        const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = doc.createElement("a");
+        a.href = url;
+        a.download = filename;
+        (doc.body ?? doc.documentElement).appendChild(a);
+        a.click();
+        a.remove();
+        targetWindow.setTimeout(() => URL.revokeObjectURL(url), 0);
+      };
+      templateDownload.addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(templateEditor.value);
+          validateDashboardAgainstSemantic(semantic, parsed);
+          const stamp = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+          downloadTextFile(`geoanalyzr-dashboard-template-${stamp}.json`, JSON.stringify(parsed, null, 2));
+          templateStatus.textContent = "Template downloaded.";
+          templateStatus.className = "ga-settings-status ok";
+        } catch (error) {
+          templateStatus.textContent = error instanceof Error ? error.message : String(error);
+          templateStatus.className = "ga-settings-status error";
+        }
+      });
+      templateUpload.addEventListener("click", () => {
+        templateUploadInput.value = "";
+        templateUploadInput.click();
+      });
+      templateUploadInput.addEventListener("change", () => {
+        const f = templateUploadInput.files?.[0] ?? null;
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = typeof reader.result === "string" ? reader.result : "";
+          templateEditor.value = text;
+          void tryApplyTemplate();
+        };
+        reader.onerror = () => {
+          templateStatus.textContent = "Failed to read file.";
+          templateStatus.className = "ga-settings-status error";
+        };
+        reader.readAsText(f);
+      });
       templateReset.addEventListener("click", () => {
         void (async () => {
           templateStatus.textContent = "";
@@ -39775,7 +39953,7 @@ ${shapes}`.trim();
       title.className = "ga-title";
       const titleLogo = doc.createElement("span");
       titleLogo.className = "ga-title-logo";
-      titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", variant: "mark", decorative: true });
+      titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", variant: "light", decorative: true });
       const titleText = doc.createElement("span");
       titleText.className = "ga-title-text";
       titleText.textContent = "GeoAnalyzr";

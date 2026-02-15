@@ -1,7 +1,7 @@
 type LogoSvgMarkupOptions = {
   size: number;
   idPrefix: string;
-  variant?: "full" | "mark";
+  variant?: "full" | "mark" | "light";
   decorative?: boolean;
   ariaLabel?: string;
 };
@@ -71,6 +71,35 @@ const LOGO_SVG_SHAPES_MARK = `
   </g>
 `;
 
+const LOGO_LIGHT_DEFS = `
+  <defs>
+    <linearGradient id="neon" x1="64" y1="64" x2="196" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#AFA2FF"/>
+      <stop offset="0.7" stop-color="#00C8FF"/>
+      <stop offset="1" stop-color="#3AE8BD"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+`;
+
+const LOGO_LIGHT_SHAPES = `
+  <path d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.70)" stroke-width="9"/>
+
+  <circle cx="128" cy="98" r="54" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" stroke-width="6"/>
+
+  <path filter="url(#glow)"
+        d="M90 110l30-26 26 20 28-36 34 26"
+        fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+`;
+
 function replaceAll(haystack: string, needle: string, replacement: string): string {
   return haystack.split(needle).join(replacement);
 }
@@ -87,12 +116,19 @@ function escapeAttr(value: string): string {
 export function logoSvgMarkup(opts: LogoSvgMarkupOptions): string {
   const { size, idPrefix, decorative, ariaLabel } = opts;
   const variant = opts.variant ?? "full";
-  const ids = ["bg", "g", "shadow", "glow"] as const;
 
-  const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
-  const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
+  let inner = "";
+  let ids: readonly string[] = [];
+  if (variant === "light") {
+    inner = `${LOGO_LIGHT_DEFS.trim()}\n${LOGO_LIGHT_SHAPES.trim()}`.trim();
+    ids = ["neon", "glow"];
+  } else {
+    const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
+    const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
+    inner = `${LOGO_SVG_DEFS.trim()}\n${bg}\n${shapes}`.trim();
+    ids = ["bg", "g", "shadow", "glow"];
+  }
 
-  let inner = `${LOGO_SVG_DEFS.trim()}\n${bg}\n${shapes}`.trim();
   for (const id of ids) {
     inner = replaceAll(inner, `id="${id}"`, `id="${idPrefix}-${id}"`);
     inner = replaceAll(inner, `url(#${id})`, `url(#${idPrefix}-${id})`);

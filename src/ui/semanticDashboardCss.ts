@@ -722,6 +722,11 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-settings-actions { display:flex; gap:8px; margin-top: 8px; flex-wrap:wrap; }
 
     /* Layout editor (Settings -> Layout) */
+    .ga-layout-editor-wrap { display:flex; flex-direction:column; gap:10px; }
+    .ga-le-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+    .ga-le-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ga-le-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color: var(--ga-text-muted); user-select:none; }
+    .ga-le-toggle input { width: 16px; height: 16px; }
     .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }
     @media (max-width: 820px) { .ga-layout-editor { grid-template-columns: 1fr; } }
     .ga-le-left, .ga-le-right { min-width: 0; }

@@ -40,7 +40,7 @@ function mkTextInput(doc: Document, label: string, value: string, onChange: (nex
   const input = doc.createElement("input");
   input.type = "text";
   input.value = value ?? "";
-  input.addEventListener("input", () => onChange(input.value));
+  input.addEventListener("change", () => onChange(input.value));
   f.inputHost.appendChild(input);
   return f.wrap;
 }
@@ -191,14 +191,93 @@ export function renderLayoutEditor(args: {
   statusEl: HTMLElement;
 }): HTMLElement {
   const { doc, semantic, onChange, statusEl } = args;
+  const wrap = doc.createElement("div");
+  wrap.className = "ga-layout-editor-wrap";
   const root = doc.createElement("div");
   root.className = "ga-layout-editor";
 
+  const head = doc.createElement("div");
+  head.className = "ga-le-head";
+  const help = doc.createElement("div");
+  help.className = "ga-settings-note";
+  help.textContent = "Make your edits, then click Apply changes. Turn on Auto-apply if you want instant updates.";
+  const headActions = doc.createElement("div");
+  headActions.className = "ga-le-head-actions";
+
+  let autoApply = false;
+  const autoWrap = doc.createElement("label");
+  autoWrap.className = "ga-le-toggle";
+  const auto = doc.createElement("input");
+  auto.type = "checkbox";
+  auto.checked = autoApply;
+  const autoTxt = doc.createElement("span");
+  autoTxt.textContent = "Auto-apply";
+  autoWrap.appendChild(auto);
+  autoWrap.appendChild(autoTxt);
+
+  head.appendChild(help);
+  head.appendChild(headActions);
+  headActions.appendChild(autoWrap);
+
+  wrap.appendChild(head);
+  wrap.appendChild(root);
+
+  let applied = cloneJson(args.dashboard);
   let draft = cloneJson(args.dashboard);
   let activeSectionIdx = 0;
+  let dirty = false;
+
+  const setStatus = (kind: "ok" | "error" | "info" | "neutral", message: string) => {
+    statusEl.textContent = message;
+    statusEl.className = "ga-settings-status";
+    if (kind === "ok") statusEl.classList.add("ok");
+    if (kind === "error") statusEl.classList.add("error");
+  };
+
+  const validateDraft = (): { ok: true } | { ok: false; error: string } => {
+    try {
+      validateDashboardAgainstSemantic(semantic, draft);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  const applyNow = () => {
+    const res = validateDraft();
+    if (!res.ok) return setStatus("error", res.error);
+    onChange(cloneJson(draft));
+    applied = cloneJson(draft);
+    dirty = false;
+    syncActions();
+    setStatus("ok", "Layout applied.");
+  };
+
+  const revertNow = () => {
+    if (!dirty) return;
+    if (!confirm("Discard unsaved layout changes?")) return;
+    draft = cloneJson(applied);
+    dirty = false;
+    syncActions();
+    setStatus("neutral", "");
+    render();
+  };
+
+  const applyBtn = mkBtn(doc, "Apply changes", () => applyNow(), "primary");
+  const revertBtn = mkBtn(doc, "Revert", () => revertNow(), "ghost");
+  headActions.appendChild(applyBtn);
+  headActions.appendChild(revertBtn);
+
+  const syncActions = () => {
+    applyBtn.disabled = !dirty;
+    revertBtn.disabled = !dirty;
+  };
+  syncActions();
 
   let debounce: number | null = null;
   const applyDraft = () => {
+    dirty = true;
+    syncActions();
     if (debounce !== null) (doc.defaultView as any)?.clearTimeout?.(debounce);
     debounce = (doc.defaultView as any)?.setTimeout?.(() => {
       debounce = null;
@@ -206,15 +285,25 @@ export function renderLayoutEditor(args: {
       statusEl.className = "ga-settings-status";
       try {
         validateDashboardAgainstSemantic(semantic, draft);
-        statusEl.textContent = "Layout applied.";
+        if (!autoApply) {
+          statusEl.textContent = "Valid. Click Apply changes to update the dashboard.";
+          statusEl.classList.add("ok");
+          return;
+        }
+        statusEl.textContent = "Applying…";
         statusEl.classList.add("ok");
-        onChange(cloneJson(draft));
+        applyNow();
       } catch (e) {
         statusEl.textContent = e instanceof Error ? e.message : String(e);
         statusEl.classList.add("error");
       }
     }, 200) as any;
   };
+
+  auto.addEventListener("change", () => {
+    autoApply = auto.checked;
+    if (autoApply && dirty) applyDraft();
+  });
 
   const render = () => {
     root.innerHTML = "";
@@ -581,5 +670,5 @@ export function renderLayoutEditor(args: {
   };
 
   render();
-  return root;
+  return wrap;
 }
