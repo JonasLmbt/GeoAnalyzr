@@ -666,15 +666,16 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }
     .ga-settings-panel {
       position:absolute;
-      top:8%;
+      top:6%;
       left:50%;
       transform:translateX(-50%);
-      width:min(980px, 94vw);
-      max-height:84vh;
+      width:min(1260px, 96vw);
+      max-height:90vh;
       overflow:auto;
       background: var(--ga-surface);
       border:1px solid var(--ga-border);
       border-radius:14px;
+      box-shadow: 0 28px 90px rgba(0,0,0,0.55);
     }
     .ga-settings-header {
       display:flex;
@@ -683,7 +684,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       padding:10px 12px;
       border-bottom:1px solid var(--ga-border);
     }
-    .ga-settings-body { padding: 12px; }
+    .ga-settings-body { padding: 14px; }
     .ga-settings-tabs { display:flex; gap:8px; margin-bottom:12px; }
     .ga-settings-tab {
       background: var(--ga-control-bg);
@@ -727,7 +728,16 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-le-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .ga-le-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color: var(--ga-text-muted); user-select:none; }
     .ga-le-toggle input { width: 16px; height: 16px; }
-    .ga-layout-editor { display:grid; grid-template-columns: 280px 1fr; gap:12px; align-items:start; }
+    .ga-le-head {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 10px 0;
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-layout-editor { display:grid; grid-template-columns: minmax(260px, 340px) 1fr; gap:12px; align-items:start; padding-top: 10px; }
     @media (max-width: 820px) { .ga-layout-editor { grid-template-columns: 1fr; } }
     .ga-le-left, .ga-le-right { min-width: 0; }
     .ga-le-left-head { display:flex; gap:8px; margin-bottom:10px; }
@@ -770,6 +780,22 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size: 12px;
       min-width: 220px;
     }
+    .ga-le-field textarea {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:8px;
+      font: inherit;
+      font-size: 12px;
+      min-height: 200px;
+      resize: vertical;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      white-space: pre;
+      line-height: 1.35;
+    }
     .ga-le-field select[multiple] { min-width: 260px; padding: 6px; }
     .ga-le-hr { border:0; height:1px; background: var(--ga-border); margin: 12px 0; opacity: 0.9; }
     .ga-le-box { background: var(--ga-card-2); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-bottom:10px; }
@@ -780,6 +806,22 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-le-subbox { background: color-mix(in srgb, var(--ga-card) 55%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
     .ga-le-subhead { font-weight: 700; font-size: 12px; color: var(--ga-text-muted); margin-bottom: 8px; }
     .ga-le-widget { background: color-mix(in srgb, var(--ga-card-2) 65%, transparent); border:1px dashed var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-details { border:1px solid var(--ga-border); border-radius:12px; padding:0; margin-top:10px; background: color-mix(in srgb, var(--ga-card-2) 60%, transparent); }
+    .ga-le-details > summary {
+      cursor:pointer;
+      padding:10px 12px;
+      font-weight: 750;
+      font-size: 12px;
+      color: var(--ga-text);
+      user-select:none;
+      list-style: none;
+    }
+    .ga-le-details[open] > summary { border-bottom: 1px solid var(--ga-border); }
+    .ga-le-details > summary::-webkit-details-marker { display:none; }
+    .ga-le-details > .ga-le-item { margin-top: 0; border: 0; border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; }
+    .ga-le-adv { margin-top: 10px; }
+    .ga-le-adv > summary { cursor:pointer; user-select:none; font-weight: 700; font-size:12px; color: var(--ga-text-muted); list-style:none; }
+    .ga-le-adv > summary::-webkit-details-marker { display:none; }
   `;
   doc.head.appendChild(style);
 }
