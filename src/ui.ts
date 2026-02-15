@@ -15,6 +15,7 @@ import {
 import { attachSettingsModal } from "./ui/settingsModal";
 import { renderAnalysisApp } from "./ui/analysisRenderer";
 import { getCurrentPlayerName } from "./app/playerIdentity";
+import { logoSvgMarkup } from "./ui/logo";
 
 function cloneTemplate<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -66,8 +67,12 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     const winTitle = applyTitleTemplate(winTpl, vars) || dashTitle;
 
     doc.title = winTitle;
-    const titleEl = doc.querySelector(".ga-topbar .ga-title") as HTMLDivElement | null;
-    if (titleEl) titleEl.textContent = topTitle;
+    const titleTextEl = doc.querySelector(".ga-topbar .ga-title .ga-title-text") as HTMLSpanElement | null;
+    if (titleTextEl) titleTextEl.textContent = topTitle;
+    else {
+      const titleEl = doc.querySelector(".ga-topbar .ga-title") as HTMLDivElement | null;
+      if (titleEl) titleEl.textContent = topTitle;
+    }
   };
 
   const renderNow = async (): Promise<void> => {
@@ -87,7 +92,16 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
 
     const title = doc.createElement("div");
     title.className = "ga-title";
-    title.textContent = "GeoAnalyzr";
+    const titleLogo = doc.createElement("span");
+    titleLogo.className = "ga-title-logo";
+    titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", decorative: true });
+
+    const titleText = doc.createElement("span");
+    titleText.className = "ga-title-text";
+    titleText.textContent = "GeoAnalyzr";
+
+    title.appendChild(titleLogo);
+    title.appendChild(titleText);
 
     const actions = doc.createElement("div");
     actions.className = "ga-topbar-actions";

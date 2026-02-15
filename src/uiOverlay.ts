@@ -1,3 +1,5 @@
+import { logoSvgMarkup } from "./ui/logo";
+
 type Counts = {
   games: number;
   rounds: number;
@@ -81,7 +83,12 @@ function cssOnce(): void {
     .ga-ui-title {
       font-weight: 700;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
+    .ga-ui-title svg { display: block; }
+    .ga-ui-icon svg { display: block; }
     .ga-ui-close {
       border: none;
       background: transparent;
@@ -187,11 +194,7 @@ export function createUIOverlay(): UIOverlay {
   iconBtn.className = "ga-ui-icon";
   iconBtn.title = "GeoAnalyzr";
   iconBtn.type = "button";
-  iconBtn.innerHTML =
-    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">' +
-    '<polyline points="3,16 9,10 14,15 21,8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
-    '<polyline points="16,8 21,8 21,13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
-    "</svg>";
+  iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", decorative: true });
 
   const panel = el("div");
   panel.className = "ga-ui-panel";
@@ -201,7 +204,12 @@ export function createUIOverlay(): UIOverlay {
 
   const title = el("div");
   title.className = "ga-ui-title";
-  title.textContent = "GeoAnalyzr";
+  const titleLogo = el("span");
+  titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", decorative: true });
+  const titleText = el("span");
+  titleText.textContent = "GeoAnalyzr";
+  title.appendChild(titleLogo);
+  title.appendChild(titleText);
 
   const closeBtn = el("button");
   closeBtn.className = "ga-ui-close";
@@ -392,4 +400,3 @@ export function createUIOverlay(): UIOverlay {
     openNcfaManager
   };
 }
-

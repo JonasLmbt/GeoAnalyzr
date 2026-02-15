@@ -137,7 +137,8 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       top: 0;
       z-index: 10;
     }
-    .ga-title { font-weight: 700; }
+    .ga-title { font-weight: 700; display:flex; align-items:center; gap:10px; }
+    .ga-title-logo svg { display:block; }
     .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
     .ga-close, .ga-gear {
       background: var(--ga-control-bg);

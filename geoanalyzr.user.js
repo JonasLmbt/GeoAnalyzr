@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.3
+// @version      2.0.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6682,6 +6682,75 @@
     }
   });
 
+  // src/ui/logo.ts
+  var LOGO_SVG_INNER = `
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="20%" r="80%">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.38"/>
+      <stop offset="55%" stop-color="#0b1020" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#060a14" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="g" x1="70" y1="70" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7950E5"/>
+      <stop offset="0.55" stop-color="#00A2FE"/>
+      <stop offset="1" stop-color="#3AE8BD"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="128" cy="128" r="112" fill="url(#bg)"/>
+
+  <path filter="url(#shadow)"
+        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)" stroke-width="4"/>
+
+  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="3"/>
+
+  <path filter="url(#glow)"
+        d="M88 110l26-22 20 16 22-30 30 22"
+        fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g filter="url(#glow)">
+    <circle cx="88" cy="110" r="5.5" fill="#7950E5"/>
+    <circle cx="114" cy="88" r="5.5" fill="#5f7ff0"/>
+    <circle cx="134" cy="104" r="5.5" fill="#00A2FE"/>
+    <circle cx="156" cy="74" r="5.5" fill="#22cfe0"/>
+    <circle cx="186" cy="96" r="5.5" fill="#3AE8BD"/>
+  </g>
+`;
+  function replaceAll(haystack, needle, replacement) {
+    return haystack.split(needle).join(replacement);
+  }
+  function escapeAttr(value) {
+    let v = value;
+    v = replaceAll(v, "&", "&amp;");
+    v = replaceAll(v, '"', "&quot;");
+    v = replaceAll(v, "<", "&lt;");
+    v = replaceAll(v, ">", "&gt;");
+    return v;
+  }
+  function logoSvgMarkup(opts) {
+    const { size, idPrefix, decorative, ariaLabel } = opts;
+    const ids = ["bg", "g", "shadow", "glow"];
+    let inner = LOGO_SVG_INNER.trim();
+    for (const id of ids) {
+      inner = replaceAll(inner, `id="${id}"`, `id="${idPrefix}-${id}"`);
+      inner = replaceAll(inner, `url(#${id})`, `url(#${idPrefix}-${id})`);
+    }
+    const label = (ariaLabel ?? "GeoAnalyzr").trim() || "GeoAnalyzr";
+    const aria = decorative ? `aria-hidden="true"` : `role="img" aria-label="${escapeAttr(label)}"`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
+  }
+
   // src/uiOverlay.ts
   function el(tag) {
     return document.createElement(tag);
@@ -6737,7 +6806,12 @@
     .ga-ui-title {
       font-weight: 700;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
+    .ga-ui-title svg { display: block; }
+    .ga-ui-icon svg { display: block; }
     .ga-ui-close {
       border: none;
       background: transparent;
@@ -6841,14 +6915,19 @@
     iconBtn.className = "ga-ui-icon";
     iconBtn.title = "GeoAnalyzr";
     iconBtn.type = "button";
-    iconBtn.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><polyline points="3,16 9,10 14,15 21,8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline><polyline points="16,8 21,8 21,13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></polyline></svg>';
+    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", decorative: true });
     const panel = el("div");
     panel.className = "ga-ui-panel";
     const header = el("div");
     header.className = "ga-ui-head";
     const title = el("div");
     title.className = "ga-ui-title";
-    title.textContent = "GeoAnalyzr";
+    const titleLogo = el("span");
+    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", decorative: true });
+    const titleText = el("span");
+    titleText.textContent = "GeoAnalyzr";
+    title.appendChild(titleLogo);
+    title.appendChild(titleText);
     const closeBtn = el("button");
     closeBtn.className = "ga-ui-close";
     closeBtn.type = "button";
@@ -33912,7 +33991,8 @@
       top: 0;
       z-index: 10;
     }
-    .ga-title { font-weight: 700; }
+    .ga-title { font-weight: 700; display:flex; align-items:center; gap:10px; }
+    .ga-title-logo svg { display:block; }
     .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
     .ga-close, .ga-gear {
       background: var(--ga-control-bg);
@@ -39642,8 +39722,12 @@
       const topTitle = applyTitleTemplate(topTpl, vars) || dashTitle;
       const winTitle = applyTitleTemplate(winTpl, vars) || dashTitle;
       doc.title = winTitle;
-      const titleEl = doc.querySelector(".ga-topbar .ga-title");
-      if (titleEl) titleEl.textContent = topTitle;
+      const titleTextEl = doc.querySelector(".ga-topbar .ga-title .ga-title-text");
+      if (titleTextEl) titleTextEl.textContent = topTitle;
+      else {
+        const titleEl = doc.querySelector(".ga-topbar .ga-title");
+        if (titleEl) titleEl.textContent = topTitle;
+      }
     };
     const renderNow = async () => {
       body.innerHTML = "";
@@ -39659,7 +39743,14 @@
       top.className = "ga-topbar";
       const title = doc.createElement("div");
       title.className = "ga-title";
-      title.textContent = "GeoAnalyzr";
+      const titleLogo = doc.createElement("span");
+      titleLogo.className = "ga-title-logo";
+      titleLogo.innerHTML = logoSvgMarkup({ size: 18, idPrefix: "ga-analysis-topbar", decorative: true });
+      const titleText = doc.createElement("span");
+      titleText.className = "ga-title-text";
+      titleText.textContent = "GeoAnalyzr";
+      title.appendChild(titleLogo);
+      title.appendChild(titleText);
       const actions = doc.createElement("div");
       actions.className = "ga-topbar-actions";
       const settingsBtn = doc.createElement("button");
