@@ -31,6 +31,7 @@ type UI = {
   onExportClick: (handler: () => void | Promise<void>) => void;
   onTokenClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
+  onDiscordClick: (handler: () => void | Promise<void>) => void;
   openNcfaManager: (args: {
     initialToken: string;
     helpText: string;
@@ -209,5 +210,11 @@ export function registerUiActions(ui: UI): void {
       ui.setStatus("Error: " + errorText(e));
       console.error(e);
     }
+  });
+
+  ui.onDiscordClick(() => {
+    const url = "https://discord.gg/8RA3VtSC";
+    const w = window.open(url, "_blank", "noopener,noreferrer");
+    if (w) w.opener = null;
   });
 }

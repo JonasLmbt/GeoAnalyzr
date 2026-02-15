@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.6
+// @version      2.0.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -6970,6 +6970,7 @@ ${shapes}`.trim();
     };
     const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
     const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
+    const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
     const tokenBtn = mkBtn2("Set NCFA Token", "rgba(95,95,30,0.35)");
     const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
     const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
@@ -6980,6 +6981,7 @@ ${shapes}`.trim();
     panel.appendChild(status);
     panel.appendChild(updateBtn);
     panel.appendChild(analysisBtn);
+    panel.appendChild(discordBtn);
     panel.appendChild(tokenBtn);
     panel.appendChild(exportBtn);
     panel.appendChild(resetBtn);
@@ -6998,11 +7000,13 @@ ${shapes}`.trim();
     let exportHandler = null;
     let tokenHandler = null;
     let openAnalysisHandler = null;
+    let discordHandler = null;
     updateBtn.addEventListener("click", () => void updateHandler?.());
     tokenBtn.addEventListener("click", () => void tokenHandler?.());
     exportBtn.addEventListener("click", () => void exportHandler?.());
     resetBtn.addEventListener("click", () => void resetHandler?.());
     analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
+    discordBtn.addEventListener("click", () => void discordHandler?.());
     const openNcfaManager = (args) => {
       const overlay = el("div");
       overlay.className = "ga-ui-modal";
@@ -7110,6 +7114,9 @@ ${shapes}`.trim();
       },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;
+      },
+      onDiscordClick(fn) {
+        discordHandler = fn;
       },
       openNcfaManager
     };
@@ -40091,6 +40098,11 @@ ${error instanceof Error ? error.message : String(error)}`;
         ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
+    });
+    ui.onDiscordClick(() => {
+      const url = "https://discord.gg/8RA3VtSC";
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      if (w) w.opener = null;
     });
   }
 

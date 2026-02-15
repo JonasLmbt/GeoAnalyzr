@@ -18,6 +18,7 @@ export type UIOverlay = {
   onExportClick: (handler: () => void | Promise<void>) => void;
   onTokenClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
+  onDiscordClick: (handler: () => void | Promise<void>) => void;
 
   openNcfaManager: (args: {
     initialToken: string;
@@ -234,6 +235,7 @@ export function createUIOverlay(): UIOverlay {
 
   const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
   const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
+  const discordBtn = mkBtn("Join Discord", "rgba(121,80,229,0.30)");
   const tokenBtn = mkBtn("Set NCFA Token", "rgba(95,95,30,0.35)");
   const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
   const resetBtn = mkBtn("Reset Database", "rgba(160,35,35,0.35)");
@@ -246,6 +248,7 @@ export function createUIOverlay(): UIOverlay {
   panel.appendChild(status);
   panel.appendChild(updateBtn);
   panel.appendChild(analysisBtn);
+  panel.appendChild(discordBtn);
   panel.appendChild(tokenBtn);
   panel.appendChild(exportBtn);
   panel.appendChild(resetBtn);
@@ -267,12 +270,14 @@ export function createUIOverlay(): UIOverlay {
   let exportHandler: (() => void | Promise<void>) | null = null;
   let tokenHandler: (() => void | Promise<void>) | null = null;
   let openAnalysisHandler: (() => void | Promise<void>) | null = null;
+  let discordHandler: (() => void | Promise<void>) | null = null;
 
   updateBtn.addEventListener("click", () => void updateHandler?.());
   tokenBtn.addEventListener("click", () => void tokenHandler?.());
   exportBtn.addEventListener("click", () => void exportHandler?.());
   resetBtn.addEventListener("click", () => void resetHandler?.());
   analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
+  discordBtn.addEventListener("click", () => void discordHandler?.());
 
   const openNcfaManager = (args: Parameters<UIOverlay["openNcfaManager"]>[0]) => {
     const overlay = el("div");
@@ -396,6 +401,9 @@ export function createUIOverlay(): UIOverlay {
     },
     onOpenAnalysisClick(fn) {
       openAnalysisHandler = fn;
+    },
+    onDiscordClick(fn) {
+      discordHandler = fn;
     },
     openNcfaManager
   };
