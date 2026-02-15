@@ -31,6 +31,12 @@ For development:
 
 ![GeoAnalyzr panel entry point](images/geoanalyzr.png)
 
+## Support & Ideas (Discord)
+
+If you need support or want to suggest new analysis ideas / features, join my Discord server:
+
+- https://discord.gg/8RA3VtSC
+
 ## Auto Updates
 
 The script already includes:
