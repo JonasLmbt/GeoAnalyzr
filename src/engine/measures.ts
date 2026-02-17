@@ -183,6 +183,54 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     return n ? sum / n : 0;
   },
 
+  // Record-style per-round measures: return NaN if value is missing so Record widgets can skip invalid groups.
+  round_score_value: (rows) => {
+    for (const r of rows) {
+      const s = getSelfScore(r);
+      if (typeof s === "number" && Number.isFinite(s) && s >= 0) return s;
+    }
+    return NaN;
+  },
+  round_damage_dealt_value: (rows) => {
+    for (const r of rows as any[]) {
+      const dmg = (r as any)?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      if (dmg > 0) return dmg;
+    }
+    return NaN;
+  },
+  round_damage_taken_value: (rows) => {
+    for (const r of rows as any[]) {
+      const dmg = (r as any)?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      if (dmg < 0) return -dmg;
+    }
+    return NaN;
+  },
+  round_guess_duration_value: (rows) => {
+    for (const r of rows) {
+      const s = getDurationSeconds(r);
+      if (typeof s === "number" && Number.isFinite(s) && s > 0) return s;
+    }
+    return NaN;
+  },
+  round_score_per_second: (rows) => {
+    let best = -Infinity;
+    let found = false;
+    for (const r of rows) {
+      const score = getSelfScore(r);
+      const dur = getDurationSeconds(r);
+      if (typeof score !== "number" || !Number.isFinite(score) || score < 0) continue;
+      if (typeof dur !== "number" || !Number.isFinite(dur) || dur <= 0) continue;
+      const v = score / dur;
+      if (Number.isFinite(v)) {
+        found = true;
+        best = Math.max(best, v);
+      }
+    }
+    return found ? best : NaN;
+  },
+
   median_player_self_score: (rows) => medianOf(rows.map((r) => getSelfScore(r) as any).filter((v) => typeof v === "number")),
   stddev_player_self_score: (rows) => stddevOf(rows.map((r) => getSelfScore(r) as any).filter((v) => typeof v === "number")),
 

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.21
+// @version      2.0.22
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9969,7 +9969,7 @@ ${shapes}`.trim();
         out.playedAt = bestTime;
         out.ts = bestTime;
       }
-      const rawDur = typeof out.durationSeconds === "number" && Number.isFinite(out.durationSeconds) && out.durationSeconds > 0 ? out.durationSeconds : null;
+      let rawDur = typeof out.durationSeconds === "number" && Number.isFinite(out.durationSeconds) && out.durationSeconds > 0 ? out.durationSeconds : null;
       const start = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : null;
       const end = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : null;
       const derived = start !== null && end !== null && end > start ? (end - start) / 1e3 : null;
@@ -9978,6 +9978,12 @@ ${shapes}`.trim();
         if (rawDur === null || Math.abs(rawDur - derivedOk) > 6) out.durationSeconds = derivedOk;
       } else if (rawDur === null) {
         delete out.durationSeconds;
+      } else if (start === null || end === null) {
+        const rounded = Math.round(rawDur);
+        if (Math.abs(rawDur - rounded) < 1e-3 && [60, 90, 120, 180, 300].includes(rounded)) {
+          delete out.durationSeconds;
+          rawDur = null;
+        }
       }
       if (typeof out.modeFamily !== "string" || !out.modeFamily) {
         const mf = asTrimmedString2(out.modeFamily) ?? asTrimmedString2(d?.modeFamily) ?? modeFamilyByGame.get(gameId);
@@ -31909,6 +31915,46 @@ ${shapes}`.trim();
         formulaId: "mean_player_self_score",
         range: { min: 0, max: 5e3 }
       },
+      round_score: {
+        label: "Round score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_score_value",
+        range: { min: 0, max: 5e3 }
+      },
+      round_damage_dealt: {
+        label: "Damage dealt",
+        unit: "int",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_damage_dealt_value",
+        range: { min: 0 }
+      },
+      round_damage_taken: {
+        label: "Damage taken",
+        unit: "int",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_damage_taken_value",
+        range: { min: 0 }
+      },
+      round_guess_duration: {
+        label: "Guess duration",
+        unit: "seconds",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_guess_duration_value",
+        range: { min: 0 }
+      },
+      round_score_per_second: {
+        label: "Score per second",
+        unit: "float",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_score_per_second",
+        range: { min: 0 }
+      },
       avg_score_hit_only: {
         label: "Avg score (hit only)",
         unit: "points",
@@ -32929,16 +32975,134 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 10,
+                h: 16,
                 card: {
                   type: "composite",
                   children: [
+                    {
+                      widgetId: "w_round_records",
+                      type: "record_list",
+                      title: "Round Records",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 6 },
+                      spec: {
+                        records: [
+                          {
+                            id: "highest_score_round",
+                            label: "Highest score round",
+                            metric: "round_score",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "lowest_score_round",
+                            label: "Lowest score round",
+                            metric: "round_score",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "biggest_damage_dealt_round",
+                            label: "Biggest damage dealt round",
+                            metric: "round_damage_dealt",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "biggest_damage_taken_round",
+                            label: "Biggest damage taken round",
+                            metric: "round_damage_taken",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "fastest_round",
+                            label: "Fastest round (min duration)",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "slowest_round",
+                            label: "Slowest round (max duration)",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "fastest_5k",
+                            label: "Fastest 5k",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            filters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_throw",
+                            label: "Slowest throw",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            filters: [{ dimension: "is_throw", op: "eq", value: "true" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "best_score_per_second",
+                            label: "Best score-per-second",
+                            metric: "round_score_per_second",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "worst_region_guess",
+                            label: "Worst region-guess (hit but low score)",
+                            metric: "round_score",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            filters: [{ dimension: "is_hit", op: "eq", value: "true" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
                     {
                       widgetId: "w_personal_records",
                       type: "record_list",
                       title: "Personal Records",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      placement: { x: 0, y: 6, w: 12, h: 10 },
                       spec: {
                         records: [
                           {
@@ -38654,6 +38818,53 @@ ${shapes}`.trim();
         }
       }
       return n ? sum / n : 0;
+    },
+    // Record-style per-round measures: return NaN if value is missing so Record widgets can skip invalid groups.
+    round_score_value: (rows) => {
+      for (const r of rows) {
+        const s = getSelfScore(r);
+        if (typeof s === "number" && Number.isFinite(s) && s >= 0) return s;
+      }
+      return NaN;
+    },
+    round_damage_dealt_value: (rows) => {
+      for (const r of rows) {
+        const dmg = r?.damage;
+        if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+        if (dmg > 0) return dmg;
+      }
+      return NaN;
+    },
+    round_damage_taken_value: (rows) => {
+      for (const r of rows) {
+        const dmg = r?.damage;
+        if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+        if (dmg < 0) return -dmg;
+      }
+      return NaN;
+    },
+    round_guess_duration_value: (rows) => {
+      for (const r of rows) {
+        const s = getDurationSeconds(r);
+        if (typeof s === "number" && Number.isFinite(s) && s > 0) return s;
+      }
+      return NaN;
+    },
+    round_score_per_second: (rows) => {
+      let best = -Infinity;
+      let found = false;
+      for (const r of rows) {
+        const score = getSelfScore(r);
+        const dur = getDurationSeconds(r);
+        if (typeof score !== "number" || !Number.isFinite(score) || score < 0) continue;
+        if (typeof dur !== "number" || !Number.isFinite(dur) || dur <= 0) continue;
+        const v = score / dur;
+        if (Number.isFinite(v)) {
+          found = true;
+          best = Math.max(best, v);
+        }
+      }
+      return found ? best : NaN;
     },
     median_player_self_score: (rows) => medianOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
     stddev_player_self_score: (rows) => stddevOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),

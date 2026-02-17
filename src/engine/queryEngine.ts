@@ -425,7 +425,7 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     // - Ignore 0 / missing values.
     // - If start/end timestamps exist and disagree strongly with durationSeconds, prefer derived.
     // This prevents broken constant values like 120.0s when timestamps show something else.
-    const rawDur = typeof out.durationSeconds === "number" && Number.isFinite(out.durationSeconds) && out.durationSeconds > 0 ? out.durationSeconds : null;
+    let rawDur = typeof out.durationSeconds === "number" && Number.isFinite(out.durationSeconds) && out.durationSeconds > 0 ? out.durationSeconds : null;
     const start = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : null;
     const end = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : null;
     const derived = start !== null && end !== null && end > start ? (end - start) / 1000 : null;
@@ -435,6 +435,14 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     } else if (rawDur === null) {
       // Keep it unset if nothing trustworthy exists (prevents misleading 0s).
       delete out.durationSeconds;
+    } else if (start === null || end === null) {
+      // Heuristic: some data sources seem to store the time limit (e.g. 120s) instead of actual guess duration.
+      // If we don't have timestamps, treat common time-limit constants as missing.
+      const rounded = Math.round(rawDur);
+      if (Math.abs(rawDur - rounded) < 0.001 && [60, 90, 120, 180, 300].includes(rounded)) {
+        delete out.durationSeconds;
+        rawDur = null;
+      }
     }
 
     // Fill mode fields if missing.

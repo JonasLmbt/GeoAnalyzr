@@ -419,16 +419,134 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 10,
+              "h": 16,
               "card": {
                 "type": "composite",
                 "children": [
+                  {
+                    "widgetId": "w_round_records",
+                    "type": "record_list",
+                    "title": "Round Records",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "highest_score_round",
+                          "label": "Highest score round",
+                          "metric": "round_score",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "lowest_score_round",
+                          "label": "Lowest score round",
+                          "metric": "round_score",
+                          "groupBy": "round_id",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "biggest_damage_dealt_round",
+                          "label": "Biggest damage dealt round",
+                          "metric": "round_damage_dealt",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "biggest_damage_taken_round",
+                          "label": "Biggest damage taken round",
+                          "metric": "round_damage_taken",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "fastest_round",
+                          "label": "Fastest round (min duration)",
+                          "metric": "round_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "slowest_round",
+                          "label": "Slowest round (max duration)",
+                          "metric": "round_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "fastest_5k",
+                          "label": "Fastest 5k",
+                          "metric": "round_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "min",
+                          "filters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "slowest_throw",
+                          "label": "Slowest throw",
+                          "metric": "round_guess_duration",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "filters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "best_score_per_second",
+                          "label": "Best score-per-second",
+                          "metric": "round_score_per_second",
+                          "groupBy": "round_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "worst_region_guess",
+                          "label": "Worst region-guess (hit but low score)",
+                          "metric": "round_score",
+                          "groupBy": "round_id",
+                          "extreme": "min",
+                          "filters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
                   {
                     "widgetId": "w_personal_records",
                     "type": "record_list",
                     "title": "Personal Records",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "placement": { "x": 0, "y": 6, "w": 12, "h": 10 },
                     "spec": {
                       "records": [
                         {

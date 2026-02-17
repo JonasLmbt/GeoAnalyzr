@@ -372,6 +372,46 @@
       "formulaId": "mean_player_self_score",
       "range": { "min": 0, "max": 5000 }
     },
+    "round_score": {
+      "label": "Round score",
+      "unit": "points",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "round_score_value",
+      "range": { "min": 0, "max": 5000 }
+    },
+    "round_damage_dealt": {
+      "label": "Damage dealt",
+      "unit": "int",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "round_damage_dealt_value",
+      "range": { "min": 0 }
+    },
+    "round_damage_taken": {
+      "label": "Damage taken",
+      "unit": "int",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "round_damage_taken_value",
+      "range": { "min": 0 }
+    },
+    "round_guess_duration": {
+      "label": "Guess duration",
+      "unit": "seconds",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "round_guess_duration_value",
+      "range": { "min": 0 }
+    },
+    "round_score_per_second": {
+      "label": "Score per second",
+      "unit": "float",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "round_score_per_second",
+      "range": { "min": 0 }
+    },
     "avg_score_hit_only": {
       "label": "Avg score (hit only)",
       "unit": "points",
