@@ -201,7 +201,7 @@ export interface BreakdownSpec {
 export interface RecordItemDef {
   id: string;
   label: string;
-  kind?: "group_extreme" | "streak" | "same_value_streak";
+  kind?: "group_extreme" | "overall" | "streak" | "same_value_streak";
   // group_extreme:
   metric?: string;
   groupBy?: string;

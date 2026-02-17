@@ -94,6 +94,32 @@ function getTrustedGuessDurationSeconds(row: any, semantic: SemanticRegistry): n
   return dur;
 }
 
+function buildOverall(
+  semantic: SemanticRegistry,
+  grain: Grain,
+  rowsAll: any[],
+  rec: RecordItemDef
+): RecordResult | null {
+  const metricId = typeof rec.metric === "string" ? rec.metric.trim() : "";
+  if (!metricId) return null;
+
+  const metric = semantic.measures[metricId];
+  if (!metric) return null;
+  const fn = MEASURES_BY_GRAIN[grain]?.[metric.formulaId];
+  if (!fn) return null;
+
+  const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
+  const v = fn(inputRows as any[]);
+  if (!Number.isFinite(v)) return null;
+
+  return {
+    keyText: "",
+    valueText: formatMetricValue(semantic, metricId, v),
+    rows: inputRows,
+    click: rec.actions?.click
+  };
+}
+
 function buildGroupExtreme(
   semantic: SemanticRegistry,
   grain: Grain,
@@ -180,8 +206,6 @@ function buildGroupExtreme(
 
   if (!bestKey || bestVal === null) return null;
 
-  const n = bestRows.length;
-  const metricLabel = semantic.measures[metricId]?.label ?? metricId;
   const metricText = formatMetricValue(semantic, metricId, bestVal);
 
   const displayKey =
@@ -197,6 +221,39 @@ function buildGroupExtreme(
       ? (firstTs !== null ? formatTs(firstTs) : bestKey)
       : bestKey;
 
+  let tieCount = 0;
+  for (const [, g] of grouped.entries()) {
+    if (!g || g.length === 0) continue;
+    const v = (() => {
+      if (grain === "round" && metricId === "avg_score") {
+        let sum = 0;
+        let n = 0;
+        for (const r of g as any[]) {
+          const s = getScore(r, semantic);
+          if (s === null) continue;
+          sum += s;
+          n++;
+        }
+        return n ? sum / n : NaN;
+      }
+      if (grain === "round" && metricId === "avg_guess_duration") {
+        let sum = 0;
+        let n = 0;
+        for (const r of g as any[]) {
+          const s = getTrustedGuessDurationSeconds(r, semantic);
+          if (s === null) continue;
+          sum += s;
+          n++;
+        }
+        return n ? sum / n : NaN;
+      }
+      return fn(g);
+    })();
+    if (!Number.isFinite(v)) continue;
+    if (v === bestVal) tieCount++;
+  }
+  const tieSuffix = tieCount > 1 ? ` (${tieCount}x)` : "";
+
   if (grain === "session" && metricId === "session_delta_rating") {
     // Keep it compact; drilldown can show exact dates per game if needed.
     return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
@@ -205,7 +262,7 @@ function buildGroupExtreme(
   // Special-case a few legacy-style "Rounds" records so the value reads naturally.
   if (groupById === "game_id" && metricId === "rounds_count") {
     if (extreme === "max") {
-      return { keyText, valueText: `${metricText} rounds (${keyText})`, rows: bestRows, click: rec.actions?.click };
+      return { keyText, valueText: `${metricText} rounds (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
     }
     // For "fewest rounds", show how many games share the minimum.
     const tied: any[] = [];
@@ -220,14 +277,14 @@ function buildGroupExtreme(
     const rows = tied.length ? tied : bestRows;
     return {
       keyText,
-      valueText: `${metricText} rounds (${tieCount} game(s))`,
+      valueText: `${metricText} rounds${tieCount > 1 ? ` (${tieCount}x)` : ""}`,
       rows,
       click: rec.actions?.click
     };
   }
 
   if (groupById === "game_id" && metricId === "score_spread") {
-    return { keyText, valueText: `${metricText} points (${keyText})`, rows: bestRows, click: rec.actions?.click };
+    return { keyText, valueText: `${metricText} points (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
   }
 
   if (displayKey === "first_ts_score") {
@@ -239,14 +296,10 @@ function buildGroupExtreme(
       const s = scoreFn(bestRows as any[]);
       if (Number.isFinite(s)) scoreText = ` (score ${Math.round(s)})`;
     }
-    return { keyText, valueText: `${metricText} on ${keyText}${scoreText}`, rows: bestRows, click: rec.actions?.click };
+    return { keyText, valueText: `${metricText} on ${keyText}${scoreText}${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
   }
 
-  // Keep value text compact; show the group key in the drilldown title (click) instead.
-  const valueText =
-    groupById === "time_day"
-      ? `${metricLabel.toLowerCase().startsWith("avg ") ? `${metricText}` : metricText} (n=${n})`
-      : `${metricText} (n=${n})`;
+  const valueText = `${metricText}${tieSuffix}`;
 
   return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
 }
@@ -367,13 +420,21 @@ export async function renderRecordListWidget(
 
   for (const rec of spec.records) {
     const kind =
-      rec.kind === "same_value_streak" ? "same_value_streak" : rec.kind === "streak" ? "streak" : "group_extreme";
+      rec.kind === "overall"
+        ? "overall"
+        : rec.kind === "same_value_streak"
+          ? "same_value_streak"
+          : rec.kind === "streak"
+            ? "streak"
+            : "group_extreme";
     const result =
-      kind === "streak"
-        ? buildStreak(semantic, grain, rowsAll as any[], rec)
-        : kind === "same_value_streak"
-          ? buildSameValueStreak(semantic, grain, rowsAll as any[], rec)
-          : buildGroupExtreme(semantic, grain, rowsAll as any[], rec);
+      kind === "overall"
+        ? buildOverall(semantic, grain, rowsAll as any[], rec)
+        : kind === "streak"
+          ? buildStreak(semantic, grain, rowsAll as any[], rec)
+          : kind === "same_value_streak"
+            ? buildSameValueStreak(semantic, grain, rowsAll as any[], rec)
+            : buildGroupExtreme(semantic, grain, rowsAll as any[], rec);
 
     const line = doc.createElement("div");
     line.className = "ga-statrow";

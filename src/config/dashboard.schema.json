@@ -548,7 +548,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "label": { "$ref": "#/$defs/title" },
-        "kind": { "enum": ["group_extreme", "streak", "same_value_streak"] },
+        "kind": { "enum": ["group_extreme", "overall", "streak", "same_value_streak"] },
         "metric": { "type": "string", "minLength": 1 },
         "groupBy": { "type": "string", "minLength": 1 },
         "extreme": { "enum": ["max", "min"] },
@@ -560,6 +560,10 @@
       },
       "required": ["id", "label"],
       "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "overall" } } },
+          "then": { "required": ["metric"] }
+        },
         {
           "anyOf": [
             { "required": ["metric", "groupBy", "extreme"] },

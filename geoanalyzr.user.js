@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.26
+// @version      2.0.27
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -33167,7 +33167,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 40,
+                h: 30,
                 card: {
                   type: "composite",
                   children: [
@@ -33290,16 +33290,18 @@ ${shapes}`.trim();
                       }
                     },
                     {
-                      widgetId: "w_game_records_kpis",
-                      type: "stat_list",
-                      title: "Game Records (Counts)",
+                      widgetId: "w_game_records",
+                      type: "record_list",
+                      title: "Game Records",
                       grain: "game",
-                      placement: { x: 0, y: 6, w: 12, h: 2 },
+                      placement: { x: 0, y: 6, w: 12, h: 7 },
                       spec: {
-                        rows: [
+                        records: [
                           {
+                            id: "flawless_wins",
                             label: "Flawless wins (no damage taken)",
-                            measure: "flawless_wins_count",
+                            kind: "overall",
+                            metric: "flawless_wins_count",
                             actions: {
                               click: {
                                 type: "drilldown",
@@ -33309,18 +33311,7 @@ ${shapes}`.trim();
                                 extraFilters: [{ dimension: "is_flawless_win", op: "eq", value: "true" }]
                               }
                             }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_game_records",
-                      type: "record_list",
-                      title: "Game Records",
-                      grain: "game",
-                      placement: { x: 0, y: 8, w: 12, h: 6 },
-                      spec: {
-                        records: [
+                          },
                           {
                             id: "highest_avg_score_game",
                             label: "Highest avg score game",
@@ -33445,7 +33436,7 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Session Records",
                       grain: "session",
-                      placement: { x: 0, y: 14, w: 12, h: 6 },
+                      placement: { x: 0, y: 13, w: 12, h: 6 },
                       spec: {
                         records: [
                           {
@@ -33536,7 +33527,7 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Day Records",
                       grain: "session",
-                      placement: { x: 0, y: 20, w: 12, h: 7 },
+                      placement: { x: 0, y: 19, w: 12, h: 7 },
                       spec: {
                         records: [
                           {
@@ -33611,103 +33602,12 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Day Streaks",
                       grain: "session",
-                      placement: { x: 0, y: 27, w: 12, h: 3 },
+                      placement: { x: 0, y: 26, w: 12, h: 3 },
                       spec: {
                         rows: [
                           { label: "Most consecutive days without games", measure: "max_consecutive_days_without_games" },
                           { label: "Longest active streak (min 1 game/day)", measure: "longest_active_streak_days" },
                           { label: "Longest 5k day streak (min 1 5k/day)", measure: "longest_5k_day_streak_days" }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_personal_records",
-                      type: "record_list",
-                      title: "Personal Records",
-                      grain: "round",
-                      placement: { x: 0, y: 30, w: 12, h: 10 },
-                      spec: {
-                        records: [
-                          {
-                            id: "best_day",
-                            label: "Day with highest avg score",
-                            metric: "avg_score",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
-                          },
-                          {
-                            id: "hardest_day",
-                            label: "Day with lowest avg score",
-                            metric: "avg_score",
-                            groupBy: "time_day",
-                            extreme: "min",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
-                          },
-                          {
-                            id: "best_game_avg_score",
-                            label: "Game with highest avg score",
-                            metric: "avg_score",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
-                          },
-                          {
-                            id: "worst_game_avg_score",
-                            label: "Game with lowest avg score",
-                            metric: "avg_score",
-                            groupBy: "game_id",
-                            extreme: "min",
-                            displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
-                          },
-                          {
-                            id: "fastest_day",
-                            label: "Day with lowest avg guess duration",
-                            metric: "avg_guess_duration",
-                            groupBy: "time_day",
-                            extreme: "min",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
-                          },
-                          {
-                            id: "slowest_day",
-                            label: "Day with highest avg guess duration",
-                            metric: "avg_guess_duration",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
-                          },
-                          {
-                            id: "best_5k_streak",
-                            label: "Best 5k streak",
-                            kind: "streak",
-                            streakFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_throw_streak",
-                            label: "Worst throw streak (<50)",
-                            kind: "streak",
-                            streakFilters: [{ dimension: "is_throw", op: "eq", value: "true" }],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-                              }
-                            }
-                          }
                         ]
                       }
                     }
@@ -41769,6 +41669,23 @@ ${shapes}`.trim();
     }
     return dur;
   }
+  function buildOverall(semantic, grain, rowsAll, rec) {
+    const metricId = typeof rec.metric === "string" ? rec.metric.trim() : "";
+    if (!metricId) return null;
+    const metric = semantic.measures[metricId];
+    if (!metric) return null;
+    const fn = MEASURES_BY_GRAIN[grain]?.[metric.formulaId];
+    if (!fn) return null;
+    const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
+    const v = fn(inputRows);
+    if (!Number.isFinite(v)) return null;
+    return {
+      keyText: "",
+      valueText: formatMetricValue(semantic, metricId, v),
+      rows: inputRows,
+      click: rec.actions?.click
+    };
+  }
   function buildGroupExtreme(semantic, grain, rowsAll, rec) {
     const metricId = typeof rec.metric === "string" ? rec.metric.trim() : "";
     const groupById = typeof rec.groupBy === "string" ? rec.groupBy.trim() : "";
@@ -41805,25 +41722,25 @@ ${shapes}`.trim();
       const v = (() => {
         if (grain === "round" && metricId === "avg_score") {
           let sum = 0;
-          let n2 = 0;
+          let n = 0;
           for (const r of g) {
             const s = getScore(r, semantic);
             if (s === null) continue;
             sum += s;
-            n2++;
+            n++;
           }
-          return n2 ? sum / n2 : NaN;
+          return n ? sum / n : NaN;
         }
         if (grain === "round" && metricId === "avg_guess_duration") {
           let sum = 0;
-          let n2 = 0;
+          let n = 0;
           for (const r of g) {
             const s = getTrustedGuessDurationSeconds(r, semantic);
             if (s === null) continue;
             sum += s;
-            n2++;
+            n++;
           }
-          return n2 ? sum / n2 : NaN;
+          return n ? sum / n : NaN;
         }
         return fn(g);
       })();
@@ -41842,8 +41759,6 @@ ${shapes}`.trim();
       }
     }
     if (!bestKey || bestVal === null) return null;
-    const n = bestRows.length;
-    const metricLabel = semantic.measures[metricId]?.label ?? metricId;
     const metricText = formatMetricValue(semantic, metricId, bestVal);
     const displayKey = rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
     const firstTs = (() => {
@@ -41851,32 +41766,64 @@ ${shapes}`.trim();
       return ts.length ? Math.min(...ts) : null;
     })();
     const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
+    let tieCount = 0;
+    for (const [, g] of grouped.entries()) {
+      if (!g || g.length === 0) continue;
+      const v = (() => {
+        if (grain === "round" && metricId === "avg_score") {
+          let sum = 0;
+          let n = 0;
+          for (const r of g) {
+            const s = getScore(r, semantic);
+            if (s === null) continue;
+            sum += s;
+            n++;
+          }
+          return n ? sum / n : NaN;
+        }
+        if (grain === "round" && metricId === "avg_guess_duration") {
+          let sum = 0;
+          let n = 0;
+          for (const r of g) {
+            const s = getTrustedGuessDurationSeconds(r, semantic);
+            if (s === null) continue;
+            sum += s;
+            n++;
+          }
+          return n ? sum / n : NaN;
+        }
+        return fn(g);
+      })();
+      if (!Number.isFinite(v)) continue;
+      if (v === bestVal) tieCount++;
+    }
+    const tieSuffix = tieCount > 1 ? ` (${tieCount}x)` : "";
     if (grain === "session" && metricId === "session_delta_rating") {
       return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
     }
     if (groupById === "game_id" && metricId === "rounds_count") {
       if (extreme === "max") {
-        return { keyText, valueText: `${metricText} rounds (${keyText})`, rows: bestRows, click: rec.actions?.click };
+        return { keyText, valueText: `${metricText} rounds (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
       }
       const tied = [];
-      let tieCount = 0;
+      let tieCount2 = 0;
       for (const [, g] of grouped.entries()) {
         if (!g || g.length === 0) continue;
         const v = fn(g);
         if (!Number.isFinite(v) || v !== bestVal) continue;
-        tieCount++;
+        tieCount2++;
         tied.push(...g);
       }
       const rows = tied.length ? tied : bestRows;
       return {
         keyText,
-        valueText: `${metricText} rounds (${tieCount} game(s))`,
+        valueText: `${metricText} rounds${tieCount2 > 1 ? ` (${tieCount2}x)` : ""}`,
         rows,
         click: rec.actions?.click
       };
     }
     if (groupById === "game_id" && metricId === "score_spread") {
-      return { keyText, valueText: `${metricText} points (${keyText})`, rows: bestRows, click: rec.actions?.click };
+      return { keyText, valueText: `${metricText} points (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
     }
     if (displayKey === "first_ts_score") {
       let scoreText = "";
@@ -41886,9 +41833,9 @@ ${shapes}`.trim();
         const s = scoreFn(bestRows);
         if (Number.isFinite(s)) scoreText = ` (score ${Math.round(s)})`;
       }
-      return { keyText, valueText: `${metricText} on ${keyText}${scoreText}`, rows: bestRows, click: rec.actions?.click };
+      return { keyText, valueText: `${metricText} on ${keyText}${scoreText}${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
     }
-    const valueText = groupById === "time_day" ? `${metricLabel.toLowerCase().startsWith("avg ") ? `${metricText}` : metricText} (n=${n})` : `${metricText} (n=${n})`;
+    const valueText = `${metricText}${tieSuffix}`;
     return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   function buildStreak(semantic, grain, rowsAll, rec) {
@@ -41975,8 +41922,8 @@ ${shapes}`.trim();
     box.className = "ga-recordlist-box";
     const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
     for (const rec of spec.records) {
-      const kind = rec.kind === "same_value_streak" ? "same_value_streak" : rec.kind === "streak" ? "streak" : "group_extreme";
-      const result = kind === "streak" ? buildStreak(semantic, grain, rowsAll, rec) : kind === "same_value_streak" ? buildSameValueStreak(semantic, grain, rowsAll, rec) : buildGroupExtreme(semantic, grain, rowsAll, rec);
+      const kind = rec.kind === "overall" ? "overall" : rec.kind === "same_value_streak" ? "same_value_streak" : rec.kind === "streak" ? "streak" : "group_extreme";
+      const result = kind === "overall" ? buildOverall(semantic, grain, rowsAll, rec) : kind === "streak" ? buildStreak(semantic, grain, rowsAll, rec) : kind === "same_value_streak" ? buildSameValueStreak(semantic, grain, rowsAll, rec) : buildGroupExtreme(semantic, grain, rowsAll, rec);
       const line = doc.createElement("div");
       line.className = "ga-statrow";
       const left = doc.createElement("div");

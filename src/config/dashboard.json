@@ -419,7 +419,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 40,
+              "h": 30,
               "card": {
                 "type": "composite",
                 "children": [
@@ -542,16 +542,18 @@
                     }
                   },
                   {
-                    "widgetId": "w_game_records_kpis",
-                    "type": "stat_list",
-                    "title": "Game Records (Counts)",
+                    "widgetId": "w_game_records",
+                    "type": "record_list",
+                    "title": "Game Records",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 6, "w": 12, "h": 2 },
+                    "placement": { "x": 0, "y": 6, "w": 12, "h": 7 },
                     "spec": {
-                      "rows": [
+                      "records": [
                         {
+                          "id": "flawless_wins",
                           "label": "Flawless wins (no damage taken)",
-                          "measure": "flawless_wins_count",
+                          "kind": "overall",
+                          "metric": "flawless_wins_count",
                           "actions": {
                             "click": {
                               "type": "drilldown",
@@ -561,18 +563,7 @@
                               "extraFilters": [{ "dimension": "is_flawless_win", "op": "eq", "value": "true" }]
                             }
                           }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_game_records",
-                    "type": "record_list",
-                    "title": "Game Records",
-                    "grain": "game",
-                    "placement": { "x": 0, "y": 8, "w": 12, "h": 6 },
-                    "spec": {
-                      "records": [
+                        },
                         {
                           "id": "highest_avg_score_game",
                           "label": "Highest avg score game",
@@ -697,7 +688,7 @@
                     "type": "record_list",
                     "title": "Session Records",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 14, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 13, "w": 12, "h": 6 },
                     "spec": {
                       "records": [
                         {
@@ -788,7 +779,7 @@
                     "type": "record_list",
                     "title": "Day Records",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 7 },
+                    "placement": { "x": 0, "y": 19, "w": 12, "h": 7 },
                     "spec": {
                       "records": [
                         {
@@ -863,103 +854,12 @@
                     "type": "stat_list",
                     "title": "Day Streaks",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 27, "w": 12, "h": 3 },
+                    "placement": { "x": 0, "y": 26, "w": 12, "h": 3 },
                     "spec": {
                       "rows": [
                         { "label": "Most consecutive days without games", "measure": "max_consecutive_days_without_games" },
                         { "label": "Longest active streak (min 1 game/day)", "measure": "longest_active_streak_days" },
                         { "label": "Longest 5k day streak (min 1 5k/day)", "measure": "longest_5k_day_streak_days" }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_personal_records",
-                    "type": "record_list",
-                    "title": "Personal Records",
-                    "grain": "round",
-                    "placement": { "x": 0, "y": 30, "w": 12, "h": 10 },
-                    "spec": {
-                      "records": [
-                        {
-                          "id": "best_day",
-                          "label": "Day with highest avg score",
-                          "metric": "avg_score",
-                          "groupBy": "time_day",
-                          "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
-                        },
-                        {
-                          "id": "hardest_day",
-                          "label": "Day with lowest avg score",
-                          "metric": "avg_score",
-                          "groupBy": "time_day",
-                          "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
-                        },
-                        {
-                          "id": "best_game_avg_score",
-                          "label": "Game with highest avg score",
-                          "metric": "avg_score",
-                          "groupBy": "game_id",
-                          "extreme": "max",
-                          "displayKey": "first_ts",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
-                        },
-                        {
-                          "id": "worst_game_avg_score",
-                          "label": "Game with lowest avg score",
-                          "metric": "avg_score",
-                          "groupBy": "game_id",
-                          "extreme": "min",
-                          "displayKey": "first_ts",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
-                        },
-                        {
-                          "id": "fastest_day",
-                          "label": "Day with lowest avg guess duration",
-                          "metric": "avg_guess_duration",
-                          "groupBy": "time_day",
-                          "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
-                        },
-                        {
-                          "id": "slowest_day",
-                          "label": "Day with highest avg guess duration",
-                          "metric": "avg_guess_duration",
-                          "groupBy": "time_day",
-                          "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
-                        },
-                        {
-                          "id": "best_5k_streak",
-                          "label": "Best 5k streak",
-                          "kind": "streak",
-                          "streakFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
-                          "actions": {
-                            "click": {
-                              "type": "drilldown",
-                              "target": "rounds",
-                              "columnsPreset": "roundMode",
-                              "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
-                            }
-                          }
-                        },
-                        {
-                          "id": "worst_throw_streak",
-                          "label": "Worst throw streak (<50)",
-                          "kind": "streak",
-                          "streakFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
-                          "actions": {
-                            "click": {
-                              "type": "drilldown",
-                              "target": "rounds",
-                              "columnsPreset": "roundMode",
-                              "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
-                            }
-                          }
-                        }
                       ]
                     }
                   }
