@@ -175,7 +175,7 @@ export function renderLayoutEditor(args: {
   const help = doc.createElement("div");
   help.className = "ga-settings-note";
   help.textContent =
-    "Build your dashboard here (sections, cards, widgets, global filters). Tip: text fields apply on blur (click outside). Use Apply changes when you're done. Advanced JSON editors unlock drilldowns, extra filters, and other power features.";
+    "Build your dashboard here (sections, cards, widgets, global filters). Tip: text fields apply on blur (click outside). Use Focus mode + the Outline to jump between cards/widgets without drowning in nested panels. Advanced JSON is optional - use it for drilldowns and other power features.";
 
   const headActions = doc.createElement("div");
   headActions.className = "ga-le-head-actions";
@@ -211,6 +211,13 @@ export function renderLayoutEditor(args: {
 
   type Active = { kind: "global_filters" } | { kind: "section"; idx: number };
   let active: Active = { kind: "section", idx: 0 };
+  let lastSectionIdx = 0;
+
+  // Section-internal navigation (keeps panels open across rerenders)
+  let focusMode = true;
+  let focusCardIdx = 0;
+  let focusWidgetIdx = 0;
+  let scrollToId: string | null = null;
 
   const grains = allowedGrains(semantic);
   const grainDefault = grains[0] ?? "round";
@@ -526,6 +533,13 @@ export function renderLayoutEditor(args: {
       return;
     }
 
+    if (lastSectionIdx !== active.idx) {
+      lastSectionIdx = active.idx;
+      focusCardIdx = 0;
+      focusWidgetIdx = 0;
+      scrollToId = null;
+    }
+
     const topRow = doc.createElement("div");
     topRow.className = "ga-le-toprow";
     topRow.appendChild(
@@ -702,7 +716,17 @@ export function renderLayoutEditor(args: {
       markDirty();
     };
 
-    cardsBox.appendChild(
+    const cards: any[] = ((section.layout.cards ?? []) as any[]) ?? [];
+    if (focusCardIdx < 0) focusCardIdx = 0;
+    if (focusCardIdx >= cards.length) focusCardIdx = Math.max(0, cards.length - 1);
+    const focusedCard: any = cards[focusCardIdx] ?? null;
+    const focusedChildren: any[] = focusedCard ? (((focusedCard.card as any).children ?? []) as any[]) : [];
+    if (focusWidgetIdx < 0) focusWidgetIdx = 0;
+    if (focusWidgetIdx >= focusedChildren.length) focusWidgetIdx = Math.max(0, focusedChildren.length - 1);
+
+    const cardsTop = doc.createElement("div");
+    cardsTop.className = "ga-le-toprow";
+    cardsTop.appendChild(
       mkBtn(
         doc,
         "Add card",
@@ -710,18 +734,124 @@ export function renderLayoutEditor(args: {
           const next = cloneJson(draft) as any;
           next.dashboard.sections[active.idx].layout.cards = [...(next.dashboard.sections[active.idx].layout.cards ?? []), defaultCard()];
           draft = next;
+          focusCardIdx = Math.max(0, (next.dashboard.sections[active.idx].layout.cards ?? []).length - 1);
+          focusWidgetIdx = 0;
+          scrollToId = `ga-le-card-${focusCardIdx}`;
           markDirty();
         },
         "primary"
       )
     );
 
-    (section.layout.cards ?? []).forEach((card: any, cardIdx: number) => {
+    const focusWrap = doc.createElement("label");
+    focusWrap.className = "ga-le-toggle";
+    const focusInput = doc.createElement("input");
+    focusInput.type = "checkbox";
+    focusInput.checked = focusMode;
+    const focusTxt = doc.createElement("span");
+    focusTxt.textContent = "Focus mode";
+    focusWrap.appendChild(focusInput);
+    focusWrap.appendChild(focusTxt);
+    focusInput.addEventListener("change", () => {
+      focusMode = focusInput.checked;
+      render();
+    });
+    cardsTop.appendChild(focusWrap);
+
+    cardsTop.appendChild(
+      mkBtn(
+        doc,
+        focusMode ? "Show all" : "Focus selected",
+        () => {
+          focusMode = !focusMode;
+          render();
+        },
+        "ghost"
+      )
+    );
+    cardsBox.appendChild(cardsTop);
+
+    const cardsLayout = doc.createElement("div");
+    cardsLayout.className = "ga-le-cards-layout";
+
+    const outline = doc.createElement("div");
+    outline.className = "ga-le-outline";
+    const oh = doc.createElement("div");
+    oh.className = "ga-le-outline-head";
+    oh.textContent = "Outline";
+    outline.appendChild(oh);
+    const oNote = doc.createElement("div");
+    oNote.className = "ga-settings-note";
+    oNote.textContent = "Click to jump. In Focus mode only the selected card/widget stays open.";
+    outline.appendChild(oNote);
+
+    const oSearch = doc.createElement("input");
+    oSearch.type = "text";
+    oSearch.placeholder = "Search cards/widgets...";
+    oSearch.className = "ga-le-outline-search";
+    outline.appendChild(oSearch);
+
+    const oList = doc.createElement("div");
+    oList.className = "ga-le-outline-list";
+    outline.appendChild(oList);
+
+    const cardsHost = doc.createElement("div");
+    cardsHost.className = "ga-le-cards-host";
+
+    cards.forEach((card: any, cardIdx: number) => {
+      const cardElId = `ga-le-card-${cardIdx}`;
+      const cardTitle = `${card.title || "Card"} (${card.cardId})`;
+
+      const cBtn = doc.createElement("button");
+      cBtn.type = "button";
+      cBtn.className = "ga-le-outline-item";
+      cBtn.classList.toggle("active", focusCardIdx === cardIdx);
+      cBtn.textContent = cardTitle;
+      (cBtn as any).dataset.searchText = cardTitle.toLowerCase();
+      cBtn.addEventListener("click", () => {
+        focusMode = true;
+        focusCardIdx = cardIdx;
+        focusWidgetIdx = 0;
+        scrollToId = cardElId;
+        render();
+      });
+      oList.appendChild(cBtn);
+
+      const outlineChildren: any[] = ((card.card as any).children ?? []) as any;
+      outlineChildren.forEach((w: any, wIdx: number) => {
+        const wElId = `ga-le-widget-${cardIdx}-${wIdx}`;
+        const wTitle = `${w.type} - ${w.title || w.widgetId}`;
+        const wBtn = doc.createElement("button");
+        wBtn.type = "button";
+        wBtn.className = "ga-le-outline-item ga-le-outline-item-widget";
+        wBtn.classList.toggle("active", focusCardIdx === cardIdx && focusWidgetIdx === wIdx);
+        wBtn.textContent = wTitle;
+        (wBtn as any).dataset.searchText = `${cardTitle} ${wTitle}`.toLowerCase();
+        wBtn.addEventListener("click", () => {
+          focusMode = true;
+          focusCardIdx = cardIdx;
+          focusWidgetIdx = wIdx;
+          scrollToId = wElId;
+          render();
+        });
+        oList.appendChild(wBtn);
+      });
+
       const details = doc.createElement("details");
-      details.open = true;
+      details.id = cardElId;
+      details.open = focusMode ? cardIdx === focusCardIdx : true;
       details.className = "ga-le-details";
       const summary = doc.createElement("summary");
-      summary.textContent = `${card.title || "Card"} (${card.cardId})`;
+      summary.textContent = cardTitle;
+      summary.addEventListener("click", (ev) => {
+        focusCardIdx = cardIdx;
+        if (focusMode) {
+          ev.preventDefault();
+          focusWidgetIdx = 0;
+          scrollToId = cardElId;
+          render();
+        }
+      });
       details.appendChild(summary);
 
       const cardItem = doc.createElement("div");
@@ -753,7 +883,7 @@ export function renderLayoutEditor(args: {
 
       const placeNote = doc.createElement("div");
       placeNote.className = "ga-settings-note";
-      placeNote.textContent = "Card placement uses a grid: x/y = position, w/h = size (in grid units).";
+      placeNote.textContent = `Card placement uses the section grid (layout.columns = ${asInt(section.layout?.columns, 12)}): x/y = position, w/h = size (grid units).`;
       cardItem.appendChild(placeNote);
 
       const grid = doc.createElement("div");
@@ -781,6 +911,9 @@ export function renderLayoutEditor(args: {
             const w = defaultWidget(grainDefault, widgetTypes[0]);
             (c.card as any).children = [...(((c.card as any).children ?? []) as any[]), w];
             draft = next;
+            focusCardIdx = cardIdx;
+            focusWidgetIdx = Math.max(0, (((c.card as any).children ?? []) as any[]).length - 1);
+            scrollToId = `ga-le-widget-${cardIdx}-${focusWidgetIdx}`;
             markDirty();
           },
           "primary"
@@ -789,9 +922,20 @@ export function renderLayoutEditor(args: {
 
       children.forEach((w: any, wIdx: number) => {
         const wDetails = doc.createElement("details");
-        wDetails.open = false;
+        const wElId = `ga-le-widget-${cardIdx}-${wIdx}`;
+        wDetails.id = wElId;
+        wDetails.open = focusMode ? cardIdx === focusCardIdx && wIdx === focusWidgetIdx : false;
         wDetails.className = "ga-le-details";
         const wSummary = doc.createElement("summary");
+        wSummary.addEventListener("click", (ev) => {
+          focusCardIdx = cardIdx;
+          focusWidgetIdx = wIdx;
+          if (focusMode) {
+            ev.preventDefault();
+            scrollToId = wElId;
+            render();
+          }
+        });
         wSummary.textContent = `${w.type} — ${w.title || w.widgetId}`;
         wDetails.appendChild(wSummary);
 
@@ -841,7 +985,7 @@ export function renderLayoutEditor(args: {
         const p = (w.placement as any) ?? { x: 0, y: 0, w: 12, h: 3 };
         const widgetPlaceNote = doc.createElement("div");
         widgetPlaceNote.className = "ga-settings-note";
-        widgetPlaceNote.textContent = "Widget placement uses a grid inside the card: x/y = position, w/h = size.";
+        widgetPlaceNote.textContent = `Widget placement uses a grid inside the card: x/y = position, w/h = size (grid units). Tip: keep w within layout.columns (${asInt(section.layout?.columns, 12)}).`;
         wItem.appendChild(widgetPlaceNote);
         const pGrid = doc.createElement("div");
         pGrid.className = "ga-le-grid4";
@@ -878,7 +1022,7 @@ export function renderLayoutEditor(args: {
             )
           );
           wItem.appendChild(
-            renderClickActionEditor(doc, "actions.click (drilldown)", spec.actions, (nextActions) =>
+            renderClickActionEditor(doc, semantic, "actions.click (drilldown)", spec.actions, (nextActions) =>
               patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } } as any)
             )
           );
@@ -887,7 +1031,7 @@ export function renderLayoutEditor(args: {
           wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } } as any)));
           wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, limit: n } } as any), { min: 1, max: 500 }));
           wItem.appendChild(
-            renderClickActionEditor(doc, "actions.click (drilldown)", spec.actions, (nextActions) =>
+            renderClickActionEditor(doc, semantic, "actions.click (drilldown)", spec.actions, (nextActions) =>
               patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } } as any)
             )
           );
@@ -895,7 +1039,7 @@ export function renderLayoutEditor(args: {
           wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, label: v } } as any)));
           wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } } as any)));
           wItem.appendChild(
-            renderClickActionEditor(doc, "actions.click (drilldown)", spec.actions, (nextActions) =>
+            renderClickActionEditor(doc, semantic, "actions.click (drilldown)", spec.actions, (nextActions) =>
               patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } } as any)
             )
           );
@@ -926,7 +1070,7 @@ export function renderLayoutEditor(args: {
               })
             );
             rowItem.appendChild(
-              renderClickActionEditor(doc, "row.actions.click (drilldown)", r.actions, (nextActions) => {
+              renderClickActionEditor(doc, semantic, "row.actions.click (drilldown)", r.actions, (nextActions) => {
                 const nextRows = rows.map((x, i) => (i === rIdx ? { ...x, actions: nextActions } : x));
                 patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } } as any);
               })
@@ -1036,7 +1180,7 @@ export function renderLayoutEditor(args: {
             }
 
             item.appendChild(
-              renderClickActionEditor(doc, "actions.click (drilldown)", r.actions, (nextActions) => {
+              renderClickActionEditor(doc, semantic, "actions.click (drilldown)", r.actions, (nextActions) => {
                 patchRecord({ ...r, actions: nextActions });
               })
             );
@@ -1059,13 +1203,39 @@ export function renderLayoutEditor(args: {
 
       cardItem.appendChild(wBox);
       details.appendChild(cardItem);
-      cardsBox.appendChild(details);
+      cardsHost.appendChild(details);
     });
 
+    oSearch.addEventListener("input", () => {
+      const q = oSearch.value.trim().toLowerCase();
+      const items = Array.from(oList.querySelectorAll("button")) as HTMLButtonElement[];
+      for (const it of items) {
+        const hay = String((it as any).dataset.searchText ?? "").toLowerCase();
+        it.style.display = !q || hay.includes(q) ? "" : "none";
+      }
+    });
+
+    cardsLayout.appendChild(outline);
+    cardsLayout.appendChild(cardsHost);
+    cardsBox.appendChild(cardsLayout);
     right.appendChild(cardsBox);
 
     root.appendChild(left);
     root.appendChild(right);
+
+    if (scrollToId) {
+      const el = doc.getElementById(scrollToId);
+      scrollToId = null;
+      if (el) {
+        try {
+          el.classList.add("ga-le-flash");
+          (el as any).scrollIntoView?.({ behavior: "smooth", block: "start" });
+          (win as any)?.setTimeout?.(() => el.classList.remove("ga-le-flash"), 900);
+        } catch {
+          // ignore
+        }
+      }
+    }
   };
 
   render();
@@ -1163,7 +1333,13 @@ function renderAdvancedJson(doc: Document, title: string, value: unknown, onAppl
   return details;
 }
 
-function renderClickActionEditor(doc: Document, title: string, actions: any, onChange: (nextActions: any) => void): HTMLElement {
+function renderClickActionEditor(
+  doc: Document,
+  semantic: SemanticRegistry,
+  title: string,
+  actions: any,
+  onChange: (nextActions: any) => void
+): HTMLElement {
   const box = doc.createElement("div");
   box.className = "ga-le-subbox";
   const head = doc.createElement("div");
@@ -1174,27 +1350,97 @@ function renderClickActionEditor(doc: Document, title: string, actions: any, onC
   const current = actions ?? {};
   const click = current?.click ?? null;
 
+  const drilldownPresets: any = (semantic as any)?.drilldownPresets ?? {};
+  const targetIds = Object.keys(drilldownPresets);
+  const targetOptions =
+    targetIds.length > 0
+      ? targetIds.map((t) => ({ value: t, label: t }))
+      : ["rounds", "games", "sessions", "players"].map((t) => ({ value: t, label: t }));
+
+  const normalizeTarget = (value: unknown) => {
+    const s = String(value ?? "");
+    return targetOptions.some((o) => o.value === s) ? s : String(targetOptions[0]?.value ?? "rounds");
+  };
+
+  const defaultClickForTarget = (target: string) => {
+    const preset = drilldownPresets?.[target];
+    const keys = Object.keys(preset?.columnsPresets ?? {});
+    const columnsPreset = String(preset?.defaultPreset ?? keys[0] ?? "default");
+    return { type: "drilldown", target, columnsPreset };
+  };
+
   box.appendChild(
     mkToggle(doc, "enabled", !!click, (enabled) => {
       const next = { ...(current ?? {}) };
       if (!enabled) delete next.click;
-      else next.click = { type: "drilldown", target: "rounds", columnsPreset: "default" };
+      else {
+        const target = normalizeTarget((click as any)?.target);
+        next.click = defaultClickForTarget(target);
+      }
       onChange(next);
     })
   );
 
   if (!click) return box;
 
+  const storedTarget = String((click as any)?.target ?? "");
+  const uiTarget = normalizeTarget(storedTarget || (targetOptions[0]?.value ?? "rounds"));
   box.appendChild(
     mkSelect(
       doc,
       "target",
-      String(click.target ?? "rounds"),
-      ["rounds", "games", "sessions", "players"].map((t) => ({ value: t, label: t })),
-      (v) => onChange({ ...(current ?? {}), click: { ...click, target: v } })
+      uiTarget,
+      targetOptions,
+      (v) => {
+        const preset = drilldownPresets?.[v];
+        const keys = Object.keys(preset?.columnsPresets ?? {});
+        const currentPreset = String(click.columnsPreset ?? "");
+        const nextPreset = keys.includes(currentPreset) ? currentPreset : String(preset?.defaultPreset ?? keys[0] ?? currentPreset ?? "default");
+        onChange({ ...(current ?? {}), click: { ...click, target: v, columnsPreset: nextPreset } });
+      }
     )
   );
-  box.appendChild(mkTextInput(doc, "columnsPreset", String(click.columnsPreset ?? ""), (v) => onChange({ ...(current ?? {}), click: { ...click, columnsPreset: v } })));
+
+  if (storedTarget && storedTarget !== uiTarget) {
+    const warn = doc.createElement("div");
+    warn.className = "ga-settings-note";
+    warn.textContent = `Unknown target '${storedTarget}'. Select a valid target or click Fix to use '${uiTarget}'.`;
+    box.appendChild(warn);
+    box.appendChild(mkBtn(doc, "Fix target", () => onChange({ ...(current ?? {}), click: defaultClickForTarget(uiTarget) }), "primary"));
+  }
+
+  const currentTarget = uiTarget;
+  const targetPreset = drilldownPresets?.[currentTarget];
+  const presetKeys = Object.keys(targetPreset?.columnsPresets ?? {});
+  if (presetKeys.length > 0) {
+    const presetOptions = presetKeys.map((k) => ({
+      value: k,
+      label: `${k} (${(targetPreset?.columnsPresets?.[k] ?? []).length})`
+    }));
+    const wanted = String(click.columnsPreset ?? "");
+    const safeValue = presetKeys.includes(wanted) ? wanted : String(targetPreset?.defaultPreset ?? presetKeys[0]);
+    box.appendChild(mkSelect(doc, "columnsPreset", safeValue, presetOptions, (v) => onChange({ ...(current ?? {}), click: { ...click, columnsPreset: v } })));
+    if (wanted && wanted !== safeValue) {
+      const warn = doc.createElement("div");
+      warn.className = "ga-settings-note";
+      warn.textContent = `Unknown columnsPreset '${wanted}' for target '${currentTarget}'. Click Fix to use '${safeValue}'.`;
+      box.appendChild(warn);
+      box.appendChild(mkBtn(doc, "Fix columnsPreset", () => onChange({ ...(current ?? {}), click: { ...click, columnsPreset: safeValue } }), "primary"));
+    }
+    const presetNote = doc.createElement("div");
+    presetNote.className = "ga-settings-note";
+    presetNote.textContent = "columnsPreset selects a predefined set of columns for the drilldown table (per target).";
+    box.appendChild(presetNote);
+  } else {
+    box.appendChild(
+      mkTextInput(doc, "columnsPreset", String(click.columnsPreset ?? ""), (v) => onChange({ ...(current ?? {}), click: { ...click, columnsPreset: v } }))
+    );
+    const presetNote = doc.createElement("div");
+    presetNote.className = "ga-settings-note";
+    presetNote.textContent = "No presets found for this target. If drilldown fails validation, check semantic.json drilldownPresets.";
+    box.appendChild(presetNote);
+  }
+
   box.appendChild(mkToggle(doc, "filterFromPoint", !!click.filterFromPoint, (v) => onChange({ ...(current ?? {}), click: { ...click, filterFromPoint: v } })));
 
   const sortBox = doc.createElement("div");

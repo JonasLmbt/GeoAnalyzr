@@ -822,6 +822,47 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-le-adv { margin-top: 10px; }
     .ga-le-adv > summary { cursor:pointer; user-select:none; font-weight: 700; font-size:12px; color: var(--ga-text-muted); list-style:none; }
     .ga-le-adv > summary::-webkit-details-marker { display:none; }
+    .ga-le-cards-layout { display:grid; grid-template-columns: minmax(220px, 320px) 1fr; gap:12px; align-items:start; }
+    @media (max-width: 980px) { .ga-le-cards-layout { grid-template-columns: 1fr; } }
+    .ga-le-outline {
+      position: sticky;
+      top: 86px;
+      background: color-mix(in srgb, var(--ga-card) 55%, transparent);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-le-outline-head { font-weight: 800; font-size: 12px; color: var(--ga-text); margin-bottom: 6px; }
+    .ga-le-outline-search {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .ga-le-outline-list { display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height: 62vh; overflow:auto; padding-right: 4px; }
+    .ga-le-outline-item {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 7px 10px;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 650;
+      opacity: 0.95;
+      font-size: 12px;
+    }
+    .ga-le-outline-item:hover { filter: brightness(1.03); }
+    .ga-le-outline-item.active { background: var(--ga-surface-2); border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
+    .ga-le-outline-item-widget { padding-left: 18px; font-weight: 600; opacity: 0.9; }
+    .ga-le-flash { outline: 2px solid color-mix(in srgb, var(--ga-accent2) 70%, transparent); outline-offset: 2px; }
   `;
   doc.head.appendChild(style);
 }
