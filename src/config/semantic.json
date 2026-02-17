@@ -912,12 +912,27 @@
           { "key": "durationSeconds", "label": "Guess Duration", "sortable": true },
           { "key": "damage", "label": "Damage", "sortable": true, "colored": true },
           { "key": "teammateName", "label": "Mate", "sortable": true },
+          { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } },
           { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } },
           { "key": "guess_maps", "label": "Guess Maps", "type": "link", "link": { "kind": "guess_maps", "label": "Open" } },
           { "key": "street_view", "label": "True Street View", "type": "link", "link": { "kind": "street_view", "label": "Open" } }
         ]
       },
       "defaultPreset": "roundMode"
+    },
+    "sessions": {
+      "entity": "session",
+      "columnsPresets": {
+        "sessionMode": [
+          { "key": "sessionStartTs", "label": "Start", "sortable": true },
+          { "key": "sessionEndTs", "label": "End", "sortable": true },
+          { "key": "gamesCount", "label": "Games", "sortable": true },
+          { "key": "roundsCount", "label": "Rounds", "sortable": true },
+          { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
+          { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } }
+        ]
+      },
+      "defaultPreset": "sessionMode"
     },
     "games": {
       "entity": "game",
@@ -926,10 +941,11 @@
           { "key": "ts", "label": "Date", "sortable": true },
           { "key": "modeFamily", "label": "Game Mode", "sortable": true },
           { "key": "movementType", "label": "Movement", "sortable": true },
-          { "key": "roundsCount", "label": "Game Length", "sortable": true },
+          { "key": "roundsCount", "label": "Rounds", "sortable": true },
           { "key": "result", "label": "Result", "sortable": true, "colored": true },
           { "key": "endRating", "label": "End Rating", "sortable": true },
           { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
+          { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } },
           { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } }
         ]
       },
@@ -942,13 +958,14 @@
           { "key": "ts", "label": "Date", "sortable": true },
           { "key": "modeFamily", "label": "Game Mode", "sortable": true },
           { "key": "movementType", "label": "Movement", "sortable": true },
-          { "key": "roundsCount", "label": "Game Length", "sortable": true },
+          { "key": "roundsCount", "label": "Rounds", "sortable": true },
           { "key": "teammateName", "label": "Mate", "sortable": true },
           { "key": "result", "label": "Result", "sortable": true, "colored": true },
           { "key": "player_opponent_name", "label": "Opponent", "sortable": true },
           { "key": "player_opponent_mate_name", "label": "Opponent Mate", "sortable": true },
           { "key": "endRating", "label": "End Rating", "sortable": true },
           { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
+          { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } },
           { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } }
         ]
       },

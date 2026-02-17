@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.20
+// @version      2.0.21
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9968,6 +9968,16 @@ ${shapes}`.trim();
       if (typeof bestTime === "number" && Number.isFinite(bestTime)) {
         out.playedAt = bestTime;
         out.ts = bestTime;
+      }
+      const rawDur = typeof out.durationSeconds === "number" && Number.isFinite(out.durationSeconds) && out.durationSeconds > 0 ? out.durationSeconds : null;
+      const start = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : null;
+      const end = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : null;
+      const derived = start !== null && end !== null && end > start ? (end - start) / 1e3 : null;
+      const derivedOk = derived !== null && Number.isFinite(derived) && derived > 0 && derived < 60 * 30 ? derived : null;
+      if (derivedOk !== null) {
+        if (rawDur === null || Math.abs(rawDur - derivedOk) > 6) out.durationSeconds = derivedOk;
+      } else if (rawDur === null) {
+        delete out.durationSeconds;
       }
       if (typeof out.modeFamily !== "string" || !out.modeFamily) {
         const mf = asTrimmedString2(out.modeFamily) ?? asTrimmedString2(d?.modeFamily) ?? modeFamilyByGame.get(gameId);
@@ -32432,12 +32442,27 @@ ${shapes}`.trim();
             { key: "durationSeconds", label: "Guess Duration", sortable: true },
             { key: "damage", label: "Damage", sortable: true, colored: true },
             { key: "teammateName", label: "Mate", sortable: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
             { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
             { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
             { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
           ]
         },
         defaultPreset: "roundMode"
+      },
+      sessions: {
+        entity: "session",
+        columnsPresets: {
+          sessionMode: [
+            { key: "sessionStartTs", label: "Start", sortable: true },
+            { key: "sessionEndTs", label: "End", sortable: true },
+            { key: "gamesCount", label: "Games", sortable: true },
+            { key: "roundsCount", label: "Rounds", sortable: true },
+            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } }
+          ]
+        },
+        defaultPreset: "sessionMode"
       },
       games: {
         entity: "game",
@@ -32446,10 +32471,11 @@ ${shapes}`.trim();
             { key: "ts", label: "Date", sortable: true },
             { key: "modeFamily", label: "Game Mode", sortable: true },
             { key: "movementType", label: "Movement", sortable: true },
-            { key: "roundsCount", label: "Game Length", sortable: true },
+            { key: "roundsCount", label: "Rounds", sortable: true },
             { key: "result", label: "Result", sortable: true, colored: true },
             { key: "endRating", label: "End Rating", sortable: true },
             { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
             { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
           ]
         },
@@ -32462,13 +32488,14 @@ ${shapes}`.trim();
             { key: "ts", label: "Date", sortable: true },
             { key: "modeFamily", label: "Game Mode", sortable: true },
             { key: "movementType", label: "Movement", sortable: true },
-            { key: "roundsCount", label: "Game Length", sortable: true },
+            { key: "roundsCount", label: "Rounds", sortable: true },
             { key: "teammateName", label: "Mate", sortable: true },
             { key: "result", label: "Result", sortable: true, colored: true },
             { key: "player_opponent_name", label: "Opponent", sortable: true },
             { key: "player_opponent_mate_name", label: "Opponent Mate", sortable: true },
             { key: "endRating", label: "End Rating", sortable: true },
             { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
             { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
           ]
         },
@@ -33029,7 +33056,11 @@ ${shapes}`.trim();
                       placement: { x: 0, y: 0, w: 12, h: 4 },
                       spec: {
                         rows: [
-                          { label: "Sessions detected (gap >45m)", measure: "sessions_count" },
+                          {
+                            label: "Sessions detected (gap >45m)",
+                            measure: "sessions_count",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: false } }
+                          },
                           { label: "Longest break between sessions", measure: "sessions_longest_break_seconds" },
                           { label: "Avg games per session", measure: "sessions_avg_games" }
                         ]
@@ -33949,7 +33980,11 @@ ${shapes}`.trim();
                       placement: { x: 0, y: 14, w: 12, h: 4 },
                       spec: {
                         rows: [
-                          { label: "Sessions detected (gap > session standard)", measure: "sessions_count" },
+                          {
+                            label: "Sessions detected (gap > session standard)",
+                            measure: "sessions_count",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: false } }
+                          },
                           { label: "Longest break between sessions", measure: "sessions_longest_break_seconds" },
                           { label: "Avg games per session", measure: "sessions_avg_games" }
                         ]
@@ -37947,6 +37982,10 @@ ${shapes}`.trim();
     root;
     doc;
     modal;
+    sessionMapByGap = /* @__PURE__ */ new Map();
+    // gameId -> sessionId
+    sessionRowByIdByGap = /* @__PURE__ */ new Map();
+    // sessionId -> sessionRow
     constructor(root) {
       this.root = root;
       this.doc = root.ownerDocument;
@@ -37957,6 +37996,32 @@ ${shapes}`.trim();
     }
     getDocument() {
       return this.doc;
+    }
+    readSessionGapMinutes() {
+      const root = this.root;
+      const raw = Number(root.dataset?.gaSessionGapMinutes);
+      return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
+    }
+    async ensureSessionMaps(semantic) {
+      const gap = this.readSessionGapMinutes();
+      const cachedGame = this.sessionMapByGap.get(gap);
+      const cachedSess = this.sessionRowByIdByGap.get(gap);
+      if (cachedGame && cachedSess) return { gap, gameToSession: cachedGame, sessionById: cachedSess };
+      const sessions = await getSessions({ global: { spec: void 0, state: {}, sessionGapMinutes: gap } });
+      const gameToSession = /* @__PURE__ */ new Map();
+      const sessionById = /* @__PURE__ */ new Map();
+      for (const s of sessions) {
+        const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
+        if (!sid) continue;
+        sessionById.set(sid, s);
+        const ids = Array.isArray(s?.gameIds) ? s.gameIds : [];
+        for (const gid of ids) {
+          if (typeof gid === "string" && gid) gameToSession.set(gid, sid);
+        }
+      }
+      this.sessionMapByGap.set(gap, gameToSession);
+      this.sessionRowByIdByGap.set(gap, sessionById);
+      return { gap, gameToSession, sessionById };
     }
     open(semantic, req) {
       this.modal.innerHTML = "";
@@ -38033,6 +38098,50 @@ ${shapes}`.trim();
       const trh = this.doc.createElement("tr");
       thead.appendChild(trh);
       const tbody = this.doc.createElement("tbody");
+      const openRoundsForGameId = async (gameId, titleSuffix) => {
+        const all = await getRounds({});
+        const rows = all.filter((r) => typeof r?.gameId === "string" && r.gameId === gameId);
+        this.open(semantic, {
+          title: `${req.title}${titleSuffix}`,
+          target: "rounds",
+          columnsPreset: semantic.drilldownPresets.rounds?.defaultPreset ?? "roundMode",
+          rows
+        });
+      };
+      const openGameById = async (gameId, titleSuffix) => {
+        const all = await getGames({});
+        const rows = all.filter((g) => typeof g?.gameId === "string" && g.gameId === gameId);
+        this.open(semantic, {
+          title: `${req.title}${titleSuffix}`,
+          target: "games",
+          columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
+          rows
+        });
+      };
+      const openGamesForSessionId = async (sessionId, titleSuffix) => {
+        const { sessionById } = await this.ensureSessionMaps(semantic);
+        const sess = sessionById.get(sessionId);
+        const ids = Array.isArray(sess?.gameIds) ? sess.gameIds : [];
+        const idSet = new Set(ids.filter((x) => typeof x === "string" && x));
+        const all = await getGames({});
+        const rows = all.filter((g) => typeof g?.gameId === "string" && idSet.has(g.gameId));
+        this.open(semantic, {
+          title: `${req.title}${titleSuffix}`,
+          target: "games",
+          columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
+          rows
+        });
+      };
+      const openSessionById = async (sessionId, titleSuffix) => {
+        const { sessionById } = await this.ensureSessionMaps(semantic);
+        const row = sessionById.get(sessionId);
+        this.open(semantic, {
+          title: `${req.title}${titleSuffix}`,
+          target: "sessions",
+          columnsPreset: semantic.drilldownPresets.sessions?.defaultPreset ?? "sessionMode",
+          rows: row ? [row] : []
+        });
+      };
       const renderHeader = () => {
         trh.innerHTML = "";
         for (const c of cols) {
@@ -38072,6 +38181,66 @@ ${shapes}`.trim();
             const td = this.doc.createElement("td");
             td.className = "ga-dd-td";
             this.renderCell(td, r, c, semantic, dateFormat);
+            const key = String(c?.key ?? "");
+            const raw = this.getCellRawValue(r, key, semantic);
+            if (req.target === "rounds" && key === "gameId" && typeof raw === "string" && raw) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openGameById(raw, ` (game ${raw})`));
+            }
+            if (req.target === "rounds" && key === "sessionId") {
+              const gid = this.getCellRawValue(r, "gameId", semantic);
+              if (typeof raw === "string" && raw) {
+                td.style.cursor = "pointer";
+                td.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
+              } else if (typeof gid === "string" && gid) {
+                td.style.cursor = "pointer";
+                td.textContent = "...";
+                void (async () => {
+                  const { gameToSession } = await this.ensureSessionMaps(semantic);
+                  const sid = gameToSession.get(gid) ?? "";
+                  td.textContent = sid || "-";
+                  if (sid) td.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
+                })();
+              }
+            }
+            if ((req.target === "games" || req.target === "players") && key === "roundsCount") {
+              const gid = this.getCellRawValue(r, "gameId", semantic);
+              if (typeof gid === "string" && gid) {
+                td.style.cursor = "pointer";
+                td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${gid})`));
+              }
+            }
+            if ((req.target === "games" || req.target === "players") && key === "gameId" && typeof raw === "string" && raw) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${raw})`));
+            }
+            if ((req.target === "games" || req.target === "players") && key === "sessionId") {
+              const gid = this.getCellRawValue(r, "gameId", semantic);
+              if (typeof raw === "string" && raw) {
+                td.style.cursor = "pointer";
+                td.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
+              } else if (typeof gid === "string" && gid) {
+                td.style.cursor = "pointer";
+                td.textContent = "...";
+                void (async () => {
+                  const { gameToSession } = await this.ensureSessionMaps(semantic);
+                  const sid = gameToSession.get(gid) ?? "";
+                  td.textContent = sid || "-";
+                  if (sid) td.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
+                })();
+              }
+            }
+            if (req.target === "sessions" && key === "gamesCount") {
+              const sid = this.getCellRawValue(r, "sessionId", semantic);
+              if (typeof sid === "string" && sid) {
+                td.style.cursor = "pointer";
+                td.addEventListener("click", () => void openGamesForSessionId(sid, ` (session ${sid})`));
+              }
+            }
+            if (req.target === "sessions" && key === "sessionId" && typeof raw === "string" && raw) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openGamesForSessionId(raw, ` (session ${raw})`));
+            }
             tr.appendChild(td);
           }
           tbody.appendChild(tr);
@@ -38309,6 +38478,11 @@ ${shapes}`.trim();
       }
       if (key === "gameId" && col.display?.truncate) {
         const head = typeof col.display.truncateHead === "number" ? col.display.truncateHead : 8;
+        const s = typeof raw === "string" ? raw : text;
+        if (s.length > head + 3) text = `${s.slice(0, head)}...`;
+      }
+      if (key === "sessionId" && col.display?.truncate) {
+        const head = typeof col.display.truncateHead === "number" ? col.display.truncateHead : 2;
         const s = typeof raw === "string" ? raw : text;
         if (s.length > head + 3) text = `${s.slice(0, head)}...`;
       }

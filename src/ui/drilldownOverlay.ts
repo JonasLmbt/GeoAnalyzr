@@ -1,6 +1,7 @@
 // src/ui/drilldownOverlay.ts
 import type { SemanticRegistry } from "../config/semantic.types";
 import type { FilterClause } from "../config/dashboard.types";
+import { getGames, getRounds, getSessions } from "../engine/queryEngine";
 import { pickWithAliases } from "../engine/fieldAccess";
 import type { DrilldownColumnDef, DrilldownColumnSpec } from "../config/semantic.types";
 
@@ -19,6 +20,8 @@ export class DrilldownOverlay {
   private root: HTMLElement;
   private doc: Document;
   private modal: HTMLDivElement;
+  private sessionMapByGap = new Map<number, Map<string, string>>(); // gameId -> sessionId
+  private sessionRowByIdByGap = new Map<number, Map<string, any>>(); // sessionId -> sessionRow
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -31,6 +34,35 @@ export class DrilldownOverlay {
 
   getDocument(): Document {
     return this.doc;
+  }
+
+  private readSessionGapMinutes(): number {
+    const root = this.root as HTMLElement & { dataset?: DOMStringMap };
+    const raw = Number(root.dataset?.gaSessionGapMinutes);
+    return Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
+  }
+
+  private async ensureSessionMaps(semantic: SemanticRegistry): Promise<{ gap: number; gameToSession: Map<string, string>; sessionById: Map<string, any> }> {
+    const gap = this.readSessionGapMinutes();
+    const cachedGame = this.sessionMapByGap.get(gap);
+    const cachedSess = this.sessionRowByIdByGap.get(gap);
+    if (cachedGame && cachedSess) return { gap, gameToSession: cachedGame, sessionById: cachedSess };
+
+    const sessions = await getSessions({ global: { spec: undefined, state: {}, sessionGapMinutes: gap } });
+    const gameToSession = new Map<string, string>();
+    const sessionById = new Map<string, any>();
+    for (const s of sessions as any[]) {
+      const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
+      if (!sid) continue;
+      sessionById.set(sid, s);
+      const ids = Array.isArray(s?.gameIds) ? (s.gameIds as any[]) : [];
+      for (const gid of ids) {
+        if (typeof gid === "string" && gid) gameToSession.set(gid, sid);
+      }
+    }
+    this.sessionMapByGap.set(gap, gameToSession);
+    this.sessionRowByIdByGap.set(gap, sessionById);
+    return { gap, gameToSession, sessionById };
   }
 
   open(semantic: SemanticRegistry, req: DrilldownRequest): void {
@@ -129,6 +161,54 @@ export class DrilldownOverlay {
 
     const tbody = this.doc.createElement("tbody");
 
+    const openRoundsForGameId = async (gameId: string, titleSuffix: string): Promise<void> => {
+      const all = await getRounds({});
+      const rows = (all as any[]).filter((r) => typeof (r as any)?.gameId === "string" && (r as any).gameId === gameId);
+      this.open(semantic, {
+        title: `${req.title}${titleSuffix}`,
+        target: "rounds",
+        columnsPreset: semantic.drilldownPresets.rounds?.defaultPreset ?? "roundMode",
+        rows
+      });
+    };
+
+    const openGameById = async (gameId: string, titleSuffix: string): Promise<void> => {
+      const all = await getGames({});
+      const rows = (all as any[]).filter((g) => typeof (g as any)?.gameId === "string" && (g as any).gameId === gameId);
+      this.open(semantic, {
+        title: `${req.title}${titleSuffix}`,
+        target: "games",
+        columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
+        rows
+      });
+    };
+
+    const openGamesForSessionId = async (sessionId: string, titleSuffix: string): Promise<void> => {
+      const { sessionById } = await this.ensureSessionMaps(semantic);
+      const sess = sessionById.get(sessionId);
+      const ids = Array.isArray(sess?.gameIds) ? (sess.gameIds as any[]) : [];
+      const idSet = new Set(ids.filter((x) => typeof x === "string" && x));
+      const all = await getGames({});
+      const rows = (all as any[]).filter((g) => typeof (g as any)?.gameId === "string" && idSet.has((g as any).gameId));
+      this.open(semantic, {
+        title: `${req.title}${titleSuffix}`,
+        target: "games",
+        columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
+        rows
+      });
+    };
+
+    const openSessionById = async (sessionId: string, titleSuffix: string): Promise<void> => {
+      const { sessionById } = await this.ensureSessionMaps(semantic);
+      const row = sessionById.get(sessionId);
+      this.open(semantic, {
+        title: `${req.title}${titleSuffix}`,
+        target: "sessions",
+        columnsPreset: semantic.drilldownPresets.sessions?.defaultPreset ?? "sessionMode",
+        rows: row ? [row] : []
+      });
+    };
+
     const renderHeader = () => {
       trh.innerHTML = "";
       for (const c of cols) {
@@ -169,6 +249,75 @@ export class DrilldownOverlay {
           const td = this.doc.createElement("td");
           td.className = "ga-dd-td";
           this.renderCell(td, r, c, semantic, dateFormat);
+
+          // Cell-level drilldowns to close the loop between entities.
+          const key = String(c?.key ?? "");
+          const raw = this.getCellRawValue(r, key, semantic);
+
+          // Rounds: click gameId/sessionId.
+          if (req.target === "rounds" && key === "gameId" && typeof raw === "string" && raw) {
+            td.style.cursor = "pointer";
+            td.addEventListener("click", () => void openGameById(raw, ` (game ${raw})`));
+          }
+          if (req.target === "rounds" && key === "sessionId") {
+            const gid = this.getCellRawValue(r, "gameId", semantic);
+            if (typeof raw === "string" && raw) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
+            } else if (typeof gid === "string" && gid) {
+              td.style.cursor = "pointer";
+              td.textContent = "...";
+              void (async () => {
+                const { gameToSession } = await this.ensureSessionMaps(semantic);
+                const sid = gameToSession.get(gid) ?? "";
+                td.textContent = sid || "-";
+                if (sid) td.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
+              })();
+            }
+          }
+
+          // Games/Players: click roundsCount, gameId, sessionId.
+          if ((req.target === "games" || req.target === "players") && key === "roundsCount") {
+            const gid = this.getCellRawValue(r, "gameId", semantic);
+            if (typeof gid === "string" && gid) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${gid})`));
+            }
+          }
+          if ((req.target === "games" || req.target === "players") && key === "gameId" && typeof raw === "string" && raw) {
+            td.style.cursor = "pointer";
+            td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${raw})`));
+          }
+          if ((req.target === "games" || req.target === "players") && key === "sessionId") {
+            const gid = this.getCellRawValue(r, "gameId", semantic);
+            if (typeof raw === "string" && raw) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
+            } else if (typeof gid === "string" && gid) {
+              td.style.cursor = "pointer";
+              td.textContent = "...";
+              void (async () => {
+                const { gameToSession } = await this.ensureSessionMaps(semantic);
+                const sid = gameToSession.get(gid) ?? "";
+                td.textContent = sid || "-";
+                if (sid) td.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
+              })();
+            }
+          }
+
+          // Sessions: click gamesCount or sessionId.
+          if (req.target === "sessions" && key === "gamesCount") {
+            const sid = this.getCellRawValue(r, "sessionId", semantic);
+            if (typeof sid === "string" && sid) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openGamesForSessionId(sid, ` (session ${sid})`));
+            }
+          }
+          if (req.target === "sessions" && key === "sessionId" && typeof raw === "string" && raw) {
+            td.style.cursor = "pointer";
+            td.addEventListener("click", () => void openGamesForSessionId(raw, ` (session ${raw})`));
+          }
+
           tr.appendChild(td);
         }
         tbody.appendChild(tr);
@@ -486,6 +635,11 @@ export class DrilldownOverlay {
 
     if (key === "gameId" && col.display?.truncate) {
       const head = typeof col.display.truncateHead === "number" ? col.display.truncateHead : 8;
+      const s = typeof raw === "string" ? raw : text;
+      if (s.length > head + 3) text = `${s.slice(0, head)}...`;
+    }
+    if (key === "sessionId" && col.display?.truncate) {
+      const head = typeof col.display.truncateHead === "number" ? col.display.truncateHead : 2;
       const s = typeof raw === "string" ? raw : text;
       if (s.length > head + 3) text = `${s.slice(0, head)}...`;
     }

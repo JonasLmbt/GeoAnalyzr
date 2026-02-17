@@ -546,7 +546,11 @@
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 4 },
                     "spec": {
                       "rows": [
-                        { "label": "Sessions detected (gap >45m)", "measure": "sessions_count" },
+                        {
+                          "label": "Sessions detected (gap >45m)",
+                          "measure": "sessions_count",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": false } }
+                        },
                         { "label": "Longest break between sessions", "measure": "sessions_longest_break_seconds" },
                         { "label": "Avg games per session", "measure": "sessions_avg_games" }
                       ]
@@ -1474,7 +1478,11 @@
                     "placement": { "x": 0, "y": 14, "w": 12, "h": 4 },
                     "spec": {
                       "rows": [
-                        { "label": "Sessions detected (gap > session standard)", "measure": "sessions_count" },
+                        {
+                          "label": "Sessions detected (gap > session standard)",
+                          "measure": "sessions_count",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": false } }
+                        },
                         { "label": "Longest break between sessions", "measure": "sessions_longest_break_seconds" },
                         { "label": "Avg games per session", "measure": "sessions_avg_games" }
                       ]

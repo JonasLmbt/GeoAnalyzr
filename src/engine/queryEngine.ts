@@ -399,9 +399,9 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   }
 
   const detailsByGame = new Map<string, any>();
-  for (const d of details) {
-    if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
-  }
+    for (const d of details) {
+      if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
+    }
 
   roundsRawCache = rows.map((r) => {
     const out: any = { ...(r as any) };
@@ -419,6 +419,22 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       out.playedAt = bestTime;
       // Also expose a dedicated ts so drilldown/date columns don't have to guess.
       out.ts = bestTime;
+    }
+
+    // Normalize guess duration:
+    // - Ignore 0 / missing values.
+    // - If start/end timestamps exist and disagree strongly with durationSeconds, prefer derived.
+    // This prevents broken constant values like 120.0s when timestamps show something else.
+    const rawDur = typeof out.durationSeconds === "number" && Number.isFinite(out.durationSeconds) && out.durationSeconds > 0 ? out.durationSeconds : null;
+    const start = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : null;
+    const end = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : null;
+    const derived = start !== null && end !== null && end > start ? (end - start) / 1000 : null;
+    const derivedOk = derived !== null && Number.isFinite(derived) && derived > 0 && derived < 60 * 30 ? derived : null;
+    if (derivedOk !== null) {
+      if (rawDur === null || Math.abs(rawDur - derivedOk) > 6) out.durationSeconds = derivedOk;
+    } else if (rawDur === null) {
+      // Keep it unset if nothing trustworthy exists (prevents misleading 0s).
+      delete out.durationSeconds;
     }
 
     // Fill mode fields if missing.

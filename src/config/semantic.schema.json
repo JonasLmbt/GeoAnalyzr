@@ -67,7 +67,7 @@
     "drilldownPresets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rounds", "players"],
+      "required": ["rounds", "players", "sessions"],
       "properties": {
         "rounds": { "$ref": "#/$defs/drilldownPresetDef" },
         "games": { "$ref": "#/$defs/drilldownPresetDef" },
