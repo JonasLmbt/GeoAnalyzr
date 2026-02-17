@@ -397,6 +397,7 @@ export class DrilldownOverlay {
       col === "playedat" ||
       col === "starttime" ||
       col === "endtime" ||
+      col.endsWith("ts") ||
       col.includes("date") ||
       col.includes("time") ||
       col.includes("playedat") ||
@@ -529,6 +530,8 @@ export class DrilldownOverlay {
     }
 
     if (key === "ratingDelta") {
+      const direct = (row as any)?.ratingDelta;
+      if (typeof direct === "number" && Number.isFinite(direct)) return direct;
       const mf = String((row as any)?.modeFamily ?? "").toLowerCase();
       const isTeam = mf === "teamduels" || (mf.includes("team") && mf.includes("duel")) || (row as any)?.isTeamDuels === true;
       const start = isTeam

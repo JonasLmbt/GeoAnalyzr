@@ -582,11 +582,12 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
 
     const mv = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
     const cur = movementByGame.get(gid);
-    if (!mv) continue;
-    if (!cur) {
-      movementByGame.set(gid, mv);
-    } else if (cur !== mv && cur !== "mixed") {
-      movementByGame.set(gid, "mixed");
+    if (mv) {
+      if (!cur) {
+        movementByGame.set(gid, mv);
+      } else if (cur !== mv && cur !== "mixed") {
+        movementByGame.set(gid, "mixed");
+      }
     }
 
     // Round aggregates (for game-level records).

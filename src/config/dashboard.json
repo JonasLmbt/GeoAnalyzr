@@ -363,7 +363,7 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                         },
                         {
                           "id": "biggest_session_rating_loss",
@@ -371,7 +371,7 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                         }
                       ]
                     }
@@ -839,7 +839,7 @@
                           "metric": "session_games_count",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                         },
                         {
                           "id": "best_session",
@@ -847,7 +847,7 @@
                           "metric": "session_avg_score",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                         },
                         {
                           "id": "worst_session",
@@ -855,7 +855,7 @@
                           "metric": "session_avg_score",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                         }
                       ]
                     }
@@ -894,7 +894,7 @@
                         "activeMeasure": "session_avg_score"
                       },
                       "sort": { "mode": "chronological" },
-                      "actions": { "hover": true, "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                      "actions": { "hover": true, "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                     }
                   },
                   {
@@ -928,7 +928,7 @@
                       "activeSort": { "mode": "chronological" },
                       "limit": 12,
                       "extendable": true,
-                      "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                      "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                     }
                   }
                 ]
@@ -1734,7 +1734,7 @@
                           "metric": "session_games_count",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
                         }
                       ]
                     }

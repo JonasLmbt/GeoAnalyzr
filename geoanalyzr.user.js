@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.23
+// @version      2.0.24
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10100,11 +10100,12 @@ ${shapes}`.trim();
       roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
       const mv = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
       const cur = movementByGame.get(gid);
-      if (!mv) continue;
-      if (!cur) {
-        movementByGame.set(gid, mv);
-      } else if (cur !== mv && cur !== "mixed") {
-        movementByGame.set(gid, "mixed");
+      if (mv) {
+        if (!cur) {
+          movementByGame.set(gid, mv);
+        } else if (cur !== mv && cur !== "mixed") {
+          movementByGame.set(gid, "mixed");
+        }
       }
       const score = typeof r?.player_self_score === "number" ? r.player_self_score : typeof r?.p1_score === "number" ? r.p1_score : typeof r?.score === "number" ? r.score : null;
       if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
@@ -32642,7 +32643,6 @@ ${shapes}`.trim();
             { key: "durationSeconds", label: "Guess Duration", sortable: true },
             { key: "damage", label: "Damage", sortable: true, colored: true },
             { key: "teammateName", label: "Mate", sortable: true },
-            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
             { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
             { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
             { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
@@ -33073,7 +33073,7 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                           },
                           {
                             id: "biggest_session_rating_loss",
@@ -33081,7 +33081,7 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                           }
                         ]
                       }
@@ -33549,7 +33549,7 @@ ${shapes}`.trim();
                             metric: "session_games_count",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                           },
                           {
                             id: "best_session",
@@ -33557,7 +33557,7 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                           },
                           {
                             id: "worst_session",
@@ -33565,7 +33565,7 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                           }
                         ]
                       }
@@ -33604,7 +33604,7 @@ ${shapes}`.trim();
                           activeMeasure: "session_avg_score"
                         },
                         sort: { mode: "chronological" },
-                        actions: { hover: true, click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                        actions: { hover: true, click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                       }
                     },
                     {
@@ -33638,7 +33638,7 @@ ${shapes}`.trim();
                         activeSort: { mode: "chronological" },
                         limit: 12,
                         extendable: true,
-                        actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                        actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                       }
                     }
                   ]
@@ -34436,7 +34436,7 @@ ${shapes}`.trim();
                             metric: "session_games_count",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
                           }
                         ]
                       }
@@ -38766,7 +38766,7 @@ ${shapes}`.trim();
     formatCellValue(value, columnName, dateMode) {
       if (value === void 0 || value === null) return "";
       const col = columnName.toLowerCase();
-      const looksLikeDateColumn = col === "ts" || col === "playedat" || col === "starttime" || col === "endtime" || col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
+      const looksLikeDateColumn = col === "ts" || col === "playedat" || col === "starttime" || col === "endtime" || col.endsWith("ts") || col.includes("date") || col.includes("time") || col.includes("playedat") || col.includes("timestamp");
       if (typeof value === "number" && Number.isFinite(value)) {
         if (looksLikeDateColumn && value > 9466848e5 && value < 41024448e5) {
           return this.formatDate(value, dateMode);
@@ -38871,6 +38871,8 @@ ${shapes}`.trim();
         return pickWithAliases(row, "player_self_endRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneEndRating", semantic.columnAliases);
       }
       if (key === "ratingDelta") {
+        const direct = row?.ratingDelta;
+        if (typeof direct === "number" && Number.isFinite(direct)) return direct;
         const mf = String(row?.modeFamily ?? "").toLowerCase();
         const isTeam = mf === "teamduels" || mf.includes("team") && mf.includes("duel") || row?.isTeamDuels === true;
         const start = isTeam ? pickWithAliases(row, "teamOneStartRating", semantic.columnAliases) ?? pickWithAliases(row, "player_self_startRating", semantic.columnAliases) : pickWithAliases(row, "player_self_startRating", semantic.columnAliases) ?? pickWithAliases(row, "playerOneStartRating", semantic.columnAliases);

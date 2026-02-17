@@ -1024,7 +1024,6 @@
           { "key": "durationSeconds", "label": "Guess Duration", "sortable": true },
           { "key": "damage", "label": "Damage", "sortable": true, "colored": true },
           { "key": "teammateName", "label": "Mate", "sortable": true },
-          { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } },
           { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } },
           { "key": "guess_maps", "label": "Guess Maps", "type": "link", "link": { "kind": "guess_maps", "label": "Open" } },
           { "key": "street_view", "label": "True Street View", "type": "link", "link": { "kind": "street_view", "label": "Open" } }
