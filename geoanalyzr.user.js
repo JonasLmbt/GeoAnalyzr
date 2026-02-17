@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.9
+// @version      2.0.10
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -34907,7 +34907,11 @@ ${shapes}`.trim();
     b.type = "button";
     b.className = `ga-le-btn ga-le-btn-${kind}`;
     b.textContent = label;
-    b.addEventListener("click", onClick);
+    b.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      onClick();
+    });
     return b;
   }
   function mkField(doc, label) {
@@ -35057,7 +35061,7 @@ ${shapes}`.trim();
     };
     const syncActions = () => {
       applyBtn.disabled = !dirty;
-      revertBtn.disabled = !dirty;
+      revertBtn.disabled = false;
     };
     const applyNow = () => {
       const res = validateDraft();
@@ -35069,7 +35073,10 @@ ${shapes}`.trim();
       setStatus("ok", "Layout applied.");
     };
     const revertNow = () => {
-      if (!dirty) return;
+      if (!dirty) {
+        setStatus("ok", "Nothing to revert.");
+        return;
+      }
       if (!confirm("Discard unsaved layout changes?")) return;
       draft = cloneJson(applied);
       dirty = false;
@@ -35401,10 +35408,39 @@ ${shapes}`.trim();
         fsBox.className = "ga-le-box";
         const fsHead = doc.createElement("div");
         fsHead.className = "ga-le-box-head";
-        fsHead.textContent = "filterScope (optional)";
+        fsHead.textContent = "Global filter visibility (optional)";
         fsBox.appendChild(fsHead);
-        fsBox.appendChild(mkMultiSelect(doc, "include", include, ctrlOpts, (vals) => patchSection({ filterScope: normalizeFilterScope({ ...section.filterScope, include: vals }) })));
-        fsBox.appendChild(mkMultiSelect(doc, "exclude", exclude, ctrlOpts, (vals) => patchSection({ filterScope: normalizeFilterScope({ ...section.filterScope, exclude: vals }) })));
+        const note = doc.createElement("div");
+        note.className = "ga-settings-note";
+        note.textContent = "Choose which global filter controls are shown for this section. Default: show all.";
+        fsBox.appendChild(note);
+        const mode = include.length ? "only" : exclude.length ? "except" : "all";
+        fsBox.appendChild(
+          mkSelect(
+            doc,
+            "Mode",
+            mode,
+            [
+              { value: "all", label: "Show all filters" },
+              { value: "only", label: "Show only selected" },
+              { value: "except", label: "Show all except selected" }
+            ],
+            (v) => {
+              if (v === "all") return patchSection({ filterScope: void 0 });
+              if (v === "only") return patchSection({ filterScope: normalizeFilterScope({ include, exclude: [] }) });
+              return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude }) });
+            }
+          )
+        );
+        const selected = mode === "only" ? include : mode === "except" ? exclude : [];
+        if (mode !== "all") {
+          fsBox.appendChild(
+            mkMultiSelect(doc, "Filters", selected, ctrlOpts, (vals) => {
+              if (mode === "only") return patchSection({ filterScope: normalizeFilterScope({ include: vals, exclude: [] }) });
+              return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude: vals }) });
+            })
+          );
+        }
         right.appendChild(fsBox);
       }
       right.appendChild(mkHr(doc));
@@ -35505,6 +35541,10 @@ ${shapes}`.trim();
         cardItem.appendChild(cardActions);
         cardItem.appendChild(mkTextInput(doc, "cardId", String(card.cardId ?? ""), (v) => patchCard(cardIdx, { cardId: v })));
         cardItem.appendChild(mkTextInput(doc, "title", String(card.title ?? ""), (v) => patchCard(cardIdx, { title: v })));
+        const placeNote = doc.createElement("div");
+        placeNote.className = "ga-settings-note";
+        placeNote.textContent = "Card placement uses a grid: x/y = position, w/h = size (in grid units).";
+        cardItem.appendChild(placeNote);
         const grid = doc.createElement("div");
         grid.className = "ga-le-grid4";
         grid.appendChild(mkNumberInput(doc, "x", asInt(card.x, 0), (n) => patchCard(cardIdx, { x: n })));
@@ -35577,6 +35617,10 @@ ${shapes}`.trim();
           wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, title: v })));
           wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidget(cardIdx, wIdx, { ...w, grain: v })));
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
+          const widgetPlaceNote = doc.createElement("div");
+          widgetPlaceNote.className = "ga-settings-note";
+          widgetPlaceNote.textContent = "Widget placement uses a grid inside the card: x/y = position, w/h = size.";
+          wItem.appendChild(widgetPlaceNote);
           const pGrid = doc.createElement("div");
           pGrid.className = "ga-le-grid4";
           pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, x: n } })));
@@ -35705,6 +35749,89 @@ ${shapes}`.trim();
               rowsBox.appendChild(rowItem);
             });
             wItem.appendChild(rowsBox);
+          } else if (w.type === "record_list") {
+            const records = Array.isArray(spec.records) ? spec.records : [];
+            const recBox = doc.createElement("div");
+            recBox.className = "ga-le-subbox";
+            const rh = doc.createElement("div");
+            rh.className = "ga-le-subhead";
+            rh.textContent = `Records (${records.length})`;
+            recBox.appendChild(rh);
+            const addRecord = mkBtn(
+              doc,
+              "Add record",
+              () => {
+                const id = `rec_${Math.random().toString(36).slice(2, 7)}`;
+                const next = [...records, { id, label: "Record", kind: "group_extreme", extreme: "max" }];
+                patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
+              },
+              "primary"
+            );
+            recBox.appendChild(addRecord);
+            const kindOpts = [
+              { value: "group_extreme", label: "group_extreme" },
+              { value: "streak", label: "streak" },
+              { value: "same_value_streak", label: "same_value_streak" }
+            ];
+            const extremeOpts = [
+              { value: "max", label: "max" },
+              { value: "min", label: "min" }
+            ];
+            const displayKeyOpts = [
+              { value: "group", label: "group" },
+              { value: "first_ts", label: "first_ts" },
+              { value: "first_ts_score", label: "first_ts_score" }
+            ];
+            records.forEach((r, rIdx) => {
+              const rDetails = doc.createElement("details");
+              rDetails.open = false;
+              rDetails.className = "ga-le-details";
+              const sum = doc.createElement("summary");
+              sum.textContent = `${r.label || "Record"} (${r.id || rIdx})`;
+              rDetails.appendChild(sum);
+              const item = doc.createElement("div");
+              item.className = "ga-le-item";
+              const top = doc.createElement("div");
+              top.className = "ga-le-toprow";
+              top.appendChild(
+                mkBtn(
+                  doc,
+                  "Delete record",
+                  () => {
+                    if (!confirm("Delete this record?")) return;
+                    const next = records.filter((_, i) => i !== rIdx);
+                    patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
+                  },
+                  "danger"
+                )
+              );
+              item.appendChild(top);
+              const patchRecord = (nextRec) => {
+                const next = records.map((x, i) => i === rIdx ? nextRec : x);
+                patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
+              };
+              item.appendChild(mkTextInput(doc, "id", String(r.id ?? ""), (v) => patchRecord({ ...r, id: v })));
+              item.appendChild(mkTextInput(doc, "label", String(r.label ?? ""), (v) => patchRecord({ ...r, label: v })));
+              item.appendChild(mkSelect(doc, "kind", String(r.kind ?? "group_extreme"), kindOpts, (v) => patchRecord({ ...r, kind: v })));
+              item.appendChild(mkSelect(doc, "displayKey", String(r.displayKey ?? "group"), displayKeyOpts, (v) => patchRecord({ ...r, displayKey: v })));
+              if ((r.kind ?? "group_extreme") === "group_extreme") {
+                item.appendChild(mkSelect(doc, "metric", String(r.metric ?? ""), meas, (v) => patchRecord({ ...r, metric: v })));
+                item.appendChild(mkSelect(doc, "groupBy", String(r.groupBy ?? ""), dims, (v) => patchRecord({ ...r, groupBy: v })));
+                item.appendChild(mkSelect(doc, "extreme", String(r.extreme ?? "max"), extremeOpts, (v) => patchRecord({ ...r, extreme: v })));
+              }
+              if ((r.kind ?? "") === "same_value_streak") {
+                item.appendChild(mkSelect(doc, "dimension", String(r.dimension ?? ""), dims, (v) => patchRecord({ ...r, dimension: v })));
+              }
+              item.appendChild(
+                renderClickActionEditor(doc, "actions.click (drilldown)", r.actions, (nextActions) => {
+                  patchRecord({ ...r, actions: nextActions });
+                })
+              );
+              item.appendChild(renderAdvancedJson(doc, "Advanced JSON (record)", r, (next) => patchRecord(next)));
+              rDetails.appendChild(item);
+              recBox.appendChild(rDetails);
+            });
+            wItem.appendChild(recBox);
           } else {
             wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
           }
