@@ -697,6 +697,27 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_games_per_session"
     },
+    "session_start_rating": {
+      "label": "Start rating",
+      "unit": "rating",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_start_rating"
+    },
+    "session_end_rating": {
+      "label": "End rating",
+      "unit": "rating",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_end_rating"
+    },
+    "session_duration_seconds": {
+      "label": "Session duration",
+      "unit": "duration",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_duration_seconds"
+    },
     "session_games_count": {
       "label": "Games",
       "unit": "count",

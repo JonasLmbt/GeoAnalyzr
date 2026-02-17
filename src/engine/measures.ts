@@ -552,6 +552,39 @@ export const SESSION_MEASURES_BY_FORMULA_ID: Record<string, (rows: SessionRow[])
     const sum = rows.reduce((a, r) => a + (typeof (r as any).gamesCount === "number" ? (r as any).gamesCount : 0), 0);
     return sum / rows.length;
   },
+  session_start_rating: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
+    for (const r of sorted as any[]) {
+      const start = (r as any)?.ratingStart;
+      if (typeof start === "number" && Number.isFinite(start)) return start;
+      const end = (r as any)?.ratingEnd;
+      if (typeof end === "number" && Number.isFinite(end)) return end;
+    }
+    return 0;
+  },
+  session_end_rating: (rows) => {
+    const sorted = [...rows].sort((a: any, b: any) => Number(a?.sessionEndTs ?? 0) - Number(b?.sessionEndTs ?? 0));
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const r: any = sorted[i];
+      const end = r?.ratingEnd;
+      if (typeof end === "number" && Number.isFinite(end)) return end;
+      const start = r?.ratingStart;
+      if (typeof start === "number" && Number.isFinite(start)) return start;
+    }
+    return 0;
+  },
+  session_duration_seconds: (rows) => {
+    let sum = 0;
+    for (const r of rows as any[]) {
+      const start = (r as any)?.sessionStartTs;
+      const end = (r as any)?.sessionEndTs;
+      if (typeof start !== "number" || typeof end !== "number") continue;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      const delta = end - start;
+      if (Number.isFinite(delta) && delta > 0) sum += delta / 1000;
+    }
+    return sum;
+  },
   max_break_between_sessions_seconds: (rows) => {
     const sorted = [...rows].sort((a: any, b: any) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
     let best = 0;

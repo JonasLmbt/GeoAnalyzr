@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.15
+// @version      2.0.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -32186,6 +32186,27 @@ ${shapes}`.trim();
         allowedCharts: ["bar", "line"],
         formulaId: "mean_games_per_session"
       },
+      session_start_rating: {
+        label: "Start rating",
+        unit: "rating",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_start_rating"
+      },
+      session_end_rating: {
+        label: "End rating",
+        unit: "rating",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_end_rating"
+      },
+      session_duration_seconds: {
+        label: "Session duration",
+        unit: "duration",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_duration_seconds"
+      },
       session_games_count: {
         label: "Games",
         unit: "count",
@@ -38639,6 +38660,39 @@ ${shapes}`.trim();
       if (!rows.length) return 0;
       const sum = rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0);
       return sum / rows.length;
+    },
+    session_start_rating: (rows) => {
+      const sorted = [...rows].sort((a, b) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
+      for (const r of sorted) {
+        const start = r?.ratingStart;
+        if (typeof start === "number" && Number.isFinite(start)) return start;
+        const end = r?.ratingEnd;
+        if (typeof end === "number" && Number.isFinite(end)) return end;
+      }
+      return 0;
+    },
+    session_end_rating: (rows) => {
+      const sorted = [...rows].sort((a, b) => Number(a?.sessionEndTs ?? 0) - Number(b?.sessionEndTs ?? 0));
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const r = sorted[i];
+        const end = r?.ratingEnd;
+        if (typeof end === "number" && Number.isFinite(end)) return end;
+        const start = r?.ratingStart;
+        if (typeof start === "number" && Number.isFinite(start)) return start;
+      }
+      return 0;
+    },
+    session_duration_seconds: (rows) => {
+      let sum = 0;
+      for (const r of rows) {
+        const start = r?.sessionStartTs;
+        const end = r?.sessionEndTs;
+        if (typeof start !== "number" || typeof end !== "number") continue;
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        const delta = end - start;
+        if (Number.isFinite(delta) && delta > 0) sum += delta / 1e3;
+      }
+      return sum;
     },
     max_break_between_sessions_seconds: (rows) => {
       const sorted = [...rows].sort((a, b) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
