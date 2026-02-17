@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.10
+// @version      2.0.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -34910,6 +34910,7 @@ ${shapes}`.trim();
     b.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      ev.stopImmediatePropagation?.();
       onClick();
     });
     return b;
@@ -35009,13 +35010,21 @@ ${shapes}`.trim();
   }
   function renderLayoutEditor(args) {
     const { doc, semantic, onChange, statusEl } = args;
+    const win = doc.defaultView ?? window;
+    const safeConfirm = (msg) => {
+      try {
+        return typeof win.confirm === "function" ? win.confirm(msg) : true;
+      } catch {
+        return true;
+      }
+    };
     const wrap = doc.createElement("div");
     wrap.className = "ga-layout-editor-wrap";
     const head = doc.createElement("div");
     head.className = "ga-le-head";
     const help = doc.createElement("div");
     help.className = "ga-settings-note";
-    help.textContent = "Build your dashboard here (sections, cards, widgets, global filters). Use Apply changes when you're done. Advanced JSON editors let you configure drilldowns, stat rows, extra filters, etc.";
+    help.textContent = "Build your dashboard here (sections, cards, widgets, global filters). Tip: text fields apply on blur (click outside). Use Apply changes when you're done. Advanced JSON editors unlock drilldowns, extra filters, and other power features.";
     const headActions = doc.createElement("div");
     headActions.className = "ga-le-head-actions";
     const autoWrap = doc.createElement("label");
@@ -35077,11 +35086,11 @@ ${shapes}`.trim();
         setStatus("ok", "Nothing to revert.");
         return;
       }
-      if (!confirm("Discard unsaved layout changes?")) return;
+      if (!safeConfirm("Discard unsaved layout changes?")) return;
       draft = cloneJson(applied);
       dirty = false;
       syncActions();
-      setStatus("neutral", "");
+      setStatus("ok", "Reverted.");
       render();
     };
     syncActions();
@@ -35151,6 +35160,10 @@ ${shapes}`.trim();
       );
       right.appendChild(addRow);
       right.appendChild(mkToggle(doc, "enabled", !!current.enabled, (v) => patch({ ...current, enabled: v })));
+      const gfNote = doc.createElement("div");
+      gfNote.className = "ga-settings-note";
+      gfNote.textContent = "`appliesTo` controls where each filter is active (round/game/session).";
+      right.appendChild(gfNote);
       right.appendChild(
         mkSelect(
           doc,
@@ -35178,7 +35191,7 @@ ${shapes}`.trim();
             doc,
             "Delete",
             () => {
-              if (!confirm(`Delete global filter '${ctrl.label || ctrl.id}'?`)) return;
+              if (!safeConfirm(`Delete global filter '${ctrl.label || ctrl.id}'?`)) return;
               patch({ ...current, controls: controls.filter((_, i) => i !== idx) });
             },
             "danger"
@@ -35370,7 +35383,8 @@ ${shapes}`.trim();
           doc,
           "Delete",
           () => {
-            if (!confirm(`Delete section '${section.title || section.id}'?`)) return;
+            setStatus("info", "Deleting section\u2026");
+            if (!safeConfirm(`Delete section '${section.title || section.id}'?`)) return;
             const next = cloneJson(draft);
             next.dashboard.sections = next.dashboard.sections.filter((_, i) => i !== active.idx);
             draft = next;
@@ -35529,7 +35543,8 @@ ${shapes}`.trim();
             doc,
             "Delete card",
             () => {
-              if (!confirm(`Delete card '${card.title || card.cardId}'?`)) return;
+              setStatus("info", "Deleting card\u2026");
+              if (!safeConfirm(`Delete card '${card.title || card.cardId}'?`)) return;
               const next = cloneJson(draft);
               next.dashboard.sections[active.idx].layout.cards = next.dashboard.sections[active.idx].layout.cards.filter((_, i) => i !== cardIdx);
               draft = next;
@@ -35592,7 +35607,8 @@ ${shapes}`.trim();
               doc,
               "Delete",
               () => {
-                if (!confirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
+                setStatus("info", "Deleting widget\u2026");
+                if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
                 const next = cloneJson(draft);
                 const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
                 c.card.children = (c.card.children ?? []).filter((_, i) => i !== wIdx);
@@ -35615,6 +35631,10 @@ ${shapes}`.trim();
             })
           );
           wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, title: v })));
+          const grainNote = doc.createElement("div");
+          grainNote.className = "ga-settings-note";
+          grainNote.textContent = "grain = the dataset level the widget is calculated on (e.g. round vs. game).";
+          wItem.appendChild(grainNote);
           wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidget(cardIdx, wIdx, { ...w, grain: v })));
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
           const widgetPlaceNote = doc.createElement("div");
@@ -35738,7 +35758,7 @@ ${shapes}`.trim();
                   doc,
                   "Delete row",
                   () => {
-                    if (!confirm("Delete this row?")) return;
+                    if (!safeConfirm("Delete this row?")) return;
                     const nextRows = rows.filter((_, i) => i !== rIdx);
                     patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
                   },
@@ -35768,6 +35788,10 @@ ${shapes}`.trim();
               "primary"
             );
             recBox.appendChild(addRecord);
+            const recNote = doc.createElement("div");
+            recNote.className = "ga-settings-note";
+            recNote.textContent = "Records are configurable items (not stat rows). Use kind + fields below, or Advanced JSON for full control.";
+            recBox.appendChild(recNote);
             const kindOpts = [
               { value: "group_extreme", label: "group_extreme" },
               { value: "streak", label: "streak" },
@@ -35798,7 +35822,7 @@ ${shapes}`.trim();
                   doc,
                   "Delete record",
                   () => {
-                    if (!confirm("Delete this record?")) return;
+                    if (!safeConfirm("Delete this record?")) return;
                     const next = records.filter((_, i) => i !== rIdx);
                     patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
                   },

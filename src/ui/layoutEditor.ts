@@ -22,6 +22,7 @@ function mkBtn(doc: Document, label: string, onClick: () => void, kind: "primary
   b.addEventListener("click", (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
+    (ev as any).stopImmediatePropagation?.();
     onClick();
   });
   return b;
@@ -156,6 +157,14 @@ export function renderLayoutEditor(args: {
   statusEl: HTMLElement;
 }): HTMLElement {
   const { doc, semantic, onChange, statusEl } = args;
+  const win = doc.defaultView ?? window;
+  const safeConfirm = (msg: string): boolean => {
+    try {
+      return typeof (win as any).confirm === "function" ? (win as any).confirm(msg) : true;
+    } catch {
+      return true;
+    }
+  };
 
   const wrap = doc.createElement("div");
   wrap.className = "ga-layout-editor-wrap";
@@ -166,7 +175,7 @@ export function renderLayoutEditor(args: {
   const help = doc.createElement("div");
   help.className = "ga-settings-note";
   help.textContent =
-    "Build your dashboard here (sections, cards, widgets, global filters). Use Apply changes when you're done. Advanced JSON editors let you configure drilldowns, stat rows, extra filters, etc.";
+    "Build your dashboard here (sections, cards, widgets, global filters). Tip: text fields apply on blur (click outside). Use Apply changes when you're done. Advanced JSON editors unlock drilldowns, extra filters, and other power features.";
 
   const headActions = doc.createElement("div");
   headActions.className = "ga-le-head-actions";
@@ -243,11 +252,11 @@ export function renderLayoutEditor(args: {
       setStatus("ok", "Nothing to revert.");
       return;
     }
-    if (!confirm("Discard unsaved layout changes?")) return;
+    if (!safeConfirm("Discard unsaved layout changes?")) return;
     draft = cloneJson(applied);
     dirty = false;
     syncActions();
-    setStatus("neutral", "");
+    setStatus("ok", "Reverted.");
     render();
   };
 
@@ -327,6 +336,10 @@ export function renderLayoutEditor(args: {
     right.appendChild(addRow);
 
     right.appendChild(mkToggle(doc, "enabled", !!current.enabled, (v) => patch({ ...current, enabled: v })));
+    const gfNote = doc.createElement("div");
+    gfNote.className = "ga-settings-note";
+    gfNote.textContent = "`appliesTo` controls where each filter is active (round/game/session).";
+    right.appendChild(gfNote);
     right.appendChild(
       mkSelect(doc, "layout.variant", String(current?.layout?.variant ?? "compact"), [{ value: "compact", label: "compact" }, { value: "full", label: "full" }], (v) =>
         patch({ ...current, layout: { ...(current.layout ?? {}), variant: v } })
@@ -352,7 +365,7 @@ export function renderLayoutEditor(args: {
           doc,
           "Delete",
           () => {
-            if (!confirm(`Delete global filter '${ctrl.label || ctrl.id}'?`)) return;
+            if (!safeConfirm(`Delete global filter '${ctrl.label || ctrl.id}'?`)) return;
             patch({ ...current, controls: controls.filter((_: any, i: number) => i !== idx) });
           },
           "danger"
@@ -546,7 +559,8 @@ export function renderLayoutEditor(args: {
         doc,
         "Delete",
         () => {
-          if (!confirm(`Delete section '${section.title || section.id}'?`)) return;
+          setStatus("info", "Deleting section…");
+          if (!safeConfirm(`Delete section '${section.title || section.id}'?`)) return;
           const next = cloneJson(draft) as any;
           next.dashboard.sections = next.dashboard.sections.filter((_: any, i: number) => i !== active.idx);
           draft = next;
@@ -722,7 +736,8 @@ export function renderLayoutEditor(args: {
           doc,
           "Delete card",
           () => {
-            if (!confirm(`Delete card '${card.title || card.cardId}'?`)) return;
+            setStatus("info", "Deleting card…");
+            if (!safeConfirm(`Delete card '${card.title || card.cardId}'?`)) return;
             const next = cloneJson(draft) as any;
             next.dashboard.sections[active.idx].layout.cards = next.dashboard.sections[active.idx].layout.cards.filter((_: any, i: number) => i !== cardIdx);
             draft = next;
@@ -792,7 +807,8 @@ export function renderLayoutEditor(args: {
             doc,
             "Delete",
             () => {
-              if (!confirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
+              setStatus("info", "Deleting widget…");
+              if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
               const next = cloneJson(draft) as any;
               const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
               (c.card as any).children = (((c.card as any).children ?? []) as any[]).filter((_: any, i: number) => i !== wIdx);
@@ -816,6 +832,10 @@ export function renderLayoutEditor(args: {
           })
         );
         wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, title: v })));
+        const grainNote = doc.createElement("div");
+        grainNote.className = "ga-settings-note";
+        grainNote.textContent = "grain = the dataset level the widget is calculated on (e.g. round vs. game).";
+        wItem.appendChild(grainNote);
         wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidget(cardIdx, wIdx, { ...w, grain: v })));
 
         const p = (w.placement as any) ?? { x: 0, y: 0, w: 12, h: 3 };
@@ -918,7 +938,7 @@ export function renderLayoutEditor(args: {
                 doc,
                 "Delete row",
                 () => {
-                  if (!confirm("Delete this row?")) return;
+                  if (!safeConfirm("Delete this row?")) return;
                   const nextRows = rows.filter((_, i) => i !== rIdx);
                   patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } } as any);
                 },
@@ -949,6 +969,10 @@ export function renderLayoutEditor(args: {
             "primary"
           );
           recBox.appendChild(addRecord);
+          const recNote = doc.createElement("div");
+          recNote.className = "ga-settings-note";
+          recNote.textContent = "Records are configurable items (not stat rows). Use kind + fields below, or Advanced JSON for full control.";
+          recBox.appendChild(recNote);
 
           const kindOpts = [
             { value: "group_extreme", label: "group_extreme" },
@@ -983,7 +1007,7 @@ export function renderLayoutEditor(args: {
                 doc,
                 "Delete record",
                 () => {
-                  if (!confirm("Delete this record?")) return;
+                  if (!safeConfirm("Delete this record?")) return;
                   const next = records.filter((_, i) => i !== rIdx);
                   patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } } as any);
                 },
