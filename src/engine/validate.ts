@@ -261,7 +261,14 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
     const spec: any = widget.spec;
     assert(Array.isArray(spec.records) && spec.records.length > 0, "E_BAD_SPEC", `record_list ${widget.widgetId} has no records`);
     for (const r of spec.records) {
-      const kind = r?.kind === "same_value_streak" ? "same_value_streak" : r?.kind === "streak" ? "streak" : "group_extreme";
+      const kind =
+        r?.kind === "same_value_streak"
+          ? "same_value_streak"
+          : r?.kind === "streak"
+            ? "streak"
+            : r?.kind === "overall"
+              ? "overall"
+              : "group_extreme";
       if (kind === "streak") {
         assert(Array.isArray(r.streakFilters) && r.streakFilters.length > 0, "E_BAD_SPEC", `record ${r.id} missing streakFilters`);
         validateClickAction(semantic, widget.widgetId, r.actions?.click);
@@ -273,6 +280,14 @@ function validateWidget(semantic: SemanticRegistry, widget: WidgetDef): void {
         assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown record dimension '${r.dimension}' in ${widget.widgetId}`);
         const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
         assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
+        validateClickAction(semantic, widget.widgetId, r.actions?.click);
+        continue;
+      }
+      if (kind === "overall") {
+        assert(typeof r.metric === "string" && r.metric.trim().length > 0, "E_BAD_SPEC", `record ${r.id} missing metric`);
+        const m = semantic.measures[r.metric];
+        assert(!!m, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
+        assert(m.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
         validateClickAction(semantic, widget.widgetId, r.actions?.click);
         continue;
       }
