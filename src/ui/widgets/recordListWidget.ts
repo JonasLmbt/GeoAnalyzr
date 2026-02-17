@@ -7,6 +7,7 @@ import { groupByKey } from "../../engine/aggregate";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
+import { pickWithAliases } from "../../engine/fieldAccess";
 
 type RecordResult = {
   keyText: string;
@@ -38,7 +39,14 @@ function formatMetricValue(semantic: SemanticRegistry, measureId: string, value:
     return unit.showSign && v > 0 ? `+${v}` : String(v);
   }
   const txt = value.toFixed(unit.decimals ?? 1);
-  return unit.showSign && value > 0 ? `+${txt}` : txt;
+  const base = unit.showSign && value > 0 ? `+${txt}` : txt;
+  const suffix = (() => {
+    const u = String(m?.unit ?? "").trim().toLowerCase();
+    if (u === "km") return " km";
+    if (u === "seconds") return " s";
+    return "";
+  })();
+  return `${base}${suffix}`;
 }
 
 function formatTs(ts: number): string {
@@ -59,6 +67,31 @@ function getRowTs(row: any): number | null {
   const b = row?.ts;
   if (typeof b === "number" && Number.isFinite(b)) return b;
   return null;
+}
+
+function getScore(row: any, semantic: SemanticRegistry): number | null {
+  const v = pickWithAliases(row, "player_self_score", semantic.columnAliases);
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+function getTrustedGuessDurationSeconds(row: any, semantic: SemanticRegistry): number | null {
+  const raw = pickWithAliases(row, "durationSeconds", semantic.columnAliases);
+  const dur = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : null;
+
+  const start = row?.startTime ?? row?.roundStartTime ?? null;
+  const end = row?.endTime ?? row?.roundEndTime ?? null;
+  const startNum = typeof start === "number" && Number.isFinite(start) ? start : null;
+  const endNum = typeof end === "number" && Number.isFinite(end) ? end : null;
+
+  const derived = startNum !== null && endNum !== null && endNum > startNum ? (endNum - startNum) / 1000 : null;
+  const derivedOk = derived !== null && Number.isFinite(derived) && derived > 0 && derived < 60 * 30 ? derived : null;
+
+  if (derivedOk !== null) {
+    if (dur !== null && Math.abs(dur - derivedOk) > 6) return derivedOk;
+    return dur ?? derivedOk;
+  }
+
+  return dur;
 }
 
 function buildGroupExtreme(
@@ -87,7 +120,49 @@ function buildGroupExtreme(
 
   for (const [k, g] of grouped.entries()) {
     if (!g || g.length === 0) continue;
-    const v = fn(g);
+    // Data quality guardrails for a few problematic record metrics.
+    // Record ranking should not consider groups where the underlying data is missing/obviously broken.
+    if (grain === "round" && metricId === "avg_score") {
+      const total = g.length;
+      let valid = 0;
+      for (const r of g) if (getScore(r, semantic) !== null) valid++;
+      if (valid === 0) continue;
+      if (groupById === "game_id" && valid !== total) continue; // require complete game score coverage
+      if (groupById === "time_day" && valid / Math.max(1, total) < 0.5) continue;
+    }
+    if (grain === "round" && metricId === "avg_guess_duration") {
+      const total = g.length;
+      let valid = 0;
+      for (const r of g) if (getTrustedGuessDurationSeconds(r, semantic) !== null) valid++;
+      if (valid === 0) continue;
+      if (valid / Math.max(1, total) < 0.5) continue;
+    }
+
+    const v = (() => {
+      if (grain === "round" && metricId === "avg_score") {
+        let sum = 0;
+        let n = 0;
+        for (const r of g as any[]) {
+          const s = getScore(r, semantic);
+          if (s === null) continue;
+          sum += s;
+          n++;
+        }
+        return n ? sum / n : NaN;
+      }
+      if (grain === "round" && metricId === "avg_guess_duration") {
+        let sum = 0;
+        let n = 0;
+        for (const r of g as any[]) {
+          const s = getTrustedGuessDurationSeconds(r, semantic);
+          if (s === null) continue;
+          sum += s;
+          n++;
+        }
+        return n ? sum / n : NaN;
+      }
+      return fn(g);
+    })();
     if (!Number.isFinite(v)) continue;
     if (bestVal === null) {
       bestKey = k;
@@ -167,11 +242,11 @@ function buildGroupExtreme(
     return { keyText, valueText: `${metricText} on ${keyText}${scoreText}`, rows: bestRows, click: rec.actions?.click };
   }
 
+  // Keep value text compact; show the group key in the drilldown title (click) instead.
   const valueText =
     groupById === "time_day"
-      ? // Match the legacy-style record hint for day records.
-        `${keyText} (${metricLabel.toLowerCase().startsWith("avg ") ? `avg ${metricText}` : metricText}, n=${n})`
-      : `${metricText} (${n} rounds, ${keyText})`;
+      ? `${metricLabel.toLowerCase().startsWith("avg ") ? `${metricText}` : metricText} (n=${n})`
+      : `${metricText} (n=${n})`;
 
   return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
 }
@@ -344,7 +419,7 @@ export async function renderRecordListWidget(
         }
         const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
         overlay.open(semantic, {
-          title: `${widget.title} - ${rec.label}`,
+          title: `${widget.title} - ${rec.label}${result.keyText ? ` (${result.keyText})` : ""}`,
           target: click.target,
           columnsPreset: click.columnsPreset,
           rows: filteredRows,

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.19
+// @version      2.0.20
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -32916,7 +32916,7 @@ ${shapes}`.trim();
                         records: [
                           {
                             id: "best_day",
-                            label: "Best day",
+                            label: "Day with highest avg score",
                             metric: "avg_score",
                             groupBy: "time_day",
                             extreme: "max",
@@ -32924,7 +32924,7 @@ ${shapes}`.trim();
                           },
                           {
                             id: "hardest_day",
-                            label: "Hardest day",
+                            label: "Day with lowest avg score",
                             metric: "avg_score",
                             groupBy: "time_day",
                             extreme: "min",
@@ -32932,7 +32932,7 @@ ${shapes}`.trim();
                           },
                           {
                             id: "best_game_avg_score",
-                            label: "Best avg score in a game",
+                            label: "Game with highest avg score",
                             metric: "avg_score",
                             groupBy: "game_id",
                             extreme: "max",
@@ -32941,7 +32941,7 @@ ${shapes}`.trim();
                           },
                           {
                             id: "worst_game_avg_score",
-                            label: "Worst avg score in a game",
+                            label: "Game with lowest avg score",
                             metric: "avg_score",
                             groupBy: "game_id",
                             extreme: "min",
@@ -32950,7 +32950,7 @@ ${shapes}`.trim();
                           },
                           {
                             id: "fastest_day",
-                            label: "Fastest day",
+                            label: "Day with lowest avg guess duration",
                             metric: "avg_guess_duration",
                             groupBy: "time_day",
                             extreme: "min",
@@ -32958,7 +32958,7 @@ ${shapes}`.trim();
                           },
                           {
                             id: "slowest_day",
-                            label: "Slowest day",
+                            label: "Day with highest avg guess duration",
                             metric: "avg_guess_duration",
                             groupBy: "time_day",
                             extreme: "max",
@@ -40672,7 +40672,14 @@ ${shapes}`.trim();
       return unit.showSign && v > 0 ? `+${v}` : String(v);
     }
     const txt = value.toFixed(unit.decimals ?? 1);
-    return unit.showSign && value > 0 ? `+${txt}` : txt;
+    const base = unit.showSign && value > 0 ? `+${txt}` : txt;
+    const suffix = (() => {
+      const u = String(m?.unit ?? "").trim().toLowerCase();
+      if (u === "km") return " km";
+      if (u === "seconds") return " s";
+      return "";
+    })();
+    return `${base}${suffix}`;
   }
   function formatTs(ts) {
     const d = new Date(ts);
@@ -40690,6 +40697,25 @@ ${shapes}`.trim();
     const b = row?.ts;
     if (typeof b === "number" && Number.isFinite(b)) return b;
     return null;
+  }
+  function getScore(row, semantic) {
+    const v = pickWithAliases(row, "player_self_score", semantic.columnAliases);
+    return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+  }
+  function getTrustedGuessDurationSeconds(row, semantic) {
+    const raw = pickWithAliases(row, "durationSeconds", semantic.columnAliases);
+    const dur = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : null;
+    const start = row?.startTime ?? row?.roundStartTime ?? null;
+    const end = row?.endTime ?? row?.roundEndTime ?? null;
+    const startNum = typeof start === "number" && Number.isFinite(start) ? start : null;
+    const endNum = typeof end === "number" && Number.isFinite(end) ? end : null;
+    const derived = startNum !== null && endNum !== null && endNum > startNum ? (endNum - startNum) / 1e3 : null;
+    const derivedOk = derived !== null && Number.isFinite(derived) && derived > 0 && derived < 60 * 30 ? derived : null;
+    if (derivedOk !== null) {
+      if (dur !== null && Math.abs(dur - derivedOk) > 6) return derivedOk;
+      return dur ?? derivedOk;
+    }
+    return dur;
   }
   function buildGroupExtreme(semantic, grain, rowsAll, rec) {
     const metricId = typeof rec.metric === "string" ? rec.metric.trim() : "";
@@ -40709,7 +40735,46 @@ ${shapes}`.trim();
     let bestRows = [];
     for (const [k, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
-      const v = fn(g);
+      if (grain === "round" && metricId === "avg_score") {
+        const total = g.length;
+        let valid = 0;
+        for (const r of g) if (getScore(r, semantic) !== null) valid++;
+        if (valid === 0) continue;
+        if (groupById === "game_id" && valid !== total) continue;
+        if (groupById === "time_day" && valid / Math.max(1, total) < 0.5) continue;
+      }
+      if (grain === "round" && metricId === "avg_guess_duration") {
+        const total = g.length;
+        let valid = 0;
+        for (const r of g) if (getTrustedGuessDurationSeconds(r, semantic) !== null) valid++;
+        if (valid === 0) continue;
+        if (valid / Math.max(1, total) < 0.5) continue;
+      }
+      const v = (() => {
+        if (grain === "round" && metricId === "avg_score") {
+          let sum = 0;
+          let n2 = 0;
+          for (const r of g) {
+            const s = getScore(r, semantic);
+            if (s === null) continue;
+            sum += s;
+            n2++;
+          }
+          return n2 ? sum / n2 : NaN;
+        }
+        if (grain === "round" && metricId === "avg_guess_duration") {
+          let sum = 0;
+          let n2 = 0;
+          for (const r of g) {
+            const s = getTrustedGuessDurationSeconds(r, semantic);
+            if (s === null) continue;
+            sum += s;
+            n2++;
+          }
+          return n2 ? sum / n2 : NaN;
+        }
+        return fn(g);
+      })();
       if (!Number.isFinite(v)) continue;
       if (bestVal === null) {
         bestKey = k;
@@ -40771,10 +40836,7 @@ ${shapes}`.trim();
       }
       return { keyText, valueText: `${metricText} on ${keyText}${scoreText}`, rows: bestRows, click: rec.actions?.click };
     }
-    const valueText = groupById === "time_day" ? (
-      // Match the legacy-style record hint for day records.
-      `${keyText} (${metricLabel.toLowerCase().startsWith("avg ") ? `avg ${metricText}` : metricText}, n=${n})`
-    ) : `${metricText} (${n} rounds, ${keyText})`;
+    const valueText = groupById === "time_day" ? `${metricLabel.toLowerCase().startsWith("avg ") ? `${metricText}` : metricText} (n=${n})` : `${metricText} (n=${n})`;
     return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   function buildStreak(semantic, grain, rowsAll, rec) {
@@ -40903,7 +40965,7 @@ ${shapes}`.trim();
           }
           const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
           overlay.open(semantic, {
-            title: `${widget.title} - ${rec.label}`,
+            title: `${widget.title} - ${rec.label}${result.keyText ? ` (${result.keyText})` : ""}`,
             target: click.target,
             columnsPreset: click.columnsPreset,
             rows: filteredRows,

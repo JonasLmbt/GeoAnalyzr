@@ -433,7 +433,7 @@
                       "records": [
                         {
                           "id": "best_day",
-                          "label": "Best day",
+                          "label": "Day with highest avg score",
                           "metric": "avg_score",
                           "groupBy": "time_day",
                           "extreme": "max",
@@ -441,7 +441,7 @@
                         },
                         {
                           "id": "hardest_day",
-                          "label": "Hardest day",
+                          "label": "Day with lowest avg score",
                           "metric": "avg_score",
                           "groupBy": "time_day",
                           "extreme": "min",
@@ -449,7 +449,7 @@
                         },
                         {
                           "id": "best_game_avg_score",
-                          "label": "Best avg score in a game",
+                          "label": "Game with highest avg score",
                           "metric": "avg_score",
                           "groupBy": "game_id",
                           "extreme": "max",
@@ -458,7 +458,7 @@
                         },
                         {
                           "id": "worst_game_avg_score",
-                          "label": "Worst avg score in a game",
+                          "label": "Game with lowest avg score",
                           "metric": "avg_score",
                           "groupBy": "game_id",
                           "extreme": "min",
@@ -467,7 +467,7 @@
                         },
                         {
                           "id": "fastest_day",
-                          "label": "Fastest day",
+                          "label": "Day with lowest avg guess duration",
                           "metric": "avg_guess_duration",
                           "groupBy": "time_day",
                           "extreme": "min",
@@ -475,7 +475,7 @@
                         },
                         {
                           "id": "slowest_day",
-                          "label": "Slowest day",
+                          "label": "Day with highest avg guess duration",
                           "metric": "avg_guess_duration",
                           "groupBy": "time_day",
                           "extreme": "max",
