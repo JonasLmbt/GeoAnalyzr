@@ -16,6 +16,7 @@ import { attachSettingsModal } from "./ui/settingsModal";
 import { renderAnalysisApp } from "./ui/analysisRenderer";
 import { getCurrentPlayerName } from "./app/playerIdentity";
 import { logoSvgMarkup } from "./ui/logo";
+import { mergeSemanticWithDashboard } from "./engine/semanticMerge";
 
 function cloneTemplate<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -38,7 +39,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   doc.body.classList.add("ga-semantic-page");
   injectSemanticDashboardCssOnce(doc);
 
-  const semantic = cloneTemplate(semanticTemplate) as SemanticRegistry;
+  const semanticBase = cloneTemplate(semanticTemplate) as SemanticRegistry;
   let dashboard = loadDashboardTemplate(doc, cloneTemplate(dashboardTemplate) as DashboardDoc);
   let settings = loadSettings(doc);
 
@@ -77,6 +78,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
 
   const renderNow = async (): Promise<void> => {
     body.innerHTML = "";
+    const semantic = mergeSemanticWithDashboard(semanticBase, dashboard);
     validateDashboardAgainstSemantic(semantic, dashboard);
     updateTitles();
     await renderAnalysisApp({ body, semantic, dashboard });
@@ -135,7 +137,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
       targetWindow,
       root,
       openButton: settingsBtn,
-      semantic,
+      semantic: semanticBase,
       getDashboard: () => dashboard,
       getDefaultDashboard: () => cloneTemplate(dashboardTemplate) as DashboardDoc,
       applyDashboard: async (next) => {

@@ -1,6 +1,7 @@
 import type { DashboardDoc } from "../config/dashboard.types";
 import type { SemanticRegistry } from "../config/semantic.types";
 import { validateDashboardAgainstSemantic } from "../engine/validate";
+import { mergeSemanticWithDashboard } from "../engine/semanticMerge";
 import { renderLayoutEditor } from "./layoutEditor";
 import {
   DEFAULT_SETTINGS,
@@ -362,7 +363,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       templateStatus.className = "ga-settings-status";
       try {
         const parsed = JSON.parse(templateEditor.value) as DashboardDoc;
-        validateDashboardAgainstSemantic(semantic, parsed);
+        validateDashboardAgainstSemantic(mergeSemanticWithDashboard(semantic, parsed), parsed);
         await applyDashboard(parsed);
         dashboard = parsed;
         templateStatus.textContent = "Template applied.";
@@ -388,7 +389,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     templateDownload.addEventListener("click", () => {
       try {
         const parsed = JSON.parse(templateEditor.value) as DashboardDoc;
-        validateDashboardAgainstSemantic(semantic, parsed);
+        validateDashboardAgainstSemantic(mergeSemanticWithDashboard(semantic, parsed), parsed);
         const stamp = new Date().toISOString().slice(0, 10);
         downloadTextFile(`geoanalyzr-dashboard-template-${stamp}.json`, JSON.stringify(parsed, null, 2));
         templateStatus.textContent = "Template downloaded.";
@@ -425,7 +426,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         templateStatus.className = "ga-settings-status";
         try {
           const next = cloneDashboard(getDefaultDashboard());
-          validateDashboardAgainstSemantic(semantic, next);
+          validateDashboardAgainstSemantic(mergeSemanticWithDashboard(semantic, next), next);
           await applyDashboard(next);
           dashboard = next;
           templateEditor.value = JSON.stringify(next, null, 2);

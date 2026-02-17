@@ -737,8 +737,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       backdrop-filter: blur(10px);
       border-bottom: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
     }
-    .ga-layout-editor { display:grid; grid-template-columns: minmax(260px, 340px) 1fr; gap:12px; align-items:start; padding-top: 10px; }
-    @media (max-width: 820px) { .ga-layout-editor { grid-template-columns: 1fr; } }
+    .ga-layout-editor { display:block; padding-top: 10px; }
     .ga-le-left, .ga-le-right { min-width: 0; }
     .ga-le-left-head { display:flex; gap:8px; margin-bottom:10px; }
     .ga-le-list { display:flex; flex-direction:column; gap:6px; }
@@ -822,6 +821,51 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-le-adv { margin-top: 10px; }
     .ga-le-adv > summary { cursor:pointer; user-select:none; font-weight: 700; font-size:12px; color: var(--ga-text-muted); list-style:none; }
     .ga-le-adv > summary::-webkit-details-marker { display:none; }
+    .ga-le-panels { display:flex; flex-direction:column; gap:12px; }
+    .ga-le-inline-input {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      min-width: 220px;
+      height: 32px;
+    }
+
+    /* Section editor modal */
+    .ga-le-modal { position: fixed; inset: 0; z-index: 99999999; }
+    .ga-le-modal-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
+    .ga-le-modal-panel {
+      position:absolute;
+      top: 6%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(1200px, 96vw);
+      max-height: 88vh;
+      overflow: auto;
+      background: var(--ga-surface);
+      border: 1px solid var(--ga-border);
+      border-radius: 14px;
+      box-shadow: 0 28px 90px rgba(0,0,0,0.55);
+      color: var(--ga-text);
+    }
+    .ga-le-modal-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--ga-border);
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      backdrop-filter: blur(10px);
+    }
+    .ga-le-modal-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+    .ga-le-modal-body { padding: 12px; }
     .ga-le-cards-layout { display:grid; grid-template-columns: minmax(220px, 320px) 1fr; gap:12px; align-items:start; }
     @media (max-width: 980px) { .ga-le-cards-layout { grid-template-columns: 1fr; } }
     .ga-le-outline {

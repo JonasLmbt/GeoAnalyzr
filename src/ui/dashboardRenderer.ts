@@ -419,7 +419,7 @@ export async function renderDashboard(
       const inner = doc.createElement("div");
       inner.className = "ga-card-inner";
       inner.style.display = "grid";
-      inner.style.gridTemplateColumns = `repeat(12, minmax(0, 1fr))`;
+      inner.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
       inner.style.gap = "10px";
 
       for (const w of placed.card.children) {

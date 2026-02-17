@@ -1,6 +1,7 @@
 import type { CardPlacementDef, DashboardDoc, SectionDef, WidgetDef } from "../config/dashboard.types";
 import type { SemanticRegistry } from "../config/semantic.types";
 import { validateDashboardAgainstSemantic } from "../engine/validate";
+import { getDrilldownPresetsOverrideFromDashboard, mergeSemanticWithDashboard } from "../engine/semanticMerge";
 
 type OnChange = (next: DashboardDoc) => void;
 
@@ -209,11 +210,13 @@ export function renderLayoutEditor(args: {
   let dirty = false;
   let autoApply = false;
 
+  let editSectionIdx: number | null = null;
+  let newPresetIdByTarget: Record<string, string> = {};
+
+  // Legacy state kept for compile stability (legacy UI is now bypassed).
   type Active = { kind: "global_filters" } | { kind: "section"; idx: number };
   let active: Active = { kind: "section", idx: 0 };
   let lastSectionIdx = 0;
-
-  // Section-internal navigation (keeps panels open across rerenders)
   let focusMode = true;
   let focusCardIdx = 0;
   let focusWidgetIdx = 0;
@@ -232,7 +235,7 @@ export function renderLayoutEditor(args: {
 
   const validateDraft = (): { ok: true } | { ok: false; error: string } => {
     try {
-      validateDashboardAgainstSemantic(semantic, draft);
+      validateDashboardAgainstSemantic(mergeSemanticWithDashboard(semantic, draft), draft);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
@@ -336,6 +339,96 @@ export function renderLayoutEditor(args: {
         () => {
           const id = `date_${Math.random().toString(36).slice(2, 7)}`;
           patch({ ...current, controls: [...controls, { id, type: "date_range", label: "Date range", default: { fromTs: null, toTs: null }, appliesTo: [grainDefault] }] });
+        },
+        "primary"
+      )
+    );
+
+    const presets: Array<{ id: string; label: string; make: () => any }> = [
+      {
+        id: "country_map",
+        label: "Country (map)",
+        make: () => ({
+          id: `country_${Math.random().toString(36).slice(2, 7)}`,
+          type: "select",
+          label: "Country",
+          dimension: "true_country",
+          default: "all",
+          options: "auto_distinct",
+          appliesTo: ["round"],
+          presentation: "map",
+          map: { variant: "compact", height: 340, restrictToOptions: true, tintSelectable: true }
+        })
+      },
+      {
+        id: "movement",
+        label: "Movement",
+        make: () => ({
+          id: `move_${Math.random().toString(36).slice(2, 7)}`,
+          type: "select",
+          label: "Movement",
+          dimension: "movement_type",
+          default: "all",
+          options: "auto_distinct",
+          appliesTo: ["round"]
+        })
+      },
+      {
+        id: "mode_family",
+        label: "Mode family",
+        make: () => ({
+          id: `mode_${Math.random().toString(36).slice(2, 7)}`,
+          type: "select",
+          label: "Mode family",
+          dimension: "mode_family",
+          default: "all",
+          options: "auto_distinct",
+          appliesTo: ["round"]
+        })
+      },
+      {
+        id: "guess_time",
+        label: "Guess time bucket",
+        make: () => ({
+          id: `time_${Math.random().toString(36).slice(2, 7)}`,
+          type: "select",
+          label: "Guess time",
+          dimension: "duration_bucket",
+          default: "all",
+          options: "auto_distinct",
+          appliesTo: ["round"]
+        })
+      },
+      {
+        id: "teammate",
+        label: "Teammate",
+        make: () => ({
+          id: `mate_${Math.random().toString(36).slice(2, 7)}`,
+          type: "select",
+          label: "Teammate",
+          dimension: "teammate_name",
+          default: "all",
+          options: "auto_teammates",
+          appliesTo: ["round"]
+        })
+      }
+    ];
+
+    const presetSel = doc.createElement("select");
+    presetSel.className = "ga-le-inline-select";
+    for (const p of presets) presetSel.appendChild(new Option(p.label, p.id));
+    addRow.appendChild(presetSel);
+    addRow.appendChild(
+      mkBtn(
+        doc,
+        "Add preset",
+        () => {
+          const picked = presets.find((p) => p.id === presetSel.value) ?? presets[0];
+          if (!picked) return;
+          const ctrl = picked.make();
+          // Keep appliesTo aligned with current grainDefault if possible.
+          if (Array.isArray(ctrl.appliesTo) && ctrl.appliesTo.length) ctrl.appliesTo = [grainDefault];
+          patch({ ...current, controls: [...controls, ctrl] });
         },
         "primary"
       )
@@ -455,8 +548,749 @@ export function renderLayoutEditor(args: {
     });
   };
 
+  function renderPanels(): boolean {
+    try {
+      wrap.querySelector(".ga-le-modal")?.remove();
+    } catch {
+      // ignore
+    }
+
+    const sem = mergeSemanticWithDashboard(semantic, draft);
+
+    const panels = doc.createElement("div");
+    panels.className = "ga-le-panels";
+    // Root is a 2-column grid in legacy mode; span full width.
+    (panels.style as any).gridColumn = "1 / -1";
+    root.appendChild(panels);
+
+    const sections: any[] = Array.isArray((draft.dashboard as any)?.sections) ? ((draft.dashboard as any).sections as any[]) : [];
+    const setSections = (nextSections: any[]) => {
+      const next = cloneJson(draft) as any;
+      next.dashboard.sections = nextSections;
+      draft = next;
+      markDirty();
+    };
+
+    const ensureOneCardContainer = (sectionIdx: number) => {
+      const next = cloneJson(draft) as any;
+      const sec = next.dashboard.sections?.[sectionIdx];
+      if (!sec) return;
+      const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
+      sec.layout = sec.layout ?? { mode: "grid", columns: cols, cards: [] };
+      sec.layout.columns = cols;
+      const cards = Array.isArray(sec.layout.cards) ? sec.layout.cards : [];
+      if (cards.length === 0) cards.push(defaultCard());
+      const first = cards[0];
+      first.x = 0;
+      first.y = 0;
+      first.w = cols;
+      first.h = Math.max(10, asInt(first.h, 12));
+      first.title = String(sec.title ?? first.title ?? "Section");
+      first.card = first.card ?? { type: "composite", children: [] };
+      (first.card as any).children = Array.isArray((first.card as any).children) ? (first.card as any).children : [];
+      sec.layout.cards = [first];
+      next.dashboard.sections[sectionIdx] = sec;
+      draft = next;
+      markDirty();
+    };
+
+    const flattenCardsIntoFirst = (sectionIdx: number) => {
+      const next = cloneJson(draft) as any;
+      const sec = next.dashboard.sections?.[sectionIdx];
+      if (!sec) return;
+      const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
+      const cards = Array.isArray(sec.layout?.cards) ? sec.layout.cards : [];
+      if (cards.length <= 1) return ensureOneCardContainer(sectionIdx);
+
+      const base = cards[0];
+      base.card = base.card ?? { type: "composite", children: [] };
+      const baseChildren: any[] = Array.isArray((base.card as any).children) ? (base.card as any).children : [];
+      let cursorY = 0;
+      for (const w of baseChildren) {
+        const p = (w as any)?.placement ?? {};
+        cursorY = Math.max(cursorY, asInt(p.y, 0) + asInt(p.h, 3));
+      }
+      cursorY += 1;
+
+      for (const c of cards.slice(1)) {
+        const kids: any[] = Array.isArray((c?.card as any)?.children) ? (c.card as any).children : [];
+        for (const w of kids) {
+          const p = (w as any)?.placement ?? { x: 0, y: 0, w: cols, h: 3 };
+          baseChildren.push({ ...w, placement: { ...p, y: asInt(p.y, 0) + cursorY } });
+        }
+        let maxLocal = 0;
+        for (const w of kids) {
+          const p = (w as any)?.placement ?? {};
+          maxLocal = Math.max(maxLocal, asInt(p.y, 0) + asInt(p.h, 3));
+        }
+        cursorY += maxLocal + 1;
+      }
+
+      (base.card as any).children = baseChildren;
+      base.x = 0;
+      base.y = 0;
+      base.w = cols;
+      base.h = Math.max(10, asInt(base.h, 12));
+      base.title = String(sec.title ?? base.title ?? "Section");
+      sec.layout.cards = [base];
+      next.dashboard.sections[sectionIdx] = sec;
+      draft = next;
+      markDirty();
+    };
+
+    const getSectionChildren = (sectionIdx: number): any[] => {
+      const sec = (draft.dashboard.sections as any[])?.[sectionIdx] ?? null;
+      const c0 = Array.isArray(sec?.layout?.cards) ? sec.layout.cards[0] : null;
+      const kids = c0?.card ? (c0.card as any).children : null;
+      return Array.isArray(kids) ? kids : [];
+    };
+
+    const setSectionChildren = (sectionIdx: number, nextChildren: any[]) => {
+      const next = cloneJson(draft) as any;
+      const sec = next.dashboard.sections?.[sectionIdx];
+      if (!sec) return;
+      const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
+      sec.layout = sec.layout ?? { mode: "grid", columns: cols, cards: [] };
+      sec.layout.columns = cols;
+      const cards = Array.isArray(sec.layout.cards) ? sec.layout.cards : [];
+      if (cards.length === 0) cards.push(defaultCard());
+      const first = cards[0];
+      first.x = 0;
+      first.y = 0;
+      first.w = cols;
+      first.h = Math.max(10, asInt(first.h, 12));
+      first.title = String(sec.title ?? first.title ?? "Section");
+      first.card = first.card ?? { type: "composite", children: [] };
+      (first.card as any).children = nextChildren;
+      sec.layout.cards = [first];
+      next.dashboard.sections[sectionIdx] = sec;
+      draft = next;
+      markDirty();
+    };
+
+    const sectionsBox = doc.createElement("div");
+    sectionsBox.className = "ga-le-box";
+    const sHead = doc.createElement("div");
+    sHead.className = "ga-le-box-head";
+    sHead.textContent = "Sections";
+    sectionsBox.appendChild(sHead);
+    const sNote = doc.createElement("div");
+    sNote.className = "ga-settings-note";
+    sNote.textContent = "Sections are your tabs. Rename, reorder, and click Edit to configure widgets.";
+    sectionsBox.appendChild(sNote);
+
+    const topRow = doc.createElement("div");
+    topRow.className = "ga-le-toprow";
+    topRow.appendChild(
+      mkBtn(
+        doc,
+        "Add section",
+        () => {
+          const next = [...sections, defaultSection()];
+          setSections(next);
+          editSectionIdx = Math.max(0, next.length - 1);
+          render();
+        },
+        "primary"
+      )
+    );
+    sectionsBox.appendChild(topRow);
+
+    sections.forEach((sec, idx) => {
+      const item = doc.createElement("div");
+      item.className = "ga-le-item";
+
+      const row = doc.createElement("div");
+      row.className = "ga-le-toprow";
+      const label = doc.createElement("div");
+      label.className = "ga-le-box-head";
+      label.textContent = `${sec?.title || sec?.id || "Untitled"} (${sec?.id || idx})`;
+      row.appendChild(label);
+      row.appendChild(
+        mkBtn(doc, "Up", () => {
+          if (idx <= 0) return;
+          const next = [...sections];
+          const [picked] = next.splice(idx, 1);
+          next.splice(idx - 1, 0, picked);
+          setSections(next);
+        })
+      );
+      row.appendChild(
+        mkBtn(doc, "Down", () => {
+          if (idx >= sections.length - 1) return;
+          const next = [...sections];
+          const [picked] = next.splice(idx, 1);
+          next.splice(idx + 1, 0, picked);
+          setSections(next);
+        })
+      );
+      row.appendChild(
+        mkBtn(
+          doc,
+          "Delete",
+          () => {
+            if (!safeConfirm(`Delete section '${sec?.title || sec?.id}'?`)) return;
+            const next = sections.filter((_, i) => i !== idx);
+            setSections(next);
+            if (editSectionIdx === idx) editSectionIdx = null;
+          },
+          "danger"
+        )
+      );
+      row.appendChild(
+        mkBtn(
+          doc,
+          "Edit",
+          () => {
+            editSectionIdx = idx;
+            render();
+          },
+          "primary"
+        )
+      );
+      item.appendChild(row);
+
+      item.appendChild(
+        mkTextInput(doc, "title", String(sec?.title ?? ""), (v) => {
+          const next = [...sections];
+          next[idx] = { ...sec, title: v };
+          setSections(next);
+        })
+      );
+      sectionsBox.appendChild(item);
+    });
+
+    panels.appendChild(sectionsBox);
+
+    // Placeholders for the next panels (filled in subsequent patches).
+    panels.appendChild(mkHr(doc));
+    const gfBox = doc.createElement("div");
+    gfBox.className = "ga-le-box";
+    const gfh = doc.createElement("div");
+    gfh.className = "ga-le-box-head";
+    gfh.textContent = "Global filters";
+    gfBox.appendChild(gfh);
+    renderGlobalFilters(gfBox);
+    panels.appendChild(gfBox);
+
+    panels.appendChild(mkHr(doc));
+    const ddBox = doc.createElement("div");
+    ddBox.className = "ga-le-box";
+    const ddh = doc.createElement("div");
+    ddh.className = "ga-le-box-head";
+    ddh.textContent = "Drilldown presets";
+    ddBox.appendChild(ddh);
+    const ddn = doc.createElement("div");
+    ddn.className = "ga-settings-note";
+    ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
+    ddBox.appendChild(ddn);
+
+    const ddOverride: any = (draft.dashboard as any)?.drilldownPresets ?? {};
+    const setDdOverride = (target: string, nextTarget: any) => {
+      const next = cloneJson(draft) as any;
+      const cur = (next.dashboard.drilldownPresets ?? {}) as any;
+      next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
+      draft = next;
+      markDirty();
+    };
+    const removeDdOverride = (target: string) => {
+      const next = cloneJson(draft) as any;
+      const cur = (next.dashboard.drilldownPresets ?? {}) as any;
+      const { [target]: _, ...rest } = cur;
+      next.dashboard.drilldownPresets = rest;
+      draft = next;
+      markDirty();
+    };
+
+    const targets = Object.keys((sem as any)?.drilldownPresets ?? {});
+    if (targets.length === 0) {
+      const none = doc.createElement("div");
+      none.className = "ga-settings-note";
+      none.textContent = "No drilldown targets found.";
+      ddBox.appendChild(none);
+    }
+
+    targets.forEach((target) => {
+      const preset = (sem as any)?.drilldownPresets?.[target] ?? {};
+      const keys = Object.keys(preset?.columnsPresets ?? {});
+      const override = ddOverride?.[target] ?? {};
+
+      const det = doc.createElement("details");
+      det.className = "ga-le-details";
+      det.open = false;
+      const sum = doc.createElement("summary");
+      sum.textContent = `${target} (${keys.length} presets)`;
+      det.appendChild(sum);
+
+      const body = doc.createElement("div");
+      body.className = "ga-le-item";
+
+      if (override && Object.keys(override).length) {
+        const top = doc.createElement("div");
+        top.className = "ga-le-toprow";
+        top.appendChild(mkBtn(doc, "Reset overrides", () => removeDdOverride(target), "danger"));
+        body.appendChild(top);
+      }
+
+      if (keys.length > 0) {
+        body.appendChild(
+          mkSelect(
+            doc,
+            "defaultPreset",
+            String(preset?.defaultPreset ?? keys[0]),
+            keys.map((k: string) => ({ value: k, label: k })),
+            (v) => setDdOverride(target, { ...override, defaultPreset: v, columnsPresets: override?.columnsPresets ?? {} })
+          )
+        );
+      }
+
+      const addRow = doc.createElement("div");
+      addRow.className = "ga-le-toprow";
+      const input = doc.createElement("input");
+      input.type = "text";
+      input.className = "ga-le-inline-input";
+      input.placeholder = "new preset id (e.g. myPreset)";
+      input.value = String(newPresetIdByTarget[target] ?? "");
+      input.addEventListener("input", () => (newPresetIdByTarget[target] = input.value));
+      addRow.appendChild(input);
+      addRow.appendChild(
+        mkBtn(
+          doc,
+          "Add preset",
+          () => {
+            const id = String(newPresetIdByTarget[target] ?? "").trim();
+            if (!id) return;
+            const colsNext = { ...(override?.columnsPresets ?? {}) };
+            if (colsNext[id]) return;
+            colsNext[id] = [{ key: "ts", label: "Date", sortable: true }];
+            setDdOverride(target, { ...override, columnsPresets: colsNext });
+            newPresetIdByTarget[target] = "";
+            render();
+          },
+          "primary"
+        )
+      );
+      body.appendChild(addRow);
+
+      const mergedPresets: any = preset?.columnsPresets ?? {};
+      for (const [pid, cols] of Object.entries(mergedPresets)) {
+        const pDet = doc.createElement("details");
+        pDet.className = "ga-le-details";
+        pDet.open = false;
+        const ps = doc.createElement("summary");
+        ps.textContent = `${pid} (${Array.isArray(cols) ? cols.length : 0} columns)`;
+        pDet.appendChild(ps);
+
+        const pBody = doc.createElement("div");
+        pBody.className = "ga-le-item";
+
+        const isEditable = !!override?.columnsPresets?.[pid];
+        if (!isEditable) {
+          const n = doc.createElement("div");
+          n.className = "ga-settings-note";
+          n.textContent = "Built-in preset from semantic.json (read-only). Create a new preset to customize.";
+          pBody.appendChild(n);
+        } else {
+          const top = doc.createElement("div");
+          top.className = "ga-le-toprow";
+          top.appendChild(
+            mkBtn(
+              doc,
+              "Delete preset",
+              () => {
+                if (!safeConfirm(`Delete preset '${pid}'?`)) return;
+                const colsNext = { ...(override?.columnsPresets ?? {}) };
+                delete colsNext[pid];
+                setDdOverride(target, { ...override, columnsPresets: colsNext });
+              },
+              "danger"
+            )
+          );
+          pBody.appendChild(top);
+        }
+
+        const arr: any[] = Array.isArray(cols) ? (cols as any[]) : [];
+        const addColRow = doc.createElement("div");
+        addColRow.className = "ga-le-toprow";
+        addColRow.appendChild(
+          mkBtn(
+            doc,
+            "Add column",
+            () => {
+              if (!isEditable) return;
+              const colsNext = { ...(override?.columnsPresets ?? {}) };
+              const nextArr = Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : [];
+              nextArr.push({ key: "", label: "", sortable: false });
+              colsNext[pid] = nextArr;
+              setDdOverride(target, { ...override, columnsPresets: colsNext });
+            },
+            "primary"
+          )
+        );
+        pBody.appendChild(addColRow);
+
+        const patchColumn = (cIdx: number, nextCol: any) => {
+          if (!isEditable) return;
+          const colsNext = { ...(override?.columnsPresets ?? {}) };
+          const nextArr = Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : [];
+          nextArr[cIdx] = nextCol;
+          colsNext[pid] = nextArr;
+          setDdOverride(target, { ...override, columnsPresets: colsNext });
+        };
+        const deleteColumn = (cIdx: number) => {
+          if (!isEditable) return;
+          const colsNext = { ...(override?.columnsPresets ?? {}) };
+          const nextArr = (Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : []).filter((_: any, i: number) => i !== cIdx);
+          colsNext[pid] = nextArr;
+          setDdOverride(target, { ...override, columnsPresets: colsNext });
+        };
+        const moveColumn = (cIdx: number, delta: -1 | 1) => {
+          if (!isEditable) return;
+          const colsNext = { ...(override?.columnsPresets ?? {}) };
+          const nextArr = Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : [];
+          const nextIdx = cIdx + delta;
+          if (nextIdx < 0 || nextIdx >= nextArr.length) return;
+          const [picked] = nextArr.splice(cIdx, 1);
+          nextArr.splice(nextIdx, 0, picked);
+          colsNext[pid] = nextArr;
+          setDdOverride(target, { ...override, columnsPresets: colsNext });
+        };
+
+        arr.forEach((c: any, cIdx: number) => {
+          const colItem = doc.createElement("div");
+          colItem.className = "ga-le-item";
+          const top = doc.createElement("div");
+          top.className = "ga-le-toprow";
+          top.appendChild(mkBtn(doc, "Up", () => moveColumn(cIdx, -1)));
+          top.appendChild(mkBtn(doc, "Down", () => moveColumn(cIdx, 1)));
+          top.appendChild(mkBtn(doc, "Delete", () => deleteColumn(cIdx), "danger"));
+          colItem.appendChild(top);
+          colItem.appendChild(mkTextInput(doc, "key", String(c?.key ?? ""), (v) => patchColumn(cIdx, { ...c, key: v })));
+          colItem.appendChild(mkTextInput(doc, "label", String(c?.label ?? ""), (v) => patchColumn(cIdx, { ...c, label: v })));
+          colItem.appendChild(mkToggle(doc, "sortable", !!c?.sortable, (v) => patchColumn(cIdx, { ...c, sortable: v })));
+          colItem.appendChild(mkToggle(doc, "colored", !!c?.colored, (v) => patchColumn(cIdx, { ...c, colored: v })));
+          colItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (column)", c, (nextCol) => patchColumn(cIdx, nextCol)));
+          pBody.appendChild(colItem);
+        });
+
+        pDet.appendChild(pBody);
+        body.appendChild(pDet);
+      }
+
+      det.appendChild(body);
+      ddBox.appendChild(det);
+    });
+    panels.appendChild(ddBox);
+
+    // Section modal
+    if (editSectionIdx !== null && sections[editSectionIdx]) {
+      const sec = sections[editSectionIdx] as any;
+
+      const overlay = doc.createElement("div");
+      overlay.className = "ga-le-modal";
+
+      const bg = doc.createElement("div");
+      bg.className = "ga-le-modal-bg";
+      bg.addEventListener("click", () => {
+        editSectionIdx = null;
+        render();
+      });
+
+      const panel = doc.createElement("div");
+      panel.className = "ga-le-modal-panel";
+
+      const header = doc.createElement("div");
+      header.className = "ga-le-modal-header";
+      const ht = doc.createElement("div");
+      ht.className = "ga-le-modal-title";
+      ht.textContent = `Edit section: ${sec?.title || sec?.id || editSectionIdx}`;
+      header.appendChild(ht);
+      header.appendChild(
+        mkBtn(doc, "Close", () => {
+          editSectionIdx = null;
+          render();
+        })
+      );
+      panel.appendChild(header);
+
+      const body = doc.createElement("div");
+      body.className = "ga-le-modal-body";
+
+      const patchSection = (partial: any) => {
+        const next = [...sections];
+        next[editSectionIdx!] = { ...sec, ...partial };
+        setSections(next);
+      };
+
+      body.appendChild(mkTextInput(doc, "section.id", String(sec?.id ?? ""), (v) => patchSection({ id: v })));
+      body.appendChild(mkTextInput(doc, "section.title", String(sec?.title ?? ""), (v) => patchSection({ title: v })));
+      const colNote = doc.createElement("div");
+      colNote.className = "ga-settings-note";
+      colNote.textContent = "layout.columns = the grid width inside the section (recommended: 12).";
+      body.appendChild(colNote);
+      body.appendChild(
+        mkNumberInput(
+          doc,
+          "layout.columns",
+          asInt(sec?.layout?.columns, 12),
+          (n) => patchSection({ layout: { ...(sec.layout ?? {}), columns: Math.max(1, Math.min(24, n)) } }),
+          { min: 1, max: 24 }
+        )
+      );
+
+      const cardsCount = Array.isArray(sec?.layout?.cards) ? sec.layout.cards.length : 0;
+      if (cardsCount !== 1) {
+        const warn = doc.createElement("div");
+        warn.className = "ga-settings-note";
+        warn.textContent =
+          cardsCount === 0
+            ? "This section has no container yet. Create one to add widgets."
+            : `This section has ${cardsCount} cards. Layout UI assumes 1 container per section.`;
+        body.appendChild(warn);
+        const fix = doc.createElement("div");
+        fix.className = "ga-le-toprow";
+        fix.appendChild(
+          mkBtn(
+            doc,
+            cardsCount === 0 ? "Create container" : "Flatten to 1 container",
+            () => {
+              if (cardsCount <= 1) ensureOneCardContainer(editSectionIdx!);
+              else {
+                if (!safeConfirm("Flatten all cards into one container?")) return;
+                flattenCardsIntoFirst(editSectionIdx!);
+              }
+              render();
+            },
+            "primary"
+          )
+        );
+        body.appendChild(fix);
+      }
+
+      body.appendChild(mkHr(doc));
+
+      const cols = Math.max(1, Math.min(24, asInt(sec?.layout?.columns, 12)));
+      const children = getSectionChildren(editSectionIdx!);
+
+      const addRow = doc.createElement("div");
+      addRow.className = "ga-le-toprow";
+      addRow.appendChild(mkBtn(doc, "Add graph", () => setSectionChildren(editSectionIdx!, [...children, defaultWidget(grainDefault, "chart", cols)]), "primary"));
+      addRow.appendChild(mkBtn(doc, "Add stat rows", () => setSectionChildren(editSectionIdx!, [...children, defaultWidget(grainDefault, "stat_list", cols)]), "primary"));
+      addRow.appendChild(mkBtn(doc, "Add box", () => setSectionChildren(editSectionIdx!, [...children, defaultWidget(grainDefault, "stat_value", cols)]), "primary"));
+      body.appendChild(addRow);
+
+      const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
+      const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
+
+      const patchWidgetAt = (wIdx: number, nextWidget: any) => {
+        const next = children.map((x, i) => (i === wIdx ? nextWidget : x));
+        setSectionChildren(editSectionIdx!, next);
+      };
+
+      const moveWidget = (wIdx: number, delta: -1 | 1) => {
+        const nextIdx = wIdx + delta;
+        if (nextIdx < 0 || nextIdx >= children.length) return;
+        const next = [...children];
+        const [picked] = next.splice(wIdx, 1);
+        next.splice(nextIdx, 0, picked);
+        setSectionChildren(editSectionIdx!, next);
+      };
+
+      const renderWidgetEditor = (w: any, wIdx: number): HTMLElement => {
+        const det = doc.createElement("details");
+        det.className = "ga-le-details";
+        det.open = false;
+        const sum = doc.createElement("summary");
+        sum.textContent = `${w.type} - ${w.title || w.widgetId}`;
+        det.appendChild(sum);
+
+        const wItem = doc.createElement("div");
+        wItem.className = "ga-le-widget";
+
+        const actions = doc.createElement("div");
+        actions.className = "ga-le-toprow";
+        actions.appendChild(mkBtn(doc, "Up", () => moveWidget(wIdx, -1)));
+        actions.appendChild(mkBtn(doc, "Down", () => moveWidget(wIdx, 1)));
+        actions.appendChild(
+          mkBtn(
+            doc,
+            "Delete",
+            () => {
+              if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
+              setSectionChildren(editSectionIdx!, children.filter((_, i) => i !== wIdx));
+            },
+            "danger"
+          )
+        );
+        wItem.appendChild(actions);
+
+        wItem.appendChild(mkTextInput(doc, "widgetId", String(w.widgetId ?? ""), (v) => patchWidgetAt(wIdx, { ...w, widgetId: v })));
+        wItem.appendChild(
+          mkSelect(doc, "type", String(w.type ?? "stat_list"), typeOpts, (v) => {
+            const nextWidget = defaultWidget(String(w.grain ?? grainDefault), v as any);
+            nextWidget.widgetId = w.widgetId;
+            nextWidget.title = w.title;
+            nextWidget.grain = w.grain ?? grainDefault;
+            nextWidget.placement = w.placement;
+            patchWidgetAt(wIdx, nextWidget as any);
+          })
+        );
+        wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidgetAt(wIdx, { ...w, title: v })));
+        wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidgetAt(wIdx, { ...w, grain: v })));
+
+        const p = (w.placement as any) ?? { x: 0, y: 0, w: cols, h: 3 };
+        const pGrid = doc.createElement("div");
+        pGrid.className = "ga-le-grid4";
+        pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, x: n } })));
+        pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, y: n } })));
+        pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, cols), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, w: n } })));
+        pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, h: n } })));
+        wItem.appendChild(pGrid);
+
+        const widgetGrain = String(w.grain ?? grainDefault);
+        const spec: any = w.spec ?? {};
+        const dims = allowedDimensionOptions(semantic, widgetGrain);
+        const meas = allowedMeasureOptions(semantic, widgetGrain);
+
+        if (w.type === "chart") {
+          wItem.appendChild(
+            mkSelect(
+              doc,
+              "chart.type",
+              String(spec.type ?? "bar"),
+              [
+                { value: "bar", label: "bar" },
+                { value: "line", label: "line" }
+              ],
+              (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, type: v } } as any)
+            )
+          );
+          wItem.appendChild(
+            mkSelect(doc, "x.dimension", String(spec?.x?.dimension ?? ""), dims, (v) =>
+              patchWidgetAt(wIdx, { ...w, spec: { ...spec, x: { ...(spec.x ?? {}), dimension: v } } } as any)
+            )
+          );
+          wItem.appendChild(
+            mkSelect(doc, "y.measure", String(spec?.y?.measure ?? ""), meas, (v) =>
+              patchWidgetAt(wIdx, { ...w, spec: { ...spec, y: { ...(spec.y ?? {}), measure: v } } } as any)
+            )
+          );
+          wItem.appendChild(
+            renderClickActionEditor(doc, sem, "actions.click (drilldown)", spec.actions, (nextActions) =>
+              patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } } as any)
+            )
+          );
+        } else if (w.type === "breakdown") {
+          wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, dimension: v } } as any)));
+          wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } } as any)));
+          wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, limit: n } } as any), { min: 1, max: 500 }));
+          wItem.appendChild(
+            renderClickActionEditor(doc, sem, "actions.click (drilldown)", spec.actions, (nextActions) =>
+              patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } } as any)
+            )
+          );
+        } else if (w.type === "stat_value") {
+          wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, label: v } } as any)));
+          wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } } as any)));
+          wItem.appendChild(
+            renderClickActionEditor(doc, sem, "actions.click (drilldown)", spec.actions, (nextActions) =>
+              patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } } as any)
+            )
+          );
+        } else if (w.type === "stat_list") {
+          const rows: any[] = Array.isArray(spec.rows) ? spec.rows : [];
+          const rowsBox = doc.createElement("div");
+          rowsBox.className = "ga-le-subbox";
+          const rh = doc.createElement("div");
+          rh.className = "ga-le-subhead";
+          rh.textContent = `Rows (${rows.length})`;
+          rowsBox.appendChild(rh);
+          rowsBox.appendChild(mkBtn(doc, "Add row", () => patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: [...rows, { label: "Row", measure: "" }] } } as any), "primary"));
+          rows.forEach((r, rIdx) => {
+            const rowItem = doc.createElement("div");
+            rowItem.className = "ga-le-item";
+            rowItem.appendChild(
+              mkTextInput(doc, "label", String(r.label ?? ""), (v) => {
+                const nextRows = rows.map((x, i) => (i === rIdx ? { ...x, label: v } : x));
+                patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } } as any);
+              })
+            );
+            rowItem.appendChild(
+              mkSelect(doc, "measure", String(r.measure ?? ""), meas, (v) => {
+                const nextRows = rows.map((x, i) => (i === rIdx ? { ...x, measure: v } : x));
+                patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } } as any);
+              })
+            );
+            rowItem.appendChild(
+              renderClickActionEditor(doc, sem, "row.actions.click (drilldown)", r.actions, (nextActions) => {
+                const nextRows = rows.map((x, i) => (i === rIdx ? { ...x, actions: nextActions } : x));
+                patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } } as any);
+              })
+            );
+            rowItem.appendChild(
+              mkBtn(
+                doc,
+                "Delete row",
+                () => {
+                  if (!safeConfirm("Delete this row?")) return;
+                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: rows.filter((_, i) => i !== rIdx) } } as any);
+                },
+                "danger"
+              )
+            );
+            rowsBox.appendChild(rowItem);
+          });
+          wItem.appendChild(rowsBox);
+        } else {
+          wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
+        }
+
+        wItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (spec)", spec, (nextSpec) => patchWidgetAt(wIdx, { ...w, spec: nextSpec } as any)));
+        det.appendChild(wItem);
+        return det;
+      };
+
+      const byCat: Record<string, number[]> = { graphs: [], statrows: [], boxes: [], other: [] };
+      children.forEach((w: any, i: number) => {
+        const t = String(w?.type ?? "");
+        if (t === "chart" || t === "breakdown") byCat.graphs.push(i);
+        else if (t === "stat_list") byCat.statrows.push(i);
+        else if (t === "stat_value" || t === "record_list" || t === "leader_list") byCat.boxes.push(i);
+        else byCat.other.push(i);
+      });
+
+      const renderCat = (title: string, idxs: number[]) => {
+        const det = doc.createElement("details");
+        det.className = "ga-le-details";
+        det.open = true;
+        const sum = doc.createElement("summary");
+        sum.textContent = `${title} (${idxs.length})`;
+        det.appendChild(sum);
+        const host = doc.createElement("div");
+        host.className = "ga-le-item";
+        idxs.forEach((i) => host.appendChild(renderWidgetEditor(children[i], i)));
+        det.appendChild(host);
+        body.appendChild(det);
+      };
+
+      renderCat("Graphs", byCat.graphs);
+      renderCat("Stat rows", byCat.statrows);
+      renderCat("Boxes", byCat.boxes);
+      if (byCat.other.length) renderCat("Other", byCat.other);
+
+      panel.appendChild(body);
+      overlay.appendChild(bg);
+      overlay.appendChild(panel);
+      wrap.appendChild(overlay);
+    }
+
+    void sem;
+    return true;
+  }
+
   const render = () => {
     root.innerHTML = "";
+    if (renderPanels()) return;
 
     const left = doc.createElement("div");
     left.className = "ga-le-left";
@@ -1264,9 +2098,10 @@ function defaultSection(): SectionDef {
   };
 }
 
-function defaultWidget(grain: string, type: WidgetDef["type"]): WidgetDef {
+function defaultWidget(grain: string, type: WidgetDef["type"], columns = 12): WidgetDef {
   const widgetId = `w_${type}_${Math.random().toString(36).slice(2, 7)}`;
-  const placement = { x: 0, y: 0, w: 12, h: 3 };
+  const w = Math.max(1, Math.min(24, asInt(columns, 12)));
+  const placement = { x: 0, y: 0, w, h: 3 };
   const base: any = { widgetId, type, title: type, grain, placement };
   if (type === "stat_value") base.spec = { label: "Value", measure: "" };
   else if (type === "stat_list") base.spec = { rows: [{ label: "Row", measure: "" }] };
