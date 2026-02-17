@@ -177,6 +177,12 @@ function resultKeyAny(row: any): GroupKey | null {
   return null;
 }
 
+function isFlawlessWinKeyAny(row: any): GroupKey | null {
+  const v = (row as any)?.isFlawlessWin;
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return null;
+}
+
 function teammateKeyAny(row: any): GroupKey | null {
   const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
   return v ? v : null;
@@ -296,6 +302,7 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     game_mode: gameModeKeyAny,
     mode_family: modeFamilyKeyAny,
     result: resultKeyAny,
+    is_flawless_win: isFlawlessWinKeyAny,
     game_length: (g: any) => {
       const n = (g as any).roundsCount;
       if (typeof n !== "number" || !Number.isFinite(n)) return null;

@@ -88,6 +88,14 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 5 }
     },
+    "is_flawless_win": {
+      "label": "Flawless win?",
+      "kind": "category",
+      "grain": "game",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 2 }
+    },
     "game_length": {
       "label": "Game length (rounds)",
       "kind": "category",
@@ -577,6 +585,69 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "min_player_self_rating_delta"
     },
+    "game_avg_score": {
+      "label": "Avg score (game)",
+      "unit": "points",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_avg_score_over_rounds",
+      "range": { "min": 0, "max": 5000 }
+    },
+    "game_5k_count": {
+      "label": "5k count (game)",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_5k_count",
+      "range": { "min": 0 }
+    },
+    "game_throw_count": {
+      "label": "Throw count (game)",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_throw_count",
+      "range": { "min": 0 }
+    },
+    "game_hit_rate": {
+      "label": "Hit rate (game)",
+      "unit": "percent",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_hit_rate",
+      "range": { "min": 0, "max": 1 }
+    },
+    "game_rating_delta": {
+      "label": "Rating delta (game)",
+      "unit": "rating_delta",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_rating_delta_value"
+    },
+    "game_duration": {
+      "label": "Game duration",
+      "unit": "duration",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_duration_seconds",
+      "range": { "min": 0 }
+    },
+    "game_final_health": {
+      "label": "Final health",
+      "unit": "int",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "game_final_health",
+      "range": { "min": 0 }
+    },
+    "flawless_wins_count": {
+      "label": "Flawless wins",
+      "unit": "count",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_flawless_wins",
+      "range": { "min": 0 }
+    },
     "longest_win_streak": {
       "label": "Longest win streak",
       "unit": "count",
@@ -896,6 +967,7 @@
 
   "units": {
     "count": { "format": "int" },
+    "int": { "format": "int" },
     "points": { "format": "float", "decimals": 1 },
     "percent": { "format": "percent", "decimals": 1 },
     "seconds": { "format": "float", "decimals": 1 },

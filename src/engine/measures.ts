@@ -536,6 +536,91 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
     return Number.isFinite(best) ? best : 0;
   },
 
+  game_avg_score_over_rounds: (rows) => {
+    // Per-game measure (expected to be used with groupBy=game_id). Require full score coverage.
+    for (const g of rows as any[]) {
+      const roundsCount = typeof g?.roundsCount === "number" ? g.roundsCount : 0;
+      const scoreSum = typeof g?.scoreSum === "number" ? g.scoreSum : null;
+      const scoreCount = typeof g?.scoreCount === "number" ? g.scoreCount : 0;
+      if (roundsCount <= 0) return NaN;
+      if (scoreSum === null || scoreCount !== roundsCount) return NaN;
+      return scoreCount > 0 ? scoreSum / scoreCount : NaN;
+    }
+    return NaN;
+  },
+
+  game_5k_count: (rows) => {
+    for (const g of rows as any[]) {
+      const v = g?.fivekCount;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+    return NaN;
+  },
+
+  game_throw_count: (rows) => {
+    for (const g of rows as any[]) {
+      const v = g?.throwCount;
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+    }
+    return NaN;
+  },
+
+  game_hit_rate: (rows) => {
+    for (const g of rows as any[]) {
+      const hit = typeof g?.hitCount === "number" ? g.hitCount : null;
+      const denom = typeof g?.hitDenom === "number" ? g.hitDenom : null;
+      const roundsCount = typeof g?.roundsCount === "number" ? g.roundsCount : 0;
+      if (hit === null || denom === null || denom <= 0) return NaN;
+      if (roundsCount > 0 && denom / roundsCount < 0.5) return NaN;
+      return hit / denom;
+    }
+    return NaN;
+  },
+
+  game_rating_delta_value: (rows) => {
+    for (const g of rows as any[]) {
+      const d = g?.ratingDelta;
+      if (typeof d === "number" && Number.isFinite(d)) return d;
+      const start = g?.player_self_startRating ?? g?.playerOneStartRating ?? g?.teamOneStartRating ?? null;
+      const end = g?.player_self_endRating ?? g?.playerOneEndRating ?? g?.teamOneEndRating ?? null;
+      if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end) && start !== 0 && end !== 0) return end - start;
+    }
+    return NaN;
+  },
+
+  game_duration_seconds: (rows) => {
+    for (const g of rows as any[]) {
+      const v = g?.gameDurationSeconds;
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+    }
+    return NaN;
+  },
+
+  game_final_health: (rows) => {
+    for (const g of rows as any[]) {
+      const v =
+        g?.player_self_finalHealth ??
+        g?.playerOneFinalHealth ??
+        g?.teamOneFinalHealth ??
+        g?.team1FinalHealth ??
+        null;
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
+    }
+    return NaN;
+  },
+
+  count_flawless_wins: (rows) => {
+    let k = 0;
+    for (const g of rows as any[]) if (g?.isFlawlessWin === true) k++;
+    return k;
+  },
+
+  // Record-style: return 1 for flawless win else NaN, to pick an example game via record_list if needed.
+  is_flawless_win_value: (rows) => {
+    for (const g of rows as any[]) return g?.isFlawlessWin === true ? 1 : NaN;
+    return NaN;
+  },
+
   count_win_game: (rows) => {
     let k = 0;
     for (const g of rows) if (getGameOutcome(g) === "win") k++;

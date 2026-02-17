@@ -563,6 +563,18 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
 
   const roundsCountByGame = new Map<string, number>();
   const movementByGame = new Map<string, string>();
+  const scoreSumByGame = new Map<string, number>();
+  const scoreCountByGame = new Map<string, number>();
+  const fivekCountByGame = new Map<string, number>();
+  const throwCountByGame = new Map<string, number>();
+  const hitCountByGame = new Map<string, number>();
+  const hitDenomByGame = new Map<string, number>();
+  const minStartByGame = new Map<string, number>();
+  const maxEndByGame = new Map<string, number>();
+  const minHealthAfterByGame = new Map<string, number>();
+  const maxHealthAfterByGame = new Map<string, number>();
+  const finalHealthAfterByGame = new Map<string, number>();
+  const finalHealthMarkerByGame = new Map<string, number>();
   for (const r of rounds as any[]) {
     const gid = typeof r?.gameId === "string" ? r.gameId : "";
     if (!gid) continue;
@@ -575,6 +587,53 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       movementByGame.set(gid, mv);
     } else if (cur !== mv && cur !== "mixed") {
       movementByGame.set(gid, "mixed");
+    }
+
+    // Round aggregates (for game-level records).
+    const score = typeof r?.player_self_score === "number" ? r.player_self_score : typeof r?.p1_score === "number" ? r.p1_score : typeof r?.score === "number" ? r.score : null;
+    if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+      scoreSumByGame.set(gid, (scoreSumByGame.get(gid) ?? 0) + score);
+      scoreCountByGame.set(gid, (scoreCountByGame.get(gid) ?? 0) + 1);
+      if (score >= 5000) fivekCountByGame.set(gid, (fivekCountByGame.get(gid) ?? 0) + 1);
+      if (score < 50) throwCountByGame.set(gid, (throwCountByGame.get(gid) ?? 0) + 1);
+    }
+
+    const truth = typeof r?.trueCountry === "string" ? r.trueCountry : typeof r?.true_country === "string" ? r.true_country : "";
+    const guess = typeof r?.player_self_guessCountry === "string" ? r.player_self_guessCountry : typeof r?.p1_guessCountry === "string" ? r.p1_guessCountry : typeof r?.guessCountry === "string" ? r.guessCountry : "";
+    if (truth && guess) {
+      hitDenomByGame.set(gid, (hitDenomByGame.get(gid) ?? 0) + 1);
+      if (guess === truth) hitCountByGame.set(gid, (hitCountByGame.get(gid) ?? 0) + 1);
+    }
+
+    const start = typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
+    const end = typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
+    if (start !== null) {
+      const curMin = minStartByGame.get(gid);
+      minStartByGame.set(gid, curMin === undefined ? start : Math.min(curMin, start));
+    }
+    if (end !== null) {
+      const curMax = maxEndByGame.get(gid);
+      maxEndByGame.set(gid, curMax === undefined ? end : Math.max(curMax, end));
+    }
+
+    const h = typeof r?.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
+    if (h !== null) {
+      const curMin = minHealthAfterByGame.get(gid);
+      const curMax = maxHealthAfterByGame.get(gid);
+      minHealthAfterByGame.set(gid, curMin === undefined ? h : Math.min(curMin, h));
+      maxHealthAfterByGame.set(gid, curMax === undefined ? h : Math.max(curMax, h));
+
+      const marker =
+        (typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ??
+        (typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ??
+        (typeof r?.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
+      if (marker !== null) {
+        const curMarker = finalHealthMarkerByGame.get(gid);
+        if (curMarker === undefined || marker >= curMarker) {
+          finalHealthMarkerByGame.set(gid, marker);
+          finalHealthAfterByGame.set(gid, h);
+        }
+      }
     }
   }
 
@@ -594,6 +653,33 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
     if (typeof out.movementType !== "string" || !out.movementType) {
       const mv = movementByGame.get(g.gameId);
       if (mv) out.movementType = mv;
+    }
+
+    const scoreSum = scoreSumByGame.get(g.gameId);
+    const scoreCount = scoreCountByGame.get(g.gameId);
+    if (typeof scoreSum === "number") out.scoreSum = scoreSum;
+    if (typeof scoreCount === "number") out.scoreCount = scoreCount;
+    out.fivekCount = fivekCountByGame.get(g.gameId) ?? 0;
+    out.throwCount = throwCountByGame.get(g.gameId) ?? 0;
+    out.hitCount = hitCountByGame.get(g.gameId) ?? 0;
+    out.hitDenom = hitDenomByGame.get(g.gameId) ?? 0;
+
+    const minStart = minStartByGame.get(g.gameId);
+    const maxEnd = maxEndByGame.get(g.gameId);
+    if (typeof minStart === "number" && typeof maxEnd === "number" && Number.isFinite(minStart) && Number.isFinite(maxEnd) && maxEnd > minStart) {
+      out.gameDurationSeconds = (maxEnd - minStart) / 1000;
+    }
+
+    // Flawless win (no damage taken) approximated via constant healthAfter across all rounds.
+    const minH = minHealthAfterByGame.get(g.gameId);
+    const maxH = maxHealthAfterByGame.get(g.gameId);
+    if (typeof minH === "number" && typeof maxH === "number" && Number.isFinite(minH) && Number.isFinite(maxH) && minH === maxH && maxH > 0) {
+      out.isFlawless = true;
+    }
+
+    const finalH = finalHealthAfterByGame.get(g.gameId);
+    if (typeof finalH === "number" && Number.isFinite(finalH) && finalH >= 0) {
+      out.player_self_finalHealth = finalH;
     }
 
     // Best-effort normalize teammateName for team duels.
@@ -631,6 +717,11 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
             ? out.playerOneVictory
             : undefined;
     if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
+
+    if (out.isFlawless === true) {
+      const res = String(out.result ?? "").trim().toLowerCase();
+      out.isFlawlessWin = res === "win" || res === "w" || res === "true";
+    }
 
     return out as GameFactRow;
   });

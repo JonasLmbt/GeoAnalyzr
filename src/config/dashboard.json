@@ -419,7 +419,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 16,
+              "h": 24,
               "card": {
                 "type": "composite",
                 "children": [
@@ -542,11 +542,162 @@
                     }
                   },
                   {
+                    "widgetId": "w_game_records_kpis",
+                    "type": "stat_list",
+                    "title": "Game Records (Counts)",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 6, "w": 12, "h": 2 },
+                    "spec": {
+                      "rows": [
+                        {
+                          "label": "Flawless wins (no damage taken)",
+                          "measure": "flawless_wins_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_flawless_win", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_game_records",
+                    "type": "record_list",
+                    "title": "Game Records",
+                    "grain": "game",
+                    "placement": { "x": 0, "y": 8, "w": 12, "h": 6 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "highest_avg_score_game",
+                          "label": "Highest avg score game",
+                          "metric": "game_avg_score",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "lowest_avg_score_game",
+                          "label": "Lowest avg score game",
+                          "metric": "game_avg_score",
+                          "groupBy": "game_id",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "most_5ks_in_game",
+                          "label": "Most 5ks in a game",
+                          "metric": "game_5k_count",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "most_throws_in_game",
+                          "label": "Most throws in a game",
+                          "metric": "game_throw_count",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "worst_hit_rate_game",
+                          "label": "Worst hit rate game",
+                          "metric": "game_hit_rate",
+                          "groupBy": "game_id",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "highest_rating_gain_game",
+                          "label": "Highest rating gain",
+                          "metric": "game_rating_delta",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "fastest_win_game",
+                          "label": "Fastest win game",
+                          "metric": "game_duration",
+                          "groupBy": "game_id",
+                          "extreme": "min",
+                          "filters": [{ "dimension": "result", "op": "eq", "value": "Win" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "slowest_win_game",
+                          "label": "Slowest win game",
+                          "metric": "game_duration",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "filters": [{ "dimension": "result", "op": "eq", "value": "Win" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "best_clutch_game",
+                          "label": "Best clutch (win with lowest health)",
+                          "metric": "game_final_health",
+                          "groupBy": "game_id",
+                          "extreme": "min",
+                          "filters": [{ "dimension": "result", "op": "eq", "value": "Win" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                            }
+                          }
+                        },
+                        {
+                          "id": "worst_throw_game",
+                          "label": "Worst throw (loss with highest health in last round)",
+                          "metric": "game_final_health",
+                          "groupBy": "game_id",
+                          "extreme": "max",
+                          "filters": [{ "dimension": "result", "op": "eq", "value": "Loss" }],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true,
+                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Loss" }]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
                     "widgetId": "w_personal_records",
                     "type": "record_list",
                     "title": "Personal Records",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 6, "w": 12, "h": 10 },
+                    "placement": { "x": 0, "y": 14, "w": 12, "h": 10 },
                     "spec": {
                       "records": [
                         {

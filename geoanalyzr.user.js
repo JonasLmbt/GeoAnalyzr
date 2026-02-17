@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.22
+// @version      2.0.23
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9452,6 +9452,11 @@ ${shapes}`.trim();
     if (typeof v === "boolean") return v ? "Win" : "Loss";
     return null;
   }
+  function isFlawlessWinKeyAny(row) {
+    const v = row?.isFlawlessWin;
+    if (typeof v === "boolean") return v ? "true" : "false";
+    return null;
+  }
   function teammateKeyAny(row) {
     const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
     return v ? v : null;
@@ -9561,6 +9566,7 @@ ${shapes}`.trim();
       game_mode: gameModeKeyAny,
       mode_family: modeFamilyKeyAny,
       result: resultKeyAny,
+      is_flawless_win: isFlawlessWinKeyAny,
       game_length: (g) => {
         const n = g.roundsCount;
         if (typeof n !== "number" || !Number.isFinite(n)) return null;
@@ -10076,6 +10082,18 @@ ${shapes}`.trim();
     const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
     const roundsCountByGame = /* @__PURE__ */ new Map();
     const movementByGame = /* @__PURE__ */ new Map();
+    const scoreSumByGame = /* @__PURE__ */ new Map();
+    const scoreCountByGame = /* @__PURE__ */ new Map();
+    const fivekCountByGame = /* @__PURE__ */ new Map();
+    const throwCountByGame = /* @__PURE__ */ new Map();
+    const hitCountByGame = /* @__PURE__ */ new Map();
+    const hitDenomByGame = /* @__PURE__ */ new Map();
+    const minStartByGame = /* @__PURE__ */ new Map();
+    const maxEndByGame = /* @__PURE__ */ new Map();
+    const minHealthAfterByGame = /* @__PURE__ */ new Map();
+    const maxHealthAfterByGame = /* @__PURE__ */ new Map();
+    const finalHealthAfterByGame = /* @__PURE__ */ new Map();
+    const finalHealthMarkerByGame = /* @__PURE__ */ new Map();
     for (const r of rounds) {
       const gid = typeof r?.gameId === "string" ? r.gameId : "";
       if (!gid) continue;
@@ -10087,6 +10105,44 @@ ${shapes}`.trim();
         movementByGame.set(gid, mv);
       } else if (cur !== mv && cur !== "mixed") {
         movementByGame.set(gid, "mixed");
+      }
+      const score = typeof r?.player_self_score === "number" ? r.player_self_score : typeof r?.p1_score === "number" ? r.p1_score : typeof r?.score === "number" ? r.score : null;
+      if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+        scoreSumByGame.set(gid, (scoreSumByGame.get(gid) ?? 0) + score);
+        scoreCountByGame.set(gid, (scoreCountByGame.get(gid) ?? 0) + 1);
+        if (score >= 5e3) fivekCountByGame.set(gid, (fivekCountByGame.get(gid) ?? 0) + 1);
+        if (score < 50) throwCountByGame.set(gid, (throwCountByGame.get(gid) ?? 0) + 1);
+      }
+      const truth = typeof r?.trueCountry === "string" ? r.trueCountry : typeof r?.true_country === "string" ? r.true_country : "";
+      const guess = typeof r?.player_self_guessCountry === "string" ? r.player_self_guessCountry : typeof r?.p1_guessCountry === "string" ? r.p1_guessCountry : typeof r?.guessCountry === "string" ? r.guessCountry : "";
+      if (truth && guess) {
+        hitDenomByGame.set(gid, (hitDenomByGame.get(gid) ?? 0) + 1);
+        if (guess === truth) hitCountByGame.set(gid, (hitCountByGame.get(gid) ?? 0) + 1);
+      }
+      const start = typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
+      const end = typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
+      if (start !== null) {
+        const curMin = minStartByGame.get(gid);
+        minStartByGame.set(gid, curMin === void 0 ? start : Math.min(curMin, start));
+      }
+      if (end !== null) {
+        const curMax = maxEndByGame.get(gid);
+        maxEndByGame.set(gid, curMax === void 0 ? end : Math.max(curMax, end));
+      }
+      const h = typeof r?.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
+      if (h !== null) {
+        const curMin = minHealthAfterByGame.get(gid);
+        const curMax = maxHealthAfterByGame.get(gid);
+        minHealthAfterByGame.set(gid, curMin === void 0 ? h : Math.min(curMin, h));
+        maxHealthAfterByGame.set(gid, curMax === void 0 ? h : Math.max(curMax, h));
+        const marker = (typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ?? (typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ?? (typeof r?.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
+        if (marker !== null) {
+          const curMarker = finalHealthMarkerByGame.get(gid);
+          if (curMarker === void 0 || marker >= curMarker) {
+            finalHealthMarkerByGame.set(gid, marker);
+            finalHealthAfterByGame.set(gid, h);
+          }
+        }
       }
     }
     const detailsByGame = /* @__PURE__ */ new Map();
@@ -10104,6 +10160,28 @@ ${shapes}`.trim();
       if (typeof out.movementType !== "string" || !out.movementType) {
         const mv = movementByGame.get(g.gameId);
         if (mv) out.movementType = mv;
+      }
+      const scoreSum = scoreSumByGame.get(g.gameId);
+      const scoreCount = scoreCountByGame.get(g.gameId);
+      if (typeof scoreSum === "number") out.scoreSum = scoreSum;
+      if (typeof scoreCount === "number") out.scoreCount = scoreCount;
+      out.fivekCount = fivekCountByGame.get(g.gameId) ?? 0;
+      out.throwCount = throwCountByGame.get(g.gameId) ?? 0;
+      out.hitCount = hitCountByGame.get(g.gameId) ?? 0;
+      out.hitDenom = hitDenomByGame.get(g.gameId) ?? 0;
+      const minStart = minStartByGame.get(g.gameId);
+      const maxEnd = maxEndByGame.get(g.gameId);
+      if (typeof minStart === "number" && typeof maxEnd === "number" && Number.isFinite(minStart) && Number.isFinite(maxEnd) && maxEnd > minStart) {
+        out.gameDurationSeconds = (maxEnd - minStart) / 1e3;
+      }
+      const minH = minHealthAfterByGame.get(g.gameId);
+      const maxH = maxHealthAfterByGame.get(g.gameId);
+      if (typeof minH === "number" && typeof maxH === "number" && Number.isFinite(minH) && Number.isFinite(maxH) && minH === maxH && maxH > 0) {
+        out.isFlawless = true;
+      }
+      const finalH = finalHealthAfterByGame.get(g.gameId);
+      if (typeof finalH === "number" && Number.isFinite(finalH) && finalH >= 0) {
+        out.player_self_finalHealth = finalH;
       }
       if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
@@ -10130,6 +10208,10 @@ ${shapes}`.trim();
       }
       const v = typeof out.player_self_victory === "boolean" ? out.player_self_victory : typeof out.teamOneVictory === "boolean" ? out.teamOneVictory : typeof out.playerOneVictory === "boolean" ? out.playerOneVictory : void 0;
       if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
+      if (out.isFlawless === true) {
+        const res = String(out.result ?? "").trim().toLowerCase();
+        out.isFlawlessWin = res === "win" || res === "w" || res === "true";
+      }
       return out;
     });
     return gamesRawCache;
@@ -31635,6 +31717,14 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 5 }
       },
+      is_flawless_win: {
+        label: "Flawless win?",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
       game_length: {
         label: "Game length (rounds)",
         kind: "category",
@@ -32119,6 +32209,69 @@ ${shapes}`.trim();
         allowedCharts: ["bar", "line"],
         formulaId: "min_player_self_rating_delta"
       },
+      game_avg_score: {
+        label: "Avg score (game)",
+        unit: "points",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_avg_score_over_rounds",
+        range: { min: 0, max: 5e3 }
+      },
+      game_5k_count: {
+        label: "5k count (game)",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_5k_count",
+        range: { min: 0 }
+      },
+      game_throw_count: {
+        label: "Throw count (game)",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_throw_count",
+        range: { min: 0 }
+      },
+      game_hit_rate: {
+        label: "Hit rate (game)",
+        unit: "percent",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_hit_rate",
+        range: { min: 0, max: 1 }
+      },
+      game_rating_delta: {
+        label: "Rating delta (game)",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_rating_delta_value"
+      },
+      game_duration: {
+        label: "Game duration",
+        unit: "duration",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_duration_seconds",
+        range: { min: 0 }
+      },
+      game_final_health: {
+        label: "Final health",
+        unit: "int",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_final_health",
+        range: { min: 0 }
+      },
+      flawless_wins_count: {
+        label: "Flawless wins",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_flawless_wins",
+        range: { min: 0 }
+      },
       longest_win_streak: {
         label: "Longest win streak",
         unit: "count",
@@ -32434,6 +32587,7 @@ ${shapes}`.trim();
     },
     units: {
       count: { format: "int" },
+      int: { format: "int" },
       points: { format: "float", decimals: 1 },
       percent: { format: "percent", decimals: 1 },
       seconds: { format: "float", decimals: 1 },
@@ -32975,7 +33129,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 16,
+                h: 24,
                 card: {
                   type: "composite",
                   children: [
@@ -33098,11 +33252,162 @@ ${shapes}`.trim();
                       }
                     },
                     {
+                      widgetId: "w_game_records_kpis",
+                      type: "stat_list",
+                      title: "Game Records (Counts)",
+                      grain: "game",
+                      placement: { x: 0, y: 6, w: 12, h: 2 },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Flawless wins (no damage taken)",
+                            measure: "flawless_wins_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_flawless_win", op: "eq", value: "true" }]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_game_records",
+                      type: "record_list",
+                      title: "Game Records",
+                      grain: "game",
+                      placement: { x: 0, y: 8, w: 12, h: 6 },
+                      spec: {
+                        records: [
+                          {
+                            id: "highest_avg_score_game",
+                            label: "Highest avg score game",
+                            metric: "game_avg_score",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "lowest_avg_score_game",
+                            label: "Lowest avg score game",
+                            metric: "game_avg_score",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_5ks_in_game",
+                            label: "Most 5ks in a game",
+                            metric: "game_5k_count",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_throws_in_game",
+                            label: "Most throws in a game",
+                            metric: "game_throw_count",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "worst_hit_rate_game",
+                            label: "Worst hit rate game",
+                            metric: "game_hit_rate",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "highest_rating_gain_game",
+                            label: "Highest rating gain",
+                            metric: "game_rating_delta",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "fastest_win_game",
+                            label: "Fastest win game",
+                            metric: "game_duration",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            filters: [{ dimension: "result", op: "eq", value: "Win" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_win_game",
+                            label: "Slowest win game",
+                            metric: "game_duration",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            filters: [{ dimension: "result", op: "eq", value: "Win" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "best_clutch_game",
+                            label: "Best clutch (win with lowest health)",
+                            metric: "game_final_health",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            filters: [{ dimension: "result", op: "eq", value: "Win" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_throw_game",
+                            label: "Worst throw (loss with highest health in last round)",
+                            metric: "game_final_health",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            filters: [{ dimension: "result", op: "eq", value: "Loss" }],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
                       widgetId: "w_personal_records",
                       type: "record_list",
                       title: "Personal Records",
                       grain: "round",
-                      placement: { x: 0, y: 6, w: 12, h: 10 },
+                      placement: { x: 0, y: 14, w: 12, h: 10 },
                       spec: {
                         records: [
                           {
@@ -39134,6 +39439,76 @@ ${shapes}`.trim();
         best = Math.min(best, end - start);
       }
       return Number.isFinite(best) ? best : 0;
+    },
+    game_avg_score_over_rounds: (rows) => {
+      for (const g of rows) {
+        const roundsCount = typeof g?.roundsCount === "number" ? g.roundsCount : 0;
+        const scoreSum = typeof g?.scoreSum === "number" ? g.scoreSum : null;
+        const scoreCount = typeof g?.scoreCount === "number" ? g.scoreCount : 0;
+        if (roundsCount <= 0) return NaN;
+        if (scoreSum === null || scoreCount !== roundsCount) return NaN;
+        return scoreCount > 0 ? scoreSum / scoreCount : NaN;
+      }
+      return NaN;
+    },
+    game_5k_count: (rows) => {
+      for (const g of rows) {
+        const v = g?.fivekCount;
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+      }
+      return NaN;
+    },
+    game_throw_count: (rows) => {
+      for (const g of rows) {
+        const v = g?.throwCount;
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+      }
+      return NaN;
+    },
+    game_hit_rate: (rows) => {
+      for (const g of rows) {
+        const hit = typeof g?.hitCount === "number" ? g.hitCount : null;
+        const denom = typeof g?.hitDenom === "number" ? g.hitDenom : null;
+        const roundsCount = typeof g?.roundsCount === "number" ? g.roundsCount : 0;
+        if (hit === null || denom === null || denom <= 0) return NaN;
+        if (roundsCount > 0 && denom / roundsCount < 0.5) return NaN;
+        return hit / denom;
+      }
+      return NaN;
+    },
+    game_rating_delta_value: (rows) => {
+      for (const g of rows) {
+        const d = g?.ratingDelta;
+        if (typeof d === "number" && Number.isFinite(d)) return d;
+        const start = g?.player_self_startRating ?? g?.playerOneStartRating ?? g?.teamOneStartRating ?? null;
+        const end = g?.player_self_endRating ?? g?.playerOneEndRating ?? g?.teamOneEndRating ?? null;
+        if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end) && start !== 0 && end !== 0) return end - start;
+      }
+      return NaN;
+    },
+    game_duration_seconds: (rows) => {
+      for (const g of rows) {
+        const v = g?.gameDurationSeconds;
+        if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+      }
+      return NaN;
+    },
+    game_final_health: (rows) => {
+      for (const g of rows) {
+        const v = g?.player_self_finalHealth ?? g?.playerOneFinalHealth ?? g?.teamOneFinalHealth ?? g?.team1FinalHealth ?? null;
+        if (typeof v === "number" && Number.isFinite(v) && v >= 0) return v;
+      }
+      return NaN;
+    },
+    count_flawless_wins: (rows) => {
+      let k = 0;
+      for (const g of rows) if (g?.isFlawlessWin === true) k++;
+      return k;
+    },
+    // Record-style: return 1 for flawless win else NaN, to pick an example game via record_list if needed.
+    is_flawless_win_value: (rows) => {
+      for (const g of rows) return g?.isFlawlessWin === true ? 1 : NaN;
+      return NaN;
     },
     count_win_game: (rows) => {
       let k = 0;
