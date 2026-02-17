@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.24
+// @version      2.0.25
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -32507,11 +32507,11 @@ ${shapes}`.trim();
         formulaId: "session_end_rating"
       },
       session_duration_minutes: {
-        label: "Session duration (min)",
-        unit: "float",
+        label: "Session duration",
+        unit: "duration",
         grain: "session",
         allowedCharts: ["bar", "line"],
-        formulaId: "session_duration_minutes",
+        formulaId: "session_duration_seconds",
         range: { min: 0 }
       },
       session_games_count: {
@@ -33129,7 +33129,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 24,
+                h: 30,
                 card: {
                   type: "composite",
                   children: [
@@ -33403,11 +33403,102 @@ ${shapes}`.trim();
                       }
                     },
                     {
+                      widgetId: "w_session_records",
+                      type: "record_list",
+                      title: "Session Records",
+                      grain: "session",
+                      placement: { x: 0, y: 14, w: 12, h: 6 },
+                      spec: {
+                        records: [
+                          {
+                            id: "highest_win_rate_session",
+                            label: "Highest win rate session",
+                            metric: "session_win_rate",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "highest_avg_score_session",
+                            label: "Highest avg score session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "lowest_avg_score_session",
+                            label: "Lowest avg score session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_games_session",
+                            label: "Most games session",
+                            metric: "session_games_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "longest_session_total_duration",
+                            label: "Longest session (total duration)",
+                            metric: "session_duration_minutes",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_5ks_session",
+                            label: "Most 5ks session",
+                            metric: "session_5k_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "best_hit_rate_session",
+                            label: "Best hit rate session",
+                            metric: "session_hit_rate",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "highest_throw_rate_session",
+                            label: "Highest throw rate session",
+                            metric: "session_throw_rate",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "biggest_rating_gain_in_session",
+                            label: "Biggest rating gain in a session",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "biggest_rating_loss_in_session",
+                            label: "Biggest rating loss in a session",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          }
+                        ]
+                      }
+                    },
+                    {
                       widgetId: "w_personal_records",
                       type: "record_list",
                       title: "Personal Records",
                       grain: "round",
-                      placement: { x: 0, y: 14, w: 12, h: 10 },
+                      placement: { x: 0, y: 20, w: 12, h: 10 },
                       spec: {
                         records: [
                           {

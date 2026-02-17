@@ -885,11 +885,11 @@
       "formulaId": "session_end_rating"
     },
     "session_duration_minutes": {
-      "label": "Session duration (min)",
-      "unit": "float",
+      "label": "Session duration",
+      "unit": "duration",
       "grain": "session",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "session_duration_minutes",
+      "formulaId": "session_duration_seconds",
       "range": { "min": 0 }
     },
     "session_games_count": {
