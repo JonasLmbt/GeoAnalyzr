@@ -335,7 +335,17 @@
                       "rows": [
                         { "label": "Current rating", "measure": "end_rating" },
                         { "label": "Trend", "measure": "rating_trend" },
-                        { "label": "Avg rating delta", "measure": "rating_delta_avg" }
+                        { "label": "Avg rating delta", "measure": "rating_delta_avg" },
+                        {
+                          "label": "Highest rating delta",
+                          "measure": "rating_delta_highest",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "label": "Lowest rating delta",
+                          "measure": "rating_delta_lowest",
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                        }
                       ]
                     }
                   },
@@ -353,7 +363,7 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
                         },
                         {
                           "id": "biggest_session_rating_loss",
@@ -361,7 +371,7 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
                         }
                       ]
                     }

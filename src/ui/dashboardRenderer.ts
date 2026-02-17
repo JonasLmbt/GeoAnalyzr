@@ -13,7 +13,7 @@ import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
 import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
 import { applyFilters } from "../engine/filters";
-import { buildSessionsFromRoundsForUi } from "../engine/queryEngine";
+import { getSessions } from "../engine/queryEngine";
 
 
 export async function renderDashboard(
@@ -392,7 +392,8 @@ export async function renderDashboard(
       const rootEl = content.closest(".ga-root") as HTMLElement | null;
       const raw = Number((rootEl as any)?.dataset?.gaSessionGapMinutes);
       const gap = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
-      localDatasets.session = buildSessionsFromRoundsForUi(localRounds as any[], gap);
+      // Rebuild sessions from locally filtered rounds *and* attach rating/outcome context from games.
+      localDatasets.session = await getSessions({ global: { spec: undefined, state: {}, sessionGapMinutes: gap } }, { rounds: localRounds as any[] });
     }
 
     activeDatasets = localDatasets;

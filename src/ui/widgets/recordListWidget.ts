@@ -123,11 +123,8 @@ function buildGroupExtreme(
       : bestKey;
 
   if (grain === "session" && metricId === "session_delta_rating") {
-    const row = bestRows[0] as any;
-    const start = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : null;
-    const end = typeof row?.sessionEndTs === "number" ? row.sessionEndTs : null;
-    const rangeText = start !== null && end !== null ? `${formatTs(start)} -> ${formatTs(end)}` : keyText;
-    return { keyText, valueText: `${metricText} (${rangeText})`, rows: bestRows, click: rec.actions?.click };
+    // Keep it compact; drilldown can show exact dates per game if needed.
+    return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
   }
 
   // Special-case a few legacy-style "Rounds" records so the value reads naturally.
@@ -321,7 +318,7 @@ export async function renderRecordListWidget(
     const click = result?.click;
     if (click?.type === "drilldown" && result) {
       line.style.cursor = "pointer";
-      line.addEventListener("click", () => {
+      line.addEventListener("click", async () => {
         const rowsFromPoint = click.filterFromPoint ? result.rows : (rowsAll as any[]);
         let sourceRows: any[] = rowsFromPoint as any[];
         let targetGrain: Grain = grain;
@@ -333,6 +330,17 @@ export async function renderRecordListWidget(
             if (Array.isArray(rr)) out.push(...rr);
           }
           sourceRows = out;
+        }
+        if (grain === "session" && click.target === "games") {
+          targetGrain = "game";
+          const ids = new Set<string>();
+          for (const s of sourceRows as any[]) {
+            const gIds = (s as any)?.gameIds;
+            if (!Array.isArray(gIds)) continue;
+            for (const id of gIds) if (typeof id === "string" && id) ids.add(id);
+          }
+          const allGames = await getGames({});
+          sourceRows = allGames.filter((g: any) => typeof g?.gameId === "string" && ids.has(g.gameId));
         }
         const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
         overlay.open(semantic, {

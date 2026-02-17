@@ -220,6 +220,44 @@ function attachClickIfAny(
           rows = [];
         }
       }
+
+      if (grain === "game" && (formulaId === "max_player_self_rating_delta" || formulaId === "min_player_self_rating_delta")) {
+        const getNum = (v: any): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+        const isTeam = (g: any): boolean => {
+          const mf = String(g?.modeFamily ?? g?.mode_family ?? "").trim().toLowerCase();
+          return g?.isTeamDuels === true || mf === "teamduels" || (mf.includes("team") && mf.includes("duel"));
+        };
+        const startRatingOf = (g: any): number | null => {
+          if (isTeam(g)) return getNum(g.teamOneStartRating) ?? getNum(g.player_self_startRating) ?? getNum(g.playerOneStartRating) ?? null;
+          return getNum(g.player_self_startRating) ?? getNum(g.playerOneStartRating) ?? null;
+        };
+        const endRatingOf = (g: any): number | null => {
+          if (isTeam(g)) return getNum(g.teamOneEndRating) ?? getNum(g.player_self_endRating) ?? getNum(g.playerOneEndRating) ?? null;
+          return getNum(g.player_self_endRating) ?? getNum(g.playerOneEndRating) ?? null;
+        };
+        const deltaOf = (g: any): number | null => {
+          const end = endRatingOf(g);
+          const start = startRatingOf(g) ?? end;
+          if (end === null || start === null) return null;
+          if (end === 0 || start === 0) return null;
+          return end - start;
+        };
+
+        let best = formulaId === "min_player_self_rating_delta" ? Infinity : -Infinity;
+        for (const g of rows as any[]) {
+          const d = deltaOf(g);
+          if (typeof d !== "number" || !Number.isFinite(d)) continue;
+          best = formulaId === "min_player_self_rating_delta" ? Math.min(best, d) : Math.max(best, d);
+        }
+        if (Number.isFinite(best)) {
+          const candidates = rows.filter((g) => deltaOf(g) === best);
+          const tsOf = (g: any): number => (typeof (g as any).ts === "number" ? (g as any).ts : typeof (g as any).playedAt === "number" ? (g as any).playedAt : 0);
+          const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
+          rows = bestOne ? [bestOne] : candidates;
+        } else {
+          rows = [];
+        }
+      }
       overlay.open(semantic, {
         title,
         target: click.target,

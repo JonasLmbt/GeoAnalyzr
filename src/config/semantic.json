@@ -523,6 +523,20 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_player_self_rating_delta"
     },
+    "rating_delta_highest": {
+      "label": "Highest rating delta",
+      "unit": "rating_delta",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_player_self_rating_delta"
+    },
+    "rating_delta_lowest": {
+      "label": "Lowest rating delta",
+      "unit": "rating_delta",
+      "grain": "game",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "min_player_self_rating_delta"
+    },
     "longest_win_streak": {
       "label": "Longest win streak",
       "unit": "count",

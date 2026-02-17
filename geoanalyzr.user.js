@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.18
+// @version      2.0.19
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9904,10 +9904,6 @@ ${shapes}`.trim();
       }
     }
     return sessions;
-  }
-  function buildSessionsFromRoundsForUi(rounds, gapMinutes) {
-    const mins = typeof gapMinutes === "number" && Number.isFinite(gapMinutes) ? Math.max(1, Math.min(360, Math.round(gapMinutes))) : 45;
-    return buildSessionsFromRounds(rounds, mins);
   }
   async function getSessionsRaw(gapMinutes) {
     if (sessionsRawCache) return sessionsRawCache;
@@ -32053,6 +32049,20 @@ ${shapes}`.trim();
         allowedCharts: ["bar", "line"],
         formulaId: "mean_player_self_rating_delta"
       },
+      rating_delta_highest: {
+        label: "Highest rating delta",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_player_self_rating_delta"
+      },
+      rating_delta_lowest: {
+        label: "Lowest rating delta",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "min_player_self_rating_delta"
+      },
       longest_win_streak: {
         label: "Longest win streak",
         unit: "count",
@@ -32808,7 +32818,17 @@ ${shapes}`.trim();
                         rows: [
                           { label: "Current rating", measure: "end_rating" },
                           { label: "Trend", measure: "rating_trend" },
-                          { label: "Avg rating delta", measure: "rating_delta_avg" }
+                          { label: "Avg rating delta", measure: "rating_delta_avg" },
+                          {
+                            label: "Highest rating delta",
+                            measure: "rating_delta_highest",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          },
+                          {
+                            label: "Lowest rating delta",
+                            measure: "rating_delta_lowest",
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                          }
                         ]
                       }
                     },
@@ -32826,7 +32846,7 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
                           },
                           {
                             id: "biggest_session_rating_loss",
@@ -32834,7 +32854,7 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
                           }
                         ]
                       }
@@ -38384,6 +38404,12 @@ ${shapes}`.trim();
     const v = pick(g, "teamOneEndRating") ?? pick(g, "player_self_endRating");
     return typeof v === "number" ? v : void 0;
   }
+  function getGameEffectiveStartRating(g) {
+    return getGameModeFamily(g) === "teamduels" ? getGameTeamStartRating(g) : getGameDuelStartRating(g);
+  }
+  function getGameEffectiveEndRating(g) {
+    return getGameModeFamily(g) === "teamduels" ? getGameTeamEndRating(g) : getGameDuelEndRating(g);
+  }
   function ratingModeForRows(rows) {
     for (const g of rows) {
       if (getGameModeFamily(g) === "duels") return "duel";
@@ -38662,12 +38688,29 @@ ${shapes}`.trim();
     trend_player_self_rating: (rows) => {
       const sorted = [...rows].sort((a, b) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
       if (sorted.length === 0) return 0;
-      const mode = ratingModeForRows(sorted);
-      const first = sorted[0];
-      const last = sorted[sorted.length - 1];
-      const start = mode === "duel" ? getGameDuelStartRating(first) ?? getGameDuelEndRating(first) : getGameTeamStartRating(first) ?? getGameTeamEndRating(first);
-      const end = mode === "duel" ? getGameDuelEndRating(last) : getGameTeamEndRating(last);
-      if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) return end - start;
+      const pickFiniteNonZero = (v) => typeof v === "number" && Number.isFinite(v) && v !== 0 ? v : null;
+      let firstRating = null;
+      for (const g of sorted) {
+        const start = pickFiniteNonZero(getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g));
+        const end = pickFiniteNonZero(getGameEffectiveEndRating(g) ?? getGameEffectiveStartRating(g));
+        const r = start ?? end;
+        if (r !== null) {
+          firstRating = r;
+          break;
+        }
+      }
+      let lastRating = null;
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const g = sorted[i];
+        const end = pickFiniteNonZero(getGameEffectiveEndRating(g) ?? getGameEffectiveStartRating(g));
+        const start = pickFiniteNonZero(getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g));
+        const r = end ?? start;
+        if (r !== null) {
+          lastRating = r;
+          break;
+        }
+      }
+      if (firstRating !== null && lastRating !== null) return lastRating - firstRating;
       return 0;
     },
     mean_player_self_rating_delta: (rows) => {
@@ -38682,6 +38725,30 @@ ${shapes}`.trim();
         }
       }
       return n ? sum / n : 0;
+    },
+    max_player_self_rating_delta: (rows) => {
+      let best = -Infinity;
+      for (const g of rows) {
+        const start = getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g);
+        const end = getGameEffectiveEndRating(g);
+        if (typeof start !== "number" || typeof end !== "number") continue;
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        if (start === 0 || end === 0) continue;
+        best = Math.max(best, end - start);
+      }
+      return Number.isFinite(best) ? best : 0;
+    },
+    min_player_self_rating_delta: (rows) => {
+      let best = Infinity;
+      for (const g of rows) {
+        const start = getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g);
+        const end = getGameEffectiveEndRating(g);
+        if (typeof start !== "number" || typeof end !== "number") continue;
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        if (start === 0 || end === 0) continue;
+        best = Math.min(best, end - start);
+      }
+      return Number.isFinite(best) ? best : 0;
     },
     count_win_game: (rows) => {
       let k = 0;
@@ -39118,6 +39185,42 @@ ${shapes}`.trim();
           }
           if (Number.isFinite(best)) {
             const candidates = filtered.filter((g) => opponentStartOf(g) === best);
+            const tsOf = (g) => typeof g.ts === "number" ? g.ts : typeof g.playedAt === "number" ? g.playedAt : 0;
+            const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
+            rows = bestOne ? [bestOne] : candidates;
+          } else {
+            rows = [];
+          }
+        }
+        if (grain === "game" && (formulaId === "max_player_self_rating_delta" || formulaId === "min_player_self_rating_delta")) {
+          const getNum = (v) => typeof v === "number" && Number.isFinite(v) ? v : null;
+          const isTeam = (g) => {
+            const mf = String(g?.modeFamily ?? g?.mode_family ?? "").trim().toLowerCase();
+            return g?.isTeamDuels === true || mf === "teamduels" || mf.includes("team") && mf.includes("duel");
+          };
+          const startRatingOf = (g) => {
+            if (isTeam(g)) return getNum(g.teamOneStartRating) ?? getNum(g.player_self_startRating) ?? getNum(g.playerOneStartRating) ?? null;
+            return getNum(g.player_self_startRating) ?? getNum(g.playerOneStartRating) ?? null;
+          };
+          const endRatingOf = (g) => {
+            if (isTeam(g)) return getNum(g.teamOneEndRating) ?? getNum(g.player_self_endRating) ?? getNum(g.playerOneEndRating) ?? null;
+            return getNum(g.player_self_endRating) ?? getNum(g.playerOneEndRating) ?? null;
+          };
+          const deltaOf = (g) => {
+            const end = endRatingOf(g);
+            const start = startRatingOf(g) ?? end;
+            if (end === null || start === null) return null;
+            if (end === 0 || start === 0) return null;
+            return end - start;
+          };
+          let best = formulaId === "min_player_self_rating_delta" ? Infinity : -Infinity;
+          for (const g of rows) {
+            const d = deltaOf(g);
+            if (typeof d !== "number" || !Number.isFinite(d)) continue;
+            best = formulaId === "min_player_self_rating_delta" ? Math.min(best, d) : Math.max(best, d);
+          }
+          if (Number.isFinite(best)) {
+            const candidates = rows.filter((g) => deltaOf(g) === best);
             const tsOf = (g) => typeof g.ts === "number" ? g.ts : typeof g.playedAt === "number" ? g.playedAt : 0;
             const bestOne = candidates.sort((a, b) => tsOf(b) - tsOf(a))[0];
             rows = bestOne ? [bestOne] : candidates;
@@ -40632,11 +40735,7 @@ ${shapes}`.trim();
     })();
     const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
     if (grain === "session" && metricId === "session_delta_rating") {
-      const row = bestRows[0];
-      const start = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : null;
-      const end = typeof row?.sessionEndTs === "number" ? row.sessionEndTs : null;
-      const rangeText = start !== null && end !== null ? `${formatTs(start)} -> ${formatTs(end)}` : keyText;
-      return { keyText, valueText: `${metricText} (${rangeText})`, rows: bestRows, click: rec.actions?.click };
+      return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
     }
     if (groupById === "game_id" && metricId === "rounds_count") {
       if (extreme === "max") {
@@ -40778,7 +40877,7 @@ ${shapes}`.trim();
       const click = result?.click;
       if (click?.type === "drilldown" && result) {
         line.style.cursor = "pointer";
-        line.addEventListener("click", () => {
+        line.addEventListener("click", async () => {
           const rowsFromPoint = click.filterFromPoint ? result.rows : rowsAll;
           let sourceRows = rowsFromPoint;
           let targetGrain = grain;
@@ -40790,6 +40889,17 @@ ${shapes}`.trim();
               if (Array.isArray(rr)) out.push(...rr);
             }
             sourceRows = out;
+          }
+          if (grain === "session" && click.target === "games") {
+            targetGrain = "game";
+            const ids = /* @__PURE__ */ new Set();
+            for (const s of sourceRows) {
+              const gIds = s?.gameIds;
+              if (!Array.isArray(gIds)) continue;
+              for (const id of gIds) if (typeof id === "string" && id) ids.add(id);
+            }
+            const allGames = await getGames({});
+            sourceRows = allGames.filter((g) => typeof g?.gameId === "string" && ids.has(g.gameId));
           }
           const filteredRows = applyFilters(sourceRows, click.extraFilters, targetGrain);
           overlay.open(semantic, {
@@ -41439,7 +41549,7 @@ ${shapes}`.trim();
         const rootEl = content.closest(".ga-root");
         const raw = Number(rootEl?.dataset?.gaSessionGapMinutes);
         const gap = Number.isFinite(raw) ? Math.max(1, Math.min(360, Math.round(raw))) : 45;
-        localDatasets.session = buildSessionsFromRoundsForUi(localRounds, gap);
+        localDatasets.session = await getSessions({ global: { spec: void 0, state: {}, sessionGapMinutes: gap } }, { rounds: localRounds });
       }
       activeDatasets = localDatasets;
       const grid = doc.createElement("div");

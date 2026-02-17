@@ -419,18 +419,32 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
     const sorted = [...rows].sort((a: any, b: any) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b?.ts) || Number(b?.playedAt) || 0));
     if (sorted.length === 0) return 0;
 
-    const mode = ratingModeForRows(sorted as any[]);
-    const first = sorted[0] as any;
-    const last = sorted[sorted.length - 1] as any;
-    const start =
-      mode === "duel"
-        ? (getGameDuelStartRating(first) ?? getGameDuelEndRating(first))
-        : (getGameTeamStartRating(first) ?? getGameTeamEndRating(first));
-    const end =
-      mode === "duel"
-        ? getGameDuelEndRating(last)
-        : getGameTeamEndRating(last);
-    if (typeof start === "number" && typeof end === "number" && Number.isFinite(start) && Number.isFinite(end)) return end - start;
+    const pickFiniteNonZero = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v !== 0 ? v : null);
+
+    let firstRating: number | null = null;
+    for (const g of sorted as any[]) {
+      const start = pickFiniteNonZero(getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g));
+      const end = pickFiniteNonZero(getGameEffectiveEndRating(g) ?? getGameEffectiveStartRating(g));
+      const r = start ?? end;
+      if (r !== null) {
+        firstRating = r;
+        break;
+      }
+    }
+
+    let lastRating: number | null = null;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const g = sorted[i] as any;
+      const end = pickFiniteNonZero(getGameEffectiveEndRating(g) ?? getGameEffectiveStartRating(g));
+      const start = pickFiniteNonZero(getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g));
+      const r = end ?? start;
+      if (r !== null) {
+        lastRating = r;
+        break;
+      }
+    }
+
+    if (firstRating !== null && lastRating !== null) return lastRating - firstRating;
     return 0;
   },
 
@@ -446,8 +460,34 @@ export const GAME_MEASURES_BY_FORMULA_ID: Record<string, (rows: GameFactRow[]) =
       }
     }
     return n ? sum / n : 0;
-  }
-  ,
+  },
+
+  max_player_self_rating_delta: (rows) => {
+    let best = -Infinity;
+    for (const g of rows as any[]) {
+      const start = getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g);
+      const end = getGameEffectiveEndRating(g);
+      if (typeof start !== "number" || typeof end !== "number") continue;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      if (start === 0 || end === 0) continue;
+      best = Math.max(best, end - start);
+    }
+    return Number.isFinite(best) ? best : 0;
+  },
+
+  min_player_self_rating_delta: (rows) => {
+    let best = Infinity;
+    for (const g of rows as any[]) {
+      const start = getGameEffectiveStartRating(g) ?? getGameEffectiveEndRating(g);
+      const end = getGameEffectiveEndRating(g);
+      if (typeof start !== "number" || typeof end !== "number") continue;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      if (start === 0 || end === 0) continue;
+      best = Math.min(best, end - start);
+    }
+    return Number.isFinite(best) ? best : 0;
+  },
+
   count_win_game: (rows) => {
     let k = 0;
     for (const g of rows) if (getGameOutcome(g) === "win") k++;
