@@ -10,6 +10,16 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function safePrompt(doc: Document, message: string, value?: string): string | null {
+  try {
+    const w = doc.defaultView as any;
+    const out = typeof w?.prompt === "function" ? w.prompt(message, value ?? "") : null;
+    return typeof out === "string" ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 function asInt(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) ? Math.round(n) : fallback;
@@ -26,6 +36,18 @@ function mkBtn(doc: Document, label: string, onClick: () => void, kind: "primary
     (ev as any).stopImmediatePropagation?.();
     onClick();
   });
+  return b;
+}
+
+function mkIconBtn(
+  doc: Document,
+  label: string,
+  onClick: () => void,
+  kind: "primary" | "danger" | "ghost" = "ghost"
+): HTMLButtonElement {
+  const b = mkBtn(doc, label, onClick, kind);
+  b.classList.add("ga-le-btn-icon");
+  b.setAttribute("aria-label", label);
   return b;
 }
 
@@ -221,6 +243,9 @@ export function renderLayoutEditor(args: {
   let focusCardIdx = 0;
   let focusWidgetIdx = 0;
   let scrollToId: string | null = null;
+  let editGlobalFilters = false;
+  let editDrilldownTarget: string | null = null;
+  let editDrilldownPreset: { target: string; presetId: string } | null = null;
 
   const grains = allowedGrains(semantic);
   const grainDefault = grains[0] ?? "round";
@@ -548,6 +573,35 @@ export function renderLayoutEditor(args: {
     });
   };
 
+  const mkModal = (title: string, onClose: () => void): { overlay: HTMLDivElement; body: HTMLDivElement } => {
+    const overlay = doc.createElement("div");
+    overlay.className = "ga-le-modal";
+
+    const bg = doc.createElement("div");
+    bg.className = "ga-le-modal-bg";
+    bg.addEventListener("click", onClose);
+
+    const panel = doc.createElement("div");
+    panel.className = "ga-le-modal-panel";
+
+    const header = doc.createElement("div");
+    header.className = "ga-le-modal-header";
+    const ht = doc.createElement("div");
+    ht.className = "ga-le-modal-title";
+    ht.textContent = title;
+    header.appendChild(ht);
+    header.appendChild(mkBtn(doc, "Close", onClose));
+
+    const body = doc.createElement("div");
+    body.className = "ga-le-modal-body";
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+    overlay.appendChild(bg);
+    overlay.appendChild(panel);
+    return { overlay, body };
+  };
+
   function renderPanels(): boolean {
     try {
       wrap.querySelector(".ga-le-modal")?.remove();
@@ -696,38 +750,77 @@ export function renderLayoutEditor(args: {
     );
     sectionsBox.appendChild(topRow);
 
-    sections.forEach((sec, idx) => {
-      const item = doc.createElement("div");
-      item.className = "ga-le-item";
+    const reorderSection = (fromIdx: number, toIdx: number) => {
+      if (fromIdx === toIdx) return;
+      if (fromIdx < 0 || fromIdx >= sections.length) return;
+      if (toIdx < 0 || toIdx >= sections.length) return;
+      const next = [...sections];
+      const [picked] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, picked);
+      setSections(next);
+    };
 
+    sections.forEach((sec, idx) => {
       const row = doc.createElement("div");
-      row.className = "ga-le-toprow";
-      const label = doc.createElement("div");
-      label.className = "ga-le-box-head";
-      label.textContent = `${sec?.title || sec?.id || "Untitled"} (${sec?.id || idx})`;
-      row.appendChild(label);
-      row.appendChild(
-        mkBtn(doc, "Up", () => {
-          if (idx <= 0) return;
+      row.className = "ga-le-compact-row";
+      row.draggable = true;
+      row.dataset.idx = String(idx);
+
+      row.addEventListener("dragstart", (ev) => {
+        try {
+          ev.dataTransfer?.setData("text/plain", String(idx));
+          ev.dataTransfer?.setDragImage?.(row, 12, 12);
+        } catch {
+          // ignore
+        }
+        row.classList.add("dragging");
+      });
+      row.addEventListener("dragend", () => row.classList.remove("dragging"));
+      row.addEventListener("dragover", (ev) => {
+        ev.preventDefault();
+        row.classList.add("dragover");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+      row.addEventListener("drop", (ev) => {
+        ev.preventDefault();
+        row.classList.remove("dragover");
+        const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+        const fromIdx = asInt(raw, -1);
+        if (fromIdx < 0) return;
+        reorderSection(fromIdx, idx);
+      });
+
+      const drag = doc.createElement("div");
+      drag.className = "ga-le-drag";
+      drag.title = "Drag to reorder";
+      drag.textContent = "⋮⋮";
+      row.appendChild(drag);
+
+      const title = doc.createElement("div");
+      title.className = "ga-le-compact-title";
+      title.textContent = sec?.title || sec?.id || "Untitled";
+      row.appendChild(title);
+
+      const meta = doc.createElement("div");
+      meta.className = "ga-le-compact-meta";
+      meta.textContent = String(sec?.id || "");
+      row.appendChild(meta);
+
+      const actions = doc.createElement("div");
+      actions.className = "ga-le-compact-actions";
+      actions.appendChild(
+        mkIconBtn(doc, "✎", () => {
+          const nextTitle = safePrompt(doc, "Rename section title:", String(sec?.title ?? ""));
+          if (nextTitle === null) return;
           const next = [...sections];
-          const [picked] = next.splice(idx, 1);
-          next.splice(idx - 1, 0, picked);
+          next[idx] = { ...sec, title: nextTitle };
           setSections(next);
         })
       );
-      row.appendChild(
-        mkBtn(doc, "Down", () => {
-          if (idx >= sections.length - 1) return;
-          const next = [...sections];
-          const [picked] = next.splice(idx, 1);
-          next.splice(idx + 1, 0, picked);
-          setSections(next);
-        })
-      );
-      row.appendChild(
-        mkBtn(
+      actions.appendChild(
+        mkIconBtn(
           doc,
-          "Delete",
+          "🗑",
           () => {
             if (!safeConfirm(`Delete section '${sec?.title || sec?.id}'?`)) return;
             const next = sections.filter((_, i) => i !== idx);
@@ -737,7 +830,7 @@ export function renderLayoutEditor(args: {
           "danger"
         )
       );
-      row.appendChild(
+      actions.appendChild(
         mkBtn(
           doc,
           "Edit",
@@ -748,16 +841,9 @@ export function renderLayoutEditor(args: {
           "primary"
         )
       );
-      item.appendChild(row);
+      row.appendChild(actions);
 
-      item.appendChild(
-        mkTextInput(doc, "title", String(sec?.title ?? ""), (v) => {
-          const next = [...sections];
-          next[idx] = { ...sec, title: v };
-          setSections(next);
-        })
-      );
-      sectionsBox.appendChild(item);
+      sectionsBox.appendChild(row);
     });
 
     panels.appendChild(sectionsBox);
@@ -770,7 +856,29 @@ export function renderLayoutEditor(args: {
     gfh.className = "ga-le-box-head";
     gfh.textContent = "Global filters";
     gfBox.appendChild(gfh);
-    renderGlobalFilters(gfBox);
+    const gfSummary = doc.createElement("div");
+    gfSummary.className = "ga-le-compact-row";
+    const gfCurrent: any = (draft.dashboard as any).globalFilters ?? {};
+    const gfControls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+    const gfLeft = doc.createElement("div");
+    gfLeft.className = "ga-le-compact-title";
+    gfLeft.textContent = `${gfCurrent?.enabled === false ? "Disabled" : "Enabled"} • ${gfControls.length} controls`;
+    gfSummary.appendChild(gfLeft);
+    const gfActions = doc.createElement("div");
+    gfActions.className = "ga-le-compact-actions";
+    gfActions.appendChild(
+      mkBtn(
+        doc,
+        "Edit",
+        () => {
+          editGlobalFilters = true;
+          render();
+        },
+        "primary"
+      )
+    );
+    gfSummary.appendChild(gfActions);
+    gfBox.appendChild(gfSummary);
     panels.appendChild(gfBox);
 
     panels.appendChild(mkHr(doc));
@@ -813,17 +921,50 @@ export function renderLayoutEditor(args: {
     targets.forEach((target) => {
       const preset = (sem as any)?.drilldownPresets?.[target] ?? {};
       const keys = Object.keys(preset?.columnsPresets ?? {});
+      const left = doc.createElement("div");
+      left.className = "ga-le-compact-title";
+      left.textContent = `${target} • ${keys.length} presets`;
+
+      const row = doc.createElement("div");
+      row.className = "ga-le-compact-row";
+      row.appendChild(left);
+      const actions = doc.createElement("div");
+      actions.className = "ga-le-compact-actions";
+      actions.appendChild(
+        mkBtn(
+          doc,
+          "Edit",
+          () => {
+            editDrilldownTarget = target;
+            render();
+          },
+          "primary"
+        )
+      );
+      row.appendChild(actions);
+      ddBox.appendChild(row);
+    });
+    panels.appendChild(ddBox);
+
+    if (editGlobalFilters) {
+      const { overlay, body } = mkModal("Global filters", () => {
+        editGlobalFilters = false;
+        render();
+      });
+      renderGlobalFilters(body);
+      wrap.appendChild(overlay);
+    }
+
+    if (editDrilldownTarget) {
+      const target = editDrilldownTarget;
+      const preset = (sem as any)?.drilldownPresets?.[target] ?? {};
+      const keys = Object.keys(preset?.columnsPresets ?? {});
       const override = ddOverride?.[target] ?? {};
-
-      const det = doc.createElement("details");
-      det.className = "ga-le-details";
-      det.open = false;
-      const sum = doc.createElement("summary");
-      sum.textContent = `${target} (${keys.length} presets)`;
-      det.appendChild(sum);
-
-      const body = doc.createElement("div");
-      body.className = "ga-le-item";
+      const { overlay, body } = mkModal(`Drilldown presets: ${target}`, () => {
+        editDrilldownTarget = null;
+        editDrilldownPreset = null;
+        render();
+      });
 
       if (override && Object.keys(override).length) {
         const top = doc.createElement("div");
@@ -874,113 +1015,219 @@ export function renderLayoutEditor(args: {
 
       const mergedPresets: any = preset?.columnsPresets ?? {};
       for (const [pid, cols] of Object.entries(mergedPresets)) {
-        const pDet = doc.createElement("details");
-        pDet.className = "ga-le-details";
-        pDet.open = false;
-        const ps = doc.createElement("summary");
-        ps.textContent = `${pid} (${Array.isArray(cols) ? cols.length : 0} columns)`;
-        pDet.appendChild(ps);
-
-        const pBody = doc.createElement("div");
-        pBody.className = "ga-le-item";
-
         const isEditable = !!override?.columnsPresets?.[pid];
+
+        const row = doc.createElement("div");
+        row.className = "ga-le-compact-row";
+        const left = doc.createElement("div");
+        left.className = "ga-le-compact-title";
+        left.textContent = `${pid} • ${Array.isArray(cols) ? cols.length : 0} cols`;
+        row.appendChild(left);
+
+        const actions = doc.createElement("div");
+        actions.className = "ga-le-compact-actions";
         if (!isEditable) {
-          const n = doc.createElement("div");
-          n.className = "ga-settings-note";
-          n.textContent = "Built-in preset from semantic.json (read-only). Create a new preset to customize.";
-          pBody.appendChild(n);
+          actions.appendChild(
+            mkBtn(doc, "Customize", () => {
+              const colsNext = { ...(override?.columnsPresets ?? {}) };
+              colsNext[pid] = cloneJson(cols as any[]);
+              setDdOverride(target, { ...override, columnsPresets: colsNext });
+              editDrilldownPreset = { target, presetId: pid };
+              render();
+            })
+          );
         } else {
-          const top = doc.createElement("div");
-          top.className = "ga-le-toprow";
-          top.appendChild(
-            mkBtn(
+          actions.appendChild(
+            mkIconBtn(
               doc,
-              "Delete preset",
+              "🗑",
               () => {
                 if (!safeConfirm(`Delete preset '${pid}'?`)) return;
                 const colsNext = { ...(override?.columnsPresets ?? {}) };
                 delete colsNext[pid];
                 setDdOverride(target, { ...override, columnsPresets: colsNext });
+                if (editDrilldownPreset?.target === target && editDrilldownPreset?.presetId === pid) editDrilldownPreset = null;
+                render();
               },
               "danger"
             )
           );
-          pBody.appendChild(top);
         }
-
-        const arr: any[] = Array.isArray(cols) ? (cols as any[]) : [];
-        const addColRow = doc.createElement("div");
-        addColRow.className = "ga-le-toprow";
-        addColRow.appendChild(
+        actions.appendChild(
           mkBtn(
             doc,
-            "Add column",
+            "Edit",
             () => {
-              if (!isEditable) return;
-              const colsNext = { ...(override?.columnsPresets ?? {}) };
-              const nextArr = Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : [];
-              nextArr.push({ key: "", label: "", sortable: false });
-              colsNext[pid] = nextArr;
-              setDdOverride(target, { ...override, columnsPresets: colsNext });
+              if (!isEditable) {
+                const colsNext = { ...(override?.columnsPresets ?? {}) };
+                colsNext[pid] = cloneJson(cols as any[]);
+                setDdOverride(target, { ...override, columnsPresets: colsNext });
+              }
+              editDrilldownPreset = { target, presetId: pid };
+              render();
             },
             "primary"
           )
         );
-        pBody.appendChild(addColRow);
-
-        const patchColumn = (cIdx: number, nextCol: any) => {
-          if (!isEditable) return;
-          const colsNext = { ...(override?.columnsPresets ?? {}) };
-          const nextArr = Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : [];
-          nextArr[cIdx] = nextCol;
-          colsNext[pid] = nextArr;
-          setDdOverride(target, { ...override, columnsPresets: colsNext });
-        };
-        const deleteColumn = (cIdx: number) => {
-          if (!isEditable) return;
-          const colsNext = { ...(override?.columnsPresets ?? {}) };
-          const nextArr = (Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : []).filter((_: any, i: number) => i !== cIdx);
-          colsNext[pid] = nextArr;
-          setDdOverride(target, { ...override, columnsPresets: colsNext });
-        };
-        const moveColumn = (cIdx: number, delta: -1 | 1) => {
-          if (!isEditable) return;
-          const colsNext = { ...(override?.columnsPresets ?? {}) };
-          const nextArr = Array.isArray(colsNext[pid]) ? [...colsNext[pid]] : [];
-          const nextIdx = cIdx + delta;
-          if (nextIdx < 0 || nextIdx >= nextArr.length) return;
-          const [picked] = nextArr.splice(cIdx, 1);
-          nextArr.splice(nextIdx, 0, picked);
-          colsNext[pid] = nextArr;
-          setDdOverride(target, { ...override, columnsPresets: colsNext });
-        };
-
-        arr.forEach((c: any, cIdx: number) => {
-          const colItem = doc.createElement("div");
-          colItem.className = "ga-le-item";
-          const top = doc.createElement("div");
-          top.className = "ga-le-toprow";
-          top.appendChild(mkBtn(doc, "Up", () => moveColumn(cIdx, -1)));
-          top.appendChild(mkBtn(doc, "Down", () => moveColumn(cIdx, 1)));
-          top.appendChild(mkBtn(doc, "Delete", () => deleteColumn(cIdx), "danger"));
-          colItem.appendChild(top);
-          colItem.appendChild(mkTextInput(doc, "key", String(c?.key ?? ""), (v) => patchColumn(cIdx, { ...c, key: v })));
-          colItem.appendChild(mkTextInput(doc, "label", String(c?.label ?? ""), (v) => patchColumn(cIdx, { ...c, label: v })));
-          colItem.appendChild(mkToggle(doc, "sortable", !!c?.sortable, (v) => patchColumn(cIdx, { ...c, sortable: v })));
-          colItem.appendChild(mkToggle(doc, "colored", !!c?.colored, (v) => patchColumn(cIdx, { ...c, colored: v })));
-          colItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (column)", c, (nextCol) => patchColumn(cIdx, nextCol)));
-          pBody.appendChild(colItem);
-        });
-
-        pDet.appendChild(pBody);
-        body.appendChild(pDet);
+        row.appendChild(actions);
+        body.appendChild(row);
       }
 
-      det.appendChild(body);
-      ddBox.appendChild(det);
-    });
-    panels.appendChild(ddBox);
+      wrap.appendChild(overlay);
+    }
+
+    if (editDrilldownPreset) {
+      const { target, presetId } = editDrilldownPreset;
+      const semPreset = (sem as any)?.drilldownPresets?.[target] ?? {};
+      const mergedCols = semPreset?.columnsPresets?.[presetId] ?? [];
+      const override = ddOverride?.[target] ?? {};
+      const isEditable = !!override?.columnsPresets?.[presetId];
+      if (!isEditable) {
+        // Shouldn't happen (we auto-customize before opening), but guard anyway.
+        editDrilldownPreset = null;
+      } else {
+        const colsArr: any[] = Array.isArray(mergedCols) ? (mergedCols as any[]) : [];
+        const { overlay, body } = mkModal(`Edit columns: ${target}.${presetId}`, () => {
+          editDrilldownPreset = null;
+          render();
+        });
+
+        const colsNextBase = () => ({ ...(override?.columnsPresets ?? {}) });
+        const setColsForPreset = (nextArr: any[]) => {
+          const colsNext = colsNextBase();
+          colsNext[presetId] = nextArr;
+          setDdOverride(target, { ...override, columnsPresets: colsNext });
+        };
+
+        const addRow = doc.createElement("div");
+        addRow.className = "ga-le-toprow";
+        addRow.appendChild(
+          mkBtn(
+            doc,
+            "Add column",
+            () => setColsForPreset([...colsArr, { key: "", label: "", sortable: false }]),
+            "primary"
+          )
+        );
+        body.appendChild(addRow);
+
+        const reorder = (fromIdx: number, toIdx: number) => {
+          if (fromIdx === toIdx) return;
+          if (fromIdx < 0 || toIdx < 0) return;
+          if (fromIdx >= colsArr.length || toIdx >= colsArr.length) return;
+          const next = [...colsArr];
+          const [picked] = next.splice(fromIdx, 1);
+          next.splice(toIdx, 0, picked);
+          setColsForPreset(next);
+        };
+
+        colsArr.forEach((c: any, cIdx: number) => {
+          const row = doc.createElement("div");
+          row.className = "ga-le-compact-row ga-le-compact-row-col";
+          row.draggable = true;
+          row.addEventListener("dragstart", (ev) => {
+            try {
+              ev.dataTransfer?.setData("text/plain", String(cIdx));
+              ev.dataTransfer?.setDragImage?.(row, 12, 12);
+            } catch {
+              // ignore
+            }
+            row.classList.add("dragging");
+          });
+          row.addEventListener("dragend", () => row.classList.remove("dragging"));
+          row.addEventListener("dragover", (ev) => {
+            ev.preventDefault();
+            row.classList.add("dragover");
+          });
+          row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+          row.addEventListener("drop", (ev) => {
+            ev.preventDefault();
+            row.classList.remove("dragover");
+            const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+            reorder(asInt(raw, -1), cIdx);
+          });
+
+          const drag = doc.createElement("div");
+          drag.className = "ga-le-drag";
+          drag.title = "Drag to reorder";
+          drag.textContent = "⋮⋮";
+          row.appendChild(drag);
+
+          const key = doc.createElement("input");
+          key.type = "text";
+          key.className = "ga-le-inline-input ga-le-col-key";
+          key.placeholder = "key";
+          key.value = String(c?.key ?? "");
+          key.addEventListener("change", () => {
+            const next = [...colsArr];
+            next[cIdx] = { ...c, key: key.value };
+            setColsForPreset(next);
+          });
+          row.appendChild(key);
+
+          const label = doc.createElement("input");
+          label.type = "text";
+          label.className = "ga-le-inline-input ga-le-col-label";
+          label.placeholder = "label";
+          label.value = String(c?.label ?? "");
+          label.addEventListener("change", () => {
+            const next = [...colsArr];
+            next[cIdx] = { ...c, label: label.value };
+            setColsForPreset(next);
+          });
+          row.appendChild(label);
+
+          const mkChk = (txt: string, checked: boolean, onChange: (v: boolean) => void) => {
+            const w = doc.createElement("label");
+            w.className = "ga-le-compact-chk";
+            const cb = doc.createElement("input");
+            cb.type = "checkbox";
+            cb.checked = checked;
+            cb.addEventListener("change", () => onChange(cb.checked));
+            const s = doc.createElement("span");
+            s.textContent = txt;
+            w.appendChild(cb);
+            w.appendChild(s);
+            return w;
+          };
+
+          row.appendChild(
+            mkChk("sort", !!c?.sortable, (v) => {
+              const next = [...colsArr];
+              next[cIdx] = { ...c, sortable: v };
+              setColsForPreset(next);
+            })
+          );
+          row.appendChild(
+            mkChk("color", !!c?.colored, (v) => {
+              const next = [...colsArr];
+              next[cIdx] = { ...c, colored: v };
+              setColsForPreset(next);
+            })
+          );
+
+          row.appendChild(
+            mkIconBtn(
+              doc,
+              "🗑",
+              () => setColsForPreset(colsArr.filter((_: any, i: number) => i !== cIdx)),
+              "danger"
+            )
+          );
+
+          body.appendChild(row);
+
+          const adv = renderAdvancedJson(doc, "Advanced JSON (column)", c, (nextCol) => {
+            const next = [...colsArr];
+            next[cIdx] = nextCol;
+            setColsForPreset(next);
+          });
+          body.appendChild(adv);
+        });
+
+        wrap.appendChild(overlay);
+      }
+    }
 
     // Section modal
     if (editSectionIdx !== null && sections[editSectionIdx]) {

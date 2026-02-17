@@ -116,14 +116,19 @@ function dayKeysBetween(fromTs: number, toTs: number): string[] {
   return out;
 }
 
-function chunkKeys(keys: string[], maxPoints: number): Array<{ label: string; keys: string[] }> {
+function chunkKeys(
+  keys: string[],
+  maxPoints: number,
+  labelMode: "range" | "start" = "range"
+): Array<{ label: string; keys: string[] }> {
   if (!Number.isFinite(maxPoints) || maxPoints <= 1) return keys.map((k) => ({ label: k, keys: [k] }));
   if (keys.length <= maxPoints) return keys.map((k) => ({ label: k, keys: [k] }));
   const bucket = Math.ceil(keys.length / maxPoints);
   const out: Array<{ label: string; keys: string[] }> = [];
   for (let i = 0; i < keys.length; i += bucket) {
     const slice = keys.slice(i, i + bucket);
-    const label = slice.length <= 1 ? slice[0] : `${slice[0]}..${slice[slice.length - 1]}`;
+    const label =
+      slice.length <= 1 ? slice[0] : labelMode === "start" ? slice[0] : `${slice[0]}..${slice[slice.length - 1]}`;
     out.push({ label, keys: slice });
   }
   return out;
@@ -679,7 +684,7 @@ export async function renderChartWidget(
           : typeof limitOverride === "number" && Number.isFinite(limitOverride)
             ? Math.floor(limitOverride)
             : 0;
-      const buckets = maxPoints > 1 ? chunkKeys(keys, maxPoints) : keys.map((k) => ({ label: k, keys: [k] }));
+      const buckets = maxPoints > 1 ? chunkKeys(keys, maxPoints, "start") : keys.map((k) => ({ label: k, keys: [k] }));
 
       if (activeAcc === "to_date") {
         const cum: any[] = [];
@@ -1030,12 +1035,9 @@ export async function renderChartWidget(
 
         if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
           const tx = doc.createElementNS(svg.namespaceURI, "text");
-          const isFirst = i === 0;
-          const isLast = i === data.length - 1;
-          const labelX = isFirst ? PAD_L + 2 : isLast ? PAD_L + innerW - 2 : x + barW / 2;
-          tx.setAttribute("x", String(labelX));
+          tx.setAttribute("x", String(x + barW / 2));
           tx.setAttribute("y", String(PAD_T + innerH + 16));
-          tx.setAttribute("text-anchor", isFirst ? "start" : isLast ? "end" : "middle");
+          tx.setAttribute("text-anchor", "middle");
           tx.setAttribute("font-size", "10");
           tx.setAttribute("fill", "var(--ga-axis-text)");
           tx.setAttribute("opacity", "0.95");

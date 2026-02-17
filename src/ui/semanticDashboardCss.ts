@@ -764,6 +764,16 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size: 12px;
       height: 32px;
     }
+    .ga-le-btn-icon {
+      width: 32px;
+      min-width: 32px;
+      padding: 0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 13px;
+      line-height: 1;
+    }
     .ga-le-btn-primary { border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
     .ga-le-btn-danger { border-color: color-mix(in srgb, var(--ga-danger) 60%, var(--ga-control-border)); }
     .ga-le-field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
@@ -800,6 +810,36 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-le-box { background: var(--ga-card-2); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-bottom:10px; }
     .ga-le-box-head { font-weight: 750; font-size: 12px; color: var(--ga-text); margin-bottom: 8px; }
     .ga-le-item { background: color-mix(in srgb, var(--ga-card) 65%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-compact-row {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      background: color-mix(in srgb, var(--ga-card) 65%, transparent);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:8px 10px;
+      margin-top:8px;
+    }
+    .ga-le-compact-row.dragover { outline: 2px solid color-mix(in srgb, var(--ga-accent2) 55%, transparent); }
+    .ga-le-drag {
+      width: 18px;
+      min-width: 18px;
+      opacity: 0.8;
+      cursor: grab;
+      user-select:none;
+      text-align:center;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+    .ga-le-compact-title { font-weight: 750; font-size: 12px; color: var(--ga-text); flex: 1 1 auto; min-width: 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ga-le-compact-meta { font-size: 11px; color: var(--ga-text-muted); opacity: 0.9; flex: 0 0 auto; }
+    .ga-le-compact-actions { display:flex; gap:8px; align-items:center; flex: 0 0 auto; }
+    .ga-le-compact-row-col { justify-content:flex-start; }
+    .ga-le-col-key { min-width: 160px; width: 160px; }
+    .ga-le-col-label { min-width: 220px; width: min(420px, 42vw); }
+    .ga-le-compact-chk { display:flex; align-items:center; gap:6px; font-size:11px; color: var(--ga-text-muted); user-select:none; }
+    .ga-le-compact-chk input { width: 14px; height: 14px; }
     .ga-le-grid4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px; }
     @media (max-width: 820px) { .ga-le-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     .ga-le-subbox { background: color-mix(in srgb, var(--ga-card) 55%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }

@@ -70,6 +70,8 @@
       "required": ["rounds", "players"],
       "properties": {
         "rounds": { "$ref": "#/$defs/drilldownPresetDef" },
+        "games": { "$ref": "#/$defs/drilldownPresetDef" },
+        "sessions": { "$ref": "#/$defs/drilldownPresetDef" },
         "players": { "$ref": "#/$defs/drilldownPresetDef" }
       }
     },

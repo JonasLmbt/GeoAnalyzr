@@ -828,6 +828,22 @@
       },
       "defaultPreset": "roundMode"
     },
+    "games": {
+      "entity": "game",
+      "columnsPresets": {
+        "gameMode": [
+          { "key": "ts", "label": "Date", "sortable": true },
+          { "key": "modeFamily", "label": "Game Mode", "sortable": true },
+          { "key": "movementType", "label": "Movement", "sortable": true },
+          { "key": "roundsCount", "label": "Game Length", "sortable": true },
+          { "key": "result", "label": "Result", "sortable": true, "colored": true },
+          { "key": "endRating", "label": "End Rating", "sortable": true },
+          { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
+          { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } }
+        ]
+      },
+      "defaultPreset": "gameMode"
+    },
     "players": {
       "entity": "game",
       "columnsPresets": {
