@@ -390,6 +390,17 @@ function triggerDownload(doc: Document, blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function readCssVar(doc: Document, name: string): string | null {
+  const root = doc.querySelector(".ga-root") as HTMLElement | null;
+  const cs = root ? doc.defaultView?.getComputedStyle(root) : null;
+  const v = cs?.getPropertyValue(name)?.trim() ?? "";
+  return v.length > 0 ? v : null;
+}
+
+function resolveVarsInString(value: string, vars: Map<string, string>): string {
+  return value.replace(/var\(\s*(--[a-zA-Z0-9_-]+)\s*\)/g, (m, varName) => vars.get(String(varName)) ?? m);
+}
+
 function serializeSvg(svg: SVGSVGElement): { text: string; width: number; height: number } {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -399,6 +410,45 @@ function serializeSvg(svg: SVGSVGElement): { text: string; width: number; height
   const height = Number.isFinite(vb[3]) && vb[3] > 0 ? vb[3] : 360;
   clone.setAttribute("width", String(width));
   clone.setAttribute("height", String(height));
+
+  // When rendering the SVG standalone (as <img> for PNG export), CSS variables from the page won't exist.
+  // Inline the handful of variables used by charts so colors don't collapse to black/transparent.
+  const doc = svg.ownerDocument;
+  const vars = new Map<string, string>();
+  const varNames = ["--ga-axis-color", "--ga-axis-grid", "--ga-axis-text", "--ga-graph-color", "--ga-surface", "--ga-card-2"];
+  for (const n of varNames) {
+    const v = readCssVar(doc, n);
+    if (v) vars.set(n, v);
+  }
+  for (const [k, v] of vars.entries()) clone.style.setProperty(k, v);
+
+  // Add a background so PNGs aren't saved as transparent (often appearing as black in viewers).
+  const bgSource =
+    (svg.closest(".ga-chart-box") as HTMLElement | null) ??
+    (svg.closest(".ga-widget") as HTMLElement | null) ??
+    (doc.querySelector(".ga-root") as HTMLElement | null);
+  const bg = bgSource ? doc.defaultView?.getComputedStyle(bgSource)?.backgroundColor?.trim() : "";
+  const bgFill = bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent" ? bg : vars.get("--ga-surface") ?? vars.get("--ga-card-2") ?? "#0f111a";
+  const rect = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("x", "0");
+  rect.setAttribute("y", "0");
+  rect.setAttribute("width", String(width));
+  rect.setAttribute("height", String(height));
+  rect.setAttribute("fill", bgFill);
+  clone.insertBefore(rect, clone.firstChild);
+
+  // Resolve var(--*) in presentation attributes and inline style attributes for maximum compatibility.
+  const nodes = clone.querySelectorAll("*");
+  for (const el of Array.from(nodes)) {
+    for (const attr of ["fill", "stroke", "stop-color", "color"]) {
+      const val = el.getAttribute(attr);
+      if (!val || !val.includes("var(")) continue;
+      el.setAttribute(attr, resolveVarsInString(val, vars));
+    }
+    const style = el.getAttribute("style");
+    if (style && style.includes("var(")) el.setAttribute("style", resolveVarsInString(style, vars));
+  }
+
   return { text: new XMLSerializer().serializeToString(clone), width, height };
 }
 

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.14
+// @version      2.0.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -39302,6 +39302,15 @@ ${shapes}`.trim();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1e3);
   }
+  function readCssVar(doc, name) {
+    const root = doc.querySelector(".ga-root");
+    const cs = root ? doc.defaultView?.getComputedStyle(root) : null;
+    const v = cs?.getPropertyValue(name)?.trim() ?? "";
+    return v.length > 0 ? v : null;
+  }
+  function resolveVarsInString(value, vars) {
+    return value.replace(/var\(\s*(--[a-zA-Z0-9_-]+)\s*\)/g, (m, varName) => vars.get(String(varName)) ?? m);
+  }
   function serializeSvg(svg) {
     const clone = svg.cloneNode(true);
     if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -39311,6 +39320,34 @@ ${shapes}`.trim();
     const height = Number.isFinite(vb[3]) && vb[3] > 0 ? vb[3] : 360;
     clone.setAttribute("width", String(width));
     clone.setAttribute("height", String(height));
+    const doc = svg.ownerDocument;
+    const vars = /* @__PURE__ */ new Map();
+    const varNames = ["--ga-axis-color", "--ga-axis-grid", "--ga-axis-text", "--ga-graph-color", "--ga-surface", "--ga-card-2"];
+    for (const n of varNames) {
+      const v = readCssVar(doc, n);
+      if (v) vars.set(n, v);
+    }
+    for (const [k, v] of vars.entries()) clone.style.setProperty(k, v);
+    const bgSource = svg.closest(".ga-chart-box") ?? svg.closest(".ga-widget") ?? doc.querySelector(".ga-root");
+    const bg = bgSource ? doc.defaultView?.getComputedStyle(bgSource)?.backgroundColor?.trim() : "";
+    const bgFill = bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent" ? bg : vars.get("--ga-surface") ?? vars.get("--ga-card-2") ?? "#0f111a";
+    const rect = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", "0");
+    rect.setAttribute("y", "0");
+    rect.setAttribute("width", String(width));
+    rect.setAttribute("height", String(height));
+    rect.setAttribute("fill", bgFill);
+    clone.insertBefore(rect, clone.firstChild);
+    const nodes = clone.querySelectorAll("*");
+    for (const el2 of Array.from(nodes)) {
+      for (const attr of ["fill", "stroke", "stop-color", "color"]) {
+        const val = el2.getAttribute(attr);
+        if (!val || !val.includes("var(")) continue;
+        el2.setAttribute(attr, resolveVarsInString(val, vars));
+      }
+      const style = el2.getAttribute("style");
+      if (style && style.includes("var(")) el2.setAttribute("style", resolveVarsInString(style, vars));
+    }
     return { text: new XMLSerializer().serializeToString(clone), width, height };
   }
   async function downloadSvg(doc, svg, title) {
