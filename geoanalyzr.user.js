@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.17
+// @version      2.0.18
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -39884,7 +39884,9 @@ ${shapes}`.trim();
       const unitFormatRaw = semantic.units[measureDef.unit]?.format ?? "float";
       const unitFormat = unitFormatRaw === "datetime" ? "int" : unitFormatRaw;
       const preferZero = spec.type === "bar" || unitFormat === "int";
-      const yVals = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
+      const yValsRaw = data.map((d) => clampForMeasure(semantic, activeMeasure, d.y));
+      const ignoreZeroForRating = measureDef.unit === "rating" && yValsRaw.some((v) => typeof v === "number" && Number.isFinite(v) && v !== 0);
+      const yVals = ignoreZeroForRating ? yValsRaw.filter((v) => v !== 0) : yValsRaw;
       const hardMin = measureDef.range?.min;
       const hardMax = measureDef.range?.max;
       const { minY, maxY } = computeYBounds({
@@ -39982,13 +39984,25 @@ ${shapes}`.trim();
         const xSpan = Math.max(1, innerW - outerPad * 2);
         const points = data.map((d, i) => {
           const x = PAD_L + outerPad + i / Math.max(1, data.length - 1) * xSpan;
-          const y = PAD_T + innerH - (clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange * innerH;
-          return { x, y, d };
+          const yVal = clampForMeasure(semantic, activeMeasure, d.y);
+          const missing = ignoreZeroForRating && yVal === 0;
+          const y = missing ? NaN : PAD_T + innerH - (yVal - minY) / yRange * innerH;
+          return { x, y, yVal, missing, d, idx: i };
         });
         const path = doc.createElementNS(svg.namespaceURI, "path");
         path.classList.add("ga-chart-line-path");
-        const dPath = points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-        path.setAttribute("d", dPath);
+        const dParts = [];
+        let started = false;
+        for (const p of points) {
+          if (p.missing) {
+            started = false;
+            continue;
+          }
+          if (!Number.isFinite(p.y)) continue;
+          dParts.push(`${started ? "L" : "M"} ${p.x} ${p.y}`);
+          started = true;
+        }
+        path.setAttribute("d", dParts.join(" "));
         path.setAttribute("fill", "none");
         path.setAttribute("stroke", colorOverride ?? "var(--ga-graph-color)");
         path.setAttribute("stroke-width", "2.5");
@@ -39997,10 +40011,28 @@ ${shapes}`.trim();
         if (isAnimationsEnabled(doc)) {
           prepareLineAnimation(path);
         }
+        let lastValidIdx = -1;
+        for (let i = points.length - 1; i >= 0; i--) {
+          if (!points[i].missing && Number.isFinite(points[i].y)) {
+            lastValidIdx = i;
+            break;
+          }
+        }
+        let prevValidY = null;
+        let dotIdx = 0;
         points.forEach((p, i) => {
+          if (p.missing || !Number.isFinite(p.y)) return;
+          const isFirstValid = prevValidY === null;
+          const isLastValid = i === lastValidIdx;
+          const changed = !isFirstValid && prevValidY !== p.yVal;
+          const showDot = isFirstValid || isLastValid || changed;
+          if (!showDot) {
+            prevValidY = p.yVal;
+            return;
+          }
           const dot = doc.createElementNS(svg.namespaceURI, "circle");
           dot.classList.add("ga-chart-line-dot");
-          dot.style.setProperty("--ga-dot-index", String(i));
+          dot.style.setProperty("--ga-dot-index", String(dotIdx++));
           dot.setAttribute("cx", String(p.x));
           dot.setAttribute("cy", String(p.y));
           dot.setAttribute("r", "3");
@@ -40032,6 +40064,7 @@ ${shapes}`.trim();
             });
           }
           svg.appendChild(dot);
+          prevValidY = p.yVal;
         });
         maybeAnimateChartSvg(svg, doc);
       } else {
