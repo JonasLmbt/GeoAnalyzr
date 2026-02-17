@@ -73,6 +73,8 @@ export type SessionRow = {
 
   scoreSum: number;
   scoreCount: number;
+  hitScoreSum: number;
+  hitScoreCount: number;
   durationSum: number;
   durationCount: number;
   distanceSum: number;
@@ -85,6 +87,12 @@ export type SessionRow = {
   // For drilldowns.
   gameIds: string[];
   rounds: RoundRow[];
+
+  // Game outcomes inside the session (best effort; depends on available game metadata).
+  winCount?: number;
+  lossCount?: number;
+  tieCount?: number;
+  gamesWithOutcome?: number;
 
   // Rating context for the session (computed from the first/last game in this session).
   ratingStart?: number;
@@ -132,6 +140,7 @@ function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): Sessio
     const gameIds = Array.from(gameIdSet.values());
 
     let scoreSum = 0, scoreCount = 0;
+    let hitScoreSum = 0, hitScoreCount = 0;
     let durationSum = 0, durationCount = 0;
     let distanceSum = 0, distanceCount = 0;
     let fivekCount = 0, hitCount = 0, throwCount = 0;
@@ -146,7 +155,14 @@ function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): Sessio
       }
       const truth = (r as any).trueCountry ?? (r as any).true_country;
       const guess = (r as any).player_self_guessCountry ?? (r as any).p1_guessCountry ?? (r as any).guessCountry;
-      if (typeof truth === "string" && truth && typeof guess === "string" && guess === truth) hitCount++;
+      const isHit = typeof truth === "string" && truth && typeof guess === "string" && guess === truth;
+      if (isHit) {
+        hitCount++;
+        if (typeof s === "number" && Number.isFinite(s)) {
+          hitScoreSum += s;
+          hitScoreCount++;
+        }
+      }
 
       const dur = (r as any).durationSeconds;
       if (typeof dur === "number" && Number.isFinite(dur) && dur >= 0) {
@@ -170,6 +186,8 @@ function buildSessionsFromRounds(rounds: RoundRow[], gapMinutes: number): Sessio
       roundsCount: allRounds.length,
       scoreSum,
       scoreCount,
+      hitScoreSum,
+      hitScoreCount,
       durationSum,
       durationCount,
       distanceSum,
@@ -226,6 +244,26 @@ function extractGameRatings(g: any): { start?: number; end?: number } {
   return { start, end };
 }
 
+function getGameOutcome(g: any): "win" | "loss" | "tie" | null {
+  const v =
+    typeof g?.player_self_victory === "boolean"
+      ? g.player_self_victory
+      : typeof g?.teamOneVictory === "boolean"
+        ? g.teamOneVictory
+        : typeof g?.playerOneVictory === "boolean"
+          ? g.playerOneVictory
+          : undefined;
+  if (typeof v === "boolean") return v ? "win" : "loss";
+
+  const r = g?.result;
+  const s = typeof r === "string" ? r.trim().toLowerCase() : "";
+  if (!s) return null;
+  if (s === "win" || s === "w" || s === "true") return "win";
+  if (s === "loss" || s === "l" || s === "false") return "loss";
+  if (s === "tie" || s === "t" || s === "draw") return "tie";
+  return null;
+}
+
 async function attachRatingsToSessions(sessions: SessionRow[]): Promise<SessionRow[]> {
   if (!sessions.length) return sessions;
   const games = await getGamesRaw();
@@ -246,7 +284,20 @@ async function attachRatingsToSessions(sessions: SessionRow[]): Promise<SessionR
     let deltaSum = 0;
     let haveDelta = false;
 
+    let winCount = 0;
+    let lossCount = 0;
+    let tieCount = 0;
+    let gamesWithOutcome = 0;
+
     for (const g of sorted) {
+      const outcome = getGameOutcome(g);
+      if (outcome) {
+        gamesWithOutcome++;
+        if (outcome === "win") winCount++;
+        else if (outcome === "loss") lossCount++;
+        else tieCount++;
+      }
+
       const r = extractGameRatings(g);
       const start = typeof r.start === "number" && Number.isFinite(r.start) ? r.start : undefined;
       const end = typeof r.end === "number" && Number.isFinite(r.end) ? r.end : undefined;
@@ -270,6 +321,13 @@ async function attachRatingsToSessions(sessions: SessionRow[]): Promise<SessionR
       s.ratingDelta = lastRating - firstRating;
     } else if (haveDelta) {
       s.ratingDelta = deltaSum;
+    }
+
+    if (gamesWithOutcome > 0) {
+      s.winCount = winCount;
+      s.lossCount = lossCount;
+      s.tieCount = tieCount;
+      s.gamesWithOutcome = gamesWithOutcome;
     }
   }
 

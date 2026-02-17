@@ -697,6 +697,54 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "mean_games_per_session"
     },
+    "session_avg_score_hit": {
+      "label": "Avg score (hits only)",
+      "unit": "points",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_avg_score_hit",
+      "range": { "min": 0, "max": 5000 }
+    },
+    "session_5k_count": {
+      "label": "5k count",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_5k_count",
+      "range": { "min": 0 }
+    },
+    "session_hit_count": {
+      "label": "Hit count",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_hit_count",
+      "range": { "min": 0 }
+    },
+    "session_throw_count": {
+      "label": "Throw count",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_throw_count",
+      "range": { "min": 0 }
+    },
+    "session_win_rate": {
+      "label": "Win rate",
+      "unit": "percent",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_win_rate",
+      "range": { "min": 0, "max": 1 }
+    },
+    "session_win_count": {
+      "label": "Wins",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_win_count",
+      "range": { "min": 0 }
+    },
     "session_start_rating": {
       "label": "Start rating",
       "unit": "rating",
@@ -711,12 +759,13 @@
       "allowedCharts": ["bar", "line"],
       "formulaId": "session_end_rating"
     },
-    "session_duration_seconds": {
-      "label": "Session duration",
-      "unit": "duration",
+    "session_duration_minutes": {
+      "label": "Session duration (min)",
+      "unit": "float",
       "grain": "session",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "session_duration_seconds"
+      "formulaId": "session_duration_minutes",
+      "range": { "min": 0 }
     },
     "session_games_count": {
       "label": "Games",
@@ -777,6 +826,13 @@
     },
     "session_delta_rating": {
       "label": "Session rating delta",
+      "unit": "rating_delta",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "session_delta_rating"
+    },
+    "session_rating_delta": {
+      "label": "Rating delta",
       "unit": "rating_delta",
       "grain": "session",
       "allowedCharts": ["bar", "line"],

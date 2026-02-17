@@ -552,6 +552,36 @@ export const SESSION_MEASURES_BY_FORMULA_ID: Record<string, (rows: SessionRow[])
     const sum = rows.reduce((a, r) => a + (typeof (r as any).gamesCount === "number" ? (r as any).gamesCount : 0), 0);
     return sum / rows.length;
   },
+  session_avg_score_hit: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const ss = r.hitScoreSum;
+      const sc = r.hitScoreCount;
+      if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+        sum += ss;
+        n += sc;
+      }
+    }
+    return n ? sum / n : 0;
+  },
+  session_5k_count: (rows) => rows.reduce((a, r: any) => a + (typeof r.fivekCount === "number" ? r.fivekCount : 0), 0),
+  session_hit_count: (rows) => rows.reduce((a, r: any) => a + (typeof r.hitCount === "number" ? r.hitCount : 0), 0),
+  session_throw_count: (rows) => rows.reduce((a, r: any) => a + (typeof r.throwCount === "number" ? r.throwCount : 0), 0),
+  session_win_count: (rows) => rows.reduce((a, r: any) => a + (typeof r.winCount === "number" ? r.winCount : 0), 0),
+  session_win_rate: (rows) => {
+    let wins = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const w = r.winCount;
+      const g = r.gamesWithOutcome;
+      if (typeof w === "number" && Number.isFinite(w) && typeof g === "number" && Number.isFinite(g) && g > 0) {
+        wins += w;
+        n += g;
+      }
+    }
+    return n ? wins / n : 0;
+  },
   session_start_rating: (rows) => {
     const sorted = [...rows].sort((a: any, b: any) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
     for (const r of sorted as any[]) {
@@ -582,6 +612,18 @@ export const SESSION_MEASURES_BY_FORMULA_ID: Record<string, (rows: SessionRow[])
       if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
       const delta = end - start;
       if (Number.isFinite(delta) && delta > 0) sum += delta / 1000;
+    }
+    return sum;
+  },
+  session_duration_minutes: (rows) => {
+    let sum = 0;
+    for (const r of rows as any[]) {
+      const start = (r as any)?.sessionStartTs;
+      const end = (r as any)?.sessionEndTs;
+      if (typeof start !== "number" || typeof end !== "number") continue;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+      const delta = end - start;
+      if (Number.isFinite(delta) && delta > 0) sum += delta / 60000;
     }
     return sum;
   },

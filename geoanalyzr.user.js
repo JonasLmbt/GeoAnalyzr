@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.16
+// @version      2.0.17
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9740,6 +9740,7 @@ ${shapes}`.trim();
       const gameIdSet = new Set(curGames.map((g) => g.gameId));
       const gameIds = Array.from(gameIdSet.values());
       let scoreSum = 0, scoreCount = 0;
+      let hitScoreSum = 0, hitScoreCount = 0;
       let durationSum = 0, durationCount = 0;
       let distanceSum = 0, distanceCount = 0;
       let fivekCount = 0, hitCount = 0, throwCount = 0;
@@ -9753,7 +9754,14 @@ ${shapes}`.trim();
         }
         const truth = r.trueCountry ?? r.true_country;
         const guess = r.player_self_guessCountry ?? r.p1_guessCountry ?? r.guessCountry;
-        if (typeof truth === "string" && truth && typeof guess === "string" && guess === truth) hitCount++;
+        const isHit2 = typeof truth === "string" && truth && typeof guess === "string" && guess === truth;
+        if (isHit2) {
+          hitCount++;
+          if (typeof s === "number" && Number.isFinite(s)) {
+            hitScoreSum += s;
+            hitScoreCount++;
+          }
+        }
         const dur = r.durationSeconds;
         if (typeof dur === "number" && Number.isFinite(dur) && dur >= 0) {
           durationSum += dur;
@@ -9775,6 +9783,8 @@ ${shapes}`.trim();
         roundsCount: allRounds.length,
         scoreSum,
         scoreCount,
+        hitScoreSum,
+        hitScoreCount,
         durationSum,
         durationCount,
         distanceSum,
@@ -9824,6 +9834,17 @@ ${shapes}`.trim();
     const end = pickNum(["player_self_endRating", "playerOneEndRating"]);
     return { start, end };
   }
+  function getGameOutcome(g) {
+    const v = typeof g?.player_self_victory === "boolean" ? g.player_self_victory : typeof g?.teamOneVictory === "boolean" ? g.teamOneVictory : typeof g?.playerOneVictory === "boolean" ? g.playerOneVictory : void 0;
+    if (typeof v === "boolean") return v ? "win" : "loss";
+    const r = g?.result;
+    const s = typeof r === "string" ? r.trim().toLowerCase() : "";
+    if (!s) return null;
+    if (s === "win" || s === "w" || s === "true") return "win";
+    if (s === "loss" || s === "l" || s === "false") return "loss";
+    if (s === "tie" || s === "t" || s === "draw") return "tie";
+    return null;
+  }
   async function attachRatingsToSessions(sessions) {
     if (!sessions.length) return sessions;
     const games = await getGamesRaw();
@@ -9842,7 +9863,18 @@ ${shapes}`.trim();
       let prevEnd;
       let deltaSum = 0;
       let haveDelta = false;
+      let winCount = 0;
+      let lossCount = 0;
+      let tieCount = 0;
+      let gamesWithOutcome = 0;
       for (const g of sorted) {
+        const outcome = getGameOutcome(g);
+        if (outcome) {
+          gamesWithOutcome++;
+          if (outcome === "win") winCount++;
+          else if (outcome === "loss") lossCount++;
+          else tieCount++;
+        }
         const r = extractGameRatings(g);
         const start = typeof r.start === "number" && Number.isFinite(r.start) ? r.start : void 0;
         const end = typeof r.end === "number" && Number.isFinite(r.end) ? r.end : void 0;
@@ -9863,6 +9895,12 @@ ${shapes}`.trim();
         s.ratingDelta = lastRating - firstRating;
       } else if (haveDelta) {
         s.ratingDelta = deltaSum;
+      }
+      if (gamesWithOutcome > 0) {
+        s.winCount = winCount;
+        s.lossCount = lossCount;
+        s.tieCount = tieCount;
+        s.gamesWithOutcome = gamesWithOutcome;
       }
     }
     return sessions;
@@ -32186,6 +32224,54 @@ ${shapes}`.trim();
         allowedCharts: ["bar", "line"],
         formulaId: "mean_games_per_session"
       },
+      session_avg_score_hit: {
+        label: "Avg score (hits only)",
+        unit: "points",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_score_hit",
+        range: { min: 0, max: 5e3 }
+      },
+      session_5k_count: {
+        label: "5k count",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_5k_count",
+        range: { min: 0 }
+      },
+      session_hit_count: {
+        label: "Hit count",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_hit_count",
+        range: { min: 0 }
+      },
+      session_throw_count: {
+        label: "Throw count",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_throw_count",
+        range: { min: 0 }
+      },
+      session_win_rate: {
+        label: "Win rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_win_rate",
+        range: { min: 0, max: 1 }
+      },
+      session_win_count: {
+        label: "Wins",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_win_count",
+        range: { min: 0 }
+      },
       session_start_rating: {
         label: "Start rating",
         unit: "rating",
@@ -32200,12 +32286,13 @@ ${shapes}`.trim();
         allowedCharts: ["bar", "line"],
         formulaId: "session_end_rating"
       },
-      session_duration_seconds: {
-        label: "Session duration",
-        unit: "duration",
+      session_duration_minutes: {
+        label: "Session duration (min)",
+        unit: "float",
         grain: "session",
         allowedCharts: ["bar", "line"],
-        formulaId: "session_duration_seconds"
+        formulaId: "session_duration_minutes",
+        range: { min: 0 }
       },
       session_games_count: {
         label: "Games",
@@ -32266,6 +32353,13 @@ ${shapes}`.trim();
       },
       session_delta_rating: {
         label: "Session rating delta",
+        unit: "rating_delta",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_delta_rating"
+      },
+      session_rating_delta: {
+        label: "Rating delta",
         unit: "rating_delta",
         grain: "session",
         allowedCharts: ["bar", "line"],
@@ -32969,9 +33063,19 @@ ${shapes}`.trim();
                         y: {
                           measures: [
                             "session_avg_score",
+                            "session_avg_score_hit",
                             "session_fivek_rate",
+                            "session_5k_count",
                             "session_throw_rate",
+                            "session_throw_count",
                             "session_hit_rate",
+                            "session_hit_count",
+                            "session_win_rate",
+                            "session_win_count",
+                            "session_start_rating",
+                            "session_end_rating",
+                            "session_rating_delta",
+                            "session_duration_minutes",
                             "session_games_count",
                             "session_rounds_count",
                             "session_avg_guess_duration",
@@ -32993,9 +33097,19 @@ ${shapes}`.trim();
                         dimension: "session_start",
                         measures: [
                           "session_avg_score",
+                          "session_avg_score_hit",
                           "session_fivek_rate",
+                          "session_5k_count",
                           "session_throw_rate",
+                          "session_throw_count",
                           "session_hit_rate",
+                          "session_hit_count",
+                          "session_win_rate",
+                          "session_win_count",
+                          "session_start_rating",
+                          "session_end_rating",
+                          "session_rating_delta",
+                          "session_duration_minutes",
                           "session_games_count",
                           "session_rounds_count"
                         ],
@@ -38276,7 +38390,7 @@ ${shapes}`.trim();
     }
     return "team";
   }
-  function getGameOutcome(g) {
+  function getGameOutcome2(g) {
     const v = getGameSelfVictory(g);
     if (typeof v === "boolean") return v ? "win" : "loss";
     const r = pick(g, "result");
@@ -38517,7 +38631,7 @@ ${shapes}`.trim();
       let n = 0;
       let k = 0;
       for (const g of rows) {
-        const o = getGameOutcome(g);
+        const o = getGameOutcome2(g);
         if (!o) continue;
         n++;
         if (o === "win") k++;
@@ -38571,22 +38685,22 @@ ${shapes}`.trim();
     },
     count_win_game: (rows) => {
       let k = 0;
-      for (const g of rows) if (getGameOutcome(g) === "win") k++;
+      for (const g of rows) if (getGameOutcome2(g) === "win") k++;
       return k;
     },
     count_loss_game: (rows) => {
       let k = 0;
-      for (const g of rows) if (getGameOutcome(g) === "loss") k++;
+      for (const g of rows) if (getGameOutcome2(g) === "loss") k++;
       return k;
     },
     count_tie_game: (rows) => {
       let k = 0;
-      for (const g of rows) if (getGameOutcome(g) === "tie") k++;
+      for (const g of rows) if (getGameOutcome2(g) === "tie") k++;
       return k;
     },
     count_games_with_result: (rows) => {
       let k = 0;
-      for (const g of rows) if (getGameOutcome(g)) k++;
+      for (const g of rows) if (getGameOutcome2(g)) k++;
       return k;
     },
     max_player_self_end_rating: (rows) => {
@@ -38603,7 +38717,7 @@ ${shapes}`.trim();
       let best = 0;
       let cur = 0;
       for (const g of sorted) {
-        const o = getGameOutcome(g);
+        const o = getGameOutcome2(g);
         if (!o) continue;
         if (o === "win") {
           cur++;
@@ -38619,7 +38733,7 @@ ${shapes}`.trim();
       let best = 0;
       let cur = 0;
       for (const g of sorted) {
-        const o = getGameOutcome(g);
+        const o = getGameOutcome2(g);
         if (!o) continue;
         if (o === "loss") {
           cur++;
@@ -38644,7 +38758,7 @@ ${shapes}`.trim();
     max_defeated_opponent_start_rating: (rows) => {
       let best = -Infinity;
       for (const g of rows) {
-        if (getGameOutcome(g) !== "win") continue;
+        if (getGameOutcome2(g) !== "win") continue;
         const mode = String(g?.modeFamily ?? "").trim().toLowerCase();
         const vals = mode === "teamduels" ? [g.player_opponent_startRating, g.player_opponent_mate_startRating] : [g.player_opponent_startRating, g.playerTwoStartRating];
         for (const v of vals) {
@@ -38660,6 +38774,36 @@ ${shapes}`.trim();
       if (!rows.length) return 0;
       const sum = rows.reduce((a, r) => a + (typeof r.gamesCount === "number" ? r.gamesCount : 0), 0);
       return sum / rows.length;
+    },
+    session_avg_score_hit: (rows) => {
+      let sum = 0;
+      let n = 0;
+      for (const r of rows) {
+        const ss = r.hitScoreSum;
+        const sc = r.hitScoreCount;
+        if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
+          sum += ss;
+          n += sc;
+        }
+      }
+      return n ? sum / n : 0;
+    },
+    session_5k_count: (rows) => rows.reduce((a, r) => a + (typeof r.fivekCount === "number" ? r.fivekCount : 0), 0),
+    session_hit_count: (rows) => rows.reduce((a, r) => a + (typeof r.hitCount === "number" ? r.hitCount : 0), 0),
+    session_throw_count: (rows) => rows.reduce((a, r) => a + (typeof r.throwCount === "number" ? r.throwCount : 0), 0),
+    session_win_count: (rows) => rows.reduce((a, r) => a + (typeof r.winCount === "number" ? r.winCount : 0), 0),
+    session_win_rate: (rows) => {
+      let wins = 0;
+      let n = 0;
+      for (const r of rows) {
+        const w = r.winCount;
+        const g = r.gamesWithOutcome;
+        if (typeof w === "number" && Number.isFinite(w) && typeof g === "number" && Number.isFinite(g) && g > 0) {
+          wins += w;
+          n += g;
+        }
+      }
+      return n ? wins / n : 0;
     },
     session_start_rating: (rows) => {
       const sorted = [...rows].sort((a, b) => Number(a?.sessionStartTs ?? 0) - Number(b?.sessionStartTs ?? 0));
@@ -38691,6 +38835,18 @@ ${shapes}`.trim();
         if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
         const delta = end - start;
         if (Number.isFinite(delta) && delta > 0) sum += delta / 1e3;
+      }
+      return sum;
+    },
+    session_duration_minutes: (rows) => {
+      let sum = 0;
+      for (const r of rows) {
+        const start = r?.sessionStartTs;
+        const end = r?.sessionEndTs;
+        if (typeof start !== "number" || typeof end !== "number") continue;
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        const delta = end - start;
+        if (Number.isFinite(delta) && delta > 0) sum += delta / 6e4;
       }
       return sum;
     },
