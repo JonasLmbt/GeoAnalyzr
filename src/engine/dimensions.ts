@@ -311,6 +311,12 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     }
   },
   session: {
+    time_day: (row: any) => {
+      const ts = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : typeof row?.ts === "number" ? row.ts : null;
+      if (typeof ts !== "number" || !Number.isFinite(ts)) return null;
+      const d = new Date(ts);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    },
     session_index: (row: any) => (typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null),
     session_start: (row: any) => {
       const ts = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : typeof row?.ts === "number" ? row.ts : null;

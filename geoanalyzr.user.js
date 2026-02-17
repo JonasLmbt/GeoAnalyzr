@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.25
+// @version      2.0.26
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9575,6 +9575,12 @@ ${shapes}`.trim();
       }
     },
     session: {
+      time_day: (row) => {
+        const ts = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : typeof row?.ts === "number" ? row.ts : null;
+        if (typeof ts !== "number" || !Number.isFinite(ts)) return null;
+        const d = new Date(ts);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      },
       session_index: (row) => typeof row?.sessionIndex === "number" ? String(row.sessionIndex) : null,
       session_start: (row) => {
         const ts = typeof row?.sessionStartTs === "number" ? row.sessionStartTs : typeof row?.ts === "number" ? row.ts : null;
@@ -31657,7 +31663,7 @@ ${shapes}`.trim();
       time_day: {
         label: "Date",
         kind: "time",
-        grain: ["round", "game"],
+        grain: ["round", "game", "session"],
         ordered: true,
         allowedCharts: ["line", "bar"],
         sortModes: ["chronological"]
@@ -32584,6 +32590,38 @@ ${shapes}`.trim();
         grain: "session",
         allowedCharts: ["bar", "line"],
         formulaId: "session_delta_rating"
+      },
+      day_win_rate_min5: {
+        label: "Win rate (day, min 5 games)",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "day_win_rate_min5",
+        range: { min: 0, max: 1 }
+      },
+      max_consecutive_days_without_games: {
+        label: "Most consecutive days without games",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_consecutive_days_without_games",
+        range: { min: 0 }
+      },
+      longest_active_streak_days: {
+        label: "Longest active streak (days)",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "longest_active_streak_days",
+        range: { min: 0 }
+      },
+      longest_5k_day_streak_days: {
+        label: "Longest 5k day streak (days)",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "longest_5k_day_streak_days",
+        range: { min: 0 }
       }
     },
     units: {
@@ -33129,7 +33167,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 30,
+                h: 40,
                 card: {
                   type: "composite",
                   children: [
@@ -33494,11 +33532,100 @@ ${shapes}`.trim();
                       }
                     },
                     {
+                      widgetId: "w_day_records",
+                      type: "record_list",
+                      title: "Day Records",
+                      grain: "session",
+                      placement: { x: 0, y: 20, w: 12, h: 7 },
+                      spec: {
+                        records: [
+                          {
+                            id: "best_day_by_avg_score",
+                            label: "Best day by avg score",
+                            metric: "session_avg_score",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "worst_day_by_avg_score",
+                            label: "Worst day by avg score",
+                            metric: "session_avg_score",
+                            groupBy: "time_day",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_sessions_in_a_day",
+                            label: "Most sessions in a day",
+                            metric: "sessions_count",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_games_in_a_day",
+                            label: "Most games in a day",
+                            metric: "session_games_count",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_time_played_in_a_day",
+                            label: "Most time played in a day",
+                            metric: "session_duration_minutes",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "most_5ks_in_a_day",
+                            label: "Most 5ks in a day",
+                            metric: "session_5k_count",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "best_win_rate_day",
+                            label: "Best win rate day (min 5 games)",
+                            metric: "day_win_rate_min5",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          },
+                          {
+                            id: "worst_win_rate_day",
+                            label: "Worst win rate day (min 5 games)",
+                            metric: "day_win_rate_min5",
+                            groupBy: "time_day",
+                            extreme: "min",
+                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_day_streaks",
+                      type: "stat_list",
+                      title: "Day Streaks",
+                      grain: "session",
+                      placement: { x: 0, y: 27, w: 12, h: 3 },
+                      spec: {
+                        rows: [
+                          { label: "Most consecutive days without games", measure: "max_consecutive_days_without_games" },
+                          { label: "Longest active streak (min 1 game/day)", measure: "longest_active_streak_days" },
+                          { label: "Longest 5k day streak (min 1 5k/day)", measure: "longest_5k_day_streak_days" }
+                        ]
+                      }
+                    },
+                    {
                       widgetId: "w_personal_records",
                       type: "record_list",
                       title: "Personal Records",
                       grain: "round",
-                      placement: { x: 0, y: 20, w: 12, h: 10 },
+                      placement: { x: 0, y: 30, w: 12, h: 10 },
                       spec: {
                         records: [
                           {
@@ -39868,6 +39995,78 @@ ${shapes}`.trim();
         if (typeof d === "number" && Number.isFinite(d)) sum += d;
       }
       return sum;
+    },
+    // Day-grain helpers (group sessions by time_day).
+    day_win_rate_min5: (rows) => {
+      let win = 0;
+      let denom = 0;
+      for (const r of rows) {
+        const w = r?.winCount;
+        const g = r?.gamesWithOutcome;
+        if (typeof w === "number" && Number.isFinite(w) && typeof g === "number" && Number.isFinite(g) && g > 0) {
+          win += w;
+          denom += g;
+        }
+      }
+      if (denom < 5) return NaN;
+      return win / denom;
+    },
+    max_consecutive_days_without_games: (rows) => {
+      const dayIndexSet = /* @__PURE__ */ new Set();
+      for (const r of rows) {
+        const ts = typeof r?.sessionStartTs === "number" ? r.sessionStartTs : typeof r?.ts === "number" ? r.ts : null;
+        if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+        const d = new Date(ts);
+        const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        dayIndexSet.add(Math.floor(midnight / 864e5));
+      }
+      const days2 = Array.from(dayIndexSet.values()).sort((a, b) => a - b);
+      let bestGap = 0;
+      for (let i = 1; i < days2.length; i++) {
+        const gap = days2[i] - days2[i - 1] - 1;
+        if (gap > bestGap) bestGap = gap;
+      }
+      return bestGap;
+    },
+    longest_active_streak_days: (rows) => {
+      const dayIndexSet = /* @__PURE__ */ new Set();
+      for (const r of rows) {
+        const ts = typeof r?.sessionStartTs === "number" ? r.sessionStartTs : typeof r?.ts === "number" ? r.ts : null;
+        if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+        const d = new Date(ts);
+        const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        dayIndexSet.add(Math.floor(midnight / 864e5));
+      }
+      const days2 = Array.from(dayIndexSet.values()).sort((a, b) => a - b);
+      let best = 0;
+      let cur = 0;
+      for (let i = 0; i < days2.length; i++) {
+        if (i === 0 || days2[i] === days2[i - 1] + 1) cur++;
+        else cur = 1;
+        if (cur > best) best = cur;
+      }
+      return best;
+    },
+    longest_5k_day_streak_days: (rows) => {
+      const dayIndexSet = /* @__PURE__ */ new Set();
+      for (const r of rows) {
+        const fivek = r?.fivekCount;
+        if (typeof fivek !== "number" || !Number.isFinite(fivek) || fivek <= 0) continue;
+        const ts = typeof r?.sessionStartTs === "number" ? r.sessionStartTs : typeof r?.ts === "number" ? r.ts : null;
+        if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+        const d = new Date(ts);
+        const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        dayIndexSet.add(Math.floor(midnight / 864e5));
+      }
+      const days2 = Array.from(dayIndexSet.values()).sort((a, b) => a - b);
+      let best = 0;
+      let cur = 0;
+      for (let i = 0; i < days2.length; i++) {
+        if (i === 0 || days2[i] === days2[i - 1] + 1) cur++;
+        else cur = 1;
+        if (cur > best) best = cur;
+      }
+      return best;
     }
   };
   var MEASURES_BY_GRAIN = {

@@ -27,7 +27,7 @@
       "time_day": {
         "label": "Date",
         "kind": "time",
-        "grain": ["round", "game"],
+        "grain": ["round", "game", "session"],
         "ordered": true,
         "allowedCharts": ["line", "bar"],
         "sortModes": ["chronological"]
@@ -962,6 +962,38 @@
       "grain": "session",
       "allowedCharts": ["bar", "line"],
       "formulaId": "session_delta_rating"
+    },
+    "day_win_rate_min5": {
+      "label": "Win rate (day, min 5 games)",
+      "unit": "percent",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "day_win_rate_min5",
+      "range": { "min": 0, "max": 1 }
+    },
+    "max_consecutive_days_without_games": {
+      "label": "Most consecutive days without games",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "max_consecutive_days_without_games",
+      "range": { "min": 0 }
+    },
+    "longest_active_streak_days": {
+      "label": "Longest active streak (days)",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "longest_active_streak_days",
+      "range": { "min": 0 }
+    },
+    "longest_5k_day_streak_days": {
+      "label": "Longest 5k day streak (days)",
+      "unit": "count",
+      "grain": "session",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "longest_5k_day_streak_days",
+      "range": { "min": 0 }
     }
   },
 

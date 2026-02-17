@@ -419,7 +419,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 30,
+              "h": 40,
               "card": {
                 "type": "composite",
                 "children": [
@@ -784,11 +784,100 @@
                     }
                   },
                   {
+                    "widgetId": "w_day_records",
+                    "type": "record_list",
+                    "title": "Day Records",
+                    "grain": "session",
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 7 },
+                    "spec": {
+                      "records": [
+                        {
+                          "id": "best_day_by_avg_score",
+                          "label": "Best day by avg score",
+                          "metric": "session_avg_score",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "worst_day_by_avg_score",
+                          "label": "Worst day by avg score",
+                          "metric": "session_avg_score",
+                          "groupBy": "time_day",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "most_sessions_in_a_day",
+                          "label": "Most sessions in a day",
+                          "metric": "sessions_count",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "most_games_in_a_day",
+                          "label": "Most games in a day",
+                          "metric": "session_games_count",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "most_time_played_in_a_day",
+                          "label": "Most time played in a day",
+                          "metric": "session_duration_minutes",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "most_5ks_in_a_day",
+                          "label": "Most 5ks in a day",
+                          "metric": "session_5k_count",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "best_win_rate_day",
+                          "label": "Best win rate day (min 5 games)",
+                          "metric": "day_win_rate_min5",
+                          "groupBy": "time_day",
+                          "extreme": "max",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        },
+                        {
+                          "id": "worst_win_rate_day",
+                          "label": "Worst win rate day (min 5 games)",
+                          "metric": "day_win_rate_min5",
+                          "groupBy": "time_day",
+                          "extreme": "min",
+                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_day_streaks",
+                    "type": "stat_list",
+                    "title": "Day Streaks",
+                    "grain": "session",
+                    "placement": { "x": 0, "y": 27, "w": 12, "h": 3 },
+                    "spec": {
+                      "rows": [
+                        { "label": "Most consecutive days without games", "measure": "max_consecutive_days_without_games" },
+                        { "label": "Longest active streak (min 1 game/day)", "measure": "longest_active_streak_days" },
+                        { "label": "Longest 5k day streak (min 1 5k/day)", "measure": "longest_5k_day_streak_days" }
+                      ]
+                    }
+                  },
+                  {
                     "widgetId": "w_personal_records",
                     "type": "record_list",
                     "title": "Personal Records",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 10 },
+                    "placement": { "x": 0, "y": 30, "w": 12, "h": 10 },
                     "spec": {
                       "records": [
                         {

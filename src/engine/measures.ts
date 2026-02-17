@@ -899,6 +899,82 @@ export const SESSION_MEASURES_BY_FORMULA_ID: Record<string, (rows: SessionRow[])
       if (typeof d === "number" && Number.isFinite(d)) sum += d;
     }
     return sum;
+  },
+
+  // Day-grain helpers (group sessions by time_day).
+  day_win_rate_min5: (rows) => {
+    let win = 0;
+    let denom = 0;
+    for (const r of rows as any[]) {
+      const w = (r as any)?.winCount;
+      const g = (r as any)?.gamesWithOutcome;
+      if (typeof w === "number" && Number.isFinite(w) && typeof g === "number" && Number.isFinite(g) && g > 0) {
+        win += w;
+        denom += g;
+      }
+    }
+    if (denom < 5) return NaN;
+    return win / denom;
+  },
+
+  max_consecutive_days_without_games: (rows) => {
+    const dayIndexSet = new Set<number>();
+    for (const r of rows as any[]) {
+      const ts = typeof (r as any)?.sessionStartTs === "number" ? (r as any).sessionStartTs : typeof (r as any)?.ts === "number" ? (r as any).ts : null;
+      if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+      const d = new Date(ts);
+      const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      dayIndexSet.add(Math.floor(midnight / 86400000));
+    }
+    const days = Array.from(dayIndexSet.values()).sort((a, b) => a - b);
+    let bestGap = 0;
+    for (let i = 1; i < days.length; i++) {
+      const gap = days[i] - days[i - 1] - 1;
+      if (gap > bestGap) bestGap = gap;
+    }
+    return bestGap;
+  },
+
+  longest_active_streak_days: (rows) => {
+    const dayIndexSet = new Set<number>();
+    for (const r of rows as any[]) {
+      const ts = typeof (r as any)?.sessionStartTs === "number" ? (r as any).sessionStartTs : typeof (r as any)?.ts === "number" ? (r as any).ts : null;
+      if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+      const d = new Date(ts);
+      const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      dayIndexSet.add(Math.floor(midnight / 86400000));
+    }
+    const days = Array.from(dayIndexSet.values()).sort((a, b) => a - b);
+    let best = 0;
+    let cur = 0;
+    for (let i = 0; i < days.length; i++) {
+      if (i === 0 || days[i] === days[i - 1] + 1) cur++;
+      else cur = 1;
+      if (cur > best) best = cur;
+    }
+    return best;
+  },
+
+  longest_5k_day_streak_days: (rows) => {
+    const dayIndexSet = new Set<number>();
+    for (const r of rows as any[]) {
+      const fivek = (r as any)?.fivekCount;
+      if (typeof fivek !== "number" || !Number.isFinite(fivek) || fivek <= 0) continue;
+      const ts = typeof (r as any)?.sessionStartTs === "number" ? (r as any).sessionStartTs : typeof (r as any)?.ts === "number" ? (r as any).ts : null;
+      if (typeof ts !== "number" || !Number.isFinite(ts)) continue;
+      const d = new Date(ts);
+      const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      dayIndexSet.add(Math.floor(midnight / 86400000));
+    }
+    const days = Array.from(dayIndexSet.values()).sort((a, b) => a - b);
+    let best = 0;
+    let cur = 0;
+    for (let i = 0; i < days.length; i++) {
+      if (i === 0 || days[i] === days[i - 1] + 1) cur++;
+      else cur = 1;
+      if (cur > best) best = cur;
+    }
+    return best;
   }
 };
 
