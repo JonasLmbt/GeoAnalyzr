@@ -1,5 +1,6 @@
 import { db, FeedGameRow, ModeFamily } from "./db";
 import { httpGetJson } from "./http";
+import { fetchDetailsForGames } from "./details";
 
 function etaLabel(ms: number): string {
   const sec = Math.max(0, Math.round(ms / 1e3));
@@ -378,6 +379,212 @@ export async function syncFeed(opts: {
     updatedAt: Date.now()
   });
   return { inserted, total };
+}
+
+export async function updateData(opts: {
+  onStatus: (msg: string) => void;
+  maxPages?: number;
+  delayMs?: number;
+  detailConcurrency?: number;
+  verifyCompleteness?: boolean;
+  retryErrors?: boolean;
+  enrichLimit?: number;
+  ncfa?: string;
+}): Promise<{
+  feedPages: number;
+  feedUpserted: number;
+  detailsQueued: number;
+  detailsOk: number;
+  detailsFail: number;
+  detailsSkipped: number;
+  enrichedQueued: number;
+  enrichedOk: number;
+  enrichedFail: number;
+  enrichedSkipped: number;
+}> {
+  const maxPages = opts.maxPages ?? 5000;
+  const delayMs = opts.delayMs ?? 150;
+  const detailConcurrency = opts.detailConcurrency ?? 4;
+  const verifyCompleteness = opts.verifyCompleteness ?? true;
+  const retryErrors = opts.retryErrors ?? true;
+  const enrichLimit = opts.enrichLimit ?? 1500;
+
+  const startedAt = Date.now();
+  const meta = await db.meta.get("sync");
+  const lastSeen = (meta?.value as any)?.lastSeenTime ? Number((meta?.value as any)?.lastSeenTime) : null;
+
+  let paginationToken: string | undefined;
+  let feedPages = 0;
+  let feedUpserted = 0;
+
+  let detailsQueued = 0;
+  let detailsOk = 0;
+  let detailsFail = 0;
+  let detailsSkipped = 0;
+
+  const seenPaginationTokens = new Set<string>();
+
+  opts.onStatus("Update started (feed + details)...");
+
+  for (let page = 0; page < maxPages; page++) {
+    feedPages = page + 1;
+    opts.onStatus(`Fetching feed page ${page}...`);
+
+    const data = await fetchFeedPage(paginationToken, opts.ncfa);
+    const entries = Array.isArray(data?.entries) ? data.entries : [];
+    if (entries.length === 0) {
+      opts.onStatus(`Feed page ${page} empty. Stopping.`);
+      break;
+    }
+
+    const pageRows: FeedGameRow[] = [];
+    for (const entry of entries) {
+      const evs = extractEvents(entry);
+      for (const ev of evs) {
+        const { gameId } = extractGameIdWithSource(ev);
+        if (!gameId) continue;
+        const playedAt = extractEventTimeMs(ev, entry);
+        const gameMode = extractGameMode(ev, entry);
+        const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
+        pageRows.push({
+          gameId,
+          type: classifyTypeFromFamily(modeFamily),
+          playedAt,
+          mode: gameMode,
+          gameMode,
+          modeFamily,
+          isTeamDuels: modeFamily === "teamduels",
+          raw: ev
+        });
+      }
+    }
+
+    // Dedupe by gameId and keep most recent playedAt.
+    const byId = new Map<string, FeedGameRow>();
+    for (const row of pageRows) {
+      const prev = byId.get(row.gameId);
+      if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
+    }
+    const deduped = [...byId.values()];
+
+    if (deduped.length > 0) {
+      await db.games.bulkPut(deduped);
+      feedUpserted += deduped.length;
+    }
+
+    const newestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
+    const oldestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
+    const elapsed = Date.now() - startedAt;
+
+    // Keep the "lastSeen" pointer at the newest known timestamp (head of feed).
+    const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
+    await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
+
+    // Fetch/enrich details for games we just saw, so the update proceeds step-by-step.
+    if (deduped.length > 0) {
+      const res = await fetchDetailsForGames({
+        onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
+        games: deduped,
+        concurrency: detailConcurrency,
+        verifyCompleteness,
+        retryErrors,
+        ncfa: opts.ncfa,
+        reason: `feed-page-${page}`
+      });
+      detailsQueued += res.queued;
+      detailsOk += res.ok;
+      detailsFail += res.fail;
+      detailsSkipped += res.skipped;
+    }
+
+    // Progress: based on reaching previously synced time span (best-effort; stable across shifting pages).
+    let etaText = "ETA unknown";
+    if (lastSeen && Number.isFinite(oldestOnPage) && newestOnPage > 0) {
+      const covered = newestOnPage - oldestOnPage;
+      const totalSpan = newestOnPage - lastSeen;
+      const progress = totalSpan > 0 ? Math.max(0, Math.min(1, covered / totalSpan)) : 1;
+      if (progress > 0) {
+        const etaMs = elapsed * ((1 - progress) / progress);
+        etaText = progress >= 0.999 ? "ETA ~0s" : `ETA ~${etaLabel(etaMs)}`;
+      }
+    }
+
+    opts.onStatus(
+      `Feed page ${page}: upserted ${deduped.length} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${etaText}`
+    );
+
+    paginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : undefined;
+    if (!paginationToken) {
+      opts.onStatus("Feed has no pagination token. Stopping.");
+      break;
+    }
+    if (seenPaginationTokens.has(paginationToken)) {
+      opts.onStatus("Stopped sync due to repeated pagination token (loop protection).");
+      break;
+    }
+    seenPaginationTokens.add(paginationToken);
+
+    // Stop once this page has no data newer than lastSeen.
+    if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
+      opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
+      break;
+    }
+
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  // Enrichment pass: fill newly introduced fields (map, rated) for already-fetched games.
+  let enrichedQueued = 0;
+  let enrichedOk = 0;
+  let enrichedFail = 0;
+  let enrichedSkipped = 0;
+  if (enrichLimit > 0) {
+    opts.onStatus(`Enriching existing details (limit ${enrichLimit})...`);
+    const recentDetails = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
+    const needIds = recentDetails
+      .filter((d: any) => d?.status === "ok")
+      .filter((d: any) => {
+        const missSlug = typeof d?.mapSlug !== "string" || !d.mapSlug.trim();
+        const missName = typeof d?.mapName !== "string" || !d.mapName.trim();
+        const missRated = typeof d?.isRated !== "boolean";
+        return missSlug || missName || missRated;
+      })
+      .map((d: any) => d.gameId)
+      .filter((x: any): x is string => typeof x === "string" && x);
+
+    if (needIds.length > 0) {
+      const games = (await db.games.bulkGet(needIds)).filter((g): g is FeedGameRow => !!g);
+      const res = await fetchDetailsForGames({
+        onStatus: (m) => opts.onStatus(`Enrich | ${m}`),
+        games,
+        concurrency: detailConcurrency,
+        verifyCompleteness: false,
+        retryErrors,
+        ncfa: opts.ncfa,
+        reason: "enrich-missing-fields"
+      });
+      enrichedQueued = res.queued;
+      enrichedOk = res.ok;
+      enrichedFail = res.fail;
+      enrichedSkipped = res.skipped;
+    } else {
+      opts.onStatus("No existing details need enrichment.");
+    }
+  }
+
+  opts.onStatus("Update complete.");
+  return {
+    feedPages,
+    feedUpserted,
+    detailsQueued,
+    detailsOk,
+    detailsFail,
+    detailsSkipped,
+    enrichedQueued,
+    enrichedOk,
+    enrichedFail,
+    enrichedSkipped
+  };
 }
 
 export async function getModeCounts(): Promise<Array<{ mode: string; count: number }>> {

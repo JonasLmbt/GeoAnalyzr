@@ -1,6 +1,5 @@
 import { db } from "../db";
-import { syncFeed } from "../sync";
-import { fetchMissingDuelsDetails } from "../details";
+import { updateData } from "../sync";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
 import { invalidateRoundsCache } from "../engine/queryEngine";
 import { exportExcel } from "../export";
@@ -87,23 +86,20 @@ export function registerUiActions(ui: UI): void {
       } else if (resolved.source === "cookie") {
         ui.setStatus("Using NCFA token from browser cookie. Continuing update...");
       }
-      const res = await syncFeed({
+      const res = await updateData({
         onStatus: (m) => ui.setStatus(m),
         maxPages: 5000,
         delayMs: 200,
-        ncfa
-      });
-      await fetchMissingDuelsDetails({
-        onStatus: (m) => ui.setStatus(m),
-        concurrency: 4,
+        detailConcurrency: 4,
         retryErrors: true,
         verifyCompleteness: true,
+        enrichLimit: 2000,
         ncfa
       });
       const norm = await normalizeLegacyRounds({ onStatus: (m) => ui.setStatus(m) });
       invalidateRoundsCache();
-      ui.setStatus(`Update complete. New feed games: ${res.inserted}.`);
-      if (norm.updated > 0) ui.setStatus(`Update complete. New feed games: ${res.inserted}. Normalized legacy rounds: ${norm.updated}.`);
+      ui.setStatus(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
+      if (norm.updated > 0) ui.setStatus(`Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}.`);
       await refreshUI(ui);
     } catch (e) {
       ui.setStatus("Error: " + errorText(e));

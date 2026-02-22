@@ -9,7 +9,6 @@ import {
   RoundRowDuel,
   RoundRowTeamDuel
 } from "./db";
-import { resolveCountryCodeByLatLng } from "./countries";
 import { httpGetJson } from "./http";
 
 let cachedOwnPlayerId: string | null | undefined;
@@ -112,30 +111,6 @@ function extractGuessCountryCode(guess: any): string | undefined {
       "country"
     ])
   );
-}
-
-function isLatLngInRange(lat?: number, lng?: number): boolean {
-  return (
-    typeof lat === "number" &&
-    Number.isFinite(lat) &&
-    Math.abs(lat) <= 90 &&
-    typeof lng === "number" &&
-    Number.isFinite(lng) &&
-    Math.abs(lng) <= 180
-  );
-}
-
-async function resolveGuessCountryResilient(lat?: number, lng?: number): Promise<string | undefined> {
-  if (!isLatLngInRange(lat, lng)) return undefined;
-  const primary = normalizeIso2(await resolveCountryCodeByLatLng(lat, lng));
-  if (primary) return primary;
-
-  // Fallback: some payloads/providers flip coordinate order.
-  if (isLatLngInRange(lng, lat)) {
-    const swapped = normalizeIso2(await resolveCountryCodeByLatLng(lng, lat));
-    if (swapped) return swapped;
-  }
-  return undefined;
 }
 
 function roundId(gameId: string, roundNumber: number): string {
@@ -370,77 +345,6 @@ function averageDefined(values: Array<number | undefined>): number | undefined {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-async function backfillMissingGuessCountries(
-  onStatus: (msg: string) => void
-): Promise<{
-  updatedRounds: number;
-  filledCountries: number;
-  attempted: number;
-  noLatLng: number;
-  resolveFailed: number;
-}> {
-  const rounds = await db.rounds.toArray();
-  if (rounds.length === 0) {
-    return { updatedRounds: 0, filledCountries: 0, attempted: 0, noLatLng: 0, resolveFailed: 0 };
-  }
-
-  const startedAt = Date.now();
-  const updated: RoundRow[] = [];
-  let filledCountries = 0;
-  let attempted = 0;
-  let noLatLng = 0;
-  let resolveFailed = 0;
-
-  for (let i = 0; i < rounds.length; i++) {
-    const r = rounds[i] as any;
-    let changed = false;
-    const next: any = { ...r };
-
-    for (const role of ["player_self", "player_mate", "player_opponent", "player_opponent_mate"] as const) {
-      const countryKey = `${role}_guessCountry`;
-      const latKey = `${role}_guessLat`;
-      const lngKey = `${role}_guessLng`;
-      const currentCountry = normalizeIso2(next[countryKey]);
-      if (currentCountry) continue;
-
-      const lat = asNum(next[latKey]);
-      const lng = asNum(next[lngKey]);
-      if (lat === undefined || lng === undefined) {
-        noLatLng++;
-        continue;
-      }
-
-      attempted++;
-      const normalized = await resolveGuessCountryResilient(lat, lng);
-      if (!normalized) {
-        resolveFailed++;
-        continue;
-      }
-
-      next[countryKey] = normalized;
-      filledCountries++;
-      changed = true;
-    }
-
-    if (changed) updated.push(next as RoundRow);
-
-    if ((i + 1) % 250 === 0) {
-      const elapsed = Date.now() - startedAt;
-      const rate = (i + 1) / Math.max(1, elapsed);
-      const etaMs = rate > 0 ? (rounds.length - (i + 1)) / rate : 0;
-      onStatus(
-        `Backfilling guess countries ${i + 1}/${rounds.length} (updated ${updated.length}) ETA ~${etaLabel(etaMs)}`
-      );
-    }
-  }
-
-  for (let i = 0; i < updated.length; i += 500) {
-    await db.rounds.bulkPut(updated.slice(i, i + 500));
-  }
-
-  return { updatedRounds: updated.length, filledCountries, attempted, noLatLng, resolveFailed };
-}
-
 async function normalizeGameAndRounds(
   game: FeedGameRow,
   gameData: any,
@@ -464,6 +368,14 @@ async function normalizeGameAndRounds(
     .map((r: any) => asNum(r?.roundNumber))
     .filter((v: any): v is number => v !== undefined);
 
+  const mapName = pickFirst(gameData, ["options.map.name"]);
+  const mapSlug = pickFirst(gameData, ["options.map.slug"]);
+  const isRated = asBool(pickFirst(gameData, ["options.isRated"]));
+  const missingFields: string[] = [];
+  if (typeof mapSlug !== "string" || !mapSlug.trim()) missingFields.push("mapSlug");
+  if (typeof mapName !== "string" || !mapName.trim()) missingFields.push("mapName");
+  if (isRated === undefined) missingFields.push("isRated");
+
   const commonBase = {
     gameId: game.gameId,
     status: "ok" as const,
@@ -471,9 +383,11 @@ async function normalizeGameAndRounds(
     endpoint,
     gameMode: game.gameMode || game.mode,
     modeFamily: family,
-    mapName: pickFirst(gameData, ["options.map.name"]),
-    mapSlug: pickFirst(gameData, ["options.map.slug"]),
-    isRated: asBool(pickFirst(gameData, ["options.isRated"])),
+    mapName: typeof mapName === "string" ? mapName : undefined,
+    mapSlug: typeof mapSlug === "string" ? mapSlug : undefined,
+    isRated,
+    missingFields: missingFields.length > 0 ? missingFields : undefined,
+    missingFieldsCheckedAt: missingFields.length > 0 ? Date.now() : undefined,
     totalRounds: asNum(gameData?.currentRoundNumber) ?? rounds.length,
     damageMultiplierRounds,
     healingRounds,
@@ -682,8 +596,7 @@ async function normalizeGameAndRounds(
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
         (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
-        (round as any)[`${role}_guessCountry`] =
-          extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
+        (round as any)[`${role}_guessCountry`] = extractGuessCountryCode(guess);
         (round as any)[`${role}_score`] = asNum(guess?.score);
         (round as any)[`${role}_healthAfter`] = healthMap.get(rn);
         (round as any)[`${role}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
@@ -704,8 +617,7 @@ async function normalizeGameAndRounds(
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
         (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
-        (round as any)[`${role}_guessCountry`] =
-          extractGuessCountryCode(guess) ?? await resolveGuessCountryResilient(guessLat, guessLng);
+        (round as any)[`${role}_guessCountry`] = extractGuessCountryCode(guess);
         (round as any)[`${role}_score`] = asNum(guess?.score);
         (round as any)[`${role}_healthAfter`] = healthMap.get(rn);
       }
@@ -730,79 +642,141 @@ export async function fetchMissingDuelsDetails(opts: {
   ncfa?: string;
 }) {
   const limitGames = opts.limitGames;
-  const concurrency = opts.concurrency ?? 4;
-  const retryErrors = opts.retryErrors ?? true;
-  const verifyCompleteness = opts.verifyCompleteness ?? true;
-  const ownPlayerId = await getOwnPlayerId();
-  opts.onStatus(`Detected own playerId: ${ownPlayerId ?? "not found"}`);
-  console.info("[GeoAnalyzr] Detected own playerId:", ownPlayerId ?? "not found");
-  const missingRetryAfterMs = 7 * 24 * 60 * 60 * 1000;
-
   const recent = typeof limitGames === "number"
     ? await db.games.orderBy("playedAt").reverse().limit(limitGames).toArray()
     : await db.games.orderBy("playedAt").reverse().toArray();
 
-  const candidates = recent.filter((g) => {
+  await fetchDetailsForGames({
+    onStatus: opts.onStatus,
+    games: recent,
+    concurrency: opts.concurrency,
+    retryErrors: opts.retryErrors,
+    verifyCompleteness: opts.verifyCompleteness,
+    ncfa: opts.ncfa,
+    reason: "missing-details-scan"
+  });
+}
+
+export async function fetchDetailsForGames(opts: {
+  onStatus: (msg: string) => void;
+  games: FeedGameRow[];
+  concurrency?: number;
+  retryErrors?: boolean;
+  verifyCompleteness?: boolean;
+  ncfa?: string;
+  reason?: string;
+}): Promise<{ queued: number; ok: number; fail: number; skipped: number }> {
+  const concurrency = opts.concurrency ?? 4;
+  const retryErrors = opts.retryErrors ?? true;
+  const verifyCompleteness = opts.verifyCompleteness ?? true;
+  const reason = opts.reason ? ` (${opts.reason})` : "";
+
+  const ownPlayerId = await getOwnPlayerId();
+  opts.onStatus(`Detected own playerId: ${ownPlayerId ?? "not found"}${reason}`);
+
+  const missingRetryAfterMs = 7 * 24 * 60 * 60 * 1000;
+  const enrichmentRetryAfterMs = 30 * 24 * 60 * 60 * 1000;
+
+  const candidates = (opts.games || []).filter((g) => {
     const family = classifyFamily(g);
     if (family === "duels" || family === "teamduels") return true;
     const m = String(g.gameMode || g.mode || "").toLowerCase();
     return m.includes("duel");
   });
 
+  if (candidates.length === 0) {
+    opts.onStatus(`No duel candidates to fetch.${reason}`);
+    return { queued: 0, ok: 0, fail: 0, skipped: 0 };
+  }
+
   const existing = await db.details.bulkGet(candidates.map((g) => g.gameId));
-  const queue: FeedGameRow[] = [];
-  const markMissing: GameRow[] = [];
-  const roundCountByGame = new Map<string, number>();
+
+  let roundCountByGame: Map<string, number> | null = null;
   if (verifyCompleteness) {
-    const allRounds = await db.rounds.toArray();
-    for (const r of allRounds) {
-      roundCountByGame.set(r.gameId, (roundCountByGame.get(r.gameId) || 0) + 1);
+    const ids = candidates.map((g) => g.gameId);
+    const rr = await db.rounds.where("gameId").anyOf(ids).toArray();
+    roundCountByGame = new Map<string, number>();
+    for (const r of rr as any[]) {
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      if (!gid) continue;
+      roundCountByGame.set(gid, (roundCountByGame.get(gid) || 0) + 1);
     }
   }
 
+  const shouldRefetchForEnrichment = (detail: any): boolean => {
+    if (!detail || detail.status !== "ok") return false;
+    const missing: string[] = [];
+    if (typeof detail.mapSlug !== "string" || !detail.mapSlug.trim()) missing.push("mapSlug");
+    if (typeof detail.mapName !== "string" || !detail.mapName.trim()) missing.push("mapName");
+    if (typeof detail.isRated !== "boolean") missing.push("isRated");
+    if (missing.length === 0) return false;
+
+    const checkedAt = typeof detail.missingFieldsCheckedAt === "number" ? detail.missingFieldsCheckedAt : 0;
+    const prevMissing = Array.isArray(detail.missingFields) ? detail.missingFields : [];
+    const alreadyKnown = missing.every((m) => prevMissing.includes(m));
+    if (alreadyKnown && checkedAt && Date.now() - checkedAt < enrichmentRetryAfterMs) return false;
+    return true;
+  };
+
+  const queue: FeedGameRow[] = [];
+  const markMissing: GameRow[] = [];
+  let skipped = 0;
+
   for (let i = 0; i < candidates.length; i++) {
     const game = candidates[i];
-    const detail = existing[i];
+    const detail = existing[i] as any;
     if (!detail) {
       markMissing.push({ gameId: game.gameId, status: "missing", modeFamily: classifyFamily(game), gameMode: game.gameMode || game.mode });
       queue.push(game);
       continue;
     }
-    if (verifyCompleteness && detail.status === "ok") {
-      const have = roundCountByGame.get(game.gameId) || 0;
-      const expected = detail.totalRounds;
-      const incomplete = have === 0 || (typeof expected === "number" && expected > 0 && have < expected);
-      if (incomplete) {
+
+    if (detail.status === "ok") {
+      if (verifyCompleteness && roundCountByGame) {
+        const have = roundCountByGame.get(game.gameId) || 0;
+        const expected = detail.totalRounds;
+        const incomplete = have === 0 || (typeof expected === "number" && expected > 0 && have < expected);
+        if (incomplete) {
+          queue.push(game);
+          continue;
+        }
+      }
+      if (shouldRefetchForEnrichment(detail)) {
         queue.push(game);
         continue;
       }
+      skipped++;
+      continue;
     }
+
     if (detail.status === "missing") {
       const lastTry = detail.fetchedAt || 0;
       const shouldRetry = !lastTry || Date.now() - lastTry >= missingRetryAfterMs;
       if (shouldRetry) queue.push(game);
+      else skipped++;
       continue;
     }
-    if (retryErrors && detail.status === "error") queue.push(game);
+
+    if (retryErrors && detail.status === "error") {
+      queue.push(game);
+      continue;
+    }
+
+    skipped++;
   }
 
   if (markMissing.length > 0) await db.details.bulkPut(markMissing);
   if (queue.length === 0) {
-    opts.onStatus("No missing detail entries. Checking guess-country completeness...");
-    const backfillOnly = await backfillMissingGuessCountries(opts.onStatus);
-    opts.onStatus(
-      `No missing detail entries. Guess-country backfill: updated rounds ${backfillOnly.updatedRounds}, filled ${backfillOnly.filledCountries}, attempted ${backfillOnly.attempted}, noLatLng ${backfillOnly.noLatLng}, failed ${backfillOnly.resolveFailed}.`
-    );
-    return;
+    opts.onStatus(`No detail fetch needed (skipped ${skipped}).${reason}`);
+    return { queued: 0, ok: 0, fail: 0, skipped };
   }
 
-  opts.onStatus(`Fetching details for ${queue.length} duel games...`);
+  opts.onStatus(`Fetching details for ${queue.length} duel games...${reason}`);
   const total = queue.length;
 
   let done = 0;
   let ok = 0;
   let fail = 0;
-  const failByMode = new Map<string, number>();
   const startedAt = Date.now();
 
   async function worker() {
@@ -821,7 +795,6 @@ export async function fetchMissingDuelsDetails(opts: {
 
         ok++;
       } catch (e) {
-        const mode = game.gameMode || game.mode || "unknown";
         const message = e instanceof Error ? e.message : String(e);
         const likelyUnavailable = /HTTP (403|404|410)\b/.test(message);
         await db.details.put({
@@ -832,29 +805,18 @@ export async function fetchMissingDuelsDetails(opts: {
           modeFamily: classifyFamily(game),
           error: message
         });
-        if (!likelyUnavailable) {
-          failByMode.set(mode, (failByMode.get(mode) || 0) + 1);
-          fail++;
-        }
+        if (!likelyUnavailable) fail++;
       } finally {
         done++;
         const elapsed = Date.now() - startedAt;
         const rate = done / Math.max(1, elapsed);
         const etaMs = rate > 0 ? (total - done) / rate : 0;
-        opts.onStatus(`Details ${done}/${total} (ok ${ok}, fail ${fail}) ETA ~${etaLabel(etaMs)}`);
+        opts.onStatus(`Details ${done}/${total} (ok ${ok}, fail ${fail}) ETA ~${etaLabel(etaMs)}${reason}`);
       }
     }
   }
 
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
-  const topFailModes = [...failByMode.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([mode, count]) => `${mode}:${count}`)
-    .join(", ");
-  opts.onStatus("Checking guess-country completeness...");
-  const backfill = await backfillMissingGuessCountries(opts.onStatus);
-  opts.onStatus(
-    `Done. ok=${ok}, fail=${fail}${topFailModes ? ` | failModes ${topFailModes}` : ""} | backfill rounds=${backfill.updatedRounds}, countries=${backfill.filledCountries}, attempted=${backfill.attempted}, noLatLng=${backfill.noLatLng}, failed=${backfill.resolveFailed}`
-  );
+  opts.onStatus(`Details done. ok=${ok}, fail=${fail}, skipped=${skipped}${reason}`);
+  return { queued: total, ok, fail, skipped };
 }

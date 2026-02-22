@@ -116,6 +116,10 @@ interface GameRowBase {
   mapName?: string;
   mapSlug?: string;
   isRated?: boolean;
+  // Tracks fields that could not be resolved from any available endpoint at the time.
+  // Used to avoid retrying the same enrichment every update loop.
+  missingFields?: string[];
+  missingFieldsCheckedAt?: number;
   totalRounds?: number;
   damageMultiplierRounds?: number[];
   healingRounds?: number[];

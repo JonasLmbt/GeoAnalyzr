@@ -1,6 +1,5 @@
 import * as XLSX from "xlsx";
 import { db } from "./db";
-import { resolveCountryCodeByLatLng } from "./countries";
 
 const LEGACY_KEY_ALIASES: Record<string, string[]> = {
   player_self_id: ["playerOneId", "p1_id"],
@@ -175,22 +174,8 @@ function isDetailsExpected(modeFamily?: string, gameMode?: string): boolean {
   return m.includes("duel");
 }
 
-async function resolveGuessCountryForExport(
-  existing: unknown,
-  lat?: number,
-  lng?: number
-): Promise<string> {
-  const direct = normalizeIso2(existing);
-  if (direct) return direct;
-  if (!isLatLngInRange(lat, lng)) {
-    return "";
-  }
-  let resolved = normalizeIso2(await resolveCountryCodeByLatLng(lat, lng));
-  if (!resolved && isLatLngInRange(lng, lat)) {
-    resolved = normalizeIso2(await resolveCountryCodeByLatLng(lng, lat));
-  }
-  if (resolved) return resolved;
-  return `ERR_RESOLVE_FAILED(${fmtCoord(lat)},${fmtCoord(lng)})`;
+function resolveGuessCountryForExport(existing: unknown): string {
+  return normalizeIso2(existing) ?? "";
 }
 
 async function downloadWorkbook(wb: XLSX.WorkBook, filename: string): Promise<void> {
@@ -360,22 +345,10 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     if (!roundsByMode.has(mode)) roundsByMode.set(mode, []);
     const selfLat = pickWithAliases(r, "player_self_guessLat");
     const selfLng = pickWithAliases(r, "player_self_guessLng");
-    const selfCountry = await resolveGuessCountryForExport(pickWithAliases(r, "player_self_guessCountry"), selfLat, selfLng);
-    const mateCountry = await resolveGuessCountryForExport(
-      pickWithAliases(r, "player_mate_guessCountry"),
-      pickWithAliases(r, "player_mate_guessLat"),
-      pickWithAliases(r, "player_mate_guessLng")
-    );
-    const oppCountry = await resolveGuessCountryForExport(
-      pickWithAliases(r, "player_opponent_guessCountry"),
-      pickWithAliases(r, "player_opponent_guessLat"),
-      pickWithAliases(r, "player_opponent_guessLng")
-    );
-    const oppMateCountry = await resolveGuessCountryForExport(
-      pickWithAliases(r, "player_opponent_mate_guessCountry"),
-      pickWithAliases(r, "player_opponent_mate_guessLat"),
-      pickWithAliases(r, "player_opponent_mate_guessLng")
-    );
+    const selfCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_self_guessCountry"));
+    const mateCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_mate_guessCountry"));
+    const oppCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_opponent_guessCountry"));
+    const oppMateCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_opponent_mate_guessCountry"));
     const trueHeading = asFiniteNumber(
       pickFirst((r as any).raw, [
         "panorama.heading",
@@ -413,11 +386,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       player_opponent_guessLat: pickWithAliases(r, "player_opponent_guessLat") ?? "",
       player_opponent_guessLng: pickWithAliases(r, "player_opponent_guessLng") ?? "",
       player_opponent_googleMaps_url: buildGoogleMapsUrl(pickWithAliases(r, "player_opponent_guessLat"), pickWithAliases(r, "player_opponent_guessLng")),
-      player_opponent_guessCountry: await resolveGuessCountryForExport(
-        pickWithAliases(r, "player_opponent_guessCountry"),
-        pickWithAliases(r, "player_opponent_guessLat"),
-        pickWithAliases(r, "player_opponent_guessLng")
-      ),
+      player_opponent_guessCountry: resolveGuessCountryForExport(pickWithAliases(r, "player_opponent_guessCountry")),
       player_opponent_distance_km: pickWithAliases(r, "player_opponent_distanceKm") ?? "",
       player_opponent_score: pickWithAliases(r, "player_opponent_score") ?? "",
       player_opponent_healthAfter: pickWithAliases(r, "player_opponent_healthAfter") ?? "",
