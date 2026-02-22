@@ -178,8 +178,10 @@ export function renderLayoutEditor(args: {
   dashboard: DashboardDoc;
   onChange: OnChange;
   statusEl: HTMLElement;
+  mode?: "section_layout" | "global_filters" | "drilldowns";
 }): HTMLElement {
   const { doc, semantic, onChange, statusEl } = args;
+  const mode = args.mode ?? "section_layout";
   const win = doc.defaultView ?? window;
   const safeConfirm = (msg: string): boolean => {
     try {
@@ -244,6 +246,7 @@ export function renderLayoutEditor(args: {
   let focusWidgetIdx = 0;
   let scrollToId: string | null = null;
   let editGlobalFilters = false;
+  let editGlobalFilterIdx: number | null = null;
   let editDrilldownTarget: string | null = null;
   let editDrilldownPreset: { target: string; presetId: string } | null = null;
 
@@ -733,22 +736,7 @@ export function renderLayoutEditor(args: {
     sNote.textContent = "Sections are your tabs. Rename, reorder, and click Edit to configure widgets.";
     sectionsBox.appendChild(sNote);
 
-    const topRow = doc.createElement("div");
-    topRow.className = "ga-le-toprow";
-    topRow.appendChild(
-      mkBtn(
-        doc,
-        "Add section",
-        () => {
-          const next = [...sections, defaultSection()];
-          setSections(next);
-          editSectionIdx = Math.max(0, next.length - 1);
-          render();
-        },
-        "primary"
-      )
-    );
-    sectionsBox.appendChild(topRow);
+    // "Add" uses a compact + row (keeps the list consistent with section rows).
 
     const reorderSection = (fromIdx: number, toIdx: number) => {
       if (fromIdx === toIdx) return;
@@ -846,42 +834,258 @@ export function renderLayoutEditor(args: {
       sectionsBox.appendChild(row);
     });
 
-    panels.appendChild(sectionsBox);
+    const addSectionRow = doc.createElement("div");
+    addSectionRow.className = "ga-le-compact-row";
+    addSectionRow.title = "Add section";
+    const addSection = () => {
+      const next = [...sections, defaultSection()];
+      setSections(next);
+      editSectionIdx = Math.max(0, next.length - 1);
+      render();
+    };
+    addSectionRow.addEventListener("click", () => addSection());
+
+    const addDrag = doc.createElement("div");
+    addDrag.className = "ga-le-drag";
+    addDrag.textContent = "+";
+    addSectionRow.appendChild(addDrag);
+
+    const addTitle = doc.createElement("div");
+    addTitle.className = "ga-le-compact-title";
+    addTitle.textContent = "Add section";
+    addSectionRow.appendChild(addTitle);
+
+    const addMeta = doc.createElement("div");
+    addMeta.className = "ga-le-compact-meta";
+    addMeta.textContent = "";
+    addSectionRow.appendChild(addMeta);
+
+    const addActions = doc.createElement("div");
+    addActions.className = "ga-le-compact-actions";
+    addActions.appendChild(mkBtn(doc, "+", () => addSection(), "primary"));
+    addSectionRow.appendChild(addActions);
+    sectionsBox.appendChild(addSectionRow);
+
+    if (mode === "section_layout") {
+      panels.appendChild(sectionsBox);
+    }
 
     // Placeholders for the next panels (filled in subsequent patches).
-    panels.appendChild(mkHr(doc));
-    const gfBox = doc.createElement("div");
-    gfBox.className = "ga-le-box";
-    const gfh = doc.createElement("div");
-    gfh.className = "ga-le-box-head";
-    gfh.textContent = "Global filters";
-    gfBox.appendChild(gfh);
-    const gfSummary = doc.createElement("div");
-    gfSummary.className = "ga-le-compact-row";
-    const gfCurrent: any = (draft.dashboard as any).globalFilters ?? {};
-    const gfControls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
-    const gfLeft = doc.createElement("div");
-    gfLeft.className = "ga-le-compact-title";
-    gfLeft.textContent = `${gfCurrent?.enabled === false ? "Disabled" : "Enabled"} • ${gfControls.length} controls`;
-    gfSummary.appendChild(gfLeft);
-    const gfActions = doc.createElement("div");
-    gfActions.className = "ga-le-compact-actions";
-    gfActions.appendChild(
-      mkBtn(
-        doc,
-        "Edit",
-        () => {
-          editGlobalFilters = true;
-          render();
-        },
-        "primary"
-      )
-    );
-    gfSummary.appendChild(gfActions);
-    gfBox.appendChild(gfSummary);
-    panels.appendChild(gfBox);
 
-    panels.appendChild(mkHr(doc));
+    if (mode === "global_filters") {
+      const gfFallback: any = {
+        enabled: true,
+        layout: { variant: "compact" },
+        controls: [],
+        buttons: { apply: false, reset: true }
+      };
+      const gfRaw: any = (draft.dashboard as any).globalFilters;
+      const gfCurrent: any = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
+      if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
+      if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
+      const gfControls: any[] = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+
+      const setGlobalFilters = (nextGlobalFilters: any) => {
+        const next = cloneJson(draft) as any;
+        next.dashboard.globalFilters = nextGlobalFilters;
+        draft = next;
+        markDirty();
+      };
+      const setControls = (nextControls: any[]) => setGlobalFilters({ ...gfCurrent, controls: nextControls });
+
+      const gfBox = doc.createElement("div");
+      gfBox.className = "ga-le-box";
+      const gfh = doc.createElement("div");
+      gfh.className = "ga-le-box-head";
+      gfh.textContent = "Global filters";
+      gfBox.appendChild(gfh);
+      const gfNote = doc.createElement("div");
+      gfNote.className = "ga-settings-note";
+      gfNote.textContent = "Drag to reorder. Click Edit to configure a filter. Use + to add a new filter.";
+      gfBox.appendChild(gfNote);
+
+      const gfEnabled = gfCurrent?.enabled !== false;
+
+      const barRow = doc.createElement("div");
+      barRow.className = "ga-le-compact-row";
+      const barDrag = doc.createElement("div");
+      barDrag.className = "ga-le-drag";
+      barDrag.textContent = "";
+      barRow.appendChild(barDrag);
+      const barTitle = doc.createElement("div");
+      barTitle.className = "ga-le-compact-title";
+      barTitle.textContent = "Global filter bar";
+      barRow.appendChild(barTitle);
+      const barMeta = doc.createElement("div");
+      barMeta.className = "ga-le-compact-meta";
+      barMeta.textContent = `${gfEnabled ? "Enabled" : "Disabled"} • ${String(gfCurrent?.layout?.variant ?? "compact")}`;
+      barRow.appendChild(barMeta);
+      const barActions = doc.createElement("div");
+      barActions.className = "ga-le-compact-actions";
+      barActions.appendChild(
+        mkBtn(
+          doc,
+          gfEnabled ? "Disable" : "Enable",
+          () => setGlobalFilters({ ...gfCurrent, enabled: !gfEnabled }),
+          gfEnabled ? "ghost" : "primary"
+        )
+      );
+      barActions.appendChild(
+        mkBtn(
+          doc,
+          "Advanced",
+          () => {
+            editGlobalFilters = true;
+            render();
+          },
+          "ghost"
+        )
+      );
+      barRow.appendChild(barActions);
+      gfBox.appendChild(barRow);
+
+      const reorderControl = (fromIdx: number, toIdx: number) => {
+        if (fromIdx === toIdx) return;
+        if (fromIdx < 0 || fromIdx >= gfControls.length) return;
+        if (toIdx < 0 || toIdx >= gfControls.length) return;
+        const next = [...gfControls];
+        const [picked] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, picked);
+        setControls(next);
+      };
+
+      gfControls.forEach((ctrl, idx) => {
+        const row = doc.createElement("div");
+        row.className = "ga-le-compact-row";
+        row.draggable = true;
+        row.dataset.idx = String(idx);
+        row.addEventListener("click", () => {
+          editGlobalFilterIdx = idx;
+          render();
+        });
+
+        row.addEventListener("dragstart", (ev) => {
+          try {
+            ev.dataTransfer?.setData("text/plain", String(idx));
+            ev.dataTransfer?.setDragImage?.(row, 12, 12);
+          } catch {
+            // ignore
+          }
+          row.classList.add("dragging");
+        });
+        row.addEventListener("dragend", () => row.classList.remove("dragging"));
+        row.addEventListener("dragover", (ev) => {
+          ev.preventDefault();
+          row.classList.add("dragover");
+        });
+        row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+        row.addEventListener("drop", (ev) => {
+          ev.preventDefault();
+          row.classList.remove("dragover");
+          const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+          const fromIdx = asInt(raw, -1);
+          if (fromIdx < 0) return;
+          reorderControl(fromIdx, idx);
+        });
+
+        const drag = doc.createElement("div");
+        drag.className = "ga-le-drag";
+        drag.title = "Drag to reorder";
+        drag.textContent = "⋮⋮";
+        row.appendChild(drag);
+
+        const title = doc.createElement("div");
+        title.className = "ga-le-compact-title";
+        title.textContent = String(ctrl?.label || ctrl?.id || "Untitled filter");
+        row.appendChild(title);
+
+        const meta = doc.createElement("div");
+        meta.className = "ga-le-compact-meta";
+        const metaParts: string[] = [];
+        if (ctrl?.id) metaParts.push(String(ctrl.id));
+        metaParts.push(String(ctrl?.type ?? "select"));
+        if (ctrl?.type === "select") metaParts.push(String(ctrl?.dimension ?? "(no dimension)"));
+        if (Array.isArray(ctrl?.appliesTo) && ctrl.appliesTo.length) metaParts.push(String(ctrl.appliesTo.join(",")));
+        meta.textContent = metaParts.filter(Boolean).join(" • ");
+        row.appendChild(meta);
+
+        const actions = doc.createElement("div");
+        actions.className = "ga-le-compact-actions";
+        actions.appendChild(
+          mkIconBtn(doc, "✎", () => {
+            editGlobalFilterIdx = idx;
+            render();
+          })
+        );
+        actions.appendChild(
+          mkIconBtn(
+            doc,
+            "🗑",
+            () => {
+              if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
+              setControls(gfControls.filter((_: any, i: number) => i !== idx));
+              if (editGlobalFilterIdx === idx) editGlobalFilterIdx = null;
+            },
+            "danger"
+          )
+        );
+        actions.appendChild(
+          mkBtn(
+            doc,
+            "Edit",
+            () => {
+              editGlobalFilterIdx = idx;
+              render();
+            },
+            "primary"
+          )
+        );
+        row.appendChild(actions);
+        gfBox.appendChild(row);
+      });
+
+      const addFilter = () => {
+        const id = `filter_${Math.random().toString(36).slice(2, 7)}`;
+        const next = [
+          ...gfControls,
+          { id, type: "select", label: "New filter", dimension: "", default: "all", options: "auto_distinct", appliesTo: [grainDefault] }
+        ];
+        setControls(next);
+        editGlobalFilterIdx = Math.max(0, next.length - 1);
+        render();
+      };
+
+      const addFilterRow = doc.createElement("div");
+      addFilterRow.className = "ga-le-compact-row";
+      addFilterRow.title = "Add filter";
+      addFilterRow.addEventListener("click", () => addFilter());
+
+      const addDrag = doc.createElement("div");
+      addDrag.className = "ga-le-drag";
+      addDrag.textContent = "+";
+      addFilterRow.appendChild(addDrag);
+
+      const addTitle = doc.createElement("div");
+      addTitle.className = "ga-le-compact-title";
+      addTitle.textContent = "Add filter";
+      addFilterRow.appendChild(addTitle);
+
+      const addMeta = doc.createElement("div");
+      addMeta.className = "ga-le-compact-meta";
+      addMeta.textContent = "";
+      addFilterRow.appendChild(addMeta);
+
+      const addActions = doc.createElement("div");
+      addActions.className = "ga-le-compact-actions";
+      addActions.appendChild(mkBtn(doc, "+", () => addFilter(), "primary"));
+      addFilterRow.appendChild(addActions);
+      gfBox.appendChild(addFilterRow);
+
+      panels.appendChild(gfBox);
+    }
+
+    if (mode === "drilldowns") {
+      panels.appendChild(mkHr(doc));
     const ddBox = doc.createElement("div");
     ddBox.className = "ga-le-box";
     const ddh = doc.createElement("div");
@@ -945,6 +1149,7 @@ export function renderLayoutEditor(args: {
       ddBox.appendChild(row);
     });
     panels.appendChild(ddBox);
+    }
 
     if (editGlobalFilters) {
       const { overlay, body } = mkModal("Global filters", () => {
@@ -953,6 +1158,150 @@ export function renderLayoutEditor(args: {
       });
       renderGlobalFilters(body);
       wrap.appendChild(overlay);
+    }
+
+    if (editGlobalFilterIdx !== null) {
+      const gfFallback: any = {
+        enabled: true,
+        layout: { variant: "compact" },
+        controls: [],
+        buttons: { apply: false, reset: true }
+      };
+      const gfRaw: any = (draft.dashboard as any).globalFilters;
+      const gfCurrent: any = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
+      if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
+      if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
+      const controls: any[] = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+      const idx = editGlobalFilterIdx;
+      const ctrl = controls[idx];
+      if (!ctrl) {
+        editGlobalFilterIdx = null;
+      } else {
+        const { overlay, body } = mkModal(`Global filter: ${String(ctrl?.label || ctrl?.id || "")}`, () => {
+          editGlobalFilterIdx = null;
+          render();
+        });
+
+        const setGlobalFilters = (nextGlobalFilters: any) => {
+          const next = cloneJson(draft) as any;
+          next.dashboard.globalFilters = nextGlobalFilters;
+          draft = next;
+          markDirty();
+        };
+        const patchCtrl = (nextCtrl: any) => setGlobalFilters({ ...gfCurrent, controls: controls.map((c, i) => (i === idx ? nextCtrl : c)) });
+
+        const top = doc.createElement("div");
+        top.className = "ga-le-toprow";
+        top.appendChild(
+          mkBtn(
+            doc,
+            "Delete",
+            () => {
+              if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
+              setGlobalFilters({ ...gfCurrent, controls: controls.filter((_: any, i: number) => i !== idx) });
+              editGlobalFilterIdx = null;
+              render();
+            },
+            "danger"
+          )
+        );
+        top.appendChild(
+          mkBtn(doc, "Advanced (all)", () => {
+            editGlobalFilterIdx = null;
+            editGlobalFilters = true;
+            render();
+          })
+        );
+        body.appendChild(top);
+
+        const dimsAll = Object.keys((semantic.dimensions ?? {}) as any).map((id) => ({ value: id, label: id }));
+
+        body.appendChild(mkTextInput(doc, "id", String(ctrl.id ?? ""), (v) => patchCtrl({ ...ctrl, id: v })));
+        body.appendChild(
+          mkSelect(
+            doc,
+            "type",
+            String(ctrl.type ?? "select"),
+            [
+              { value: "select", label: "select" },
+              { value: "date_range", label: "date_range" }
+            ],
+            (v) => {
+              if (v === ctrl.type) return;
+              if (v === "date_range") {
+                patchCtrl({
+                  id: ctrl.id,
+                  type: "date_range",
+                  label: ctrl.label || "Date range",
+                  default: { fromTs: null, toTs: null },
+                  appliesTo: ctrl.appliesTo ?? [grainDefault]
+                });
+              } else {
+                patchCtrl({
+                  id: ctrl.id,
+                  type: "select",
+                  label: ctrl.label || "New filter",
+                  dimension: "",
+                  default: "all",
+                  options: "auto_distinct",
+                  appliesTo: ctrl.appliesTo ?? [grainDefault]
+                });
+              }
+            }
+          )
+        );
+        body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
+        body.appendChild(
+          mkMultiSelect(doc, "appliesTo", Array.isArray(ctrl.appliesTo) ? ctrl.appliesTo : [grainDefault], grainOpts, (vals) => patchCtrl({ ...ctrl, appliesTo: vals }))
+        );
+
+        if (ctrl.type === "select") {
+          body.appendChild(mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => patchCtrl({ ...ctrl, dimension: v })));
+          body.appendChild(
+            mkSelect(
+              doc,
+              "options",
+              String(ctrl.options ?? "auto_distinct"),
+              [
+                { value: "auto_distinct", label: "auto_distinct" },
+                { value: "auto_teammates", label: "auto_teammates" }
+              ],
+              (v) => patchCtrl({ ...ctrl, options: v })
+            )
+          );
+          body.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
+          body.appendChild(
+            mkSelect(doc, "presentation", String(ctrl.presentation ?? "dropdown"), [{ value: "dropdown", label: "dropdown" }, { value: "map", label: "map" }], (v) =>
+              patchCtrl({ ...ctrl, presentation: v })
+            )
+          );
+          if (ctrl.presentation === "map") {
+            const map = ctrl.map ?? {};
+            body.appendChild(
+              mkSelect(doc, "map.variant", String(map.variant ?? "compact"), [{ value: "compact", label: "compact" }, { value: "wide", label: "wide" }], (v) =>
+                patchCtrl({ ...ctrl, map: { ...map, variant: v } })
+              )
+            );
+            body.appendChild(
+              mkNumberInput(doc, "map.height", asInt(map.height, 340), (n) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n)) } }), {
+                min: 160,
+                max: 1200,
+                step: 10
+              })
+            );
+            body.appendChild(mkToggle(doc, "map.restrictToOptions", !!map.restrictToOptions, (v) => patchCtrl({ ...ctrl, map: { ...map, restrictToOptions: v } })));
+            body.appendChild(mkToggle(doc, "map.tintSelectable", map.tintSelectable !== false, (v) => patchCtrl({ ...ctrl, map: { ...map, tintSelectable: v } })));
+          }
+        } else if (ctrl.type === "date_range") {
+          const btnRow = doc.createElement("div");
+          btnRow.className = "ga-le-toprow";
+          btnRow.appendChild(mkBtn(doc, "Reset default", () => patchCtrl({ ...ctrl, default: { fromTs: null, toTs: null } })));
+          body.appendChild(btnRow);
+        }
+
+        body.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
+        wrap.appendChild(overlay);
+      }
     }
 
     if (editDrilldownTarget) {

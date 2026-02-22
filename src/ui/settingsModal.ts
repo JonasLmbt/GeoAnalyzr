@@ -91,12 +91,20 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const templateTab = doc.createElement("button");
     templateTab.className = "ga-settings-tab";
     templateTab.textContent = "Template";
-    const layoutTab = doc.createElement("button");
-    layoutTab.className = "ga-settings-tab";
-    layoutTab.textContent = "Layout";
+    const sectionLayoutTab = doc.createElement("button");
+    sectionLayoutTab.className = "ga-settings-tab";
+    sectionLayoutTab.textContent = "Section Layout";
+    const globalFiltersTab = doc.createElement("button");
+    globalFiltersTab.className = "ga-settings-tab";
+    globalFiltersTab.textContent = "Global Filters";
+    const drilldownsTab = doc.createElement("button");
+    drilldownsTab.className = "ga-settings-tab";
+    drilldownsTab.textContent = "Drilldowns";
     tabs.appendChild(appearanceTab);
     tabs.appendChild(standardsTab);
-    tabs.appendChild(layoutTab);
+    tabs.appendChild(sectionLayoutTab);
+    tabs.appendChild(globalFiltersTab);
+    tabs.appendChild(drilldownsTab);
     tabs.appendChild(templateTab);
 
     const settings = getSettings();
@@ -216,7 +224,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const templateWarn = doc.createElement("div");
     templateWarn.className = "ga-settings-note";
     templateWarn.textContent =
-      "Warning: Editing the template JSON can easily break the dashboard. Prefer the Layout tab unless you know what you're doing.";
+      "Warning: Editing the template JSON can easily break the dashboard. Prefer Section Layout / Global Filters / Drilldowns unless you know what you're doing.";
     templatePane.appendChild(templateWarn);
 
     const templateField = doc.createElement("div");
@@ -265,30 +273,49 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     templatePane.appendChild(templateActions);
     templatePane.appendChild(templateStatus);
 
-    const layoutPane = doc.createElement("div");
-    layoutPane.className = "ga-settings-pane";
-    const layoutStatus = doc.createElement("div");
-    layoutStatus.className = "ga-settings-status";
-    const layoutHost = doc.createElement("div");
-    layoutPane.appendChild(layoutHost);
-    layoutPane.appendChild(layoutStatus);
+    const sectionLayoutPane = doc.createElement("div");
+    sectionLayoutPane.className = "ga-settings-pane";
+    const sectionLayoutStatus = doc.createElement("div");
+    sectionLayoutStatus.className = "ga-settings-status";
+    const sectionLayoutHost = doc.createElement("div");
+    sectionLayoutPane.appendChild(sectionLayoutHost);
+    sectionLayoutPane.appendChild(sectionLayoutStatus);
+
+    const globalFiltersPane = doc.createElement("div");
+    globalFiltersPane.className = "ga-settings-pane";
+    const globalFiltersStatus = doc.createElement("div");
+    globalFiltersStatus.className = "ga-settings-status";
+    const globalFiltersHost = doc.createElement("div");
+    globalFiltersPane.appendChild(globalFiltersHost);
+    globalFiltersPane.appendChild(globalFiltersStatus);
+
+    const drilldownsPane = doc.createElement("div");
+    drilldownsPane.className = "ga-settings-pane";
+    const drilldownsStatus = doc.createElement("div");
+    drilldownsStatus.className = "ga-settings-status";
+    const drilldownsHost = doc.createElement("div");
+    drilldownsPane.appendChild(drilldownsHost);
+    drilldownsPane.appendChild(drilldownsStatus);
 
     panes.appendChild(appearancePane);
     panes.appendChild(standardsPane);
-    panes.appendChild(layoutPane);
+    panes.appendChild(sectionLayoutPane);
+    panes.appendChild(globalFiltersPane);
+    panes.appendChild(drilldownsPane);
     panes.appendChild(templatePane);
 
-    const renderLayout = () => {
-      layoutHost.innerHTML = "";
+    const renderLayout = (mode: "section_layout" | "global_filters" | "drilldowns", host: HTMLDivElement, status: HTMLDivElement) => {
+      host.innerHTML = "";
       const latest = getDashboard();
       dashboard = latest;
       templateEditor.value = JSON.stringify(latest, null, 2);
-      layoutHost.appendChild(
+      host.appendChild(
         renderLayoutEditor({
           doc,
           semantic,
           dashboard: latest,
-          statusEl: layoutStatus,
+          mode,
+          statusEl: status,
           onChange: (next) => {
             void (async () => {
               try {
@@ -296,8 +323,8 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
                 dashboard = next;
                 templateEditor.value = JSON.stringify(next, null, 2);
               } catch (e) {
-                layoutStatus.textContent = e instanceof Error ? e.message : String(e);
-                layoutStatus.className = "ga-settings-status error";
+                status.textContent = e instanceof Error ? e.message : String(e);
+                status.className = "ga-settings-status error";
               }
             })();
           }
@@ -305,18 +332,35 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       );
     };
 
-    const setActiveTab = (idx: 0 | 1 | 2 | 3) => {
-      const tabButtons = [appearanceTab, standardsTab, layoutTab, templateTab];
-      const tabPanes = [appearancePane, standardsPane, layoutPane, templatePane];
+    let renderedSectionLayout = false;
+    let renderedGlobalFilters = false;
+    let renderedDrilldowns = false;
+
+    const setActiveTab = (idx: 0 | 1 | 2 | 3 | 4 | 5) => {
+      const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, templateTab];
+      const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, templatePane];
       tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
       tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
-      if (idx === 2) renderLayout();
+      if (idx === 2 && !renderedSectionLayout) {
+        renderedSectionLayout = true;
+        renderLayout("section_layout", sectionLayoutHost, sectionLayoutStatus);
+      }
+      if (idx === 3 && !renderedGlobalFilters) {
+        renderedGlobalFilters = true;
+        renderLayout("global_filters", globalFiltersHost, globalFiltersStatus);
+      }
+      if (idx === 4 && !renderedDrilldowns) {
+        renderedDrilldowns = true;
+        renderLayout("drilldowns", drilldownsHost, drilldownsStatus);
+      }
     };
 
     appearanceTab.addEventListener("click", () => setActiveTab(0));
     standardsTab.addEventListener("click", () => setActiveTab(1));
-    layoutTab.addEventListener("click", () => setActiveTab(2));
-    templateTab.addEventListener("click", () => setActiveTab(3));
+    sectionLayoutTab.addEventListener("click", () => setActiveTab(2));
+    globalFiltersTab.addEventListener("click", () => setActiveTab(3));
+    drilldownsTab.addEventListener("click", () => setActiveTab(4));
+    templateTab.addEventListener("click", () => setActiveTab(5));
 
     const persistSettings = async () => {
       const next: SemanticDashboardSettings = {

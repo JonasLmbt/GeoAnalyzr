@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.0
+// @version      2.1.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -34530,6 +34530,7 @@ ${shapes}`.trim();
   }
   function renderLayoutEditor(args) {
     const { doc, semantic, onChange, statusEl } = args;
+    const mode = args.mode ?? "section_layout";
     const win = doc.defaultView ?? window;
     const safeConfirm = (msg) => {
       try {
@@ -34579,6 +34580,7 @@ ${shapes}`.trim();
     let focusWidgetIdx = 0;
     let scrollToId = null;
     let editGlobalFilters = false;
+    let editGlobalFilterIdx = null;
     let editDrilldownTarget = null;
     let editDrilldownPreset = null;
     const grains = allowedGrains(semantic);
@@ -35038,22 +35040,6 @@ ${shapes}`.trim();
       sNote.className = "ga-settings-note";
       sNote.textContent = "Sections are your tabs. Rename, reorder, and click Edit to configure widgets.";
       sectionsBox.appendChild(sNote);
-      const topRow = doc.createElement("div");
-      topRow.className = "ga-le-toprow";
-      topRow.appendChild(
-        mkBtn(
-          doc,
-          "Add section",
-          () => {
-            const next = [...sections, defaultSection()];
-            setSections(next);
-            editSectionIdx = Math.max(0, next.length - 1);
-            render();
-          },
-          "primary"
-        )
-      );
-      sectionsBox.appendChild(topRow);
       const reorderSection = (fromIdx, toIdx) => {
         if (fromIdx === toIdx) return;
         if (fromIdx < 0 || fromIdx >= sections.length) return;
@@ -35141,98 +35127,290 @@ ${shapes}`.trim();
         row.appendChild(actions);
         sectionsBox.appendChild(row);
       });
-      panels.appendChild(sectionsBox);
-      panels.appendChild(mkHr(doc));
-      const gfBox = doc.createElement("div");
-      gfBox.className = "ga-le-box";
-      const gfh = doc.createElement("div");
-      gfh.className = "ga-le-box-head";
-      gfh.textContent = "Global filters";
-      gfBox.appendChild(gfh);
-      const gfSummary = doc.createElement("div");
-      gfSummary.className = "ga-le-compact-row";
-      const gfCurrent = draft.dashboard.globalFilters ?? {};
-      const gfControls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
-      const gfLeft = doc.createElement("div");
-      gfLeft.className = "ga-le-compact-title";
-      gfLeft.textContent = `${gfCurrent?.enabled === false ? "Disabled" : "Enabled"} \u2022 ${gfControls.length} controls`;
-      gfSummary.appendChild(gfLeft);
-      const gfActions = doc.createElement("div");
-      gfActions.className = "ga-le-compact-actions";
-      gfActions.appendChild(
-        mkBtn(
-          doc,
-          "Edit",
-          () => {
-            editGlobalFilters = true;
-            render();
-          },
-          "primary"
-        )
-      );
-      gfSummary.appendChild(gfActions);
-      gfBox.appendChild(gfSummary);
-      panels.appendChild(gfBox);
-      panels.appendChild(mkHr(doc));
-      const ddBox = doc.createElement("div");
-      ddBox.className = "ga-le-box";
-      const ddh = doc.createElement("div");
-      ddh.className = "ga-le-box-head";
-      ddh.textContent = "Drilldown presets";
-      ddBox.appendChild(ddh);
-      const ddn = doc.createElement("div");
-      ddn.className = "ga-settings-note";
-      ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
-      ddBox.appendChild(ddn);
-      const ddOverride = draft.dashboard?.drilldownPresets ?? {};
-      const setDdOverride = (target, nextTarget) => {
-        const next = cloneJson2(draft);
-        const cur = next.dashboard.drilldownPresets ?? {};
-        next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
-        draft = next;
-        markDirty();
+      const addSectionRow = doc.createElement("div");
+      addSectionRow.className = "ga-le-compact-row";
+      addSectionRow.title = "Add section";
+      const addSection = () => {
+        const next = [...sections, defaultSection()];
+        setSections(next);
+        editSectionIdx = Math.max(0, next.length - 1);
+        render();
       };
-      const removeDdOverride = (target) => {
-        const next = cloneJson2(draft);
-        const cur = next.dashboard.drilldownPresets ?? {};
-        const { [target]: _, ...rest } = cur;
-        next.dashboard.drilldownPresets = rest;
-        draft = next;
-        markDirty();
-      };
-      const targets = Object.keys(sem?.drilldownPresets ?? {});
-      if (targets.length === 0) {
-        const none = doc.createElement("div");
-        none.className = "ga-settings-note";
-        none.textContent = "No drilldown targets found.";
-        ddBox.appendChild(none);
+      addSectionRow.addEventListener("click", () => addSection());
+      const addDrag = doc.createElement("div");
+      addDrag.className = "ga-le-drag";
+      addDrag.textContent = "+";
+      addSectionRow.appendChild(addDrag);
+      const addTitle = doc.createElement("div");
+      addTitle.className = "ga-le-compact-title";
+      addTitle.textContent = "Add section";
+      addSectionRow.appendChild(addTitle);
+      const addMeta = doc.createElement("div");
+      addMeta.className = "ga-le-compact-meta";
+      addMeta.textContent = "";
+      addSectionRow.appendChild(addMeta);
+      const addActions = doc.createElement("div");
+      addActions.className = "ga-le-compact-actions";
+      addActions.appendChild(mkBtn(doc, "+", () => addSection(), "primary"));
+      addSectionRow.appendChild(addActions);
+      sectionsBox.appendChild(addSectionRow);
+      if (mode === "section_layout") {
+        panels.appendChild(sectionsBox);
       }
-      targets.forEach((target) => {
-        const preset = sem?.drilldownPresets?.[target] ?? {};
-        const keys2 = Object.keys(preset?.columnsPresets ?? {});
-        const left = doc.createElement("div");
-        left.className = "ga-le-compact-title";
-        left.textContent = `${target} \u2022 ${keys2.length} presets`;
-        const row = doc.createElement("div");
-        row.className = "ga-le-compact-row";
-        row.appendChild(left);
-        const actions = doc.createElement("div");
-        actions.className = "ga-le-compact-actions";
-        actions.appendChild(
+      if (mode === "global_filters") {
+        const gfFallback = {
+          enabled: true,
+          layout: { variant: "compact" },
+          controls: [],
+          buttons: { apply: false, reset: true }
+        };
+        const gfRaw = draft.dashboard.globalFilters;
+        const gfCurrent = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
+        if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
+        if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
+        const gfControls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+        const setGlobalFilters = (nextGlobalFilters) => {
+          const next = cloneJson2(draft);
+          next.dashboard.globalFilters = nextGlobalFilters;
+          draft = next;
+          markDirty();
+        };
+        const setControls = (nextControls) => setGlobalFilters({ ...gfCurrent, controls: nextControls });
+        const gfBox = doc.createElement("div");
+        gfBox.className = "ga-le-box";
+        const gfh = doc.createElement("div");
+        gfh.className = "ga-le-box-head";
+        gfh.textContent = "Global filters";
+        gfBox.appendChild(gfh);
+        const gfNote = doc.createElement("div");
+        gfNote.className = "ga-settings-note";
+        gfNote.textContent = "Drag to reorder. Click Edit to configure a filter. Use + to add a new filter.";
+        gfBox.appendChild(gfNote);
+        const gfEnabled = gfCurrent?.enabled !== false;
+        const barRow = doc.createElement("div");
+        barRow.className = "ga-le-compact-row";
+        const barDrag = doc.createElement("div");
+        barDrag.className = "ga-le-drag";
+        barDrag.textContent = "";
+        barRow.appendChild(barDrag);
+        const barTitle = doc.createElement("div");
+        barTitle.className = "ga-le-compact-title";
+        barTitle.textContent = "Global filter bar";
+        barRow.appendChild(barTitle);
+        const barMeta = doc.createElement("div");
+        barMeta.className = "ga-le-compact-meta";
+        barMeta.textContent = `${gfEnabled ? "Enabled" : "Disabled"} \u2022 ${String(gfCurrent?.layout?.variant ?? "compact")}`;
+        barRow.appendChild(barMeta);
+        const barActions = doc.createElement("div");
+        barActions.className = "ga-le-compact-actions";
+        barActions.appendChild(
           mkBtn(
             doc,
-            "Edit",
-            () => {
-              editDrilldownTarget = target;
-              render();
-            },
-            "primary"
+            gfEnabled ? "Disable" : "Enable",
+            () => setGlobalFilters({ ...gfCurrent, enabled: !gfEnabled }),
+            gfEnabled ? "ghost" : "primary"
           )
         );
-        row.appendChild(actions);
-        ddBox.appendChild(row);
-      });
-      panels.appendChild(ddBox);
+        barActions.appendChild(
+          mkBtn(
+            doc,
+            "Advanced",
+            () => {
+              editGlobalFilters = true;
+              render();
+            },
+            "ghost"
+          )
+        );
+        barRow.appendChild(barActions);
+        gfBox.appendChild(barRow);
+        const reorderControl = (fromIdx, toIdx) => {
+          if (fromIdx === toIdx) return;
+          if (fromIdx < 0 || fromIdx >= gfControls.length) return;
+          if (toIdx < 0 || toIdx >= gfControls.length) return;
+          const next = [...gfControls];
+          const [picked] = next.splice(fromIdx, 1);
+          next.splice(toIdx, 0, picked);
+          setControls(next);
+        };
+        gfControls.forEach((ctrl, idx) => {
+          const row = doc.createElement("div");
+          row.className = "ga-le-compact-row";
+          row.draggable = true;
+          row.dataset.idx = String(idx);
+          row.addEventListener("click", () => {
+            editGlobalFilterIdx = idx;
+            render();
+          });
+          row.addEventListener("dragstart", (ev) => {
+            try {
+              ev.dataTransfer?.setData("text/plain", String(idx));
+              ev.dataTransfer?.setDragImage?.(row, 12, 12);
+            } catch {
+            }
+            row.classList.add("dragging");
+          });
+          row.addEventListener("dragend", () => row.classList.remove("dragging"));
+          row.addEventListener("dragover", (ev) => {
+            ev.preventDefault();
+            row.classList.add("dragover");
+          });
+          row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+          row.addEventListener("drop", (ev) => {
+            ev.preventDefault();
+            row.classList.remove("dragover");
+            const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+            const fromIdx = asInt(raw, -1);
+            if (fromIdx < 0) return;
+            reorderControl(fromIdx, idx);
+          });
+          const drag = doc.createElement("div");
+          drag.className = "ga-le-drag";
+          drag.title = "Drag to reorder";
+          drag.textContent = "\u22EE\u22EE";
+          row.appendChild(drag);
+          const title = doc.createElement("div");
+          title.className = "ga-le-compact-title";
+          title.textContent = String(ctrl?.label || ctrl?.id || "Untitled filter");
+          row.appendChild(title);
+          const meta = doc.createElement("div");
+          meta.className = "ga-le-compact-meta";
+          const metaParts = [];
+          if (ctrl?.id) metaParts.push(String(ctrl.id));
+          metaParts.push(String(ctrl?.type ?? "select"));
+          if (ctrl?.type === "select") metaParts.push(String(ctrl?.dimension ?? "(no dimension)"));
+          if (Array.isArray(ctrl?.appliesTo) && ctrl.appliesTo.length) metaParts.push(String(ctrl.appliesTo.join(",")));
+          meta.textContent = metaParts.filter(Boolean).join(" \u2022 ");
+          row.appendChild(meta);
+          const actions = doc.createElement("div");
+          actions.className = "ga-le-compact-actions";
+          actions.appendChild(
+            mkIconBtn(doc, "\u270E", () => {
+              editGlobalFilterIdx = idx;
+              render();
+            })
+          );
+          actions.appendChild(
+            mkIconBtn(
+              doc,
+              "\u{1F5D1}",
+              () => {
+                if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
+                setControls(gfControls.filter((_, i) => i !== idx));
+                if (editGlobalFilterIdx === idx) editGlobalFilterIdx = null;
+              },
+              "danger"
+            )
+          );
+          actions.appendChild(
+            mkBtn(
+              doc,
+              "Edit",
+              () => {
+                editGlobalFilterIdx = idx;
+                render();
+              },
+              "primary"
+            )
+          );
+          row.appendChild(actions);
+          gfBox.appendChild(row);
+        });
+        const addFilter = () => {
+          const id = `filter_${Math.random().toString(36).slice(2, 7)}`;
+          const next = [
+            ...gfControls,
+            { id, type: "select", label: "New filter", dimension: "", default: "all", options: "auto_distinct", appliesTo: [grainDefault] }
+          ];
+          setControls(next);
+          editGlobalFilterIdx = Math.max(0, next.length - 1);
+          render();
+        };
+        const addFilterRow = doc.createElement("div");
+        addFilterRow.className = "ga-le-compact-row";
+        addFilterRow.title = "Add filter";
+        addFilterRow.addEventListener("click", () => addFilter());
+        const addDrag2 = doc.createElement("div");
+        addDrag2.className = "ga-le-drag";
+        addDrag2.textContent = "+";
+        addFilterRow.appendChild(addDrag2);
+        const addTitle2 = doc.createElement("div");
+        addTitle2.className = "ga-le-compact-title";
+        addTitle2.textContent = "Add filter";
+        addFilterRow.appendChild(addTitle2);
+        const addMeta2 = doc.createElement("div");
+        addMeta2.className = "ga-le-compact-meta";
+        addMeta2.textContent = "";
+        addFilterRow.appendChild(addMeta2);
+        const addActions2 = doc.createElement("div");
+        addActions2.className = "ga-le-compact-actions";
+        addActions2.appendChild(mkBtn(doc, "+", () => addFilter(), "primary"));
+        addFilterRow.appendChild(addActions2);
+        gfBox.appendChild(addFilterRow);
+        panels.appendChild(gfBox);
+      }
+      if (mode === "drilldowns") {
+        panels.appendChild(mkHr(doc));
+        const ddBox = doc.createElement("div");
+        ddBox.className = "ga-le-box";
+        const ddh = doc.createElement("div");
+        ddh.className = "ga-le-box-head";
+        ddh.textContent = "Drilldown presets";
+        ddBox.appendChild(ddh);
+        const ddn = doc.createElement("div");
+        ddn.className = "ga-settings-note";
+        ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
+        ddBox.appendChild(ddn);
+        const ddOverride2 = draft.dashboard?.drilldownPresets ?? {};
+        const setDdOverride2 = (target, nextTarget) => {
+          const next = cloneJson2(draft);
+          const cur = next.dashboard.drilldownPresets ?? {};
+          next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
+          draft = next;
+          markDirty();
+        };
+        const removeDdOverride2 = (target) => {
+          const next = cloneJson2(draft);
+          const cur = next.dashboard.drilldownPresets ?? {};
+          const { [target]: _, ...rest } = cur;
+          next.dashboard.drilldownPresets = rest;
+          draft = next;
+          markDirty();
+        };
+        const targets = Object.keys(sem?.drilldownPresets ?? {});
+        if (targets.length === 0) {
+          const none = doc.createElement("div");
+          none.className = "ga-settings-note";
+          none.textContent = "No drilldown targets found.";
+          ddBox.appendChild(none);
+        }
+        targets.forEach((target) => {
+          const preset = sem?.drilldownPresets?.[target] ?? {};
+          const keys2 = Object.keys(preset?.columnsPresets ?? {});
+          const left = doc.createElement("div");
+          left.className = "ga-le-compact-title";
+          left.textContent = `${target} \u2022 ${keys2.length} presets`;
+          const row = doc.createElement("div");
+          row.className = "ga-le-compact-row";
+          row.appendChild(left);
+          const actions = doc.createElement("div");
+          actions.className = "ga-le-compact-actions";
+          actions.appendChild(
+            mkBtn(
+              doc,
+              "Edit",
+              () => {
+                editDrilldownTarget = target;
+                render();
+              },
+              "primary"
+            )
+          );
+          row.appendChild(actions);
+          ddBox.appendChild(row);
+        });
+        panels.appendChild(ddBox);
+      }
       if (editGlobalFilters) {
         const { overlay, body } = mkModal("Global filters", () => {
           editGlobalFilters = false;
@@ -35240,6 +35418,151 @@ ${shapes}`.trim();
         });
         renderGlobalFilters(body);
         wrap.appendChild(overlay);
+      }
+      if (editGlobalFilterIdx !== null) {
+        const gfFallback = {
+          enabled: true,
+          layout: { variant: "compact" },
+          controls: [],
+          buttons: { apply: false, reset: true }
+        };
+        const gfRaw = draft.dashboard.globalFilters;
+        const gfCurrent = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
+        if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
+        if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
+        const controls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+        const idx = editGlobalFilterIdx;
+        const ctrl = controls[idx];
+        if (!ctrl) {
+          editGlobalFilterIdx = null;
+        } else {
+          const { overlay, body } = mkModal(`Global filter: ${String(ctrl?.label || ctrl?.id || "")}`, () => {
+            editGlobalFilterIdx = null;
+            render();
+          });
+          const setGlobalFilters = (nextGlobalFilters) => {
+            const next = cloneJson2(draft);
+            next.dashboard.globalFilters = nextGlobalFilters;
+            draft = next;
+            markDirty();
+          };
+          const patchCtrl = (nextCtrl) => setGlobalFilters({ ...gfCurrent, controls: controls.map((c, i) => i === idx ? nextCtrl : c) });
+          const top = doc.createElement("div");
+          top.className = "ga-le-toprow";
+          top.appendChild(
+            mkBtn(
+              doc,
+              "Delete",
+              () => {
+                if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
+                setGlobalFilters({ ...gfCurrent, controls: controls.filter((_, i) => i !== idx) });
+                editGlobalFilterIdx = null;
+                render();
+              },
+              "danger"
+            )
+          );
+          top.appendChild(
+            mkBtn(doc, "Advanced (all)", () => {
+              editGlobalFilterIdx = null;
+              editGlobalFilters = true;
+              render();
+            })
+          );
+          body.appendChild(top);
+          const dimsAll = Object.keys(semantic.dimensions ?? {}).map((id) => ({ value: id, label: id }));
+          body.appendChild(mkTextInput(doc, "id", String(ctrl.id ?? ""), (v) => patchCtrl({ ...ctrl, id: v })));
+          body.appendChild(
+            mkSelect(
+              doc,
+              "type",
+              String(ctrl.type ?? "select"),
+              [
+                { value: "select", label: "select" },
+                { value: "date_range", label: "date_range" }
+              ],
+              (v) => {
+                if (v === ctrl.type) return;
+                if (v === "date_range") {
+                  patchCtrl({
+                    id: ctrl.id,
+                    type: "date_range",
+                    label: ctrl.label || "Date range",
+                    default: { fromTs: null, toTs: null },
+                    appliesTo: ctrl.appliesTo ?? [grainDefault]
+                  });
+                } else {
+                  patchCtrl({
+                    id: ctrl.id,
+                    type: "select",
+                    label: ctrl.label || "New filter",
+                    dimension: "",
+                    default: "all",
+                    options: "auto_distinct",
+                    appliesTo: ctrl.appliesTo ?? [grainDefault]
+                  });
+                }
+              }
+            )
+          );
+          body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
+          body.appendChild(
+            mkMultiSelect(doc, "appliesTo", Array.isArray(ctrl.appliesTo) ? ctrl.appliesTo : [grainDefault], grainOpts, (vals) => patchCtrl({ ...ctrl, appliesTo: vals }))
+          );
+          if (ctrl.type === "select") {
+            body.appendChild(mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => patchCtrl({ ...ctrl, dimension: v })));
+            body.appendChild(
+              mkSelect(
+                doc,
+                "options",
+                String(ctrl.options ?? "auto_distinct"),
+                [
+                  { value: "auto_distinct", label: "auto_distinct" },
+                  { value: "auto_teammates", label: "auto_teammates" }
+                ],
+                (v) => patchCtrl({ ...ctrl, options: v })
+              )
+            );
+            body.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
+            body.appendChild(
+              mkSelect(
+                doc,
+                "presentation",
+                String(ctrl.presentation ?? "dropdown"),
+                [{ value: "dropdown", label: "dropdown" }, { value: "map", label: "map" }],
+                (v) => patchCtrl({ ...ctrl, presentation: v })
+              )
+            );
+            if (ctrl.presentation === "map") {
+              const map = ctrl.map ?? {};
+              body.appendChild(
+                mkSelect(
+                  doc,
+                  "map.variant",
+                  String(map.variant ?? "compact"),
+                  [{ value: "compact", label: "compact" }, { value: "wide", label: "wide" }],
+                  (v) => patchCtrl({ ...ctrl, map: { ...map, variant: v } })
+                )
+              );
+              body.appendChild(
+                mkNumberInput(doc, "map.height", asInt(map.height, 340), (n) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n)) } }), {
+                  min: 160,
+                  max: 1200,
+                  step: 10
+                })
+              );
+              body.appendChild(mkToggle(doc, "map.restrictToOptions", !!map.restrictToOptions, (v) => patchCtrl({ ...ctrl, map: { ...map, restrictToOptions: v } })));
+              body.appendChild(mkToggle(doc, "map.tintSelectable", map.tintSelectable !== false, (v) => patchCtrl({ ...ctrl, map: { ...map, tintSelectable: v } })));
+            }
+          } else if (ctrl.type === "date_range") {
+            const btnRow = doc.createElement("div");
+            btnRow.className = "ga-le-toprow";
+            btnRow.appendChild(mkBtn(doc, "Reset default", () => patchCtrl({ ...ctrl, default: { fromTs: null, toTs: null } })));
+            body.appendChild(btnRow);
+          }
+          body.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
+          wrap.appendChild(overlay);
+        }
       }
       if (editDrilldownTarget) {
         const target = editDrilldownTarget;
@@ -35939,12 +36262,12 @@ ${shapes}`.trim();
         note.className = "ga-settings-note";
         note.textContent = "Choose which global filter controls are shown for this section. Default: show all.";
         fsBox.appendChild(note);
-        const mode = include.length ? "only" : exclude.length ? "except" : "all";
+        const mode2 = include.length ? "only" : exclude.length ? "except" : "all";
         fsBox.appendChild(
           mkSelect(
             doc,
             "Mode",
-            mode,
+            mode2,
             [
               { value: "all", label: "Show all filters" },
               { value: "only", label: "Show only selected" },
@@ -35957,11 +36280,11 @@ ${shapes}`.trim();
             }
           )
         );
-        const selected = mode === "only" ? include : mode === "except" ? exclude : [];
-        if (mode !== "all") {
+        const selected = mode2 === "only" ? include : mode2 === "except" ? exclude : [];
+        if (mode2 !== "all") {
           fsBox.appendChild(
             mkMultiSelect(doc, "Filters", selected, ctrlOpts, (vals) => {
-              if (mode === "only") return patchSection({ filterScope: normalizeFilterScope({ include: vals, exclude: [] }) });
+              if (mode2 === "only") return patchSection({ filterScope: normalizeFilterScope({ include: vals, exclude: [] }) });
               return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude: vals }) });
             })
           );
@@ -36792,12 +37115,20 @@ ${shapes}`.trim();
       const templateTab = doc.createElement("button");
       templateTab.className = "ga-settings-tab";
       templateTab.textContent = "Template";
-      const layoutTab = doc.createElement("button");
-      layoutTab.className = "ga-settings-tab";
-      layoutTab.textContent = "Layout";
+      const sectionLayoutTab = doc.createElement("button");
+      sectionLayoutTab.className = "ga-settings-tab";
+      sectionLayoutTab.textContent = "Section Layout";
+      const globalFiltersTab = doc.createElement("button");
+      globalFiltersTab.className = "ga-settings-tab";
+      globalFiltersTab.textContent = "Global Filters";
+      const drilldownsTab = doc.createElement("button");
+      drilldownsTab.className = "ga-settings-tab";
+      drilldownsTab.textContent = "Drilldowns";
       tabs.appendChild(appearanceTab);
       tabs.appendChild(standardsTab);
-      tabs.appendChild(layoutTab);
+      tabs.appendChild(sectionLayoutTab);
+      tabs.appendChild(globalFiltersTab);
+      tabs.appendChild(drilldownsTab);
       tabs.appendChild(templateTab);
       const settings = getSettings();
       let dashboard = getDashboard();
@@ -36900,7 +37231,7 @@ ${shapes}`.trim();
       templatePane.className = "ga-settings-pane";
       const templateWarn = doc.createElement("div");
       templateWarn.className = "ga-settings-note";
-      templateWarn.textContent = "Warning: Editing the template JSON can easily break the dashboard. Prefer the Layout tab unless you know what you're doing.";
+      templateWarn.textContent = "Warning: Editing the template JSON can easily break the dashboard. Prefer Section Layout / Global Filters / Drilldowns unless you know what you're doing.";
       templatePane.appendChild(templateWarn);
       const templateField = doc.createElement("div");
       templateField.className = "ga-settings-field";
@@ -36940,28 +37271,45 @@ ${shapes}`.trim();
       templateActions.appendChild(templateReset);
       templatePane.appendChild(templateActions);
       templatePane.appendChild(templateStatus);
-      const layoutPane = doc.createElement("div");
-      layoutPane.className = "ga-settings-pane";
-      const layoutStatus = doc.createElement("div");
-      layoutStatus.className = "ga-settings-status";
-      const layoutHost = doc.createElement("div");
-      layoutPane.appendChild(layoutHost);
-      layoutPane.appendChild(layoutStatus);
+      const sectionLayoutPane = doc.createElement("div");
+      sectionLayoutPane.className = "ga-settings-pane";
+      const sectionLayoutStatus = doc.createElement("div");
+      sectionLayoutStatus.className = "ga-settings-status";
+      const sectionLayoutHost = doc.createElement("div");
+      sectionLayoutPane.appendChild(sectionLayoutHost);
+      sectionLayoutPane.appendChild(sectionLayoutStatus);
+      const globalFiltersPane = doc.createElement("div");
+      globalFiltersPane.className = "ga-settings-pane";
+      const globalFiltersStatus = doc.createElement("div");
+      globalFiltersStatus.className = "ga-settings-status";
+      const globalFiltersHost = doc.createElement("div");
+      globalFiltersPane.appendChild(globalFiltersHost);
+      globalFiltersPane.appendChild(globalFiltersStatus);
+      const drilldownsPane = doc.createElement("div");
+      drilldownsPane.className = "ga-settings-pane";
+      const drilldownsStatus = doc.createElement("div");
+      drilldownsStatus.className = "ga-settings-status";
+      const drilldownsHost = doc.createElement("div");
+      drilldownsPane.appendChild(drilldownsHost);
+      drilldownsPane.appendChild(drilldownsStatus);
       panes.appendChild(appearancePane);
       panes.appendChild(standardsPane);
-      panes.appendChild(layoutPane);
+      panes.appendChild(sectionLayoutPane);
+      panes.appendChild(globalFiltersPane);
+      panes.appendChild(drilldownsPane);
       panes.appendChild(templatePane);
-      const renderLayout = () => {
-        layoutHost.innerHTML = "";
+      const renderLayout = (mode, host, status) => {
+        host.innerHTML = "";
         const latest = getDashboard();
         dashboard = latest;
         templateEditor.value = JSON.stringify(latest, null, 2);
-        layoutHost.appendChild(
+        host.appendChild(
           renderLayoutEditor({
             doc,
             semantic,
             dashboard: latest,
-            statusEl: layoutStatus,
+            mode,
+            statusEl: status,
             onChange: (next) => {
               void (async () => {
                 try {
@@ -36969,25 +37317,41 @@ ${shapes}`.trim();
                   dashboard = next;
                   templateEditor.value = JSON.stringify(next, null, 2);
                 } catch (e) {
-                  layoutStatus.textContent = e instanceof Error ? e.message : String(e);
-                  layoutStatus.className = "ga-settings-status error";
+                  status.textContent = e instanceof Error ? e.message : String(e);
+                  status.className = "ga-settings-status error";
                 }
               })();
             }
           })
         );
       };
+      let renderedSectionLayout = false;
+      let renderedGlobalFilters = false;
+      let renderedDrilldowns = false;
       const setActiveTab = (idx) => {
-        const tabButtons = [appearanceTab, standardsTab, layoutTab, templateTab];
-        const tabPanes = [appearancePane, standardsPane, layoutPane, templatePane];
+        const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, templateTab];
+        const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, templatePane];
         tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
         tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
-        if (idx === 2) renderLayout();
+        if (idx === 2 && !renderedSectionLayout) {
+          renderedSectionLayout = true;
+          renderLayout("section_layout", sectionLayoutHost, sectionLayoutStatus);
+        }
+        if (idx === 3 && !renderedGlobalFilters) {
+          renderedGlobalFilters = true;
+          renderLayout("global_filters", globalFiltersHost, globalFiltersStatus);
+        }
+        if (idx === 4 && !renderedDrilldowns) {
+          renderedDrilldowns = true;
+          renderLayout("drilldowns", drilldownsHost, drilldownsStatus);
+        }
       };
       appearanceTab.addEventListener("click", () => setActiveTab(0));
       standardsTab.addEventListener("click", () => setActiveTab(1));
-      layoutTab.addEventListener("click", () => setActiveTab(2));
-      templateTab.addEventListener("click", () => setActiveTab(3));
+      sectionLayoutTab.addEventListener("click", () => setActiveTab(2));
+      globalFiltersTab.addEventListener("click", () => setActiveTab(3));
+      drilldownsTab.addEventListener("click", () => setActiveTab(4));
+      templateTab.addEventListener("click", () => setActiveTab(5));
       const persistSettings = async () => {
         const next = {
           appearance: {
