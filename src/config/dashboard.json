@@ -127,6 +127,7 @@
             { "key": "ts", "label": "Date", "sortable": true },
             { "key": "modeFamily", "label": "Game Mode", "sortable": true },
             { "key": "movementType", "label": "Movement", "sortable": true },
+            { "key": "teammateName", "label": "Mate", "sortable": true },
             { "key": "roundsCount", "label": "Rounds", "sortable": true },
             { "key": "result", "label": "Result", "sortable": true, "colored": true },
             { "key": "endRating", "label": "End Rating", "sortable": true },

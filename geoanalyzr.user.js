@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.8
+// @version      2.1.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -10260,6 +10260,11 @@ ${shapes}`.trim();
       if (typeof out.movementType !== "string" || !out.movementType) {
         const mv = movementByGame.get(g.gameId);
         if (mv) out.movementType = mv;
+      }
+      if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
+        const raw = asTrimmedString2(out.gameModeSimple) ?? asTrimmedString2(out.gameMode) ?? asTrimmedString2(out.mode) ?? asTrimmedString2(out.gameType);
+        const norm = normalizeMovementType(raw);
+        if (norm !== "unknown") out.movementType = norm;
       }
       const scoreSum = scoreSumByGame.get(g.gameId);
       const scoreCount = scoreCountByGame.get(g.gameId);
@@ -32762,7 +32767,11 @@ ${shapes}`.trim();
       player_opponent_mate_score: ["p4_score", "player_opponent_mate_score"],
       player_opponent_mate_isBestGuess: ["p4_isBestGuess", "player_opponent_mate_isBestGuess"],
       distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
-      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"]
+      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"],
+      mapName: ["mapName", "map_name"],
+      mapSlug: ["mapSlug", "map_slug"],
+      isRanked: ["isRated", "is_rated", "rated"],
+      isRated: ["is_rated", "rated"]
     },
     drilldownPresets: {
       rounds: {
@@ -32975,6 +32984,7 @@ ${shapes}`.trim();
               { key: "ts", label: "Date", sortable: true },
               { key: "modeFamily", label: "Game Mode", sortable: true },
               { key: "movementType", label: "Movement", sortable: true },
+              { key: "teammateName", label: "Mate", sortable: true },
               { key: "roundsCount", label: "Rounds", sortable: true },
               { key: "result", label: "Result", sortable: true, colored: true },
               { key: "endRating", label: "End Rating", sortable: true },

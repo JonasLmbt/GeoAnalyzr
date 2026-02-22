@@ -1063,7 +1063,11 @@
     "player_opponent_mate_score": ["p4_score", "player_opponent_mate_score"],
     "player_opponent_mate_isBestGuess": ["p4_isBestGuess", "player_opponent_mate_isBestGuess"],
     "distanceKm": ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
-    "durationSeconds": ["durationSeconds", "guessDurationSec", "timeSec"]
+    "durationSeconds": ["durationSeconds", "guessDurationSec", "timeSec"],
+    "mapName": ["mapName", "map_name"],
+    "mapSlug": ["mapSlug", "map_slug"],
+    "isRanked": ["isRated", "is_rated", "rated"],
+    "isRated": ["is_rated", "rated"]
   },
 
   "drilldownPresets": {

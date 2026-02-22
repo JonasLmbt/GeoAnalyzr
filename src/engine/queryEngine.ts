@@ -706,6 +706,15 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       const mv = movementByGame.get(g.gameId);
       if (mv) out.movementType = mv;
     }
+    if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
+      const raw =
+        asTrimmedString(out.gameModeSimple) ??
+        asTrimmedString(out.gameMode) ??
+        asTrimmedString(out.mode) ??
+        asTrimmedString(out.gameType);
+      const norm = normalizeMovementType(raw);
+      if (norm !== "unknown") out.movementType = norm;
+    }
 
     const scoreSum = scoreSumByGame.get(g.gameId);
     const scoreCount = scoreCountByGame.get(g.gameId);
