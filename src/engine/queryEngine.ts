@@ -355,9 +355,16 @@ export async function getSessions(filters: GlobalFilters, opts?: { rounds?: Roun
   const controlIds = gf?.controlIds;
   const gapMinutes = typeof gf?.sessionGapMinutes === "number" && Number.isFinite(gf.sessionGapMinutes) ? gf.sessionGapMinutes : 45;
 
+  // Important: when sessions are built from a caller-provided round list, they are inherently local/ephemeral
+  // (e.g. "sessions together with teammate X"). Caching them under the same global key would cause cross-contamination
+  // between different local datasets and even different sections, which leads to obviously wrong session counts/breaks.
+  const fromProvidedRounds = Array.isArray(opts?.rounds);
+
   const key = normalizeGlobalFilterKey(spec, state, "session", controlIds) + `|gap=${gapMinutes}`;
-  const cached = sessionsFilteredCache.get(key);
-  if (cached) return cached as SessionRow[];
+  if (!fromProvidedRounds) {
+    const cached = sessionsFilteredCache.get(key);
+    if (cached) return cached as SessionRow[];
+  }
 
   // If prefiltered rounds are provided, build sessions from them (so round-grain filters affect sessionization).
   const raw = opts?.rounds ? await attachRatingsToSessions(buildSessionsFromRounds(opts.rounds, gapMinutes)) : await getSessionsRaw(gapMinutes);
@@ -372,7 +379,7 @@ export async function getSessions(filters: GlobalFilters, opts?: { rounds?: Roun
   }
   rows = applyFilters(rows, applied.clauses, "session");
 
-  sessionsFilteredCache.set(key, rows);
+  if (!fromProvidedRounds) sessionsFilteredCache.set(key, rows);
   return rows as SessionRow[];
 }
 

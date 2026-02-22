@@ -9,24 +9,8 @@ function legacy(obj: any, ...keys: string[]): any {
 }
 
 export function getSelfScore(r: RoundRow): number | undefined {
-  const mf = String((r as any)?.modeFamily ?? "").trim().toLowerCase();
   const selfRaw = legacy(r, "player_self_score", "p1_score", "score");
   const self = typeof selfRaw === "number" ? selfRaw : undefined;
-
-  // In team duels, treat the team's best own guess as the effective score.
-  if (mf === "teamduels") {
-    const mateRaw = legacy(r, "player_mate_score", "p2_score");
-    const mate = typeof mateRaw === "number" ? mateRaw : undefined;
-    const selfBest = legacy(r, "player_self_isBestGuess", "p1_isBestGuess");
-    const mateBest = legacy(r, "player_mate_isBestGuess", "p2_isBestGuess");
-
-    if (mateBest === true && selfBest !== true && typeof mate === "number") return mate;
-    if (selfBest === true && mateBest !== true && typeof self === "number") return self;
-
-    if (typeof self === "number" && typeof mate === "number") return Math.max(self, mate);
-    if (typeof mate === "number") return mate;
-  }
-
   return typeof self === "number" ? self : undefined;
 }
 

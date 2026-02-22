@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.7
+// @version      2.1.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9285,19 +9285,8 @@ ${shapes}`.trim();
     return void 0;
   }
   function getSelfScore(r) {
-    const mf = String(r?.modeFamily ?? "").trim().toLowerCase();
     const selfRaw = legacy(r, "player_self_score", "p1_score", "score");
     const self2 = typeof selfRaw === "number" ? selfRaw : void 0;
-    if (mf === "teamduels") {
-      const mateRaw = legacy(r, "player_mate_score", "p2_score");
-      const mate = typeof mateRaw === "number" ? mateRaw : void 0;
-      const selfBest = legacy(r, "player_self_isBestGuess", "p1_isBestGuess");
-      const mateBest = legacy(r, "player_mate_isBestGuess", "p2_isBestGuess");
-      if (mateBest === true && selfBest !== true && typeof mate === "number") return mate;
-      if (selfBest === true && mateBest !== true && typeof self2 === "number") return self2;
-      if (typeof self2 === "number" && typeof mate === "number") return Math.max(self2, mate);
-      if (typeof mate === "number") return mate;
-    }
     return typeof self2 === "number" ? self2 : void 0;
   }
   function getPlayedAt(r) {
@@ -9994,9 +9983,12 @@ ${shapes}`.trim();
     const state = gf?.state ?? {};
     const controlIds = gf?.controlIds;
     const gapMinutes = typeof gf?.sessionGapMinutes === "number" && Number.isFinite(gf.sessionGapMinutes) ? gf.sessionGapMinutes : 45;
+    const fromProvidedRounds = Array.isArray(opts?.rounds);
     const key = normalizeGlobalFilterKey(spec, state, "session", controlIds) + `|gap=${gapMinutes}`;
-    const cached = sessionsFilteredCache.get(key);
-    if (cached) return cached;
+    if (!fromProvidedRounds) {
+      const cached = sessionsFilteredCache.get(key);
+      if (cached) return cached;
+    }
     const raw = opts?.rounds ? await attachRatingsToSessions(buildSessionsFromRounds(opts.rounds, gapMinutes)) : await getSessionsRaw(gapMinutes);
     const applied = buildAppliedFilters(spec, state, "session", controlIds);
     let rows = raw;
@@ -10007,7 +9999,7 @@ ${shapes}`.trim();
       if (toTs2 !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs <= toTs2);
     }
     rows = applyFilters(rows, applied.clauses, "session");
-    sessionsFilteredCache.set(key, rows);
+    if (!fromProvidedRounds) sessionsFilteredCache.set(key, rows);
     return rows;
   }
   async function getGamePlayedAtBounds() {
@@ -39421,6 +39413,18 @@ ${shapes}`.trim();
           rows
         });
       };
+      const openGamesForSessionRow = async (sessionRow, titleSuffix) => {
+        const ids = Array.isArray(sessionRow?.gameIds) ? sessionRow.gameIds : [];
+        const idSet = new Set(ids.filter((x) => typeof x === "string" && x));
+        const all = await getGames({});
+        const rows = all.filter((g) => typeof g?.gameId === "string" && idSet.has(g.gameId));
+        this.open(semantic, {
+          title: `${req.title}${titleSuffix}`,
+          target: "games",
+          columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
+          rows
+        });
+      };
       const openSessionById = async (sessionId, titleSuffix) => {
         const { sessionById } = await this.ensureSessionMaps(semantic);
         const row = sessionById.get(sessionId);
@@ -39521,14 +39525,19 @@ ${shapes}`.trim();
             }
             if (req.target === "sessions" && key === "gamesCount") {
               const sid = this.getCellRawValue(r, "sessionId", semantic);
-              if (typeof sid === "string" && sid) {
+              const hasInlineIds = Array.isArray(r?.gameIds) && r.gameIds.length > 0;
+              if (hasInlineIds) {
+                td.style.cursor = "pointer";
+                td.addEventListener("click", () => void openGamesForSessionRow(r, sid ? ` (session ${sid})` : ""));
+              } else if (typeof sid === "string" && sid) {
                 td.style.cursor = "pointer";
                 td.addEventListener("click", () => void openGamesForSessionId(sid, ` (session ${sid})`));
               }
             }
             if (req.target === "sessions" && key === "sessionId" && typeof raw === "string" && raw) {
+              const hasInlineIds = Array.isArray(r?.gameIds) && r.gameIds.length > 0;
               td.style.cursor = "pointer";
-              td.addEventListener("click", () => void openGamesForSessionId(raw, ` (session ${raw})`));
+              td.addEventListener("click", () => void (hasInlineIds ? openGamesForSessionRow(r, ` (session ${raw})`) : openGamesForSessionId(raw, ` (session ${raw})`)));
             }
             tr.appendChild(td);
           }

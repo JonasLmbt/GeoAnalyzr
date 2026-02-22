@@ -198,6 +198,19 @@ export class DrilldownOverlay {
       });
     };
 
+    const openGamesForSessionRow = async (sessionRow: any, titleSuffix: string): Promise<void> => {
+      const ids = Array.isArray(sessionRow?.gameIds) ? (sessionRow.gameIds as any[]) : [];
+      const idSet = new Set(ids.filter((x) => typeof x === "string" && x));
+      const all = await getGames({});
+      const rows = (all as any[]).filter((g) => typeof (g as any)?.gameId === "string" && idSet.has((g as any).gameId));
+      this.open(semantic, {
+        title: `${req.title}${titleSuffix}`,
+        target: "games",
+        columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
+        rows
+      });
+    };
+
     const openSessionById = async (sessionId: string, titleSuffix: string): Promise<void> => {
       const { sessionById } = await this.ensureSessionMaps(semantic);
       const row = sessionById.get(sessionId);
@@ -308,14 +321,19 @@ export class DrilldownOverlay {
           // Sessions: click gamesCount or sessionId.
           if (req.target === "sessions" && key === "gamesCount") {
             const sid = this.getCellRawValue(r, "sessionId", semantic);
-            if (typeof sid === "string" && sid) {
+            const hasInlineIds = Array.isArray((r as any)?.gameIds) && (r as any).gameIds.length > 0;
+            if (hasInlineIds) {
+              td.style.cursor = "pointer";
+              td.addEventListener("click", () => void openGamesForSessionRow(r, sid ? ` (session ${sid})` : ""));
+            } else if (typeof sid === "string" && sid) {
               td.style.cursor = "pointer";
               td.addEventListener("click", () => void openGamesForSessionId(sid, ` (session ${sid})`));
             }
           }
           if (req.target === "sessions" && key === "sessionId" && typeof raw === "string" && raw) {
+            const hasInlineIds = Array.isArray((r as any)?.gameIds) && (r as any).gameIds.length > 0;
             td.style.cursor = "pointer";
-            td.addEventListener("click", () => void openGamesForSessionId(raw, ` (session ${raw})`));
+            td.addEventListener("click", () => void (hasInlineIds ? openGamesForSessionRow(r, ` (session ${raw})`) : openGamesForSessionId(raw, ` (session ${raw})`)));
           }
 
           tr.appendChild(td);
