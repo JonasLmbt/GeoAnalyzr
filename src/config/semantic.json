@@ -181,7 +181,7 @@
     "movement_type": {
       "label": "Movement",
       "kind": "category",
-      "grain": "round",
+      "grain": ["round", "game"],
       "allowedCharts": ["bar", "line"],
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 8 }

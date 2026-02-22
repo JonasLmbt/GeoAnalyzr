@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.5
+// @version      2.1.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -31897,7 +31897,7 @@ ${shapes}`.trim();
       movement_type: {
         label: "Movement",
         kind: "category",
-        grain: "round",
+        grain: ["round", "game"],
         allowedCharts: ["bar", "line"],
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 8 }
@@ -32918,7 +32918,7 @@ ${shapes}`.trim();
             dimension: "movement_type",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round"]
+            appliesTo: ["round", "game"]
           },
           {
             id: "guessTimeBucket",
@@ -36760,6 +36760,19 @@ ${shapes}`.trim();
           markDirty();
         };
         const setControls = (nextControls) => setGlobalFilters({ ...gfCurrent, controls: nextControls });
+        const normalizedControls = gfControls.map((c) => {
+          if (!c || typeof c !== "object") return c;
+          if (c.type !== "select") return c;
+          const dimId = typeof c.dimension === "string" ? c.dimension : "";
+          const dim = dimId ? semantic.dimensions?.[dimId] : null;
+          const grains2 = dim ? Array.isArray(dim.grain) ? dim.grain : [dim.grain] : null;
+          if (!grains2 || grains2.length === 0) return c;
+          return { ...c, appliesTo: grains2 };
+        });
+        if (JSON.stringify(normalizedControls) !== JSON.stringify(gfControls)) {
+          setControls(normalizedControls);
+          return true;
+        }
         const gfBox = doc.createElement("div");
         gfBox.className = "ga-le-box";
         const gfh = doc.createElement("div");
@@ -36861,17 +36874,18 @@ ${shapes}`.trim();
           meta.className = "ga-le-compact-meta";
           const metaParts = [];
           if (ctrl?.id) metaParts.push(String(ctrl.id));
-          metaParts.push(String(ctrl?.type ?? "select"));
           if (ctrl?.type === "select") metaParts.push(String(ctrl?.dimension ?? "(no dimension)"));
-          if (Array.isArray(ctrl?.appliesTo) && ctrl.appliesTo.length) metaParts.push(String(ctrl.appliesTo.join(",")));
+          else metaParts.push(String(ctrl?.type ?? "select"));
           meta.textContent = metaParts.filter(Boolean).join(" \u2022 ");
           row.appendChild(meta);
           const actions = doc.createElement("div");
           actions.className = "ga-le-compact-actions";
           actions.appendChild(
             mkIconBtn(doc, "\u270E", () => {
-              editGlobalFilterIdx = idx;
-              render();
+              const nextLabel = safePrompt(doc, "Rename filter label:", String(ctrl?.label ?? ""));
+              if (nextLabel === null) return;
+              const next = gfControls.map((x, i) => i === idx ? { ...x, label: nextLabel } : x);
+              setControls(next);
             })
           );
           actions.appendChild(
@@ -37055,94 +37069,40 @@ ${shapes}`.trim();
           );
           body.appendChild(top);
           const dimsAll = Object.keys(semantic.dimensions ?? {}).map((id) => ({ value: id, label: id }));
-          body.appendChild(mkTextInput(doc, "id", String(ctrl.id ?? ""), (v) => patchCtrl({ ...ctrl, id: v })));
-          body.appendChild(
-            mkSelect(
-              doc,
-              "type",
-              String(ctrl.type ?? "select"),
-              [
-                { value: "select", label: "select" },
-                { value: "date_range", label: "date_range" }
-              ],
-              (v) => {
-                if (v === ctrl.type) return;
-                if (v === "date_range") {
-                  patchCtrl({
-                    id: ctrl.id,
-                    type: "date_range",
-                    label: ctrl.label || "Date range",
-                    default: { fromTs: null, toTs: null },
-                    appliesTo: ctrl.appliesTo ?? [grainDefault]
-                  });
-                } else {
-                  patchCtrl({
-                    id: ctrl.id,
-                    type: "select",
-                    label: ctrl.label || "New filter",
-                    dimension: "",
-                    default: "all",
-                    options: "auto_distinct",
-                    appliesTo: ctrl.appliesTo ?? [grainDefault]
-                  });
-                }
-              }
-            )
-          );
+          const idField = doc.createElement("div");
+          idField.className = "ga-le-field";
+          const idLabel = doc.createElement("label");
+          idLabel.textContent = "id";
+          idField.appendChild(idLabel);
+          const idHost = doc.createElement("div");
+          idHost.className = "ga-le-inputhost";
+          const idText = doc.createElement("div");
+          idText.style.padding = "8px 10px";
+          idText.style.border = "1px solid var(--ga-control-border)";
+          idText.style.borderRadius = "8px";
+          idText.style.background = "var(--ga-control-bg)";
+          idText.style.color = "var(--ga-control-text)";
+          idText.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+          idText.textContent = String(ctrl.id ?? "");
+          idHost.appendChild(idText);
+          idField.appendChild(idHost);
+          body.appendChild(idField);
           body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
-          body.appendChild(
-            mkMultiSelect(doc, "appliesTo", Array.isArray(ctrl.appliesTo) ? ctrl.appliesTo : [grainDefault], grainOpts, (vals) => patchCtrl({ ...ctrl, appliesTo: vals }))
-          );
           if (ctrl.type === "select") {
-            body.appendChild(mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => patchCtrl({ ...ctrl, dimension: v })));
             body.appendChild(
-              mkSelect(
-                doc,
-                "options",
-                String(ctrl.options ?? "auto_distinct"),
-                [
-                  { value: "auto_distinct", label: "auto_distinct" },
-                  { value: "auto_teammates", label: "auto_teammates" }
-                ],
-                (v) => patchCtrl({ ...ctrl, options: v })
-              )
+              mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => {
+                const dim = semantic.dimensions?.[v];
+                const grains2 = dim ? Array.isArray(dim.grain) ? dim.grain : [dim.grain] : null;
+                const nextOptions = v === "teammate_name" ? "auto_teammates" : typeof ctrl.options === "string" && ctrl.options.trim().length > 0 ? ctrl.options : "auto_distinct";
+                patchCtrl({ ...ctrl, dimension: v, options: nextOptions, appliesTo: grains2 && grains2.length ? grains2 : ctrl.appliesTo ?? [grainDefault] });
+              })
             );
             body.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
-            body.appendChild(
-              mkSelect(
-                doc,
-                "presentation",
-                String(ctrl.presentation ?? "dropdown"),
-                [{ value: "dropdown", label: "dropdown" }, { value: "map", label: "map" }],
-                (v) => patchCtrl({ ...ctrl, presentation: v })
-              )
-            );
-            if (ctrl.presentation === "map") {
-              const map = ctrl.map ?? {};
-              body.appendChild(
-                mkSelect(
-                  doc,
-                  "map.variant",
-                  String(map.variant ?? "compact"),
-                  [{ value: "compact", label: "compact" }, { value: "wide", label: "wide" }],
-                  (v) => patchCtrl({ ...ctrl, map: { ...map, variant: v } })
-                )
-              );
-              body.appendChild(
-                mkNumberInput(doc, "map.height", asInt(map.height, 340), (n) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n)) } }), {
-                  min: 160,
-                  max: 1200,
-                  step: 10
-                })
-              );
-              body.appendChild(mkToggle(doc, "map.restrictToOptions", !!map.restrictToOptions, (v) => patchCtrl({ ...ctrl, map: { ...map, restrictToOptions: v } })));
-              body.appendChild(mkToggle(doc, "map.tintSelectable", map.tintSelectable !== false, (v) => patchCtrl({ ...ctrl, map: { ...map, tintSelectable: v } })));
-            }
           } else if (ctrl.type === "date_range") {
-            const btnRow = doc.createElement("div");
-            btnRow.className = "ga-le-toprow";
-            btnRow.appendChild(mkBtn(doc, "Reset default", () => patchCtrl({ ...ctrl, default: { fromTs: null, toTs: null } })));
-            body.appendChild(btnRow);
+            const note = doc.createElement("div");
+            note.className = "ga-settings-note";
+            note.textContent = "Date range defaults are automatically initialized to your full dataset span. Advanced JSON can override behavior.";
+            body.appendChild(note);
           }
           body.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
           wrap.appendChild(overlay);

@@ -62,7 +62,7 @@
           "dimension": "movement_type",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round"]
+          "appliesTo": ["round", "game"]
         },
         {
           "id": "guessTimeBucket",
