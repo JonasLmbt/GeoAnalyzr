@@ -97,17 +97,44 @@ function createBootLog(doc: Document): BootLog {
 }
 
 async function ensureDocumentShell(targetWindow: Window, doc: Document): Promise<void> {
-  if (doc.head && doc.body) return;
+  // Firefox can briefly report a usable `document` for `about:blank` and then
+  // "finish" the blank navigation and wipe whatever was injected.
+  // To avoid the post-injection wipe, force-write a minimal shell when targeting a new tab.
+  const isSameWindow = targetWindow === window;
+  const href = (() => {
+    try {
+      const w = doc.defaultView as any;
+      const h = w?.location?.href;
+      if (typeof h === "string") return h;
+    } catch {
+      // ignore
+    }
+    return typeof doc.URL === "string" ? doc.URL : "";
+  })();
+  const isAboutBlank = href === "about:blank" || href.startsWith("about:blank#") || doc.URL === "about:blank";
+  const hasRoot = (() => {
+    try {
+      return !!doc.getElementById("geoanalyzr-semantic-root");
+    } catch {
+      return false;
+    }
+  })();
 
-  // Firefox can return a Window for `about:blank` before head/body exist.
-  // Ensure the document has a minimal HTML shell before we start injecting UI/CSS.
-  try {
-    doc.open();
-    doc.write("<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>");
-    doc.close();
-  } catch {
-    // Ignore and fall back to manual element creation below.
+  if (!isSameWindow && isAboutBlank && !hasRoot) {
+    try {
+      doc.open();
+      doc.write(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+          "<style>html,body{margin:0;padding:0;background:#0b1020;color:#cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}#geoanalyzr-boot-placeholder{padding:16px}#geoanalyzr-boot-placeholder h1{margin:0 0 6px 0;font-size:16px;color:#fff}#geoanalyzr-boot-placeholder p{margin:0;font-size:13px;opacity:.85}</style>" +
+          "</head><body><div id=\"geoanalyzr-boot-placeholder\"><h1>GeoAnalyzr</h1><p>Loading analysis…</p></div></body></html>"
+      );
+      doc.close();
+    } catch {
+      // Ignore and fall back to manual element creation below.
+    }
   }
+
+  if (doc.head && doc.body) return;
 
   if (!doc.documentElement) {
     try {
@@ -155,6 +182,10 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     throw new Error("Semantic dashboard target window is unavailable.");
   }
 
+  // Prevent re-entrant init loops (e.g. Firefox late about:blank commit).
+  if ((targetWindow as any).__gaAnalysisInitInProgress) return;
+  (targetWindow as any).__gaAnalysisInitInProgress = true;
+
   let doc: Document;
   try {
     doc = targetWindow.document;
@@ -166,6 +197,12 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   await ensureDocumentShell(targetWindow, doc);
   if (!doc.body || !doc.head) {
     throw new Error("Semantic dashboard target document is not ready.");
+  }
+
+  try {
+    doc.getElementById("geoanalyzr-boot-placeholder")?.remove();
+  } catch {
+    // ignore
   }
 
   const boot = createBootLog(doc);
@@ -337,5 +374,35 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     body.appendChild(pre);
     boot.error("Failed to render semantic dashboard", error);
     throw error;
+  } finally {
+    // If the browser finishes about:blank navigation after our first render (Firefox),
+    // it can wipe the document. Install a tiny watchdog that retries init once.
+    if (!(targetWindow as any).__gaAnalysisWatchdogInstalled) {
+      (targetWindow as any).__gaAnalysisWatchdogInstalled = true;
+      const schedule = (delayMs: number) => {
+        (targetWindow as any)?.setTimeout?.(() => {
+          try {
+            if (targetWindow.closed) return;
+            const d = targetWindow.document;
+            const root = d.getElementById("geoanalyzr-semantic-root");
+            if (root) return;
+
+            const attempts = ((targetWindow as any).__gaAnalysisInitAttempts ?? 0) + 1;
+            (targetWindow as any).__gaAnalysisInitAttempts = attempts;
+            if (attempts > 2) return;
+
+            // Force a shell rewrite by clearing root markers and re-running init.
+            void initAnalysisWindow({ targetWindow });
+          } catch {
+            // ignore
+          }
+        }, delayMs);
+      };
+      schedule(250);
+      schedule(1200);
+      schedule(3000);
+    }
+
+    (targetWindow as any).__gaAnalysisInitInProgress = false;
   }
 }

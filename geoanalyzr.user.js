@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.3
+// @version      2.1.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -43879,13 +43879,35 @@ ${describeError(err)}` : ""}`),
     };
   }
   async function ensureDocumentShell(targetWindow, doc) {
-    if (doc.head && doc.body) return;
-    try {
-      doc.open();
-      doc.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
-      doc.close();
-    } catch {
+    const isSameWindow = targetWindow === window;
+    const href = (() => {
+      try {
+        const w = doc.defaultView;
+        const h = w?.location?.href;
+        if (typeof h === "string") return h;
+      } catch {
+      }
+      return typeof doc.URL === "string" ? doc.URL : "";
+    })();
+    const isAboutBlank = href === "about:blank" || href.startsWith("about:blank#") || doc.URL === "about:blank";
+    const hasRoot = (() => {
+      try {
+        return !!doc.getElementById("geoanalyzr-semantic-root");
+      } catch {
+        return false;
+      }
+    })();
+    if (!isSameWindow && isAboutBlank && !hasRoot) {
+      try {
+        doc.open();
+        doc.write(
+          '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;padding:0;background:#0b1020;color:#cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}#geoanalyzr-boot-placeholder{padding:16px}#geoanalyzr-boot-placeholder h1{margin:0 0 6px 0;font-size:16px;color:#fff}#geoanalyzr-boot-placeholder p{margin:0;font-size:13px;opacity:.85}</style></head><body><div id="geoanalyzr-boot-placeholder"><h1>GeoAnalyzr</h1><p>Loading analysis\u2026</p></div></body></html>'
+        );
+        doc.close();
+      } catch {
+      }
     }
+    if (doc.head && doc.body) return;
     if (!doc.documentElement) {
       try {
         const html = doc.createElement("html");
@@ -43922,6 +43944,8 @@ ${describeError(err)}` : ""}`),
     if (!targetWindow || targetWindow.closed) {
       throw new Error("Semantic dashboard target window is unavailable.");
     }
+    if (targetWindow.__gaAnalysisInitInProgress) return;
+    targetWindow.__gaAnalysisInitInProgress = true;
     let doc;
     try {
       doc = targetWindow.document;
@@ -43931,6 +43955,10 @@ ${describeError(err)}` : ""}`),
     await ensureDocumentShell(targetWindow, doc);
     if (!doc.body || !doc.head) {
       throw new Error("Semantic dashboard target document is not ready.");
+    }
+    try {
+      doc.getElementById("geoanalyzr-boot-placeholder")?.remove();
+    } catch {
     }
     const boot = createBootLog(doc);
     const ua = doc.defaultView?.navigator?.userAgent ?? "";
@@ -44077,6 +44105,29 @@ ${error instanceof Error ? error.message : String(error)}`;
       body.appendChild(pre);
       boot.error("Failed to render semantic dashboard", error);
       throw error;
+    } finally {
+      if (!targetWindow.__gaAnalysisWatchdogInstalled) {
+        targetWindow.__gaAnalysisWatchdogInstalled = true;
+        const schedule = (delayMs) => {
+          targetWindow?.setTimeout?.(() => {
+            try {
+              if (targetWindow.closed) return;
+              const d = targetWindow.document;
+              const root2 = d.getElementById("geoanalyzr-semantic-root");
+              if (root2) return;
+              const attempts = (targetWindow.__gaAnalysisInitAttempts ?? 0) + 1;
+              targetWindow.__gaAnalysisInitAttempts = attempts;
+              if (attempts > 2) return;
+              void initAnalysisWindow({ targetWindow });
+            } catch {
+            }
+          }, delayMs);
+        };
+        schedule(250);
+        schedule(1200);
+        schedule(3e3);
+      }
+      targetWindow.__gaAnalysisInitInProgress = false;
     }
   }
 
