@@ -183,6 +183,38 @@ function isFlawlessWinKeyAny(row: any): GroupKey | null {
   return null;
 }
 
+function mapSlugKeyAny(row: any): GroupKey | null {
+  const direct = asTrimmedString((row as any)?.mapSlug ?? (row as any)?.map_slug);
+  if (direct) return direct;
+  const raw = (row as any)?.raw;
+  const v = asTrimmedString(raw?.options?.map?.slug ?? raw?.mapSlug ?? raw?.map?.slug);
+  return v ? v : null;
+}
+
+function mapNameKeyAny(row: any): GroupKey | null {
+  const direct = asTrimmedString((row as any)?.mapName ?? (row as any)?.map_name);
+  if (direct) return direct;
+  const raw = (row as any)?.raw;
+  const v = asTrimmedString(raw?.options?.map?.name ?? raw?.mapName ?? raw?.map?.name);
+  return v ? v : null;
+}
+
+function isRatedKeyAny(row: any): GroupKey | null {
+  const direct = (row as any)?.isRated;
+  if (direct === true) return "Rated";
+  if (direct === false) return "Unrated";
+  const raw = (row as any)?.raw;
+  const v = raw?.options?.isRated;
+  if (v === true) return "Rated";
+  if (v === false) return "Unrated";
+
+  // Best-effort inference for older payloads:
+  const a = (row as any)?.player_self_startRating;
+  const b = (row as any)?.player_self_endRating;
+  if (typeof a === "number" && Number.isFinite(a) && typeof b === "number" && Number.isFinite(b)) return "Rated";
+  return "Unknown";
+}
+
 function teammateKeyAny(row: any): GroupKey | null {
   const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
   return v ? v : null;
@@ -255,6 +287,9 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     confused_countries: confusedCountriesKey,
     guess_country: guessCountryKey,
     teammate_name: teammateNameKey,
+    map_slug: mapSlugKeyAny,
+    map_name: mapNameKeyAny,
+    is_rated: isRatedKeyAny,
     mode_family: (r: any) => {
       const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
       if (!v) return null;
@@ -299,6 +334,9 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     },
     movement_type: movementTypeKeyAny,
     teammate_name: teammateKeyAny,
+    map_slug: mapSlugKeyAny,
+    map_name: mapNameKeyAny,
+    is_rated: isRatedKeyAny,
     game_mode: gameModeKeyAny,
     mode_family: modeFamilyKeyAny,
     result: resultKeyAny,

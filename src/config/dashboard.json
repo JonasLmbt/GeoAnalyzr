@@ -29,6 +29,24 @@
           "appliesTo": ["round", "game"]
         },
         {
+          "id": "rated",
+          "type": "select",
+          "label": "Rated",
+          "dimension": "is_rated",
+          "default": "all",
+          "options": "auto_distinct",
+          "appliesTo": ["round", "game"]
+        },
+        {
+          "id": "map",
+          "type": "select",
+          "label": "Map",
+          "dimension": "map_slug",
+          "default": "all",
+          "options": "auto_distinct",
+          "appliesTo": ["round", "game"]
+        },
+        {
           "id": "teammate",
           "type": "select",
           "label": "Teammate",

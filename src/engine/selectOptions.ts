@@ -73,6 +73,36 @@ export async function getSelectOptionsForControl(opts: {
   const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];
   if (!extractor) return [];
 
+  if (dimId === "map_slug") {
+    const nameExtractor = ROUND_DIMENSION_EXTRACTORS["map_name"];
+    const gameIdExtractor = ROUND_DIMENSION_EXTRACTORS["game_id"];
+    const bySlug = new Map<string, { name?: string; games: Set<string> }>();
+    for (const r of rows) {
+      const slug = extractor(r);
+      if (typeof slug !== "string" || !slug.trim()) continue;
+      const s = slug.trim();
+      const cur = bySlug.get(s) ?? { games: new Set<string>() };
+      const name = nameExtractor ? nameExtractor(r) : null;
+      if (typeof name === "string" && name.trim() && !cur.name) cur.name = name.trim();
+      const gid = gameIdExtractor ? gameIdExtractor(r) : null;
+      if (typeof gid === "string" && gid.trim()) cur.games.add(gid.trim());
+      bySlug.set(s, cur);
+    }
+
+    const out = Array.from(bySlug.entries())
+      .map(([value, meta]) => {
+        const nGames = meta.games.size;
+        const labelBase = meta.name ? meta.name : value;
+        const label = nGames > 0 ? `${labelBase} (${nGames} games)` : labelBase;
+        return { value, label, n: nGames, labelBase };
+      })
+      .sort((a, b) => (b.n - a.n) || a.labelBase.localeCompare(b.labelBase))
+      .map(({ value, label }) => ({ value, label }));
+
+    cache.set(key, out);
+    return out;
+  }
+
   const seen = new Set<string>();
   for (const r of rows) {
     const v = extractor(r);

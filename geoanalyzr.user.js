@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.30
+// @version      2.0.31
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -8473,6 +8473,11 @@ ${shapes}`.trim();
     }
     return void 0;
   }
+  function asBool(v) {
+    if (v === true) return true;
+    if (v === false) return false;
+    return void 0;
+  }
   function getByPath2(obj, path) {
     const parts = path.split(".");
     let cur = obj;
@@ -8815,6 +8820,7 @@ ${shapes}`.trim();
       modeFamily: family,
       mapName: pickFirst2(gameData, ["options.map.name"]),
       mapSlug: pickFirst2(gameData, ["options.map.slug"]),
+      isRated: asBool(pickFirst2(gameData, ["options.isRated"])),
       totalRounds: asNum(gameData?.currentRoundNumber) ?? rounds.length,
       damageMultiplierRounds,
       healingRounds,
@@ -8961,6 +8967,9 @@ ${shapes}`.trim();
         id: roundId(game.gameId, rn),
         gameId: game.gameId,
         roundNumber: rn,
+        mapName: commonBase.mapName,
+        mapSlug: commonBase.mapSlug,
+        isRated: commonBase.isRated,
         trueLat: asNum(r?.panorama?.lat),
         trueLng: asNum(r?.panorama?.lng),
         trueCountry: typeof r?.panorama?.countryCode === "string" ? r.panorama.countryCode : void 0,
@@ -9457,6 +9466,33 @@ ${shapes}`.trim();
     if (typeof v === "boolean") return v ? "true" : "false";
     return null;
   }
+  function mapSlugKeyAny(row) {
+    const direct = asTrimmedString(row?.mapSlug ?? row?.map_slug);
+    if (direct) return direct;
+    const raw = row?.raw;
+    const v = asTrimmedString(raw?.options?.map?.slug ?? raw?.mapSlug ?? raw?.map?.slug);
+    return v ? v : null;
+  }
+  function mapNameKeyAny(row) {
+    const direct = asTrimmedString(row?.mapName ?? row?.map_name);
+    if (direct) return direct;
+    const raw = row?.raw;
+    const v = asTrimmedString(raw?.options?.map?.name ?? raw?.mapName ?? raw?.map?.name);
+    return v ? v : null;
+  }
+  function isRatedKeyAny(row) {
+    const direct = row?.isRated;
+    if (direct === true) return "Rated";
+    if (direct === false) return "Unrated";
+    const raw = row?.raw;
+    const v = raw?.options?.isRated;
+    if (v === true) return "Rated";
+    if (v === false) return "Unrated";
+    const a = row?.player_self_startRating;
+    const b = row?.player_self_endRating;
+    if (typeof a === "number" && Number.isFinite(a) && typeof b === "number" && Number.isFinite(b)) return "Rated";
+    return "Unknown";
+  }
   function teammateKeyAny(row) {
     const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
     return v ? v : null;
@@ -9519,6 +9555,9 @@ ${shapes}`.trim();
       confused_countries: confusedCountriesKey,
       guess_country: guessCountryKey,
       teammate_name: teammateNameKey,
+      map_slug: mapSlugKeyAny,
+      map_name: mapNameKeyAny,
+      is_rated: isRatedKeyAny,
       mode_family: (r) => {
         const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
         if (!v) return null;
@@ -9563,6 +9602,9 @@ ${shapes}`.trim();
       },
       movement_type: movementTypeKeyAny,
       teammate_name: teammateKeyAny,
+      map_slug: mapSlugKeyAny,
+      map_name: mapNameKeyAny,
+      is_rated: isRatedKeyAny,
       game_mode: gameModeKeyAny,
       mode_family: modeFamilyKeyAny,
       result: resultKeyAny,
@@ -9994,6 +10036,22 @@ ${shapes}`.trim();
       const out = { ...r };
       const gameId = String(out.gameId ?? "");
       const d = detailsByGame.get(gameId);
+      if (d) {
+        if (typeof out.mapSlug !== "string" || !out.mapSlug) {
+          const ms = typeof d?.mapSlug === "string" ? d.mapSlug : typeof d?.raw?.options?.map?.slug === "string" ? d.raw.options.map.slug : "";
+          if (ms) out.mapSlug = ms;
+        }
+        if (typeof out.mapName !== "string" || !out.mapName) {
+          const mn = typeof d?.mapName === "string" ? d.mapName : typeof d?.raw?.options?.map?.name === "string" ? d.raw.options.map.name : "";
+          if (mn) out.mapName = mn;
+        }
+        if (typeof out.isRated !== "boolean") {
+          const ir = d?.isRated;
+          const rawIr = d?.raw?.options?.isRated;
+          if (ir === true || ir === false) out.isRated = ir;
+          else if (rawIr === true || rawIr === false) out.isRated = rawIr;
+        }
+      }
       const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : void 0;
       const roundEnd = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : void 0;
       const gamePlayedAt = playedAtByGame.get(gameId);
@@ -30985,6 +31043,7 @@ ${shapes}`.trim();
         gameMode: d?.gameModeSimple || mode || "",
         mapName: d?.mapName || "",
         mapSlug: d?.mapSlug || "",
+        isRated: typeof d?.isRated === "boolean" ? d.isRated : "",
         detailsStatus: d?.status || "missing",
         detailsFetchedAt: iso(d?.fetchedAt),
         detailsError: d?.status === "error" ? d?.error || "" : ""
@@ -31744,6 +31803,30 @@ ${shapes}`.trim();
         allowedCharts: ["bar", "line"],
         sortModes: ["asc", "desc"],
         cardinality: { policy: "small", maxSeries: 10 }
+      },
+      is_rated: {
+        label: "Rated",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      map_name: {
+        label: "Map",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      map_slug: {
+        label: "Map (slug)",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
       },
       result: {
         label: "Result",
@@ -32804,6 +32887,24 @@ ${shapes}`.trim();
             type: "select",
             label: "Game mode",
             dimension: "mode_family",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round", "game"]
+          },
+          {
+            id: "rated",
+            type: "select",
+            label: "Rated",
+            dimension: "is_rated",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round", "game"]
+          },
+          {
+            id: "map",
+            type: "select",
+            label: "Map",
+            dimension: "map_slug",
             default: "all",
             options: "auto_distinct",
             appliesTo: ["round", "game"]
@@ -42983,6 +43084,30 @@ ${shapes}`.trim();
     const dimId = control.dimension;
     const extractor = ROUND_DIMENSION_EXTRACTORS[dimId];
     if (!extractor) return [];
+    if (dimId === "map_slug") {
+      const nameExtractor = ROUND_DIMENSION_EXTRACTORS["map_name"];
+      const gameIdExtractor = ROUND_DIMENSION_EXTRACTORS["game_id"];
+      const bySlug = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const slug = extractor(r);
+        if (typeof slug !== "string" || !slug.trim()) continue;
+        const s = slug.trim();
+        const cur = bySlug.get(s) ?? { games: /* @__PURE__ */ new Set() };
+        const name = nameExtractor ? nameExtractor(r) : null;
+        if (typeof name === "string" && name.trim() && !cur.name) cur.name = name.trim();
+        const gid = gameIdExtractor ? gameIdExtractor(r) : null;
+        if (typeof gid === "string" && gid.trim()) cur.games.add(gid.trim());
+        bySlug.set(s, cur);
+      }
+      const out2 = Array.from(bySlug.entries()).map(([value, meta]) => {
+        const nGames = meta.games.size;
+        const labelBase = meta.name ? meta.name : value;
+        const label = nGames > 0 ? `${labelBase} (${nGames} games)` : labelBase;
+        return { value, label, n: nGames, labelBase };
+      }).sort((a, b) => b.n - a.n || a.labelBase.localeCompare(b.labelBase)).map(({ value, label }) => ({ value, label }));
+      cache.set(key, out2);
+      return out2;
+    }
     const seen = /* @__PURE__ */ new Set();
     for (const r of rows) {
       const v = extractor(r);

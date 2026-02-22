@@ -434,6 +434,24 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     const gameId = String(out.gameId ?? "");
     const d = detailsByGame.get(gameId);
 
+    // Backfill game-level fields onto rounds for round-grain filters/exports.
+    if (d) {
+      if (typeof out.mapSlug !== "string" || !out.mapSlug) {
+        const ms = typeof d?.mapSlug === "string" ? d.mapSlug : typeof d?.raw?.options?.map?.slug === "string" ? d.raw.options.map.slug : "";
+        if (ms) out.mapSlug = ms;
+      }
+      if (typeof out.mapName !== "string" || !out.mapName) {
+        const mn = typeof d?.mapName === "string" ? d.mapName : typeof d?.raw?.options?.map?.name === "string" ? d.raw.options.map.name : "";
+        if (mn) out.mapName = mn;
+      }
+      if (typeof out.isRated !== "boolean") {
+        const ir = d?.isRated;
+        const rawIr = d?.raw?.options?.isRated;
+        if (ir === true || ir === false) out.isRated = ir;
+        else if (rawIr === true || rawIr === false) out.isRated = rawIr;
+      }
+    }
+
     // Prefer round start time where available (round-specific).
     const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : undefined;
     const roundEnd = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : undefined;

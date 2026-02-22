@@ -42,6 +42,12 @@ function asNum(v: unknown): number | undefined {
   return undefined;
 }
 
+function asBool(v: unknown): boolean | undefined {
+  if (v === true) return true;
+  if (v === false) return false;
+  return undefined;
+}
+
 function normalizeCountryCode(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const x = v.trim().toLowerCase();
@@ -467,6 +473,7 @@ async function normalizeGameAndRounds(
     modeFamily: family,
     mapName: pickFirst(gameData, ["options.map.name"]),
     mapSlug: pickFirst(gameData, ["options.map.slug"]),
+    isRated: asBool(pickFirst(gameData, ["options.isRated"])),
     totalRounds: asNum(gameData?.currentRoundNumber) ?? rounds.length,
     damageMultiplierRounds,
     healingRounds,
@@ -634,6 +641,9 @@ async function normalizeGameAndRounds(
       id: roundId(game.gameId, rn),
       gameId: game.gameId,
       roundNumber: rn,
+      mapName: commonBase.mapName,
+      mapSlug: commonBase.mapSlug,
+      isRated: commonBase.isRated,
       trueLat: asNum(r?.panorama?.lat),
       trueLng: asNum(r?.panorama?.lng),
       trueCountry: typeof r?.panorama?.countryCode === "string" ? r.panorama.countryCode : undefined,

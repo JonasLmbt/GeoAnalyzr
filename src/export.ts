@@ -278,6 +278,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
       gameMode: d?.gameModeSimple || mode || "",
       mapName: d?.mapName || "",
       mapSlug: d?.mapSlug || "",
+      isRated: typeof (d as any)?.isRated === "boolean" ? (d as any).isRated : "",
       detailsStatus: d?.status || "missing",
       detailsFetchedAt: iso(d?.fetchedAt),
       detailsError: d?.status === "error" ? (d?.error || "") : ""

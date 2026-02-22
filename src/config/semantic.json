@@ -80,6 +80,30 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "small", "maxSeries": 10 }
     },
+    "is_rated": {
+      "label": "Rated",
+      "kind": "category",
+      "grain": ["game", "round"],
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 3 }
+    },
+    "map_name": {
+      "label": "Map",
+      "kind": "category",
+      "grain": ["game", "round"],
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30 }
+    },
+    "map_slug": {
+      "label": "Map (slug)",
+      "kind": "category",
+      "grain": ["game", "round"],
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30 }
+    },
     "result": {
       "label": "Result",
       "kind": "category",

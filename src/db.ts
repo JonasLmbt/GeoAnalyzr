@@ -115,6 +115,7 @@ interface GameRowBase {
   gameMode?: string;
   mapName?: string;
   mapSlug?: string;
+  isRated?: boolean;
   totalRounds?: number;
   damageMultiplierRounds?: number[];
   healingRounds?: number[];
