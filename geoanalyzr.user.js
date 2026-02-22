@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.29
+// @version      2.0.30
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -43333,6 +43333,69 @@ ${shapes}`.trim();
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
   }
+  function createBootLog(doc) {
+    let pre = null;
+    const lines = [];
+    const ensurePre = () => {
+      if (pre) return pre;
+      if (!doc.body) return null;
+      pre = doc.createElement("pre");
+      pre.id = "ga-boot-log";
+      pre.style.cssText = [
+        "position:fixed",
+        "left:0",
+        "top:0",
+        "right:0",
+        "max-height:40vh",
+        "overflow:auto",
+        "margin:0",
+        "padding:10px 12px",
+        "background:rgba(0,0,0,0.85)",
+        "color:#c7f5d9",
+        'font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        "z-index:2147483647",
+        "white-space:pre-wrap"
+      ].join(";");
+      doc.body.appendChild(pre);
+      pre.textContent = lines.join("\n");
+      return pre;
+    };
+    const fmt = (s) => {
+      const t = /* @__PURE__ */ new Date();
+      const hh = String(t.getHours()).padStart(2, "0");
+      const mm = String(t.getMinutes()).padStart(2, "0");
+      const ss = String(t.getSeconds()).padStart(2, "0");
+      const ms = String(t.getMilliseconds()).padStart(3, "0");
+      return `[${hh}:${mm}:${ss}.${ms}] ${s}`;
+    };
+    const append = (line) => {
+      lines.push(fmt(line));
+      const el2 = ensurePre();
+      if (el2) el2.textContent = lines.join("\n");
+    };
+    const describeError = (err) => {
+      if (!err) return "";
+      if (err instanceof Error) {
+        const stack = typeof err.stack === "string" && err.stack.trim().length ? `
+${err.stack}` : "";
+        return `${err.name}: ${err.message}${stack}`;
+      }
+      try {
+        return String(err);
+      } catch {
+        return "<unprintable error>";
+      }
+    };
+    return {
+      log: (message) => append(message),
+      error: (message, err) => append(`${message}${err ? `
+${describeError(err)}` : ""}`),
+      remove: () => {
+        if (pre && pre.parentElement) pre.remove();
+        pre = null;
+      }
+    };
+  }
   async function ensureDocumentShell(targetWindow, doc) {
     if (doc.head && doc.body) return;
     try {
@@ -43377,20 +43440,42 @@ ${shapes}`.trim();
     if (!targetWindow || targetWindow.closed) {
       throw new Error("Semantic dashboard target window is unavailable.");
     }
-    const doc = targetWindow.document;
+    let doc;
+    try {
+      doc = targetWindow.document;
+    } catch (e) {
+      throw new Error(`Cannot access semantic dashboard document: ${e instanceof Error ? e.message : String(e)}`);
+    }
     await ensureDocumentShell(targetWindow, doc);
     if (!doc.body || !doc.head) {
       throw new Error("Semantic dashboard target document is not ready.");
     }
+    const boot = createBootLog(doc);
+    const ua = doc.defaultView?.navigator?.userAgent ?? "";
+    boot.log("GeoAnalyzr: analysis window boot");
+    boot.log(`readyState=${doc.readyState} ua=${ua}`);
+    if (!targetWindow.__gaBootHandlersInstalled) {
+      targetWindow.__gaBootHandlersInstalled = true;
+      targetWindow.addEventListener("error", (ev) => {
+        const msg = typeof ev?.message === "string" ? ev.message : "Unhandled window error";
+        boot.error(`window.onerror: ${msg}`, ev?.error);
+      });
+      targetWindow.addEventListener("unhandledrejection", (ev) => {
+        boot.error("unhandledrejection", ev?.reason);
+      });
+    }
     doc.title = "GeoAnalyzr";
     doc.documentElement.classList.add("ga-semantic-page");
     doc.body.classList.add("ga-semantic-page");
+    boot.log("Injecting dashboard CSS...");
     injectSemanticDashboardCssOnce(doc);
+    boot.log("Loading templates/settings...");
     const semanticBase = cloneTemplate2(semantic_default);
     let dashboard = loadDashboardTemplate(doc, cloneTemplate2(dashboard_default));
     let settings = loadSettings(doc);
     let root = doc.getElementById("geoanalyzr-semantic-root");
     let body;
+    boot.log("Resolving player name...");
     const playerName = await getCurrentPlayerName();
     const applyTitleTemplate = (tpl, vars) => {
       const raw = String(tpl ?? "");
@@ -43418,10 +43503,14 @@ ${shapes}`.trim();
     };
     const renderNow = async () => {
       body.innerHTML = "";
+      boot.log("Merging semantic + validating...");
       const semantic = mergeSemanticWithDashboard(semanticBase, dashboard);
       validateDashboardAgainstSemantic(semantic, dashboard);
       updateTitles();
+      boot.log("Rendering analysis app...");
       await renderAnalysisApp({ body, semantic, dashboard });
+      boot.log("Render complete.");
+      boot.remove();
     };
     if (!root) {
       root = doc.createElement("div");
@@ -43504,6 +43593,7 @@ ${shapes}`.trim();
       pre.textContent = `Failed to render semantic dashboard:
 ${error instanceof Error ? error.message : String(error)}`;
       body.appendChild(pre);
+      boot.error("Failed to render semantic dashboard", error);
       throw error;
     }
   }
@@ -43747,7 +43837,9 @@ ${error instanceof Error ? error.message : String(error)}`;
           try {
             await initAnalysisWindow({ targetWindow: semanticTab });
           } catch (semanticError) {
-            semanticStatus = " Semantic dashboard failed to render.";
+            const msg = errorText(semanticError);
+            semanticStatus = ` Semantic dashboard failed to render: ${msg}`;
+            ui.setStatus(`Dashboard error: ${msg}`);
             console.error("Failed to initialize semantic dashboard tab", semanticError);
           }
         }

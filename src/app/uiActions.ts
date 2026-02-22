@@ -201,7 +201,9 @@ export function registerUiActions(ui: UI): void {
         try {
           await initAnalysisWindow({ targetWindow: semanticTab });
         } catch (semanticError) {
-          semanticStatus = " Semantic dashboard failed to render.";
+          const msg = errorText(semanticError);
+          semanticStatus = ` Semantic dashboard failed to render: ${msg}`;
+          ui.setStatus(`Dashboard error: ${msg}`);
           console.error("Failed to initialize semantic dashboard tab", semanticError);
         }
       }
