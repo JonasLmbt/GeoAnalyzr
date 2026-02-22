@@ -479,6 +479,25 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     .ga-chart-host { width:100%; }
     .ga-chart-svg { width:100%; max-width:100%; display:block; overflow: visible; }
     .ga-chart-bar { transform-box: view-box; }
+
+    /* Hover emphasis (only when animations are enabled). */
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar,
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot {
+      transition: opacity 140ms ease, filter 140ms ease, stroke-width 140ms ease;
+    }
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar:hover {
+      opacity: 0.95;
+      filter: brightness(1.18);
+      stroke: rgba(255,255,255,0.55);
+      stroke-width: 1.25px;
+    }
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot:hover {
+      opacity: 1;
+      filter: brightness(1.25);
+      stroke: rgba(255,255,255,0.70);
+      stroke-width: 2px;
+      paint-order: stroke fill;
+    }
     .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
       transform: scaleY(0);
       opacity: 0.25;

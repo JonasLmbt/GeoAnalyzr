@@ -360,18 +360,63 @@ function maybeAnimateChartSvg(svg: SVGSVGElement, doc: Document): void {
     return;
   }
   svg.setAttribute("data-anim-state", "pending");
-  const obs = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        svg.setAttribute("data-anim-state", "run");
-        obs.disconnect();
-        return;
+
+  const win = doc.defaultView as any;
+  const forceRun = () => {
+    svg.setAttribute("data-anim-state", "run");
+  };
+
+  const setup = () => {
+    // Firefox can ignore observing a detached node; wait until SVG is connected.
+    if (!svg.isConnected) {
+      win?.setTimeout?.(setup, 0);
+      return;
+    }
+
+    const IO = win?.IntersectionObserver;
+    if (typeof IO !== "function") {
+      forceRun();
+      return;
+    }
+
+    let obs: IntersectionObserver | null = null;
+    try {
+      obs = new IO(
+        (entries: IntersectionObserverEntry[]) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            forceRun();
+            try {
+              obs?.disconnect();
+            } catch {
+              // ignore
+            }
+            return;
+          }
+        },
+        { threshold: 0.15 }
+      );
+      obs.observe(svg);
+    } catch {
+      forceRun();
+      return;
+    }
+
+    // Fallback: if the observer doesn't fire (Firefox edge cases), don't keep charts invisible.
+    win?.setTimeout?.(() => {
+      if (svg.getAttribute("data-anim-state") === "pending") {
+        forceRun();
+        try {
+          obs?.disconnect();
+        } catch {
+          // ignore
+        }
       }
-    },
-    { threshold: 0.15 }
-  );
-  obs.observe(svg);
+    }, 650);
+  };
+
+  // Defer one tick so layout is ready before observing.
+  win?.requestAnimationFrame ? win.requestAnimationFrame(setup) : win?.setTimeout?.(setup, 0);
 }
 
 function sanitizeFileName(name: string): string {

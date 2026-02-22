@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.4
+// @version      2.1.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -35314,6 +35314,25 @@ ${shapes}`.trim();
     .ga-chart-host { width:100%; }
     .ga-chart-svg { width:100%; max-width:100%; display:block; overflow: visible; }
     .ga-chart-bar { transform-box: view-box; }
+
+    /* Hover emphasis (only when animations are enabled). */
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar,
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot {
+      transition: opacity 140ms ease, filter 140ms ease, stroke-width 140ms ease;
+    }
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar:hover {
+      opacity: 0.95;
+      filter: brightness(1.18);
+      stroke: rgba(255,255,255,0.55);
+      stroke-width: 1.25px;
+    }
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot:hover {
+      opacity: 1;
+      filter: brightness(1.25);
+      stroke: rgba(255,255,255,0.70);
+      stroke-width: 2px;
+      paint-order: stroke fill;
+    }
     .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
       transform: scaleY(0);
       opacity: 0.25;
@@ -41027,18 +41046,52 @@ ${shapes}`.trim();
       return;
     }
     svg.setAttribute("data-anim-state", "pending");
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
-          svg.setAttribute("data-anim-state", "run");
-          obs.disconnect();
-          return;
+    const win = doc.defaultView;
+    const forceRun = () => {
+      svg.setAttribute("data-anim-state", "run");
+    };
+    const setup = () => {
+      if (!svg.isConnected) {
+        win?.setTimeout?.(setup, 0);
+        return;
+      }
+      const IO = win?.IntersectionObserver;
+      if (typeof IO !== "function") {
+        forceRun();
+        return;
+      }
+      let obs = null;
+      try {
+        obs = new IO(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              forceRun();
+              try {
+                obs?.disconnect();
+              } catch {
+              }
+              return;
+            }
+          },
+          { threshold: 0.15 }
+        );
+        obs.observe(svg);
+      } catch {
+        forceRun();
+        return;
+      }
+      win?.setTimeout?.(() => {
+        if (svg.getAttribute("data-anim-state") === "pending") {
+          forceRun();
+          try {
+            obs?.disconnect();
+          } catch {
+          }
         }
-      },
-      { threshold: 0.15 }
-    );
-    obs.observe(svg);
+      }, 650);
+    };
+    win?.requestAnimationFrame ? win.requestAnimationFrame(setup) : win?.setTimeout?.(setup, 0);
   }
   function sanitizeFileName(name) {
     const out = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").trim();
