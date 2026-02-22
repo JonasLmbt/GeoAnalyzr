@@ -44,6 +44,25 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     return JSON.parse(JSON.stringify(value)) as DashboardDoc;
   };
 
+  const downloadJson = (filename: string, value: unknown): void => {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = doc.createElement("a");
+    a.href = url;
+    a.download = filename;
+    (doc.body ?? doc.documentElement).appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const readJsonFromFileInput = async (input: HTMLInputElement): Promise<any> => {
+    const file = input.files?.[0] ?? null;
+    if (!file) return null;
+    const text = await file.text();
+    return JSON.parse(text);
+  };
+
   const settingsModal = doc.createElement("div");
   settingsModal.className = "ga-settings-modal";
   settingsModal.style.display = "none";
@@ -278,6 +297,28 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const sectionLayoutStatus = doc.createElement("div");
     sectionLayoutStatus.className = "ga-settings-status";
     const sectionLayoutHost = doc.createElement("div");
+
+    const sectionLayoutActions = doc.createElement("div");
+    sectionLayoutActions.className = "ga-settings-actions";
+    const sectionLayoutDownload = doc.createElement("button");
+    sectionLayoutDownload.type = "button";
+    sectionLayoutDownload.className = "ga-filter-btn";
+    sectionLayoutDownload.textContent = "Download sections";
+    sectionLayoutDownload.title = "Download only dashboard sections as JSON";
+    const sectionLayoutUpload = doc.createElement("button");
+    sectionLayoutUpload.type = "button";
+    sectionLayoutUpload.className = "ga-filter-btn";
+    sectionLayoutUpload.textContent = "Upload sections";
+    sectionLayoutUpload.title = "Upload JSON to replace dashboard sections";
+    const sectionLayoutUploadInput = doc.createElement("input");
+    sectionLayoutUploadInput.type = "file";
+    sectionLayoutUploadInput.accept = "application/json,.json";
+    sectionLayoutUploadInput.style.display = "none";
+    sectionLayoutActions.appendChild(sectionLayoutDownload);
+    sectionLayoutActions.appendChild(sectionLayoutUpload);
+    sectionLayoutActions.appendChild(sectionLayoutUploadInput);
+    sectionLayoutPane.appendChild(sectionLayoutActions);
+
     sectionLayoutPane.appendChild(sectionLayoutHost);
     sectionLayoutPane.appendChild(sectionLayoutStatus);
 
@@ -286,6 +327,28 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const globalFiltersStatus = doc.createElement("div");
     globalFiltersStatus.className = "ga-settings-status";
     const globalFiltersHost = doc.createElement("div");
+
+    const globalFiltersActions = doc.createElement("div");
+    globalFiltersActions.className = "ga-settings-actions";
+    const globalFiltersDownload = doc.createElement("button");
+    globalFiltersDownload.type = "button";
+    globalFiltersDownload.className = "ga-filter-btn";
+    globalFiltersDownload.textContent = "Download filters";
+    globalFiltersDownload.title = "Download only globalFilters as JSON";
+    const globalFiltersUpload = doc.createElement("button");
+    globalFiltersUpload.type = "button";
+    globalFiltersUpload.className = "ga-filter-btn";
+    globalFiltersUpload.textContent = "Upload filters";
+    globalFiltersUpload.title = "Upload JSON to replace globalFilters";
+    const globalFiltersUploadInput = doc.createElement("input");
+    globalFiltersUploadInput.type = "file";
+    globalFiltersUploadInput.accept = "application/json,.json";
+    globalFiltersUploadInput.style.display = "none";
+    globalFiltersActions.appendChild(globalFiltersDownload);
+    globalFiltersActions.appendChild(globalFiltersUpload);
+    globalFiltersActions.appendChild(globalFiltersUploadInput);
+    globalFiltersPane.appendChild(globalFiltersActions);
+
     globalFiltersPane.appendChild(globalFiltersHost);
     globalFiltersPane.appendChild(globalFiltersStatus);
 
@@ -294,6 +357,28 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const drilldownsStatus = doc.createElement("div");
     drilldownsStatus.className = "ga-settings-status";
     const drilldownsHost = doc.createElement("div");
+
+    const drilldownsActions = doc.createElement("div");
+    drilldownsActions.className = "ga-settings-actions";
+    const drilldownsDownload = doc.createElement("button");
+    drilldownsDownload.type = "button";
+    drilldownsDownload.className = "ga-filter-btn";
+    drilldownsDownload.textContent = "Download drilldowns";
+    drilldownsDownload.title = "Download only drilldownPresets as JSON";
+    const drilldownsUpload = doc.createElement("button");
+    drilldownsUpload.type = "button";
+    drilldownsUpload.className = "ga-filter-btn";
+    drilldownsUpload.textContent = "Upload drilldowns";
+    drilldownsUpload.title = "Upload JSON to replace drilldownPresets";
+    const drilldownsUploadInput = doc.createElement("input");
+    drilldownsUploadInput.type = "file";
+    drilldownsUploadInput.accept = "application/json,.json";
+    drilldownsUploadInput.style.display = "none";
+    drilldownsActions.appendChild(drilldownsDownload);
+    drilldownsActions.appendChild(drilldownsUpload);
+    drilldownsActions.appendChild(drilldownsUploadInput);
+    drilldownsPane.appendChild(drilldownsActions);
+
     drilldownsPane.appendChild(drilldownsHost);
     drilldownsPane.appendChild(drilldownsStatus);
 
@@ -331,6 +416,90 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         })
       );
     };
+
+    sectionLayoutDownload.addEventListener("click", () => {
+      const cur = getDashboard();
+      downloadJson("geoanalyzr.sections.json", (cur as any)?.dashboard?.sections ?? []);
+    });
+    sectionLayoutUpload.addEventListener("click", () => sectionLayoutUploadInput.click());
+    sectionLayoutUploadInput.addEventListener("change", () => {
+      void (async () => {
+        try {
+          const parsed = await readJsonFromFileInput(sectionLayoutUploadInput);
+          const sections = Array.isArray(parsed) ? parsed : (parsed as any)?.dashboard?.sections ?? (parsed as any)?.sections;
+          if (!Array.isArray(sections)) throw new Error("Invalid sections JSON (expected an array or { sections: [...] }).");
+          const next = cloneDashboard(getDashboard()) as any;
+          next.dashboard.sections = sections;
+          await applyDashboard(next);
+          dashboard = next;
+          templateEditor.value = JSON.stringify(next, null, 2);
+          renderLayout("section_layout", sectionLayoutHost, sectionLayoutStatus);
+          sectionLayoutStatus.textContent = "Sections imported.";
+          sectionLayoutStatus.className = "ga-settings-status ok";
+        } catch (e) {
+          sectionLayoutStatus.textContent = e instanceof Error ? e.message : String(e);
+          sectionLayoutStatus.className = "ga-settings-status error";
+        } finally {
+          sectionLayoutUploadInput.value = "";
+        }
+      })();
+    });
+
+    globalFiltersDownload.addEventListener("click", () => {
+      const cur = getDashboard();
+      downloadJson("geoanalyzr.globalFilters.json", (cur as any)?.dashboard?.globalFilters ?? {});
+    });
+    globalFiltersUpload.addEventListener("click", () => globalFiltersUploadInput.click());
+    globalFiltersUploadInput.addEventListener("change", () => {
+      void (async () => {
+        try {
+          const parsed = await readJsonFromFileInput(globalFiltersUploadInput);
+          const gf = (parsed as any)?.dashboard?.globalFilters ?? (parsed as any)?.globalFilters ?? parsed;
+          if (!gf || typeof gf !== "object") throw new Error("Invalid globalFilters JSON.");
+          const next = cloneDashboard(getDashboard()) as any;
+          next.dashboard.globalFilters = gf;
+          await applyDashboard(next);
+          dashboard = next;
+          templateEditor.value = JSON.stringify(next, null, 2);
+          renderLayout("global_filters", globalFiltersHost, globalFiltersStatus);
+          globalFiltersStatus.textContent = "Global filters imported.";
+          globalFiltersStatus.className = "ga-settings-status ok";
+        } catch (e) {
+          globalFiltersStatus.textContent = e instanceof Error ? e.message : String(e);
+          globalFiltersStatus.className = "ga-settings-status error";
+        } finally {
+          globalFiltersUploadInput.value = "";
+        }
+      })();
+    });
+
+    drilldownsDownload.addEventListener("click", () => {
+      const cur = getDashboard();
+      downloadJson("geoanalyzr.drilldownPresets.json", (cur as any)?.dashboard?.drilldownPresets ?? {});
+    });
+    drilldownsUpload.addEventListener("click", () => drilldownsUploadInput.click());
+    drilldownsUploadInput.addEventListener("change", () => {
+      void (async () => {
+        try {
+          const parsed = await readJsonFromFileInput(drilldownsUploadInput);
+          const dd = (parsed as any)?.dashboard?.drilldownPresets ?? (parsed as any)?.drilldownPresets ?? parsed;
+          if (!dd || typeof dd !== "object") throw new Error("Invalid drilldownPresets JSON.");
+          const next = cloneDashboard(getDashboard()) as any;
+          next.dashboard.drilldownPresets = dd;
+          await applyDashboard(next);
+          dashboard = next;
+          templateEditor.value = JSON.stringify(next, null, 2);
+          renderLayout("drilldowns", drilldownsHost, drilldownsStatus);
+          drilldownsStatus.textContent = "Drilldowns imported.";
+          drilldownsStatus.className = "ga-settings-status ok";
+        } catch (e) {
+          drilldownsStatus.textContent = e instanceof Error ? e.message : String(e);
+          drilldownsStatus.className = "ga-settings-status error";
+        } finally {
+          drilldownsUploadInput.value = "";
+        }
+      })();
+    });
 
     let renderedSectionLayout = false;
     let renderedGlobalFilters = false;

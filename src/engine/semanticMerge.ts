@@ -29,14 +29,23 @@ export function mergeSemanticWithDashboard(base: SemanticRegistry, dashboard: Da
   for (const [target, o] of Object.entries(override)) {
     const baseTarget = (next.drilldownPresets as any)?.[target] ?? {};
     const baseCols = { ...(baseTarget.columnsPresets ?? {}) };
-    const oCols = o?.columnsPresets && typeof o.columnsPresets === "object" ? o.columnsPresets : {};
+
+    const rawO: any = o && typeof o === "object" ? cloneJson(o as any) : {};
+    const oCols = rawO?.columnsPresets && typeof rawO.columnsPresets === "object" ? rawO.columnsPresets : {};
     const mergedCols = { ...baseCols, ...cloneJson(oCols) };
+
+    // Prefer other fields (e.g. entity) from dashboard template if present.
+    try {
+      delete rawO.columnsPresets;
+    } catch {
+      // ignore
+    }
+
     (next.drilldownPresets as any)[target] = {
       ...baseTarget,
-      ...(o?.defaultPreset ? { defaultPreset: o.defaultPreset } : {}),
+      ...rawO,
       columnsPresets: mergedCols
     };
   }
   return next as SemanticRegistry;
 }
-

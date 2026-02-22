@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.6
+// @version      2.1.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -32941,6 +32941,79 @@ ${shapes}`.trim();
         ],
         buttons: { apply: false, reset: true }
       },
+      drilldownPresets: {
+        rounds: {
+          entity: "round",
+          columnsPresets: {
+            roundMode: [
+              { key: "ts", label: "Date", sortable: true },
+              { key: "result", label: "Result", sortable: true, colored: true },
+              { key: "roundNumber", label: "Round", sortable: true },
+              { key: "movementType", label: "Movement", sortable: true },
+              { key: "player_self_score", label: "Score", sortable: true },
+              { key: "true_country", label: "Country", sortable: true },
+              { key: "durationSeconds", label: "Guess Duration", sortable: true },
+              { key: "damage", label: "Damage", sortable: true, colored: true },
+              { key: "teammateName", label: "Mate", sortable: true },
+              { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
+              { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
+              { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
+            ]
+          },
+          defaultPreset: "roundMode"
+        },
+        sessions: {
+          entity: "session",
+          columnsPresets: {
+            sessionMode: [
+              { key: "sessionStartTs", label: "Start", sortable: true },
+              { key: "sessionEndTs", label: "End", sortable: true },
+              { key: "gamesCount", label: "Games", sortable: true },
+              { key: "roundsCount", label: "Rounds", sortable: true },
+              { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+              { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } }
+            ]
+          },
+          defaultPreset: "sessionMode"
+        },
+        games: {
+          entity: "game",
+          columnsPresets: {
+            gameMode: [
+              { key: "ts", label: "Date", sortable: true },
+              { key: "modeFamily", label: "Game Mode", sortable: true },
+              { key: "movementType", label: "Movement", sortable: true },
+              { key: "roundsCount", label: "Rounds", sortable: true },
+              { key: "result", label: "Result", sortable: true, colored: true },
+              { key: "endRating", label: "End Rating", sortable: true },
+              { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+              { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
+              { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
+            ]
+          },
+          defaultPreset: "gameMode"
+        },
+        players: {
+          entity: "game",
+          columnsPresets: {
+            opponentMode: [
+              { key: "ts", label: "Date", sortable: true },
+              { key: "modeFamily", label: "Game Mode", sortable: true },
+              { key: "movementType", label: "Movement", sortable: true },
+              { key: "roundsCount", label: "Rounds", sortable: true },
+              { key: "teammateName", label: "Mate", sortable: true },
+              { key: "result", label: "Result", sortable: true, colored: true },
+              { key: "player_opponent_name", label: "Opponent", sortable: true },
+              { key: "player_opponent_mate_name", label: "Opponent Mate", sortable: true },
+              { key: "endRating", label: "End Rating", sortable: true },
+              { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+              { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
+              { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
+            ]
+          },
+          defaultPreset: "opponentMode"
+        }
+      },
       sections: [
         {
           id: "overview",
@@ -35971,11 +36044,16 @@ ${shapes}`.trim();
     for (const [target, o] of Object.entries(override)) {
       const baseTarget = next.drilldownPresets?.[target] ?? {};
       const baseCols = { ...baseTarget.columnsPresets ?? {} };
-      const oCols = o?.columnsPresets && typeof o.columnsPresets === "object" ? o.columnsPresets : {};
+      const rawO = o && typeof o === "object" ? cloneJson(o) : {};
+      const oCols = rawO?.columnsPresets && typeof rawO.columnsPresets === "object" ? rawO.columnsPresets : {};
       const mergedCols = { ...baseCols, ...cloneJson(oCols) };
+      try {
+        delete rawO.columnsPresets;
+      } catch {
+      }
       next.drilldownPresets[target] = {
         ...baseTarget,
-        ...o?.defaultPreset ? { defaultPreset: o.defaultPreset } : {},
+        ...rawO,
         columnsPresets: mergedCols
       };
     }
@@ -36513,6 +36591,22 @@ ${shapes}`.trim();
       } catch {
       }
       const sem = mergeSemanticWithDashboard(semantic, draft);
+      const ddOverride = draft.dashboard?.drilldownPresets ?? {};
+      const setDdOverride = (target, nextTarget) => {
+        const next = cloneJson2(draft);
+        const cur = next.dashboard.drilldownPresets ?? {};
+        next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
+        draft = next;
+        markDirty();
+      };
+      const removeDdOverride = (target) => {
+        const next = cloneJson2(draft);
+        const cur = next.dashboard.drilldownPresets ?? {};
+        const { [target]: _, ...rest } = cur;
+        next.dashboard.drilldownPresets = rest;
+        draft = next;
+        markDirty();
+      };
       const panels = doc.createElement("div");
       panels.className = "ga-le-panels";
       panels.style.gridColumn = "1 / -1";
@@ -36959,22 +37053,6 @@ ${shapes}`.trim();
         ddn.className = "ga-settings-note";
         ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
         ddBox.appendChild(ddn);
-        const ddOverride2 = draft.dashboard?.drilldownPresets ?? {};
-        const setDdOverride2 = (target, nextTarget) => {
-          const next = cloneJson2(draft);
-          const cur = next.dashboard.drilldownPresets ?? {};
-          next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
-          draft = next;
-          markDirty();
-        };
-        const removeDdOverride2 = (target) => {
-          const next = cloneJson2(draft);
-          const cur = next.dashboard.drilldownPresets ?? {};
-          const { [target]: _, ...rest } = cur;
-          next.dashboard.drilldownPresets = rest;
-          draft = next;
-          markDirty();
-        };
         const targets = Object.keys(sem?.drilldownPresets ?? {});
         if (targets.length === 0) {
           const none = doc.createElement("div");
@@ -38619,6 +38697,23 @@ ${shapes}`.trim();
       if (typeof structuredClone === "function") return structuredClone(value);
       return JSON.parse(JSON.stringify(value));
     };
+    const downloadJson = (filename, value) => {
+      const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = doc.createElement("a");
+      a.href = url;
+      a.download = filename;
+      (doc.body ?? doc.documentElement).appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1e3);
+    };
+    const readJsonFromFileInput = async (input) => {
+      const file = input.files?.[0] ?? null;
+      if (!file) return null;
+      const text = await file.text();
+      return JSON.parse(text);
+    };
     const settingsModal = doc.createElement("div");
     settingsModal.className = "ga-settings-modal";
     settingsModal.style.display = "none";
@@ -38820,6 +38915,26 @@ ${shapes}`.trim();
       const sectionLayoutStatus = doc.createElement("div");
       sectionLayoutStatus.className = "ga-settings-status";
       const sectionLayoutHost = doc.createElement("div");
+      const sectionLayoutActions = doc.createElement("div");
+      sectionLayoutActions.className = "ga-settings-actions";
+      const sectionLayoutDownload = doc.createElement("button");
+      sectionLayoutDownload.type = "button";
+      sectionLayoutDownload.className = "ga-filter-btn";
+      sectionLayoutDownload.textContent = "Download sections";
+      sectionLayoutDownload.title = "Download only dashboard sections as JSON";
+      const sectionLayoutUpload = doc.createElement("button");
+      sectionLayoutUpload.type = "button";
+      sectionLayoutUpload.className = "ga-filter-btn";
+      sectionLayoutUpload.textContent = "Upload sections";
+      sectionLayoutUpload.title = "Upload JSON to replace dashboard sections";
+      const sectionLayoutUploadInput = doc.createElement("input");
+      sectionLayoutUploadInput.type = "file";
+      sectionLayoutUploadInput.accept = "application/json,.json";
+      sectionLayoutUploadInput.style.display = "none";
+      sectionLayoutActions.appendChild(sectionLayoutDownload);
+      sectionLayoutActions.appendChild(sectionLayoutUpload);
+      sectionLayoutActions.appendChild(sectionLayoutUploadInput);
+      sectionLayoutPane.appendChild(sectionLayoutActions);
       sectionLayoutPane.appendChild(sectionLayoutHost);
       sectionLayoutPane.appendChild(sectionLayoutStatus);
       const globalFiltersPane = doc.createElement("div");
@@ -38827,6 +38942,26 @@ ${shapes}`.trim();
       const globalFiltersStatus = doc.createElement("div");
       globalFiltersStatus.className = "ga-settings-status";
       const globalFiltersHost = doc.createElement("div");
+      const globalFiltersActions = doc.createElement("div");
+      globalFiltersActions.className = "ga-settings-actions";
+      const globalFiltersDownload = doc.createElement("button");
+      globalFiltersDownload.type = "button";
+      globalFiltersDownload.className = "ga-filter-btn";
+      globalFiltersDownload.textContent = "Download filters";
+      globalFiltersDownload.title = "Download only globalFilters as JSON";
+      const globalFiltersUpload = doc.createElement("button");
+      globalFiltersUpload.type = "button";
+      globalFiltersUpload.className = "ga-filter-btn";
+      globalFiltersUpload.textContent = "Upload filters";
+      globalFiltersUpload.title = "Upload JSON to replace globalFilters";
+      const globalFiltersUploadInput = doc.createElement("input");
+      globalFiltersUploadInput.type = "file";
+      globalFiltersUploadInput.accept = "application/json,.json";
+      globalFiltersUploadInput.style.display = "none";
+      globalFiltersActions.appendChild(globalFiltersDownload);
+      globalFiltersActions.appendChild(globalFiltersUpload);
+      globalFiltersActions.appendChild(globalFiltersUploadInput);
+      globalFiltersPane.appendChild(globalFiltersActions);
       globalFiltersPane.appendChild(globalFiltersHost);
       globalFiltersPane.appendChild(globalFiltersStatus);
       const drilldownsPane = doc.createElement("div");
@@ -38834,6 +38969,26 @@ ${shapes}`.trim();
       const drilldownsStatus = doc.createElement("div");
       drilldownsStatus.className = "ga-settings-status";
       const drilldownsHost = doc.createElement("div");
+      const drilldownsActions = doc.createElement("div");
+      drilldownsActions.className = "ga-settings-actions";
+      const drilldownsDownload = doc.createElement("button");
+      drilldownsDownload.type = "button";
+      drilldownsDownload.className = "ga-filter-btn";
+      drilldownsDownload.textContent = "Download drilldowns";
+      drilldownsDownload.title = "Download only drilldownPresets as JSON";
+      const drilldownsUpload = doc.createElement("button");
+      drilldownsUpload.type = "button";
+      drilldownsUpload.className = "ga-filter-btn";
+      drilldownsUpload.textContent = "Upload drilldowns";
+      drilldownsUpload.title = "Upload JSON to replace drilldownPresets";
+      const drilldownsUploadInput = doc.createElement("input");
+      drilldownsUploadInput.type = "file";
+      drilldownsUploadInput.accept = "application/json,.json";
+      drilldownsUploadInput.style.display = "none";
+      drilldownsActions.appendChild(drilldownsDownload);
+      drilldownsActions.appendChild(drilldownsUpload);
+      drilldownsActions.appendChild(drilldownsUploadInput);
+      drilldownsPane.appendChild(drilldownsActions);
       drilldownsPane.appendChild(drilldownsHost);
       drilldownsPane.appendChild(drilldownsStatus);
       panes.appendChild(appearancePane);
@@ -38869,6 +39024,87 @@ ${shapes}`.trim();
           })
         );
       };
+      sectionLayoutDownload.addEventListener("click", () => {
+        const cur = getDashboard();
+        downloadJson("geoanalyzr.sections.json", cur?.dashboard?.sections ?? []);
+      });
+      sectionLayoutUpload.addEventListener("click", () => sectionLayoutUploadInput.click());
+      sectionLayoutUploadInput.addEventListener("change", () => {
+        void (async () => {
+          try {
+            const parsed = await readJsonFromFileInput(sectionLayoutUploadInput);
+            const sections = Array.isArray(parsed) ? parsed : parsed?.dashboard?.sections ?? parsed?.sections;
+            if (!Array.isArray(sections)) throw new Error("Invalid sections JSON (expected an array or { sections: [...] }).");
+            const next = cloneDashboard(getDashboard());
+            next.dashboard.sections = sections;
+            await applyDashboard(next);
+            dashboard = next;
+            templateEditor.value = JSON.stringify(next, null, 2);
+            renderLayout("section_layout", sectionLayoutHost, sectionLayoutStatus);
+            sectionLayoutStatus.textContent = "Sections imported.";
+            sectionLayoutStatus.className = "ga-settings-status ok";
+          } catch (e) {
+            sectionLayoutStatus.textContent = e instanceof Error ? e.message : String(e);
+            sectionLayoutStatus.className = "ga-settings-status error";
+          } finally {
+            sectionLayoutUploadInput.value = "";
+          }
+        })();
+      });
+      globalFiltersDownload.addEventListener("click", () => {
+        const cur = getDashboard();
+        downloadJson("geoanalyzr.globalFilters.json", cur?.dashboard?.globalFilters ?? {});
+      });
+      globalFiltersUpload.addEventListener("click", () => globalFiltersUploadInput.click());
+      globalFiltersUploadInput.addEventListener("change", () => {
+        void (async () => {
+          try {
+            const parsed = await readJsonFromFileInput(globalFiltersUploadInput);
+            const gf = parsed?.dashboard?.globalFilters ?? parsed?.globalFilters ?? parsed;
+            if (!gf || typeof gf !== "object") throw new Error("Invalid globalFilters JSON.");
+            const next = cloneDashboard(getDashboard());
+            next.dashboard.globalFilters = gf;
+            await applyDashboard(next);
+            dashboard = next;
+            templateEditor.value = JSON.stringify(next, null, 2);
+            renderLayout("global_filters", globalFiltersHost, globalFiltersStatus);
+            globalFiltersStatus.textContent = "Global filters imported.";
+            globalFiltersStatus.className = "ga-settings-status ok";
+          } catch (e) {
+            globalFiltersStatus.textContent = e instanceof Error ? e.message : String(e);
+            globalFiltersStatus.className = "ga-settings-status error";
+          } finally {
+            globalFiltersUploadInput.value = "";
+          }
+        })();
+      });
+      drilldownsDownload.addEventListener("click", () => {
+        const cur = getDashboard();
+        downloadJson("geoanalyzr.drilldownPresets.json", cur?.dashboard?.drilldownPresets ?? {});
+      });
+      drilldownsUpload.addEventListener("click", () => drilldownsUploadInput.click());
+      drilldownsUploadInput.addEventListener("change", () => {
+        void (async () => {
+          try {
+            const parsed = await readJsonFromFileInput(drilldownsUploadInput);
+            const dd = parsed?.dashboard?.drilldownPresets ?? parsed?.drilldownPresets ?? parsed;
+            if (!dd || typeof dd !== "object") throw new Error("Invalid drilldownPresets JSON.");
+            const next = cloneDashboard(getDashboard());
+            next.dashboard.drilldownPresets = dd;
+            await applyDashboard(next);
+            dashboard = next;
+            templateEditor.value = JSON.stringify(next, null, 2);
+            renderLayout("drilldowns", drilldownsHost, drilldownsStatus);
+            drilldownsStatus.textContent = "Drilldowns imported.";
+            drilldownsStatus.className = "ga-settings-status ok";
+          } catch (e) {
+            drilldownsStatus.textContent = e instanceof Error ? e.message : String(e);
+            drilldownsStatus.className = "ga-settings-status error";
+          } finally {
+            drilldownsUploadInput.value = "";
+          }
+        })();
+      });
       let renderedSectionLayout = false;
       let renderedGlobalFilters = false;
       let renderedDrilldowns = false;

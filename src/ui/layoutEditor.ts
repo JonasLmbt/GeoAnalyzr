@@ -614,6 +614,25 @@ export function renderLayoutEditor(args: {
 
     const sem = mergeSemanticWithDashboard(semantic, draft);
 
+    // Drilldown presets are stored in the dashboard template (dashboard.drilldownPresets).
+    // Keep these helpers in outer scope so the edit modals work (even after rerenders).
+    const ddOverride: any = (draft.dashboard as any)?.drilldownPresets ?? {};
+    const setDdOverride = (target: string, nextTarget: any) => {
+      const next = cloneJson(draft) as any;
+      const cur = (next.dashboard.drilldownPresets ?? {}) as any;
+      next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
+      draft = next;
+      markDirty();
+    };
+    const removeDdOverride = (target: string) => {
+      const next = cloneJson(draft) as any;
+      const cur = (next.dashboard.drilldownPresets ?? {}) as any;
+      const { [target]: _, ...rest } = cur;
+      next.dashboard.drilldownPresets = rest;
+      draft = next;
+      markDirty();
+    };
+
     const panels = doc.createElement("div");
     panels.className = "ga-le-panels";
     // Root is a 2-column grid in legacy mode; span full width.
@@ -1112,23 +1131,6 @@ export function renderLayoutEditor(args: {
     ddn.className = "ga-settings-note";
     ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
     ddBox.appendChild(ddn);
-
-    const ddOverride: any = (draft.dashboard as any)?.drilldownPresets ?? {};
-    const setDdOverride = (target: string, nextTarget: any) => {
-      const next = cloneJson(draft) as any;
-      const cur = (next.dashboard.drilldownPresets ?? {}) as any;
-      next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
-      draft = next;
-      markDirty();
-    };
-    const removeDdOverride = (target: string) => {
-      const next = cloneJson(draft) as any;
-      const cur = (next.dashboard.drilldownPresets ?? {}) as any;
-      const { [target]: _, ...rest } = cur;
-      next.dashboard.drilldownPresets = rest;
-      draft = next;
-      markDirty();
-    };
 
     const targets = Object.keys((sem as any)?.drilldownPresets ?? {});
     if (targets.length === 0) {
