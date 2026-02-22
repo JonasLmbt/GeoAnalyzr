@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.0.28
+// @version      2.0.29
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9947,11 +9947,32 @@ ${shapes}`.trim();
     return rows;
   }
   async function getGamePlayedAtBounds() {
-    const first = await db.games.orderBy("playedAt").first();
-    const last = await db.games.orderBy("playedAt").last();
-    const minTs = first && typeof first.playedAt === "number" ? first.playedAt : null;
-    const maxTs = last && typeof last.playedAt === "number" ? last.playedAt : null;
-    return { minTs, maxTs };
+    const isInvalidKeyRangeError = (e) => {
+      const any = e;
+      const name = typeof any?.name === "string" ? any.name : "";
+      const message = typeof any?.message === "string" ? any.message : "";
+      if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
+      return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
+    };
+    try {
+      const first = await db.games.orderBy("playedAt").first();
+      const last = await db.games.orderBy("playedAt").last();
+      const minTs = first && typeof first.playedAt === "number" ? first.playedAt : null;
+      const maxTs = last && typeof last.playedAt === "number" ? last.playedAt : null;
+      return { minTs, maxTs };
+    } catch (e) {
+      if (!isInvalidKeyRangeError(e)) throw e;
+      const games = await db.games.toArray();
+      let minTs = null;
+      let maxTs = null;
+      for (const g of games) {
+        const ts = typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) ? g.playedAt : null;
+        if (ts === null) continue;
+        minTs = minTs === null ? ts : Math.min(minTs, ts);
+        maxTs = maxTs === null ? ts : Math.max(maxTs, ts);
+      }
+      return { minTs, maxTs };
+    }
   }
   async function getRoundsRaw() {
     if (roundsRawCache) return roundsRawCache;
@@ -43281,7 +43302,17 @@ ${shapes}`.trim();
         const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
         if (candidate) return candidate;
       }
-    } catch {
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player name from DB", e);
     }
     return void 0;
   }
@@ -43302,12 +43333,52 @@ ${shapes}`.trim();
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
   }
+  async function ensureDocumentShell(targetWindow, doc) {
+    if (doc.head && doc.body) return;
+    try {
+      doc.open();
+      doc.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
+      doc.close();
+    } catch {
+    }
+    if (!doc.documentElement) {
+      try {
+        const html = doc.createElement("html");
+        doc.appendChild(html);
+      } catch {
+        return;
+      }
+    }
+    if (!doc.head) {
+      try {
+        const head = doc.createElement("head");
+        doc.documentElement.insertBefore(head, doc.documentElement.firstChild);
+      } catch {
+      }
+    }
+    if (!doc.body) {
+      try {
+        const body = doc.createElement("body");
+        doc.documentElement.appendChild(body);
+      } catch {
+      }
+    }
+    if (doc.head && doc.body) return;
+    const timeoutMs = 1500;
+    const start = Date.now();
+    while (!(doc.head && doc.body)) {
+      if (targetWindow.closed) break;
+      if (Date.now() - start > timeoutMs) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }
   async function initAnalysisWindow(opts) {
     const targetWindow = opts?.targetWindow ?? window;
     if (!targetWindow || targetWindow.closed) {
       throw new Error("Semantic dashboard target window is unavailable.");
     }
     const doc = targetWindow.document;
+    await ensureDocumentShell(targetWindow, doc);
     if (!doc.body || !doc.head) {
       throw new Error("Semantic dashboard target document is not ready.");
     }

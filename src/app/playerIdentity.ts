@@ -69,8 +69,25 @@ async function guessPlayerNameFromDb(): Promise<string | undefined> {
         asTrimmedString(d?.playerOneNickname);
       if (candidate) return candidate;
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    // Fallback for rare IndexedDB key-range errors (e.g. "IDBKeyRange.bound ... not a valid key").
+    try {
+      const all = await db.details.toArray();
+      const sorted = (all as any[])
+        .slice()
+        .sort((a, b) => (Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0)));
+      for (const d of sorted.slice(0, 25)) {
+        const candidate =
+          asTrimmedString(d?.player_self_name) ??
+          asTrimmedString(d?.playerOneName) ??
+          asTrimmedString(d?.playerOneNick) ??
+          asTrimmedString(d?.playerOneNickname);
+        if (candidate) return candidate;
+      }
+    } catch {
+      // ignore
+    }
+    console.warn("Failed to guess player name from DB", e);
   }
   return undefined;
 }
@@ -88,4 +105,3 @@ export async function getCurrentPlayerName(): Promise<string | undefined> {
   cachedPlayerName = fromDb ?? null;
   return fromDb;
 }
-

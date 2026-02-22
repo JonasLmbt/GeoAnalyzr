@@ -377,11 +377,37 @@ export async function getSessions(filters: GlobalFilters, opts?: { rounds?: Roun
 }
 
 export async function getGamePlayedAtBounds(): Promise<{ minTs: number | null; maxTs: number | null }> {
-  const first = await db.games.orderBy("playedAt").first();
-  const last = await db.games.orderBy("playedAt").last();
-  const minTs = first && typeof first.playedAt === "number" ? first.playedAt : null;
-  const maxTs = last && typeof last.playedAt === "number" ? last.playedAt : null;
-  return { minTs, maxTs };
+  const isInvalidKeyRangeError = (e: unknown): boolean => {
+    const any = e as any;
+    const name = typeof any?.name === "string" ? any.name : "";
+    const message = typeof any?.message === "string" ? any.message : "";
+    // Firefox/Chromium usually surface this as a DOMException "DataError".
+    if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
+    return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
+  };
+
+  // Fast path using the playedAt index.
+  try {
+    const first = await db.games.orderBy("playedAt").first();
+    const last = await db.games.orderBy("playedAt").last();
+    const minTs = first && typeof first.playedAt === "number" ? first.playedAt : null;
+    const maxTs = last && typeof last.playedAt === "number" ? last.playedAt : null;
+    return { minTs, maxTs };
+  } catch (e) {
+    // Fallback: if the index or key-range query is broken for some users, compute bounds by scanning.
+    // This avoids IndexedDB key-range creation (IDBKeyRange.bound) paths entirely.
+    if (!isInvalidKeyRangeError(e)) throw e;
+    const games = await db.games.toArray();
+    let minTs: number | null = null;
+    let maxTs: number | null = null;
+    for (const g of games as any[]) {
+      const ts = typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) ? g.playedAt : null;
+      if (ts === null) continue;
+      minTs = minTs === null ? ts : Math.min(minTs, ts);
+      maxTs = maxTs === null ? ts : Math.max(maxTs, ts);
+    }
+    return { minTs, maxTs };
+  }
 }
 
 async function getRoundsRaw(): Promise<RoundRow[]> {

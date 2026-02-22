@@ -23,6 +23,59 @@ function cloneTemplate<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+async function ensureDocumentShell(targetWindow: Window, doc: Document): Promise<void> {
+  if (doc.head && doc.body) return;
+
+  // Firefox can return a Window for `about:blank` before head/body exist.
+  // Ensure the document has a minimal HTML shell before we start injecting UI/CSS.
+  try {
+    doc.open();
+    doc.write("<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>");
+    doc.close();
+  } catch {
+    // Ignore and fall back to manual element creation below.
+  }
+
+  if (!doc.documentElement) {
+    try {
+      const html = doc.createElement("html");
+      doc.appendChild(html);
+    } catch {
+      // If we cannot create a root element, we have no safe way to continue.
+      return;
+    }
+  }
+
+  if (!doc.head) {
+    try {
+      const head = doc.createElement("head");
+      doc.documentElement.insertBefore(head, doc.documentElement.firstChild);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!doc.body) {
+    try {
+      const body = doc.createElement("body");
+      doc.documentElement.appendChild(body);
+    } catch {
+      // ignore
+    }
+  }
+
+  if (doc.head && doc.body) return;
+
+  // Last resort: give the browser a moment to finish initializing `about:blank`.
+  const timeoutMs = 1500;
+  const start = Date.now();
+  while (!(doc.head && doc.body)) {
+    if (targetWindow.closed) break;
+    if (Date.now() - start > timeoutMs) break;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
 export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }): Promise<void> {
   const targetWindow = opts?.targetWindow ?? window;
   if (!targetWindow || targetWindow.closed) {
@@ -30,6 +83,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   }
 
   const doc = targetWindow.document;
+  await ensureDocumentShell(targetWindow, doc);
   if (!doc.body || !doc.head) {
     throw new Error("Semantic dashboard target document is not ready.");
   }
