@@ -10,6 +10,7 @@ import {
   RoundRowTeamDuel
 } from "./db";
 import { httpGetJson } from "./http";
+import { resolveCountryCodeByLatLng } from "./countries";
 
 let cachedOwnPlayerId: string | null | undefined;
 const profileCache = new Map<string, { nick?: string; countryCode?: string; countryName?: string }>();
@@ -111,6 +112,14 @@ function extractGuessCountryCode(guess: any): string | undefined {
       "country"
     ])
   );
+}
+
+async function resolveGuessCountryFallback(lat?: number, lng?: number): Promise<string | undefined> {
+  try {
+    return await resolveCountryCodeByLatLng(lat, lng);
+  } catch {
+    return undefined;
+  }
 }
 
 function roundId(gameId: string, roundNumber: number): string {
@@ -350,7 +359,8 @@ async function normalizeGameAndRounds(
   gameData: any,
   endpoint: string,
   ownPlayerId?: string,
-  ncfa?: string
+  ncfa?: string,
+  existingByRoundNumber?: Map<number, any>
 ): Promise<{ detail: GameRow; rounds: RoundRow[] }> {
   const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
   const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
@@ -575,6 +585,7 @@ async function normalizeGameAndRounds(
 
     if (family === "teamduels") {
       const round: RoundRowTeamDuel = { ...roundBase, modeFamily: "teamduels" };
+      const prev = existingByRoundNumber?.get(rn);
       const roleByPos: Record<number, "player_self" | "player_mate" | "player_opponent" | "player_opponent_mate"> = {
         1: "player_self",
         2: "player_mate",
@@ -596,7 +607,8 @@ async function normalizeGameAndRounds(
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
         (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
-        (round as any)[`${role}_guessCountry`] = extractGuessCountryCode(guess);
+        const prevCountry = normalizeIso2((prev as any)?.[`${role}_guessCountry`]);
+        (round as any)[`${role}_guessCountry`] = extractGuessCountryCode(guess) ?? prevCountry ?? (await resolveGuessCountryFallback(guessLat, guessLng));
         (round as any)[`${role}_score`] = asNum(guess?.score);
         (round as any)[`${role}_healthAfter`] = healthMap.get(rn);
         (round as any)[`${role}_isBestGuess`] = Boolean(guess?.isTeamsBestGuessOnRound);
@@ -604,6 +616,7 @@ async function normalizeGameAndRounds(
       normalizedRounds.push(round);
     } else {
       const round: RoundRowDuel = { ...roundBase, modeFamily: "duels" };
+      const prev = existingByRoundNumber?.get(rn);
       for (let p = 0; p < Math.min(players.length, 2); p++) {
         const role = p === 0 ? "player_self" : "player_opponent";
         const { player, healthMap } = players[p];
@@ -617,7 +630,8 @@ async function normalizeGameAndRounds(
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
         (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;
-        (round as any)[`${role}_guessCountry`] = extractGuessCountryCode(guess);
+        const prevCountry = normalizeIso2((prev as any)?.[`${role}_guessCountry`]);
+        (round as any)[`${role}_guessCountry`] = extractGuessCountryCode(guess) ?? prevCountry ?? (await resolveGuessCountryFallback(guessLat, guessLng));
         (round as any)[`${role}_score`] = asNum(guess?.score);
         (round as any)[`${role}_healthAfter`] = healthMap.get(rn);
       }
@@ -771,6 +785,26 @@ export async function fetchDetailsForGames(opts: {
     return { queued: 0, ok: 0, fail: 0, skipped };
   }
 
+  // Preserve existing per-round fields (e.g. externally resolved guessCountry) when re-fetching details.
+  const existingByGameAndRound = new Map<string, Map<number, any>>();
+  try {
+    const ids = queue.map((g) => g.gameId);
+    const existingRounds = await db.rounds.where("gameId").anyOf(ids).toArray();
+    for (const r of existingRounds as any[]) {
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      const rn = typeof r?.roundNumber === "number" ? r.roundNumber : asNum(r?.roundNumber);
+      if (!gid || rn === undefined) continue;
+      let byRn = existingByGameAndRound.get(gid);
+      if (!byRn) {
+        byRn = new Map<number, any>();
+        existingByGameAndRound.set(gid, byRn);
+      }
+      byRn.set(rn, r);
+    }
+  } catch {
+    // ignore - enrichment will still work, just without preservation.
+  }
+
   opts.onStatus(`Fetching details for ${queue.length} duel games...${reason}`);
   const total = queue.length;
 
@@ -786,7 +820,8 @@ export async function fetchDetailsForGames(opts: {
 
       try {
         const { data, endpoint } = await fetchDetailJson(game, opts.ncfa);
-        const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, opts.ncfa);
+        const prev = existingByGameAndRound.get(game.gameId);
+        const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, opts.ncfa, prev);
 
         await db.transaction("rw", db.details, db.rounds, async () => {
           await db.details.put(normalized.detail);

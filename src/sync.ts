@@ -416,6 +416,11 @@ export async function updateData(opts: {
   let paginationToken: string | undefined;
   let feedPages = 0;
   let feedUpserted = 0;
+  let estimatedTotalPages: number | null = null;
+  let estimatedTotalGames: number | null = null;
+  let probeDone = false;
+  let probePromise: Promise<void> | null = null;
+  const probeErrors: string[] = [];
 
   let detailsQueued = 0;
   let detailsOk = 0;
@@ -436,6 +441,8 @@ export async function updateData(opts: {
       opts.onStatus(`Feed page ${page} empty. Stopping.`);
       break;
     }
+
+    const nextPaginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : undefined;
 
     const pageRows: FeedGameRow[] = [];
     for (const entry of entries) {
@@ -476,6 +483,74 @@ export async function updateData(opts: {
     const oldestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
     const elapsed = Date.now() - startedAt;
 
+    // Best-effort probe to estimate how many pages/games are left. Runs in parallel with detail fetching.
+    if (!probePromise && nextPaginationToken) {
+      probePromise = (async () => {
+        try {
+          const seenTokensProbe = new Set<string>();
+          let token = nextPaginationToken;
+          let pages = feedPages;
+          let games = feedUpserted;
+
+          while (token && pages < maxPages) {
+            if (seenTokensProbe.has(token)) break;
+            seenTokensProbe.add(token);
+
+            const d = await fetchFeedPage(token, opts.ncfa);
+            const ents = Array.isArray(d?.entries) ? d.entries : [];
+            if (ents.length === 0) break;
+
+            const rows: FeedGameRow[] = [];
+            for (const entry of ents) {
+              const evs = extractEvents(entry);
+              for (const ev of evs) {
+                const { gameId } = extractGameIdWithSource(ev);
+                if (!gameId) continue;
+                const playedAt = extractEventTimeMs(ev, entry);
+                const gameMode = extractGameMode(ev, entry);
+                const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
+                rows.push({
+                  gameId,
+                  type: classifyTypeFromFamily(modeFamily),
+                  playedAt,
+                  mode: gameMode,
+                  gameMode,
+                  modeFamily,
+                  isTeamDuels: modeFamily === "teamduels",
+                  raw: ev
+                });
+              }
+            }
+
+            // Dedupe within page (same logic as the main loop; estimate only).
+            const byId = new Map<string, FeedGameRow>();
+            for (const row of rows) {
+              const prev = byId.get(row.gameId);
+              if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
+            }
+            const ded = [...byId.values()];
+            games += ded.length;
+            pages += 1;
+
+            const newest = ded.length > 0 ? ded.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
+            const next = typeof d?.paginationToken === "string" && d.paginationToken ? d.paginationToken : undefined;
+            token = next;
+
+            if (!token) break;
+            if (lastSeen && newest > 0 && newest <= lastSeen) break;
+          }
+
+          estimatedTotalPages = pages;
+          estimatedTotalGames = games;
+        } catch (e) {
+          probeErrors.push(e instanceof Error ? e.message : String(e));
+        } finally {
+          probeDone = true;
+        }
+      })();
+      void probePromise;
+    }
+
     // Keep the "lastSeen" pointer at the newest known timestamp (head of feed).
     const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
     await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
@@ -497,23 +572,36 @@ export async function updateData(opts: {
       detailsSkipped += res.skipped;
     }
 
-    // Progress: based on reaching previously synced time span (best-effort; stable across shifting pages).
-    let etaText = "ETA unknown";
+    // Progress: time-span based (stable across shifting pages) + optional page-count based ETA (if probe finished).
+    let spanEtaText = "ETA unknown";
     if (lastSeen && Number.isFinite(oldestOnPage) && newestOnPage > 0) {
       const covered = newestOnPage - oldestOnPage;
       const totalSpan = newestOnPage - lastSeen;
       const progress = totalSpan > 0 ? Math.max(0, Math.min(1, covered / totalSpan)) : 1;
       if (progress > 0) {
         const etaMs = elapsed * ((1 - progress) / progress);
-        etaText = progress >= 0.999 ? "ETA ~0s" : `ETA ~${etaLabel(etaMs)}`;
+        spanEtaText = progress >= 0.999 ? "ETA ~0s" : `ETA ~${etaLabel(etaMs)}`;
       }
     }
 
+    let pageEtaText = "";
+    if (estimatedTotalPages && estimatedTotalPages >= feedPages) {
+      const avgMsPerPage = elapsed / Math.max(1, feedPages);
+      const remainingPages = Math.max(0, estimatedTotalPages - feedPages);
+      const etaMs = avgMsPerPage * remainingPages;
+      const gamesPart = estimatedTotalGames ? `, games ~${feedUpserted}/${estimatedTotalGames}` : "";
+      pageEtaText = `Overall: ${feedPages}/${estimatedTotalPages} pages${gamesPart} ETA ~${etaLabel(etaMs)}`;
+    } else if (probePromise && !probeDone) {
+      pageEtaText = "Overall: estimating total pages...";
+    } else if (probeErrors.length > 0) {
+      pageEtaText = "Overall: estimate unavailable.";
+    }
+
     opts.onStatus(
-      `Feed page ${page}: upserted ${deduped.length} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${etaText}`
+      `Feed page ${page}: upserted ${deduped.length} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
     );
 
-    paginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : undefined;
+    paginationToken = nextPaginationToken;
     if (!paginationToken) {
       opts.onStatus("Feed has no pagination token. Stopping.");
       break;
