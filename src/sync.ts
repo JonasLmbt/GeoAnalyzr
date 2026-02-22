@@ -641,6 +641,9 @@ export async function updateData(opts: {
       .filter((x: any): x is string => typeof x === "string" && x);
 
     if (needIds.length > 0) {
+      opts.onStatus(
+        `Database update: enriching ${needIds.length} existing games to add ranked/unranked + map name/slug. This can take a bit longer (usually only needed once after an update).`
+      );
       const games = (await db.games.bulkGet(needIds)).filter((g): g is FeedGameRow => !!g);
       const res = await fetchDetailsForGames({
         onStatus: (m) => opts.onStatus(`Enrich | ${m}`),

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.2
+// @version      2.1.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9137,6 +9137,9 @@ ${shapes}`.trim();
         return missSlug || missName || missRated;
       }).map((d) => d.gameId).filter((x) => typeof x === "string" && x);
       if (needIds.length > 0) {
+        opts.onStatus(
+          `Database update: enriching ${needIds.length} existing games to add ranked/unranked + map name/slug. This can take a bit longer (usually only needed once after an update).`
+        );
         const games = (await db.games.bulkGet(needIds)).filter((g) => !!g);
         const res = await fetchDetailsForGames({
           onStatus: (m) => opts.onStatus(`Enrich | ${m}`),
@@ -44166,6 +44169,83 @@ ${error instanceof Error ? error.message : String(error)}`;
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
   }
+  function createThrottledStatus(setStatus) {
+    let lastRenderAt = 0;
+    let currentShownAt = 0;
+    let currentMinHoldMs = 0;
+    let pending = null;
+    let timer = null;
+    const clearTimer = () => {
+      if (timer === null) return;
+      try {
+        window.clearTimeout(timer);
+      } catch {
+      }
+      timer = null;
+    };
+    const policyFor = (message) => {
+      const m = String(message || "");
+      const isDbUpdate = m.startsWith("Database update:") || m.startsWith("Enriching existing details") || m.startsWith("Normalizing legacy rounds");
+      const isChattyProgress = m.startsWith("Feed page ") || m.startsWith("Fetching feed page ") || m.startsWith("Page ") || m.startsWith("Details ") || m.startsWith("Enrich |");
+      const isFinal = m.startsWith("Update complete") || m.startsWith("Error:");
+      if (isDbUpdate) return { throttleMs: 0, minHoldMs: 1800, immediate: true };
+      if (isFinal) return { throttleMs: 0, minHoldMs: 0, immediate: true };
+      if (isChattyProgress) return { throttleMs: 650, minHoldMs: 0, immediate: false };
+      return { throttleMs: 200, minHoldMs: 0, immediate: false };
+    };
+    const flush = () => {
+      clearTimer();
+      if (!pending) return;
+      const now = Date.now();
+      const shownFor = now - currentShownAt;
+      if (shownFor < currentMinHoldMs) {
+        timer = window.setTimeout(flush, Math.max(50, currentMinHoldMs - shownFor));
+        return;
+      }
+      setStatus(pending.message);
+      lastRenderAt = now;
+      currentShownAt = now;
+      currentMinHoldMs = pending.minHoldMs;
+      pending = null;
+    };
+    const scheduleFlush = (throttleMs) => {
+      if (timer !== null) return;
+      const now = Date.now();
+      const sinceLast = now - lastRenderAt;
+      const delay = Math.max(0, throttleMs - sinceLast);
+      timer = window.setTimeout(flush, delay);
+    };
+    return {
+      push(message) {
+        const p = policyFor(message);
+        pending = { message, ...p };
+        const now = Date.now();
+        const shownFor = now - currentShownAt;
+        if (p.immediate && shownFor >= currentMinHoldMs) {
+          clearTimer();
+          setStatus(message);
+          lastRenderAt = now;
+          currentShownAt = now;
+          currentMinHoldMs = p.minHoldMs;
+          pending = null;
+          return;
+        }
+        scheduleFlush(p.throttleMs);
+      },
+      flushNow(message) {
+        clearTimer();
+        pending = null;
+        setStatus(message);
+        lastRenderAt = Date.now();
+        currentShownAt = lastRenderAt;
+        currentMinHoldMs = 0;
+      },
+      dispose() {
+        clearTimer();
+        pending = null;
+      }
+    };
+  }
   async function refreshUI(ui) {
     const [games, rounds, detailsOk, detailsError, detailsMissing] = await Promise.all([
       db.games.count(),
@@ -44178,8 +44258,9 @@ ${error instanceof Error ? error.message : String(error)}`;
   }
   function registerUiActions(ui) {
     ui.onUpdateClick(async () => {
+      const status = createThrottledStatus(ui.setStatus);
       try {
-        ui.setStatus("Update started...");
+        status.flushNow("Update started...");
         let resolved = await getResolvedNcfaToken();
         let ncfa = resolved.token;
         if (!ncfa) {
@@ -44194,21 +44275,21 @@ ${error instanceof Error ? error.message : String(error)}`;
                   await setNcfaToken(clean);
                   resolved = await getResolvedNcfaToken();
                   ncfa = resolved.token;
-                  ui.setStatus(`NCFA token saved and validated (HTTP ${check.status ?? "ok"}). Continuing update...`);
+                  status.flushNow(`NCFA token saved and validated (HTTP ${check.status ?? "ok"}). Continuing update...`);
                 } else {
-                  ui.setStatus(`NCFA token not saved: ${check.reason} Continuing without NCFA...`);
+                  status.flushNow(`NCFA token not saved: ${check.reason} Continuing without NCFA...`);
                 }
               } else {
                 await setNcfaToken("");
-                ui.setStatus("No token saved. Continuing without NCFA...");
+                status.flushNow("No token saved. Continuing without NCFA...");
               }
             }
           }
         } else if (resolved.source === "cookie") {
-          ui.setStatus("Using NCFA token from browser cookie. Continuing update...");
+          status.flushNow("Using NCFA token from browser cookie. Continuing update...");
         }
         const res = await updateData({
-          onStatus: (m) => ui.setStatus(m),
+          onStatus: (m) => status.push(m),
           maxPages: 5e3,
           delayMs: 200,
           detailConcurrency: 4,
@@ -44217,14 +44298,16 @@ ${error instanceof Error ? error.message : String(error)}`;
           enrichLimit: 2e3,
           ncfa
         });
-        const norm = await normalizeLegacyRounds({ onStatus: (m) => ui.setStatus(m) });
+        const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
         invalidateRoundsCache();
-        ui.setStatus(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
-        if (norm.updated > 0) ui.setStatus(`Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}.`);
+        status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
+        if (norm.updated > 0) status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}.`);
         await refreshUI(ui);
       } catch (e) {
-        ui.setStatus("Error: " + errorText(e));
+        status.flushNow("Error: " + errorText(e));
         console.error(e);
+      } finally {
+        status.dispose();
       }
     });
     ui.onResetClick(async () => {
