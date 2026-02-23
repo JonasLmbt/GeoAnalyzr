@@ -1939,7 +1939,6 @@
       {
         "id": "country_insight",
         "title": "Country Insight",
-        "filterScope": { "exclude": ["country"] },
         "localFilters": {
           "enabled": true,
           "controls": [

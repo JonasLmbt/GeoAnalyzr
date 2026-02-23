@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { updateData } from "../sync";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
+import { backfillGuessCountries } from "../migrations/backfillGuessCountries";
 import { invalidateRoundsCache } from "../engine/queryEngine";
 import { exportExcel } from "../export";
 import { initAnalysisWindow } from "../ui";
@@ -199,9 +200,14 @@ export function registerUiActions(ui: UI): void {
         ncfa
       });
       const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
+      const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
       invalidateRoundsCache();
       status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
-      if (norm.updated > 0) status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}.`);
+      if (norm.updated > 0 || backfilled.updated > 0) {
+        status.flushNow(
+          `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}.`
+        );
+      }
       await refreshUI(ui);
     } catch (e) {
       status.flushNow("Error: " + errorText(e));

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.11
+// @version      2.1.12
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -9288,6 +9288,78 @@ ${shapes}`.trim();
       }
       if (scanned % (batchSize * 5) === 0 || scanned === total) {
         onStatus(`Normalizing legacy rounds... (${scanned}/${total}, updated ${updated})`);
+      }
+    }
+    await db.meta.put({
+      key: metaKey,
+      value: { doneAt: Date.now(), scanned, updated },
+      updatedAt: Date.now()
+    });
+    return { scanned, updated };
+  }
+
+  // src/migrations/backfillGuessCountries.ts
+  function normalizeIso23(v) {
+    if (typeof v !== "string") return void 0;
+    const x = v.trim().toLowerCase();
+    return /^[a-z]{2}$/.test(x) ? x : void 0;
+  }
+  function isFiniteNumber2(x) {
+    return typeof x === "number" && Number.isFinite(x);
+  }
+  function hasRole(r, role) {
+    const id = r?.[`${role}_playerId`];
+    const lat = r?.[`${role}_guessLat`];
+    const lng = r?.[`${role}_guessLng`];
+    return typeof id === "string" && id.trim().length > 0 || isFiniteNumber2(lat) && isFiniteNumber2(lng);
+  }
+  async function maybeFillRole(out, role) {
+    const existing = normalizeIso23(out?.[`${role}_guessCountry`]);
+    if (existing) return false;
+    const lat = out?.[`${role}_guessLat`];
+    const lng = out?.[`${role}_guessLng`];
+    if (!isFiniteNumber2(lat) || !isFiniteNumber2(lng)) return false;
+    const iso2 = await resolveCountryCodeByLatLngLocalOnly(lat, lng);
+    if (!iso2) return false;
+    out[`${role}_guessCountry`] = iso2;
+    return true;
+  }
+  async function backfillGuessCountries(opts) {
+    const onStatus = opts.onStatus ?? (() => {
+    });
+    const batchSize = opts.batchSize ?? 500;
+    const metaKey = "migration_guess_countries_v1";
+    if (!opts.force) {
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      if (typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 24 * 60 * 60 * 1e3) {
+        return { scanned: 0, updated: 0 };
+      }
+    }
+    const total = await db.rounds.count();
+    let scanned = 0;
+    let updated = 0;
+    onStatus(`Backfilling guessCountry... (0/${total})`);
+    for (let offset = 0; offset < total; offset += batchSize) {
+      const chunk = await db.rounds.offset(offset).limit(batchSize).toArray();
+      scanned += chunk.length;
+      const patch = [];
+      for (const r of chunk) {
+        if (!r || typeof r !== "object") continue;
+        const out = { ...r };
+        let changed = false;
+        if (hasRole(r, "player_self")) changed = await maybeFillRole(out, "player_self") || changed;
+        if (hasRole(r, "player_opponent")) changed = await maybeFillRole(out, "player_opponent") || changed;
+        if (hasRole(r, "player_mate")) changed = await maybeFillRole(out, "player_mate") || changed;
+        if (hasRole(r, "player_opponent_mate")) changed = await maybeFillRole(out, "player_opponent_mate") || changed;
+        if (changed) patch.push(out);
+      }
+      if (patch.length > 0) {
+        await db.rounds.bulkPut(patch);
+        updated += patch.length;
+      }
+      if (scanned % (batchSize * 5) === 0 || scanned === total) {
+        onStatus(`Backfilling guessCountry... (${scanned}/${total}, updated ${updated})`);
       }
     }
     await db.meta.put({
@@ -30952,7 +31024,7 @@ ${shapes}`.trim();
     if (!counterLike || typeof counterLike !== "object") return [];
     return Object.entries(counterLike).map(([key, value]) => ({ category, key, count: Number(value) || 0 })).sort((a, b) => b.count - a.count);
   }
-  function normalizeIso23(v) {
+  function normalizeIso24(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : void 0;
@@ -30998,7 +31070,7 @@ ${shapes}`.trim();
     return m.includes("duel");
   }
   function resolveGuessCountryForExport(existing) {
-    return normalizeIso23(existing) ?? "";
+    return normalizeIso24(existing) ?? "";
   }
   async function downloadWorkbook(wb, filename) {
     const arrayBuffer = writeSync(wb, { type: "array", bookType: "xlsx" });
@@ -31017,6 +31089,7 @@ ${shapes}`.trim();
   }
   async function exportExcel(onStatus) {
     onStatus("Preparing export...");
+    await backfillGuessCountries({ onStatus });
     const [games, rounds, details, metaRows] = await Promise.all([
       db.games.orderBy("playedAt").reverse().toArray(),
       db.rounds.toArray(),
@@ -34814,7 +34887,6 @@ ${shapes}`.trim();
         {
           id: "country_insight",
           title: "Country Insight",
-          filterScope: { exclude: ["country"] },
           localFilters: {
             enabled: true,
             controls: [
@@ -43077,7 +43149,7 @@ ${describeError(err)}` : message;
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
     return res.json();
   }
-  function normalizeIso24(v) {
+  function normalizeIso25(v) {
     if (typeof v !== "string") return null;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : null;
@@ -43147,7 +43219,7 @@ ${describeError(err)}` : message;
     const selectableMap = /* @__PURE__ */ new Map();
     if (Array.isArray(args.selectableValues)) {
       for (const v of args.selectableValues) {
-        const norm = normalizeIso24(v);
+        const norm = normalizeIso25(v);
         if (!norm) continue;
         if (!selectableMap.has(norm)) selectableMap.set(norm, String(v));
       }
@@ -43220,7 +43292,7 @@ ${describeError(err)}` : message;
       list.push(p);
       pathsByIso2.set(iso2, list);
     }
-    let selected = normalizeIso24(value);
+    let selected = normalizeIso25(value);
     const refreshActive = () => {
       for (const [iso2, list] of pathsByIso2.entries()) {
         const active = !!selected && iso2 === selected;
@@ -43276,7 +43348,7 @@ ${describeError(err)}` : message;
       const { x, y } = rectPoint(ev.clientX, ev.clientY);
       const target = ev.target;
       const hit = target?.closest?.("path.ga-country-shape");
-      const hitIso2 = normalizeIso24(hit?.dataset?.iso2) ?? null;
+      const hitIso2 = normalizeIso25(hit?.dataset?.iso2) ?? null;
       const isSelectable = !hasSelectableFilter || (hitIso2 ? selectableMap.has(hitIso2) : false);
       dragStart = { x, y, tx: vp.tx, ty: vp.ty, hitIso2: isSelectable ? hitIso2 : null };
     });
@@ -44787,9 +44859,14 @@ ${error instanceof Error ? error.message : String(error)}`;
           ncfa
         });
         const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
+        const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
         invalidateRoundsCache();
         status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
-        if (norm.updated > 0) status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}.`);
+        if (norm.updated > 0 || backfilled.updated > 0) {
+          status.flushNow(
+            `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}.`
+          );
+        }
         await refreshUI(ui);
       } catch (e) {
         status.flushNow("Error: " + errorText(e));

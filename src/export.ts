@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { db } from "./db";
+import { backfillGuessCountries } from "./migrations/backfillGuessCountries";
 
 const LEGACY_KEY_ALIASES: Record<string, string[]> = {
   player_self_id: ["playerOneId", "p1_id"],
@@ -196,6 +197,9 @@ async function downloadWorkbook(wb: XLSX.WorkBook, filename: string): Promise<vo
 
 export async function exportExcel(onStatus: (msg: string) => void): Promise<void> {
   onStatus("Preparing export...");
+
+  // Ensure guessCountry columns exist for all players (where guess lat/lng is present).
+  await backfillGuessCountries({ onStatus });
 
   const [games, rounds, details, metaRows] = await Promise.all([
     db.games.orderBy("playedAt").reverse().toArray(),
