@@ -396,7 +396,7 @@ function maybeAnimateChartSvg(svg: SVGSVGElement, doc: Document): void {
         },
         { threshold: 0.15 }
       );
-      obs.observe(svg);
+      if (obs) obs.observe(svg);
     } catch {
       forceRun();
       return;
@@ -923,11 +923,11 @@ export async function renderChartWidget(
     });
     const yRange = Math.max(1e-9, maxY - minY);
 
-    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg") as unknown as SVGSVGElement;
     svg.classList.add("ga-chart-svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
 
-    const axisX = doc.createElementNS(svg.namespaceURI, "line");
+    const axisX = doc.createElementNS(svg.namespaceURI, "line") as unknown as SVGLineElement;
     axisX.setAttribute("x1", String(PAD_L));
     axisX.setAttribute("y1", String(PAD_T + innerH));
     axisX.setAttribute("x2", String(PAD_L + innerW));
@@ -936,7 +936,7 @@ export async function renderChartWidget(
     axisX.setAttribute("opacity", "0.7");
     svg.appendChild(axisX);
 
-    const axisY = doc.createElementNS(svg.namespaceURI, "line");
+    const axisY = doc.createElementNS(svg.namespaceURI, "line") as unknown as SVGLineElement;
     axisY.setAttribute("x1", String(PAD_L));
     axisY.setAttribute("y1", String(PAD_T));
     axisY.setAttribute("x2", String(PAD_L));
@@ -950,7 +950,7 @@ export async function renderChartWidget(
       const yVal = minY + (yRange * i) / tickCount;
       const yPos = PAD_T + innerH - ((yVal - minY) / yRange) * innerH;
 
-      const grid = doc.createElementNS(svg.namespaceURI, "line");
+      const grid = doc.createElementNS(svg.namespaceURI, "line") as unknown as SVGLineElement;
       grid.setAttribute("x1", String(PAD_L));
       grid.setAttribute("y1", String(yPos));
       grid.setAttribute("x2", String(PAD_L + innerW));
@@ -959,7 +959,7 @@ export async function renderChartWidget(
       grid.setAttribute("opacity", i === 0 ? "0.8" : "0.45");
       svg.appendChild(grid);
 
-      const yTick = doc.createElementNS(svg.namespaceURI, "text");
+      const yTick = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
       yTick.setAttribute("x", String(PAD_L - 8));
       yTick.setAttribute("y", String(yPos + 3));
       yTick.setAttribute("text-anchor", "end");
@@ -970,7 +970,7 @@ export async function renderChartWidget(
       svg.appendChild(yTick);
     }
 
-    const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+    const xAxisLabel = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
     xAxisLabel.setAttribute("x", String(PAD_L + innerW / 2));
     xAxisLabel.setAttribute("y", String(H - 8));
     xAxisLabel.setAttribute("text-anchor", "middle");
@@ -985,7 +985,7 @@ export async function renderChartWidget(
       const first = data[0].x;
       const last = data[data.length - 1].x;
 
-      const lx = doc.createElementNS(svg.namespaceURI, "text");
+      const lx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
       lx.setAttribute("x", String(PAD_L + 2));
       lx.setAttribute("y", String(PAD_T + innerH + 18));
       lx.setAttribute("text-anchor", "start");
@@ -995,7 +995,7 @@ export async function renderChartWidget(
       lx.textContent = first;
       svg.appendChild(lx);
 
-      const rx = doc.createElementNS(svg.namespaceURI, "text");
+      const rx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
       rx.setAttribute("x", String(PAD_L + innerW - 2));
       rx.setAttribute("y", String(PAD_T + innerH + 18));
       rx.setAttribute("text-anchor", "end");
@@ -1006,7 +1006,7 @@ export async function renderChartWidget(
       svg.appendChild(rx);
     }
 
-    const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
+    const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
     yAxisLabel.setAttribute("x", "16");
     yAxisLabel.setAttribute("y", String(PAD_T + innerH / 2));
     yAxisLabel.setAttribute("text-anchor", "middle");
@@ -1027,7 +1027,7 @@ export async function renderChartWidget(
         const y = missing ? NaN : PAD_T + innerH - ((yVal - minY) / yRange) * innerH;
         return { x, y, yVal, missing, d, idx: i };
       });
-      const path = doc.createElementNS(svg.namespaceURI, "path");
+      const path = doc.createElementNS(svg.namespaceURI, "path") as unknown as SVGPathElement;
       path.classList.add("ga-chart-line-path");
       const dParts: string[] = [];
       let started = false;
@@ -1071,7 +1071,7 @@ export async function renderChartWidget(
           prevValidY = p.yVal;
           return;
         }
-        const dot = doc.createElementNS(svg.namespaceURI, "circle");
+        const dot = doc.createElementNS(svg.namespaceURI, "circle") as unknown as SVGCircleElement;
         dot.classList.add("ga-chart-line-dot");
         dot.style.setProperty("--ga-dot-index", String(dotIdx++));
         dot.setAttribute("cx", String(p.x));
@@ -1079,7 +1079,7 @@ export async function renderChartWidget(
         dot.setAttribute("r", "3");
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
-        const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+        const tooltip = doc.createElementNS(svg.namespaceURI, "title") as unknown as SVGTitleElement;
         tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
@@ -1120,7 +1120,7 @@ export async function renderChartWidget(
         const h = ((clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange) * innerH;
         const y = PAD_T + innerH - h;
 
-        const rect = doc.createElementNS(svg.namespaceURI, "rect");
+        const rect = doc.createElementNS(svg.namespaceURI, "rect") as unknown as SVGRectElement;
         rect.classList.add("ga-chart-bar");
         rect.style.setProperty("--ga-bar-index", String(i));
         rect.setAttribute("x", String(x + 1));
@@ -1134,7 +1134,7 @@ export async function renderChartWidget(
         rect.style.transformOrigin = `${x + barW / 2}px ${PAD_T + innerH}px`;
         rect.style.transformBox = "view-box";
 
-        const tooltip = doc.createElementNS(svg.namespaceURI, "title");
+        const tooltip = doc.createElementNS(svg.namespaceURI, "title") as unknown as SVGTitleElement;
         tooltip.textContent = `${formatDimensionKey(doc, dimId, d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, d.y))}`;
         rect.appendChild(tooltip);
 
@@ -1164,7 +1164,7 @@ export async function renderChartWidget(
         svg.appendChild(rect);
 
         if (data.length <= 20 || i % Math.ceil(data.length / 10) === 0) {
-          const tx = doc.createElementNS(svg.namespaceURI, "text");
+          const tx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
           tx.setAttribute("x", String(x + barW / 2));
           tx.setAttribute("y", String(PAD_T + innerH + 16));
           tx.setAttribute("text-anchor", "middle");
