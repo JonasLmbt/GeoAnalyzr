@@ -190,6 +190,17 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border-radius:12px;
       min-width: 200px;
     }
+
+    /* Keep the Map global filter compact even when options are long. */
+    .ga-filter[data-ga-filter-id="map"] {
+      flex: 0 0 220px;
+      min-width: 220px;
+      max-width: 220px;
+    }
+    .ga-filter[data-ga-filter-id="map"] select {
+      width: 100%;
+      text-overflow: ellipsis;
+    }
     .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
     .ga-filter-row { display:flex; gap:8px; align-items:center; }
     .ga-filter select, .ga-filter input[type="date"] {

@@ -142,6 +142,7 @@ export async function renderGlobalFiltersBar(args: {
 
     const wrap = doc.createElement("div");
     wrap.className = "ga-filter";
+    wrap.setAttribute("data-ga-filter-id", id);
     wrap.appendChild(renderControlLabel(doc, c.label));
 
     const row = doc.createElement("div");
@@ -178,6 +179,7 @@ export async function renderGlobalFiltersBar(args: {
 
     const wrap = doc.createElement("div");
     wrap.className = "ga-filter";
+    wrap.setAttribute("data-ga-filter-id", id);
     wrap.appendChild(renderControlLabel(doc, control.label));
 
     const sel = doc.createElement("select");

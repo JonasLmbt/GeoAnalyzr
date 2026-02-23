@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.14
+// @version      2.1.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -35203,6 +35203,17 @@ ${shapes}`.trim();
       border-radius:12px;
       min-width: 200px;
     }
+
+    /* Keep the Map global filter compact even when options are long. */
+    .ga-filter[data-ga-filter-id="map"] {
+      flex: 0 0 220px;
+      min-width: 220px;
+      max-width: 220px;
+    }
+    .ga-filter[data-ga-filter-id="map"] select {
+      width: 100%;
+      text-overflow: ellipsis;
+    }
     .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
     .ga-filter-row { display:flex; gap:8px; align-items:center; }
     .ga-filter select, .ga-filter input[type="date"] {
@@ -43871,6 +43882,7 @@ ${describeError(err)}` : message;
       const current = getDateRangeValue(applyMode ? pending : state, id, def);
       const wrap = doc.createElement("div");
       wrap.className = "ga-filter";
+      wrap.setAttribute("data-ga-filter-id", id);
       wrap.appendChild(renderControlLabel(doc, c.label));
       const row = doc.createElement("div");
       row.className = "ga-filter-row";
@@ -43901,6 +43913,7 @@ ${describeError(err)}` : message;
       const current = String((applyMode ? pending : state)[id] ?? control.default ?? "all");
       const wrap = doc.createElement("div");
       wrap.className = "ga-filter";
+      wrap.setAttribute("data-ga-filter-id", id);
       wrap.appendChild(renderControlLabel(doc, control.label));
       const sel = doc.createElement("select");
       sel.className = "ga-filter-select";
