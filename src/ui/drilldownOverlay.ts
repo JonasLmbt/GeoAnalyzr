@@ -69,6 +69,56 @@ export class DrilldownOverlay {
     this.modal.innerHTML = "";
     this.modal.style.display = "block";
 
+    const normalizeTitle = (raw: string): string => {
+      const shortId = (id: string, n = 8) => (id.length > n ? `${id.slice(0, n)}…` : id);
+
+      let t = String(raw ?? "").trim();
+      if (!t) return "Drilldown";
+
+      // If callers already included a count suffix like "(12)", drop it (the overlay adds its own count).
+      t = t.replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim();
+
+      // Pull trailing "(...)" tokens and de-duplicate them (often created by nested drilldowns).
+      const tokens: string[] = [];
+      while (true) {
+        const m = t.match(/^(.*)\s*\(([^()]*)\)\s*$/);
+        if (!m) break;
+        t = (m[1] ?? "").trimEnd();
+        const tok = String(m[2] ?? "").trim();
+        if (tok) tokens.push(tok);
+      }
+      tokens.reverse();
+      const seen = new Set<string>();
+      const uniq = tokens.filter((x) => {
+        const k = x.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+
+      const normalized = uniq.map((x) => {
+        const gm = x.match(/^game\s+([0-9a-f]{12,})$/i);
+        if (gm) return `game ${shortId(gm[1])}`;
+        const sm = x.match(/^session\s+(s\d+)$/i);
+        if (sm) return `session ${sm[1]}`;
+        return x;
+      });
+
+      let out = t.trim();
+      if (normalized.length) out = `${out} ${normalized.map((x) => `(${x})`).join(" ")}`.trim();
+
+      const max = 92;
+      if (out.length > max) {
+        const head = 60;
+        const tail = 26;
+        out = `${out.slice(0, head).trimEnd()} … ${out.slice(-tail).trimStart()}`;
+      }
+      return out;
+    };
+
+    const baseTitle = normalizeTitle(req.title);
+    const shortGameId = (id: string) => (id.length > 8 ? `${id.slice(0, 8)}…` : id);
+
     const bg = this.doc.createElement("div");
     bg.className = "ga-drilldown-bg";
     bg.addEventListener("click", () => this.close());
@@ -81,7 +131,7 @@ export class DrilldownOverlay {
 
     const hTitle = this.doc.createElement("div");
     hTitle.className = "ga-drilldown-title";
-    hTitle.textContent = `${req.title} (${req.rows.length})`;
+    hTitle.textContent = `${baseTitle} (${req.rows.length})`;
 
     const btn = this.doc.createElement("button");
     btn.className = "ga-drilldown-close";
@@ -165,7 +215,7 @@ export class DrilldownOverlay {
       const all = await getRounds({});
       const rows = (all as any[]).filter((r) => typeof (r as any)?.gameId === "string" && (r as any).gameId === gameId);
       this.open(semantic, {
-        title: `${req.title}${titleSuffix}`,
+        title: `${baseTitle}${titleSuffix}`,
         target: "rounds",
         columnsPreset: semantic.drilldownPresets.rounds?.defaultPreset ?? "roundMode",
         rows
@@ -176,7 +226,7 @@ export class DrilldownOverlay {
       const all = await getGames({});
       const rows = (all as any[]).filter((g) => typeof (g as any)?.gameId === "string" && (g as any).gameId === gameId);
       this.open(semantic, {
-        title: `${req.title}${titleSuffix}`,
+        title: `${baseTitle}${titleSuffix}`,
         target: "games",
         columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
         rows
@@ -191,7 +241,7 @@ export class DrilldownOverlay {
       const all = await getGames({});
       const rows = (all as any[]).filter((g) => typeof (g as any)?.gameId === "string" && idSet.has((g as any).gameId));
       this.open(semantic, {
-        title: `${req.title}${titleSuffix}`,
+        title: `${baseTitle}${titleSuffix}`,
         target: "games",
         columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
         rows
@@ -204,7 +254,7 @@ export class DrilldownOverlay {
       const all = await getGames({});
       const rows = (all as any[]).filter((g) => typeof (g as any)?.gameId === "string" && idSet.has((g as any).gameId));
       this.open(semantic, {
-        title: `${req.title}${titleSuffix}`,
+        title: `${baseTitle}${titleSuffix}`,
         target: "games",
         columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
         rows
@@ -215,7 +265,7 @@ export class DrilldownOverlay {
       const { sessionById } = await this.ensureSessionMaps(semantic);
       const row = sessionById.get(sessionId);
       this.open(semantic, {
-        title: `${req.title}${titleSuffix}`,
+        title: `${baseTitle}${titleSuffix}`,
         target: "sessions",
         columnsPreset: semantic.drilldownPresets.sessions?.defaultPreset ?? "sessionMode",
         rows: row ? [row] : []
@@ -270,7 +320,7 @@ export class DrilldownOverlay {
           // Rounds: click gameId/sessionId.
           if (req.target === "rounds" && key === "gameId" && typeof raw === "string" && raw) {
             td.style.cursor = "pointer";
-            td.addEventListener("click", () => void openGameById(raw, ` (game ${raw})`));
+            td.addEventListener("click", () => void openGameById(raw, ` (game ${shortGameId(raw)})`));
           }
           if (req.target === "rounds" && key === "sessionId") {
             const gid = this.getCellRawValue(r, "gameId", semantic);
@@ -294,12 +344,12 @@ export class DrilldownOverlay {
             const gid = this.getCellRawValue(r, "gameId", semantic);
             if (typeof gid === "string" && gid) {
               td.style.cursor = "pointer";
-              td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${gid})`));
+              td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${shortGameId(gid)})`));
             }
           }
           if ((req.target === "games" || req.target === "players") && key === "gameId" && typeof raw === "string" && raw) {
             td.style.cursor = "pointer";
-            td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${raw})`));
+            td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${shortGameId(raw)})`));
           }
           if ((req.target === "games" || req.target === "players") && key === "sessionId") {
             const gid = this.getCellRawValue(r, "gameId", semantic);

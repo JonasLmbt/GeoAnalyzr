@@ -17,6 +17,7 @@ import { renderAnalysisApp } from "./ui/analysisRenderer";
 import { getCurrentPlayerName } from "./app/playerIdentity";
 import { logoSvgMarkup } from "./ui/logo";
 import { mergeSemanticWithDashboard } from "./engine/semanticMerge";
+import { analysisConsole } from "./ui/consoleStore";
 
 function cloneTemplate<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -30,69 +31,10 @@ type BootLog = {
 };
 
 function createBootLog(doc: Document): BootLog {
-  let pre: HTMLPreElement | null = null;
-  const lines: string[] = [];
-
-  const ensurePre = (): HTMLPreElement | null => {
-    if (pre) return pre;
-    if (!doc.body) return null;
-    pre = doc.createElement("pre");
-    pre.id = "ga-boot-log";
-    pre.style.cssText = [
-      "position:fixed",
-      "left:0",
-      "top:0",
-      "right:0",
-      "max-height:40vh",
-      "overflow:auto",
-      "margin:0",
-      "padding:10px 12px",
-      "background:rgba(0,0,0,0.85)",
-      "color:#c7f5d9",
-      "font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace",
-      "z-index:2147483647",
-      "white-space:pre-wrap"
-    ].join(";");
-    doc.body.appendChild(pre);
-    pre.textContent = lines.join("\n");
-    return pre;
-  };
-
-  const fmt = (s: string): string => {
-    const t = new Date();
-    const hh = String(t.getHours()).padStart(2, "0");
-    const mm = String(t.getMinutes()).padStart(2, "0");
-    const ss = String(t.getSeconds()).padStart(2, "0");
-    const ms = String(t.getMilliseconds()).padStart(3, "0");
-    return `[${hh}:${mm}:${ss}.${ms}] ${s}`;
-  };
-
-  const append = (line: string): void => {
-    lines.push(fmt(line));
-    const el = ensurePre();
-    if (el) el.textContent = lines.join("\n");
-  };
-
-  const describeError = (err: unknown): string => {
-    if (!err) return "";
-    if (err instanceof Error) {
-      const stack = typeof err.stack === "string" && err.stack.trim().length ? `\n${err.stack}` : "";
-      return `${err.name}: ${err.message}${stack}`;
-    }
-    try {
-      return String(err);
-    } catch {
-      return "<unprintable error>";
-    }
-  };
-
   return {
-    log: (message) => append(message),
-    error: (message, err) => append(`${message}${err ? `\n${describeError(err)}` : ""}`),
-    remove: () => {
-      if (pre && pre.parentElement) pre.remove();
-      pre = null;
-    }
+    log: (message) => analysisConsole.info(message),
+    error: (message, err) => analysisConsole.error(message, err),
+    remove: () => void 0
   };
 }
 

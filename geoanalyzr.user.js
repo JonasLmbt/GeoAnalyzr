@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.9
+// @version      2.1.10
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -862,10 +862,10 @@
             endMicroTickScope();
         }
         function propagateAllListeners(promise) {
-          var listeners = promise._listeners;
+          var listeners2 = promise._listeners;
           promise._listeners = [];
-          for (var i = 0, len = listeners.length; i < len; ++i) {
-            propagateToListener(promise, listeners[i]);
+          for (var i = 0, len = listeners2.length; i < len; ++i) {
+            propagateToListener(promise, listeners2[i]);
           }
           var psd = promise._PSD;
           --psd.ref || psd.finalize();
@@ -4147,9 +4147,9 @@
         function collectTableSubscribers(tblCache, updatedParts, outQueriesToSignal, deleteAffectedCacheEntries) {
           var updatedEntryLists = [];
           for (var _i = 0, _a2 = Object.entries(tblCache.queries.query); _i < _a2.length; _i++) {
-            var _b = _a2[_i], indexName = _b[0], entries = _b[1];
+            var _b = _a2[_i], indexName = _b[0], entries2 = _b[1];
             var filteredEntries = [];
-            for (var _c = 0, entries_1 = entries; _c < entries_1.length; _c++) {
+            for (var _c = 0, entries_1 = entries2; _c < entries_1.length; _c++) {
               var entry = entries_1[_c];
               if (obsSetsOverlap(updatedParts, entry.obsSet)) {
                 entry.subscribers.forEach(function(requery) {
@@ -4407,7 +4407,7 @@
             });
           });
         }
-        function pad(a, value, count) {
+        function pad2(a, value, count) {
           var result = isArray(a) ? a.slice() : [a];
           for (var i = 0; i < count; ++i)
             result.push(value);
@@ -4451,9 +4451,9 @@
             function translateRange(range, keyTail) {
               return {
                 type: range.type === 1 ? 2 : range.type,
-                lower: pad(range.lower, range.lowerOpen ? down.MAX_KEY : down.MIN_KEY, keyTail),
+                lower: pad2(range.lower, range.lowerOpen ? down.MAX_KEY : down.MIN_KEY, keyTail),
                 lowerOpen: true,
-                upper: pad(range.upper, range.upperOpen ? down.MIN_KEY : down.MAX_KEY, keyTail),
+                upper: pad2(range.upper, range.upperOpen ? down.MIN_KEY : down.MAX_KEY, keyTail),
                 upperOpen: true
               };
             }
@@ -4474,13 +4474,13 @@
                 return table.openCursor(req);
               function createVirtualCursor(cursor) {
                 function _continue(key) {
-                  key != null ? cursor.continue(pad(key, req.reverse ? down.MAX_KEY : down.MIN_KEY, keyTail)) : req.unique ? cursor.continue(cursor.key.slice(0, keyLength).concat(req.reverse ? down.MIN_KEY : down.MAX_KEY, keyTail)) : cursor.continue();
+                  key != null ? cursor.continue(pad2(key, req.reverse ? down.MAX_KEY : down.MIN_KEY, keyTail)) : req.unique ? cursor.continue(cursor.key.slice(0, keyLength).concat(req.reverse ? down.MIN_KEY : down.MAX_KEY, keyTail)) : cursor.continue();
                 }
                 var virtualCursor = Object.create(cursor, {
                   continue: { value: _continue },
                   continuePrimaryKey: {
                     value: function(key, primaryKey2) {
-                      cursor.continuePrimaryKey(pad(key, down.MAX_KEY, keyTail), primaryKey2);
+                      cursor.continuePrimaryKey(pad2(key, down.MAX_KEY, keyTail), primaryKey2);
                     }
                   },
                   primaryKey: {
@@ -5112,12 +5112,12 @@
           if (!queries)
             return [null, false, tblCache, null];
           var indexName = req.query ? req.query.index.name : null;
-          var entries = queries[indexName || ""];
-          if (!entries)
+          var entries2 = queries[indexName || ""];
+          if (!entries2)
             return [null, false, tblCache, null];
           switch (type2) {
             case "query":
-              var equalEntry = entries.find(function(entry) {
+              var equalEntry = entries2.find(function(entry) {
                 return entry.req.limit === req.limit && entry.req.values === req.values && areRangesEqual(entry.req.query.range, req.query.range);
               });
               if (equalEntry)
@@ -5125,18 +5125,18 @@
                   equalEntry,
                   true,
                   tblCache,
-                  entries
+                  entries2
                 ];
-              var superEntry = entries.find(function(entry) {
+              var superEntry = entries2.find(function(entry) {
                 var limit = "limit" in entry.req ? entry.req.limit : Infinity;
                 return limit >= req.limit && (req.values ? entry.req.values : true) && isSuperRange(entry.req.query.range, req.query.range);
               });
-              return [superEntry, false, tblCache, entries];
+              return [superEntry, false, tblCache, entries2];
             case "count":
-              var countQuery = entries.find(function(entry) {
+              var countQuery = entries2.find(function(entry) {
                 return areRangesEqual(entry.req.query.range, req.query.range);
               });
-              return [countQuery, !!countQuery, tblCache, entries];
+              return [countQuery, !!countQuery, tblCache, entries2];
           }
         }
         function subscribeToCacheEntry(cacheEntry, container, requery, signal) {
@@ -5181,11 +5181,11 @@
                           });
                           if (idbtrans._explicit && wasCommitted && idbtrans.mutatedParts) {
                             for (var _a2 = 0, _b = Object.values(tblCache.queries.query); _a2 < _b.length; _a2++) {
-                              var entries = _b[_a2];
-                              for (var _c = 0, _d = entries.slice(); _c < _d.length; _c++) {
+                              var entries2 = _b[_a2];
+                              for (var _c = 0, _d = entries2.slice(); _c < _d.length; _c++) {
                                 var entry = _d[_c];
                                 if (obsSetsOverlap(entry.obsSet, idbtrans.mutatedParts)) {
-                                  delArrayItem(entries, entry);
+                                  delArrayItem(entries2, entry);
                                   entry.subscribers.forEach(function(requery) {
                                     return affectedSubscribers_1.add(requery);
                                   });
@@ -5197,15 +5197,15 @@
                               return op.trans !== idbtrans;
                             });
                             for (var _e = 0, _f = Object.values(tblCache.queries.query); _e < _f.length; _e++) {
-                              var entries = _f[_e];
-                              for (var _g = 0, _h = entries.slice(); _g < _h.length; _g++) {
+                              var entries2 = _f[_e];
+                              for (var _g = 0, _h = entries2.slice(); _g < _h.length; _g++) {
                                 var entry = _h[_g];
                                 if (entry.res != null && idbtrans.mutatedParts) {
                                   if (wasCommitted && !entry.dirty) {
                                     var freezeResults = Object.isFrozen(entry.res);
                                     var modRes = applyOptimisticOps(entry.res, entry.req, ops, table, entry, freezeResults);
                                     if (entry.dirty) {
-                                      delArrayItem(entries, entry);
+                                      delArrayItem(entries2, entry);
                                       entry.subscribers.forEach(function(requery) {
                                         return affectedSubscribers_1.add(requery);
                                       });
@@ -5215,7 +5215,7 @@
                                     }
                                   } else {
                                     if (entry.dirty) {
-                                      delArrayItem(entries, entry);
+                                      delArrayItem(entries2, entry);
                                     }
                                     entry.subscribers.forEach(function(requery) {
                                       return affectedSubscribers_1.add(requery);
@@ -8967,14 +8967,14 @@ ${shapes}`.trim();
       feedPages = page + 1;
       opts.onStatus(`Fetching feed page ${page}...`);
       const data = await fetchFeedPage(paginationToken, opts.ncfa);
-      const entries = Array.isArray(data?.entries) ? data.entries : [];
-      if (entries.length === 0) {
+      const entries2 = Array.isArray(data?.entries) ? data.entries : [];
+      if (entries2.length === 0) {
         opts.onStatus(`Feed page ${page} empty. Stopping.`);
         break;
       }
       const nextPaginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : void 0;
       const pageRows = [];
-      for (const entry of entries) {
+      for (const entry of entries2) {
         const evs = extractEvents(entry);
         for (const ev of evs) {
           const { gameId } = extractGameIdWithSource(ev);
@@ -16050,7 +16050,7 @@ ${shapes}`.trim();
     }
     return -1;
   }
-  function write_PropertySet(entries, RE, PIDSI) {
+  function write_PropertySet(entries2, RE, PIDSI) {
     var hdr = new_buf(8), piao = [], prop = [];
     var sz = 8, i = 0;
     var pr = new_buf(8), pio = new_buf(8);
@@ -16065,9 +16065,9 @@ ${shapes}`.trim();
       pio.write_shift(4, 0);
       piao.unshift(pio);
       var bufs = [new_buf(4)];
-      bufs[0].write_shift(4, entries.length);
-      for (i = 0; i < entries.length; ++i) {
-        var value = entries[i][0];
+      bufs[0].write_shift(4, entries2.length);
+      for (i = 0; i < entries2.length; ++i) {
+        var value = entries2[i][0];
         pr = new_buf(4 + 4 + 2 * (value.length + 1) + (value.length % 2 ? 0 : 2));
         pr.write_shift(4, i + 2);
         pr.write_shift(4, value.length + 1);
@@ -16079,13 +16079,13 @@ ${shapes}`.trim();
       prop.unshift(pr);
       sz += 8 + pr.length;
     }
-    for (i = 0; i < entries.length; ++i) {
-      if (RE && !RE[entries[i][0]]) continue;
-      if (XLSPSSkip.indexOf(entries[i][0]) > -1 || PseudoPropsPairs.indexOf(entries[i][0]) > -1) continue;
-      if (entries[i][1] == null) continue;
-      var val = entries[i][1], idx = 0;
+    for (i = 0; i < entries2.length; ++i) {
+      if (RE && !RE[entries2[i][0]]) continue;
+      if (XLSPSSkip.indexOf(entries2[i][0]) > -1 || PseudoPropsPairs.indexOf(entries2[i][0]) > -1) continue;
+      if (entries2[i][1] == null) continue;
+      var val = entries2[i][1], idx = 0;
       if (RE) {
-        idx = +RE[entries[i][0]];
+        idx = +RE[entries2[i][0]];
         var pinfo = PIDSI[idx];
         if (pinfo.p == "version" && typeof val == "string") {
           var arr = val.split(".");
@@ -16115,20 +16115,20 @@ ${shapes}`.trim();
     hdr.write_shift(4, prop.length);
     return bconcat([hdr].concat(piao).concat(prop));
   }
-  function write_PropertySetStream(entries, clsid, RE, PIDSI, entries2, clsid2) {
-    var hdr = new_buf(entries2 ? 68 : 48);
+  function write_PropertySetStream(entries2, clsid, RE, PIDSI, entries22, clsid2) {
+    var hdr = new_buf(entries22 ? 68 : 48);
     var bufs = [hdr];
     hdr.write_shift(2, 65534);
     hdr.write_shift(2, 0);
     hdr.write_shift(4, 842412599);
     hdr.write_shift(16, CFB.utils.consts.HEADER_CLSID, "hex");
-    hdr.write_shift(4, entries2 ? 2 : 1);
+    hdr.write_shift(4, entries22 ? 2 : 1);
     hdr.write_shift(16, clsid, "hex");
-    hdr.write_shift(4, entries2 ? 68 : 48);
-    var ps0 = write_PropertySet(entries, RE, PIDSI);
+    hdr.write_shift(4, entries22 ? 68 : 48);
+    var ps0 = write_PropertySet(entries2, RE, PIDSI);
     bufs.push(ps0);
-    if (entries2) {
-      var ps1 = write_PropertySet(entries2, null, null);
+    if (entries22) {
+      var ps1 = write_PropertySet(entries22, null, null);
       hdr.write_shift(16, clsid2, "hex");
       hdr.write_shift(4, 68 + ps0.length);
       bufs.push(ps1);
@@ -38681,6 +38681,72 @@ ${shapes}`.trim();
     return box;
   }
 
+  // src/ui/consoleStore.ts
+  var MAX_ENTRIES = 800;
+  var entries = [];
+  var listeners = /* @__PURE__ */ new Set();
+  var pad = (n, w) => String(n).padStart(w, "0");
+  function formatConsoleEntry(e) {
+    const d = new Date(e.ts);
+    const hh = pad(d.getHours(), 2);
+    const mm = pad(d.getMinutes(), 2);
+    const ss = pad(d.getSeconds(), 2);
+    const ms = pad(d.getMilliseconds(), 3);
+    const lvl = e.level.toUpperCase().padEnd(5, " ");
+    return `[${hh}:${mm}:${ss}.${ms}] ${lvl} ${e.message}`;
+  }
+  function emit() {
+    for (const fn of listeners) {
+      try {
+        fn();
+      } catch {
+      }
+    }
+  }
+  function describeError(err) {
+    if (!err) return "";
+    if (err instanceof Error) {
+      const stack = typeof err.stack === "string" && err.stack.trim().length ? `
+${err.stack}` : "";
+      return `${err.name}: ${err.message}${stack}`;
+    }
+    try {
+      return String(err);
+    } catch {
+      return "<unprintable error>";
+    }
+  }
+  var analysisConsole = {
+    entries,
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    clear() {
+      entries.splice(0, entries.length);
+      emit();
+    },
+    push(level, message, err) {
+      const full = err ? `${message}
+${describeError(err)}` : message;
+      entries.push({ ts: Date.now(), level, message: String(full ?? "") });
+      if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
+      emit();
+    },
+    log(message) {
+      this.push("log", message);
+    },
+    info(message) {
+      this.push("info", message);
+    },
+    warn(message) {
+      this.push("warn", message);
+    },
+    error(message, err) {
+      this.push("error", message, err);
+    }
+  };
+
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
@@ -38723,9 +38789,20 @@ ${shapes}`.trim();
     const openSettings = async () => {
       settingsModal.innerHTML = "";
       settingsModal.style.display = "block";
+      let consoleUnsubscribe = null;
+      const cleanup = () => {
+        if (consoleUnsubscribe) {
+          try {
+            consoleUnsubscribe();
+          } catch {
+          }
+          consoleUnsubscribe = null;
+        }
+      };
       const bg = doc.createElement("div");
       bg.className = "ga-settings-bg";
       bg.addEventListener("click", () => {
+        cleanup();
         settingsModal.style.display = "none";
       });
       const panel = doc.createElement("div");
@@ -38738,6 +38815,7 @@ ${shapes}`.trim();
       headerClose.className = "ga-close";
       headerClose.textContent = "Close";
       headerClose.addEventListener("click", () => {
+        cleanup();
         settingsModal.style.display = "none";
       });
       header.appendChild(headerTitle);
@@ -38765,11 +38843,15 @@ ${shapes}`.trim();
       const drilldownsTab = doc.createElement("button");
       drilldownsTab.className = "ga-settings-tab";
       drilldownsTab.textContent = "Drilldowns";
+      const consoleTab = doc.createElement("button");
+      consoleTab.className = "ga-settings-tab";
+      consoleTab.textContent = "Console";
       tabs.appendChild(appearanceTab);
       tabs.appendChild(standardsTab);
       tabs.appendChild(sectionLayoutTab);
       tabs.appendChild(globalFiltersTab);
       tabs.appendChild(drilldownsTab);
+      tabs.appendChild(consoleTab);
       tabs.appendChild(templateTab);
       const settings = getSettings();
       let dashboard = getDashboard();
@@ -38993,11 +39075,83 @@ ${shapes}`.trim();
       drilldownsPane.appendChild(drilldownsActions);
       drilldownsPane.appendChild(drilldownsHost);
       drilldownsPane.appendChild(drilldownsStatus);
+      const consolePane = doc.createElement("div");
+      consolePane.className = "ga-settings-pane";
+      const consoleNote = doc.createElement("div");
+      consoleNote.className = "ga-settings-note";
+      consoleNote.textContent = "Hints and error messages from the analysis window. Useful for debugging when something looks off.";
+      consolePane.appendChild(consoleNote);
+      const consoleActions = doc.createElement("div");
+      consoleActions.className = "ga-settings-actions";
+      const consoleCopy = doc.createElement("button");
+      consoleCopy.type = "button";
+      consoleCopy.className = "ga-filter-btn";
+      consoleCopy.textContent = "Copy";
+      consoleCopy.title = "Copy console text to clipboard";
+      const consoleClear = doc.createElement("button");
+      consoleClear.type = "button";
+      consoleClear.className = "ga-filter-btn";
+      consoleClear.textContent = "Clear";
+      consoleClear.title = "Clear console";
+      const onlyErrorsWrap = doc.createElement("label");
+      onlyErrorsWrap.style.display = "inline-flex";
+      onlyErrorsWrap.style.alignItems = "center";
+      onlyErrorsWrap.style.gap = "6px";
+      const onlyErrors = doc.createElement("input");
+      onlyErrors.type = "checkbox";
+      const onlyErrorsText = doc.createElement("span");
+      onlyErrorsText.textContent = "Only errors";
+      onlyErrorsWrap.appendChild(onlyErrors);
+      onlyErrorsWrap.appendChild(onlyErrorsText);
+      consoleActions.appendChild(consoleCopy);
+      consoleActions.appendChild(consoleClear);
+      consoleActions.appendChild(onlyErrorsWrap);
+      consolePane.appendChild(consoleActions);
+      const consoleBox = doc.createElement("pre");
+      consoleBox.className = "ga-console-box";
+      consoleBox.style.marginTop = "10px";
+      consoleBox.style.whiteSpace = "pre-wrap";
+      consoleBox.style.maxHeight = "50vh";
+      consoleBox.style.overflow = "auto";
+      consoleBox.style.padding = "10px 12px";
+      consoleBox.style.borderRadius = "10px";
+      consoleBox.style.border = "1px solid var(--ga-control-border)";
+      consoleBox.style.background = "rgba(0,0,0,0.25)";
+      consoleBox.style.font = '12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+      consolePane.appendChild(consoleBox);
+      const renderConsole = () => {
+        const list = analysisConsole.entries;
+        const filtered = onlyErrors.checked ? list.filter((e) => e.level === "error") : list;
+        consoleBox.textContent = filtered.map(formatConsoleEntry).join("\n");
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      };
+      consoleUnsubscribe = analysisConsole.subscribe(renderConsole);
+      renderConsole();
+      onlyErrors.addEventListener("change", renderConsole);
+      consoleClear.addEventListener("click", () => analysisConsole.clear());
+      consoleCopy.addEventListener("click", async () => {
+        const text = consoleBox.textContent ?? "";
+        try {
+          await doc.defaultView?.navigator?.clipboard?.writeText?.(text);
+        } catch {
+          try {
+            const range = doc.createRange();
+            range.selectNodeContents(consoleBox);
+            const sel = doc.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+            doc.execCommand("copy");
+            sel?.removeAllRanges();
+          } catch {
+          }
+        }
+      });
       panes.appendChild(appearancePane);
       panes.appendChild(standardsPane);
       panes.appendChild(sectionLayoutPane);
       panes.appendChild(globalFiltersPane);
       panes.appendChild(drilldownsPane);
+      panes.appendChild(consolePane);
       panes.appendChild(templatePane);
       const renderLayout = (mode, host, status) => {
         host.innerHTML = "";
@@ -39111,8 +39265,8 @@ ${shapes}`.trim();
       let renderedGlobalFilters = false;
       let renderedDrilldowns = false;
       const setActiveTab = (idx) => {
-        const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, templateTab];
-        const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, templatePane];
+        const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, consoleTab, templateTab];
+        const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, consolePane, templatePane];
         tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
         tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
         if (idx === 2 && !renderedSectionLayout) {
@@ -39133,7 +39287,8 @@ ${shapes}`.trim();
       sectionLayoutTab.addEventListener("click", () => setActiveTab(2));
       globalFiltersTab.addEventListener("click", () => setActiveTab(3));
       drilldownsTab.addEventListener("click", () => setActiveTab(4));
-      templateTab.addEventListener("click", () => setActiveTab(5));
+      consoleTab.addEventListener("click", () => setActiveTab(5));
+      templateTab.addEventListener("click", () => setActiveTab(6));
       const persistSettings = async () => {
         const next = {
           appearance: {
@@ -39317,6 +39472,46 @@ ${shapes}`.trim();
     open(semantic, req) {
       this.modal.innerHTML = "";
       this.modal.style.display = "block";
+      const normalizeTitle = (raw) => {
+        const shortId = (id, n = 8) => id.length > n ? `${id.slice(0, n)}\u2026` : id;
+        let t = String(raw ?? "").trim();
+        if (!t) return "Drilldown";
+        t = t.replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim();
+        const tokens = [];
+        while (true) {
+          const m = t.match(/^(.*)\s*\(([^()]*)\)\s*$/);
+          if (!m) break;
+          t = (m[1] ?? "").trimEnd();
+          const tok = String(m[2] ?? "").trim();
+          if (tok) tokens.push(tok);
+        }
+        tokens.reverse();
+        const seen = /* @__PURE__ */ new Set();
+        const uniq = tokens.filter((x) => {
+          const k = x.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+        const normalized = uniq.map((x) => {
+          const gm = x.match(/^game\s+([0-9a-f]{12,})$/i);
+          if (gm) return `game ${shortId(gm[1])}`;
+          const sm = x.match(/^session\s+(s\d+)$/i);
+          if (sm) return `session ${sm[1]}`;
+          return x;
+        });
+        let out = t.trim();
+        if (normalized.length) out = `${out} ${normalized.map((x) => `(${x})`).join(" ")}`.trim();
+        const max = 92;
+        if (out.length > max) {
+          const head = 60;
+          const tail = 26;
+          out = `${out.slice(0, head).trimEnd()} \u2026 ${out.slice(-tail).trimStart()}`;
+        }
+        return out;
+      };
+      const baseTitle = normalizeTitle(req.title);
+      const shortGameId = (id) => id.length > 8 ? `${id.slice(0, 8)}\u2026` : id;
       const bg = this.doc.createElement("div");
       bg.className = "ga-drilldown-bg";
       bg.addEventListener("click", () => this.close());
@@ -39326,7 +39521,7 @@ ${shapes}`.trim();
       header.className = "ga-drilldown-header";
       const hTitle = this.doc.createElement("div");
       hTitle.className = "ga-drilldown-title";
-      hTitle.textContent = `${req.title} (${req.rows.length})`;
+      hTitle.textContent = `${baseTitle} (${req.rows.length})`;
       const btn = this.doc.createElement("button");
       btn.className = "ga-drilldown-close";
       btn.type = "button";
@@ -39393,7 +39588,7 @@ ${shapes}`.trim();
         const all = await getRounds({});
         const rows = all.filter((r) => typeof r?.gameId === "string" && r.gameId === gameId);
         this.open(semantic, {
-          title: `${req.title}${titleSuffix}`,
+          title: `${baseTitle}${titleSuffix}`,
           target: "rounds",
           columnsPreset: semantic.drilldownPresets.rounds?.defaultPreset ?? "roundMode",
           rows
@@ -39403,7 +39598,7 @@ ${shapes}`.trim();
         const all = await getGames({});
         const rows = all.filter((g) => typeof g?.gameId === "string" && g.gameId === gameId);
         this.open(semantic, {
-          title: `${req.title}${titleSuffix}`,
+          title: `${baseTitle}${titleSuffix}`,
           target: "games",
           columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
           rows
@@ -39417,7 +39612,7 @@ ${shapes}`.trim();
         const all = await getGames({});
         const rows = all.filter((g) => typeof g?.gameId === "string" && idSet.has(g.gameId));
         this.open(semantic, {
-          title: `${req.title}${titleSuffix}`,
+          title: `${baseTitle}${titleSuffix}`,
           target: "games",
           columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
           rows
@@ -39429,7 +39624,7 @@ ${shapes}`.trim();
         const all = await getGames({});
         const rows = all.filter((g) => typeof g?.gameId === "string" && idSet.has(g.gameId));
         this.open(semantic, {
-          title: `${req.title}${titleSuffix}`,
+          title: `${baseTitle}${titleSuffix}`,
           target: "games",
           columnsPreset: semantic.drilldownPresets.games?.defaultPreset ?? "gameMode",
           rows
@@ -39439,7 +39634,7 @@ ${shapes}`.trim();
         const { sessionById } = await this.ensureSessionMaps(semantic);
         const row = sessionById.get(sessionId);
         this.open(semantic, {
-          title: `${req.title}${titleSuffix}`,
+          title: `${baseTitle}${titleSuffix}`,
           target: "sessions",
           columnsPreset: semantic.drilldownPresets.sessions?.defaultPreset ?? "sessionMode",
           rows: row ? [row] : []
@@ -39488,7 +39683,7 @@ ${shapes}`.trim();
             const raw = this.getCellRawValue(r, key, semantic);
             if (req.target === "rounds" && key === "gameId" && typeof raw === "string" && raw) {
               td.style.cursor = "pointer";
-              td.addEventListener("click", () => void openGameById(raw, ` (game ${raw})`));
+              td.addEventListener("click", () => void openGameById(raw, ` (game ${shortGameId(raw)})`));
             }
             if (req.target === "rounds" && key === "sessionId") {
               const gid = this.getCellRawValue(r, "gameId", semantic);
@@ -39510,12 +39705,12 @@ ${shapes}`.trim();
               const gid = this.getCellRawValue(r, "gameId", semantic);
               if (typeof gid === "string" && gid) {
                 td.style.cursor = "pointer";
-                td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${gid})`));
+                td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${shortGameId(gid)})`));
               }
             }
             if ((req.target === "games" || req.target === "players") && key === "gameId" && typeof raw === "string" && raw) {
               td.style.cursor = "pointer";
-              td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${raw})`));
+              td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${shortGameId(raw)})`));
             }
             if ((req.target === "games" || req.target === "players") && key === "sessionId") {
               const gid = this.getCellRawValue(r, "gameId", semantic);
@@ -41195,9 +41390,9 @@ ${shapes}`.trim();
       if (preferZero) min2 = 0;
       let range2 = max2 - min2;
       if (!Number.isFinite(range2) || range2 <= 0) range2 = Math.max(0.01, Math.abs(max2) || 0.01);
-      const pad2 = range2 * 0.06;
-      min2 = Math.max(0, min2 - pad2);
-      max2 = Math.min(1, max2 + pad2);
+      const pad3 = range2 * 0.06;
+      min2 = Math.max(0, min2 - pad3);
+      max2 = Math.min(1, max2 + pad3);
       range2 = max2 - min2;
       const niceStep2 = (raw) => {
         if (!Number.isFinite(raw) || raw <= 0) return 0.01;
@@ -41221,9 +41416,9 @@ ${shapes}`.trim();
     if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
     let range = max - min;
     if (!Number.isFinite(range) || range <= 0) range = Math.max(1, Math.abs(max) || 1);
-    const pad = range * 0.06;
-    min -= pad;
-    max += pad;
+    const pad2 = range * 0.06;
+    min -= pad2;
+    max += pad2;
     if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
     if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
     range = max - min;
@@ -41278,8 +41473,8 @@ ${shapes}`.trim();
       let obs = null;
       try {
         obs = new IO(
-          (entries) => {
-            for (const entry of entries) {
+          (entries2) => {
+            for (const entry of entries2) {
               if (!entry.isIntersecting) continue;
               forceRun();
               try {
@@ -43436,9 +43631,9 @@ ${shapes}`.trim();
   function createGlobalFilterStore(spec) {
     let defaults = buildDefaults(spec);
     let state = cloneJson3(defaults);
-    const listeners = /* @__PURE__ */ new Set();
+    const listeners2 = /* @__PURE__ */ new Set();
     const notify = () => {
-      for (const l of listeners) l();
+      for (const l of listeners2) l();
     };
     return {
       getSpec: () => spec,
@@ -43466,8 +43661,8 @@ ${shapes}`.trim();
         notify();
       },
       subscribe: (listener) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
+        listeners2.add(listener);
+        return () => listeners2.delete(listener);
       }
     };
   }
@@ -44084,66 +44279,10 @@ ${shapes}`.trim();
     return JSON.parse(JSON.stringify(value));
   }
   function createBootLog(doc) {
-    let pre = null;
-    const lines = [];
-    const ensurePre = () => {
-      if (pre) return pre;
-      if (!doc.body) return null;
-      pre = doc.createElement("pre");
-      pre.id = "ga-boot-log";
-      pre.style.cssText = [
-        "position:fixed",
-        "left:0",
-        "top:0",
-        "right:0",
-        "max-height:40vh",
-        "overflow:auto",
-        "margin:0",
-        "padding:10px 12px",
-        "background:rgba(0,0,0,0.85)",
-        "color:#c7f5d9",
-        'font:12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        "z-index:2147483647",
-        "white-space:pre-wrap"
-      ].join(";");
-      doc.body.appendChild(pre);
-      pre.textContent = lines.join("\n");
-      return pre;
-    };
-    const fmt = (s) => {
-      const t = /* @__PURE__ */ new Date();
-      const hh = String(t.getHours()).padStart(2, "0");
-      const mm = String(t.getMinutes()).padStart(2, "0");
-      const ss = String(t.getSeconds()).padStart(2, "0");
-      const ms = String(t.getMilliseconds()).padStart(3, "0");
-      return `[${hh}:${mm}:${ss}.${ms}] ${s}`;
-    };
-    const append = (line) => {
-      lines.push(fmt(line));
-      const el2 = ensurePre();
-      if (el2) el2.textContent = lines.join("\n");
-    };
-    const describeError = (err) => {
-      if (!err) return "";
-      if (err instanceof Error) {
-        const stack = typeof err.stack === "string" && err.stack.trim().length ? `
-${err.stack}` : "";
-        return `${err.name}: ${err.message}${stack}`;
-      }
-      try {
-        return String(err);
-      } catch {
-        return "<unprintable error>";
-      }
-    };
     return {
-      log: (message) => append(message),
-      error: (message, err) => append(`${message}${err ? `
-${describeError(err)}` : ""}`),
-      remove: () => {
-        if (pre && pre.parentElement) pre.remove();
-        pre = null;
-      }
+      log: (message) => analysisConsole.info(message),
+      error: (message, err) => analysisConsole.error(message, err),
+      remove: () => void 0
     };
   }
   async function ensureDocumentShell(targetWindow, doc) {

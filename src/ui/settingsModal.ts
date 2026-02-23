@@ -3,6 +3,7 @@ import type { SemanticRegistry } from "../config/semantic.types";
 import { validateDashboardAgainstSemantic } from "../engine/validate";
 import { mergeSemanticWithDashboard } from "../engine/semanticMerge";
 import { renderLayoutEditor } from "./layoutEditor";
+import { analysisConsole, formatConsoleEntry } from "./consoleStore";
 import {
   DEFAULT_SETTINGS,
   normalizeColor,
@@ -72,9 +73,22 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     settingsModal.innerHTML = "";
     settingsModal.style.display = "block";
 
+    let consoleUnsubscribe: (() => void) | null = null;
+    const cleanup = () => {
+      if (consoleUnsubscribe) {
+        try {
+          consoleUnsubscribe();
+        } catch {
+          // ignore
+        }
+        consoleUnsubscribe = null;
+      }
+    };
+
     const bg = doc.createElement("div");
     bg.className = "ga-settings-bg";
     bg.addEventListener("click", () => {
+      cleanup();
       settingsModal.style.display = "none";
     });
 
@@ -89,6 +103,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     headerClose.className = "ga-close";
     headerClose.textContent = "Close";
     headerClose.addEventListener("click", () => {
+      cleanup();
       settingsModal.style.display = "none";
     });
     header.appendChild(headerTitle);
@@ -119,11 +134,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const drilldownsTab = doc.createElement("button");
     drilldownsTab.className = "ga-settings-tab";
     drilldownsTab.textContent = "Drilldowns";
+    const consoleTab = doc.createElement("button");
+    consoleTab.className = "ga-settings-tab";
+    consoleTab.textContent = "Console";
     tabs.appendChild(appearanceTab);
     tabs.appendChild(standardsTab);
     tabs.appendChild(sectionLayoutTab);
     tabs.appendChild(globalFiltersTab);
     tabs.appendChild(drilldownsTab);
+    tabs.appendChild(consoleTab);
     tabs.appendChild(templateTab);
 
     const settings = getSettings();
@@ -382,11 +401,96 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     drilldownsPane.appendChild(drilldownsHost);
     drilldownsPane.appendChild(drilldownsStatus);
 
+    const consolePane = doc.createElement("div");
+    consolePane.className = "ga-settings-pane";
+
+    const consoleNote = doc.createElement("div");
+    consoleNote.className = "ga-settings-note";
+    consoleNote.textContent = "Hints and error messages from the analysis window. Useful for debugging when something looks off.";
+    consolePane.appendChild(consoleNote);
+
+    const consoleActions = doc.createElement("div");
+    consoleActions.className = "ga-settings-actions";
+
+    const consoleCopy = doc.createElement("button");
+    consoleCopy.type = "button";
+    consoleCopy.className = "ga-filter-btn";
+    consoleCopy.textContent = "Copy";
+    consoleCopy.title = "Copy console text to clipboard";
+
+    const consoleClear = doc.createElement("button");
+    consoleClear.type = "button";
+    consoleClear.className = "ga-filter-btn";
+    consoleClear.textContent = "Clear";
+    consoleClear.title = "Clear console";
+
+    const onlyErrorsWrap = doc.createElement("label");
+    onlyErrorsWrap.style.display = "inline-flex";
+    onlyErrorsWrap.style.alignItems = "center";
+    onlyErrorsWrap.style.gap = "6px";
+    const onlyErrors = doc.createElement("input");
+    onlyErrors.type = "checkbox";
+    const onlyErrorsText = doc.createElement("span");
+    onlyErrorsText.textContent = "Only errors";
+    onlyErrorsWrap.appendChild(onlyErrors);
+    onlyErrorsWrap.appendChild(onlyErrorsText);
+
+    consoleActions.appendChild(consoleCopy);
+    consoleActions.appendChild(consoleClear);
+    consoleActions.appendChild(onlyErrorsWrap);
+    consolePane.appendChild(consoleActions);
+
+    const consoleBox = doc.createElement("pre");
+    consoleBox.className = "ga-console-box";
+    consoleBox.style.marginTop = "10px";
+    consoleBox.style.whiteSpace = "pre-wrap";
+    consoleBox.style.maxHeight = "50vh";
+    consoleBox.style.overflow = "auto";
+    consoleBox.style.padding = "10px 12px";
+    consoleBox.style.borderRadius = "10px";
+    consoleBox.style.border = "1px solid var(--ga-control-border)";
+    consoleBox.style.background = "rgba(0,0,0,0.25)";
+    consoleBox.style.font =
+      "12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
+    consolePane.appendChild(consoleBox);
+
+    const renderConsole = () => {
+      const list = analysisConsole.entries;
+      const filtered = onlyErrors.checked ? list.filter((e) => e.level === "error") : list;
+      consoleBox.textContent = filtered.map(formatConsoleEntry).join("\n");
+      // auto-scroll to bottom
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    };
+    consoleUnsubscribe = analysisConsole.subscribe(renderConsole);
+    renderConsole();
+
+    onlyErrors.addEventListener("change", renderConsole);
+    consoleClear.addEventListener("click", () => analysisConsole.clear());
+    consoleCopy.addEventListener("click", async () => {
+      const text = consoleBox.textContent ?? "";
+      try {
+        await (doc.defaultView as any)?.navigator?.clipboard?.writeText?.(text);
+      } catch {
+        try {
+          const range = doc.createRange();
+          range.selectNodeContents(consoleBox);
+          const sel = doc.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+          doc.execCommand("copy");
+          sel?.removeAllRanges();
+        } catch {
+          // ignore
+        }
+      }
+    });
+
     panes.appendChild(appearancePane);
     panes.appendChild(standardsPane);
     panes.appendChild(sectionLayoutPane);
     panes.appendChild(globalFiltersPane);
     panes.appendChild(drilldownsPane);
+    panes.appendChild(consolePane);
     panes.appendChild(templatePane);
 
     const renderLayout = (mode: "section_layout" | "global_filters" | "drilldowns", host: HTMLDivElement, status: HTMLDivElement) => {
@@ -505,9 +609,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     let renderedGlobalFilters = false;
     let renderedDrilldowns = false;
 
-    const setActiveTab = (idx: 0 | 1 | 2 | 3 | 4 | 5) => {
-      const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, templateTab];
-      const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, templatePane];
+    const setActiveTab = (idx: 0 | 1 | 2 | 3 | 4 | 5 | 6) => {
+      const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, consoleTab, templateTab];
+      const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, consolePane, templatePane];
       tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
       tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
       if (idx === 2 && !renderedSectionLayout) {
@@ -529,7 +633,8 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     sectionLayoutTab.addEventListener("click", () => setActiveTab(2));
     globalFiltersTab.addEventListener("click", () => setActiveTab(3));
     drilldownsTab.addEventListener("click", () => setActiveTab(4));
-    templateTab.addEventListener("click", () => setActiveTab(5));
+    consoleTab.addEventListener("click", () => setActiveTab(5));
+    templateTab.addEventListener("click", () => setActiveTab(6));
 
     const persistSettings = async () => {
       const next: SemanticDashboardSettings = {
