@@ -3,6 +3,15 @@ import { iso1A2Code } from "@rapideditor/country-coder";
 
 const guessCountryCache = new Map<string, string | undefined>();
 
+function isInBoundingBox(lat: number, lng: number, box: { minLat: number; maxLat: number; minLng: number; maxLng: number }): boolean {
+  return lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng;
+}
+
+// Special-case regions where some datasets/libraries may disagree on ISO2 attribution.
+// GeoGuessr panorama.countryCode uses HK/MO, while some boundary datasets may return CN for those coordinates.
+const HONG_KONG_BOX = { minLat: 22.13, maxLat: 22.57, minLng: 113.83, maxLng: 114.45 };
+const MACAU_BOX = { minLat: 22.10, maxLat: 22.24, minLng: 113.52, maxLng: 113.61 };
+
 function normalizeIso2(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const x = v.trim().toLowerCase();
@@ -50,12 +59,22 @@ async function reverseGeocodeCountry(lat: number, lng: number): Promise<string |
  * Resolve ISO2 country code for a coordinate.
  * Note: country-coder expects [longitude, latitude].
  */
-export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Promise<string | undefined> {
+async function resolveCountryCodeByLatLngInternal(lat?: number, lng?: number, allowNetworkFallback = true): Promise<string | undefined> {
   const norm = normalizeLatLng(lat, lng);
   if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return undefined;
 
   const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
   if (guessCountryCache.has(key)) return guessCountryCache.get(key);
+
+  // Override: HK/MO should remain distinct (not collapsed into CN).
+  if (isInBoundingBox(norm.lat, norm.lng, HONG_KONG_BOX)) {
+    guessCountryCache.set(key, "hk");
+    return "hk";
+  }
+  if (isInBoundingBox(norm.lat, norm.lng, MACAU_BOX)) {
+    guessCountryCache.set(key, "mo");
+    return "mo";
+  }
 
   // 1) Fast local lookup (no network)
   const local = iso1A2Code([norm.lng, norm.lat]); // IMPORTANT: [lng, lat]
@@ -67,12 +86,23 @@ export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Pr
   }
 
   // 2) Optional fallback (network) for edge cases / disputed borders / coastal points
-  const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
-  if (fallback) {
-    guessCountryCache.set(key, fallback);
-    return fallback;
+  if (allowNetworkFallback) {
+    const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
+    if (fallback) {
+      guessCountryCache.set(key, fallback);
+      return fallback;
+    }
   }
 
   guessCountryCache.set(key, undefined);
   return undefined;
+}
+
+export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Promise<string | undefined> {
+  return resolveCountryCodeByLatLngInternal(lat, lng, true);
+}
+
+// For UI-time repair / best-effort enrichment without spamming network requests.
+export async function resolveCountryCodeByLatLngLocalOnly(lat?: number, lng?: number): Promise<string | undefined> {
+  return resolveCountryCodeByLatLngInternal(lat, lng, false);
 }

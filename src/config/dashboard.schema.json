@@ -55,6 +55,7 @@
           }
         },
         "globalFilters": { "$ref": "#/$defs/globalFiltersSpecDef" },
+        "drilldownPresets": { "type": "object" },
         "sections": {
           "type": "array",
           "minItems": 1,
@@ -565,11 +566,15 @@
           "then": { "required": ["metric"] }
         },
         {
-          "anyOf": [
-            { "required": ["metric", "groupBy", "extreme"] },
-            { "required": ["streakFilters"] },
-            { "required": ["dimension"] }
-          ]
+          "if": { "properties": { "kind": { "const": "overall" } } },
+          "then": {},
+          "else": {
+            "anyOf": [
+              { "required": ["metric", "groupBy", "extreme"] },
+              { "required": ["streakFilters"] },
+              { "required": ["dimension"] }
+            ]
+          }
         }
       ]
     }

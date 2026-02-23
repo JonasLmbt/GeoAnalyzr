@@ -4,6 +4,7 @@ import type { RoundRow, GameFactRow } from "../db";
 import type { GlobalFiltersSpec } from "../config/dashboard.types";
 import { applyFilters } from "./filters";
 import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState } from "./globalFilters";
+import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
 
 export type GlobalFilters = {
   global?: {
@@ -436,7 +437,7 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
     }
 
-  roundsRawCache = rows.map((r) => {
+  roundsRawCache = await Promise.all(rows.map(async (r) => {
     const out: any = { ...(r as any) };
     const gameId = String(out.gameId ?? "");
     const d = detailsByGame.get(gameId);
@@ -548,6 +549,18 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       }
     }
 
+    // Best-effort: ensure guessCountry exists for confusion matrix / hit-rate dimensions.
+    // Do this locally only (no network), and only if we have a guess coordinate.
+    const existingGuess = typeof out.player_self_guessCountry === "string" ? out.player_self_guessCountry : typeof out.p1_guessCountry === "string" ? out.p1_guessCountry : typeof out.guessCountry === "string" ? out.guessCountry : "";
+    if (!existingGuess) {
+      const glat = typeof out.player_self_guessLat === "number" ? out.player_self_guessLat : typeof out.p1_guessLat === "number" ? out.p1_guessLat : undefined;
+      const glng = typeof out.player_self_guessLng === "number" ? out.player_self_guessLng : typeof out.p1_guessLng === "number" ? out.p1_guessLng : undefined;
+      if (typeof glat === "number" && Number.isFinite(glat) && typeof glng === "number" && Number.isFinite(glng)) {
+        const iso = await resolveCountryCodeByLatLngLocalOnly(glat, glng);
+        if (iso) out.player_self_guessCountry = iso;
+      }
+    }
+
     if (typeof out.damage !== "number") {
       const mf = String(out.modeFamily ?? "");
       if (mf === "duels") {
@@ -576,7 +589,7 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     }
 
     return out as RoundRow;
-  });
+  }));
 
   return roundsRawCache;
 }

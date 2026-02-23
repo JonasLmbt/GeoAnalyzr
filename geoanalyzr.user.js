@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.10
+// @version      2.1.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -8082,6 +8082,11 @@ ${shapes}`.trim();
 
   // src/countries.ts
   var guessCountryCache = /* @__PURE__ */ new Map();
+  function isInBoundingBox(lat, lng, box) {
+    return lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng;
+  }
+  var HONG_KONG_BOX = { minLat: 22.13, maxLat: 22.57, minLng: 113.83, maxLng: 114.45 };
+  var MACAU_BOX = { minLat: 22.1, maxLat: 22.24, minLng: 113.52, maxLng: 113.61 };
   function normalizeIso2(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
@@ -8110,24 +8115,40 @@ ${shapes}`.trim();
       return void 0;
     }
   }
-  async function resolveCountryCodeByLatLng(lat, lng) {
+  async function resolveCountryCodeByLatLngInternal(lat, lng, allowNetworkFallback = true) {
     const norm = normalizeLatLng(lat, lng);
     if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return void 0;
     const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
     if (guessCountryCache.has(key)) return guessCountryCache.get(key);
+    if (isInBoundingBox(norm.lat, norm.lng, HONG_KONG_BOX)) {
+      guessCountryCache.set(key, "hk");
+      return "hk";
+    }
+    if (isInBoundingBox(norm.lat, norm.lng, MACAU_BOX)) {
+      guessCountryCache.set(key, "mo");
+      return "mo";
+    }
     const local = iso1A2Code([norm.lng, norm.lat]);
     const isoLocal = normalizeIso2(local);
     if (isoLocal) {
       guessCountryCache.set(key, isoLocal);
       return isoLocal;
     }
-    const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
-    if (fallback) {
-      guessCountryCache.set(key, fallback);
-      return fallback;
+    if (allowNetworkFallback) {
+      const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
+      if (fallback) {
+        guessCountryCache.set(key, fallback);
+        return fallback;
+      }
     }
     guessCountryCache.set(key, void 0);
     return void 0;
+  }
+  async function resolveCountryCodeByLatLng(lat, lng) {
+    return resolveCountryCodeByLatLngInternal(lat, lng, true);
+  }
+  async function resolveCountryCodeByLatLngLocalOnly(lat, lng) {
+    return resolveCountryCodeByLatLngInternal(lat, lng, false);
   }
 
   // src/details.ts
@@ -8604,7 +8625,7 @@ ${shapes}`.trim();
         isRated: commonBase.isRated,
         trueLat: asNum(r?.panorama?.lat),
         trueLng: asNum(r?.panorama?.lng),
-        trueCountry: typeof r?.panorama?.countryCode === "string" ? r.panorama.countryCode : void 0,
+        trueCountry: normalizeIso22(r?.panorama?.countryCode),
         damageMultiplier: asNum(r?.damageMultiplier),
         isHealingRound: Boolean(r?.isHealingRound),
         startTime: toTs(r?.startTime),
@@ -10046,7 +10067,7 @@ ${shapes}`.trim();
     for (const d of details) {
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
     }
-    roundsRawCache = rows.map((r) => {
+    roundsRawCache = await Promise.all(rows.map(async (r) => {
       const out = { ...r };
       const gameId = String(out.gameId ?? "");
       const d = detailsByGame.get(gameId);
@@ -10127,6 +10148,15 @@ ${shapes}`.trim();
           if (mateName) out.teammateName = mateName;
         }
       }
+      const existingGuess = typeof out.player_self_guessCountry === "string" ? out.player_self_guessCountry : typeof out.p1_guessCountry === "string" ? out.p1_guessCountry : typeof out.guessCountry === "string" ? out.guessCountry : "";
+      if (!existingGuess) {
+        const glat = typeof out.player_self_guessLat === "number" ? out.player_self_guessLat : typeof out.p1_guessLat === "number" ? out.p1_guessLat : void 0;
+        const glng = typeof out.player_self_guessLng === "number" ? out.player_self_guessLng : typeof out.p1_guessLng === "number" ? out.p1_guessLng : void 0;
+        if (typeof glat === "number" && Number.isFinite(glat) && typeof glng === "number" && Number.isFinite(glng)) {
+          const iso2 = await resolveCountryCodeByLatLngLocalOnly(glat, glng);
+          if (iso2) out.player_self_guessCountry = iso2;
+        }
+      }
       if (typeof out.damage !== "number") {
         const mf = String(out.modeFamily ?? "");
         if (mf === "duels") {
@@ -10152,7 +10182,7 @@ ${shapes}`.trim();
         }
       }
       return out;
-    });
+    }));
     return roundsRawCache;
   }
   async function getRounds(filters) {

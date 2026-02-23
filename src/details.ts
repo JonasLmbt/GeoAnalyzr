@@ -570,7 +570,7 @@ async function normalizeGameAndRounds(
       isRated: commonBase.isRated,
       trueLat: asNum(r?.panorama?.lat),
       trueLng: asNum(r?.panorama?.lng),
-      trueCountry: typeof r?.panorama?.countryCode === "string" ? r.panorama.countryCode : undefined,
+      trueCountry: normalizeIso2(r?.panorama?.countryCode),
       damageMultiplier: asNum(r?.damageMultiplier),
       isHealingRound: Boolean(r?.isHealingRound),
       startTime: toTs(r?.startTime),
