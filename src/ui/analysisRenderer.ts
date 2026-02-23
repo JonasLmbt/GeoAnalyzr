@@ -52,6 +52,10 @@ export async function renderAnalysisApp(opts: {
   dashboardHost.className = "ga-dashboard-host";
   body.appendChild(dashboardHost);
 
+  // Preserve active tab across global filter re-renders (renderDashboard() rebuilds the DOM).
+  const targetWindow = doc.defaultView as any;
+  if (typeof targetWindow.__gaActiveSectionId !== "string") targetWindow.__gaActiveSectionId = "";
+
   const updateStickyVars = () => {
     if (!root) return;
     const topbar = root.querySelector(".ga-topbar") as HTMLElement | null;
@@ -290,7 +294,11 @@ export async function renderAnalysisApp(opts: {
       datasets: datasetsAll,
       datasetsBySection,
       context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
-      contextBySection
+      contextBySection,
+      initialActiveSectionId: targetWindow.__gaActiveSectionId,
+      onActiveSectionChange: (id) => {
+        targetWindow.__gaActiveSectionId = id;
+      }
     });
   };
 

@@ -25,6 +25,7 @@ export async function renderDashboard(
     datasetsBySection?: Record<string, Partial<Record<Grain, any[]>>>;
     context?: { dateRange?: { fromTs: number | null; toTs: number | null } };
     contextBySection?: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }>;
+    initialActiveSectionId?: string;
     onActiveSectionChange?: (sectionId: string) => void;
   }
 ): Promise<void> {
@@ -49,7 +50,8 @@ export async function renderDashboard(
   root.appendChild(content);
 
   const sections = dashboard.dashboard.sections;
-  let active = sections[0]?.id ?? "";
+  const desired = typeof opts?.initialActiveSectionId === "string" ? opts.initialActiveSectionId : "";
+  let active = (desired && sections.some((s) => s.id === desired) ? desired : sections[0]?.id) ?? "";
   const localStateBySection = new Map<string, Record<string, string>>();
 
   function makeTab(secId: string, label: string) {

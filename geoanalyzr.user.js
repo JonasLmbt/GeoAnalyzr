@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.12
+// @version      2.1.13
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @match        https://www.geoguessr.com/*
@@ -43400,7 +43400,8 @@ ${describeError(err)}` : message;
     root.appendChild(tabBar);
     root.appendChild(content);
     const sections = dashboard.dashboard.sections;
-    let active = sections[0]?.id ?? "";
+    const desired = typeof opts?.initialActiveSectionId === "string" ? opts.initialActiveSectionId : "";
+    let active = (desired && sections.some((s) => s.id === desired) ? desired : sections[0]?.id) ?? "";
     const localStateBySection = /* @__PURE__ */ new Map();
     function makeTab(secId, label) {
       const btn = doc.createElement("button");
@@ -44083,6 +44084,8 @@ ${describeError(err)}` : message;
     const dashboardHost = doc.createElement("div");
     dashboardHost.className = "ga-dashboard-host";
     body.appendChild(dashboardHost);
+    const targetWindow = doc.defaultView;
+    if (typeof targetWindow.__gaActiveSectionId !== "string") targetWindow.__gaActiveSectionId = "";
     const updateStickyVars = () => {
       if (!root) return;
       const topbar = root.querySelector(".ga-topbar");
@@ -44283,7 +44286,11 @@ ${describeError(err)}` : message;
         datasets: datasetsAll,
         datasetsBySection,
         context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
-        contextBySection
+        contextBySection,
+        initialActiveSectionId: targetWindow.__gaActiveSectionId,
+        onActiveSectionChange: (id) => {
+          targetWindow.__gaActiveSectionId = id;
+        }
       });
     };
     store.subscribe(() => {
