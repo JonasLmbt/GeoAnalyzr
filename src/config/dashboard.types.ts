@@ -217,6 +217,19 @@ export interface CountryMetricMapSpec {
   actions?: Actions;
 }
 
+export interface RegionMetricMapSpec {
+  dimension: string;
+  geojsonUrl: string;
+  // Feature property name used as key (must match the extracted dimension values).
+  featureKey: string;
+  measure?: string;
+  measures?: string[];
+  activeMeasure?: string;
+  mapHeight?: number;
+  filters?: FilterClause[];
+  actions?: Actions;
+}
+
 export interface RecordItemDef {
   id: string;
   label: string;
@@ -253,11 +266,14 @@ export interface LeaderListRowDef {
 
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "country_map" | "record_list" | "leader_list";
+  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "country_map" | "region_map" | "record_list" | "leader_list";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | CountryMetricMapSpec | RecordListSpec | { rows: LeaderListRowDef[] };
+  // Optional: only render the widget when a local filter has one of the expected values.
+  // Useful for country-specific insight widgets (e.g. Germany-only region breakdowns).
+  showIfLocal?: { id: string; in: string[] };
+  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | CountryMetricMapSpec | RegionMetricMapSpec | RecordListSpec | { rows: LeaderListRowDef[] };
 }
 
 export interface CompositeCardDef {

@@ -2028,7 +2028,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 18,
+              "h": 30,
               "card": {
                 "type": "composite",
                 "children": [
@@ -2104,6 +2104,66 @@
                       "sort": { "mode": "chronological" },
                       "actions": {
                         "hover": true,
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  }
+                  ,
+                  {
+                    "widgetId": "w_country_insight_de_states",
+                    "type": "breakdown",
+                    "title": "Germany - States (Bundesländer)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
+                    "placement": { "x": 0, "y": 18, "w": 6, "h": 6 },
+                    "spec": {
+                      "dimension": "true_state",
+                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                      "activeMeasure": "rounds_count",
+                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                      "activeSort": { "mode": "desc" },
+                      "limit": 12,
+                      "extendable": true,
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_de_states_map",
+                    "type": "region_map",
+                    "title": "Germany - States (map)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
+                    "placement": { "x": 6, "y": 18, "w": 6, "h": 6 },
+                    "spec": {
+                      "dimension": "true_state",
+                      "geojsonUrl": "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
+                      "featureKey": "name",
+                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                      "activeMeasure": "avg_score",
+                      "mapHeight": 380,
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_de_districts",
+                    "type": "breakdown",
+                    "title": "Germany - Districts (Landkreise)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
+                    "placement": { "x": 0, "y": 24, "w": 12, "h": 6 },
+                    "spec": {
+                      "dimension": "true_district",
+                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                      "activeMeasure": "rounds_count",
+                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                      "activeSort": { "mode": "desc" },
+                      "limit": 15,
+                      "extendable": true,
+                      "actions": {
                         "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
                       }
                     }

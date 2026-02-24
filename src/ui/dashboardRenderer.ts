@@ -10,6 +10,7 @@ import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
 import { renderLeaderListWidget } from "./widgets/leaderListWidget";
 import { renderCountryMetricMapWidget } from "./widgets/countryMetricMapWidget";
+import { renderRegionMetricMapWidget } from "./widgets/regionMetricMapWidget";
 import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
 import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
@@ -80,6 +81,7 @@ export async function renderDashboard(
     if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "region_map") return await renderRegionMetricMapWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows as any);
 
@@ -428,6 +430,19 @@ export async function renderDashboard(
       inner.style.gap = "10px";
 
       for (const w of placed.card.children) {
+        const showIf = (w as any)?.showIfLocal;
+        if (showIf && typeof showIf === "object") {
+          const id = typeof (showIf as any).id === "string" ? String((showIf as any).id) : "";
+          const allowed = Array.isArray((showIf as any).in) ? ((showIf as any).in as any[]).map(String) : [];
+          const cur = typeof (localState as any)?.[id] === "string" ? String((localState as any)[id]) : "";
+          const ok =
+            id &&
+            allowed.length > 0 &&
+            cur &&
+            allowed.some((x) => x.trim().toLowerCase() === cur.trim().toLowerCase());
+          if (!ok) continue;
+        }
+
         const container = doc.createElement("div");
         container.className = "ga-child";
 

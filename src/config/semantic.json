@@ -104,6 +104,22 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 30 }
     },
+    "true_state": {
+      "label": "State",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30 }
+    },
+    "true_district": {
+      "label": "District",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 40, "selectorRequired": true }
+    },
     "score_vs_opponent": {
       "label": "Score vs opponents",
       "kind": "category",

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.0
+// @version      2.2.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9541,6 +9541,14 @@ ${shapes}`.trim();
     const v = typeof n === "string" ? n.trim() : "";
     return v.length ? v : null;
   }
+  function trueStateKey(r) {
+    const v = typeof r?.trueState === "string" ? String(r.trueState).trim() : typeof r?.true_state === "string" ? String(r.true_state).trim() : "";
+    return v ? v : null;
+  }
+  function trueDistrictKey(r) {
+    const v = typeof r?.trueDistrict === "string" ? String(r.trueDistrict).trim() : typeof r?.true_district === "string" ? String(r.true_district).trim() : "";
+    return v ? v : null;
+  }
   function confusedCountriesKey(r) {
     const truthRaw = getTrueCountry(r);
     const guessRaw = getGuessCountrySelf(r);
@@ -9691,6 +9699,8 @@ ${shapes}`.trim();
       map_slug: mapSlugKeyAny,
       map_name: mapNameKeyAny,
       is_rated: isRatedKeyAny,
+      true_state: trueStateKey,
+      true_district: trueDistrictKey,
       mode_family: (r) => {
         const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
         if (!v) return null;
@@ -9854,6 +9864,169 @@ ${shapes}`.trim();
       parts.push(`${c.id}=${JSON.stringify(v)}`);
     }
     return `gf:${grain}:${parts.join("|")}`;
+  }
+
+  // src/geo/deRegions.ts
+  var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
+  var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
+  function hasGmXhr2() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson(url) {
+    if (hasGmXhr2()) {
+      const txt = await gmGetText(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords(c, bbox);
+  }
+  function bboxForGeometry(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var statesIndexPromise = null;
+  var districtsIndexPromise = null;
+  async function loadStatesIndex() {
+    if (!statesIndexPromise) {
+      statesIndexPromise = (async () => {
+        const geo = await fetchJson(DE_STATES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return statesIndexPromise;
+  }
+  async function loadDistrictsIndex() {
+    if (!districtsIndexPromise) {
+      districtsIndexPromise = (async () => {
+        const geo = await fetchJson(DE_DISTRICTS_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.NAME_3 === "string" ? f.properties.NAME_3.trim() : "";
+          const bbox = bboxForGeometry(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return districtsIndexPromise;
+  }
+  var stateMemo = /* @__PURE__ */ new Map();
+  var districtMemo = /* @__PURE__ */ new Map();
+  function memoKey(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  async function resolveDeStateByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey(lat, lng);
+    const cached = stateMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadStatesIndex();
+    for (const it of items) {
+      if (!bboxContains(it.bbox, lon, lat)) continue;
+      if (pointInGeometry(lon, lat, it.geom)) {
+        stateMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveDeDistrictByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey(lat, lng);
+    const cached = districtMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadDistrictsIndex();
+    for (const it of items) {
+      if (!bboxContains(it.bbox, lon, lat)) continue;
+      if (pointInGeometry(lon, lat, it.geom)) {
+        districtMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
   }
 
   // src/engine/queryEngine.ts
@@ -10279,6 +10452,21 @@ ${shapes}`.trim();
             if (Number.isFinite(bestOwn) && Number.isFinite(bestOpp)) {
               out.damage = Math.max(-5e3, Math.min(5e3, bestOwn - bestOpp));
             }
+          }
+        }
+      }
+      const tc = typeof out.trueCountry === "string" ? out.trueCountry.trim().toLowerCase() : "";
+      if (tc === "de") {
+        const lat = typeof out.trueLat === "number" ? out.trueLat : void 0;
+        const lng = typeof out.trueLng === "number" ? out.trueLng : void 0;
+        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+          if (typeof out.trueState !== "string" || !out.trueState) {
+            const s = await resolveDeStateByLatLng(lat, lng);
+            if (s) out.trueState = s;
+          }
+          if (typeof out.trueDistrict !== "string" || !out.trueDistrict) {
+            const d2 = await resolveDeDistrictByLatLng(lat, lng);
+            if (d2) out.trueDistrict = d2;
           }
         }
       }
@@ -31950,6 +32138,22 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 30 }
       },
+      true_state: {
+        label: "State",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      true_district: {
+        label: "District",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40, selectorRequired: true }
+      },
       score_vs_opponent: {
         label: "Score vs opponents",
         kind: "category",
@@ -35020,7 +35224,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 18,
+                h: 30,
                 card: {
                   type: "composite",
                   children: [
@@ -35096,6 +35300,65 @@ ${shapes}`.trim();
                         sort: { mode: "chronological" },
                         actions: {
                           hover: true,
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_de_states",
+                      type: "breakdown",
+                      title: "Germany - States (Bundesl\xE4nder)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
+                      placement: { x: 0, y: 18, w: 6, h: 6 },
+                      spec: {
+                        dimension: "true_state",
+                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                        activeMeasure: "rounds_count",
+                        sorts: [{ mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "desc" },
+                        limit: 12,
+                        extendable: true,
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_de_states_map",
+                      type: "region_map",
+                      title: "Germany - States (map)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
+                      placement: { x: 6, y: 18, w: 6, h: 6 },
+                      spec: {
+                        dimension: "true_state",
+                        geojsonUrl: "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
+                        featureKey: "name",
+                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                        activeMeasure: "avg_score",
+                        mapHeight: 380,
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_de_districts",
+                      type: "breakdown",
+                      title: "Germany - Districts (Landkreise)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
+                      placement: { x: 0, y: 24, w: 12, h: 6 },
+                      spec: {
+                        dimension: "true_district",
+                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                        activeMeasure: "rounds_count",
+                        sorts: [{ mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "desc" },
+                        limit: 15,
+                        extendable: true,
+                        actions: {
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
                         }
                       }
@@ -43297,10 +43560,10 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
-  function hasGmXhr2() {
+  function hasGmXhr3() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText(url, accept) {
+  function gmGetText2(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -43313,9 +43576,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson(url) {
-    if (hasGmXhr2()) {
-      const txt = await gmGetText(url, "application/json");
+  async function fetchJson2(url) {
+    if (hasGmXhr3()) {
+      const txt = await gmGetText2(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -43330,7 +43593,7 @@ ${describeError(err)}` : message;
   async function loadData() {
     if (!dataPromise) {
       dataPromise = (async () => {
-        const [geojson, countries] = await Promise.all([fetchJson(WORLD_GEOJSON_URL), fetchJson(ISO_MAP_URL)]);
+        const [geojson, countries] = await Promise.all([fetchJson2(WORLD_GEOJSON_URL), fetchJson2(ISO_MAP_URL)]);
         const iso3ToIso2 = /* @__PURE__ */ new Map();
         if (Array.isArray(countries)) {
           for (const c of countries) {
@@ -43843,6 +44106,428 @@ ${describeError(err)}` : message;
     return wrap;
   }
 
+  // src/ui/widgets/regionMetricMapWidget.ts
+  function hasGmXhr4() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText3(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson3(url) {
+    if (hasGmXhr4()) {
+      const txt = await gmGetText3(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  var geojsonCache = /* @__PURE__ */ new Map();
+  function loadGeoJson(url) {
+    const existing = geojsonCache.get(url);
+    if (existing) return existing;
+    const p = fetchJson3(url);
+    geojsonCache.set(url, p);
+    return p;
+  }
+  function project2(lon, lat, w, h) {
+    const x = (lon + 180) / 360 * w;
+    const y = (90 - lat) / 180 * h;
+    return [x, y];
+  }
+  function pathFromGeo2(geometry, w, h) {
+    const d = [];
+    const addRing = (ring) => {
+      if (!Array.isArray(ring) || ring.length < 2) return;
+      const pts = ring.map((p) => Array.isArray(p) && p.length >= 2 ? [Number(p[0]), Number(p[1])] : null).filter((p) => !!p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      if (pts.length < 2) return;
+      const [x0, y0] = project2(pts[0][0], pts[0][1], w, h);
+      d.push(`M${x0.toFixed(2)},${y0.toFixed(2)}`);
+      for (let i = 1; i < pts.length; i++) {
+        const [x, y] = project2(pts[i][0], pts[i][1], w, h);
+        d.push(`L${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+      d.push("Z");
+    };
+    const type = geometry?.type;
+    const coords = geometry?.coordinates;
+    if (!type || !coords) return "";
+    if (type === "Polygon") {
+      for (const ring of coords) addRing(ring);
+      return d.join(" ");
+    }
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        for (const ring of poly) addRing(ring);
+      }
+      return d.join(" ");
+    }
+    return "";
+  }
+  function applyViewport2(g, vp) {
+    g.setAttribute("transform", `translate(${vp.tx.toFixed(2)} ${vp.ty.toFixed(2)}) scale(${vp.scale.toFixed(4)})`);
+  }
+  function lerp2(a, b, t) {
+    return a + (b - a) * t;
+  }
+  function percentile2(sorted, p) {
+    if (sorted.length === 0) return NaN;
+    const clamped = Math.max(0, Math.min(1, p));
+    const idx = (sorted.length - 1) * clamped;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    return lerp2(sorted[lo], sorted[hi], idx - lo);
+  }
+  function parseCssRgb2(input) {
+    const s = input.trim();
+    const m = s.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+    if (!m) return null;
+    const r = Number(m[1]);
+    const g = Number(m[2]);
+    const b = Number(m[3]);
+    if (![r, g, b].every((x) => Number.isFinite(x))) return null;
+    return { r: Math.max(0, Math.min(255, Math.round(r))), g: Math.max(0, Math.min(255, Math.round(g))), b: Math.max(0, Math.min(255, Math.round(b))) };
+  }
+  function parseHex2(hex) {
+    const h = hex.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(h)) return null;
+    const r = parseInt(h.slice(1, 3), 16);
+    const g = parseInt(h.slice(3, 5), 16);
+    const b = parseInt(h.slice(5, 7), 16);
+    return { r, g, b };
+  }
+  function parseCssColor2(input) {
+    return parseHex2(input) ?? parseCssRgb2(input);
+  }
+  function colorForValue2(base, t) {
+    const clamped = Math.max(0, Math.min(1, t));
+    const mixToBlack = lerp2(0.18, 0.7, clamped);
+    const a = lerp2(0.1, 0.96, clamped);
+    const r = Math.round(base.r * (1 - mixToBlack));
+    const g = Math.round(base.g * (1 - mixToBlack));
+    const b = Math.round(base.b * (1 - mixToBlack));
+    return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+  }
+  function formatValue4(doc, semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!m || !unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
+    const decimals = unit.decimals ?? 1;
+    const txt = value.toFixed(decimals);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
+  }
+  function getMeasureIds3(spec) {
+    const out = [];
+    const single = typeof spec.measure === "string" ? spec.measure.trim() : "";
+    if (single) out.push(single);
+    if (Array.isArray(spec.measures)) {
+      for (const m of spec.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || out.includes(clean)) continue;
+        out.push(clean);
+      }
+    }
+    return out;
+  }
+  async function renderRegionMetricMapWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const grain = widget.grain;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-country-metric-map";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const header = doc.createElement("div");
+    header.className = "ga-breakdown-header";
+    const headerLeft = doc.createElement("div");
+    headerLeft.className = "ga-breakdown-header-left";
+    headerLeft.textContent = semantic.dimensions[spec.dimension]?.label ?? spec.dimension;
+    const headerRight = doc.createElement("div");
+    headerRight.className = "ga-breakdown-header-right";
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    const box = doc.createElement("div");
+    box.className = "ga-breakdown-box";
+    const legend = doc.createElement("div");
+    legend.className = "ga-country-map-legend";
+    const mapHost = doc.createElement("div");
+    mapHost.className = "ga-country-map";
+    const h = typeof spec.mapHeight === "number" && Number.isFinite(spec.mapHeight) ? Math.round(spec.mapHeight) : 420;
+    mapHost.style.setProperty("--ga-country-map-h", `${Math.max(180, Math.min(1200, h))}px`);
+    box.appendChild(legend);
+    box.appendChild(mapHost);
+    const measureIds = getMeasureIds3(spec);
+    if (measureIds.length === 0) throw new Error(`Region map ${widget.widgetId} has no measure or measures[]`);
+    let activeMeasure = measureIds.includes(spec.activeMeasure || "") ? spec.activeMeasure : measureIds[0];
+    const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
+    const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
+    const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
+    const renderHeaderRight = () => {
+      headerRight.innerHTML = "";
+      const wrapRight = doc.createElement("div");
+      wrapRight.className = "ga-breakdown-controls";
+      if (measureIds.length > 1) {
+        const mLabel = doc.createElement("span");
+        mLabel.className = "ga-breakdown-ctl-label";
+        mLabel.textContent = "Measure:";
+        const mSelect = doc.createElement("select");
+        mSelect.className = "ga-breakdown-ctl-select";
+        for (const mId of measureIds) {
+          const opt = doc.createElement("option");
+          opt.value = mId;
+          opt.textContent = semantic.measures[mId]?.label ?? mId;
+          if (mId === activeMeasure) opt.selected = true;
+          mSelect.appendChild(opt);
+        }
+        mSelect.addEventListener("change", () => {
+          const next = mSelect.value;
+          if (!measureIds.includes(next)) return;
+          activeMeasure = next;
+          void renderMap();
+        });
+        wrapRight.appendChild(mLabel);
+        wrapRight.appendChild(mSelect);
+      } else {
+        const mText = doc.createElement("span");
+        mText.textContent = semantic.measures[activeMeasure]?.label ?? activeMeasure;
+        wrapRight.appendChild(mText);
+      }
+      headerRight.appendChild(wrapRight);
+    };
+    const renderMap = async () => {
+      mapHost.innerHTML = "";
+      const measDef = semantic.measures[activeMeasure];
+      if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (region_map)`);
+      const unit = semantic.units[measDef.unit];
+      const grouped = groupByKey(rowsAll, keyFn);
+      const values = /* @__PURE__ */ new Map();
+      const allVals = [];
+      let min = Infinity;
+      let max = -Infinity;
+      const measureFn = MEASURES_BY_GRAIN[grain]?.[measDef.formulaId];
+      if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
+      for (const [k, g2] of grouped.entries()) {
+        const key = String(k ?? "").trim();
+        if (!key) continue;
+        const v = measureFn(g2);
+        if (typeof v !== "number" || !Number.isFinite(v)) continue;
+        const vv = unit?.format === "percent" ? Math.max(0, Math.min(1, v)) : v;
+        values.set(key, vv);
+        allVals.push(vv);
+        min = Math.min(min, vv);
+        max = Math.max(max, vv);
+      }
+      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        min = 0;
+        max = 1;
+      }
+      const sorted = allVals.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+      const p10 = Number.isFinite(percentile2(sorted, 0.1)) ? percentile2(sorted, 0.1) : min;
+      const p90 = Number.isFinite(percentile2(sorted, 0.9)) ? percentile2(sorted, 0.9) : max;
+      const scaleMin = Math.min(p10, p90);
+      const scaleMax = Math.max(p10, p90);
+      const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
+      const rootEl = doc.querySelector(".ga-root") ?? null;
+      const theme = rootEl?.dataset?.gaTheme ?? "";
+      const styles = rootEl ? getComputedStyle(rootEl) : null;
+      const baseColorRaw = theme === "geoguessr" ? styles?.getPropertyValue("--ga-warn") ?? "" : styles?.getPropertyValue("--ga-graph-color") ?? "";
+      const baseColor = parseCssColor2(baseColorRaw) ?? parseCssColor2(styles?.getPropertyValue("--ga-warn") ?? "") ?? { r: 126, g: 182, b: 255 };
+      legend.innerHTML = "";
+      const left = doc.createElement("div");
+      left.className = "ga-country-map-legend-min";
+      left.textContent = formatValue4(doc, semantic, activeMeasure, scaleMin);
+      const bar = doc.createElement("div");
+      bar.className = "ga-country-map-legend-bar";
+      bar.style.background = `linear-gradient(90deg, ${colorForValue2(baseColor, 0)}, ${colorForValue2(baseColor, 1)})`;
+      const right = doc.createElement("div");
+      right.className = "ga-country-map-legend-max";
+      right.textContent = formatValue4(doc, semantic, activeMeasure, scaleMax);
+      legend.appendChild(left);
+      legend.appendChild(bar);
+      legend.appendChild(right);
+      const geojson = await loadGeoJson(spec.geojsonUrl);
+      const wrap2 = doc.createElement("div");
+      wrap2.className = "ga-country-map-wrap";
+      mapHost.appendChild(wrap2);
+      const toolbar = doc.createElement("div");
+      toolbar.className = "ga-country-map-toolbar";
+      wrap2.appendChild(toolbar);
+      const btnMinus = doc.createElement("button");
+      btnMinus.type = "button";
+      btnMinus.className = "ga-country-map-btn";
+      btnMinus.textContent = "\u2212";
+      btnMinus.title = "Zoom out";
+      const btnPlus = doc.createElement("button");
+      btnPlus.type = "button";
+      btnPlus.className = "ga-country-map-btn";
+      btnPlus.textContent = "+";
+      btnPlus.title = "Zoom in";
+      const hint = doc.createElement("div");
+      hint.className = "ga-country-map-hint";
+      hint.textContent = "Scroll to zoom, drag to pan, click to select.";
+      toolbar.appendChild(btnMinus);
+      toolbar.appendChild(btnPlus);
+      toolbar.appendChild(hint);
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add("ga-country-map-svg");
+      wrap2.appendChild(svg);
+      const W = 1e3;
+      const H = 500;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+      svg.appendChild(g);
+      const features = Array.isArray(geojson?.features) ? geojson.features : [];
+      const groupedByKey = grouped;
+      for (const f of features) {
+        const props = f?.properties;
+        const key = props && spec.featureKey in props ? String(props[spec.featureKey] ?? "").trim() : "";
+        if (!key) continue;
+        const d = pathFromGeo2(f.geometry, W, H);
+        if (!d) continue;
+        const p = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.setAttribute("d", d);
+        p.setAttribute("fill-rule", "evenodd");
+        p.dataset.key = key;
+        p.classList.add("ga-country-shape");
+        g.appendChild(p);
+        const v = values.get(key);
+        if (typeof v === "number" && Number.isFinite(v)) {
+          const rawT = (v - scaleMin) / scaleSpan;
+          const clamped = Math.max(0, Math.min(1, rawT));
+          const t = Math.pow(clamped, 0.65);
+          p.style.fill = colorForValue2(baseColor, t);
+          p.style.opacity = "1";
+        } else {
+          p.style.opacity = "0.35";
+        }
+        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue4(doc, semantic, activeMeasure, v) : "n/a";
+        const tt = `${key}${valTxt ? ": " : ""}${valTxt}`;
+        const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
+        titleEl.textContent = tt;
+        p.appendChild(titleEl);
+        p.addEventListener("pointerenter", () => {
+          p.style.filter = "brightness(1.12)";
+          p.style.strokeWidth = "2";
+        });
+        p.addEventListener("pointerleave", () => {
+          p.style.filter = "";
+          p.style.strokeWidth = "";
+        });
+        p.addEventListener("click", () => {
+          const click = spec.actions?.click;
+          if (!click || click.type !== "drilldown") return;
+          const rowsFromPoint = click.filterFromPoint ? groupedByKey.get(key) ?? [] : rowsAll;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${key}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
+          });
+        });
+      }
+      let vp = { scale: 1, tx: 0, ty: 0 };
+      applyViewport2(g, vp);
+      const rectPoint = (clientX, clientY) => {
+        const r = svg.getBoundingClientRect();
+        const x = (clientX - r.left) / Math.max(1, r.width) * W;
+        const y = (clientY - r.top) / Math.max(1, r.height) * H;
+        return { x, y };
+      };
+      const zoomAt = (px, py, nextScale) => {
+        const s0 = vp.scale;
+        const sx = (px - vp.tx) / s0;
+        const sy = (py - vp.ty) / s0;
+        vp = {
+          scale: nextScale,
+          tx: px - nextScale * sx,
+          ty: py - nextScale * sy
+        };
+        applyViewport2(g, vp);
+      };
+      const clamp2 = (v, a, b) => Math.max(a, Math.min(b, v));
+      const onZoom = (delta, clientX, clientY) => {
+        const p = rectPoint(clientX, clientY);
+        const factor = delta > 0 ? 1.12 : 1 / 1.12;
+        const next = clamp2(vp.scale * factor, 1, 12);
+        zoomAt(p.x, p.y, next);
+      };
+      svg.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          onZoom(e.deltaY, e.clientX, e.clientY);
+        },
+        { passive: false }
+      );
+      btnPlus.addEventListener("click", () => {
+        const r = svg.getBoundingClientRect();
+        onZoom(-1, r.left + r.width / 2, r.top + r.height / 2);
+      });
+      btnMinus.addEventListener("click", () => {
+        const r = svg.getBoundingClientRect();
+        onZoom(1, r.left + r.width / 2, r.top + r.height / 2);
+      });
+      let drag = null;
+      svg.addEventListener("pointerdown", (e) => {
+        const target = e.target;
+        if (target && target.tagName.toLowerCase() === "path") return;
+        svg.setPointerCapture?.(e.pointerId);
+        drag = { x: e.clientX, y: e.clientY, tx: vp.tx, ty: vp.ty };
+      });
+      svg.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        const dx = (e.clientX - drag.x) / Math.max(1, svg.getBoundingClientRect().width) * W;
+        const dy = (e.clientY - drag.y) / Math.max(1, svg.getBoundingClientRect().height) * H;
+        vp = { ...vp, tx: drag.tx + dx, ty: drag.ty + dy };
+        applyViewport2(g, vp);
+      });
+      svg.addEventListener("pointerup", () => drag = null);
+      svg.addEventListener("pointercancel", () => drag = null);
+    };
+    renderHeaderRight();
+    await renderMap();
+    wrap.appendChild(title);
+    wrap.appendChild(header);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
@@ -43887,6 +44572,7 @@ ${describeError(err)}` : message;
       if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "region_map") return await renderRegionMetricMapWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
@@ -44149,6 +44835,14 @@ ${describeError(err)}` : message;
         inner.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
         inner.style.gap = "10px";
         for (const w of placed.card.children) {
+          const showIf = w?.showIfLocal;
+          if (showIf && typeof showIf === "object") {
+            const id = typeof showIf.id === "string" ? String(showIf.id) : "";
+            const allowed = Array.isArray(showIf.in) ? showIf.in.map(String) : [];
+            const cur = typeof localState?.[id] === "string" ? String(localState[id]) : "";
+            const ok = id && allowed.length > 0 && cur && allowed.some((x) => x.trim().toLowerCase() === cur.trim().toLowerCase());
+            if (!ok) continue;
+          }
           const container = doc.createElement("div");
           container.className = "ga-child";
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };

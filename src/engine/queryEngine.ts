@@ -5,6 +5,7 @@ import type { GlobalFiltersSpec } from "../config/dashboard.types";
 import { applyFilters } from "./filters";
 import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState } from "./globalFilters";
 import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
+import { resolveDeDistrictByLatLng, resolveDeStateByLatLng } from "../geo/deRegions";
 
 export type GlobalFilters = {
   global?: {
@@ -584,6 +585,24 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
           if (Number.isFinite(bestOwn) && Number.isFinite(bestOpp)) {
             out.damage = Math.max(-5000, Math.min(5000, bestOwn - bestOpp));
           }
+        }
+      }
+    }
+
+    // Germany-only region enrichment for Country Insight drilldowns (Bundesländer / Landkreise).
+    // This is computed locally from geojson boundaries and cached in-memory per session.
+    const tc = typeof out.trueCountry === "string" ? out.trueCountry.trim().toLowerCase() : "";
+    if (tc === "de") {
+      const lat = typeof out.trueLat === "number" ? out.trueLat : undefined;
+      const lng = typeof out.trueLng === "number" ? out.trueLng : undefined;
+      if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+        if (typeof (out as any).trueState !== "string" || !(out as any).trueState) {
+          const s = await resolveDeStateByLatLng(lat, lng);
+          if (s) (out as any).trueState = s;
+        }
+        if (typeof (out as any).trueDistrict !== "string" || !(out as any).trueDistrict) {
+          const d2 = await resolveDeDistrictByLatLng(lat, lng);
+          if (d2) (out as any).trueDistrict = d2;
         }
       }
     }

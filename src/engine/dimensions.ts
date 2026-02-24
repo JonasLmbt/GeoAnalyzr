@@ -145,6 +145,16 @@ export function teammateNameKey(r: RoundRow): GroupKey | null {
   return v.length ? v : null;
 }
 
+export function trueStateKey(r: RoundRow): GroupKey | null {
+  const v = typeof (r as any)?.trueState === "string" ? String((r as any).trueState).trim() : typeof (r as any)?.true_state === "string" ? String((r as any).true_state).trim() : "";
+  return v ? v : null;
+}
+
+export function trueDistrictKey(r: RoundRow): GroupKey | null {
+  const v = typeof (r as any)?.trueDistrict === "string" ? String((r as any).trueDistrict).trim() : typeof (r as any)?.true_district === "string" ? String((r as any).true_district).trim() : "";
+  return v ? v : null;
+}
+
 export function confusedCountriesKey(r: RoundRow): GroupKey | null {
   const truthRaw = getTrueCountry(r);
   const guessRaw = getGuessCountrySelf(r);
@@ -327,6 +337,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     map_slug: mapSlugKeyAny,
     map_name: mapNameKeyAny,
     is_rated: isRatedKeyAny,
+    true_state: trueStateKey,
+    true_district: trueDistrictKey,
     mode_family: (r: any) => {
       const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
       if (!v) return null;

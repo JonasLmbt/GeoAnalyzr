@@ -29,6 +29,9 @@ interface RoundRowBase {
   trueLat?: number;
   trueLng?: number;
   trueCountry?: string;
+  // Germany-only enrichments (computed locally).
+  trueState?: string;
+  trueDistrict?: string;
   startTime?: number;
   endTime?: number;
   raw?: unknown;
