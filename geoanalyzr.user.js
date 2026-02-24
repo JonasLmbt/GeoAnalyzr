@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.20
+// @version      2.2.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -34066,7 +34066,9 @@ ${shapes}`.trim();
                             "session_avg_guess_duration",
                             "session_avg_distance_km"
                           ],
-                          activeMeasure: "session_avg_score"
+                          activeMeasure: "session_avg_score",
+                          accumulations: ["period", "to_date"],
+                          activeAccumulation: "period"
                         },
                         sort: { mode: "chronological" },
                         actions: { hover: true, click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
@@ -34613,7 +34615,6 @@ ${shapes}`.trim();
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
                         type: "bar",
-                        color: "#ff8a3d",
                         x: { dimension: "hour" },
                         y: {
                           measures: [
@@ -41889,6 +41890,9 @@ ${describeError(err)}` : message;
         if (!accModes.includes(a)) accModes.push(a);
       }
     }
+    if (accModes.length === 0 && spec.type === "line" && dimDef.ordered) {
+      accModes.push("period", "to_date");
+    }
     let activeAcc = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
     if (!accModes.includes(activeAcc)) accModes.unshift(activeAcc);
     let currentSvg = null;
@@ -41936,7 +41940,7 @@ ${describeError(err)}` : message;
       controlsLeft.appendChild(label);
       controlsLeft.appendChild(select);
     }
-    if (accModes.length > 1 && dimId === "time_day") {
+    if (accModes.length > 1 && spec.type === "line" && dimDef.ordered) {
       const label = doc.createElement("label");
       label.style.fontSize = "12px";
       label.style.opacity = "0.9";
@@ -42072,6 +42076,32 @@ ${describeError(err)}` : message;
         const rowsForKey = grouped.get(k) ?? [];
         return { x: k, y: clampForMeasure(semantic, measureId, yForRows(rowsForKey)), rows: rowsForKey };
       });
+      if (dimDef.ordered && activeSortMode === "chronological" && activeAcc === "to_date") {
+        const ordered = sortData(baseData, "chronological");
+        if (typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {
+          const maxPoints = Math.floor(spec.maxPoints);
+          if (ordered.length > maxPoints) {
+            const buckets = chunkKeys(ordered.map((d) => d.x), maxPoints);
+            const byKey = new Map(ordered.map((d) => [d.x, d]));
+            const cum2 = [];
+            const out = buckets.map((b) => {
+              const bucketRows = [];
+              for (const k of b.keys) {
+                const item = byKey.get(k);
+                if (item?.rows?.length) bucketRows.push(...item.rows);
+              }
+              if (bucketRows.length) cum2.push(...bucketRows);
+              return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(cum2)), rows: cum2.slice() };
+            });
+            return out;
+          }
+        }
+        const cum = [];
+        return ordered.map((d) => {
+          if (d.rows?.length) cum.push(...d.rows);
+          return { x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() };
+        });
+      }
       if (dimDef.ordered && typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {
         const maxPoints = Math.floor(spec.maxPoints);
         const ordered = sortData(baseData, "chronological");

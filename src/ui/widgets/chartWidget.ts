@@ -602,6 +602,10 @@ export async function renderChartWidget(
       if (!accModes.includes(a)) accModes.push(a);
     }
   }
+  // Default: for ordered x-axes in line charts, offer both accumulation modes.
+  if (accModes.length === 0 && spec.type === "line" && dimDef.ordered) {
+    accModes.push("period", "to_date");
+  }
   let activeAcc: "period" | "to_date" = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
   if (!accModes.includes(activeAcc)) accModes.unshift(activeAcc);
 
@@ -658,7 +662,7 @@ export async function renderChartWidget(
     controlsLeft.appendChild(select);
   }
 
-  if (accModes.length > 1 && dimId === "time_day") {
+  if (accModes.length > 1 && spec.type === "line" && dimDef.ordered) {
     const label = doc.createElement("label");
     label.style.fontSize = "12px";
     label.style.opacity = "0.9";
@@ -831,6 +835,33 @@ export async function renderChartWidget(
       const rowsForKey = grouped.get(k) ?? [];
       return { x: k, y: clampForMeasure(semantic, measureId, yForRows(rowsForKey)), rows: rowsForKey };
     });
+
+    if (dimDef.ordered && activeSortMode === "chronological" && activeAcc === "to_date") {
+      const ordered = sortData(baseData, "chronological");
+      if (typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {
+        const maxPoints = Math.floor(spec.maxPoints);
+        if (ordered.length > maxPoints) {
+          const buckets = chunkKeys(ordered.map((d) => d.x), maxPoints);
+          const byKey = new Map(ordered.map((d) => [d.x, d]));
+          const cum: any[] = [];
+          const out: Datum[] = buckets.map((b) => {
+            const bucketRows: any[] = [];
+            for (const k of b.keys) {
+              const item = byKey.get(k);
+              if (item?.rows?.length) bucketRows.push(...item.rows);
+            }
+            if (bucketRows.length) cum.push(...bucketRows);
+            return { x: b.label, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() };
+          });
+          return out;
+        }
+      }
+      const cum: any[] = [];
+      return ordered.map((d) => {
+        if (d.rows?.length) cum.push(...d.rows);
+        return { x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() };
+      });
+    }
 
     // If this is an ordered axis and a long series, optionally bucket down to maxPoints.
     if (dimDef.ordered && typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1) {

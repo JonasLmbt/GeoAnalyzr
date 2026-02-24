@@ -1064,7 +1064,9 @@
                           "session_avg_guess_duration",
                           "session_avg_distance_km"
                         ],
-                        "activeMeasure": "session_avg_score"
+                        "activeMeasure": "session_avg_score",
+                        "accumulations": ["period", "to_date"],
+                        "activeAccumulation": "period"
                       },
                       "sort": { "mode": "chronological" },
                       "actions": { "hover": true, "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
@@ -1614,7 +1616,6 @@
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                     "spec": {
                       "type": "bar",
-                      "color": "#ff8a3d",
                       "x": { "dimension": "hour" },
                       "y": {
                         "measures": [
