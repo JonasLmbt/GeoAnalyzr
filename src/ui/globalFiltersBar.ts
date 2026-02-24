@@ -143,6 +143,13 @@ export async function renderGlobalFiltersBar(args: {
     const wrap = doc.createElement("div");
     wrap.className = "ga-filter";
     wrap.setAttribute("data-ga-filter-id", id);
+    const widthPx = typeof c.width === "number" ? c.width : Number(c.width);
+    if (Number.isFinite(widthPx) && widthPx > 0) {
+      const px = Math.round(widthPx);
+      wrap.style.flex = `0 0 ${px}px`;
+      wrap.style.minWidth = `${px}px`;
+      wrap.style.maxWidth = `${px}px`;
+    }
     wrap.appendChild(renderControlLabel(doc, c.label));
 
     const row = doc.createElement("div");
@@ -180,6 +187,13 @@ export async function renderGlobalFiltersBar(args: {
     const wrap = doc.createElement("div");
     wrap.className = "ga-filter";
     wrap.setAttribute("data-ga-filter-id", id);
+    const widthPx = typeof (control as any).width === "number" ? (control as any).width : Number((control as any).width);
+    if (Number.isFinite(widthPx) && widthPx > 0) {
+      const px = Math.round(widthPx);
+      wrap.style.flex = `0 0 ${px}px`;
+      wrap.style.minWidth = `${px}px`;
+      wrap.style.maxWidth = `${px}px`;
+    }
     wrap.appendChild(renderControlLabel(doc, control.label));
 
     const sel = doc.createElement("select");

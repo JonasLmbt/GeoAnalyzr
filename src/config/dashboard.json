@@ -41,6 +41,7 @@
           "id": "map",
           "type": "select",
           "label": "Map",
+          "width": 220,
           "dimension": "map_slug",
           "default": "all",
           "options": "auto_distinct",

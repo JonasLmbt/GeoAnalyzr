@@ -190,17 +190,6 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border-radius:12px;
       min-width: 200px;
     }
-
-    /* Keep the Map global filter compact even when options are long. */
-    .ga-filter[data-ga-filter-id="map"] {
-      flex: 0 0 220px;
-      min-width: 220px;
-      max-width: 220px;
-    }
-    .ga-filter[data-ga-filter-id="map"] select {
-      width: 100%;
-      text-overflow: ellipsis;
-    }
     .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
     .ga-filter-row { display:flex; gap:8px; align-items:center; }
     .ga-filter select, .ga-filter input[type="date"] {
@@ -212,6 +201,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font: inherit;
       font-size: 12px;
     }
+    .ga-filter select { width: 100%; min-width: 0; }
 
     .ga-filter.ga-filter-map { min-width: 340px; }
     .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; width: 100%; min-width: 520px; }

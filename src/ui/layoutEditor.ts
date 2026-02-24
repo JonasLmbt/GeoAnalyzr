@@ -1257,6 +1257,30 @@ export function renderLayoutEditor(args: {
         // Simplified UI: only show what end users typically need.
         body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
 
+        // Optional fixed width for the filter control in the global filter bar.
+        const widthField = mkField(doc, "width (px)");
+        const widthInput = doc.createElement("input");
+        widthInput.type = "number";
+        widthInput.min = "120";
+        widthInput.max = "900";
+        widthInput.step = "10";
+        widthInput.placeholder = "auto";
+        widthInput.value = typeof (ctrl as any).width === "number" ? String((ctrl as any).width) : "";
+        widthInput.addEventListener("change", () => {
+          const raw = widthInput.value.trim();
+          if (!raw) {
+            const next = { ...(ctrl as any) };
+            delete next.width;
+            patchCtrl(next);
+            return;
+          }
+          const n = asInt(raw, (ctrl as any).width ?? 0);
+          const clamped = Math.max(120, Math.min(900, n));
+          patchCtrl({ ...(ctrl as any), width: clamped });
+        });
+        widthField.inputHost.appendChild(widthInput);
+        body.appendChild(widthField.wrap);
+
         if (ctrl.type === "select") {
           body.appendChild(
             mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => {

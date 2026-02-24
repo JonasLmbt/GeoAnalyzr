@@ -100,6 +100,7 @@
         "id": { "$ref": "#/$defs/id" },
         "type": { "enum": ["date_range", "select"] },
         "label": { "$ref": "#/$defs/title" },
+        "width": { "type": "integer", "minimum": 120, "maximum": 900 },
         "default": {},
         "dimension": { "type": "string", "minLength": 1 },
         "presentation": { "enum": ["dropdown", "map"] },

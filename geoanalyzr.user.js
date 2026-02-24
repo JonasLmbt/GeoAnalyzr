@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.15
+// @version      2.1.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -33002,6 +33002,7 @@ ${shapes}`.trim();
             id: "map",
             type: "select",
             label: "Map",
+            width: 220,
             dimension: "map_slug",
             default: "all",
             options: "auto_distinct",
@@ -35203,17 +35204,6 @@ ${shapes}`.trim();
       border-radius:12px;
       min-width: 200px;
     }
-
-    /* Keep the Map global filter compact even when options are long. */
-    .ga-filter[data-ga-filter-id="map"] {
-      flex: 0 0 220px;
-      min-width: 220px;
-      max-width: 220px;
-    }
-    .ga-filter[data-ga-filter-id="map"] select {
-      width: 100%;
-      text-overflow: ellipsis;
-    }
     .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
     .ga-filter-row { display:flex; gap:8px; align-items:center; }
     .ga-filter select, .ga-filter input[type="date"] {
@@ -35225,6 +35215,7 @@ ${shapes}`.trim();
       font: inherit;
       font-size: 12px;
     }
+    .ga-filter select { width: 100%; min-width: 0; }
 
     .ga-filter.ga-filter-map { min-width: 340px; }
     .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; width: 100%; min-width: 520px; }
@@ -37282,6 +37273,28 @@ ${shapes}`.trim();
           idField.appendChild(idHost);
           body.appendChild(idField);
           body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
+          const widthField = mkField(doc, "width (px)");
+          const widthInput = doc.createElement("input");
+          widthInput.type = "number";
+          widthInput.min = "120";
+          widthInput.max = "900";
+          widthInput.step = "10";
+          widthInput.placeholder = "auto";
+          widthInput.value = typeof ctrl.width === "number" ? String(ctrl.width) : "";
+          widthInput.addEventListener("change", () => {
+            const raw = widthInput.value.trim();
+            if (!raw) {
+              const next = { ...ctrl };
+              delete next.width;
+              patchCtrl(next);
+              return;
+            }
+            const n = asInt(raw, ctrl.width ?? 0);
+            const clamped = Math.max(120, Math.min(900, n));
+            patchCtrl({ ...ctrl, width: clamped });
+          });
+          widthField.inputHost.appendChild(widthInput);
+          body.appendChild(widthField.wrap);
           if (ctrl.type === "select") {
             body.appendChild(
               mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => {
@@ -43883,6 +43896,13 @@ ${describeError(err)}` : message;
       const wrap = doc.createElement("div");
       wrap.className = "ga-filter";
       wrap.setAttribute("data-ga-filter-id", id);
+      const widthPx = typeof c.width === "number" ? c.width : Number(c.width);
+      if (Number.isFinite(widthPx) && widthPx > 0) {
+        const px = Math.round(widthPx);
+        wrap.style.flex = `0 0 ${px}px`;
+        wrap.style.minWidth = `${px}px`;
+        wrap.style.maxWidth = `${px}px`;
+      }
       wrap.appendChild(renderControlLabel(doc, c.label));
       const row = doc.createElement("div");
       row.className = "ga-filter-row";
@@ -43914,6 +43934,13 @@ ${describeError(err)}` : message;
       const wrap = doc.createElement("div");
       wrap.className = "ga-filter";
       wrap.setAttribute("data-ga-filter-id", id);
+      const widthPx = typeof control.width === "number" ? control.width : Number(control.width);
+      if (Number.isFinite(widthPx) && widthPx > 0) {
+        const px = Math.round(widthPx);
+        wrap.style.flex = `0 0 ${px}px`;
+        wrap.style.minWidth = `${px}px`;
+        wrap.style.maxWidth = `${px}px`;
+      }
       wrap.appendChild(renderControlLabel(doc, control.label));
       const sel = doc.createElement("select");
       sel.className = "ga-filter-select";

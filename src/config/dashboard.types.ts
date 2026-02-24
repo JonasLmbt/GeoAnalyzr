@@ -50,6 +50,9 @@ export type DateRangeControlSpec = {
   id: string;
   type: "date_range";
   label: string;
+  // Optional fixed width in CSS px for this control in the global filter bar.
+  // If omitted, the control sizes naturally.
+  width?: number;
   default: DateRangeValue;
   appliesTo: GlobalFilterGrain[];
 };
@@ -70,6 +73,9 @@ export type SelectControlSpec = {
   id: string;
   type: "select";
   label: string;
+  // Optional fixed width in CSS px for this control in the global filter bar.
+  // If omitted, the control sizes naturally.
+  width?: number;
   dimension: string;
   // Optional UI hint. Default: dropdown.
   presentation?: "dropdown" | "map";
