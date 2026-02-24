@@ -75,7 +75,7 @@ export async function renderDashboard(
 
   async function renderWidget(widget: WidgetDef): Promise<HTMLElement> {
     const baseRows = activeDatasets[widget.grain];
-    if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, activeDatasets, baseRows as any);
     if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);

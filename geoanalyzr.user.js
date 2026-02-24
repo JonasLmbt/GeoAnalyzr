@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.16
+// @version      2.1.17
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -41234,7 +41234,7 @@ ${describeError(err)}` : message;
       }
     });
   }
-  async function renderStatListWidget(semantic, widget, overlay, baseRows) {
+  async function renderStatListWidget(semantic, widget, overlay, datasets, baseRows) {
     const spec = widget.spec;
     const doc = overlay.getDocument();
     const widgetGrain = widget.grain;
@@ -41247,7 +41247,7 @@ ${describeError(err)}` : message;
     box.className = "ga-statlist-box";
     for (const row of spec.rows) {
       const rowGrain = row.grain ? row.grain : widgetGrain;
-      const rowBaseRows = rowGrain === widgetGrain ? baseRows : void 0;
+      const rowBaseRows = rowGrain === widgetGrain ? baseRows : datasets?.[rowGrain];
       const line = doc.createElement("div");
       line.className = "ga-statrow";
       const left = doc.createElement("div");
@@ -43447,7 +43447,7 @@ ${describeError(err)}` : message;
     }
     async function renderWidget(widget) {
       const baseRows = activeDatasets[widget.grain];
-      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, activeDatasets, baseRows);
       if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);

@@ -274,6 +274,7 @@ export async function renderStatListWidget(
   semantic: SemanticRegistry,
   widget: WidgetDef,
   overlay: DrilldownOverlay,
+  datasets: Partial<Record<Grain, any[]>> | undefined,
   baseRows?: any[]
 ): Promise<HTMLElement> {
   const spec = widget.spec as StatListSpec;
@@ -292,9 +293,10 @@ export async function renderStatListWidget(
 
   for (const row of spec.rows) {
     const rowGrain = (row as any).grain ? ((row as any).grain as Grain) : widgetGrain;
-    // `baseRows` is pre-filtered for the widget grain. If a row overrides grain,
-    // it must fetch from its own dataset instead.
-    const rowBaseRows = rowGrain === widgetGrain ? baseRows : undefined;
+    // `baseRows` is pre-filtered for the widget grain.
+    // If a row overrides grain, try to use the pre-filtered dataset for that grain,
+    // otherwise fall back to fetching unfiltered rows inside `computeMeasure()`.
+    const rowBaseRows = rowGrain === widgetGrain ? baseRows : datasets?.[rowGrain];
     const line = doc.createElement("div");
     line.className = "ga-statrow";
 
