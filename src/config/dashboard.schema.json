@@ -257,7 +257,7 @@
       "required": ["widgetId", "type", "title", "grain", "spec"],
       "properties": {
         "widgetId": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "record_list", "leader_list"] },
+        "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "record_list", "leader_list"] },
         "title": { "$ref": "#/$defs/title" },
         "grain": { "$ref": "#/$defs/grain" },
         "placement": { "$ref": "#/$defs/placementDef" },
@@ -268,9 +268,25 @@
         { "if": { "properties": { "type": { "const": "stat_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/statListSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "stat_value" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/statValueSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "breakdown" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/breakdownSpecDef" } } } },
+        { "if": { "properties": { "type": { "const": "country_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/countryMapSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "record_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/recordListSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "leader_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/leaderListSpecDef" } } } }
       ]
+    },
+
+    "countryMapSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension"],
+      "properties": {
+        "dimension": { "type": "string", "minLength": 1 },
+        "measure": { "type": "string", "minLength": 1 },
+        "measures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "activeMeasure": { "type": "string", "minLength": 1 },
+        "mapHeight": { "type": "integer", "minimum": 180, "maximum": 1200 },
+        "filters": { "type": "array", "items": { "$ref": "#/$defs/filterDef" } },
+        "actions": { "type": "object", "additionalProperties": true }
+      }
     },
 
     "leaderListSpecDef": {

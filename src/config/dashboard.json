@@ -1677,12 +1677,13 @@
                 "children": [
                   {
                     "widgetId": "w_country_metrics",
-                    "type": "breakdown",
+                    "type": "country_map",
                     "title": "Countries - Country metrics",
                     "grain": "round",
                     "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
                       "spec": {
                         "dimension": "true_country",
+                        "mapHeight": 420,
                         "measures": [
                           "avg_score",
                           "avg_score_hit_only",
@@ -1701,10 +1702,6 @@
                           "damage_taken_share"
                         ],
                         "activeMeasure": "avg_score",
-                        "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                        "activeSort": { "mode": "desc" },
-                        "limit": 15,
-                        "extendable": true,
                         "actions": {
                           "click": {
                             "type": "drilldown",

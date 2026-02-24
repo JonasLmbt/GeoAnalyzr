@@ -9,6 +9,7 @@ import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
 import { renderLeaderListWidget } from "./widgets/leaderListWidget";
+import { renderCountryMetricMapWidget } from "./widgets/countryMetricMapWidget";
 import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
 import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
@@ -78,6 +79,7 @@ export async function renderDashboard(
     if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, activeDatasets, baseRows as any);
     if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows as any);
 

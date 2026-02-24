@@ -204,6 +204,19 @@ export interface BreakdownSpec {
   actions?: Actions;
 }
 
+export interface CountryMetricMapSpec {
+  dimension: string;
+  // Single-measure (legacy + simplest form).
+  measure?: string;
+  // Multi-measure. If provided, a select will be shown to switch active measure.
+  measures?: string[];
+  activeMeasure?: string;
+  // Optional fixed height in CSS px for the map container.
+  mapHeight?: number;
+  filters?: FilterClause[];
+  actions?: Actions;
+}
+
 export interface RecordItemDef {
   id: string;
   label: string;
@@ -240,11 +253,11 @@ export interface LeaderListRowDef {
 
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "record_list" | "leader_list";
+  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "country_map" | "record_list" | "leader_list";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | RecordListSpec | { rows: LeaderListRowDef[] };
+  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | CountryMetricMapSpec | RecordListSpec | { rows: LeaderListRowDef[] };
 }
 
 export interface CompositeCardDef {

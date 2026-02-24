@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.18
+// @version      2.1.19
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -34675,12 +34675,13 @@ ${shapes}`.trim();
                   children: [
                     {
                       widgetId: "w_country_metrics",
-                      type: "breakdown",
+                      type: "country_map",
                       title: "Countries - Country metrics",
                       grain: "round",
                       placement: { x: 0, y: 0, w: 12, h: 10 },
                       spec: {
                         dimension: "true_country",
+                        mapHeight: 420,
                         measures: [
                           "avg_score",
                           "avg_score_hit_only",
@@ -34699,10 +34700,6 @@ ${shapes}`.trim();
                           "damage_taken_share"
                         ],
                         activeMeasure: "avg_score",
-                        sorts: [{ mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "desc" },
-                        limit: 15,
-                        extendable: true,
                         actions: {
                           click: {
                             type: "drilldown",
@@ -35688,6 +35685,23 @@ ${shapes}`.trim();
       font-size:12px;
     }
     .ga-breakdown-toggle:hover { filter: brightness(1.02); }
+
+    .ga-country-map-legend {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size: 12px;
+      color: var(--ga-text-muted);
+      margin: 2px 2px 6px;
+    }
+    .ga-country-map-legend-min, .ga-country-map-legend-max { font-variant-numeric: tabular-nums; min-width: 70px; }
+    .ga-country-map-legend-bar {
+      flex: 1;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid var(--ga-border);
+      background: linear-gradient(90deg, rgba(96,140,214,0.25), rgba(18,64,128,0.95));
+    }
     .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
     .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
     .ga-drilldown-panel {
@@ -43471,6 +43485,250 @@ ${describeError(err)}` : message;
     });
   }
 
+  // src/ui/widgets/countryMetricMapWidget.ts
+  function readCountryFormatMode3(doc) {
+    const root = doc.querySelector(".ga-root");
+    return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
+  }
+  function formatCountry3(doc, isoOrName) {
+    const mode = readCountryFormatMode3(doc);
+    if (mode === "iso2") return isoOrName;
+    const iso2 = isoOrName.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
+    if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
+    try {
+      const dn = new Intl.DisplayNames(["en"], { type: "region" });
+      return dn.of(iso2) ?? isoOrName;
+    } catch {
+      return isoOrName;
+    }
+  }
+  function formatValue3(doc, semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!m || !unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
+    const decimals = unit.decimals ?? 1;
+    const txt = value.toFixed(decimals);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
+  }
+  function normalizeIso2Key(key) {
+    const v = key.trim().toLowerCase();
+    return /^[a-z]{2}$/.test(v) ? v : null;
+  }
+  function sumDamage3(rows, kind) {
+    let sum = 0;
+    for (const r of rows) {
+      const dmg = r?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      if (kind === "dealt") sum += Math.max(0, dmg);
+      else sum += Math.max(0, -dmg);
+    }
+    return sum;
+  }
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+  function colorForValue(t) {
+    const clamped = Math.max(0, Math.min(1, t));
+    const lo = { r: 96, g: 140, b: 214 };
+    const hi = { r: 18, g: 64, b: 128 };
+    const a = lerp(0.18, 0.95, clamped);
+    const r = Math.round(lerp(lo.r, hi.r, clamped));
+    const g = Math.round(lerp(lo.g, hi.g, clamped));
+    const b = Math.round(lerp(lo.b, hi.b, clamped));
+    return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+  }
+  async function renderCountryMetricMapWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const grain = widget.grain;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-country-metric-map";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const header = doc.createElement("div");
+    header.className = "ga-breakdown-header";
+    const headerLeft = doc.createElement("div");
+    headerLeft.className = "ga-breakdown-header-left";
+    headerLeft.textContent = semantic.dimensions[spec.dimension]?.label ?? spec.dimension;
+    const headerRight = doc.createElement("div");
+    headerRight.className = "ga-breakdown-header-right";
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    const box = doc.createElement("div");
+    box.className = "ga-breakdown-box";
+    const legend = doc.createElement("div");
+    legend.className = "ga-country-map-legend";
+    const mapHost = doc.createElement("div");
+    mapHost.className = "ga-country-map";
+    const h = typeof spec.mapHeight === "number" && Number.isFinite(spec.mapHeight) ? Math.round(spec.mapHeight) : 420;
+    mapHost.style.setProperty("--ga-country-map-h", `${Math.max(180, Math.min(1200, h))}px`);
+    box.appendChild(legend);
+    box.appendChild(mapHost);
+    const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
+    const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
+    const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
+    if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (country_map)`);
+    const measures = [];
+    if (typeof spec.measure === "string" && spec.measure.trim()) measures.push(spec.measure.trim());
+    if (Array.isArray(spec.measures)) {
+      for (const m of spec.measures) if (typeof m === "string" && m.trim() && !measures.includes(m.trim())) measures.push(m.trim());
+    }
+    if (measures.length === 0) throw new Error(`Country map ${widget.widgetId} has no measure or measures[]`);
+    let activeMeasure = measures.includes(spec.activeMeasure || "") ? spec.activeMeasure : measures[0];
+    const renderHeaderRight = () => {
+      headerRight.innerHTML = "";
+      const wrapRight = doc.createElement("div");
+      wrapRight.className = "ga-breakdown-controls";
+      if (measures.length > 1) {
+        const mLabel = doc.createElement("span");
+        mLabel.className = "ga-breakdown-ctl-label";
+        mLabel.textContent = "Measure:";
+        const mSelect = doc.createElement("select");
+        mSelect.className = "ga-breakdown-ctl-select";
+        for (const mId of measures) {
+          const opt = doc.createElement("option");
+          opt.value = mId;
+          opt.textContent = semantic.measures[mId]?.label ?? mId;
+          if (mId === activeMeasure) opt.selected = true;
+          mSelect.appendChild(opt);
+        }
+        mSelect.addEventListener("change", () => {
+          const next = mSelect.value;
+          if (!measures.includes(next)) return;
+          activeMeasure = next;
+          void renderMap();
+        });
+        wrapRight.appendChild(mLabel);
+        wrapRight.appendChild(mSelect);
+      } else {
+        const mText = doc.createElement("span");
+        mText.textContent = semantic.measures[activeMeasure]?.label ?? activeMeasure;
+        wrapRight.appendChild(mText);
+      }
+      headerRight.appendChild(wrapRight);
+    };
+    const renderMap = async () => {
+      const measDef = semantic.measures[activeMeasure];
+      if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (country_map)`);
+      const unit = semantic.units[measDef.unit];
+      const groupedRaw = groupByKey(rowsAll, keyFn);
+      const grouped = /* @__PURE__ */ new Map();
+      for (const [k, g] of groupedRaw.entries()) {
+        const iso2 = normalizeIso2Key(String(k));
+        if (!iso2) continue;
+        grouped.set(iso2, g);
+      }
+      const selectableValues = Array.from(grouped.keys());
+      const values = /* @__PURE__ */ new Map();
+      const formulaId = measDef.formulaId;
+      const shareKind = formulaId === "share_damage_dealt" ? "dealt" : formulaId === "share_damage_taken" ? "taken" : formulaId === "share_rounds" ? "rounds" : null;
+      const denom = shareKind === "rounds" ? rowsAll.length : shareKind ? sumDamage3(rowsAll, shareKind) : 0;
+      const measureFn = shareKind ? null : MEASURES_BY_GRAIN[grain]?.[formulaId];
+      if (!shareKind && !measureFn) throw new Error(`Missing measure implementation for formulaId=${formulaId}`);
+      let min = Infinity;
+      let max = -Infinity;
+      for (const [iso2, g] of grouped.entries()) {
+        const v = shareKind === "rounds" ? denom > 0 ? g.length / denom : 0 : shareKind ? denom > 0 ? sumDamage3(g, shareKind) / denom : 0 : measureFn(g);
+        if (typeof v !== "number" || !Number.isFinite(v)) continue;
+        const vv = unit?.format === "percent" ? Math.max(0, Math.min(1, v)) : v;
+        values.set(iso2, vv);
+        min = Math.min(min, vv);
+        max = Math.max(max, vv);
+      }
+      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        min = 0;
+        max = 1;
+      }
+      const span = Math.max(1e-9, max - min);
+      legend.innerHTML = "";
+      const left = doc.createElement("div");
+      left.className = "ga-country-map-legend-min";
+      left.textContent = formatValue3(doc, semantic, activeMeasure, min);
+      const bar = doc.createElement("div");
+      bar.className = "ga-country-map-legend-bar";
+      bar.style.background = `linear-gradient(90deg, ${colorForValue(0)}, ${colorForValue(1)})`;
+      const right = doc.createElement("div");
+      right.className = "ga-country-map-legend-max";
+      right.textContent = formatValue3(doc, semantic, activeMeasure, max);
+      legend.appendChild(left);
+      legend.appendChild(bar);
+      legend.appendChild(right);
+      await renderCountryMapPicker({
+        container: mapHost,
+        value: "",
+        selectableValues,
+        tintSelectable: false,
+        onChange: (iso2) => {
+          const click = spec.actions?.click;
+          if (!click || click.type !== "drilldown") return;
+          const rowsFromPoint = click.filterFromPoint ? grouped.get(iso2) ?? [] : rowsAll;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${formatCountry3(doc, iso2.toUpperCase())}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
+          });
+        }
+      });
+      const paths = Array.from(mapHost.querySelectorAll("path.ga-country-shape"));
+      for (const p of paths) {
+        const iso2 = typeof p.dataset?.iso2 === "string" ? String(p.dataset.iso2) : "";
+        const v = values.get(iso2);
+        if (typeof v === "number" && Number.isFinite(v)) {
+          const t = span > 0 ? (v - min) / span : 1;
+          p.style.fill = colorForValue(t);
+          p.style.opacity = "1";
+        }
+        const label = iso2 ? formatCountry3(doc, iso2.toUpperCase()) : "";
+        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue3(doc, semantic, activeMeasure, v) : "n/a";
+        const tt = `${label}${label && valTxt ? ": " : ""}${valTxt}`;
+        let titleEl = p.querySelector("title");
+        if (!titleEl) {
+          titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
+          p.appendChild(titleEl);
+        }
+        titleEl.textContent = tt;
+        p.addEventListener("pointerenter", () => {
+          p.style.filter = "brightness(1.12)";
+          p.style.strokeWidth = "2";
+        });
+        p.addEventListener("pointerleave", () => {
+          p.style.filter = "";
+          p.style.strokeWidth = "";
+        });
+      }
+    };
+    renderHeaderRight();
+    await renderMap();
+    wrap.appendChild(title);
+    wrap.appendChild(header);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
@@ -43514,6 +43772,7 @@ ${describeError(err)}` : message;
       if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, activeDatasets, baseRows);
       if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
@@ -43521,12 +43780,12 @@ ${describeError(err)}` : message;
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
       return ph;
     }
-    const readCountryFormatMode4 = () => {
+    const readCountryFormatMode5 = () => {
       const rootEl = root.closest?.(".ga-root") ?? null;
       return rootEl?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
     };
-    const formatCountry4 = (isoOrName) => {
-      if (readCountryFormatMode4() === "iso2") return isoOrName;
+    const formatCountry5 = (isoOrName) => {
+      if (readCountryFormatMode5() === "iso2") return isoOrName;
       const iso2 = isoOrName.trim().toUpperCase();
       if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
       if (typeof Intl === "undefined" || !Intl.DisplayNames) return isoOrName;
@@ -43543,7 +43802,7 @@ ${describeError(err)}` : message;
         const raw = typeof v === "string" && v !== "all" ? v : "";
         const dim = dimById?.[id];
         if (!raw) return "";
-        if (dim === "true_country" || dim === "guess_country" || dim === "opponent_country") return formatCountry4(raw);
+        if (dim === "true_country" || dim === "guess_country" || dim === "opponent_country") return formatCountry5(raw);
         return raw;
       });
     };
@@ -43616,7 +43875,7 @@ ${describeError(err)}` : message;
         let values = Array.from(counts.entries()).map(([value, n]) => ({ value, n })).sort((a, b) => b.n - a.n || a.value.localeCompare(b.value));
         if (dimId === "duration_bucket") values = values.sort((a, b) => (durationRank2.get(a.value) ?? 999) - (durationRank2.get(b.value) ?? 999));
         return values.map((v) => {
-          const baseLabel = dimId === "movement_type" ? movementLabel2(v.value) : dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country" ? formatCountry4(v.value) : v.value;
+          const baseLabel = dimId === "movement_type" ? movementLabel2(v.value) : dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country" ? formatCountry5(v.value) : v.value;
           return {
             value: v.value,
             label: `${baseLabel} (${v.n} rounds)`,
@@ -43646,7 +43905,7 @@ ${describeError(err)}` : message;
           if (mapSpec?.variant === "wide") wrap.classList.add("ga-filter-map-wide");
           const selected = doc.createElement("div");
           selected.className = "ga-filter-map-selected";
-          const txt = next && next !== "all" ? formatCountry4(next) : "";
+          const txt = next && next !== "all" ? formatCountry5(next) : "";
           selected.textContent = txt ? `Selected: ${txt}` : "Click a country on the map";
           wrap.appendChild(selected);
           const mapHost = doc.createElement("div");
@@ -43897,12 +44156,12 @@ ${describeError(err)}` : message;
     el2.textContent = label;
     return el2;
   }
-  function readCountryFormatMode3(doc) {
+  function readCountryFormatMode4(doc) {
     const root = doc.querySelector(".ga-root");
     return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
   }
-  function formatCountry3(doc, isoOrName) {
-    const mode = readCountryFormatMode3(doc);
+  function formatCountry4(doc, isoOrName) {
+    const mode = readCountryFormatMode4(doc);
     if (mode === "iso2") return isoOrName;
     const iso2 = isoOrName.trim().toUpperCase();
     if (!/^[A-Z]{2}$/.test(iso2)) return isoOrName;
@@ -44011,7 +44270,7 @@ ${describeError(err)}` : message;
       const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
       if (!isRequired) sel.appendChild(new Option("All", "all"));
       for (const opt of options) {
-        const label = control.dimension === "true_country" ? formatCountry3(doc, opt.label) : opt.label;
+        const label = control.dimension === "true_country" ? formatCountry4(doc, opt.label) : opt.label;
         sel.appendChild(new Option(label, opt.value));
       }
       const hasCurrent = options.some((o) => o.value === current);

@@ -614,6 +614,23 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size:12px;
     }
     .ga-breakdown-toggle:hover { filter: brightness(1.02); }
+
+    .ga-country-map-legend {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size: 12px;
+      color: var(--ga-text-muted);
+      margin: 2px 2px 6px;
+    }
+    .ga-country-map-legend-min, .ga-country-map-legend-max { font-variant-numeric: tabular-nums; min-width: 70px; }
+    .ga-country-map-legend-bar {
+      flex: 1;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid var(--ga-border);
+      background: linear-gradient(90deg, rgba(96,140,214,0.25), rgba(18,64,128,0.95));
+    }
     .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
     .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
     .ga-drilldown-panel {
