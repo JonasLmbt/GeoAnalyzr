@@ -1124,7 +1124,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 14,
+              "h": 18,
               "card": {
                 "type": "composite",
                 "children": [
@@ -1236,7 +1236,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 14,
+              "h": 18,
               "card": {
                 "type": "composite",
                 "children": [
@@ -1308,11 +1308,27 @@
                     }
                   },
                   {
+                    "widgetId": "w_score_vs_opponents",
+                    "type": "breakdown",
+                    "title": "Score vs opponents",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 4, "w": 12, "h": 4 },
+                    "spec": {
+                      "dimension": "score_vs_opponent",
+                      "measure": "rounds_share",
+                      "sort": { "mode": "desc" },
+                      "limit": 3,
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
                     "widgetId": "w_score_distribution",
                     "type": "chart",
                     "title": "Scores - Score distribution (smoothed)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 4, "w": 12, "h": 10 },
+                    "placement": { "x": 0, "y": 8, "w": 12, "h": 10 },
                     "spec": {
                       "type": "bar",
                       "limit": 200,

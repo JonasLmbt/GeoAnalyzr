@@ -43,6 +43,16 @@ export function getMateScore(r: RoundRow): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
+export function getOpponentScore(r: RoundRow): number | undefined {
+  const v = legacy(r, "player_opponent_score", "playerTwoScore", "p2_score_opponent");
+  return typeof v === "number" ? v : undefined;
+}
+
+export function getOpponentMateScore(r: RoundRow): number | undefined {
+  const v = legacy(r, "player_opponent_mate_score", "opponentMateScore");
+  return typeof v === "number" ? v : undefined;
+}
+
 export function getMateDistanceKm(r: RoundRow): number | undefined {
   const v = legacy(r, "player_mate_distanceKm", "p2_distanceKm");
   return typeof v === "number" ? v : undefined;

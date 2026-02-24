@@ -104,6 +104,14 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 30 }
     },
+    "score_vs_opponent": {
+      "label": "Score vs opponents",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 3 }
+    },
     "result": {
       "label": "Result",
       "kind": "category",
@@ -316,6 +324,14 @@
       "grain": "game",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_games"
+    },
+    "rounds_share": {
+      "label": "Share",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "formulaId": "share_rounds",
+      "range": { "min": 0, "max": 1 }
     },
     "matchups_count": {
       "label": "Match-ups",

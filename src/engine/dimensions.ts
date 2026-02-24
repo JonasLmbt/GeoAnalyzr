@@ -10,6 +10,8 @@ import {
   getTeammateName,
   getGuessCountrySelf,
   getMateScore,
+  getOpponentScore,
+  getOpponentMateScore,
   getMateDistanceKm,
   getDistanceKm
 } from "./fieldAccess";
@@ -76,6 +78,40 @@ export function isThrowKey(r: RoundRow): GroupKey | null {
   const s = getSelfScore(r);
   if (typeof s !== "number") return null;
   return s < 50 ? "true" : "false";
+}
+
+export function scoreVsOpponentKey(r: RoundRow): GroupKey | null {
+  const mf = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
+  if (mf !== "duels" && mf !== "teamduels") return null;
+
+  const sSelf = getSelfScore(r);
+  const sMate = getMateScore(r);
+  const sOpp = getOpponentScore(r);
+  const sOppMate = getOpponentMateScore(r);
+
+  const own =
+    mf === "teamduels"
+      ? Math.max(
+          ...(typeof sSelf === "number" && Number.isFinite(sSelf) ? [sSelf] : []),
+          ...(typeof sMate === "number" && Number.isFinite(sMate) ? [sMate] : [])
+        )
+      : typeof sSelf === "number" && Number.isFinite(sSelf)
+        ? sSelf
+        : NaN;
+
+  const opp =
+    mf === "teamduels"
+      ? Math.max(
+          ...(typeof sOpp === "number" && Number.isFinite(sOpp) ? [sOpp] : []),
+          ...(typeof sOppMate === "number" && Number.isFinite(sOppMate) ? [sOppMate] : [])
+        )
+      : typeof sOpp === "number" && Number.isFinite(sOpp)
+        ? sOpp
+        : NaN;
+
+  if (!Number.isFinite(own) || !Number.isFinite(opp)) return null;
+  if (own === opp) return "Tie";
+  return own > opp ? "You" : "Opponents";
 }
 
 export function isDamageDealtKey(r: any): GroupKey | null {
@@ -271,6 +307,7 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     movement_type: movementTypeKey,
     is_hit: isHitKey,
     is_throw: isThrowKey,
+    score_vs_opponent: scoreVsOpponentKey,
     is_damage_dealt: isDamageDealtKey,
     is_damage_taken: isDamageTakenKey,
     is_near_perfect: (r: any) => {

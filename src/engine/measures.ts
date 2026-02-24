@@ -124,6 +124,9 @@ function getGameOutcome(g: GameFactRow): "win" | "loss" | "tie" | null {
 
 export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => number> = {
   count_rounds: (rows) => rows.length,
+  // NOTE: In breakdown widgets, `share_rounds` is normalized against the full dataset for the breakdown.
+  // The fallback implementation returns a count so the formulaId is always "implemented".
+  share_rounds: (rows) => rows.length,
 
   count_distinct_game_id: (rows) => {
     const seen = new Set<string>();

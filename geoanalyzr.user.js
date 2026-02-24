@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.17
+// @version      2.1.18
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9405,6 +9405,14 @@ ${shapes}`.trim();
     const v = legacy(r, "player_mate_score", "p2_score");
     return typeof v === "number" ? v : void 0;
   }
+  function getOpponentScore(r) {
+    const v = legacy(r, "player_opponent_score", "playerTwoScore", "p2_score_opponent");
+    return typeof v === "number" ? v : void 0;
+  }
+  function getOpponentMateScore(r) {
+    const v = legacy(r, "player_opponent_mate_score", "opponentMateScore");
+    return typeof v === "number" ? v : void 0;
+  }
   function getMateDistanceKm(r) {
     const v = legacy(r, "player_mate_distanceKm", "p2_distanceKm");
     return typeof v === "number" ? v : void 0;
@@ -9487,6 +9495,25 @@ ${shapes}`.trim();
     const s = getSelfScore(r);
     if (typeof s !== "number") return null;
     return s < 50 ? "true" : "false";
+  }
+  function scoreVsOpponentKey(r) {
+    const mf = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
+    if (mf !== "duels" && mf !== "teamduels") return null;
+    const sSelf = getSelfScore(r);
+    const sMate = getMateScore(r);
+    const sOpp = getOpponentScore(r);
+    const sOppMate = getOpponentMateScore(r);
+    const own = mf === "teamduels" ? Math.max(
+      ...typeof sSelf === "number" && Number.isFinite(sSelf) ? [sSelf] : [],
+      ...typeof sMate === "number" && Number.isFinite(sMate) ? [sMate] : []
+    ) : typeof sSelf === "number" && Number.isFinite(sSelf) ? sSelf : NaN;
+    const opp = mf === "teamduels" ? Math.max(
+      ...typeof sOpp === "number" && Number.isFinite(sOpp) ? [sOpp] : [],
+      ...typeof sOppMate === "number" && Number.isFinite(sOppMate) ? [sOppMate] : []
+    ) : typeof sOpp === "number" && Number.isFinite(sOpp) ? sOpp : NaN;
+    if (!Number.isFinite(own) || !Number.isFinite(opp)) return null;
+    if (own === opp) return "Tie";
+    return own > opp ? "You" : "Opponents";
   }
   function isDamageDealtKey(r) {
     const dmg = r?.damage;
@@ -9644,6 +9671,7 @@ ${shapes}`.trim();
       movement_type: movementTypeKey,
       is_hit: isHitKey,
       is_throw: isThrowKey,
+      score_vs_opponent: scoreVsOpponentKey,
       is_damage_dealt: isDamageDealtKey,
       is_damage_taken: isDamageTakenKey,
       is_near_perfect: (r) => {
@@ -31922,6 +31950,14 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 30 }
       },
+      score_vs_opponent: {
+        label: "Score vs opponents",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
       result: {
         label: "Result",
         kind: "category",
@@ -32131,6 +32167,14 @@ ${shapes}`.trim();
         grain: "game",
         allowedCharts: ["bar", "line"],
         formulaId: "count_games"
+      },
+      rounds_share: {
+        label: "Share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar"],
+        formulaId: "share_rounds",
+        range: { min: 0, max: 1 }
       },
       matchups_count: {
         label: "Match-ups",
@@ -34082,7 +34126,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 14,
+                h: 18,
                 card: {
                   type: "composite",
                   children: [
@@ -34194,7 +34238,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 14,
+                h: 18,
                 card: {
                   type: "composite",
                   children: [
@@ -34266,11 +34310,27 @@ ${shapes}`.trim();
                       }
                     },
                     {
+                      widgetId: "w_score_vs_opponents",
+                      type: "breakdown",
+                      title: "Score vs opponents",
+                      grain: "round",
+                      placement: { x: 0, y: 4, w: 12, h: 4 },
+                      spec: {
+                        dimension: "score_vs_opponent",
+                        measure: "rounds_share",
+                        sort: { mode: "desc" },
+                        limit: 3,
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
                       widgetId: "w_score_distribution",
                       type: "chart",
                       title: "Scores - Score distribution (smoothed)",
                       grain: "round",
-                      placement: { x: 0, y: 4, w: 12, h: 10 },
+                      placement: { x: 0, y: 8, w: 12, h: 10 },
                       spec: {
                         type: "bar",
                         limit: 200,
@@ -40235,6 +40295,9 @@ ${describeError(err)}` : message;
   }
   var ROUND_MEASURES_BY_FORMULA_ID = {
     count_rounds: (rows) => rows.length,
+    // NOTE: In breakdown widgets, `share_rounds` is normalized against the full dataset for the breakdown.
+    // The fallback implementation returns a count so the formulaId is always "implemented".
+    share_rounds: (rows) => rows.length,
     count_distinct_game_id: (rows) => {
       const seen = /* @__PURE__ */ new Set();
       for (const r of rows) {
@@ -42301,6 +42364,7 @@ ${describeError(err)}` : message;
   function getShareKindFromFormulaId2(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
     if (formulaId === "share_damage_taken") return "taken";
+    if (formulaId === "share_rounds") return "rounds";
     return null;
   }
   function sumDamage2(rows, kind) {
@@ -42518,13 +42582,13 @@ ${describeError(err)}` : message;
       const shareKind = getShareKindFromFormulaId2(measDef.formulaId);
       const measureFn = shareKind ? null : measureFnById.get(activeMeasure);
       if (!shareKind && !measureFn) return;
-      const denom = shareKind ? sumDamage2(rowsAll, shareKind) : 0;
+      const denom = shareKind === "rounds" ? rowsAll.length : shareKind ? sumDamage2(rowsAll, shareKind) : 0;
       rowsAllSorted = Array.from(grouped.entries()).filter(([k]) => !exclude.has(String(k).trim().toLowerCase())).map(([k, g]) => ({
         key: k,
         value: clampForMeasure2(
           semantic,
           activeMeasure,
-          shareKind ? denom > 0 ? sumDamage2(g, shareKind) / denom : 0 : measureFn(g)
+          shareKind === "rounds" ? denom > 0 ? g.length / denom : 0 : shareKind ? denom > 0 ? sumDamage2(g, shareKind) / denom : 0 : measureFn(g)
         ),
         rows: g
       }));

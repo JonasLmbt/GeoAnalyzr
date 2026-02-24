@@ -14,9 +14,10 @@ type Row = {
   rows: any[];
 };
 
-function getShareKindFromFormulaId(formulaId: string): "dealt" | "taken" | null {
+function getShareKindFromFormulaId(formulaId: string): "dealt" | "taken" | "rounds" | null {
   if (formulaId === "share_damage_dealt") return "dealt";
   if (formulaId === "share_damage_taken") return "taken";
+  if (formulaId === "share_rounds") return "rounds";
   return null;
 }
 
@@ -285,7 +286,8 @@ export async function renderBreakdownWidget(
     const shareKind = getShareKindFromFormulaId(measDef.formulaId);
     const measureFn = shareKind ? null : measureFnById.get(activeMeasure);
     if (!shareKind && !measureFn) return;
-    const denom = shareKind ? sumDamage(rowsAll, shareKind) : 0;
+    const denom =
+      shareKind === "rounds" ? rowsAll.length : shareKind ? sumDamage(rowsAll, shareKind) : 0;
 
     rowsAllSorted = Array.from(grouped.entries())
       .filter(([k]) => !exclude.has(String(k).trim().toLowerCase()))
@@ -294,7 +296,11 @@ export async function renderBreakdownWidget(
         value: clampForMeasure(
           semantic,
           activeMeasure,
-          shareKind ? (denom > 0 ? sumDamage(g, shareKind) / denom : 0) : (measureFn as any)(g)
+          shareKind === "rounds"
+            ? (denom > 0 ? g.length / denom : 0)
+            : shareKind
+              ? (denom > 0 ? sumDamage(g, shareKind) / denom : 0)
+              : (measureFn as any)(g)
         ),
         rows: g
       }));
