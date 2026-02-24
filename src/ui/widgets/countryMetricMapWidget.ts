@@ -82,20 +82,45 @@ function parseHex(hex: string): { r: number; g: number; b: number } | null {
   return { r, g, b };
 }
 
+function parseCssRgb(input: string): { r: number; g: number; b: number } | null {
+  const s = input.trim();
+  const m = s.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+  if (!m) return null;
+  const r = Number(m[1]);
+  const g = Number(m[2]);
+  const b = Number(m[3]);
+  if (![r, g, b].every((x) => Number.isFinite(x))) return null;
+  return { r: Math.max(0, Math.min(255, Math.round(r))), g: Math.max(0, Math.min(255, Math.round(g))), b: Math.max(0, Math.min(255, Math.round(b))) };
+}
+
+function parseCssColor(input: string): { r: number; g: number; b: number } | null {
+  return parseHex(input) ?? parseCssRgb(input);
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function colorForValue(t: number): string {
+function colorForValue(base: { r: number; g: number; b: number }, t: number): string {
   const clamped = Math.max(0, Math.min(1, t));
-  // Higher = darker.
-  const lo = { r: 96, g: 140, b: 214 };
-  const hi = { r: 18, g: 64, b: 128 };
-  const a = lerp(0.18, 0.95, clamped);
-  const r = Math.round(lerp(lo.r, hi.r, clamped));
-  const g = Math.round(lerp(lo.g, hi.g, clamped));
-  const b = Math.round(lerp(lo.b, hi.b, clamped));
+  // Higher = darker + more opaque.
+  const mixToBlack = lerp(0.18, 0.70, clamped);
+  const a = lerp(0.10, 0.96, clamped);
+  const r = Math.round(base.r * (1 - mixToBlack));
+  const g = Math.round(base.g * (1 - mixToBlack));
+  const b = Math.round(base.b * (1 - mixToBlack));
   return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return NaN;
+  const clamped = Math.max(0, Math.min(1, p));
+  const idx = (sorted.length - 1) * clamped;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const t = idx - lo;
+  return lerp(sorted[lo], sorted[hi], t);
 }
 
 export async function renderCountryMetricMapWidget(
@@ -220,6 +245,7 @@ export async function renderCountryMetricMapWidget(
 
     let min = Infinity;
     let max = -Infinity;
+    const allVals: number[] = [];
     for (const [iso2, g] of grouped.entries()) {
       const v =
         shareKind === "rounds"
@@ -234,6 +260,7 @@ export async function renderCountryMetricMapWidget(
       if (typeof v !== "number" || !Number.isFinite(v)) continue;
       const vv = unit?.format === "percent" ? Math.max(0, Math.min(1, v)) : v;
       values.set(iso2, vv);
+      allVals.push(vv);
       min = Math.min(min, vv);
       max = Math.max(max, vv);
     }
@@ -241,19 +268,33 @@ export async function renderCountryMetricMapWidget(
       min = 0;
       max = 1;
     }
-    const span = Math.max(1e-9, max - min);
+    const sorted = allVals.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+    const p10 = Number.isFinite(percentile(sorted, 0.10)) ? percentile(sorted, 0.10) : min;
+    const p90 = Number.isFinite(percentile(sorted, 0.90)) ? percentile(sorted, 0.90) : max;
+    const scaleMin = Math.min(p10, p90);
+    const scaleMax = Math.max(p10, p90);
+    const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
+
+    const rootEl = (doc.querySelector(".ga-root") as HTMLElement | null) ?? null;
+    const theme = rootEl?.dataset?.gaTheme ?? "";
+    const styles = rootEl ? getComputedStyle(rootEl) : null;
+    const baseColorRaw =
+      theme === "geoguessr"
+        ? (styles?.getPropertyValue("--ga-warn") ?? "")
+        : (styles?.getPropertyValue("--ga-graph-color") ?? "");
+    const baseColor = parseCssColor(baseColorRaw) ?? parseCssColor(styles?.getPropertyValue("--ga-warn") ?? "") ?? { r: 126, g: 182, b: 255 };
 
     // Legend
     legend.innerHTML = "";
     const left = doc.createElement("div");
     left.className = "ga-country-map-legend-min";
-    left.textContent = formatValue(doc, semantic, activeMeasure, min);
+    left.textContent = formatValue(doc, semantic, activeMeasure, scaleMin);
     const bar = doc.createElement("div");
     bar.className = "ga-country-map-legend-bar";
-    bar.style.background = `linear-gradient(90deg, ${colorForValue(0)}, ${colorForValue(1)})`;
+    bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
     const right = doc.createElement("div");
     right.className = "ga-country-map-legend-max";
-    right.textContent = formatValue(doc, semantic, activeMeasure, max);
+    right.textContent = formatValue(doc, semantic, activeMeasure, scaleMax);
     legend.appendChild(left);
     legend.appendChild(bar);
     legend.appendChild(right);
@@ -284,8 +325,11 @@ export async function renderCountryMetricMapWidget(
       const iso2 = typeof (p as any).dataset?.iso2 === "string" ? String((p as any).dataset.iso2) : "";
       const v = values.get(iso2);
       if (typeof v === "number" && Number.isFinite(v)) {
-        const t = span > 0 ? (v - min) / span : 1;
-        p.style.fill = colorForValue(t);
+        const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
+        const clamped = Math.max(0, Math.min(1, rawT));
+        // gamma < 1 => higher contrast in the lower-mid range
+        const t = Math.pow(clamped, 0.65);
+        p.style.fill = colorForValue(baseColor, t);
         p.style.opacity = "1";
       }
 
@@ -320,4 +364,3 @@ export async function renderCountryMetricMapWidget(
   wrap.appendChild(box);
   return wrap;
 }
-

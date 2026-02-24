@@ -1671,19 +1671,18 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 18,
+              "h": 26,
               "card": {
                 "type": "composite",
                 "children": [
                   {
                     "widgetId": "w_country_metrics",
-                    "type": "country_map",
+                    "type": "breakdown",
                     "title": "Countries - Country metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 8 },
                       "spec": {
                         "dimension": "true_country",
-                        "mapHeight": 420,
                         "measures": [
                           "avg_score",
                           "avg_score_hit_only",
@@ -1702,6 +1701,10 @@
                           "damage_taken_share"
                         ],
                         "activeMeasure": "avg_score",
+                        "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                        "activeSort": { "mode": "desc" },
+                        "limit": 15,
+                        "extendable": true,
                         "actions": {
                           "click": {
                             "type": "drilldown",
@@ -1715,11 +1718,49 @@
                   }
                   ,
                   {
+                    "widgetId": "w_country_metrics_map",
+                    "type": "country_map",
+                    "title": "Countries - Country metrics (map)",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 8, "w": 12, "h": 10 },
+                    "spec": {
+                      "dimension": "true_country",
+                      "mapHeight": 420,
+                      "measures": [
+                        "avg_score",
+                        "avg_score_hit_only",
+                        "avg_distance_km",
+                        "avg_guess_duration",
+                        "rounds_count",
+                        "fivek_rate",
+                        "fivek_count",
+                        "throw_rate",
+                        "throw_count",
+                        "hit_rate",
+                        "hit_count",
+                        "damage_dealt_avg",
+                        "damage_taken_avg",
+                        "damage_dealt_share",
+                        "damage_taken_share"
+                      ],
+                      "activeMeasure": "avg_score",
+                      "actions": {
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
+                      }
+                    }
+                  }
+                  ,
+                  {
                     "widgetId": "w_country_confusion",
                     "type": "chart",
                     "title": "Countries - Confusion matrix (top pairs)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 10, "w": 12, "h": 8 },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 8 },
                     "spec": {
                       "type": "bar",
                       "limit": 20,

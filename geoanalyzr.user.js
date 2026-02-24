@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.1.19
+// @version      2.1.20
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -34669,16 +34669,56 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 18,
+                h: 26,
                 card: {
                   type: "composite",
                   children: [
                     {
                       widgetId: "w_country_metrics",
-                      type: "country_map",
+                      type: "breakdown",
                       title: "Countries - Country metrics",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      placement: { x: 0, y: 0, w: 12, h: 8 },
+                      spec: {
+                        dimension: "true_country",
+                        measures: [
+                          "avg_score",
+                          "avg_score_hit_only",
+                          "avg_distance_km",
+                          "avg_guess_duration",
+                          "rounds_count",
+                          "fivek_rate",
+                          "fivek_count",
+                          "throw_rate",
+                          "throw_count",
+                          "hit_rate",
+                          "hit_count",
+                          "damage_dealt_avg",
+                          "damage_taken_avg",
+                          "damage_dealt_share",
+                          "damage_taken_share"
+                        ],
+                        activeMeasure: "avg_score",
+                        sorts: [{ mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "desc" },
+                        limit: 15,
+                        extendable: true,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_metrics_map",
+                      type: "country_map",
+                      title: "Countries - Country metrics (map)",
+                      grain: "round",
+                      placement: { x: 0, y: 8, w: 12, h: 10 },
                       spec: {
                         dimension: "true_country",
                         mapHeight: 420,
@@ -34715,7 +34755,7 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Countries - Confusion matrix (top pairs)",
                       grain: "round",
-                      placement: { x: 0, y: 10, w: 12, h: 8 },
+                      placement: { x: 0, y: 18, w: 12, h: 8 },
                       spec: {
                         type: "bar",
                         limit: 20,
@@ -43544,18 +43584,48 @@ ${describeError(err)}` : message;
     }
     return sum;
   }
+  function parseHex(hex) {
+    const h = hex.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(h)) return null;
+    const r = parseInt(h.slice(1, 3), 16);
+    const g = parseInt(h.slice(3, 5), 16);
+    const b = parseInt(h.slice(5, 7), 16);
+    return { r, g, b };
+  }
+  function parseCssRgb(input) {
+    const s = input.trim();
+    const m = s.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i);
+    if (!m) return null;
+    const r = Number(m[1]);
+    const g = Number(m[2]);
+    const b = Number(m[3]);
+    if (![r, g, b].every((x) => Number.isFinite(x))) return null;
+    return { r: Math.max(0, Math.min(255, Math.round(r))), g: Math.max(0, Math.min(255, Math.round(g))), b: Math.max(0, Math.min(255, Math.round(b))) };
+  }
+  function parseCssColor(input) {
+    return parseHex(input) ?? parseCssRgb(input);
+  }
   function lerp(a, b, t) {
     return a + (b - a) * t;
   }
-  function colorForValue(t) {
+  function colorForValue(base, t) {
     const clamped = Math.max(0, Math.min(1, t));
-    const lo = { r: 96, g: 140, b: 214 };
-    const hi = { r: 18, g: 64, b: 128 };
-    const a = lerp(0.18, 0.95, clamped);
-    const r = Math.round(lerp(lo.r, hi.r, clamped));
-    const g = Math.round(lerp(lo.g, hi.g, clamped));
-    const b = Math.round(lerp(lo.b, hi.b, clamped));
+    const mixToBlack = lerp(0.18, 0.7, clamped);
+    const a = lerp(0.1, 0.96, clamped);
+    const r = Math.round(base.r * (1 - mixToBlack));
+    const g = Math.round(base.g * (1 - mixToBlack));
+    const b = Math.round(base.b * (1 - mixToBlack));
     return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+  }
+  function percentile(sorted, p) {
+    if (sorted.length === 0) return NaN;
+    const clamped = Math.max(0, Math.min(1, p));
+    const idx = (sorted.length - 1) * clamped;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    const t = idx - lo;
+    return lerp(sorted[lo], sorted[hi], t);
   }
   async function renderCountryMetricMapWidget(semantic, widget, overlay, baseRows) {
     const spec = widget.spec;
@@ -43648,11 +43718,13 @@ ${describeError(err)}` : message;
       if (!shareKind && !measureFn) throw new Error(`Missing measure implementation for formulaId=${formulaId}`);
       let min = Infinity;
       let max = -Infinity;
+      const allVals = [];
       for (const [iso2, g] of grouped.entries()) {
         const v = shareKind === "rounds" ? denom > 0 ? g.length / denom : 0 : shareKind ? denom > 0 ? sumDamage3(g, shareKind) / denom : 0 : measureFn(g);
         if (typeof v !== "number" || !Number.isFinite(v)) continue;
         const vv = unit?.format === "percent" ? Math.max(0, Math.min(1, v)) : v;
         values.set(iso2, vv);
+        allVals.push(vv);
         min = Math.min(min, vv);
         max = Math.max(max, vv);
       }
@@ -43660,17 +43732,27 @@ ${describeError(err)}` : message;
         min = 0;
         max = 1;
       }
-      const span = Math.max(1e-9, max - min);
+      const sorted = allVals.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+      const p10 = Number.isFinite(percentile(sorted, 0.1)) ? percentile(sorted, 0.1) : min;
+      const p90 = Number.isFinite(percentile(sorted, 0.9)) ? percentile(sorted, 0.9) : max;
+      const scaleMin = Math.min(p10, p90);
+      const scaleMax = Math.max(p10, p90);
+      const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
+      const rootEl = doc.querySelector(".ga-root") ?? null;
+      const theme = rootEl?.dataset?.gaTheme ?? "";
+      const styles = rootEl ? getComputedStyle(rootEl) : null;
+      const baseColorRaw = theme === "geoguessr" ? styles?.getPropertyValue("--ga-warn") ?? "" : styles?.getPropertyValue("--ga-graph-color") ?? "";
+      const baseColor = parseCssColor(baseColorRaw) ?? parseCssColor(styles?.getPropertyValue("--ga-warn") ?? "") ?? { r: 126, g: 182, b: 255 };
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue3(doc, semantic, activeMeasure, min);
+      left.textContent = formatValue3(doc, semantic, activeMeasure, scaleMin);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
-      bar.style.background = `linear-gradient(90deg, ${colorForValue(0)}, ${colorForValue(1)})`;
+      bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue3(doc, semantic, activeMeasure, max);
+      right.textContent = formatValue3(doc, semantic, activeMeasure, scaleMax);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -43698,8 +43780,10 @@ ${describeError(err)}` : message;
         const iso2 = typeof p.dataset?.iso2 === "string" ? String(p.dataset.iso2) : "";
         const v = values.get(iso2);
         if (typeof v === "number" && Number.isFinite(v)) {
-          const t = span > 0 ? (v - min) / span : 1;
-          p.style.fill = colorForValue(t);
+          const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
+          const clamped = Math.max(0, Math.min(1, rawT));
+          const t = Math.pow(clamped, 0.65);
+          p.style.fill = colorForValue(baseColor, t);
           p.style.opacity = "1";
         }
         const label = iso2 ? formatCountry3(doc, iso2.toUpperCase()) : "";
