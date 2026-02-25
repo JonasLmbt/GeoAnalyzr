@@ -1,15 +1,18 @@
+import { getGmXmlhttpRequest, hasGmXmlhttpRequest } from "../gm";
+
 const DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
 const DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
 
 type BBox = { minLon: number; minLat: number; maxLon: number; maxLat: number };
 
 function hasGmXhr(): boolean {
-  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
+  return hasGmXmlhttpRequest();
 }
 
 function gmGetText(url: string, accept?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const gm = (globalThis as any).GM_xmlhttpRequest;
+    const gm = getGmXmlhttpRequest();
+    if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
     gm({
       method: "GET",
       url,
@@ -185,4 +188,3 @@ export async function resolveDeDistrictByLatLng(lat: number, lng: number): Promi
   }
   return null;
 }
-

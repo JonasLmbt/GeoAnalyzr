@@ -18,6 +18,7 @@ import { getCurrentPlayerName } from "./app/playerIdentity";
 import { logoSvgMarkup } from "./ui/logo";
 import { mergeSemanticWithDashboard } from "./engine/semanticMerge";
 import { analysisConsole } from "./ui/consoleStore";
+import { getGmXmlhttpRequest } from "./gm";
 
 function cloneTemplate<T>(value: T): T {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -151,6 +152,18 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   const ua = doc.defaultView?.navigator?.userAgent ?? "";
   boot.log("GeoAnalyzr: analysis window boot");
   boot.log(`readyState=${doc.readyState} ua=${ua}`);
+
+  // Tampermonkey/Violentmonkey GM_* APIs are available in the userscript sandbox (the opener window),
+  // but not necessarily on the newly opened about:blank window. Bridge the function reference so that
+  // analysis-window code can use GM_xmlhttpRequest to bypass CORS when fetching geojson etc.
+  try {
+    const gm = getGmXmlhttpRequest();
+    if (typeof gm === "function" && typeof (targetWindow as any).GM_xmlhttpRequest !== "function") {
+      (targetWindow as any).GM_xmlhttpRequest = gm;
+    }
+  } catch {
+    // ignore
+  }
 
   if (!(targetWindow as any).__gaBootHandlersInstalled) {
     (targetWindow as any).__gaBootHandlersInstalled = true;

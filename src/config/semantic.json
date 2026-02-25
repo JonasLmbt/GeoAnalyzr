@@ -831,6 +831,70 @@
         "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
       }
     },
+    "admin_hit_rate_de_state": {
+      "label": "Admin-unit hit rate (DE ADM1)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_de_state_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_de_district": {
+      "label": "Admin-unit hit rate (DE ADM2)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_de_district_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_us_state": {
+      "label": "Admin-unit hit rate (US ADM1)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_us_state_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_ca_province": {
+      "label": "Admin-unit hit rate (CA ADM1)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_ca_province_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_id_province": {
+      "label": "Admin-unit hit rate (ID ADM1)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_id_province_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_id_kabupaten": {
+      "label": "Admin-unit hit rate (ID ADM2)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_id_kabupaten_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_ph_province": {
+      "label": "Admin-unit hit rate (PH ADM1)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_ph_province_hit",
+      "range": { "min": 0, "max": 100 }
+    },
+    "admin_hit_rate_vn_province": {
+      "label": "Admin-unit hit rate (VN ADM1)",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_vn_province_hit",
+      "range": { "min": 0, "max": 100 }
+    },
     "hit_count": {
       "label": "Hit count",
       "unit": "count",

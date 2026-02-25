@@ -1,15 +1,18 @@
+import { getGmXmlhttpRequest, hasGmXmlhttpRequest } from "../gm";
+
 const WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
 const ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
 
 let dataPromise: Promise<{ geojson: any; iso3ToIso2: Map<string, string> }> | null = null;
 
 function hasGmXhr(): boolean {
-  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
+  return hasGmXmlhttpRequest();
 }
 
 function gmGetText(url: string, accept?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const gm = (globalThis as any).GM_xmlhttpRequest;
+    const gm = getGmXmlhttpRequest();
+    if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
     gm({
       method: "GET",
       url,

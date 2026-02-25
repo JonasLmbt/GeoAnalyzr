@@ -2186,17 +2186,121 @@
                     }
                   },
                   {
-                    "widgetId": "w_country_insight_overall_hit_rate",
-                    "type": "stat_value",
-                    "title": "Hit rate in selected country",
+                    "widgetId": "w_country_insight_admin_hit_de",
+                    "type": "stat_list",
+                    "title": "Administrative unit accuracy (selected country)",
                     "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 3 },
+                    "spec": {
+                      "enrichDimensions": ["true_state", "guess_state", "true_district", "guess_district"],
+                      "rows": [
+                        {
+                          "label": "Correct Bundesland (ADM1)",
+                          "measure": "admin_hit_rate_de_state",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        },
+                        {
+                          "label": "Correct Landkreis (ADM2)",
+                          "measure": "admin_hit_rate_de_district",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_admin_hit_id",
+                    "type": "stat_list",
+                    "title": "Administrative unit accuracy (selected country)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 3 },
+                    "spec": {
+                      "enrichDimensions": ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"],
+                      "rows": [
+                        {
+                          "label": "Correct province (ADM1)",
+                          "measure": "admin_hit_rate_id_province",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        },
+                        {
+                          "label": "Correct kabupaten / regency (ADM2)",
+                          "measure": "admin_hit_rate_id_kabupaten",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_admin_hit_us",
+                    "type": "stat_list",
+                    "title": "Administrative unit accuracy (selected country)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["us", "US"] },
                     "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
                     "spec": {
-                      "label": "Country hit rate (selected country)",
-                      "measure": "hit_rate",
-                      "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" }
-                      }
+                      "enrichDimensions": ["true_us_state", "guess_us_state"],
+                      "rows": [
+                        {
+                          "label": "Correct state (ADM1)",
+                          "measure": "admin_hit_rate_us_state",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_admin_hit_ca",
+                    "type": "stat_list",
+                    "title": "Administrative unit accuracy (selected country)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["ca", "CA"] },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
+                    "spec": {
+                      "enrichDimensions": ["true_ca_province", "guess_ca_province"],
+                      "rows": [
+                        {
+                          "label": "Correct province / territory (ADM1)",
+                          "measure": "admin_hit_rate_ca_province",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_admin_hit_ph",
+                    "type": "stat_list",
+                    "title": "Administrative unit accuracy (selected country)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["ph", "PH"] },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
+                    "spec": {
+                      "enrichDimensions": ["true_ph_province", "guess_ph_province"],
+                      "rows": [
+                        {
+                          "label": "Correct province (ADM1)",
+                          "measure": "admin_hit_rate_ph_province",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_admin_hit_vn",
+                    "type": "stat_list",
+                    "title": "Administrative unit accuracy (selected country)",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["vn", "VN"] },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
+                    "spec": {
+                      "enrichDimensions": ["true_vn_province", "guess_vn_province"],
+                      "rows": [
+                        {
+                          "label": "Correct province (ADM1)",
+                          "measure": "admin_hit_rate_vn_province",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                        }
+                      ]
                     }
                   },
                   {
@@ -2205,7 +2309,7 @@
                     "title": "Germany - Level 1: States (Bundesländer)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 21, "w": 12, "h": 6 },
                     "spec": {
                       "activeView": "bar",
                       "views": [
@@ -2349,7 +2453,7 @@
                     "title": "Indonesia - Level 1: Provinces",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 21, "w": 12, "h": 6 },
                     "spec": {
                       "activeView": "map",
                       "views": [
@@ -2493,7 +2597,7 @@
                     "title": "Germany - Level 2: Districts (Landkreise)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 26, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 27, "w": 12, "h": 5 },
                     "spec": {
                       "dimension": "true_district",
                       "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
@@ -2513,7 +2617,7 @@
                     "title": "Indonesia - Level 2: Kabupaten / Regencies",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
-                    "placement": { "x": 0, "y": 26, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 27, "w": 12, "h": 5 },
                     "spec": {
                       "dimension": "true_id_kabupaten",
                       "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],

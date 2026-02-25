@@ -5,14 +5,16 @@ import { getRounds, getGames, getSessions } from "../../engine/queryEngine";
 import { applyFilters } from "../../engine/filters";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { DrilldownOverlay } from "../drilldownOverlay";
+import { getGmXmlhttpRequest, hasGmXmlhttpRequest } from "../../gm";
 
 function hasGmXhr(): boolean {
-  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
+  return hasGmXmlhttpRequest();
 }
 
 function gmGetText(url: string, accept?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const gm = (globalThis as any).GM_xmlhttpRequest;
+    const gm = getGmXmlhttpRequest();
+    if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
     gm({
       method: "GET",
       url,

@@ -36,6 +36,19 @@ function isHit(r: RoundRow): boolean {
   return typeof guess === "string" && guess === truth;
 }
 
+function rateStringFieldEq(rows: any[], trueKey: string, guessKey: string): number {
+  let denom = 0;
+  let num = 0;
+  for (const r of rows as any[]) {
+    const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
+    if (!t) continue;
+    denom++;
+    const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
+    if (g && g === t) num++;
+  }
+  return denom ? num / denom : 0;
+}
+
 function isThrowLt50(r: RoundRow): boolean {
   const s = getSelfScore(r);
   return typeof s === "number" && s < 50;
@@ -323,6 +336,15 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     for (const r of rows) if (isHit(r)) k++;
     return k / n;
   },
+
+  rate_de_state_hit: (rows) => rateStringFieldEq(rows as any[], "trueState", "guessState"),
+  rate_de_district_hit: (rows) => rateStringFieldEq(rows as any[], "trueDistrict", "guessDistrict"),
+  rate_us_state_hit: (rows) => rateStringFieldEq(rows as any[], "trueUsState", "guessUsState"),
+  rate_ca_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueCaProvince", "guessCaProvince"),
+  rate_id_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueIdProvince", "guessIdProvince"),
+  rate_id_kabupaten_hit: (rows) => rateStringFieldEq(rows as any[], "trueIdKabupaten", "guessIdKabupaten"),
+  rate_ph_province_hit: (rows) => rateStringFieldEq(rows as any[], "truePhProvince", "guessPhProvince"),
+  rate_vn_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueVnProvince", "guessVnProvince"),
 
   rate_throw_round: (rows) => {
     const n = rows.length;

@@ -6,6 +6,7 @@ import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
 import { DrilldownOverlay } from "../drilldownOverlay";
 import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
+import { maybeEnrichRoundRowsForDimension } from "../../engine/regionEnrichment";
 
 function readDateFormatMode(doc: Document): "dd/mm/yyyy" | "mm/dd/yyyy" | "yyyy-mm-dd" | "locale" {
   const root = doc.querySelector(".ga-root") as HTMLElement | null;
@@ -81,6 +82,7 @@ async function computeMeasure(
 
   const rowsAll =
     baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
+
   const rows = applyFilters(rowsAll, filters, grain);
   const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
   if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
@@ -280,6 +282,16 @@ export async function renderStatListWidget(
   const spec = widget.spec as StatListSpec;
   const doc = overlay.getDocument();
   const widgetGrain = widget.grain as Grain;
+
+  const enrichDims = Array.isArray((spec as any).enrichDimensions) ? ((spec as any).enrichDimensions as any[]).filter((d) => typeof d === "string" && d) : [];
+  if (widgetGrain === "round" && enrichDims.length) {
+    const rowsToEnrich = Array.isArray(baseRows) ? baseRows : Array.isArray(datasets?.round) ? (datasets?.round as any[]) : null;
+    if (rowsToEnrich) {
+      for (const dimId of enrichDims) {
+        await maybeEnrichRoundRowsForDimension(String(dimId), rowsToEnrich as any[]);
+      }
+    }
+  }
 
   const wrap = doc.createElement("div");
   wrap.className = "ga-widget ga-statlist";

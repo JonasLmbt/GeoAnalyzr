@@ -35,15 +35,50 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
     "true_id_kabupaten",
     "true_ph_province",
     "true_vn_province",
+    "guess_state",
+    "guess_district",
+    "guess_us_state",
+    "guess_ca_province",
+    "guess_id_province",
+    "guess_id_kabupaten",
+    "guess_ph_province",
+    "guess_vn_province",
   ]);
   if (!supported.has(dimId)) return;
+
+  const guessLatLngOf = (r: any): { lat: number; lng: number } | null => {
+    const lat =
+      typeof r?.player_self_guessLat === "number"
+        ? r.player_self_guessLat
+        : typeof r?.p1_guessLat === "number"
+          ? r.p1_guessLat
+          : typeof r?.guessLat === "number"
+            ? r.guessLat
+            : null;
+    const lng =
+      typeof r?.player_self_guessLng === "number"
+        ? r.player_self_guessLng
+        : typeof r?.p1_guessLng === "number"
+          ? r.p1_guessLng
+          : typeof r?.guessLng === "number"
+            ? r.guessLng
+            : null;
+    if (!isFiniteNum(lat) || !isFiniteNum(lng)) return null;
+    return { lat, lng };
+  };
 
   const todo: any[] = [];
   for (const r of rows) {
     const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
     const lat = r?.trueLat;
     const lng = r?.trueLng;
-    if (!isFiniteNum(lat) || !isFiniteNum(lng)) continue;
+
+    const g = guessLatLngOf(r);
+
+    const wantTrue = dimId.startsWith("true_");
+    const wantGuess = dimId.startsWith("guess_");
+    if (wantTrue && (!isFiniteNum(lat) || !isFiniteNum(lng))) continue;
+    if (wantGuess && !g) continue;
 
     if (dimId === "true_state") {
       if (tc !== "de") continue;
@@ -61,6 +96,22 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
       if (tc !== "ca") continue;
       const has = typeof r?.trueCaProvince === "string" && r.trueCaProvince.trim().length > 0;
       if (!has) todo.push(r);
+    } else if (dimId === "guess_state") {
+      if (tc !== "de") continue;
+      const has = typeof r?.guessState === "string" && r.guessState.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "guess_district") {
+      if (tc !== "de") continue;
+      const has = typeof r?.guessDistrict === "string" && r.guessDistrict.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "guess_us_state") {
+      if (tc !== "us") continue;
+      const has = typeof r?.guessUsState === "string" && r.guessUsState.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "guess_ca_province") {
+      if (tc !== "ca") continue;
+      const has = typeof r?.guessCaProvince === "string" && r.guessCaProvince.trim().length > 0;
+      if (!has) todo.push(r);
     } else if (dimId === "true_id_province") {
       if (tc !== "id") continue;
       const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
@@ -77,13 +128,31 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
       if (tc !== "vn") continue;
       const has = typeof r?.trueVnProvince === "string" && r.trueVnProvince.trim().length > 0;
       if (!has) todo.push(r);
+    } else if (dimId === "guess_id_province") {
+      if (tc !== "id") continue;
+      const has = typeof r?.guessIdProvince === "string" && r.guessIdProvince.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "guess_id_kabupaten") {
+      if (tc !== "id") continue;
+      const has = typeof r?.guessIdKabupaten === "string" && r.guessIdKabupaten.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "guess_ph_province") {
+      if (tc !== "ph") continue;
+      const has = typeof r?.guessPhProvince === "string" && r.guessPhProvince.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "guess_vn_province") {
+      if (tc !== "vn") continue;
+      const has = typeof r?.guessVnProvince === "string" && r.guessVnProvince.trim().length > 0;
+      if (!has) todo.push(r);
     }
   }
   if (todo.length === 0) return;
 
   await runPool(todo, 6, async (r) => {
+    const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
     const lat = r.trueLat as number;
     const lng = r.trueLng as number;
+    const g = guessLatLngOf(r);
     if (dimId === "true_state") {
       const s = await resolveDeStateByLatLng(lat, lng);
       if (s) r.trueState = s;
@@ -96,6 +165,18 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
     } else if (dimId === "true_ca_province") {
       const p = await resolveCaProvinceByLatLng(lat, lng);
       if (p) r.trueCaProvince = p;
+    } else if (dimId === "guess_state" && g && tc === "de") {
+      const s = await resolveDeStateByLatLng(g.lat, g.lng);
+      if (s) r.guessState = s;
+    } else if (dimId === "guess_district" && g && tc === "de") {
+      const d = await resolveDeDistrictByLatLng(g.lat, g.lng);
+      if (d) r.guessDistrict = d;
+    } else if (dimId === "guess_us_state" && g && tc === "us") {
+      const s = await resolveUsStateByLatLng(g.lat, g.lng);
+      if (s) r.guessUsState = s;
+    } else if (dimId === "guess_ca_province" && g && tc === "ca") {
+      const p = await resolveCaProvinceByLatLng(g.lat, g.lng);
+      if (p) r.guessCaProvince = p;
     } else if (dimId === "true_id_province") {
       const p = await resolveIdProvinceByLatLng(lat, lng);
       if (p) r.trueIdProvince = p;
@@ -108,6 +189,18 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
     } else if (dimId === "true_vn_province") {
       const p = await resolveVnProvinceByLatLng(lat, lng);
       if (p) r.trueVnProvince = p;
+    } else if (dimId === "guess_id_province" && g && tc === "id") {
+      const p = await resolveIdProvinceByLatLng(g.lat, g.lng);
+      if (p) r.guessIdProvince = p;
+    } else if (dimId === "guess_id_kabupaten" && g && tc === "id") {
+      const k = await resolveIdKabupatenByLatLng(g.lat, g.lng);
+      if (k) r.guessIdKabupaten = k;
+    } else if (dimId === "guess_ph_province" && g && tc === "ph") {
+      const p = await resolvePhProvinceByLatLng(g.lat, g.lng);
+      if (p) r.guessPhProvince = p;
+    } else if (dimId === "guess_vn_province" && g && tc === "vn") {
+      const p = await resolveVnProvinceByLatLng(g.lat, g.lng);
+      if (p) r.guessVnProvince = p;
     }
   });
 }

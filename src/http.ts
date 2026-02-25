@@ -1,3 +1,5 @@
+import { getGmXmlhttpRequest, hasGmXmlhttpRequest } from "./gm";
+
 type HttpResult = {
   status: number;
   text: string;
@@ -18,13 +20,10 @@ function readNcfaFromDocumentCookie(): string | undefined {
   return undefined;
 }
 
-function hasGmXhr(): boolean {
-  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
-}
-
 function gmRequest(url: string, opts?: { ncfa?: string; headers?: Record<string, string> }): Promise<HttpResult> {
   return new Promise((resolve, reject) => {
-    const gm = (globalThis as any).GM_xmlhttpRequest;
+    const gm = getGmXmlhttpRequest();
+    if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
     const headers: Record<string, string> = {
       Accept: "application/json",
       ...(opts?.headers || {})
@@ -53,7 +52,7 @@ function gmRequest(url: string, opts?: { ncfa?: string; headers?: Record<string,
 
 export async function httpGetJson(url: string, opts?: { ncfa?: string; forceGm?: boolean; headers?: Record<string, string> }): Promise<{ status: number; data: any }> {
   const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
-  if ((opts?.forceGm || ncfa) && hasGmXhr()) {
+  if ((opts?.forceGm || ncfa) && hasGmXmlhttpRequest()) {
     const res = await gmRequest(url, { ncfa, headers: opts?.headers });
     return { status: res.status, data: res.json() };
   }

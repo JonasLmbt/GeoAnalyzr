@@ -8,51 +8,7 @@ import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { maybeEnrichRoundRowsForDimension } from "../../engine/regionEnrichment";
 import { DrilldownOverlay } from "../drilldownOverlay";
-
-function hasGmXhr(): boolean {
-  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
-}
-
-function gmGetText(url: string, accept?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const gm = (globalThis as any).GM_xmlhttpRequest;
-    gm({
-      method: "GET",
-      url,
-      headers: { Accept: accept ?? "application/json" },
-      onload: (res: any) => {
-        const status = typeof res?.status === "number" ? res.status : 0;
-        if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
-        resolve(typeof res?.responseText === "string" ? res.responseText : "");
-      },
-      onerror: (err: any) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
-      ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-    });
-  });
-}
-
-async function fetchJson(url: string): Promise<any> {
-  if (hasGmXhr()) {
-    try {
-      const txt = await gmGetText(url, "application/json");
-      return JSON.parse(txt);
-    } catch {
-      // Fall back to fetch() for environments where GM_xhr is blocked by @connect permissions.
-    }
-  }
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
-}
-
-let geojsonCache = new Map<string, Promise<any>>();
-function loadGeoJson(url: string): Promise<any> {
-  const existing = geojsonCache.get(url);
-  if (existing) return existing;
-  const p = fetchJson(url);
-  geojsonCache.set(url, p);
-  return p;
-}
+import { loadGeoJson } from "../../geo/geoJsonFetch";
 
 type Viewport = { scale: number; tx: number; ty: number };
 

@@ -1,45 +1,11 @@
+import { loadGeoJson } from "./geoJsonFetch";
+
 const ID_PROVINCES_GEOJSON_URL =
   "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
 const ID_KABUPATEN_GEOJSON_URL =
   "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
 
 type BBox = { minLon: number; minLat: number; maxLon: number; maxLat: number };
-
-function hasGmXhr(): boolean {
-  return typeof (globalThis as any).GM_xmlhttpRequest === "function";
-}
-
-function gmGetText(url: string, accept?: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const gm = (globalThis as any).GM_xmlhttpRequest;
-    gm({
-      method: "GET",
-      url,
-      headers: { Accept: accept ?? "application/json" },
-      onload: (res: any) => {
-        const status = typeof res?.status === "number" ? res.status : 0;
-        if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
-        resolve(typeof res?.responseText === "string" ? res.responseText : "");
-      },
-      onerror: (err: any) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
-      ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-    });
-  });
-}
-
-async function fetchJson(url: string): Promise<any> {
-  if (hasGmXhr()) {
-    try {
-      const txt = await gmGetText(url, "application/json");
-      return JSON.parse(txt);
-    } catch {
-      // Fall back to fetch() for environments where GM_xhr is blocked by @connect permissions.
-    }
-  }
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
-}
 
 function bboxForCoords(coords: any, bbox: BBox): void {
   if (!Array.isArray(coords)) return;
@@ -112,7 +78,7 @@ let kabupatenIndexPromise: Promise<FeatureIndexItem[]> | null = null;
 async function loadProvincesIndex(): Promise<FeatureIndexItem[]> {
   if (!provincesIndexPromise) {
     provincesIndexPromise = (async () => {
-      const geo = await fetchJson(ID_PROVINCES_GEOJSON_URL);
+      const geo = await loadGeoJson(ID_PROVINCES_GEOJSON_URL);
       const feats = Array.isArray(geo?.features) ? geo.features : [];
       const out: FeatureIndexItem[] = [];
       for (const f of feats) {
@@ -130,7 +96,7 @@ async function loadProvincesIndex(): Promise<FeatureIndexItem[]> {
 async function loadKabupatenIndex(): Promise<FeatureIndexItem[]> {
   if (!kabupatenIndexPromise) {
     kabupatenIndexPromise = (async () => {
-      const geo = await fetchJson(ID_KABUPATEN_GEOJSON_URL);
+      const geo = await loadGeoJson(ID_KABUPATEN_GEOJSON_URL);
       const feats = Array.isArray(geo?.features) ? geo.features : [];
       const out: FeatureIndexItem[] = [];
       for (const f of feats) {

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.19
+// @version      2.2.20
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -51,10 +51,10 @@
       })(exports, (function() {
         "use strict";
         var extendStatics = function(d, b) {
-          extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
-            d2.__proto__ = b2;
-          } || function(d2, b2) {
-            for (var p in b2) if (Object.prototype.hasOwnProperty.call(b2, p)) d2[p] = b2[p];
+          extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b3) {
+            d2.__proto__ = b3;
+          } || function(d2, b3) {
+            for (var p in b3) if (Object.prototype.hasOwnProperty.call(b3, p)) d2[p] = b3[p];
           };
           return extendStatics(d, b);
         };
@@ -666,10 +666,10 @@
             if (arguments.length === 1)
               return this.then(null, onRejected);
             var type2 = arguments[0], handler = arguments[1];
-            return typeof type2 === "function" ? this.then(null, function(err) {
-              return err instanceof type2 ? handler(err) : PromiseReject(err);
-            }) : this.then(null, function(err) {
-              return err && err.name === type2 ? handler(err) : PromiseReject(err);
+            return typeof type2 === "function" ? this.then(null, function(err2) {
+              return err2 instanceof type2 ? handler(err2) : PromiseReject(err2);
+            }) : this.then(null, function(err2) {
+              return err2 && err2.name === type2 ? handler(err2) : PromiseReject(err2);
             });
           },
           finally: function(onFinally) {
@@ -677,9 +677,9 @@
               return DexiePromise.resolve(onFinally()).then(function() {
                 return value;
               });
-            }, function(err) {
+            }, function(err2) {
               return DexiePromise.resolve(onFinally()).then(function() {
-                return PromiseReject(err);
+                return PromiseReject(err2);
               });
             });
           },
@@ -1185,7 +1185,7 @@
               if (mode === "readwrite")
                 try {
                   trans.idbtrans.commit();
-                } catch (_a2) {
+                } catch (_a3) {
                 }
               return mode === "readonly" ? result : trans._completion.then(function() {
                 return result;
@@ -1262,7 +1262,7 @@
               case "Array":
                 return compareArrays(a, b);
             }
-          } catch (_a2) {
+          } catch (_a3) {
           }
           return NaN;
         }
@@ -1311,8 +1311,8 @@
             keys3 = keys3.filter(function(_, i) {
               return !res.failures[i];
             });
-          return Promise.all(yProps.map(function(_a2) {
-            var updatesTable = _a2.updatesTable;
+          return Promise.all(yProps.map(function(_a3) {
+            var updatesTable = _a3.updatesTable;
             return keys3 ? table.db.table(updatesTable).where("k").anyOf(keys3).delete() : table.db.table(updatesTable).clear();
           })).then(function() {
             return res;
@@ -1323,7 +1323,7 @@
             this["@@propmod"] = spec;
           }
           PropModification3.prototype.execute = function(value) {
-            var _a2;
+            var _a3;
             var spec = this["@@propmod"];
             if (spec.add !== void 0) {
               var term = spec.add;
@@ -1335,7 +1335,7 @@
               if (typeof term === "bigint") {
                 try {
                   return BigInt(value) + term;
-                } catch (_b) {
+                } catch (_b2) {
                   return BigInt(0) + term;
                 }
               }
@@ -1359,7 +1359,7 @@
               }
               throw new TypeError("Invalid subtrahend ".concat(subtrahend_1));
             }
-            var prefixToReplace = (_a2 = spec.replacePrefix) === null || _a2 === void 0 ? void 0 : _a2[0];
+            var prefixToReplace = (_a3 = spec.replacePrefix) === null || _a3 === void 0 ? void 0 : _a3[0];
             if (prefixToReplace && typeof value === "string" && value.startsWith(prefixToReplace)) {
               return spec.replacePrefix[1] + value.substring(prefixToReplace.length);
             }
@@ -1404,9 +1404,9 @@
               }, { trans, transless: PSD.transless || PSD }) : tempTransaction(this.db, mode, [this.name], checkTableInTransaction);
               if (task2) {
                 p._consoleTask = task2;
-                p = p.catch(function(err) {
-                  console.trace(err);
-                  return rejection(err);
+                p = p.catch(function(err2) {
+                  console.trace(err2);
+                  return rejection(err2);
                 });
               }
               return p;
@@ -1461,8 +1461,8 @@
             function equals(a, b) {
               return cmp2(a, b) === 0;
             }
-            var _a2 = keyPaths.reduce(function(_a3, keyPath) {
-              var prevIndex = _a3[0], prevFilterFn = _a3[1];
+            var _a3 = keyPaths.reduce(function(_a4, keyPath) {
+              var prevIndex = _a4[0], prevFilterFn = _a4[1];
               var index = idxByName[keyPath];
               var value = indexOrCrit[keyPath];
               return [
@@ -1476,7 +1476,7 @@
                   return equals(value, getByKeyPath(x, keyPath));
                 }) : prevFilterFn
               ];
-            }, [null, null]), idx = _a2[0], filterFunction = _a2[1];
+            }, [null, null]), idx = _a3[0], filterFunction = _a3[1];
             return idx ? this.where(idx.name).equals(indexOrCrit[idx.keyPath]).filter(filterFunction) : compoundIndex ? this.filter(filterFunction) : this.where(keyPaths).equals("");
           };
           Table3.prototype.filter = function(filterFunction) {
@@ -1507,7 +1507,7 @@
             return this.toCollection().reverse();
           };
           Table3.prototype.mapToClass = function(constructor) {
-            var _a2 = this, db2 = _a2.db, tableName = _a2.name;
+            var _a3 = this, db2 = _a3.db, tableName = _a3.name;
             this.schema.mappedClass = constructor;
             if (constructor.prototype instanceof Entity2) {
               constructor = (function(_super) {
@@ -1561,7 +1561,7 @@
           };
           Table3.prototype.add = function(obj, key) {
             var _this = this;
-            var _a2 = this.schema.primKey, auto = _a2.auto, keyPath = _a2.keyPath;
+            var _a3 = this.schema.primKey, auto = _a3.auto, keyPath = _a3.keyPath;
             var objToAdd = obj;
             if (keyPath && auto) {
               objToAdd = workaroundForUndefinedPrimKey(keyPath)(obj);
@@ -1614,7 +1614,7 @@
           };
           Table3.prototype.put = function(obj, key) {
             var _this = this;
-            var _a2 = this.schema.primKey, auto = _a2.auto, keyPath = _a2.keyPath;
+            var _a3 = this.schema.primKey, auto = _a3.auto, keyPath = _a3.keyPath;
             var objToAdd = obj;
             if (keyPath && auto) {
               objToAdd = workaroundForUndefinedPrimKey(keyPath)(obj);
@@ -1672,15 +1672,15 @@
             options = options || (keys3 ? void 0 : keysOrOptions);
             var wantResults = options ? options.allKeys : void 0;
             return this._trans("readwrite", function(trans) {
-              var _a2 = _this.schema.primKey, auto = _a2.auto, keyPath = _a2.keyPath;
+              var _a3 = _this.schema.primKey, auto = _a3.auto, keyPath = _a3.keyPath;
               if (keyPath && keys3)
                 throw new exceptions.InvalidArgument("bulkAdd(): keys argument invalid on tables with inbound keys");
               if (keys3 && keys3.length !== objects.length)
                 throw new exceptions.InvalidArgument("Arguments objects and keys must have the same length");
               var numObjects = objects.length;
               var objectsToAdd = keyPath && auto ? objects.map(workaroundForUndefinedPrimKey(keyPath)) : objects;
-              return _this.core.mutate({ trans, type: "add", keys: keys3, values: objectsToAdd, wantResults }).then(function(_a3) {
-                var numFailures = _a3.numFailures, results = _a3.results, lastResult = _a3.lastResult, failures = _a3.failures;
+              return _this.core.mutate({ trans, type: "add", keys: keys3, values: objectsToAdd, wantResults }).then(function(_a4) {
+                var numFailures = _a4.numFailures, results = _a4.results, lastResult = _a4.lastResult, failures = _a4.failures;
                 var result = wantResults ? results : lastResult;
                 if (numFailures === 0)
                   return result;
@@ -1694,15 +1694,15 @@
             options = options || (keys3 ? void 0 : keysOrOptions);
             var wantResults = options ? options.allKeys : void 0;
             return this._trans("readwrite", function(trans) {
-              var _a2 = _this.schema.primKey, auto = _a2.auto, keyPath = _a2.keyPath;
+              var _a3 = _this.schema.primKey, auto = _a3.auto, keyPath = _a3.keyPath;
               if (keyPath && keys3)
                 throw new exceptions.InvalidArgument("bulkPut(): keys argument invalid on tables with inbound keys");
               if (keys3 && keys3.length !== objects.length)
                 throw new exceptions.InvalidArgument("Arguments objects and keys must have the same length");
               var numObjects = objects.length;
               var objectsToPut = keyPath && auto ? objects.map(workaroundForUndefinedPrimKey(keyPath)) : objects;
-              return _this.core.mutate({ trans, type: "put", keys: keys3, values: objectsToPut, wantResults }).then(function(_a3) {
-                var numFailures = _a3.numFailures, results = _a3.results, lastResult = _a3.lastResult, failures = _a3.failures;
+              return _this.core.mutate({ trans, type: "put", keys: keys3, values: objectsToPut, wantResults }).then(function(_a4) {
+                var numFailures = _a4.numFailures, results = _a4.results, lastResult = _a4.lastResult, failures = _a4.failures;
                 var result = wantResults ? results : lastResult;
                 if (numFailures === 0)
                   return result;
@@ -1724,12 +1724,12 @@
               return coreTable.getMany({ trans, keys: keys3, cache: "clone" }).then(function(objs) {
                 var resultKeys = [];
                 var resultObjs = [];
-                keysAndChanges.forEach(function(_a2, idx) {
-                  var key = _a2.key, changes = _a2.changes;
+                keysAndChanges.forEach(function(_a3, idx) {
+                  var key = _a3.key, changes = _a3.changes;
                   var obj = objs[idx];
                   if (obj) {
-                    for (var _i = 0, _b = Object.keys(changes); _i < _b.length; _i++) {
-                      var keyPath = _b[_i];
+                    for (var _i = 0, _b2 = Object.keys(changes); _i < _b2.length; _i++) {
+                      var keyPath = _b2[_i];
                       var value = changes[keyPath];
                       if (keyPath === _this.schema.primKey.keyPath) {
                         if (cmp2(value, key) !== 0) {
@@ -1754,12 +1754,12 @@
                     keys: keys3,
                     changeSpecs
                   }
-                }).then(function(_a2) {
-                  var numFailures = _a2.numFailures, failures = _a2.failures;
+                }).then(function(_a3) {
+                  var numFailures = _a3.numFailures, failures = _a3.failures;
                   if (numFailures === 0)
                     return numEntries;
-                  for (var _i = 0, _b = Object.keys(failures); _i < _b.length; _i++) {
-                    var offset = _b[_i];
+                  for (var _i = 0, _b2 = Object.keys(failures); _i < _b2.length; _i++) {
+                    var offset = _b2[_i];
                     var mappedOffset = offsetMap[Number(offset)];
                     if (mappedOffset != null) {
                       var failure = failures[offset];
@@ -1779,8 +1779,8 @@
               return _this.core.mutate({ trans, type: "delete", keys: keys3 }).then(function(res) {
                 return builtInDeletionTrigger(_this, keys3, res);
               });
-            }).then(function(_a2) {
-              var numFailures = _a2.numFailures, lastResult = _a2.lastResult, failures = _a2.failures;
+            }).then(function(_a3) {
+              var numFailures = _a3.numFailures, lastResult = _a3.lastResult, failures = _a3.failures;
               if (numFailures === 0)
                 return lastResult;
               throw new BulkError("".concat(_this.name, ".bulkDelete(): ").concat(numFailures, " of ").concat(numKeys, " operations failed"), failures);
@@ -1917,8 +1917,8 @@
             var union = function(item, cursor, advance) {
               if (!filter || filter(cursor, advance, function(result) {
                 return cursor.stop(result);
-              }, function(err) {
-                return cursor.fail(err);
+              }, function(err2) {
+                return cursor.fail(err2);
               })) {
                 var primaryKey = cursor.primaryKey;
                 var key = "" + primaryKey;
@@ -2056,8 +2056,8 @@
                     index,
                     range: ctx.range
                   }
-                }).then(function(_a2) {
-                  var result = _a2.result;
+                }).then(function(_a3) {
+                  var result = _a3.result;
                   return valueMapper_1 ? result.map(valueMapper_1) : result;
                 });
               } else {
@@ -2197,8 +2197,8 @@
                     range: ctx.range
                   }
                 });
-              }).then(function(_a2) {
-                var result = _a2.result;
+              }).then(function(_a3) {
+                var result = _a3.result;
                 return result;
               }).then(cb);
             }
@@ -2248,7 +2248,7 @@
                 };
               }
               var coreTable = ctx.table.core;
-              var _a2 = coreTable.schema.primaryKey, outbound = _a2.outbound, extractKey = _a2.extractKey;
+              var _a3 = coreTable.schema.primaryKey, outbound = _a3.outbound, extractKey = _a3.extractKey;
               var limit = 200;
               var modifyChunkSize = _this.db._options.modifyChunkSize;
               if (modifyChunkSize) {
@@ -2264,8 +2264,8 @@
               var applyMutateResult = function(expectedCount, res) {
                 var failures = res.failures, numFailures = res.numFailures;
                 successCount += expectedCount - numFailures;
-                for (var _i = 0, _a3 = keys2(failures); _i < _a3.length; _i++) {
-                  var pos = _a3[_i];
+                for (var _i = 0, _a4 = keys2(failures); _i < _a4.length; _i++) {
+                  var pos = _a4[_i];
                   totalFailures.push(failures[pos]);
                 }
               };
@@ -2356,8 +2356,8 @@
                 var primaryKey = ctx.table.core.schema.primaryKey;
                 var coreRange = range;
                 return ctx.table.core.count({ trans, query: { index: primaryKey, range: coreRange } }).then(function(count) {
-                  return ctx.table.core.mutate({ trans, type: "deleteRange", range: coreRange }).then(function(_a2) {
-                    var failures = _a2.failures, numFailures = _a2.numFailures;
+                  return ctx.table.core.mutate({ trans, type: "deleteRange", range: coreRange }).then(function(_a3) {
+                    var failures = _a3.failures, numFailures = _a3.numFailures;
                     if (numFailures)
                       throw new ModifyError("Could not delete some values", Object.keys(failures).map(function(pos) {
                         return failures[pos];
@@ -2414,9 +2414,9 @@
         function simpleCompareReverse(a, b) {
           return a > b ? -1 : a === b ? 0 : 1;
         }
-        function fail(collectionOrWhereClause, err, T) {
+        function fail(collectionOrWhereClause, err2, T) {
           var collection = collectionOrWhereClause instanceof WhereClause ? new collectionOrWhereClause.Collection(collectionOrWhereClause) : collectionOrWhereClause;
-          collection._ctx.error = T ? new T(err) : new TypeError(err);
+          collection._ctx.error = T ? new T(err2) : new TypeError(err2);
           return collection;
         }
         function emptyCollection(whereClause) {
@@ -2691,7 +2691,7 @@
           };
           WhereClause2.prototype.inAnyRange = function(ranges, options) {
             var _this = this;
-            var cmp3 = this._cmp, ascending = this._ascending, descending = this._descending, min = this._min, max = this._max;
+            var cmp3 = this._cmp, ascending = this._ascending, descending = this._descending, min = this._min, max2 = this._max;
             if (ranges.length === 0)
               return emptyCollection(this);
             if (!ranges.every(function(range) {
@@ -2707,7 +2707,7 @@
                 var range = ranges2[i];
                 if (cmp3(newRange[0], range[1]) < 0 && cmp3(newRange[1], range[0]) > 0) {
                   range[0] = min(range[0], newRange[0]);
-                  range[1] = max(range[1], newRange[1]);
+                  range[1] = max2(range[1], newRange[1]);
                   break;
                 }
               }
@@ -2963,8 +2963,8 @@
             return new DexiePromise(function(resolve, reject) {
               promise.then(function(res) {
                 return root._waitingQueue.push(wrap(resolve.bind(null, res)));
-              }, function(err) {
-                return root._waitingQueue.push(wrap(reject.bind(null, err)));
+              }, function(err2) {
+                return root._waitingQueue.push(wrap(reject.bind(null, err2)));
               }).finally(function() {
                 if (root._waitingFor === currentWaitPromise) {
                   root._waitingFor = null;
@@ -3000,8 +3000,8 @@
             var _this = this;
             if (mode !== "readonly")
               storeNames.forEach(function(storeName) {
-                var _a2;
-                var yProps = (_a2 = dbschema[storeName]) === null || _a2 === void 0 ? void 0 : _a2.yProps;
+                var _a3;
+                var yProps = (_a3 = dbschema[storeName]) === null || _a3 === void 0 ? void 0 : _a3.yProps;
                 if (yProps)
                   storeNames = storeNames.concat(yProps.map(function(p) {
                     return p.updatesTable;
@@ -3180,8 +3180,8 @@
           }
           function createDbCoreTable(tableSchema) {
             var tableName = tableSchema.name;
-            function mutate(_a3) {
-              var trans = _a3.trans, type2 = _a3.type, keys3 = _a3.keys, values = _a3.values, range = _a3.range;
+            function mutate(_a4) {
+              var trans = _a4.trans, type2 = _a4.type, keys3 = _a4.keys, values = _a4.values, range = _a4.range;
               return new Promise(function(resolve, reject) {
                 resolve = wrap(resolve);
                 var store = trans.objectStore(tableName);
@@ -3211,7 +3211,7 @@
                   else
                     reqs.push(req = store.delete(makeIDBKeyRange(range)));
                 } else {
-                  var _a4 = isAddOrPut ? outbound ? [values, keys3] : [values, null] : [keys3, null], args1 = _a4[0], args2 = _a4[1];
+                  var _a5 = isAddOrPut ? outbound ? [values, keys3] : [values, null] : [keys3, null], args1 = _a5[0], args2 = _a5[1];
                   if (isAddOrPut) {
                     for (var i = 0; i < length; ++i) {
                       reqs.push(req = args2 && args2[i] !== void 0 ? store[type2](args1[i], args2[i]) : store[type2](args1[i]));
@@ -3245,8 +3245,8 @@
                 req.onsuccess = done;
               });
             }
-            function openCursor2(_a3) {
-              var trans = _a3.trans, values = _a3.values, query2 = _a3.query, reverse = _a3.reverse, unique = _a3.unique;
+            function openCursor2(_a4) {
+              var trans = _a4.trans, values = _a4.values, query2 = _a4.query, reverse = _a4.reverse, unique = _a4.unique;
               return new Promise(function(resolve, reject) {
                 resolve = wrap(resolve);
                 var index = query2.index, range = query2.range;
@@ -3300,8 +3300,8 @@
                       if (req.result) {
                         try {
                           callback();
-                        } catch (err) {
-                          cursor.fail(err);
+                        } catch (err2) {
+                          cursor.fail(err2);
                         }
                       } else {
                         cursor.done = true;
@@ -3365,8 +3365,8 @@
               name: tableName,
               schema: tableSchema,
               mutate,
-              getMany: function(_a3) {
-                var trans = _a3.trans, keys3 = _a3.keys;
+              getMany: function(_a4) {
+                var trans = _a4.trans, keys3 = _a4.keys;
                 return new Promise(function(resolve, reject) {
                   resolve = wrap(resolve);
                   var store = trans.objectStore(tableName);
@@ -3397,8 +3397,8 @@
                     resolve(result);
                 });
               },
-              get: function(_a3) {
-                var trans = _a3.trans, key = _a3.key;
+              get: function(_a4) {
+                var trans = _a4.trans, key = _a4.key;
                 return new Promise(function(resolve, reject) {
                   resolve = wrap(resolve);
                   var store = trans.objectStore(tableName);
@@ -3411,8 +3411,8 @@
               },
               query: query(hasGetAll),
               openCursor: openCursor2,
-              count: function(_a3) {
-                var query2 = _a3.query, trans = _a3.trans;
+              count: function(_a4) {
+                var query2 = _a4.query, trans = _a4.trans;
                 var index = query2.index, range = query2.range;
                 return new Promise(function(resolve, reject) {
                   var store = trans.objectStore(tableName);
@@ -3427,7 +3427,7 @@
               }
             };
           }
-          var _a2 = extractSchema(db2, tmpTrans), schema = _a2.schema, hasGetAll = _a2.hasGetAll;
+          var _a3 = extractSchema(db2, tmpTrans), schema = _a3.schema, hasGetAll = _a3.hasGetAll;
           var tables = schema.tables.map(function(tableSchema) {
             return createDbCoreTable(tableSchema);
           });
@@ -3450,14 +3450,14 @@
           };
         }
         function createMiddlewareStack(stackImpl, middlewares) {
-          return middlewares.reduce(function(down, _a2) {
-            var create = _a2.create;
+          return middlewares.reduce(function(down, _a3) {
+            var create = _a3.create;
             return __assign(__assign({}, down), create(down));
           }, stackImpl);
         }
-        function createMiddlewareStacks(middlewares, idbdb, _a2, tmpTrans) {
-          var IDBKeyRange = _a2.IDBKeyRange;
-          _a2.indexedDB;
+        function createMiddlewareStacks(middlewares, idbdb, _a3, tmpTrans) {
+          var IDBKeyRange = _a3.IDBKeyRange;
+          _a3.indexedDB;
           var dbcore = createMiddlewareStack(createDBCore(idbdb, IDBKeyRange, tmpTrans), middlewares.dbcore);
           return {
             dbcore
@@ -3562,8 +3562,8 @@
               addIndex(store, idx);
             });
           };
-          for (var _i = 0, _a2 = diff.change; _i < _a2.length; _i++) {
-            var tableChange = _a2[_i];
+          for (var _i = 0, _a3 = diff.change; _i < _a3.length; _i++) {
+            var tableChange = _a3[_i];
             var state_1 = _loop_1(tableChange);
             if (typeof state_1 === "object")
               return state_1.value;
@@ -3805,9 +3805,9 @@
         }
         function parseIndexSyntax(primKeyAndIndexes) {
           return primKeyAndIndexes.split(",").map(function(index, indexNum) {
-            var _a2;
+            var _a3;
             var typeSplit = index.split(":");
-            var type2 = (_a2 = typeSplit[1]) === null || _a2 === void 0 ? void 0 : _a2.trim();
+            var type2 = (_a3 = typeSplit[1]) === null || _a3 === void 0 ? void 0 : _a3.trim();
             index = typeSplit[0].trim();
             var name = index.replace(/([&*]|\+\+)/g, "");
             var keyPath = /^\[/.test(name) ? name.match(/^\[(.*)\]$/)[1].split("+") : name;
@@ -3896,8 +3896,8 @@
         function hasDatabasesNative(indexedDB2) {
           return indexedDB2 && typeof indexedDB2.databases === "function";
         }
-        function getDatabaseNames(_a2) {
-          var indexedDB2 = _a2.indexedDB, IDBKeyRange = _a2.IDBKeyRange;
+        function getDatabaseNames(_a3) {
+          var indexedDB2 = _a3.indexedDB, IDBKeyRange = _a3.IDBKeyRange;
           return hasDatabasesNative(indexedDB2) ? Promise.resolve(indexedDB2.databases()).then(function(infos) {
             return infos.map(function(info) {
               return info.name;
@@ -3906,12 +3906,12 @@
             });
           }) : getDbNamesTable(indexedDB2, IDBKeyRange).toCollection().primaryKeys();
         }
-        function _onDatabaseCreated(_a2, name) {
-          var indexedDB2 = _a2.indexedDB, IDBKeyRange = _a2.IDBKeyRange;
+        function _onDatabaseCreated(_a3, name) {
+          var indexedDB2 = _a3.indexedDB, IDBKeyRange = _a3.IDBKeyRange;
           !hasDatabasesNative(indexedDB2) && name !== DBNAMES_DB && getDbNamesTable(indexedDB2, IDBKeyRange).put({ name }).catch(nop);
         }
-        function _onDatabaseDeleted(_a2, name) {
-          var indexedDB2 = _a2.indexedDB, IDBKeyRange = _a2.IDBKeyRange;
+        function _onDatabaseDeleted(_a3, name) {
+          var indexedDB2 = _a3.indexedDB, IDBKeyRange = _a3.IDBKeyRange;
           !hasDatabasesNative(indexedDB2) && name !== DBNAMES_DB && getDbNamesTable(indexedDB2, IDBKeyRange).delete(name).catch(nop);
         }
         function vip(fn) {
@@ -3935,7 +3935,7 @@
             return clearInterval(intervalId);
           });
         }
-        var _a;
+        var _a2;
         function isEmptyRange(node) {
           return !("from" in node);
         }
@@ -3950,7 +3950,7 @@
             return rv;
           }
         };
-        props(RangeSet2.prototype, (_a = {
+        props(RangeSet2.prototype, (_a2 = {
           add: function(rangeSet) {
             mergeRanges2(this, rangeSet);
             return this;
@@ -3970,9 +3970,9 @@
             var node = getRangeSetIterator(this).next(key).value;
             return node && cmp2(node.from, key) <= 0 && cmp2(node.to, key) >= 0;
           }
-        }, _a[iteratorSymbol] = function() {
+        }, _a2[iteratorSymbol] = function() {
           return getRangeSetIterator(this);
-        }, _a));
+        }, _a2));
         function addRange(target, from, to) {
           var diff = cmp2(from, to);
           if (isNaN(diff))
@@ -4010,8 +4010,8 @@
           }
         }
         function mergeRanges2(target, newSet) {
-          function _addRangeSet(target2, _a2) {
-            var from = _a2.from, to = _a2.to, l = _a2.l, r = _a2.r;
+          function _addRangeSet(target2, _a3) {
+            var from = _a3.from, to = _a3.to, l = _a3.l, r = _a3.r;
             addRange(target2, from, to);
             if (l)
               _addRangeSet(target2, l);
@@ -4072,8 +4072,8 @@
           };
         }
         function rebalance(target) {
-          var _a2, _b;
-          var diff = (((_a2 = target.r) === null || _a2 === void 0 ? void 0 : _a2.d) || 0) - (((_b = target.l) === null || _b === void 0 ? void 0 : _b.d) || 0);
+          var _a3, _b2;
+          var diff = (((_a3 = target.r) === null || _a3 === void 0 ? void 0 : _a3.d) || 0) - (((_b2 = target.l) === null || _b2 === void 0 ? void 0 : _b2.d) || 0);
           var r = diff > 1 ? "r" : diff < -1 ? "l" : "";
           if (r) {
             var l = r === "r" ? "l" : "r";
@@ -4088,8 +4088,8 @@
           }
           target.d = computeDepth(target);
         }
-        function computeDepth(_a2) {
-          var r = _a2.r, l = _a2.l;
+        function computeDepth(_a3) {
+          var r = _a3.r, l = _a3.l;
           return (r ? l ? Math.max(r.d, l.d) : r.d : l ? l.d : 0) + 1;
         }
         function extendObservabilitySet(target, newSet) {
@@ -4127,8 +4127,8 @@
           }
           var queriesToSignal = /* @__PURE__ */ new Set();
           if (updatedParts.all) {
-            for (var _i = 0, _a2 = Object.values(cache2); _i < _a2.length; _i++) {
-              var tblCache = _a2[_i];
+            for (var _i = 0, _a3 = Object.values(cache2); _i < _a3.length; _i++) {
+              var tblCache = _a3[_i];
               collectTableSubscribers(tblCache, updatedParts, queriesToSignal, deleteAffectedCacheEntries);
             }
           } else {
@@ -4148,8 +4148,8 @@
         }
         function collectTableSubscribers(tblCache, updatedParts, outQueriesToSignal, deleteAffectedCacheEntries) {
           var updatedEntryLists = [];
-          for (var _i = 0, _a2 = Object.entries(tblCache.queries.query); _i < _a2.length; _i++) {
-            var _b = _a2[_i], indexName = _b[0], entries2 = _b[1];
+          for (var _i = 0, _a3 = Object.entries(tblCache.queries.query); _i < _a3.length; _i++) {
+            var _b2 = _a3[_i], indexName = _b2[0], entries2 = _b2[1];
             var filteredEntries = [];
             for (var _c = 0, entries_1 = entries2; _c < entries_1.length; _c++) {
               var entry = entries_1[_c];
@@ -4255,8 +4255,8 @@
                   _onDatabaseCreated(db2._deps, dbName);
                 resolve();
               }, reject);
-            }).catch(function(err) {
-              switch (err === null || err === void 0 ? void 0 : err.name) {
+            }).catch(function(err2) {
+              switch (err2 === null || err2 === void 0 ? void 0 : err2.name) {
                 case "UnknownError":
                   if (state.PR1398_maxLoop > 0) {
                     state.PR1398_maxLoop--;
@@ -4271,7 +4271,7 @@
                   }
                   break;
               }
-              return DexiePromise.reject(err);
+              return DexiePromise.reject(err2);
             });
           };
           return DexiePromise.race([
@@ -4296,16 +4296,16 @@
               state.onReadyBeingFired = null;
               state.isBeingOpened = false;
             }
-          }).catch(function(err) {
-            state.dbOpenError = err;
+          }).catch(function(err2) {
+            state.dbOpenError = err2;
             try {
               upgradeTransaction && upgradeTransaction.abort();
-            } catch (_a2) {
+            } catch (_a3) {
             }
             if (openCanceller === state.openCanceller) {
               db2._close();
             }
-            return rejection(err);
+            return rejection(err2);
           }).finally(function() {
             state.openComplete = true;
             resolveDbReady();
@@ -4442,8 +4442,8 @@
             }
             var primaryKey = addVirtualIndexes(schema.primaryKey.keyPath, 0, schema.primaryKey);
             indexLookup[":id"] = [primaryKey];
-            for (var _i = 0, _a2 = schema.indexes; _i < _a2.length; _i++) {
-              var index = _a2[_i];
+            for (var _i = 0, _a3 = schema.indexes; _i < _a3.length; _i++) {
+              var index = _a3[_i];
               addVirtualIndexes(index.keyPath, 0, index);
             }
             function findBestIndex(keyPath) {
@@ -4471,7 +4471,7 @@
             }, query: function(req) {
               return table.query(translateRequest(req));
             }, openCursor: function(req) {
-              var _a3 = req.query.index, keyTail = _a3.keyTail, isVirtual = _a3.isVirtual, keyLength = _a3.keyLength;
+              var _a4 = req.query.index, keyTail = _a4.keyTail, isVirtual = _a4.isVirtual, keyLength = _a4.keyLength;
               if (!isVirtual)
                 return table.openCursor(req);
               function createVirtualCursor(cursor) {
@@ -4561,7 +4561,7 @@
               var primaryKey = downTable.schema.primaryKey;
               var tableMiddleware = __assign(__assign({}, downTable), { mutate: function(req) {
                 var dxTrans = PSD.trans;
-                var _a2 = dxTrans.table(tableName).hook, deleting = _a2.deleting, creating = _a2.creating, updating = _a2.updating;
+                var _a3 = dxTrans.table(tableName).hook, deleting = _a3.deleting, creating = _a3.creating, updating = _a3.updating;
                 switch (req.type) {
                   case "add":
                     if (creating.fire === nop)
@@ -4630,8 +4630,8 @@
                       }
                       return ctx;
                     });
-                    return downTable.mutate(req2).then(function(_a3) {
-                      var failures = _a3.failures, results = _a3.results, numFailures = _a3.numFailures, lastResult = _a3.lastResult;
+                    return downTable.mutate(req2).then(function(_a4) {
+                      var failures = _a4.failures, results = _a4.results, numFailures = _a4.numFailures, lastResult = _a4.lastResult;
                       for (var i = 0; i < keys3.length; ++i) {
                         var primKey = results ? results[i] : keys3[i];
                         var ctx = contexts[i];
@@ -4656,8 +4656,8 @@
                   return deleteNextChunk(req2.trans, req2.range, 1e4);
                 }
                 function deleteNextChunk(trans, range, limit) {
-                  return downTable.query({ trans, values: false, query: { index: primaryKey, range }, limit }).then(function(_a3) {
-                    var result = _a3.result;
+                  return downTable.query({ trans, values: false, query: { index: primaryKey, range }, limit }).then(function(_a4) {
+                    var result = _a4.result;
                     return addPutOrDelete({ type: "delete", keys: result, trans }).then(function(res) {
                       if (res.numFailures > 0)
                         return Promise.reject(res.failures[0]);
@@ -4691,7 +4691,7 @@
               ++j;
             }
             return result.length === keys3.length ? result : null;
-          } catch (_a2) {
+          } catch (_a3) {
             return null;
           }
         }
@@ -4764,7 +4764,7 @@
                 return index.compound && index.keyPath.includes(primaryKey.keyPath);
               });
               var tableClone = __assign(__assign({}, table), { mutate: function(req) {
-                var _a2, _b;
+                var _a3, _b2;
                 var trans = req.trans;
                 var mutatedParts = req.mutatedParts || (req.mutatedParts = {});
                 var getRangeSet = function(indexName) {
@@ -4789,8 +4789,8 @@
                   }
                 } else if (keys3) {
                   var range = {
-                    from: (_a2 = keys3.lower) !== null && _a2 !== void 0 ? _a2 : core.MIN_KEY,
-                    to: (_b = keys3.upper) !== null && _b !== void 0 ? _b : core.MAX_KEY
+                    from: (_a3 = keys3.lower) !== null && _a3 !== void 0 ? _a3 : core.MIN_KEY,
+                    to: (_b2 = keys3.upper) !== null && _b2 !== void 0 ? _b2 : core.MAX_KEY
                   };
                   delsRangeSet.add(range);
                   pkRangeSet.add(range);
@@ -4823,12 +4823,12 @@
                   return res;
                 });
               } });
-              var getRange = function(_a2) {
-                var _b, _c;
-                var _d = _a2.query, index = _d.index, range = _d.range;
+              var getRange = function(_a3) {
+                var _b2, _c;
+                var _d = _a3.query, index = _d.index, range = _d.range;
                 return [
                   index,
-                  new RangeSet2((_b = range.lower) !== null && _b !== void 0 ? _b : core.MIN_KEY, (_c = range.upper) !== null && _c !== void 0 ? _c : core.MAX_KEY)
+                  new RangeSet2((_b2 = range.lower) !== null && _b2 !== void 0 ? _b2 : core.MIN_KEY, (_c = range.upper) !== null && _c !== void 0 ? _c : core.MAX_KEY)
                 ];
               };
               var readSubscribers = {
@@ -4855,7 +4855,7 @@
                     };
                     var pkRangeSet_1 = getRangeSet("");
                     var delsRangeSet_1 = getRangeSet(":dels");
-                    var _a2 = readSubscribers[method](req), queriedIndex = _a2[0], queriedRanges = _a2[1];
+                    var _a3 = readSubscribers[method](req), queriedIndex = _a3[0], queriedRanges = _a3[1];
                     if (method === "query" && queriedIndex.isPrimaryKey && !req.values) {
                       delsRangeSet_1.add(queriedRanges);
                     } else {
@@ -4869,8 +4869,8 @@
                         return table[method].apply(this, arguments).then(function(res) {
                           if (method === "query") {
                             if (outbound && req.values) {
-                              return keysPromise_1.then(function(_a3) {
-                                var resultingKeys = _a3.result;
+                              return keysPromise_1.then(function(_a4) {
+                                var resultingKeys = _a4.result;
                                 pkRangeSet_1.addKeys(resultingKeys);
                                 return res;
                               });
@@ -5182,8 +5182,8 @@
                             return op.trans === idbtrans;
                           });
                           if (idbtrans._explicit && wasCommitted && idbtrans.mutatedParts) {
-                            for (var _a2 = 0, _b = Object.values(tblCache.queries.query); _a2 < _b.length; _a2++) {
-                              var entries2 = _b[_a2];
+                            for (var _a3 = 0, _b2 = Object.values(tblCache.queries.query); _a3 < _b2.length; _a3++) {
+                              var entries2 = _b2[_a3];
                               for (var _c = 0, _d = entries2.slice(); _c < _d.length; _c++) {
                                 var entry = _d[_c];
                                 if (obsSetsOverlap(entry.obsSet, idbtrans.mutatedParts)) {
@@ -5263,10 +5263,10 @@
                 }))) {
                   promise.then(function(res) {
                     var reqWithResolvedKeys = __assign(__assign({}, req), { values: req.values.map(function(value, i) {
-                      var _a2;
+                      var _a3;
                       if (res.failures[i])
                         return value;
-                      var valueWithKey = ((_a2 = primKey.keyPath) === null || _a2 === void 0 ? void 0 : _a2.includes(".")) ? deepClone(value) : __assign({}, value);
+                      var valueWithKey = ((_a3 = primKey.keyPath) === null || _a3 === void 0 ? void 0 : _a3.includes(".")) ? deepClone(value) : __assign({}, value);
                       setByKeyPath(valueWithKey, primKey.keyPath, res.results[i]);
                       return valueWithKey;
                     }) });
@@ -5296,11 +5296,11 @@
                 }
                 return promise;
               }, query: function(req) {
-                var _a2;
+                var _a3;
                 if (!isCachableContext(PSD, downTable) || !isCachableRequest("query", req))
                   return downTable.query(req);
-                var freezeResults = ((_a2 = PSD.trans) === null || _a2 === void 0 ? void 0 : _a2.db._options.cache) === "immutable";
-                var _b = PSD, requery = _b.requery, signal = _b.signal;
+                var freezeResults = ((_a3 = PSD.trans) === null || _a3 === void 0 ? void 0 : _a3.db._options.cache) === "immutable";
+                var _b2 = PSD, requery = _b2.requery, signal = _b2.signal;
                 var _c = findCompatibleQuery(dbName, tableName, "query", req), cacheEntry = _c[0], exactMatch = _c[1], tblCache = _c[2], container = _c[3];
                 if (cacheEntry && exactMatch) {
                   cacheEntry.obsSet = req.obsSet;
@@ -5551,8 +5551,8 @@
               _this._state.dbReadyPromise.then(resolve, reject);
             }).then(fn);
           };
-          Dexie3.prototype.use = function(_a2) {
-            var stack = _a2.stack, create = _a2.create, level = _a2.level, name = _a2.name;
+          Dexie3.prototype.use = function(_a3) {
+            var stack = _a3.stack, create = _a3.create, level = _a3.level, name = _a3.name;
             if (name)
               this.unuse({ stack, name });
             var middlewares = this._middlewares[stack] || (this._middlewares[stack] = []);
@@ -5562,8 +5562,8 @@
             });
             return this;
           };
-          Dexie3.prototype.unuse = function(_a2) {
-            var stack = _a2.stack, name = _a2.name, create = _a2.create;
+          Dexie3.prototype.unuse = function(_a3) {
+            var stack = _a3.stack, name = _a3.name, create = _a3.create;
             if (stack && this._middlewares[stack]) {
               this._middlewares[stack] = this._middlewares[stack].filter(function(mw) {
                 return create ? mw.create !== create : name ? mw.name !== name : false;
@@ -5602,8 +5602,8 @@
               });
             }
           };
-          Dexie3.prototype.close = function(_a2) {
-            var _b = _a2 === void 0 ? { disableAutoOpen: true } : _a2, disableAutoOpen = _b.disableAutoOpen;
+          Dexie3.prototype.close = function(_a3) {
+            var _b2 = _a3 === void 0 ? { disableAutoOpen: true } : _a3, disableAutoOpen = _b2.disableAutoOpen;
             var state = this._state;
             if (disableAutoOpen) {
               if (state.isBeingOpened) {
@@ -5842,14 +5842,14 @@
                 execInGlobalContext(function() {
                   return !closed && observer.next && observer.next(result);
                 });
-              }, function(err) {
+              }, function(err2) {
                 hasValue = false;
-                if (!["DatabaseClosedError", "AbortError"].includes(err === null || err === void 0 ? void 0 : err.name)) {
+                if (!["DatabaseClosedError", "AbortError"].includes(err2 === null || err2 === void 0 ? void 0 : err2.name)) {
                   if (!closed)
                     execInGlobalContext(function() {
                       if (closed)
                         return;
-                      observer.error && observer.error(err);
+                      observer.error && observer.error(err2);
                     });
                 }
               });
@@ -5882,7 +5882,7 @@
           getDatabaseNames: function(cb) {
             try {
               return getDatabaseNames(Dexie2.dependencies).then(cb);
-            } catch (_a2) {
+            } catch (_a3) {
               return rejection(new exceptions.MissingAPI());
             }
           },
@@ -5978,8 +5978,8 @@
               propagatingLocally = false;
             }
           });
-          addEventListener(STORAGE_MUTATED_DOM_EVENT_NAME, function(_a2) {
-            var detail = _a2.detail;
+          addEventListener(STORAGE_MUTATED_DOM_EVENT_NAME, function(_a3) {
+            var detail = _a3.detail;
             if (!propagatingLocally) {
               propagateLocally(detail);
             }
@@ -7234,6 +7234,29 @@ ${shapes}`.trim();
   };
   var db = new GGDB();
 
+  // src/gm.ts
+  function getGlobalGmXmlhttpRequest() {
+    const g = globalThis;
+    return g?.GM_xmlhttpRequest ?? g?.GM?.xmlHttpRequest;
+  }
+  function getSandboxGmXmlhttpRequest() {
+    try {
+      return typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  function getGmXmlhttpRequest() {
+    const fromGlobal = getGlobalGmXmlhttpRequest();
+    if (typeof fromGlobal === "function") return fromGlobal;
+    const fromSandbox = getSandboxGmXmlhttpRequest();
+    if (typeof fromSandbox === "function") return fromSandbox;
+    return void 0;
+  }
+  function hasGmXmlhttpRequest() {
+    return typeof getGmXmlhttpRequest() === "function";
+  }
+
   // src/http.ts
   function readNcfaFromDocumentCookie() {
     if (typeof document === "undefined") return void 0;
@@ -7248,12 +7271,10 @@ ${shapes}`.trim();
     }
     return void 0;
   }
-  function hasGmXhr() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
   function gmRequest(url, opts) {
     return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
       const headers = {
         Accept: "application/json",
         ...opts?.headers || {}
@@ -7272,8 +7293,8 @@ ${shapes}`.trim();
             json: () => JSON.parse(text)
           });
         },
-        onerror: (err) => {
-          reject(err);
+        onerror: (err2) => {
+          reject(err2);
         },
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
@@ -7281,7 +7302,7 @@ ${shapes}`.trim();
   }
   async function httpGetJson(url, opts) {
     const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
-    if ((opts?.forceGm || ncfa) && hasGmXhr()) {
+    if ((opts?.forceGm || ncfa) && hasGmXmlhttpRequest()) {
       const res2 = await gmRequest(url, { ncfa, headers: opts?.headers });
       return { status: res2.status, data: res2.json() };
     }
@@ -11039,7 +11060,7 @@ ${shapes}`.trim();
     var q = Math.floor(sgn * P / Q);
     return [q, sgn * P - q * Q, Q];
   }
-  function SSF_parse_date_code(v, opts, b2) {
+  function SSF_parse_date_code(v, opts, b22) {
     if (v > 2958465 || v < 0) return null;
     var date = v | 0, time = Math.floor(86400 * (v - date)), dow = 0;
     var dout = [];
@@ -11055,10 +11076,10 @@ ${shapes}`.trim();
       }
     }
     if (date === 60) {
-      dout = b2 ? [1317, 10, 29] : [1900, 2, 29];
+      dout = b22 ? [1317, 10, 29] : [1900, 2, 29];
       dow = 3;
     } else if (date === 0) {
-      dout = b2 ? [1317, 8, 29] : [1900, 1, 0];
+      dout = b22 ? [1317, 8, 29] : [1900, 1, 0];
       dow = 6;
     } else {
       if (date > 60) --date;
@@ -11067,7 +11088,7 @@ ${shapes}`.trim();
       dout = [d.getFullYear(), d.getMonth() + 1, d.getDate()];
       dow = d.getDay();
       if (date < 60) dow = (dow + 6) % 7;
-      if (b2) dow = SSF_fix_hijri(d, dout);
+      if (b22) dow = SSF_fix_hijri(d, dout);
     }
     out.y = dout[0];
     out.m = dout[1];
@@ -13048,12 +13069,12 @@ ${shapes}`.trim();
     var bitswap8 = use_typed_arrays ? new Uint8Array(1 << 8) : [];
     for (var q = 0; q < 1 << 8; ++q) bitswap8[q] = bit_swap_8(q);
     function bit_swap_n(n, b) {
-      var rev = bitswap8[n & 255];
-      if (b <= 8) return rev >>> 8 - b;
-      rev = rev << 8 | bitswap8[n >> 8 & 255];
-      if (b <= 16) return rev >>> 16 - b;
-      rev = rev << 8 | bitswap8[n >> 16 & 255];
-      return rev >>> 24 - b;
+      var rev2 = bitswap8[n & 255];
+      if (b <= 8) return rev2 >>> 8 - b;
+      rev2 = rev2 << 8 | bitswap8[n >> 8 & 255];
+      if (b <= 16) return rev2 >>> 16 - b;
+      rev2 = rev2 << 8 | bitswap8[n >> 16 & 255];
+      return rev2 >>> 24 - b;
     }
     function read_bits_2(buf, bl) {
       var w = bl & 7, h = bl >>> 3;
@@ -13404,8 +13425,8 @@ ${shapes}`.trim();
             outbuf = realloc(outbuf, woff + 32767);
             OL = outbuf.length;
           }
-          var bits = read_bits_n(data, boff, max_len_1);
-          var code = header >>> 1 == 1 ? fix_lmap[bits] : dyn_lmap[bits];
+          var bits2 = read_bits_n(data, boff, max_len_1);
+          var code = header >>> 1 == 1 ? fix_lmap[bits2] : dyn_lmap[bits2];
           boff += code & 15;
           code >>>= 4;
           if ((code >>> 8 & 255) === 0) outbuf[woff++] = code;
@@ -13419,8 +13440,8 @@ ${shapes}`.trim();
               tgt += read_bits_n(data, boff, len_eb);
               boff += len_eb;
             }
-            bits = read_bits_n(data, boff, max_len_2);
-            code = header >>> 1 == 1 ? fix_dmap[bits] : dyn_dmap[bits];
+            bits2 = read_bits_n(data, boff, max_len_2);
+            code = header >>> 1 == 1 ? fix_dmap[bits2] : dyn_dmap[bits2];
             boff += code & 15;
             code >>>= 4;
             var dst_eb = code < 4 ? 0 : code - 2 >> 1;
@@ -14036,7 +14057,7 @@ ${shapes}`.trim();
         if (arr[0] == 255 && arr[1] == 254) return utf8write(new TextDecoder("utf-16le").decode(arr.slice(2)));
         if (arr[0] == 254 && arr[1] == 255) return utf8write(new TextDecoder("utf-16be").decode(arr.slice(2)));
       }
-      var rev = {
+      var rev2 = {
         "\u20AC": "\x80",
         "\u201A": "\x82",
         "\u0192": "\x83",
@@ -14067,7 +14088,7 @@ ${shapes}`.trim();
       };
       if (Array.isArray(arr)) arr = new Uint8Array(arr);
       return new TextDecoder("latin1").decode(arr).replace(/[€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, function(c) {
-        return rev[c] || c;
+        return rev2[c] || c;
       });
     } catch (e) {
     }
@@ -16568,13 +16589,13 @@ ${shapes}`.trim();
     return out;
   }
   function write_WriteAccess(s, opts) {
-    var b8 = !opts || opts.biff == 8;
-    var o = new_buf(b8 ? 112 : 54);
+    var b82 = !opts || opts.biff == 8;
+    var o = new_buf(b82 ? 112 : 54);
     o.write_shift(opts.biff == 8 ? 2 : 1, 7);
-    if (b8) o.write_shift(1, 0);
+    if (b82) o.write_shift(1, 0);
     o.write_shift(4, 859007059);
-    o.write_shift(4, 5458548 | (b8 ? 0 : 536870912));
-    while (o.l < o.length) o.write_shift(1, b8 ? 0 : 32);
+    o.write_shift(4, 5458548 | (b82 ? 0 : 536870912));
+    while (o.l < o.length) o.write_shift(1, b82 ? 0 : 32);
     return o;
   }
   function write_BoundSheet8(data, opts) {
@@ -16646,12 +16667,12 @@ ${shapes}`.trim();
     return o;
   }
   function write_Label(R, C, v, os, opts) {
-    var b8 = !opts || opts.biff == 8;
-    var o = new_buf(6 + 2 + +b8 + (1 + b8) * v.length);
+    var b82 = !opts || opts.biff == 8;
+    var o = new_buf(6 + 2 + +b82 + (1 + b82) * v.length);
     write_XLSCell(R, C, os, o);
     o.write_shift(2, v.length);
-    if (b8) o.write_shift(1, 1);
-    o.write_shift((1 + b8) * v.length, v, b8 ? "utf16le" : "sbcs");
+    if (b82) o.write_shift(1, 1);
+    o.write_shift((1 + b82) * v.length, v, b82 ? "utf16le" : "sbcs");
     return o;
   }
   function write_Format(i, f, opts, o) {
@@ -22775,11 +22796,11 @@ ${shapes}`.trim();
     return r.replace(/\./, "!");
   }
   var browser_has_Map = typeof Map !== "undefined";
-  function get_sst_id(sst, str, rev) {
+  function get_sst_id(sst, str, rev2) {
     var i = 0, len = sst.length;
-    if (rev) {
-      if (browser_has_Map ? rev.has(str) : Object.prototype.hasOwnProperty.call(rev, str)) {
-        var revarr = browser_has_Map ? rev.get(str) : rev[str];
+    if (rev2) {
+      if (browser_has_Map ? rev2.has(str) : Object.prototype.hasOwnProperty.call(rev2, str)) {
+        var revarr = browser_has_Map ? rev2.get(str) : rev2[str];
         for (; i < revarr.length; ++i) {
           if (sst[revarr[i]].t === str) {
             sst.Count++;
@@ -22796,13 +22817,13 @@ ${shapes}`.trim();
     sst[len] = { t: str };
     sst.Count++;
     sst.Unique++;
-    if (rev) {
+    if (rev2) {
       if (browser_has_Map) {
-        if (!rev.has(str)) rev.set(str, []);
-        rev.get(str).push(len);
+        if (!rev2.has(str)) rev2.set(str, []);
+        rev2.get(str).push(len);
       } else {
-        if (!Object.prototype.hasOwnProperty.call(rev, str)) rev[str] = [];
-        rev[str].push(len);
+        if (!Object.prototype.hasOwnProperty.call(rev2, str)) rev2[str] = [];
+        rev2[str].push(len);
       }
     }
     return len;
@@ -28751,10 +28772,10 @@ ${shapes}`.trim();
     var _WB = (wb || {}).Workbook || {};
     var _sheet = (_WB.Sheets || [])[idx] || {};
     var dense = Array.isArray(ws);
-    var b8 = opts.biff == 8;
+    var b82 = opts.biff == 8;
     var ref, rr = "", cols = [];
     var range = safe_decode_range(ws["!ref"] || "A1");
-    var MAX_ROWS = b8 ? 65536 : 16384;
+    var MAX_ROWS = b82 ? 65536 : 16384;
     if (range.e.c > 255 || range.e.r >= MAX_ROWS) {
       if (opts.WTF) throw new Error("Range " + (ws["!ref"] || "A1") + " exceeds format limit A1:IV16384");
       range.e.c = Math.min(range.e.c, 255);
@@ -28773,9 +28794,9 @@ ${shapes}`.trim();
     write_biff_rec(ba, 128, write_Guts([0, 0]));
     write_biff_rec(ba, 131, writebool(false));
     write_biff_rec(ba, 132, writebool(false));
-    if (b8) write_ws_cols_biff8(ba, ws["!cols"]);
+    if (b82) write_ws_cols_biff8(ba, ws["!cols"]);
     write_biff_rec(ba, 512, write_Dimensions(range, opts));
-    if (b8) ws["!links"] = [];
+    if (b82) ws["!links"] = [];
     for (var R = range.s.r; R <= range.e.r; ++R) {
       rr = encode_row(R);
       for (var C = range.s.c; C <= range.e.c; ++C) {
@@ -28784,15 +28805,15 @@ ${shapes}`.trim();
         var cell = dense ? (ws[R] || [])[C] : ws[ref];
         if (!cell) continue;
         write_ws_biff8_cell(ba, cell, R, C, opts);
-        if (b8 && cell.l) ws["!links"].push([ref, cell.l]);
+        if (b82 && cell.l) ws["!links"].push([ref, cell.l]);
       }
     }
     var cname = _sheet.CodeName || _sheet.name || s;
-    if (b8) write_biff_rec(ba, 574, write_Window2((_WB.Views || [])[0]));
-    if (b8 && (ws["!merges"] || []).length) write_biff_rec(ba, 229, write_MergeCells(ws["!merges"]));
-    if (b8) write_ws_biff8_hlinks(ba, ws);
+    if (b82) write_biff_rec(ba, 574, write_Window2((_WB.Views || [])[0]));
+    if (b82 && (ws["!merges"] || []).length) write_biff_rec(ba, 229, write_MergeCells(ws["!merges"]));
+    if (b82) write_ws_biff8_hlinks(ba, ws);
     write_biff_rec(ba, 442, write_XLUnicodeString(cname, opts));
-    if (b8) write_FEAT(ba, ws);
+    if (b82) write_FEAT(ba, ws);
     write_biff_rec(
       ba,
       10
@@ -28810,14 +28831,14 @@ ${shapes}`.trim();
         /*::CodeName:"ThisWorkbook"*/
       }
     );
-    var b8 = opts.biff == 8, b5 = opts.biff == 5;
+    var b82 = opts.biff == 8, b5 = opts.biff == 5;
     write_biff_rec(A, 2057, write_BOF(wb, 5, opts));
     if (opts.bookType == "xla") write_biff_rec(
       A,
       135
       /* Addin */
     );
-    write_biff_rec(A, 225, b8 ? writeuint16(1200) : null);
+    write_biff_rec(A, 225, b82 ? writeuint16(1200) : null);
     write_biff_rec(A, 193, writezeroes(2));
     if (b5) write_biff_rec(
       A,
@@ -28835,20 +28856,20 @@ ${shapes}`.trim();
       /* InterfaceEnd */
     );
     write_biff_rec(A, 92, write_WriteAccess("SheetJS", opts));
-    write_biff_rec(A, 66, writeuint16(b8 ? 1200 : 1252));
-    if (b8) write_biff_rec(A, 353, writeuint16(0));
-    if (b8) write_biff_rec(
+    write_biff_rec(A, 66, writeuint16(b82 ? 1200 : 1252));
+    if (b82) write_biff_rec(A, 353, writeuint16(0));
+    if (b82) write_biff_rec(
       A,
       448
       /* Excel9File */
     );
     write_biff_rec(A, 317, write_RRTabId(wb.SheetNames.length));
-    if (b8 && wb.vbaraw) write_biff_rec(
+    if (b82 && wb.vbaraw) write_biff_rec(
       A,
       211
       /* ObProj */
     );
-    if (b8 && wb.vbaraw) {
+    if (b82 && wb.vbaraw) {
       var cname = _wb.CodeName || "ThisWorkbook";
       write_biff_rec(A, 442, write_XLUnicodeString(cname, opts));
     }
@@ -28856,23 +28877,23 @@ ${shapes}`.trim();
     write_biff_rec(A, 25, writebool(false));
     write_biff_rec(A, 18, writebool(false));
     write_biff_rec(A, 19, writeuint16(0));
-    if (b8) write_biff_rec(A, 431, writebool(false));
-    if (b8) write_biff_rec(A, 444, writeuint16(0));
+    if (b82) write_biff_rec(A, 431, writebool(false));
+    if (b82) write_biff_rec(A, 444, writeuint16(0));
     write_biff_rec(A, 61, write_Window1(opts));
     write_biff_rec(A, 64, writebool(false));
     write_biff_rec(A, 141, writeuint16(0));
     write_biff_rec(A, 34, writebool(safe1904(wb) == "true"));
     write_biff_rec(A, 14, writebool(true));
-    if (b8) write_biff_rec(A, 439, writebool(false));
+    if (b82) write_biff_rec(A, 439, writebool(false));
     write_biff_rec(A, 218, writeuint16(0));
     write_FONTS_biff8(A, wb, opts);
     write_FMTS_biff8(A, wb.SSF, opts);
     write_CELLXFS_biff8(A, opts);
-    if (b8) write_biff_rec(A, 352, writebool(false));
+    if (b82) write_biff_rec(A, 352, writebool(false));
     var a = A.end();
     var C = buf_array();
-    if (b8) write_biff_rec(C, 140, write_Country());
-    if (b8 && opts.Strings) write_biff_continue(C, 252, write_SST(opts.Strings, opts));
+    if (b82) write_biff_rec(C, 140, write_Country());
+    if (b82 && opts.Strings) write_biff_continue(C, 252, write_SST(opts.Strings, opts));
     write_biff_rec(
       C,
       10
@@ -28881,7 +28902,7 @@ ${shapes}`.trim();
     var c = C.end();
     var B = buf_array();
     var blen = 0, j = 0;
-    for (j = 0; j < wb.SheetNames.length; ++j) blen += (b8 ? 12 : 11) + (b8 ? 2 : 1) * wb.SheetNames[j].length;
+    for (j = 0; j < wb.SheetNames.length; ++j) blen += (b82 ? 12 : 11) + (b82 ? 2 : 1) * wb.SheetNames[j].length;
     var start = a.length + blen + c.length;
     for (j = 0; j < wb.SheetNames.length; ++j) {
       var _sheet = _sheets[j] || {};
@@ -29396,9 +29417,9 @@ ${shapes}`.trim();
     }, 0);
     var out = new Uint8Array(len);
     var off = 0;
-    u8a.forEach(function(u8) {
-      out.set(u8, off);
-      off += u8.length;
+    u8a.forEach(function(u82) {
+      out.set(u82, off);
+      off += u82.length;
     });
     return out;
   }
@@ -29480,21 +29501,21 @@ ${shapes}`.trim();
     return usz.slice(0, L);
   }
   function varint_to_i32(buf) {
-    var l = 0, i32 = buf[l] & 127;
+    var l = 0, i322 = buf[l] & 127;
     varint:
       if (buf[l++] >= 128) {
-        i32 |= (buf[l] & 127) << 7;
+        i322 |= (buf[l] & 127) << 7;
         if (buf[l++] < 128)
           break varint;
-        i32 |= (buf[l] & 127) << 14;
+        i322 |= (buf[l] & 127) << 14;
         if (buf[l++] < 128)
           break varint;
-        i32 |= (buf[l] & 127) << 21;
+        i322 |= (buf[l] & 127) << 21;
         if (buf[l++] < 128)
           break varint;
-        i32 |= (buf[l] & 127) << 28;
+        i322 |= (buf[l] & 127) << 28;
       }
-    return i32;
+    return i322;
   }
   function parse_shallow(buf) {
     var out = [], ptr = [0];
@@ -29559,7 +29580,7 @@ ${shapes}`.trim();
     return u8concat(out);
   }
   function parse_iwa_file(buf) {
-    var _a;
+    var _a2;
     var out = [], ptr = [0];
     while (ptr[0] < buf.length) {
       var len = parse_varint49(buf, ptr);
@@ -29571,14 +29592,14 @@ ${shapes}`.trim();
       };
       ai[2].forEach(function(b) {
         var mi = parse_shallow(b.data);
-        var fl = varint_to_i32(mi[3][0].data);
+        var fl2 = varint_to_i32(mi[3][0].data);
         res.messages.push({
           meta: mi,
-          data: buf.slice(ptr[0], ptr[0] + fl)
+          data: buf.slice(ptr[0], ptr[0] + fl2)
         });
-        ptr[0] += fl;
+        ptr[0] += fl2;
       });
-      if ((_a = ai[3]) == null ? void 0 : _a[0])
+      if ((_a2 = ai[3]) == null ? void 0 : _a2[0])
         res.merge = varint_to_i32(ai[3][0].data) >>> 0 > 0;
       out.push(res);
     }
@@ -29787,8 +29808,8 @@ ${shapes}`.trim();
     return parse_varint49(pb[1][0].data);
   }
   function write_tile_row(tri, data, SST) {
-    var _a, _b, _c, _d;
-    if (!((_a = tri[6]) == null ? void 0 : _a[0]) || !((_b = tri[7]) == null ? void 0 : _b[0]))
+    var _a2, _b2, _c, _d;
+    if (!((_a2 = tri[6]) == null ? void 0 : _a2[0]) || !((_b2 = tri[7]) == null ? void 0 : _b2[0]))
       throw "Mutation only works on post-BNC storages!";
     var wide_offsets = ((_d = (_c = tri[8]) == null ? void 0 : _c[0]) == null ? void 0 : _d.data) && varint_to_i32(tri[8][0].data) > 0 || false;
     if (wide_offsets)
@@ -32761,6 +32782,70 @@ ${shapes}`.trim();
           extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
         }
       },
+      admin_hit_rate_de_state: {
+        label: "Admin-unit hit rate (DE ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_de_state_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_de_district: {
+        label: "Admin-unit hit rate (DE ADM2)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_de_district_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_us_state: {
+        label: "Admin-unit hit rate (US ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_us_state_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_ca_province: {
+        label: "Admin-unit hit rate (CA ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_ca_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_id_province: {
+        label: "Admin-unit hit rate (ID ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_id_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_id_kabupaten: {
+        label: "Admin-unit hit rate (ID ADM2)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_id_kabupaten_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_ph_province: {
+        label: "Admin-unit hit rate (PH ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_ph_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_vn_province: {
+        label: "Admin-unit hit rate (VN ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_vn_province_hit",
+        range: { min: 0, max: 100 }
+      },
       hit_count: {
         label: "Hit count",
         unit: "count",
@@ -35401,17 +35486,121 @@ ${shapes}`.trim();
                       }
                     },
                     {
-                      widgetId: "w_country_insight_overall_hit_rate",
-                      type: "stat_value",
-                      title: "Hit rate in selected country",
+                      widgetId: "w_country_insight_admin_hit_de",
+                      type: "stat_list",
+                      title: "Administrative unit accuracy (selected country)",
                       grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
+                      placement: { x: 0, y: 18, w: 12, h: 3 },
+                      spec: {
+                        enrichDimensions: ["true_state", "guess_state", "true_district", "guess_district"],
+                        rows: [
+                          {
+                            label: "Correct Bundesland (ADM1)",
+                            measure: "admin_hit_rate_de_state",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          },
+                          {
+                            label: "Correct Landkreis (ADM2)",
+                            measure: "admin_hit_rate_de_district",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_hit_id",
+                      type: "stat_list",
+                      title: "Administrative unit accuracy (selected country)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
+                      placement: { x: 0, y: 18, w: 12, h: 3 },
+                      spec: {
+                        enrichDimensions: ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"],
+                        rows: [
+                          {
+                            label: "Correct province (ADM1)",
+                            measure: "admin_hit_rate_id_province",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          },
+                          {
+                            label: "Correct kabupaten / regency (ADM2)",
+                            measure: "admin_hit_rate_id_kabupaten",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_hit_us",
+                      type: "stat_list",
+                      title: "Administrative unit accuracy (selected country)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["us", "US"] },
                       placement: { x: 0, y: 18, w: 12, h: 2 },
                       spec: {
-                        label: "Country hit rate (selected country)",
-                        measure: "hit_rate",
-                        actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" }
-                        }
+                        enrichDimensions: ["true_us_state", "guess_us_state"],
+                        rows: [
+                          {
+                            label: "Correct state (ADM1)",
+                            measure: "admin_hit_rate_us_state",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_hit_ca",
+                      type: "stat_list",
+                      title: "Administrative unit accuracy (selected country)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["ca", "CA"] },
+                      placement: { x: 0, y: 18, w: 12, h: 2 },
+                      spec: {
+                        enrichDimensions: ["true_ca_province", "guess_ca_province"],
+                        rows: [
+                          {
+                            label: "Correct province / territory (ADM1)",
+                            measure: "admin_hit_rate_ca_province",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_hit_ph",
+                      type: "stat_list",
+                      title: "Administrative unit accuracy (selected country)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["ph", "PH"] },
+                      placement: { x: 0, y: 18, w: 12, h: 2 },
+                      spec: {
+                        enrichDimensions: ["true_ph_province", "guess_ph_province"],
+                        rows: [
+                          {
+                            label: "Correct province (ADM1)",
+                            measure: "admin_hit_rate_ph_province",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_hit_vn",
+                      type: "stat_list",
+                      title: "Administrative unit accuracy (selected country)",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["vn", "VN"] },
+                      placement: { x: 0, y: 18, w: 12, h: 2 },
+                      spec: {
+                        enrichDimensions: ["true_vn_province", "guess_vn_province"],
+                        rows: [
+                          {
+                            label: "Correct province (ADM1)",
+                            measure: "admin_hit_rate_vn_province",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                          }
+                        ]
                       }
                     },
                     {
@@ -35420,7 +35609,7 @@ ${shapes}`.trim();
                       title: "Germany - Level 1: States (Bundesl\xE4nder)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 20, w: 12, h: 6 },
+                      placement: { x: 0, y: 21, w: 12, h: 6 },
                       spec: {
                         activeView: "bar",
                         views: [
@@ -35564,7 +35753,7 @@ ${shapes}`.trim();
                       title: "Indonesia - Level 1: Provinces",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
-                      placement: { x: 0, y: 20, w: 12, h: 6 },
+                      placement: { x: 0, y: 21, w: 12, h: 6 },
                       spec: {
                         activeView: "map",
                         views: [
@@ -35708,7 +35897,7 @@ ${shapes}`.trim();
                       title: "Germany - Level 2: Districts (Landkreise)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 26, w: 12, h: 6 },
+                      placement: { x: 0, y: 27, w: 12, h: 5 },
                       spec: {
                         dimension: "true_district",
                         measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
@@ -35728,7 +35917,7 @@ ${shapes}`.trim();
                       title: "Indonesia - Level 2: Kabupaten / Regencies",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
-                      placement: { x: 0, y: 26, w: 12, h: 6 },
+                      placement: { x: 0, y: 27, w: 12, h: 5 },
                       spec: {
                         dimension: "true_id_kabupaten",
                         measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
@@ -39658,15 +39847,15 @@ ${shapes}`.trim();
       }
     }
   }
-  function describeError(err) {
-    if (!err) return "";
-    if (err instanceof Error) {
-      const stack = typeof err.stack === "string" && err.stack.trim().length ? `
-${err.stack}` : "";
-      return `${err.name}: ${err.message}${stack}`;
+  function describeError(err2) {
+    if (!err2) return "";
+    if (err2 instanceof Error) {
+      const stack = typeof err2.stack === "string" && err2.stack.trim().length ? `
+${err2.stack}` : "";
+      return `${err2.name}: ${err2.message}${stack}`;
     }
     try {
-      return String(err);
+      return String(err2);
     } catch {
       return "<unprintable error>";
     }
@@ -39681,9 +39870,9 @@ ${err.stack}` : "";
       entries.splice(0, entries.length);
       emit();
     },
-    push(level, message, err) {
-      const full = err ? `${message}
-${describeError(err)}` : message;
+    push(level, message, err2) {
+      const full = err2 ? `${message}
+${describeError(err2)}` : message;
       entries.push({ ts: Date.now(), level, message: String(full ?? "") });
       if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
       emit();
@@ -39697,8 +39886,8 @@ ${describeError(err)}` : message;
     warn(message) {
       this.push("warn", message);
     },
-    error(message, err) {
-      this.push("error", message, err);
+    error(message, err2) {
+      this.push("error", message, err2);
     }
   };
 
@@ -40535,8 +40724,8 @@ ${describeError(err)}` : message;
         });
         let out = t.trim();
         if (normalized.length) out = `${out} ${normalized.map((x) => `(${x})`).join(" ")}`.trim();
-        const max = 92;
-        if (out.length > max) {
+        const max2 = 92;
+        if (out.length > max2) {
           const head = 60;
           const tail = 26;
           out = `${out.slice(0, head).trimEnd()} \u2026 ${out.slice(-tail).trimStart()}`;
@@ -40709,55 +40898,55 @@ ${describeError(err)}` : message;
           const next = rows[i + 1];
           if (next && isSameGame(r, next)) tr.classList.add("ga-dd-no-sep");
           for (const c of cols) {
-            const td = this.doc.createElement("td");
-            td.className = "ga-dd-td";
-            this.renderCell(td, r, c, semantic, dateFormat);
+            const td2 = this.doc.createElement("td");
+            td2.className = "ga-dd-td";
+            this.renderCell(td2, r, c, semantic, dateFormat);
             const key = String(c?.key ?? "");
             const raw = this.getCellRawValue(r, key, semantic);
             if (req.target === "rounds" && key === "gameId" && typeof raw === "string" && raw) {
-              td.style.cursor = "pointer";
-              td.addEventListener("click", () => void openGameById(raw, ` (game ${shortGameId(raw)})`));
+              td2.style.cursor = "pointer";
+              td2.addEventListener("click", () => void openGameById(raw, ` (game ${shortGameId(raw)})`));
             }
             if (req.target === "rounds" && key === "sessionId") {
               const gid = this.getCellRawValue(r, "gameId", semantic);
               if (typeof raw === "string" && raw) {
-                td.style.cursor = "pointer";
-                td.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
+                td2.style.cursor = "pointer";
+                td2.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
               } else if (typeof gid === "string" && gid) {
-                td.style.cursor = "pointer";
-                td.textContent = "...";
+                td2.style.cursor = "pointer";
+                td2.textContent = "...";
                 void (async () => {
                   const { gameToSession } = await this.ensureSessionMaps(semantic);
                   const sid = gameToSession.get(gid) ?? "";
-                  td.textContent = sid || "-";
-                  if (sid) td.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
+                  td2.textContent = sid || "-";
+                  if (sid) td2.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
                 })();
               }
             }
             if ((req.target === "games" || req.target === "players") && key === "roundsCount") {
               const gid = this.getCellRawValue(r, "gameId", semantic);
               if (typeof gid === "string" && gid) {
-                td.style.cursor = "pointer";
-                td.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${shortGameId(gid)})`));
+                td2.style.cursor = "pointer";
+                td2.addEventListener("click", () => void openRoundsForGameId(gid, ` (game ${shortGameId(gid)})`));
               }
             }
             if ((req.target === "games" || req.target === "players") && key === "gameId" && typeof raw === "string" && raw) {
-              td.style.cursor = "pointer";
-              td.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${shortGameId(raw)})`));
+              td2.style.cursor = "pointer";
+              td2.addEventListener("click", () => void openRoundsForGameId(raw, ` (game ${shortGameId(raw)})`));
             }
             if ((req.target === "games" || req.target === "players") && key === "sessionId") {
               const gid = this.getCellRawValue(r, "gameId", semantic);
               if (typeof raw === "string" && raw) {
-                td.style.cursor = "pointer";
-                td.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
+                td2.style.cursor = "pointer";
+                td2.addEventListener("click", () => void openSessionById(raw, ` (session ${raw})`));
               } else if (typeof gid === "string" && gid) {
-                td.style.cursor = "pointer";
-                td.textContent = "...";
+                td2.style.cursor = "pointer";
+                td2.textContent = "...";
                 void (async () => {
                   const { gameToSession } = await this.ensureSessionMaps(semantic);
                   const sid = gameToSession.get(gid) ?? "";
-                  td.textContent = sid || "-";
-                  if (sid) td.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
+                  td2.textContent = sid || "-";
+                  if (sid) td2.addEventListener("click", () => void openSessionById(sid, ` (session ${sid})`));
                 })();
               }
             }
@@ -40765,19 +40954,19 @@ ${describeError(err)}` : message;
               const sid = this.getCellRawValue(r, "sessionId", semantic);
               const hasInlineIds = Array.isArray(r?.gameIds) && r.gameIds.length > 0;
               if (hasInlineIds) {
-                td.style.cursor = "pointer";
-                td.addEventListener("click", () => void openGamesForSessionRow(r, sid ? ` (session ${sid})` : ""));
+                td2.style.cursor = "pointer";
+                td2.addEventListener("click", () => void openGamesForSessionRow(r, sid ? ` (session ${sid})` : ""));
               } else if (typeof sid === "string" && sid) {
-                td.style.cursor = "pointer";
-                td.addEventListener("click", () => void openGamesForSessionId(sid, ` (session ${sid})`));
+                td2.style.cursor = "pointer";
+                td2.addEventListener("click", () => void openGamesForSessionId(sid, ` (session ${sid})`));
               }
             }
             if (req.target === "sessions" && key === "sessionId" && typeof raw === "string" && raw) {
               const hasInlineIds = Array.isArray(r?.gameIds) && r.gameIds.length > 0;
-              td.style.cursor = "pointer";
-              td.addEventListener("click", () => void (hasInlineIds ? openGamesForSessionRow(r, ` (session ${raw})`) : openGamesForSessionId(raw, ` (session ${raw})`)));
+              td2.style.cursor = "pointer";
+              td2.addEventListener("click", () => void (hasInlineIds ? openGamesForSessionRow(r, ` (session ${raw})`) : openGamesForSessionId(raw, ` (session ${raw})`)));
             }
-            tr.appendChild(td);
+            tr.appendChild(td2);
           }
           tbody.appendChild(tr);
         }
@@ -40949,7 +41138,7 @@ ${describeError(err)}` : message;
       }
       return pickWithAliases(row, key, semantic.columnAliases);
     }
-    renderCell(td, row, col, semantic, dateMode) {
+    renderCell(td2, row, col, semantic, dateMode) {
       const key = col.key;
       const raw = this.getCellRawValue(row, key, semantic);
       const mkProfileUrl = (id) => {
@@ -40968,7 +41157,7 @@ ${describeError(err)}` : message;
         a.target = "_blank";
         a.rel = "noopener";
         a.textContent = raw;
-        td.appendChild(a);
+        td2.appendChild(a);
         return true;
       };
       if (maybeRenderProfileLink("player_opponent_name", "player_opponent_id") || maybeRenderProfileLink("player_opponent_mate_name", "player_opponent_mate_id") || maybeRenderProfileLink("player_mate_name", "player_mate_id")) {
@@ -40983,7 +41172,7 @@ ${describeError(err)}` : message;
         a.target = "_blank";
         a.rel = "noopener";
         a.textContent = col.link?.label ?? "Open";
-        td.appendChild(a);
+        td2.appendChild(a);
         return;
       }
       let text = this.formatCellValue(raw, key, dateMode);
@@ -41041,7 +41230,7 @@ ${describeError(err)}` : message;
           else if (raw < 0) span.classList.add("ga-dd-neg");
         }
       }
-      td.appendChild(span);
+      td2.appendChild(span);
     }
   };
 
@@ -41071,6 +41260,18 @@ ${describeError(err)}` : message;
     if (!truth) return false;
     const guess = getGuessCountrySelf(r);
     return typeof guess === "string" && guess === truth;
+  }
+  function rateStringFieldEq(rows, trueKey, guessKey) {
+    let denom = 0;
+    let num = 0;
+    for (const r of rows) {
+      const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
+      if (!t) continue;
+      denom++;
+      const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
+      if (g && g === t) num++;
+    }
+    return denom ? num / denom : 0;
   }
   function isThrowLt50(r) {
     const s = getSelfScore(r);
@@ -41227,24 +41428,24 @@ ${describeError(err)}` : message;
       return Number.isFinite(min) ? min : 0;
     },
     max_played_at_ts: (rows) => {
-      let max = -Infinity;
+      let max2 = -Infinity;
       for (const r of rows) {
         const ts = getPlayedAt(r) ?? r?.ts;
-        if (typeof ts === "number" && Number.isFinite(ts)) max = Math.max(max, ts);
+        if (typeof ts === "number" && Number.isFinite(ts)) max2 = Math.max(max2, ts);
       }
-      return Number.isFinite(max) ? max : 0;
+      return Number.isFinite(max2) ? max2 : 0;
     },
     spread_player_self_score: (rows) => {
       let min = Infinity;
-      let max = -Infinity;
+      let max2 = -Infinity;
       for (const r of rows) {
         const s = getSelfScore(r);
         if (typeof s !== "number" || !Number.isFinite(s)) continue;
         if (s < min) min = s;
-        if (s > max) max = s;
+        if (s > max2) max2 = s;
       }
-      if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
-      return Math.max(0, max - min);
+      if (!Number.isFinite(min) || !Number.isFinite(max2)) return 0;
+      return Math.max(0, max2 - min);
     },
     // Share-of-total measures are normalized in chart/breakdown widgets (they need access to total rows).
     // In non-grouped contexts (e.g. stat row over all rows), returning 1.0 is a sensible default (100% of itself).
@@ -41325,6 +41526,14 @@ ${describeError(err)}` : message;
       for (const r of rows) if (isHit(r)) k++;
       return k / n;
     },
+    rate_de_state_hit: (rows) => rateStringFieldEq(rows, "trueState", "guessState"),
+    rate_de_district_hit: (rows) => rateStringFieldEq(rows, "trueDistrict", "guessDistrict"),
+    rate_us_state_hit: (rows) => rateStringFieldEq(rows, "trueUsState", "guessUsState"),
+    rate_ca_province_hit: (rows) => rateStringFieldEq(rows, "trueCaProvince", "guessCaProvince"),
+    rate_id_province_hit: (rows) => rateStringFieldEq(rows, "trueIdProvince", "guessIdProvince"),
+    rate_id_kabupaten_hit: (rows) => rateStringFieldEq(rows, "trueIdKabupaten", "guessIdKabupaten"),
+    rate_ph_province_hit: (rows) => rateStringFieldEq(rows, "truePhProvince", "guessPhProvince"),
+    rate_vn_province_hit: (rows) => rateStringFieldEq(rows, "trueVnProvince", "guessVnProvince"),
     rate_throw_round: (rows) => {
       const n = rows.length;
       if (!n) return 0;
@@ -42020,6 +42229,1353 @@ ${describeError(err)}` : message;
     session: SESSION_MEASURES_BY_FORMULA_ID
   };
 
+  // node_modules/fflate/esm/browser.js
+  var u8 = Uint8Array;
+  var u16 = Uint16Array;
+  var i32 = Int32Array;
+  var fleb = new u8([
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    5,
+    5,
+    5,
+    5,
+    0,
+    /* unused */
+    0,
+    0,
+    /* impossible */
+    0
+  ]);
+  var fdeb = new u8([
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    2,
+    2,
+    3,
+    3,
+    4,
+    4,
+    5,
+    5,
+    6,
+    6,
+    7,
+    7,
+    8,
+    8,
+    9,
+    9,
+    10,
+    10,
+    11,
+    11,
+    12,
+    12,
+    13,
+    13,
+    /* unused */
+    0,
+    0
+  ]);
+  var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
+  var freb = function(eb, start) {
+    var b = new u16(31);
+    for (var i = 0; i < 31; ++i) {
+      b[i] = start += 1 << eb[i - 1];
+    }
+    var r = new i32(b[30]);
+    for (var i = 1; i < 30; ++i) {
+      for (var j = b[i]; j < b[i + 1]; ++j) {
+        r[j] = j - b[i] << 5 | i;
+      }
+    }
+    return { b, r };
+  };
+  var _a = freb(fleb, 2);
+  var fl = _a.b;
+  var revfl = _a.r;
+  fl[28] = 258, revfl[258] = 28;
+  var _b = freb(fdeb, 0);
+  var fd = _b.b;
+  var revfd = _b.r;
+  var rev = new u16(32768);
+  for (i = 0; i < 32768; ++i) {
+    x = (i & 43690) >> 1 | (i & 21845) << 1;
+    x = (x & 52428) >> 2 | (x & 13107) << 2;
+    x = (x & 61680) >> 4 | (x & 3855) << 4;
+    rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
+  }
+  var x;
+  var i;
+  var hMap = (function(cd, mb, r) {
+    var s = cd.length;
+    var i = 0;
+    var l = new u16(mb);
+    for (; i < s; ++i) {
+      if (cd[i])
+        ++l[cd[i] - 1];
+    }
+    var le = new u16(mb);
+    for (i = 1; i < mb; ++i) {
+      le[i] = le[i - 1] + l[i - 1] << 1;
+    }
+    var co;
+    if (r) {
+      co = new u16(1 << mb);
+      var rvb = 15 - mb;
+      for (i = 0; i < s; ++i) {
+        if (cd[i]) {
+          var sv = i << 4 | cd[i];
+          var r_1 = mb - cd[i];
+          var v = le[cd[i] - 1]++ << r_1;
+          for (var m = v | (1 << r_1) - 1; v <= m; ++v) {
+            co[rev[v] >> rvb] = sv;
+          }
+        }
+      }
+    } else {
+      co = new u16(s);
+      for (i = 0; i < s; ++i) {
+        if (cd[i]) {
+          co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
+        }
+      }
+    }
+    return co;
+  });
+  var flt = new u8(288);
+  for (i = 0; i < 144; ++i)
+    flt[i] = 8;
+  var i;
+  for (i = 144; i < 256; ++i)
+    flt[i] = 9;
+  var i;
+  for (i = 256; i < 280; ++i)
+    flt[i] = 7;
+  var i;
+  for (i = 280; i < 288; ++i)
+    flt[i] = 8;
+  var i;
+  var fdt = new u8(32);
+  for (i = 0; i < 32; ++i)
+    fdt[i] = 5;
+  var i;
+  var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
+  var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
+  var max = function(a) {
+    var m = a[0];
+    for (var i = 1; i < a.length; ++i) {
+      if (a[i] > m)
+        m = a[i];
+    }
+    return m;
+  };
+  var bits = function(d, p, m) {
+    var o = p / 8 | 0;
+    return (d[o] | d[o + 1] << 8) >> (p & 7) & m;
+  };
+  var bits16 = function(d, p) {
+    var o = p / 8 | 0;
+    return (d[o] | d[o + 1] << 8 | d[o + 2] << 16) >> (p & 7);
+  };
+  var shft = function(p) {
+    return (p + 7) / 8 | 0;
+  };
+  var slc = function(v, s, e) {
+    if (s == null || s < 0)
+      s = 0;
+    if (e == null || e > v.length)
+      e = v.length;
+    return new u8(v.subarray(s, e));
+  };
+  var ec = [
+    "unexpected EOF",
+    "invalid block type",
+    "invalid length/literal",
+    "invalid distance",
+    "stream finished",
+    "no stream handler",
+    ,
+    "no callback",
+    "invalid UTF-8 data",
+    "extra field too long",
+    "date not in range 1980-2099",
+    "filename too long",
+    "stream finishing",
+    "invalid zip data"
+    // determined by unknown compression method
+  ];
+  var err = function(ind, msg, nt) {
+    var e = new Error(msg || ec[ind]);
+    e.code = ind;
+    if (Error.captureStackTrace)
+      Error.captureStackTrace(e, err);
+    if (!nt)
+      throw e;
+    return e;
+  };
+  var inflt = function(dat, st, buf, dict) {
+    var sl = dat.length, dl = dict ? dict.length : 0;
+    if (!sl || st.f && !st.l)
+      return buf || new u8(0);
+    var noBuf = !buf;
+    var resize = noBuf || st.i != 2;
+    var noSt = st.i;
+    if (noBuf)
+      buf = new u8(sl * 3);
+    var cbuf = function(l2) {
+      var bl = buf.length;
+      if (l2 > bl) {
+        var nbuf = new u8(Math.max(bl * 2, l2));
+        nbuf.set(buf);
+        buf = nbuf;
+      }
+    };
+    var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
+    var tbts = sl * 8;
+    do {
+      if (!lm) {
+        final = bits(dat, pos, 1);
+        var type = bits(dat, pos + 1, 3);
+        pos += 3;
+        if (!type) {
+          var s = shft(pos) + 4, l = dat[s - 4] | dat[s - 3] << 8, t = s + l;
+          if (t > sl) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + l);
+          buf.set(dat.subarray(s, t), bt);
+          st.b = bt += l, st.p = pos = t * 8, st.f = final;
+          continue;
+        } else if (type == 1)
+          lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
+        else if (type == 2) {
+          var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
+          var tl = hLit + bits(dat, pos + 5, 31) + 1;
+          pos += 14;
+          var ldt = new u8(tl);
+          var clt = new u8(19);
+          for (var i = 0; i < hcLen; ++i) {
+            clt[clim[i]] = bits(dat, pos + i * 3, 7);
+          }
+          pos += hcLen * 3;
+          var clb = max(clt), clbmsk = (1 << clb) - 1;
+          var clm = hMap(clt, clb, 1);
+          for (var i = 0; i < tl; ) {
+            var r = clm[bits(dat, pos, clbmsk)];
+            pos += r & 15;
+            var s = r >> 4;
+            if (s < 16) {
+              ldt[i++] = s;
+            } else {
+              var c = 0, n = 0;
+              if (s == 16)
+                n = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
+              else if (s == 17)
+                n = 3 + bits(dat, pos, 7), pos += 3;
+              else if (s == 18)
+                n = 11 + bits(dat, pos, 127), pos += 7;
+              while (n--)
+                ldt[i++] = c;
+            }
+          }
+          var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
+          lbt = max(lt);
+          dbt = max(dt);
+          lm = hMap(lt, lbt, 1);
+          dm = hMap(dt, dbt, 1);
+        } else
+          err(1);
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+      }
+      if (resize)
+        cbuf(bt + 131072);
+      var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
+      var lpos = pos;
+      for (; ; lpos = pos) {
+        var c = lm[bits16(dat, pos) & lms], sym = c >> 4;
+        pos += c & 15;
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (!c)
+          err(2);
+        if (sym < 256)
+          buf[bt++] = sym;
+        else if (sym == 256) {
+          lpos = pos, lm = null;
+          break;
+        } else {
+          var add2 = sym - 254;
+          if (sym > 264) {
+            var i = sym - 257, b = fleb[i];
+            add2 = bits(dat, pos, (1 << b) - 1) + fl[i];
+            pos += b;
+          }
+          var d = dm[bits16(dat, pos) & dms], dsym = d >> 4;
+          if (!d)
+            err(3);
+          pos += d & 15;
+          var dt = fd[dsym];
+          if (dsym > 3) {
+            var b = fdeb[dsym];
+            dt += bits16(dat, pos) & (1 << b) - 1, pos += b;
+          }
+          if (pos > tbts) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + 131072);
+          var end = bt + add2;
+          if (bt < dt) {
+            var shift = dl - dt, dend = Math.min(dt, end);
+            if (shift + bt < 0)
+              err(3);
+            for (; bt < dend; ++bt)
+              buf[bt] = dict[shift + bt];
+          }
+          for (; bt < end; ++bt)
+            buf[bt] = buf[bt - dt];
+        }
+      }
+      st.l = lm, st.p = lpos, st.b = bt, st.f = final;
+      if (lm)
+        final = 1, st.m = lbt, st.d = dm, st.n = dbt;
+    } while (!final);
+    return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
+  };
+  var et = /* @__PURE__ */ new u8(0);
+  var b2 = function(d, b) {
+    return d[b] | d[b + 1] << 8;
+  };
+  var b4 = function(d, b) {
+    return (d[b] | d[b + 1] << 8 | d[b + 2] << 16 | d[b + 3] << 24) >>> 0;
+  };
+  var b8 = function(d, b) {
+    return b4(d, b) + b4(d, b + 4) * 4294967296;
+  };
+  function inflateSync(data, opts) {
+    return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
+  }
+  var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
+  var tds = 0;
+  try {
+    td.decode(et, { stream: true });
+    tds = 1;
+  } catch (e) {
+  }
+  var dutf8 = function(d) {
+    for (var r = "", i = 0; ; ) {
+      var c = d[i++];
+      var eb = (c > 127) + (c > 223) + (c > 239);
+      if (i + eb > d.length)
+        return { s: r, r: slc(d, i - 1) };
+      if (!eb)
+        r += String.fromCharCode(c);
+      else if (eb == 3) {
+        c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
+      } else if (eb & 1)
+        r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
+      else
+        r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
+    }
+  };
+  function strFromU8(dat, latin1) {
+    if (latin1) {
+      var r = "";
+      for (var i = 0; i < dat.length; i += 16384)
+        r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
+      return r;
+    } else if (td) {
+      return td.decode(dat);
+    } else {
+      var _a2 = dutf8(dat), s = _a2.s, r = _a2.r;
+      if (r.length)
+        err(8);
+      return s;
+    }
+  }
+  var slzh = function(d, b) {
+    return b + 30 + b2(d, b + 26) + b2(d, b + 28);
+  };
+  var zh = function(d, b, z) {
+    var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
+    var _a2 = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
+    return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
+  };
+  var z64e = function(d, b) {
+    for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
+      ;
+    return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
+  };
+  function unzipSync(data, opts) {
+    var files = {};
+    var e = data.length - 22;
+    for (; b4(data, e) != 101010256; --e) {
+      if (!e || data.length - e > 65558)
+        err(13);
+    }
+    ;
+    var c = b2(data, e + 8);
+    if (!c)
+      return {};
+    var o = b4(data, e + 16);
+    var z = o == 4294967295 || c == 65535;
+    if (z) {
+      var ze = b4(data, e - 12);
+      z = b4(data, ze) == 101075792;
+      if (z) {
+        c = b4(data, ze + 32);
+        o = b4(data, ze + 48);
+      }
+    }
+    var fltr = opts && opts.filter;
+    for (var i = 0; i < c; ++i) {
+      var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
+      o = no;
+      if (!fltr || fltr({
+        name: fn,
+        size: sc,
+        originalSize: su,
+        compression: c_2
+      })) {
+        if (!c_2)
+          files[fn] = slc(data, b, b + sc);
+        else if (c_2 == 8)
+          files[fn] = inflateSync(data.subarray(b, b + sc), { out: new u8(su) });
+        else
+          err(14, "unknown compression type " + c_2);
+      }
+    }
+    return files;
+  }
+
+  // src/geo/geoJsonFetch.ts
+  function hasGmXhr() {
+    return typeof getGmXmlhttpRequest() === "function";
+  }
+  function gmGet(url, opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      const accept = opts.accept ?? "application/json";
+      const responseType = opts.responseType ?? "text";
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept },
+        responseType,
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : 0;
+          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
+          if (responseType === "arraybuffer") {
+            const buf = res?.response;
+            if (buf instanceof ArrayBuffer) return resolve({ status, buf });
+            try {
+              if (buf && typeof buf === "object" && typeof buf.byteLength === "number") {
+                const u82 = new Uint8Array(buf);
+                return resolve({ status, buf: u82.buffer });
+              }
+            } catch {
+            }
+            return reject(new Error(`No arraybuffer response for ${url}`));
+          }
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          resolve({ status, text });
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error(`GM_xmlhttpRequest failed for ${url}`)),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchText(url, accept) {
+    if (hasGmXhr()) {
+      const res2 = await gmGet(url, { accept, responseType: "text" });
+      return res2.text ?? "";
+    }
+    const res = await fetch(url, { headers: { Accept: accept ?? "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.text();
+  }
+  async function fetchArrayBuffer(url, accept) {
+    if (hasGmXhr()) {
+      const res2 = await gmGet(url, { accept, responseType: "arraybuffer" });
+      if (!res2.buf) throw new Error(`No arraybuffer for ${url}`);
+      return res2.buf;
+    }
+    const res = await fetch(url, { headers: { Accept: accept ?? "application/octet-stream" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.arrayBuffer();
+  }
+  function isGitLfsPointer(text) {
+    return text.startsWith("version https://git-lfs.github.com/spec/v1");
+  }
+  function parseGeoBoundariesPrefixFromUrl(url) {
+    const baseName = url.split("/").pop() ?? "";
+    const m = baseName.match(/^(geoBoundaries-[A-Z]{3}-ADM\\d)_simplified\\.geojson$/);
+    if (!m) return null;
+    const prefix = m[1];
+    const zipUrl = url.slice(0, url.length - baseName.length) + `${prefix}-all.zip`;
+    const entryName = `${prefix}_simplified.geojson`;
+    return { prefix, baseName, zipUrl, entryName };
+  }
+  var geoJsonCache = /* @__PURE__ */ new Map();
+  function loadGeoJson(url) {
+    const existing = geoJsonCache.get(url);
+    if (existing) return existing;
+    const p = (async () => {
+      let text;
+      try {
+        text = await fetchText(url, "application/json");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`GeoJSON fetch failed for ${url}: ${msg}`);
+      }
+      if (!text) throw new Error(`Empty response for ${url}`);
+      if (isGitLfsPointer(text)) {
+        const parsed = parseGeoBoundariesPrefixFromUrl(url);
+        if (!parsed) throw new Error(`Git LFS pointer returned for ${url}`);
+        let zipBuf;
+        try {
+          zipBuf = await fetchArrayBuffer(parsed.zipUrl, "application/zip");
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          throw new Error(`GeoJSON zip fetch failed for ${parsed.zipUrl}: ${msg}`);
+        }
+        const files = unzipSync(new Uint8Array(zipBuf));
+        const entry = files[parsed.entryName];
+        const found = entry ?? Object.entries(files).find(([k]) => k.endsWith(parsed.entryName))?.[1];
+        if (!found) throw new Error(`Missing ${parsed.entryName} in ${parsed.zipUrl}`);
+        return JSON.parse(strFromU8(found));
+      }
+      return JSON.parse(text);
+    })();
+    geoJsonCache.set(url, p);
+    return p;
+  }
+
+  // src/geo/idRegions.ts
+  var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
+  var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
+  function bboxForCoords(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords(c, bbox);
+  }
+  function bboxForGeometry(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var provincesIndexPromise = null;
+  var kabupatenIndexPromise = null;
+  async function loadProvincesIndex() {
+    if (!provincesIndexPromise) {
+      provincesIndexPromise = (async () => {
+        const geo = await loadGeoJson(ID_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return provincesIndexPromise;
+  }
+  async function loadKabupatenIndex() {
+    if (!kabupatenIndexPromise) {
+      kabupatenIndexPromise = (async () => {
+        const geo = await loadGeoJson(ID_KABUPATEN_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return kabupatenIndexPromise;
+  }
+  function memoKey(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var provincesMemo = /* @__PURE__ */ new Map();
+  var kabupatenMemo = /* @__PURE__ */ new Map();
+  async function resolveIdProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey(lat, lng);
+    const cached = provincesMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadProvincesIndex();
+    for (const it of items) {
+      if (!bboxContains(it.bbox, lon, lat)) continue;
+      if (pointInGeometry(lon, lat, it.geom)) {
+        provincesMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveIdKabupatenByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey(lat, lng);
+    const cached = kabupatenMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadKabupatenIndex();
+    for (const it of items) {
+      if (!bboxContains(it.bbox, lon, lat)) continue;
+      if (pointInGeometry(lon, lat, it.geom)) {
+        kabupatenMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/geo/deRegions.ts
+  var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
+  var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
+  function hasGmXhr2() {
+    return hasGmXmlhttpRequest();
+  }
+  function gmGetText(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err2) => reject(err2),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson(url) {
+    if (hasGmXhr2()) {
+      const txt = await gmGetText(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords2(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords2(c, bbox);
+  }
+  function bboxForGeometry2(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords2(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing2(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon2(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing2(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing2(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry2(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon2(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon2(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var statesIndexPromise = null;
+  var districtsIndexPromise = null;
+  async function loadStatesIndex() {
+    if (!statesIndexPromise) {
+      statesIndexPromise = (async () => {
+        const geo = await fetchJson(DE_STATES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry2(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return statesIndexPromise;
+  }
+  async function loadDistrictsIndex() {
+    if (!districtsIndexPromise) {
+      districtsIndexPromise = (async () => {
+        const geo = await fetchJson(DE_DISTRICTS_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.NAME_3 === "string" ? f.properties.NAME_3.trim() : "";
+          const bbox = bboxForGeometry2(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return districtsIndexPromise;
+  }
+  var stateMemo = /* @__PURE__ */ new Map();
+  var districtMemo = /* @__PURE__ */ new Map();
+  function memoKey2(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains2(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  async function resolveDeStateByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey2(lat, lng);
+    const cached = stateMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadStatesIndex();
+    for (const it of items) {
+      if (!bboxContains2(it.bbox, lon, lat)) continue;
+      if (pointInGeometry2(lon, lat, it.geom)) {
+        stateMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveDeDistrictByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey2(lat, lng);
+    const cached = districtMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadDistrictsIndex();
+    for (const it of items) {
+      if (!bboxContains2(it.bbox, lon, lat)) continue;
+      if (pointInGeometry2(lon, lat, it.geom)) {
+        districtMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/geo/naRegions.ts
+  var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
+  var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
+  function hasGmXhr3() {
+    return hasGmXmlhttpRequest();
+  }
+  function gmGetText2(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err2) => reject(err2),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson2(url) {
+    if (hasGmXhr3()) {
+      const txt = await gmGetText2(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords3(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords3(c, bbox);
+  }
+  function bboxForGeometry3(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords3(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing3(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon3(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing3(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing3(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry3(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon3(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon3(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var usIndexPromise = null;
+  var caIndexPromise = null;
+  async function loadUsIndex() {
+    if (!usIndexPromise) {
+      usIndexPromise = (async () => {
+        const geo = await fetchJson2(US_STATES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry3(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return usIndexPromise;
+  }
+  async function loadCaIndex() {
+    if (!caIndexPromise) {
+      caIndexPromise = (async () => {
+        const geo = await fetchJson2(CA_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry3(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return caIndexPromise;
+  }
+  function memoKey3(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains3(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var usMemo = /* @__PURE__ */ new Map();
+  var caMemo = /* @__PURE__ */ new Map();
+  async function resolveUsStateByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey3(lat, lng);
+    const cached = usMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadUsIndex();
+    for (const it of items) {
+      if (!bboxContains3(it.bbox, lon, lat)) continue;
+      if (pointInGeometry3(lon, lat, it.geom)) {
+        usMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveCaProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey3(lat, lng);
+    const cached = caMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadCaIndex();
+    for (const it of items) {
+      if (!bboxContains3(it.bbox, lon, lat)) continue;
+      if (pointInGeometry3(lon, lat, it.geom)) {
+        caMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/geo/seaRegions.ts
+  var PH_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson";
+  var VN_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson";
+  function bboxForCoords4(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords4(c, bbox);
+  }
+  function bboxForGeometry4(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords4(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing4(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon4(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing4(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing4(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry4(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon4(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon4(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var phIndexPromise = null;
+  var vnIndexPromise = null;
+  async function loadPhIndex() {
+    if (!phIndexPromise) {
+      phIndexPromise = (async () => {
+        const geo = await loadGeoJson(PH_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry4(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return phIndexPromise;
+  }
+  async function loadVnIndex() {
+    if (!vnIndexPromise) {
+      vnIndexPromise = (async () => {
+        const geo = await loadGeoJson(VN_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry4(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return vnIndexPromise;
+  }
+  function memoKey4(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains4(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var phMemo = /* @__PURE__ */ new Map();
+  var vnMemo = /* @__PURE__ */ new Map();
+  async function resolvePhProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey4(lat, lng);
+    const cached = phMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadPhIndex();
+    for (const it of items) {
+      if (!bboxContains4(it.bbox, lon, lat)) continue;
+      if (pointInGeometry4(lon, lat, it.geom)) {
+        phMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveVnProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey4(lat, lng);
+    const cached = vnMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadVnIndex();
+    for (const it of items) {
+      if (!bboxContains4(it.bbox, lon, lat)) continue;
+      if (pointInGeometry4(lon, lat, it.geom)) {
+        vnMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/engine/regionEnrichment.ts
+  function isFiniteNum(v) {
+    return typeof v === "number" && Number.isFinite(v);
+  }
+  async function runPool(items, concurrency, fn) {
+    const n = Math.max(1, Math.min(32, Math.floor(concurrency)));
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+      let localCount = 0;
+      for (; ; ) {
+        const i = idx++;
+        if (i >= items.length) return;
+        await fn(items[i]);
+        localCount++;
+        if (localCount % 25 === 0) await new Promise((r) => setTimeout(r, 0));
+      }
+    });
+    await Promise.all(workers);
+  }
+  async function maybeEnrichRoundRowsForDimension(dimId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    const supported = /* @__PURE__ */ new Set([
+      "true_state",
+      "true_district",
+      "true_us_state",
+      "true_ca_province",
+      "true_id_province",
+      "true_id_kabupaten",
+      "true_ph_province",
+      "true_vn_province",
+      "guess_state",
+      "guess_district",
+      "guess_us_state",
+      "guess_ca_province",
+      "guess_id_province",
+      "guess_id_kabupaten",
+      "guess_ph_province",
+      "guess_vn_province"
+    ]);
+    if (!supported.has(dimId)) return;
+    const guessLatLngOf = (r) => {
+      const lat = typeof r?.player_self_guessLat === "number" ? r.player_self_guessLat : typeof r?.p1_guessLat === "number" ? r.p1_guessLat : typeof r?.guessLat === "number" ? r.guessLat : null;
+      const lng = typeof r?.player_self_guessLng === "number" ? r.player_self_guessLng : typeof r?.p1_guessLng === "number" ? r.p1_guessLng : typeof r?.guessLng === "number" ? r.guessLng : null;
+      if (!isFiniteNum(lat) || !isFiniteNum(lng)) return null;
+      return { lat, lng };
+    };
+    const todo = [];
+    for (const r of rows) {
+      const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
+      const lat = r?.trueLat;
+      const lng = r?.trueLng;
+      const g = guessLatLngOf(r);
+      const wantTrue = dimId.startsWith("true_");
+      const wantGuess = dimId.startsWith("guess_");
+      if (wantTrue && (!isFiniteNum(lat) || !isFiniteNum(lng))) continue;
+      if (wantGuess && !g) continue;
+      if (dimId === "true_state") {
+        if (tc !== "de") continue;
+        const has = typeof r?.trueState === "string" && r.trueState.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_district") {
+        if (tc !== "de") continue;
+        const has = typeof r?.trueDistrict === "string" && r.trueDistrict.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_us_state") {
+        if (tc !== "us") continue;
+        const has = typeof r?.trueUsState === "string" && r.trueUsState.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_ca_province") {
+        if (tc !== "ca") continue;
+        const has = typeof r?.trueCaProvince === "string" && r.trueCaProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_state") {
+        if (tc !== "de") continue;
+        const has = typeof r?.guessState === "string" && r.guessState.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_district") {
+        if (tc !== "de") continue;
+        const has = typeof r?.guessDistrict === "string" && r.guessDistrict.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_us_state") {
+        if (tc !== "us") continue;
+        const has = typeof r?.guessUsState === "string" && r.guessUsState.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_ca_province") {
+        if (tc !== "ca") continue;
+        const has = typeof r?.guessCaProvince === "string" && r.guessCaProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_id_province") {
+        if (tc !== "id") continue;
+        const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_id_kabupaten") {
+        if (tc !== "id") continue;
+        const has = typeof r?.trueIdKabupaten === "string" && r.trueIdKabupaten.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_ph_province") {
+        if (tc !== "ph") continue;
+        const has = typeof r?.truePhProvince === "string" && r.truePhProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_vn_province") {
+        if (tc !== "vn") continue;
+        const has = typeof r?.trueVnProvince === "string" && r.trueVnProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_id_province") {
+        if (tc !== "id") continue;
+        const has = typeof r?.guessIdProvince === "string" && r.guessIdProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_id_kabupaten") {
+        if (tc !== "id") continue;
+        const has = typeof r?.guessIdKabupaten === "string" && r.guessIdKabupaten.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_ph_province") {
+        if (tc !== "ph") continue;
+        const has = typeof r?.guessPhProvince === "string" && r.guessPhProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "guess_vn_province") {
+        if (tc !== "vn") continue;
+        const has = typeof r?.guessVnProvince === "string" && r.guessVnProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      }
+    }
+    if (todo.length === 0) return;
+    await runPool(todo, 6, async (r) => {
+      const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
+      const lat = r.trueLat;
+      const lng = r.trueLng;
+      const g = guessLatLngOf(r);
+      if (dimId === "true_state") {
+        const s = await resolveDeStateByLatLng(lat, lng);
+        if (s) r.trueState = s;
+      } else if (dimId === "true_district") {
+        const d = await resolveDeDistrictByLatLng(lat, lng);
+        if (d) r.trueDistrict = d;
+      } else if (dimId === "true_us_state") {
+        const s = await resolveUsStateByLatLng(lat, lng);
+        if (s) r.trueUsState = s;
+      } else if (dimId === "true_ca_province") {
+        const p = await resolveCaProvinceByLatLng(lat, lng);
+        if (p) r.trueCaProvince = p;
+      } else if (dimId === "guess_state" && g && tc === "de") {
+        const s = await resolveDeStateByLatLng(g.lat, g.lng);
+        if (s) r.guessState = s;
+      } else if (dimId === "guess_district" && g && tc === "de") {
+        const d = await resolveDeDistrictByLatLng(g.lat, g.lng);
+        if (d) r.guessDistrict = d;
+      } else if (dimId === "guess_us_state" && g && tc === "us") {
+        const s = await resolveUsStateByLatLng(g.lat, g.lng);
+        if (s) r.guessUsState = s;
+      } else if (dimId === "guess_ca_province" && g && tc === "ca") {
+        const p = await resolveCaProvinceByLatLng(g.lat, g.lng);
+        if (p) r.guessCaProvince = p;
+      } else if (dimId === "true_id_province") {
+        const p = await resolveIdProvinceByLatLng(lat, lng);
+        if (p) r.trueIdProvince = p;
+      } else if (dimId === "true_id_kabupaten") {
+        const k = await resolveIdKabupatenByLatLng(lat, lng);
+        if (k) r.trueIdKabupaten = k;
+      } else if (dimId === "true_ph_province") {
+        const p = await resolvePhProvinceByLatLng(lat, lng);
+        if (p) r.truePhProvince = p;
+      } else if (dimId === "true_vn_province") {
+        const p = await resolveVnProvinceByLatLng(lat, lng);
+        if (p) r.trueVnProvince = p;
+      } else if (dimId === "guess_id_province" && g && tc === "id") {
+        const p = await resolveIdProvinceByLatLng(g.lat, g.lng);
+        if (p) r.guessIdProvince = p;
+      } else if (dimId === "guess_id_kabupaten" && g && tc === "id") {
+        const k = await resolveIdKabupatenByLatLng(g.lat, g.lng);
+        if (k) r.guessIdKabupaten = k;
+      } else if (dimId === "guess_ph_province" && g && tc === "ph") {
+        const p = await resolvePhProvinceByLatLng(g.lat, g.lng);
+        if (p) r.guessPhProvince = p;
+      } else if (dimId === "guess_vn_province" && g && tc === "vn") {
+        const p = await resolveVnProvinceByLatLng(g.lat, g.lng);
+        if (p) r.guessVnProvince = p;
+      }
+    });
+  }
+
   // src/ui/widgets/statListWidget.ts
   function readDateFormatMode(doc) {
     const root = doc.querySelector(".ga-root");
@@ -42240,6 +43796,15 @@ ${describeError(err)}` : message;
     const spec = widget.spec;
     const doc = overlay.getDocument();
     const widgetGrain = widget.grain;
+    const enrichDims = Array.isArray(spec.enrichDimensions) ? spec.enrichDimensions.filter((d) => typeof d === "string" && d) : [];
+    if (widgetGrain === "round" && enrichDims.length) {
+      const rowsToEnrich = Array.isArray(baseRows) ? baseRows : Array.isArray(datasets?.round) ? datasets?.round : null;
+      if (rowsToEnrich) {
+        for (const dimId of enrichDims) {
+          await maybeEnrichRoundRowsForDimension(String(dimId), rowsToEnrich);
+        }
+      }
+    }
     const wrap = doc.createElement("div");
     wrap.className = "ga-widget ga-statlist";
     const title = doc.createElement("div");
@@ -42606,14 +44171,14 @@ ${describeError(err)}` : message;
     if (unitFormat === "percent") {
       const clamped = finite.map((v) => Math.max(0, Math.min(1, v)));
       let min2 = Math.min(...clamped);
-      let max2 = Math.max(...clamped);
+      let max3 = Math.max(...clamped);
       if (preferZero) min2 = 0;
-      let range2 = max2 - min2;
-      if (!Number.isFinite(range2) || range2 <= 0) range2 = Math.max(0.01, Math.abs(max2) || 0.01);
+      let range2 = max3 - min2;
+      if (!Number.isFinite(range2) || range2 <= 0) range2 = Math.max(0.01, Math.abs(max3) || 0.01);
       const pad3 = range2 * 0.06;
       min2 = Math.max(0, min2 - pad3);
-      max2 = Math.min(1, max2 + pad3);
-      range2 = max2 - min2;
+      max3 = Math.min(1, max3 + pad3);
+      range2 = max3 - min2;
       const niceStep2 = (raw) => {
         if (!Number.isFinite(raw) || raw <= 0) return 0.01;
         const exp = Math.floor(Math.log10(raw));
@@ -42625,23 +44190,23 @@ ${describeError(err)}` : message;
       const tickCount2 = 5;
       const step2 = niceStep2(range2 / tickCount2);
       const niceMin2 = preferZero ? 0 : Math.max(0, Math.floor(min2 / step2) * step2);
-      const niceMax2 = Math.min(1, Math.ceil(max2 / step2) * step2);
+      const niceMax2 = Math.min(1, Math.ceil(max3 / step2) * step2);
       if (niceMax2 <= niceMin2) return { minY: niceMin2, maxY: Math.min(1, niceMin2 + Math.max(step2, 0.01)) };
       return { minY: niceMin2, maxY: niceMax2 };
     }
     let min = Math.min(...finite);
-    let max = Math.max(...finite);
+    let max2 = Math.max(...finite);
     if (preferZero) min = Math.min(0, min);
     if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
-    if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
-    let range = max - min;
-    if (!Number.isFinite(range) || range <= 0) range = Math.max(1, Math.abs(max) || 1);
+    if (typeof hardMax === "number" && Number.isFinite(hardMax)) max2 = Math.min(max2, hardMax);
+    let range = max2 - min;
+    if (!Number.isFinite(range) || range <= 0) range = Math.max(1, Math.abs(max2) || 1);
     const pad2 = range * 0.06;
     min -= pad2;
-    max += pad2;
+    max2 += pad2;
     if (typeof hardMin === "number" && Number.isFinite(hardMin)) min = Math.max(min, hardMin);
-    if (typeof hardMax === "number" && Number.isFinite(hardMax)) max = Math.min(max, hardMax);
-    range = max - min;
+    if (typeof hardMax === "number" && Number.isFinite(hardMax)) max2 = Math.min(max2, hardMax);
+    range = max2 - min;
     const niceStep = (raw) => {
       if (!Number.isFinite(raw) || raw <= 0) return 1;
       const exp = Math.floor(Math.log10(raw));
@@ -42653,7 +44218,7 @@ ${describeError(err)}` : message;
     const tickCount = 5;
     const step = niceStep(range / tickCount);
     const niceMin = preferZero ? 0 : Math.floor(min / step) * step;
-    const niceMax = Math.ceil(max / step) * step;
+    const niceMax = Math.ceil(max2 / step) * step;
     let outMin = Number.isFinite(niceMin) ? niceMin : 0;
     let outMax = Number.isFinite(niceMax) ? niceMax : 1;
     if (typeof hardMin === "number" && Number.isFinite(hardMin)) outMin = Math.max(outMin, hardMin);
@@ -43417,776 +44982,6 @@ ${describeError(err)}` : message;
     wrap.appendChild(controls);
     wrap.appendChild(box);
     return wrap;
-  }
-
-  // src/geo/idRegions.ts
-  var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
-  var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
-  function hasGmXhr2() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => {
-          const status = typeof res?.status === "number" ? res.status : 0;
-          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
-          resolve(typeof res?.responseText === "string" ? res.responseText : "");
-        },
-        onerror: (err) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson(url) {
-    if (hasGmXhr2()) {
-      try {
-        const txt = await gmGetText(url, "application/json");
-        return JSON.parse(txt);
-      } catch {
-      }
-    }
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords(c, bbox);
-  }
-  function bboxForGeometry(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var provincesIndexPromise = null;
-  var kabupatenIndexPromise = null;
-  async function loadProvincesIndex() {
-    if (!provincesIndexPromise) {
-      provincesIndexPromise = (async () => {
-        const geo = await fetchJson(ID_PROVINCES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
-          const bbox = bboxForGeometry(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return provincesIndexPromise;
-  }
-  async function loadKabupatenIndex() {
-    if (!kabupatenIndexPromise) {
-      kabupatenIndexPromise = (async () => {
-        const geo = await fetchJson(ID_KABUPATEN_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
-          const bbox = bboxForGeometry(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return kabupatenIndexPromise;
-  }
-  function memoKey(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  var provincesMemo = /* @__PURE__ */ new Map();
-  var kabupatenMemo = /* @__PURE__ */ new Map();
-  async function resolveIdProvinceByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey(lat, lng);
-    const cached = provincesMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadProvincesIndex();
-    for (const it of items) {
-      if (!bboxContains(it.bbox, lon, lat)) continue;
-      if (pointInGeometry(lon, lat, it.geom)) {
-        provincesMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveIdKabupatenByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey(lat, lng);
-    const cached = kabupatenMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadKabupatenIndex();
-    for (const it of items) {
-      if (!bboxContains(it.bbox, lon, lat)) continue;
-      if (pointInGeometry(lon, lat, it.geom)) {
-        kabupatenMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
-  // src/geo/deRegions.ts
-  var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
-  var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
-  function hasGmXhr3() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText2(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson2(url) {
-    if (hasGmXhr3()) {
-      const txt = await gmGetText2(url, "application/json");
-      return JSON.parse(txt);
-    }
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords2(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords2(c, bbox);
-  }
-  function bboxForGeometry2(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords2(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing2(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon2(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing2(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing2(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry2(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon2(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon2(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var statesIndexPromise = null;
-  var districtsIndexPromise = null;
-  async function loadStatesIndex() {
-    if (!statesIndexPromise) {
-      statesIndexPromise = (async () => {
-        const geo = await fetchJson2(DE_STATES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
-          const bbox = bboxForGeometry2(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return statesIndexPromise;
-  }
-  async function loadDistrictsIndex() {
-    if (!districtsIndexPromise) {
-      districtsIndexPromise = (async () => {
-        const geo = await fetchJson2(DE_DISTRICTS_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.NAME_3 === "string" ? f.properties.NAME_3.trim() : "";
-          const bbox = bboxForGeometry2(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return districtsIndexPromise;
-  }
-  var stateMemo = /* @__PURE__ */ new Map();
-  var districtMemo = /* @__PURE__ */ new Map();
-  function memoKey2(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains2(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  async function resolveDeStateByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey2(lat, lng);
-    const cached = stateMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadStatesIndex();
-    for (const it of items) {
-      if (!bboxContains2(it.bbox, lon, lat)) continue;
-      if (pointInGeometry2(lon, lat, it.geom)) {
-        stateMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveDeDistrictByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey2(lat, lng);
-    const cached = districtMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadDistrictsIndex();
-    for (const it of items) {
-      if (!bboxContains2(it.bbox, lon, lat)) continue;
-      if (pointInGeometry2(lon, lat, it.geom)) {
-        districtMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
-  // src/geo/naRegions.ts
-  var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
-  var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
-  function hasGmXhr4() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText3(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson3(url) {
-    if (hasGmXhr4()) {
-      const txt = await gmGetText3(url, "application/json");
-      return JSON.parse(txt);
-    }
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords3(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords3(c, bbox);
-  }
-  function bboxForGeometry3(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords3(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing3(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon3(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing3(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing3(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry3(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon3(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon3(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var usIndexPromise = null;
-  var caIndexPromise = null;
-  async function loadUsIndex() {
-    if (!usIndexPromise) {
-      usIndexPromise = (async () => {
-        const geo = await fetchJson3(US_STATES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
-          const bbox = bboxForGeometry3(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return usIndexPromise;
-  }
-  async function loadCaIndex() {
-    if (!caIndexPromise) {
-      caIndexPromise = (async () => {
-        const geo = await fetchJson3(CA_PROVINCES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
-          const bbox = bboxForGeometry3(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return caIndexPromise;
-  }
-  function memoKey3(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains3(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  var usMemo = /* @__PURE__ */ new Map();
-  var caMemo = /* @__PURE__ */ new Map();
-  async function resolveUsStateByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey3(lat, lng);
-    const cached = usMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadUsIndex();
-    for (const it of items) {
-      if (!bboxContains3(it.bbox, lon, lat)) continue;
-      if (pointInGeometry3(lon, lat, it.geom)) {
-        usMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveCaProvinceByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey3(lat, lng);
-    const cached = caMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadCaIndex();
-    for (const it of items) {
-      if (!bboxContains3(it.bbox, lon, lat)) continue;
-      if (pointInGeometry3(lon, lat, it.geom)) {
-        caMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
-  // src/geo/seaRegions.ts
-  var PH_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson";
-  var VN_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson";
-  function hasGmXhr5() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText4(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => {
-          const status = typeof res?.status === "number" ? res.status : 0;
-          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
-          resolve(typeof res?.responseText === "string" ? res.responseText : "");
-        },
-        onerror: (err) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson4(url) {
-    if (hasGmXhr5()) {
-      try {
-        const txt = await gmGetText4(url, "application/json");
-        return JSON.parse(txt);
-      } catch {
-      }
-    }
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords4(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords4(c, bbox);
-  }
-  function bboxForGeometry4(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords4(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing4(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon4(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing4(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing4(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry4(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon4(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon4(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var phIndexPromise = null;
-  var vnIndexPromise = null;
-  async function loadPhIndex() {
-    if (!phIndexPromise) {
-      phIndexPromise = (async () => {
-        const geo = await fetchJson4(PH_PROVINCES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
-          const bbox = bboxForGeometry4(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return phIndexPromise;
-  }
-  async function loadVnIndex() {
-    if (!vnIndexPromise) {
-      vnIndexPromise = (async () => {
-        const geo = await fetchJson4(VN_PROVINCES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
-          const bbox = bboxForGeometry4(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return vnIndexPromise;
-  }
-  function memoKey4(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains4(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  var phMemo = /* @__PURE__ */ new Map();
-  var vnMemo = /* @__PURE__ */ new Map();
-  async function resolvePhProvinceByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey4(lat, lng);
-    const cached = phMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadPhIndex();
-    for (const it of items) {
-      if (!bboxContains4(it.bbox, lon, lat)) continue;
-      if (pointInGeometry4(lon, lat, it.geom)) {
-        phMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveVnProvinceByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey4(lat, lng);
-    const cached = vnMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadVnIndex();
-    for (const it of items) {
-      if (!bboxContains4(it.bbox, lon, lat)) continue;
-      if (pointInGeometry4(lon, lat, it.geom)) {
-        vnMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
-  // src/engine/regionEnrichment.ts
-  function isFiniteNum(v) {
-    return typeof v === "number" && Number.isFinite(v);
-  }
-  async function runPool(items, concurrency, fn) {
-    const n = Math.max(1, Math.min(32, Math.floor(concurrency)));
-    let idx = 0;
-    const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
-      let localCount = 0;
-      for (; ; ) {
-        const i = idx++;
-        if (i >= items.length) return;
-        await fn(items[i]);
-        localCount++;
-        if (localCount % 25 === 0) await new Promise((r) => setTimeout(r, 0));
-      }
-    });
-    await Promise.all(workers);
-  }
-  async function maybeEnrichRoundRowsForDimension(dimId, rows) {
-    if (!Array.isArray(rows) || rows.length === 0) return;
-    const supported = /* @__PURE__ */ new Set([
-      "true_state",
-      "true_district",
-      "true_us_state",
-      "true_ca_province",
-      "true_id_province",
-      "true_id_kabupaten",
-      "true_ph_province",
-      "true_vn_province"
-    ]);
-    if (!supported.has(dimId)) return;
-    const todo = [];
-    for (const r of rows) {
-      const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
-      const lat = r?.trueLat;
-      const lng = r?.trueLng;
-      if (!isFiniteNum(lat) || !isFiniteNum(lng)) continue;
-      if (dimId === "true_state") {
-        if (tc !== "de") continue;
-        const has = typeof r?.trueState === "string" && r.trueState.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_district") {
-        if (tc !== "de") continue;
-        const has = typeof r?.trueDistrict === "string" && r.trueDistrict.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_us_state") {
-        if (tc !== "us") continue;
-        const has = typeof r?.trueUsState === "string" && r.trueUsState.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_ca_province") {
-        if (tc !== "ca") continue;
-        const has = typeof r?.trueCaProvince === "string" && r.trueCaProvince.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_id_province") {
-        if (tc !== "id") continue;
-        const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_id_kabupaten") {
-        if (tc !== "id") continue;
-        const has = typeof r?.trueIdKabupaten === "string" && r.trueIdKabupaten.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_ph_province") {
-        if (tc !== "ph") continue;
-        const has = typeof r?.truePhProvince === "string" && r.truePhProvince.trim().length > 0;
-        if (!has) todo.push(r);
-      } else if (dimId === "true_vn_province") {
-        if (tc !== "vn") continue;
-        const has = typeof r?.trueVnProvince === "string" && r.trueVnProvince.trim().length > 0;
-        if (!has) todo.push(r);
-      }
-    }
-    if (todo.length === 0) return;
-    await runPool(todo, 6, async (r) => {
-      const lat = r.trueLat;
-      const lng = r.trueLng;
-      if (dimId === "true_state") {
-        const s = await resolveDeStateByLatLng(lat, lng);
-        if (s) r.trueState = s;
-      } else if (dimId === "true_district") {
-        const d = await resolveDeDistrictByLatLng(lat, lng);
-        if (d) r.trueDistrict = d;
-      } else if (dimId === "true_us_state") {
-        const s = await resolveUsStateByLatLng(lat, lng);
-        if (s) r.trueUsState = s;
-      } else if (dimId === "true_ca_province") {
-        const p = await resolveCaProvinceByLatLng(lat, lng);
-        if (p) r.trueCaProvince = p;
-      } else if (dimId === "true_id_province") {
-        const p = await resolveIdProvinceByLatLng(lat, lng);
-        if (p) r.trueIdProvince = p;
-      } else if (dimId === "true_id_kabupaten") {
-        const k = await resolveIdKabupatenByLatLng(lat, lng);
-        if (k) r.trueIdKabupaten = k;
-      } else if (dimId === "true_ph_province") {
-        const p = await resolvePhProvinceByLatLng(lat, lng);
-        if (p) r.truePhProvince = p;
-      } else if (dimId === "true_vn_province") {
-        const p = await resolveVnProvinceByLatLng(lat, lng);
-        if (p) r.trueVnProvince = p;
-      }
-    });
   }
 
   // src/ui/widgets/breakdownWidget.ts
@@ -45045,25 +45840,26 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
-  function hasGmXhr6() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
+  function hasGmXhr4() {
+    return hasGmXmlhttpRequest();
   }
-  function gmGetText5(url, accept) {
+  function gmGetText3(url, accept) {
     return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
       gm({
         method: "GET",
         url,
         headers: { Accept: accept ?? "application/json" },
         onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
+        onerror: (err2) => reject(err2),
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
-  async function fetchJson5(url) {
-    if (hasGmXhr6()) {
-      const txt = await gmGetText5(url, "application/json");
+  async function fetchJson3(url) {
+    if (hasGmXhr4()) {
+      const txt = await gmGetText3(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -45078,7 +45874,7 @@ ${describeError(err)}` : message;
   async function loadData() {
     if (!dataPromise) {
       dataPromise = (async () => {
-        const [geojson, countries] = await Promise.all([fetchJson5(WORLD_GEOJSON_URL), fetchJson5(ISO_MAP_URL)]);
+        const [geojson, countries] = await Promise.all([fetchJson3(WORLD_GEOJSON_URL), fetchJson3(ISO_MAP_URL)]);
         const iso3ToIso2 = /* @__PURE__ */ new Map();
         if (Array.isArray(countries)) {
           for (const c of countries) {
@@ -45092,8 +45888,8 @@ ${describeError(err)}` : message;
     }
     return dataPromise;
   }
-  function clamp(v, min, max) {
-    return Math.max(min, Math.min(max, v));
+  function clamp(v, min, max2) {
+    return Math.max(min, Math.min(max2, v));
   }
   function project(lon, lat, w, h) {
     const x = (lon + 180) / 360 * w;
@@ -45495,7 +46291,7 @@ ${describeError(err)}` : message;
       const measureFn = shareKind ? null : MEASURES_BY_GRAIN[grain]?.[formulaId];
       if (!shareKind && !measureFn) throw new Error(`Missing measure implementation for formulaId=${formulaId}`);
       let min = Infinity;
-      let max = -Infinity;
+      let max2 = -Infinity;
       const allVals = [];
       for (const [iso2, g] of grouped.entries()) {
         const v = shareKind === "rounds" ? denom > 0 ? g.length / denom : 0 : shareKind ? denom > 0 ? sumDamage3(g, shareKind) / denom : 0 : measureFn(g);
@@ -45504,15 +46300,15 @@ ${describeError(err)}` : message;
         values.set(iso2, vv);
         allVals.push(vv);
         min = Math.min(min, vv);
-        max = Math.max(max, vv);
+        max2 = Math.max(max2, vv);
       }
-      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      if (!Number.isFinite(min) || !Number.isFinite(max2)) {
         min = 0;
-        max = 1;
+        max2 = 1;
       }
       const sorted = allVals.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
       const p10 = Number.isFinite(percentile(sorted, 0.1)) ? percentile(sorted, 0.1) : min;
-      const p90 = Number.isFinite(percentile(sorted, 0.9)) ? percentile(sorted, 0.9) : max;
+      const p90 = Number.isFinite(percentile(sorted, 0.9)) ? percentile(sorted, 0.9) : max2;
       const scaleMin = Math.min(p10, p90);
       const scaleMax = Math.max(p10, p90);
       const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
@@ -45592,46 +46388,6 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/regionMetricMapWidget.ts
-  function hasGmXhr7() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText6(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => {
-          const status = typeof res?.status === "number" ? res.status : 0;
-          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
-          resolve(typeof res?.responseText === "string" ? res.responseText : "");
-        },
-        onerror: (err) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson6(url) {
-    if (hasGmXhr7()) {
-      try {
-        const txt = await gmGetText6(url, "application/json");
-        return JSON.parse(txt);
-      } catch {
-      }
-    }
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  var geojsonCache = /* @__PURE__ */ new Map();
-  function loadGeoJson(url) {
-    const existing = geojsonCache.get(url);
-    if (existing) return existing;
-    const p = fetchJson6(url);
-    geojsonCache.set(url, p);
-    return p;
-  }
   function project2(lon, lat, w, h) {
     const x = (lon + 180) / 360 * w;
     const y = (90 - lat) / 180 * h;
@@ -45831,7 +46587,7 @@ ${describeError(err)}` : message;
       const values = /* @__PURE__ */ new Map();
       const allVals = [];
       let min = Infinity;
-      let max = -Infinity;
+      let max2 = -Infinity;
       const measureFn = MEASURES_BY_GRAIN[grain]?.[measDef.formulaId];
       if (!measureFn) throw new Error(`Missing measure implementation for formulaId=${measDef.formulaId}`);
       for (const [k, g2] of grouped.entries()) {
@@ -45843,15 +46599,15 @@ ${describeError(err)}` : message;
         values.set(key, vv);
         allVals.push(vv);
         min = Math.min(min, vv);
-        max = Math.max(max, vv);
+        max2 = Math.max(max2, vv);
       }
-      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      if (!Number.isFinite(min) || !Number.isFinite(max2)) {
         min = 0;
-        max = 1;
+        max2 = 1;
       }
       const sorted = allVals.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
       const p10 = Number.isFinite(percentile2(sorted, 0.1)) ? percentile2(sorted, 0.1) : min;
-      const p90 = Number.isFinite(percentile2(sorted, 0.9)) ? percentile2(sorted, 0.9) : max;
+      const p90 = Number.isFinite(percentile2(sorted, 0.9)) ? percentile2(sorted, 0.9) : max2;
       const scaleMin = Math.min(p10, p90);
       const scaleMax = Math.max(p10, p90);
       const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
@@ -46024,25 +46780,26 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/pointMapWidget.ts
-  function hasGmXhr8() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
+  function hasGmXhr5() {
+    return hasGmXmlhttpRequest();
   }
-  function gmGetText7(url, accept) {
+  function gmGetText4(url, accept) {
     return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
       gm({
         method: "GET",
         url,
         headers: { Accept: accept ?? "application/json" },
         onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
+        onerror: (err2) => reject(err2),
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
-  async function fetchJson7(url) {
-    if (hasGmXhr8()) {
-      const txt = await gmGetText7(url, "application/json");
+  async function fetchJson4(url) {
+    if (hasGmXhr5()) {
+      const txt = await gmGetText4(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -46052,11 +46809,11 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL2 = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var worldPromise = null;
   function loadWorldGeoJson() {
-    if (!worldPromise) worldPromise = fetchJson7(WORLD_GEOJSON_URL2);
+    if (!worldPromise) worldPromise = fetchJson4(WORLD_GEOJSON_URL2);
     return worldPromise;
   }
-  function clamp2(v, min, max) {
-    return Math.max(min, Math.min(max, v));
+  function clamp2(v, min, max2) {
+    return Math.max(min, Math.min(max2, v));
   }
   function project3(lon, lat, w, h) {
     const x = (lon + 180) / 360 * w;
@@ -47943,7 +48700,7 @@ ${describeError(err)}` : message;
   function createBootLog(doc) {
     return {
       log: (message) => analysisConsole.info(message),
-      error: (message, err) => analysisConsole.error(message, err),
+      error: (message, err2) => analysisConsole.error(message, err2),
       remove: () => void 0
     };
   }
@@ -48033,6 +48790,13 @@ ${describeError(err)}` : message;
     const ua = doc.defaultView?.navigator?.userAgent ?? "";
     boot.log("GeoAnalyzr: analysis window boot");
     boot.log(`readyState=${doc.readyState} ua=${ua}`);
+    try {
+      const gm = getGmXmlhttpRequest();
+      if (typeof gm === "function" && typeof targetWindow.GM_xmlhttpRequest !== "function") {
+        targetWindow.GM_xmlhttpRequest = gm;
+      }
+    } catch {
+    }
     if (!targetWindow.__gaBootHandlersInstalled) {
       targetWindow.__gaBootHandlersInstalled = true;
       targetWindow.addEventListener("error", (ev) => {
