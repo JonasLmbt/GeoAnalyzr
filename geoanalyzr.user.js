@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.1
+// @version      2.2.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -34880,79 +34880,79 @@ ${shapes}`.trim();
                   children: [
                     {
                       widgetId: "w_country_metrics",
-                      type: "breakdown",
+                      type: "multi_view",
                       title: "Countries - Country metrics",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 8 },
+                      placement: { x: 0, y: 0, w: 12, h: 18 },
                       spec: {
-                        dimension: "true_country",
-                        measures: [
-                          "avg_score",
-                          "avg_score_hit_only",
-                          "avg_distance_km",
-                          "avg_guess_duration",
-                          "rounds_count",
-                          "fivek_rate",
-                          "fivek_count",
-                          "throw_rate",
-                          "throw_count",
-                          "hit_rate",
-                          "hit_count",
-                          "damage_dealt_avg",
-                          "damage_taken_avg",
-                          "damage_dealt_share",
-                          "damage_taken_share"
-                        ],
-                        activeMeasure: "avg_score",
-                        sorts: [{ mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "desc" },
-                        limit: 15,
-                        extendable: true,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
+                        activeView: "bar",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_country",
+                              measures: [
+                                "avg_score",
+                                "avg_score_hit_only",
+                                "avg_distance_km",
+                                "avg_guess_duration",
+                                "rounds_count",
+                                "fivek_rate",
+                                "fivek_count",
+                                "throw_rate",
+                                "throw_count",
+                                "hit_rate",
+                                "hit_count",
+                                "damage_dealt_avg",
+                                "damage_taken_avg",
+                                "damage_dealt_share",
+                                "damage_taken_share"
+                              ],
+                              activeMeasure: "avg_score",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "country_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_country",
+                              mapHeight: 420,
+                              measures: [
+                                "avg_score",
+                                "avg_score_hit_only",
+                                "avg_distance_km",
+                                "avg_guess_duration",
+                                "rounds_count",
+                                "fivek_rate",
+                                "fivek_count",
+                                "throw_rate",
+                                "throw_count",
+                                "hit_rate",
+                                "hit_count",
+                                "damage_dealt_avg",
+                                "damage_taken_avg",
+                                "damage_dealt_share",
+                                "damage_taken_share"
+                              ],
+                              activeMeasure: "avg_score",
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
                           }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_country_metrics_map",
-                      type: "country_map",
-                      title: "Countries - Country metrics (map)",
-                      grain: "round",
-                      placement: { x: 0, y: 8, w: 12, h: 10 },
-                      spec: {
-                        dimension: "true_country",
-                        mapHeight: 420,
-                        measures: [
-                          "avg_score",
-                          "avg_score_hit_only",
-                          "avg_distance_km",
-                          "avg_guess_duration",
-                          "rounds_count",
-                          "fivek_rate",
-                          "fivek_count",
-                          "throw_rate",
-                          "throw_count",
-                          "hit_rate",
-                          "hit_count",
-                          "damage_dealt_avg",
-                          "damage_taken_avg",
-                          "damage_dealt_share",
-                          "damage_taken_share"
-                        ],
-                        activeMeasure: "avg_score",
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
+                        ]
                       }
                     },
                     {
@@ -35306,41 +35306,50 @@ ${shapes}`.trim();
                     },
                     {
                       widgetId: "w_country_insight_de_states",
-                      type: "breakdown",
+                      type: "multi_view",
                       title: "Germany - States (Bundesl\xE4nder)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 18, w: 6, h: 6 },
+                      placement: { x: 0, y: 18, w: 12, h: 6 },
                       spec: {
-                        dimension: "true_state",
-                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                        activeMeasure: "rounds_count",
-                        sorts: [{ mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "desc" },
-                        limit: 12,
-                        extendable: true,
-                        actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_de_states_map",
-                      type: "region_map",
-                      title: "Germany - States (map)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 6, y: 18, w: 6, h: 6 },
-                      spec: {
-                        dimension: "true_state",
-                        geojsonUrl: "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
-                        featureKey: "name",
-                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                        activeMeasure: "avg_score",
-                        mapHeight: 380,
-                        actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                        }
+                        activeView: "bar",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_state",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "rounds_count",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 12,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "region_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_state",
+                              geojsonUrl: "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
+                              featureKey: "name",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "avg_score",
+                              mapHeight: 380,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
                       }
                     },
                     {
@@ -44528,6 +44537,87 @@ ${describeError(err)}` : message;
     return wrap;
   }
 
+  // src/ui/widgets/multiViewWidget.ts
+  async function renderMultiViewWidget(args) {
+    const { widget, overlay, renderChild } = args;
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-multiview";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const controls = doc.createElement("div");
+    controls.className = "ga-chart-controls";
+    const controlsLeft = doc.createElement("div");
+    controlsLeft.className = "ga-chart-controls-left";
+    controls.appendChild(controlsLeft);
+    const actionsRight = doc.createElement("div");
+    actionsRight.className = "ga-chart-actions";
+    controls.appendChild(actionsRight);
+    const host = doc.createElement("div");
+    host.className = "ga-multiview-host";
+    const views = Array.isArray(spec.views) ? spec.views : [];
+    if (views.length === 0) {
+      const empty = doc.createElement("div");
+      empty.style.fontSize = "12px";
+      empty.style.opacity = "0.75";
+      empty.textContent = "No views configured.";
+      host.appendChild(empty);
+      wrap.appendChild(title);
+      wrap.appendChild(controls);
+      wrap.appendChild(host);
+      return wrap;
+    }
+    const allIds = views.map((v) => String(v.id));
+    let active = typeof spec.activeView === "string" && allIds.includes(spec.activeView) ? spec.activeView : allIds[0];
+    const label = doc.createElement("label");
+    label.style.fontSize = "12px";
+    label.style.opacity = "0.9";
+    label.textContent = "View:";
+    const select = doc.createElement("select");
+    select.style.background = "var(--ga-control-bg)";
+    select.style.color = "var(--ga-control-text)";
+    select.style.border = "1px solid var(--ga-control-border)";
+    select.style.borderRadius = "8px";
+    select.style.padding = "4px 8px";
+    for (const v of views) {
+      const opt = doc.createElement("option");
+      opt.value = String(v.id);
+      opt.textContent = String(v.label ?? v.id);
+      if (String(v.id) === active) opt.selected = true;
+      select.appendChild(opt);
+    }
+    const renderActive = async () => {
+      host.innerHTML = "";
+      const v = views.find((x) => String(x.id) === active) ?? views[0];
+      const child = {
+        widgetId: `${widget.widgetId}__${String(v.id)}`,
+        type: v.type,
+        title: "",
+        grain: v.grain,
+        spec: v.spec
+      };
+      const el2 = await renderChild(child);
+      const firstTitle = el2.querySelector?.(".ga-widget-title");
+      if (firstTitle && firstTitle.parentElement === el2) firstTitle.remove();
+      host.appendChild(el2);
+    };
+    select.addEventListener("change", () => {
+      const next = select.value;
+      if (!allIds.includes(next)) return;
+      active = next;
+      void renderActive();
+    });
+    controlsLeft.appendChild(label);
+    controlsLeft.appendChild(select);
+    wrap.appendChild(title);
+    wrap.appendChild(controls);
+    wrap.appendChild(host);
+    await renderActive();
+    return wrap;
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
@@ -44573,6 +44663,18 @@ ${describeError(err)}` : message;
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "region_map") return await renderRegionMetricMapWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "multi_view") {
+        return await renderMultiViewWidget({
+          semantic,
+          widget,
+          overlay,
+          datasets: activeDatasets,
+          context: activeContext,
+          renderChild: async (child) => {
+            return await renderWidget(child);
+          }
+        });
+      }
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");

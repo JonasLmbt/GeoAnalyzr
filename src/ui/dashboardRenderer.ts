@@ -11,6 +11,7 @@ import { renderRecordListWidget } from "./widgets/recordListWidget";
 import { renderLeaderListWidget } from "./widgets/leaderListWidget";
 import { renderCountryMetricMapWidget } from "./widgets/countryMetricMapWidget";
 import { renderRegionMetricMapWidget } from "./widgets/regionMetricMapWidget";
+import { renderMultiViewWidget } from "./widgets/multiViewWidget";
 import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
 import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
@@ -82,6 +83,19 @@ export async function renderDashboard(
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "region_map") return await renderRegionMetricMapWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "multi_view") {
+      return await renderMultiViewWidget({
+        semantic,
+        widget,
+        overlay,
+        datasets: activeDatasets,
+        context: activeContext,
+        renderChild: async (child) => {
+          // Ensure child widgets inherit the parent widgetId prefix for stable drilldown titles.
+          return await renderWidget(child);
+        }
+      });
+    }
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows as any);
 

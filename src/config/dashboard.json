@@ -1678,81 +1678,79 @@
                 "children": [
                   {
                     "widgetId": "w_country_metrics",
-                    "type": "breakdown",
+                    "type": "multi_view",
                     "title": "Countries - Country metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 8 },
-                      "spec": {
-                        "dimension": "true_country",
-                        "measures": [
-                          "avg_score",
-                          "avg_score_hit_only",
-                          "avg_distance_km",
-                          "avg_guess_duration",
-                          "rounds_count",
-                          "fivek_rate",
-                          "fivek_count",
-                          "throw_rate",
-                          "throw_count",
-                          "hit_rate",
-                          "hit_count",
-                          "damage_dealt_avg",
-                          "damage_taken_avg",
-                          "damage_dealt_share",
-                          "damage_taken_share"
-                        ],
-                        "activeMeasure": "avg_score",
-                        "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                        "activeSort": { "mode": "desc" },
-                        "limit": 15,
-                        "extendable": true,
-                        "actions": {
-                          "click": {
-                            "type": "drilldown",
-                            "target": "rounds",
-                            "columnsPreset": "roundMode",
-                            "filterFromPoint": true
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 18 },
+                    "spec": {
+                      "activeView": "bar",
+                      "views": [
+                        {
+                          "id": "bar",
+                          "label": "Bar",
+                          "type": "breakdown",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_country",
+                            "measures": [
+                              "avg_score",
+                              "avg_score_hit_only",
+                              "avg_distance_km",
+                              "avg_guess_duration",
+                              "rounds_count",
+                              "fivek_rate",
+                              "fivek_count",
+                              "throw_rate",
+                              "throw_count",
+                              "hit_rate",
+                              "hit_count",
+                              "damage_dealt_avg",
+                              "damage_taken_avg",
+                              "damage_dealt_share",
+                              "damage_taken_share"
+                            ],
+                            "activeMeasure": "avg_score",
+                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                            "activeSort": { "mode": "desc" },
+                            "limit": 15,
+                            "extendable": true,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "map",
+                          "label": "Map",
+                          "type": "country_map",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_country",
+                            "mapHeight": 420,
+                            "measures": [
+                              "avg_score",
+                              "avg_score_hit_only",
+                              "avg_distance_km",
+                              "avg_guess_duration",
+                              "rounds_count",
+                              "fivek_rate",
+                              "fivek_count",
+                              "throw_rate",
+                              "throw_count",
+                              "hit_rate",
+                              "hit_count",
+                              "damage_dealt_avg",
+                              "damage_taken_avg",
+                              "damage_dealt_share",
+                              "damage_taken_share"
+                            ],
+                            "activeMeasure": "avg_score",
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
                           }
                         }
-                      
-                    }
-                  }
-                  ,
-                  {
-                    "widgetId": "w_country_metrics_map",
-                    "type": "country_map",
-                    "title": "Countries - Country metrics (map)",
-                    "grain": "round",
-                    "placement": { "x": 0, "y": 8, "w": 12, "h": 10 },
-                    "spec": {
-                      "dimension": "true_country",
-                      "mapHeight": 420,
-                      "measures": [
-                        "avg_score",
-                        "avg_score_hit_only",
-                        "avg_distance_km",
-                        "avg_guess_duration",
-                        "rounds_count",
-                        "fivek_rate",
-                        "fivek_count",
-                        "throw_rate",
-                        "throw_count",
-                        "hit_rate",
-                        "hit_count",
-                        "damage_dealt_avg",
-                        "damage_taken_avg",
-                        "damage_dealt_share",
-                        "damage_taken_share"
-                      ],
-                      "activeMeasure": "avg_score",
-                      "actions": {
-                        "click": {
-                          "type": "drilldown",
-                          "target": "rounds",
-                          "columnsPreset": "roundMode",
-                          "filterFromPoint": true
-                        }
-                      }
+                      ]
                     }
                   }
                   ,
@@ -2111,41 +2109,50 @@
                   ,
                   {
                     "widgetId": "w_country_insight_de_states",
-                    "type": "breakdown",
+                    "type": "multi_view",
                     "title": "Germany - States (Bundesländer)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 18, "w": 6, "h": 6 },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 6 },
                     "spec": {
-                      "dimension": "true_state",
-                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                      "activeMeasure": "rounds_count",
-                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "desc" },
-                      "limit": 12,
-                      "extendable": true,
-                      "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                      }
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_de_states_map",
-                    "type": "region_map",
-                    "title": "Germany - States (map)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 6, "y": 18, "w": 6, "h": 6 },
-                    "spec": {
-                      "dimension": "true_state",
-                      "geojsonUrl": "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
-                      "featureKey": "name",
-                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                      "activeMeasure": "avg_score",
-                      "mapHeight": 380,
-                      "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                      }
+                      "activeView": "bar",
+                      "views": [
+                        {
+                          "id": "bar",
+                          "label": "Bar",
+                          "type": "breakdown",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_state",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "rounds_count",
+                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                            "activeSort": { "mode": "desc" },
+                            "limit": 12,
+                            "extendable": true,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "map",
+                          "label": "Map",
+                          "type": "region_map",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_state",
+                            "geojsonUrl": "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
+                            "featureKey": "name",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "avg_score",
+                            "mapHeight": 380,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        }
+                      ]
                     }
                   },
                   {

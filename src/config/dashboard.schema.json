@@ -257,7 +257,7 @@
       "required": ["widgetId", "type", "title", "grain", "spec"],
       "properties": {
         "widgetId": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "record_list", "leader_list"] },
+        "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "multi_view", "record_list", "leader_list"] },
         "title": { "$ref": "#/$defs/title" },
         "grain": { "$ref": "#/$defs/grain" },
         "placement": { "$ref": "#/$defs/placementDef" },
@@ -279,6 +279,7 @@
         { "if": { "properties": { "type": { "const": "breakdown" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/breakdownSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "country_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/countryMapSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "region_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/regionMapSpecDef" } } } },
+        { "if": { "properties": { "type": { "const": "multi_view" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/multiViewSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "record_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/recordListSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "leader_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/leaderListSpecDef" } } } }
       ]
@@ -313,6 +314,41 @@
         "mapHeight": { "type": "integer", "minimum": 180, "maximum": 1200 },
         "filters": { "type": "array", "items": { "$ref": "#/$defs/filterDef" } },
         "actions": { "type": "object", "additionalProperties": true }
+      }
+    },
+
+    "multiViewSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["views"],
+      "properties": {
+        "activeView": { "type": "string", "minLength": 1 },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "type", "grain", "spec"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "$ref": "#/$defs/title" },
+              "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "record_list", "leader_list"] },
+              "grain": { "$ref": "#/$defs/grain" },
+              "spec": {}
+            },
+            "allOf": [
+              { "if": { "properties": { "type": { "const": "chart" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/chartSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "stat_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/statListSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "stat_value" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/statValueSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "breakdown" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/breakdownSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "country_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/countryMapSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "region_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/regionMapSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "record_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/recordListSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "leader_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/leaderListSpecDef" } } } }
+            ]
+          }
+        }
       }
     },
 
