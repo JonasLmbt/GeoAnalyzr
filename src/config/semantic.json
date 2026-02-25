@@ -820,7 +820,7 @@
     },
 
     "hit_rate": {
-      "label": "Hit rate",
+      "label": "Country hit rate",
       "unit": "percent",
       "grain": "round",
       "allowedCharts": ["bar", "line"],

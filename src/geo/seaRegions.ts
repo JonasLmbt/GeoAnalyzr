@@ -16,8 +16,12 @@ function gmGetText(url: string, accept?: string): Promise<string> {
       method: "GET",
       url,
       headers: { Accept: accept ?? "application/json" },
-      onload: (res: any) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-      onerror: (err: any) => reject(err),
+      onload: (res: any) => {
+        const status = typeof res?.status === "number" ? res.status : 0;
+        if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
+        resolve(typeof res?.responseText === "string" ? res.responseText : "");
+      },
+      onerror: (err: any) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
       ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
     });
   });
@@ -25,10 +29,14 @@ function gmGetText(url: string, accept?: string): Promise<string> {
 
 async function fetchJson(url: string): Promise<any> {
   if (hasGmXhr()) {
-    const txt = await gmGetText(url, "application/json");
-    return JSON.parse(txt);
+    try {
+      const txt = await gmGetText(url, "application/json");
+      return JSON.parse(txt);
+    } catch {
+      // Fall back to fetch() for environments where GM_xhr is blocked by @connect permissions.
+    }
   }
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   return res.json();
 }
@@ -181,4 +189,3 @@ export async function resolveVnProvinceByLatLng(lat: number, lng: number): Promi
   }
   return null;
 }
-

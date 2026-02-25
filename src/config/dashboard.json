@@ -2188,12 +2188,11 @@
                   {
                     "widgetId": "w_country_insight_overall_hit_rate",
                     "type": "stat_value",
-                    "title": "Overall hit rate",
+                    "title": "Hit rate in selected country",
                     "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE", "us", "US", "ca", "CA", "id", "ID"] },
                     "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
                     "spec": {
-                      "label": "Hit rate (overall)",
+                      "label": "Country hit rate (selected country)",
                       "measure": "hit_rate",
                       "actions": {
                         "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" }
@@ -2203,7 +2202,7 @@
                   {
                     "widgetId": "w_country_insight_de_states",
                     "type": "multi_view",
-                    "title": "Germany - States (Bundesländer)",
+                    "title": "Germany - Level 1: States (Bundesländer)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
                     "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
@@ -2347,7 +2346,7 @@
                   {
                     "widgetId": "w_country_insight_id_provinces",
                     "type": "multi_view",
-                    "title": "Indonesia - Provinces",
+                    "title": "Indonesia - Level 1: Provinces",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
                     "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
@@ -2491,7 +2490,7 @@
                   {
                     "widgetId": "w_country_insight_de_districts",
                     "type": "breakdown",
-                    "title": "Germany - Districts (Landkreise)",
+                    "title": "Germany - Level 2: Districts (Landkreise)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
                     "placement": { "x": 0, "y": 26, "w": 12, "h": 6 },
@@ -2511,7 +2510,7 @@
                   {
                     "widgetId": "w_country_insight_id_kabupaten",
                     "type": "breakdown",
-                    "title": "Indonesia - Kabupaten / Regencies",
+                    "title": "Indonesia - Level 2: Kabupaten / Regencies",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
                     "placement": { "x": 0, "y": 26, "w": 12, "h": 6 },

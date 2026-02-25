@@ -110,6 +110,38 @@ export async function renderDashboard(
     return ph;
   }
 
+  const describeWidgetError = (e: any): string => {
+    if (e instanceof Error) return `${e.name}: ${e.message}`;
+    const msg = typeof e?.message === "string" ? e.message : "";
+    if (msg) return msg;
+    try {
+      const seen = new WeakSet<object>();
+      const json = JSON.stringify(
+        e,
+        (_k, v) => {
+          if (typeof v === "bigint") return String(v);
+          if (v && typeof v === "object") {
+            if (seen.has(v as object)) return "[Circular]";
+            seen.add(v as object);
+          }
+          return v;
+        },
+        2
+      );
+      if (typeof json === "string" && json && json !== "{}") return json;
+    } catch {
+      // ignore
+    }
+    try {
+      const ctor = e?.constructor?.name;
+      const tag = Object.prototype.toString.call(e);
+      const keys = e && typeof e === "object" ? Object.getOwnPropertyNames(e).slice(0, 24).join(", ") : "";
+      return `${ctor ? `${ctor} ` : ""}${tag}${keys ? ` keys=[${keys}]` : ""}`.trim();
+    } catch {
+      return String(e);
+    }
+  };
+
   const readCountryFormatMode = (): "iso2" | "english" => {
     const rootEl = (root.closest?.(".ga-root") as HTMLElement | null) ?? null;
     return rootEl?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
@@ -487,7 +519,7 @@ export async function renderDashboard(
 
         const placeholder = doc.createElement("div");
         placeholder.className = "ga-widget ga-loading";
-        placeholder.innerHTML = "<div class=\"ga-spinner\"></div><div class=\"ga-loading-text\">Loading…</div>";
+        placeholder.innerHTML = "<div class=\"ga-spinner\"></div><div class=\"ga-loading-text\">Loading...</div>";
         container.appendChild(placeholder);
 
         const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) } as WidgetDef;
@@ -511,20 +543,19 @@ export async function renderDashboard(
         if (!t.container.isConnected) return;
         t.container.innerHTML = "";
         t.container.appendChild(el);
-      } catch (e: any) {
-        if ((root as any).__gaRenderActiveId !== renderId) return;
-        if (!t.container.isConnected) return;
-        t.container.innerHTML = "";
-        const pre = doc.createElement("pre");
-        pre.className = "ga-widget ga-error";
-        pre.style.whiteSpace = "pre-wrap";
-        pre.style.padding = "10px";
-        const msg = e instanceof Error ? `${e.name}: ${e.message}` : typeof e?.message === "string" ? e.message : String(e);
-        pre.textContent = msg;
-        t.container.appendChild(pre);
-      }
-    });
-  }
+        } catch (e: any) {
+          if ((root as any).__gaRenderActiveId !== renderId) return;
+          if (!t.container.isConnected) return;
+          t.container.innerHTML = "";
+          const pre = doc.createElement("pre");
+          pre.className = "ga-widget ga-error";
+          pre.style.whiteSpace = "pre-wrap";
+          pre.style.padding = "10px";
+          pre.textContent = describeWidgetError(e);
+          t.container.appendChild(pre);
+        }
+      });
+    }
 
   for (const s of sections) makeTab(s.id, s.title);
 

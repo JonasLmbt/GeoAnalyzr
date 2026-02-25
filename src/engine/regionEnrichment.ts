@@ -11,10 +11,14 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
   const n = Math.max(1, Math.min(32, Math.floor(concurrency)));
   let idx = 0;
   const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+    let localCount = 0;
     for (;;) {
       const i = idx++;
       if (i >= items.length) return;
       await fn(items[i]);
+      // Yield regularly so large enrichments don't freeze the tab.
+      localCount++;
+      if (localCount % 25 === 0) await new Promise<void>((r) => setTimeout(r, 0));
     }
   });
   await Promise.all(workers);

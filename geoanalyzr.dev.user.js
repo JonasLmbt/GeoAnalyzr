@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.16
+// @version      2.2.17
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -32750,7 +32750,7 @@ ${shapes}`.trim();
         formulaId: "max_loss_streak"
       },
       hit_rate: {
-        label: "Hit rate",
+        label: "Country hit rate",
         unit: "percent",
         grain: "round",
         allowedCharts: ["bar", "line"],
@@ -35403,12 +35403,11 @@ ${shapes}`.trim();
                     {
                       widgetId: "w_country_insight_overall_hit_rate",
                       type: "stat_value",
-                      title: "Overall hit rate",
+                      title: "Hit rate in selected country",
                       grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE", "us", "US", "ca", "CA", "id", "ID"] },
                       placement: { x: 0, y: 18, w: 12, h: 2 },
                       spec: {
-                        label: "Hit rate (overall)",
+                        label: "Country hit rate (selected country)",
                         measure: "hit_rate",
                         actions: {
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" }
@@ -35418,7 +35417,7 @@ ${shapes}`.trim();
                     {
                       widgetId: "w_country_insight_de_states",
                       type: "multi_view",
-                      title: "Germany - States (Bundesl\xE4nder)",
+                      title: "Germany - Level 1: States (Bundesl\xE4nder)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
                       placement: { x: 0, y: 20, w: 12, h: 6 },
@@ -35562,7 +35561,7 @@ ${shapes}`.trim();
                     {
                       widgetId: "w_country_insight_id_provinces",
                       type: "multi_view",
-                      title: "Indonesia - Provinces",
+                      title: "Indonesia - Level 1: Provinces",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
                       placement: { x: 0, y: 20, w: 12, h: 6 },
@@ -35706,7 +35705,7 @@ ${shapes}`.trim();
                     {
                       widgetId: "w_country_insight_de_districts",
                       type: "breakdown",
-                      title: "Germany - Districts (Landkreise)",
+                      title: "Germany - Level 2: Districts (Landkreise)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
                       placement: { x: 0, y: 26, w: 12, h: 6 },
@@ -35726,7 +35725,7 @@ ${shapes}`.trim();
                     {
                       widgetId: "w_country_insight_id_kabupaten",
                       type: "breakdown",
-                      title: "Indonesia - Kabupaten / Regencies",
+                      title: "Indonesia - Level 2: Kabupaten / Regencies",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
                       placement: { x: 0, y: 26, w: 12, h: 6 },
@@ -43318,18 +43317,25 @@ ${describeError(err)}` : message;
         method: "GET",
         url,
         headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : 0;
+          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
+          resolve(typeof res?.responseText === "string" ? res.responseText : "");
+        },
+        onerror: (err) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
   async function fetchJson(url) {
     if (hasGmXhr2()) {
-      const txt = await gmGetText(url, "application/json");
-      return JSON.parse(txt);
+      try {
+        const txt = await gmGetText(url, "application/json");
+        return JSON.parse(txt);
+      } catch {
+      }
     }
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
     return res.json();
   }
@@ -43807,18 +43813,25 @@ ${describeError(err)}` : message;
         method: "GET",
         url,
         headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : 0;
+          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
+          resolve(typeof res?.responseText === "string" ? res.responseText : "");
+        },
+        onerror: (err) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
   async function fetchJson4(url) {
     if (hasGmXhr5()) {
-      const txt = await gmGetText4(url, "application/json");
-      return JSON.parse(txt);
+      try {
+        const txt = await gmGetText4(url, "application/json");
+        return JSON.parse(txt);
+      } catch {
+      }
     }
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
     return res.json();
   }
@@ -43965,10 +43978,13 @@ ${describeError(err)}` : message;
     const n = Math.max(1, Math.min(32, Math.floor(concurrency)));
     let idx = 0;
     const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+      let localCount = 0;
       for (; ; ) {
         const i = idx++;
         if (i >= items.length) return;
         await fn(items[i]);
+        localCount++;
+        if (localCount % 25 === 0) await new Promise((r) => setTimeout(r, 0));
       }
     });
     await Promise.all(workers);
@@ -45471,18 +45487,25 @@ ${describeError(err)}` : message;
         method: "GET",
         url,
         headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : 0;
+          if (status >= 400) return reject(new Error(`HTTP ${status} for ${url}`));
+          resolve(typeof res?.responseText === "string" ? res.responseText : "");
+        },
+        onerror: (err) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
   async function fetchJson6(url) {
     if (hasGmXhr7()) {
-      const txt = await gmGetText6(url, "application/json");
-      return JSON.parse(txt);
+      try {
+        const txt = await gmGetText6(url, "application/json");
+        return JSON.parse(txt);
+      } catch {
+      }
     }
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
     return res.json();
   }
@@ -46706,6 +46729,36 @@ ${describeError(err)}` : message;
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
       return ph;
     }
+    const describeWidgetError = (e) => {
+      if (e instanceof Error) return `${e.name}: ${e.message}`;
+      const msg = typeof e?.message === "string" ? e.message : "";
+      if (msg) return msg;
+      try {
+        const seen = /* @__PURE__ */ new WeakSet();
+        const json = JSON.stringify(
+          e,
+          (_k, v) => {
+            if (typeof v === "bigint") return String(v);
+            if (v && typeof v === "object") {
+              if (seen.has(v)) return "[Circular]";
+              seen.add(v);
+            }
+            return v;
+          },
+          2
+        );
+        if (typeof json === "string" && json && json !== "{}") return json;
+      } catch {
+      }
+      try {
+        const ctor = e?.constructor?.name;
+        const tag = Object.prototype.toString.call(e);
+        const keys2 = e && typeof e === "object" ? Object.getOwnPropertyNames(e).slice(0, 24).join(", ") : "";
+        return `${ctor ? `${ctor} ` : ""}${tag}${keys2 ? ` keys=[${keys2}]` : ""}`.trim();
+      } catch {
+        return String(e);
+      }
+    };
     const readCountryFormatMode5 = () => {
       const rootEl = root.closest?.(".ga-root") ?? null;
       return rootEl?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
@@ -46991,7 +47044,7 @@ ${describeError(err)}` : message;
           container.style.gridRow = `${p.y + 1} / span ${p.h}`;
           const placeholder = doc.createElement("div");
           placeholder.className = "ga-widget ga-loading";
-          placeholder.innerHTML = '<div class="ga-spinner"></div><div class="ga-loading-text">Loading\u2026</div>';
+          placeholder.innerHTML = '<div class="ga-spinner"></div><div class="ga-loading-text">Loading...</div>';
           container.appendChild(placeholder);
           const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) };
           tasks.push({ container, widget: wInterp });
@@ -47019,8 +47072,7 @@ ${describeError(err)}` : message;
           pre.className = "ga-widget ga-error";
           pre.style.whiteSpace = "pre-wrap";
           pre.style.padding = "10px";
-          const msg = e instanceof Error ? `${e.name}: ${e.message}` : typeof e?.message === "string" ? e.message : String(e);
-          pre.textContent = msg;
+          pre.textContent = describeWidgetError(e);
           t.container.appendChild(pre);
         }
       });
