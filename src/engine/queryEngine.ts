@@ -444,14 +444,16 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     }
 
   const outRows: RoundRow[] = new Array(rows.length);
+  // Coordinate repeat enrichment (true location) done in a single pass to avoid extra full-table scans.
+  const trueKeyFor = (lat: number, lng: number): string => `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  const trueLocationCount = new Map<string, number>();
+  const firstRoundByLocation = new Map<string, any>();
   const YIELD_EVERY = 250;
   setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
   for (let i = 0; i < rows.length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
     if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
-    const r = rows[i] as any;
-
-    const out: any = { ...(r as any) };
+    const out: any = rows[i] as any;
     const gameId = String(out.gameId ?? "");
     const d = detailsByGame.get(gameId);
 
@@ -574,6 +576,26 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       }
     }
 
+    // Repeat true locations (used by Coordinates section).
+    const tlat = typeof out?.trueLat === "number" && Number.isFinite(out.trueLat) ? out.trueLat : null;
+    const tlng = typeof out?.trueLng === "number" && Number.isFinite(out.trueLng) ? out.trueLng : null;
+    if (tlat !== null && tlng !== null) {
+      const k = trueKeyFor(tlat, tlng);
+      out.trueLocationKey = k;
+      const next = (trueLocationCount.get(k) ?? 0) + 1;
+      trueLocationCount.set(k, next);
+      if (next === 1) {
+        out.trueLocationRepeat = false;
+        firstRoundByLocation.set(k, out);
+      } else {
+        out.trueLocationRepeat = true;
+        if (next === 2) {
+          const first = firstRoundByLocation.get(k);
+          if (first) first.trueLocationRepeat = true;
+        }
+      }
+    }
+
     if (typeof out.damage !== "number") {
       const mf = String(out.modeFamily ?? "");
       if (mf === "duels") {
@@ -605,36 +627,6 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   }
   setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
   roundsRawCache = outRows;
-
-  // Coordinate repeat enrichment (true location).
-  // Useful for coordinate-focused analytics (e.g., repeats / distribution maps) without scanning repeatedly.
-  const trueKeyFor = (lat: number, lng: number): string => `${lat.toFixed(6)},${lng.toFixed(6)}`;
-  const trueCounts = new Map<string, number>();
-  setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: roundsRawCache.length });
-  for (let i = 0; i < roundsRawCache.length; i++) {
-    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-    if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: roundsRawCache.length });
-    const r = roundsRawCache[i] as any;
-    const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
-    const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
-    if (lat === null || lng === null) continue;
-    const k = trueKeyFor(lat, lng);
-    trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
-  }
-  setLoadingProgress({ phase: "Indexing repeat locations...", current: roundsRawCache.length, total: roundsRawCache.length });
-  setLoadingProgress({ phase: "Applying repeat flags...", current: 0, total: roundsRawCache.length });
-  for (let i = 0; i < roundsRawCache.length; i++) {
-    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-    if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Applying repeat flags...", current: i, total: roundsRawCache.length });
-    const r = roundsRawCache[i] as any;
-    const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
-    const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
-    if (lat === null || lng === null) continue;
-    const k = trueKeyFor(lat, lng);
-    (r as any).trueLocationKey = k;
-    (r as any).trueLocationRepeat = (trueCounts.get(k) ?? 0) > 1;
-  }
-  setLoadingProgress({ phase: "Applying repeat flags...", current: roundsRawCache.length, total: roundsRawCache.length });
 
   return roundsRawCache;
 }

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.22
+// @version      2.2.23
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10285,13 +10285,15 @@ ${shapes}`.trim();
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
     }
     const outRows = new Array(rows.length);
+    const trueKeyFor = (lat, lng) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    const trueLocationCount = /* @__PURE__ */ new Map();
+    const firstRoundByLocation = /* @__PURE__ */ new Map();
     const YIELD_EVERY = 250;
     setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
     for (let i = 0; i < rows.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
       if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
-      const r = rows[i];
-      const out = { ...r };
+      const out = rows[i];
       const gameId = String(out.gameId ?? "");
       const d = detailsByGame.get(gameId);
       if (d) {
@@ -10380,6 +10382,24 @@ ${shapes}`.trim();
           if (iso2) out.player_self_guessCountry = iso2;
         }
       }
+      const tlat = typeof out?.trueLat === "number" && Number.isFinite(out.trueLat) ? out.trueLat : null;
+      const tlng = typeof out?.trueLng === "number" && Number.isFinite(out.trueLng) ? out.trueLng : null;
+      if (tlat !== null && tlng !== null) {
+        const k = trueKeyFor(tlat, tlng);
+        out.trueLocationKey = k;
+        const next = (trueLocationCount.get(k) ?? 0) + 1;
+        trueLocationCount.set(k, next);
+        if (next === 1) {
+          out.trueLocationRepeat = false;
+          firstRoundByLocation.set(k, out);
+        } else {
+          out.trueLocationRepeat = true;
+          if (next === 2) {
+            const first = firstRoundByLocation.get(k);
+            if (first) first.trueLocationRepeat = true;
+          }
+        }
+      }
       if (typeof out.damage !== "number") {
         const mf = String(out.modeFamily ?? "");
         if (mf === "duels") {
@@ -10408,33 +10428,6 @@ ${shapes}`.trim();
     }
     setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
     roundsRawCache = outRows;
-    const trueKeyFor = (lat, lng) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
-    const trueCounts = /* @__PURE__ */ new Map();
-    setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: roundsRawCache.length });
-    for (let i = 0; i < roundsRawCache.length; i++) {
-      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-      if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: roundsRawCache.length });
-      const r = roundsRawCache[i];
-      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
-      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
-      if (lat === null || lng === null) continue;
-      const k = trueKeyFor(lat, lng);
-      trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
-    }
-    setLoadingProgress({ phase: "Indexing repeat locations...", current: roundsRawCache.length, total: roundsRawCache.length });
-    setLoadingProgress({ phase: "Applying repeat flags...", current: 0, total: roundsRawCache.length });
-    for (let i = 0; i < roundsRawCache.length; i++) {
-      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-      if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Applying repeat flags...", current: i, total: roundsRawCache.length });
-      const r = roundsRawCache[i];
-      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
-      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
-      if (lat === null || lng === null) continue;
-      const k = trueKeyFor(lat, lng);
-      r.trueLocationKey = k;
-      r.trueLocationRepeat = (trueCounts.get(k) ?? 0) > 1;
-    }
-    setLoadingProgress({ phase: "Applying repeat flags...", current: roundsRawCache.length, total: roundsRawCache.length });
     return roundsRawCache;
   }
   async function getRounds(filters) {
@@ -35998,6 +35991,32 @@ ${shapes}`.trim();
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       background: var(--ga-bg);
       color: var(--ga-text);
+    }
+    /* Scrollbars (Chromium + Firefox) */
+    .ga-root, .ga-root * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 55%, transparent) transparent;
+    }
+    .ga-root ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .ga-root ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .ga-root ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    .ga-root ::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 40%, transparent);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    .ga-root ::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--ga-text, #f3f4ff) 35%, transparent);
+      border: 2px solid transparent;
+      background-clip: padding-box;
     }
     .ga-root {
       --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;

@@ -13,6 +13,32 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       background: var(--ga-bg);
       color: var(--ga-text);
     }
+    /* Scrollbars (Chromium + Firefox) */
+    .ga-root, .ga-root * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 55%, transparent) transparent;
+    }
+    .ga-root ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .ga-root ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .ga-root ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    .ga-root ::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 40%, transparent);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    .ga-root ::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--ga-text, #f3f4ff) 35%, transparent);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
     .ga-root {
       --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       --ga-topbar-h: 0px;
