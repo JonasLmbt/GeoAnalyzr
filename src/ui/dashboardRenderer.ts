@@ -5,6 +5,7 @@ import type { Grain } from "../config/semantic.types";
 import type { RoundRow, GameFactRow } from "../db";
 import { DrilldownOverlay } from "./drilldownOverlay";
 import { renderStatListWidget } from "./widgets/statListWidget";
+import { renderStatValueWidget } from "./widgets/statValueWidget";
 import { renderChartWidget } from "./widgets/chartWidget";
 import { renderBreakdownWidget } from "./widgets/breakdownWidget";
 import { renderRecordListWidget } from "./widgets/recordListWidget";
@@ -80,6 +81,7 @@ export async function renderDashboard(
   async function renderWidget(widget: WidgetDef): Promise<HTMLElement> {
     const baseRows = activeDatasets[widget.grain];
     if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, activeDatasets, baseRows as any);
+    if (widget.type === "stat_value") return await renderStatValueWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows as any);
@@ -361,7 +363,23 @@ export async function renderDashboard(
     return nextState;
   };
 
+  async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
+    const n = Math.max(1, Math.min(8, Math.floor(concurrency)));
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+      for (;;) {
+        const i = idx++;
+        if (i >= items.length) return;
+        await fn(items[i]);
+      }
+    });
+    await Promise.all(workers);
+  }
+
   async function renderActive(): Promise<void> {
+    const renderId = ((root as any).__gaRenderActiveId ?? 0) + 1;
+    (root as any).__gaRenderActiveId = renderId;
+
     content.innerHTML = "";
     const section = sections.find((s) => s.id === active);
     if (!section) return;
@@ -426,6 +444,7 @@ export async function renderDashboard(
     grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
     grid.style.gap = "12px";
 
+    const tasks: { container: HTMLDivElement; widget: WidgetDef }[] = [];
     for (const placed of section.layout.cards) {
       const card = doc.createElement("div");
       card.className = "ga-card";
@@ -466,8 +485,13 @@ export async function renderDashboard(
         container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
         container.style.gridRow = `${p.y + 1} / span ${p.h}`;
 
-        const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) };
-        container.appendChild(await renderWidget(wInterp));
+        const placeholder = doc.createElement("div");
+        placeholder.className = "ga-widget ga-loading";
+        placeholder.innerHTML = "<div class=\"ga-spinner\"></div><div class=\"ga-loading-text\">Loading…</div>";
+        container.appendChild(placeholder);
+
+        const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) } as WidgetDef;
+        tasks.push({ container, widget: wInterp });
         inner.appendChild(container);
       }
 
@@ -478,6 +502,28 @@ export async function renderDashboard(
     }
 
     content.appendChild(grid);
+
+    void runPool(tasks, 3, async (t) => {
+      try {
+        if ((root as any).__gaRenderActiveId !== renderId) return;
+        const el = await renderWidget(t.widget);
+        if ((root as any).__gaRenderActiveId !== renderId) return;
+        if (!t.container.isConnected) return;
+        t.container.innerHTML = "";
+        t.container.appendChild(el);
+      } catch (e: any) {
+        if ((root as any).__gaRenderActiveId !== renderId) return;
+        if (!t.container.isConnected) return;
+        t.container.innerHTML = "";
+        const pre = doc.createElement("pre");
+        pre.className = "ga-widget ga-error";
+        pre.style.whiteSpace = "pre-wrap";
+        pre.style.padding = "10px";
+        const msg = e instanceof Error ? `${e.name}: ${e.message}` : typeof e?.message === "string" ? e.message : String(e);
+        pre.textContent = msg;
+        t.container.appendChild(pre);
+      }
+    });
   }
 
   for (const s of sections) makeTab(s.id, s.title);

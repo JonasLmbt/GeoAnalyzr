@@ -221,6 +221,32 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       background: var(--ga-map-bg);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
+    .ga-loading {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      height:100%;
+      min-height: 44px;
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--ga-card) 70%, transparent);
+      border: 1px dashed color-mix(in srgb, var(--ga-border) 75%, transparent);
+      color: var(--ga-text-muted);
+      font-size: 13px;
+    }
+    .ga-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--ga-text-muted) 30%, transparent);
+      border-top-color: color-mix(in srgb, var(--ga-accent2) 75%, transparent);
+      animation: ga-spin 0.9s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes ga-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
     /* Wide map: keep correct world aspect by default; cap via dashboard.json map.height (max-height). */
     .ga-filter.ga-filter-map.ga-filter-map-wide .ga-country-map {
       height: auto;

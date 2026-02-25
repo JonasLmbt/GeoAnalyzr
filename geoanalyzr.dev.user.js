@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.12
+// @version      2.2.13
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -36316,6 +36316,32 @@ ${shapes}`.trim();
       background: var(--ga-map-bg);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
+    .ga-loading {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      height:100%;
+      min-height: 44px;
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--ga-card) 70%, transparent);
+      border: 1px dashed color-mix(in srgb, var(--ga-border) 75%, transparent);
+      color: var(--ga-text-muted);
+      font-size: 13px;
+    }
+    .ga-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--ga-text-muted) 30%, transparent);
+      border-top-color: color-mix(in srgb, var(--ga-accent2) 75%, transparent);
+      animation: ga-spin 0.9s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes ga-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
     /* Wide map: keep correct world aspect by default; cap via dashboard.json map.height (max-height). */
     .ga-filter.ga-filter-map.ga-filter-map-wide .ga-country-map {
       height: auto;
@@ -42478,6 +42504,97 @@ ${describeError(err)}` : message;
     return wrap;
   }
 
+  // src/ui/widgets/statValueWidget.ts
+  function formatValue2(doc, semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!m || !unit) return String(value);
+    if (unit.format === "datetime") {
+      const d = new Date(value);
+      if (!Number.isFinite(d.getTime())) return String(value);
+      return d.toLocaleString();
+    }
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
+    const decimals = unit.decimals ?? 1;
+    const txt = value.toFixed(decimals);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
+  }
+  async function computeMeasure2(semantic, measureId, baseRows, grain) {
+    const m = semantic.measures[measureId];
+    if (!m) return 0;
+    const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
+    const fn = MEASURES_BY_GRAIN[grain]?.[m.formulaId];
+    if (!fn) throw new Error(`Missing measure implementation for formulaId=${m.formulaId}`);
+    return fn(rowsAll);
+  }
+  function attachClickIfAny2(el2, actions, overlay, semantic, title, baseRows, grain, measureId) {
+    const click = actions?.click;
+    if (!click) return;
+    if (click.type !== "drilldown") return;
+    el2.style.cursor = "pointer";
+    el2.addEventListener("click", async () => {
+      const rowsAll = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
+      overlay.open(semantic, {
+        title,
+        target: click.target,
+        columnsPreset: click.columnsPreset,
+        rows: rowsAll,
+        extraFilters: click.extraFilters,
+        initialSort: click.initialSort
+      });
+    });
+  }
+  async function renderStatValueWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const grain = widget.grain;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-statvalue";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const box = doc.createElement("div");
+    box.className = "ga-statlist-box";
+    const line = doc.createElement("div");
+    line.className = "ga-statrow";
+    const left = doc.createElement("div");
+    left.className = "ga-statrow-label";
+    left.textContent = spec.label;
+    const right = doc.createElement("div");
+    right.className = "ga-statrow-value";
+    right.textContent = "...";
+    line.appendChild(left);
+    line.appendChild(right);
+    box.appendChild(line);
+    wrap.appendChild(title);
+    wrap.appendChild(box);
+    const measureId = typeof spec.measure === "string" ? spec.measure.trim() : "";
+    const val = measureId ? await computeMeasure2(semantic, measureId, baseRows, grain) : 0;
+    right.textContent = measureId ? formatValue2(doc, semantic, measureId, val) : "\u2014";
+    if (measureId) {
+      attachClickIfAny2(line, spec.actions, overlay, semantic, `${widget.title} - ${spec.label}`, baseRows, grain, measureId);
+    }
+    return wrap;
+  }
+
   // src/engine/aggregate.ts
   function groupByKey(rows, keyFn) {
     const m = /* @__PURE__ */ new Map();
@@ -44009,7 +44126,7 @@ ${describeError(err)}` : message;
     if (mode === "mm/dd/yyyy") return `${m}/${day}/${y} ${hh}:${mm}:${ss}`;
     return `${day}/${m}/${y} ${hh}:${mm}:${ss}`;
   }
-  function formatValue2(doc, semantic, measureId, value) {
+  function formatValue3(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = semantic.units[m.unit];
     if (!unit) return String(value);
@@ -44230,7 +44347,7 @@ ${describeError(err)}` : message;
         right.className = "ga-breakdown-right";
         const val = doc.createElement("div");
         val.className = "ga-breakdown-value";
-        val.textContent = formatValue2(doc, semantic, activeMeasure, r.value);
+        val.textContent = formatValue3(doc, semantic, activeMeasure, r.value);
         const barWrap = doc.createElement("div");
         barWrap.className = "ga-breakdown-barwrap";
         const bar = doc.createElement("div");
@@ -44691,7 +44808,7 @@ ${describeError(err)}` : message;
     if (grain === "session") return getSessions({});
     return getRounds({});
   }
-  function attachClickIfAny2(args) {
+  function attachClickIfAny3(args) {
     const { el: el2, actions, overlay, semantic, title, grain, rows } = args;
     const click = actions?.click;
     if (!click) return;
@@ -44754,7 +44871,7 @@ ${describeError(err)}` : message;
       right.textContent = computeLeaderText(counts, exclude);
       line.appendChild(left);
       line.appendChild(right);
-      attachClickIfAny2({
+      attachClickIfAny3({
         el: line,
         actions: row.actions,
         overlay,
@@ -45050,7 +45167,7 @@ ${describeError(err)}` : message;
       return isoOrName;
     }
   }
-  function formatValue3(doc, semantic, measureId, value) {
+  function formatValue4(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
     if (!m || !unit) return String(value);
@@ -45253,13 +45370,13 @@ ${describeError(err)}` : message;
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue3(doc, semantic, activeMeasure, scaleMin);
+      left.textContent = formatValue4(doc, semantic, activeMeasure, scaleMin);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
       bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue3(doc, semantic, activeMeasure, scaleMax);
+      right.textContent = formatValue4(doc, semantic, activeMeasure, scaleMax);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -45294,7 +45411,7 @@ ${describeError(err)}` : message;
           p.style.opacity = "1";
         }
         const label = iso2 ? formatCountry3(doc, iso2.toUpperCase()) : "";
-        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue3(doc, semantic, activeMeasure, v) : "n/a";
+        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue4(doc, semantic, activeMeasure, v) : "n/a";
         const tt = `${label}${label && valTxt ? ": " : ""}${valTxt}`;
         let titleEl = p.querySelector("title");
         if (!titleEl) {
@@ -45433,7 +45550,7 @@ ${describeError(err)}` : message;
     const b = Math.round(base.b * (1 - mixToBlack));
     return `rgba(${r},${g},${b},${a.toFixed(3)})`;
   }
-  function formatValue4(doc, semantic, measureId, value) {
+  function formatValue5(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
     if (!m || !unit) return String(value);
@@ -45585,13 +45702,13 @@ ${describeError(err)}` : message;
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue4(doc, semantic, activeMeasure, scaleMin);
+      left.textContent = formatValue5(doc, semantic, activeMeasure, scaleMin);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
       bar.style.background = `linear-gradient(90deg, ${colorForValue2(baseColor, 0)}, ${colorForValue2(baseColor, 1)})`;
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue4(doc, semantic, activeMeasure, scaleMax);
+      right.textContent = formatValue5(doc, semantic, activeMeasure, scaleMax);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -45651,7 +45768,7 @@ ${describeError(err)}` : message;
         } else {
           p.style.opacity = "0.35";
         }
-        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue4(doc, semantic, activeMeasure, v) : "n/a";
+        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue5(doc, semantic, activeMeasure, v) : "n/a";
         const tt = `${key}${valTxt ? ": " : ""}${valTxt}`;
         const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
         titleEl.textContent = tt;
@@ -45849,7 +45966,7 @@ ${describeError(err)}` : message;
   function rgbToCss(c) {
     return `rgb(${Math.round(c.r)} ${Math.round(c.g)} ${Math.round(c.b)})`;
   }
-  function formatValue5(doc, semantic, measureId, value) {
+  function formatValue6(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
     if (!m || !unit) return String(value);
@@ -46183,7 +46300,7 @@ ${describeError(err)}` : message;
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue5(doc, semantic, activeMeasure, scaleMin);
+      left.textContent = formatValue6(doc, semantic, activeMeasure, scaleMin);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
       if (diverging) {
@@ -46193,7 +46310,7 @@ ${describeError(err)}` : message;
       }
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue5(doc, semantic, activeMeasure, scaleMax);
+      right.textContent = formatValue6(doc, semantic, activeMeasure, scaleMax);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -46368,7 +46485,7 @@ ${describeError(err)}` : message;
           circle.style.fill = "rgba(255,255,255,0.25)";
           circle.style.opacity = "0.6";
         }
-        const ttVal = typeof v === "number" && Number.isFinite(v) ? formatValue5(doc, semantic, activeMeasure, v) : "n/a";
+        const ttVal = typeof v === "number" && Number.isFinite(v) ? formatValue6(doc, semantic, activeMeasure, v) : "n/a";
         const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
         titleEl.textContent = `${k} \u2022 ${c} pts \u2022 ${ttVal}`;
         circle.appendChild(titleEl);
@@ -46541,6 +46658,7 @@ ${describeError(err)}` : message;
     async function renderWidget(widget) {
       const baseRows = activeDatasets[widget.grain];
       if (widget.type === "stat_list") return await renderStatListWidget(semantic, widget, overlay, activeDatasets, baseRows);
+      if (widget.type === "stat_value") return await renderStatValueWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "chart") return await renderChartWidget(semantic, widget, overlay, activeDatasets, activeContext);
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows);
@@ -46758,7 +46876,21 @@ ${describeError(err)}` : message;
       localStateBySection.set(sectionId, { ...nextState });
       return nextState;
     };
+    async function runPool2(items, concurrency, fn) {
+      const n = Math.max(1, Math.min(8, Math.floor(concurrency)));
+      let idx = 0;
+      const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+        for (; ; ) {
+          const i = idx++;
+          if (i >= items.length) return;
+          await fn(items[i]);
+        }
+      });
+      await Promise.all(workers);
+    }
     async function renderActive() {
+      const renderId = (root.__gaRenderActiveId ?? 0) + 1;
+      root.__gaRenderActiveId = renderId;
       content.innerHTML = "";
       const section = sections.find((s) => s.id === active);
       if (!section) return;
@@ -46804,6 +46936,7 @@ ${describeError(err)}` : message;
       grid.style.display = "grid";
       grid.style.gridTemplateColumns = `repeat(${section.layout.columns}, minmax(0, 1fr))`;
       grid.style.gap = "12px";
+      const tasks = [];
       for (const placed of section.layout.cards) {
         const card = doc.createElement("div");
         card.className = "ga-card";
@@ -46833,8 +46966,12 @@ ${describeError(err)}` : message;
           const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
           container.style.gridColumn = `${p.x + 1} / span ${p.w}`;
           container.style.gridRow = `${p.y + 1} / span ${p.h}`;
+          const placeholder = doc.createElement("div");
+          placeholder.className = "ga-widget ga-loading";
+          placeholder.innerHTML = '<div class="ga-spinner"></div><div class="ga-loading-text">Loading\u2026</div>';
+          container.appendChild(placeholder);
           const wInterp = { ...w, title: interpolate(w.title, localState, dimByLocalId) };
-          container.appendChild(await renderWidget(wInterp));
+          tasks.push({ container, widget: wInterp });
           inner.appendChild(container);
         }
         body.appendChild(inner);
@@ -46843,6 +46980,27 @@ ${describeError(err)}` : message;
         grid.appendChild(card);
       }
       content.appendChild(grid);
+      void runPool2(tasks, 3, async (t) => {
+        try {
+          if (root.__gaRenderActiveId !== renderId) return;
+          const el2 = await renderWidget(t.widget);
+          if (root.__gaRenderActiveId !== renderId) return;
+          if (!t.container.isConnected) return;
+          t.container.innerHTML = "";
+          t.container.appendChild(el2);
+        } catch (e) {
+          if (root.__gaRenderActiveId !== renderId) return;
+          if (!t.container.isConnected) return;
+          t.container.innerHTML = "";
+          const pre = doc.createElement("pre");
+          pre.className = "ga-widget ga-error";
+          pre.style.whiteSpace = "pre-wrap";
+          pre.style.padding = "10px";
+          const msg = e instanceof Error ? `${e.name}: ${e.message}` : typeof e?.message === "string" ? e.message : String(e);
+          pre.textContent = msg;
+          t.container.appendChild(pre);
+        }
+      });
     }
     for (const s of sections) makeTab(s.id, s.title);
     await renderActive();
