@@ -243,6 +243,43 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       animation: ga-spin 0.9s linear infinite;
       flex: 0 0 auto;
     }
+    .ga-loading-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 10%, rgba(0,0,0,0.10), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.55));
+      backdrop-filter: blur(8px);
+    }
+    .ga-loading-screen-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid color-mix(in srgb, var(--ga-border) 65%, transparent);
+      background: color-mix(in srgb, var(--ga-card) 70%, rgba(0,0,0,0.35));
+      color: var(--ga-text);
+      box-shadow: 0 10px 35px rgba(0,0,0,0.35);
+    }
+    .ga-loading-screen-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 220px;
+    }
+    .ga-loading-screen-title {
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.2px;
+    }
+    .ga-loading-screen-subtitle {
+      font-size: 12px;
+      color: var(--ga-text-muted);
+    }
     @keyframes ga-spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }

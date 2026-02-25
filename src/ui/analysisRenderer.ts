@@ -38,6 +38,29 @@ export async function renderAnalysisApp(opts: {
   body.innerHTML = "";
 
   const root = body.closest(".ga-root") as HTMLDivElement | null;
+
+  const sleep0 = async (): Promise<void> => {
+    await new Promise<void>((r) => setTimeout(r, 0));
+  };
+
+  let loadingEl: HTMLDivElement | null = null;
+  const showLoading = async (subtitle: string) => {
+    if (!doc.body) return;
+    if (!loadingEl) {
+      loadingEl = doc.createElement("div");
+      loadingEl.className = "ga-loading-screen";
+      loadingEl.innerHTML =
+        "<div class=\"ga-loading-screen-inner\"><div class=\"ga-spinner\"></div><div class=\"ga-loading-screen-text\"><div class=\"ga-loading-screen-title\">GeoAnalyzr</div><div class=\"ga-loading-screen-subtitle\"></div></div></div>";
+    }
+    const subtitleEl = loadingEl.querySelector(".ga-loading-screen-subtitle") as HTMLDivElement | null;
+    if (subtitleEl) subtitleEl.textContent = subtitle;
+    if (!loadingEl.isConnected) doc.body.appendChild(loadingEl);
+    await sleep0(); // allow paint before heavy work
+  };
+  const hideLoading = () => {
+    loadingEl?.remove();
+  };
+
   const getSessionGapMinutes = (): number => {
     const raw = Number(root?.dataset.gaSessionGapMinutes);
     if (Number.isFinite(raw)) return Math.max(1, Math.min(360, Math.round(raw)));
@@ -101,22 +124,24 @@ export async function renderAnalysisApp(opts: {
   }
 
   const renderNow = async () => {
+    await showLoading("Rendering dashboard...");
     const specFilters = spec;
     let state = store.getState();
 
-    await renderGlobalFiltersBar({
-      container: filtersHost,
-      semantic,
-      spec,
-      state,
-      setValue: store.setValue,
-      setAll: store.setAll,
-      reset: store.reset,
-      getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
-    });
+    try {
+      await renderGlobalFiltersBar({
+        container: filtersHost,
+        semantic,
+        spec,
+        state,
+        setValue: store.setValue,
+        setAll: store.setAll,
+        reset: store.reset,
+        getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
+      });
 
-    // Height can change due to select options and wrapping.
-    updateStickyVars();
+      // Height can change due to select options and wrapping.
+      updateStickyVars();
 
     const resolveControlIdsForSection = (section: any): string[] | undefined => {
       if (!specFilters?.enabled) return undefined;
@@ -135,6 +160,7 @@ export async function renderAnalysisApp(opts: {
     const contextBySection: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }> = {};
 
     const computeDatasetsForSection = async (section: any): Promise<void> => {
+      await showLoading(`Loading data for '${String(section?.title ?? section?.id ?? "section")}'...`);
       const controlIds = resolveControlIdsForSection(section);
 
       const used = new Set<Grain>();
@@ -206,8 +232,14 @@ export async function renderAnalysisApp(opts: {
         if (typeof v !== "string") return false;
         return v.trim().length > 0;
       })();
-      if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
-      if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
+      if (used.has("round") || used.has("session") || isOpponentsSection) {
+        await showLoading("Loading rounds...");
+        datasets.round = await getRounds(filters);
+      }
+      if (used.has("game") || isOpponentsSection) {
+        await showLoading("Loading games...");
+        datasets.game = await getGames(filters);
+      }
 
       if (isRatingSection && Array.isArray(datasets.round)) {
         const want = teammateSelected ? "teamduels" : "duels";
@@ -239,6 +271,7 @@ export async function renderAnalysisApp(opts: {
         }
       }
       if (used.has("session")) {
+        await showLoading("Building sessions...");
         const gap = getSessionGapMinutes();
         datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
       }
@@ -268,6 +301,7 @@ export async function renderAnalysisApp(opts: {
 
     const effectiveDashboard: DashboardDoc = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
 
+    await showLoading("Rendering UI...");
     await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
       datasets: datasetsDefault,
       datasetsBySection,
@@ -280,9 +314,14 @@ export async function renderAnalysisApp(opts: {
         if (datasetsBySection[id]) return;
         const sec = sections.find((s: any) => s.id === id);
         if (!sec) return;
+        await showLoading(`Loading data for '${String(sec?.title ?? sec?.id ?? "section")}'...`);
         await computeDatasetsForSection(sec);
+        hideLoading();
       }
     });
+    } finally {
+      hideLoading();
+    }
   };
 
   store.subscribe(() => {

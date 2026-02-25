@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.18
+// @version      2.2.19
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -35997,6 +35997,43 @@ ${shapes}`.trim();
       animation: ga-spin 0.9s linear infinite;
       flex: 0 0 auto;
     }
+    .ga-loading-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 10%, rgba(0,0,0,0.10), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.55));
+      backdrop-filter: blur(8px);
+    }
+    .ga-loading-screen-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid color-mix(in srgb, var(--ga-border) 65%, transparent);
+      background: color-mix(in srgb, var(--ga-card) 70%, rgba(0,0,0,0.35));
+      color: var(--ga-text);
+      box-shadow: 0 10px 35px rgba(0,0,0,0.35);
+    }
+    .ga-loading-screen-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 220px;
+    }
+    .ga-loading-screen-title {
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.2px;
+    }
+    .ga-loading-screen-subtitle {
+      font-size: 12px;
+      color: var(--ga-text-muted);
+    }
     @keyframes ga-spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
@@ -47566,6 +47603,25 @@ ${describeError(err)}` : message;
     const doc = body.ownerDocument;
     body.innerHTML = "";
     const root = body.closest(".ga-root");
+    const sleep0 = async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    let loadingEl = null;
+    const showLoading = async (subtitle) => {
+      if (!doc.body) return;
+      if (!loadingEl) {
+        loadingEl = doc.createElement("div");
+        loadingEl.className = "ga-loading-screen";
+        loadingEl.innerHTML = '<div class="ga-loading-screen-inner"><div class="ga-spinner"></div><div class="ga-loading-screen-text"><div class="ga-loading-screen-title">GeoAnalyzr</div><div class="ga-loading-screen-subtitle"></div></div></div>';
+      }
+      const subtitleEl = loadingEl.querySelector(".ga-loading-screen-subtitle");
+      if (subtitleEl) subtitleEl.textContent = subtitle;
+      if (!loadingEl.isConnected) doc.body.appendChild(loadingEl);
+      await sleep0();
+    };
+    const hideLoading = () => {
+      loadingEl?.remove();
+    };
     const getSessionGapMinutes = () => {
       const raw = Number(root?.dataset.gaSessionGapMinutes);
       if (Number.isFinite(raw)) return Math.max(1, Math.min(360, Math.round(raw)));
@@ -47614,165 +47670,181 @@ ${describeError(err)}` : message;
       }
     }
     const renderNow = async () => {
+      await showLoading("Rendering dashboard...");
       const specFilters = spec;
       let state = store.getState();
-      await renderGlobalFiltersBar({
-        container: filtersHost,
-        semantic,
-        spec,
-        state,
-        setValue: store.setValue,
-        setAll: store.setAll,
-        reset: store.reset,
-        getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
-      });
-      updateStickyVars();
-      const resolveControlIdsForSection = (section) => {
-        if (!specFilters?.enabled) return void 0;
-        const all = specFilters.controls.map((c) => c.id);
-        const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : null;
-        const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : null;
-        let ids = include && include.length ? all.filter((id) => include.includes(id)) : [...all];
-        if (exclude && exclude.length) ids = ids.filter((id) => !exclude.includes(id));
-        return ids;
-      };
-      const hasTeamDuels = await hasAnyTeamDuels();
-      const sections = hasTeamDuels ? dashboard.dashboard.sections : dashboard.dashboard.sections.filter((s) => s.id !== "team");
-      const datasetsBySection = {};
-      const contextBySection = {};
-      const computeDatasetsForSection = async (section) => {
-        const controlIds = resolveControlIdsForSection(section);
-        const used = /* @__PURE__ */ new Set();
-        for (const placed of section.layout.cards) {
-          for (const w of placed.card.children) {
-            used.add(w.grain);
-            const anySpec = w.spec;
-            if (w.type === "chart") {
-              const xDimId = anySpec?.x?.dimension;
-              const xDim = xDimId ? semantic.dimensions[xDimId] : void 0;
-              const xGrains = xDim ? Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain] : [];
-              for (const g of xGrains) used.add(g);
-              const ids = [];
-              if (typeof anySpec?.y?.measure === "string") ids.push(anySpec.y.measure);
-              if (Array.isArray(anySpec?.y?.measures)) ids.push(...anySpec.y.measures);
-              for (const mId of ids) {
-                const m = semantic.measures[mId];
-                if (m) used.add(m.grain);
-              }
-            }
-            if (w.type === "breakdown") {
-              const ids = [];
-              if (typeof anySpec?.measure === "string") ids.push(anySpec.measure);
-              if (Array.isArray(anySpec?.measures)) ids.push(...anySpec.measures);
-              for (const mId of ids) {
-                const m = semantic.measures[mId];
-                if (m) used.add(m.grain);
-              }
-            }
-            if (w.type === "stat_list") {
-              const rows = Array.isArray(anySpec?.rows) ? anySpec.rows : [];
-              for (const r of rows) {
-                const m = semantic.measures[r?.measure];
-                if (m) used.add(m.grain);
-              }
-            }
-            if (w.type === "stat_value") {
-              const m = semantic.measures[anySpec?.measure];
-              if (m) used.add(m.grain);
-            }
-            if (w.type === "record_list") {
-              const recs = Array.isArray(anySpec?.records) ? anySpec.records : [];
-              for (const r of recs) {
-                if (Array.isArray(r?.streakFilters) && r.streakFilters.length > 0) used.add("round");
-                if (typeof r?.metric === "string") {
-                  const m = semantic.measures[r.metric];
+      try {
+        await renderGlobalFiltersBar({
+          container: filtersHost,
+          semantic,
+          spec,
+          state,
+          setValue: store.setValue,
+          setAll: store.setAll,
+          reset: store.reset,
+          getDistinctOptions: async ({ control, spec: s, state: st }) => getSelectOptionsForControl({ control, spec: s, state: st })
+        });
+        updateStickyVars();
+        const resolveControlIdsForSection = (section) => {
+          if (!specFilters?.enabled) return void 0;
+          const all = specFilters.controls.map((c) => c.id);
+          const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : null;
+          const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : null;
+          let ids = include && include.length ? all.filter((id) => include.includes(id)) : [...all];
+          if (exclude && exclude.length) ids = ids.filter((id) => !exclude.includes(id));
+          return ids;
+        };
+        const hasTeamDuels = await hasAnyTeamDuels();
+        const sections = hasTeamDuels ? dashboard.dashboard.sections : dashboard.dashboard.sections.filter((s) => s.id !== "team");
+        const datasetsBySection = {};
+        const contextBySection = {};
+        const computeDatasetsForSection = async (section) => {
+          await showLoading(`Loading data for '${String(section?.title ?? section?.id ?? "section")}'...`);
+          const controlIds = resolveControlIdsForSection(section);
+          const used = /* @__PURE__ */ new Set();
+          for (const placed of section.layout.cards) {
+            for (const w of placed.card.children) {
+              used.add(w.grain);
+              const anySpec = w.spec;
+              if (w.type === "chart") {
+                const xDimId = anySpec?.x?.dimension;
+                const xDim = xDimId ? semantic.dimensions[xDimId] : void 0;
+                const xGrains = xDim ? Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain] : [];
+                for (const g of xGrains) used.add(g);
+                const ids = [];
+                if (typeof anySpec?.y?.measure === "string") ids.push(anySpec.y.measure);
+                if (Array.isArray(anySpec?.y?.measures)) ids.push(...anySpec.y.measures);
+                for (const mId of ids) {
+                  const m = semantic.measures[mId];
                   if (m) used.add(m.grain);
                 }
-                if (typeof r?.groupBy === "string") {
-                  const d = semantic.dimensions[r.groupBy];
-                  const grains = d ? Array.isArray(d.grain) ? d.grain : [d.grain] : [];
-                  for (const g of grains) used.add(g);
+              }
+              if (w.type === "breakdown") {
+                const ids = [];
+                if (typeof anySpec?.measure === "string") ids.push(anySpec.measure);
+                if (Array.isArray(anySpec?.measures)) ids.push(...anySpec.measures);
+                for (const mId of ids) {
+                  const m = semantic.measures[mId];
+                  if (m) used.add(m.grain);
+                }
+              }
+              if (w.type === "stat_list") {
+                const rows = Array.isArray(anySpec?.rows) ? anySpec.rows : [];
+                for (const r of rows) {
+                  const m = semantic.measures[r?.measure];
+                  if (m) used.add(m.grain);
+                }
+              }
+              if (w.type === "stat_value") {
+                const m = semantic.measures[anySpec?.measure];
+                if (m) used.add(m.grain);
+              }
+              if (w.type === "record_list") {
+                const recs = Array.isArray(anySpec?.records) ? anySpec.records : [];
+                for (const r of recs) {
+                  if (Array.isArray(r?.streakFilters) && r.streakFilters.length > 0) used.add("round");
+                  if (typeof r?.metric === "string") {
+                    const m = semantic.measures[r.metric];
+                    if (m) used.add(m.grain);
+                  }
+                  if (typeof r?.groupBy === "string") {
+                    const d = semantic.dimensions[r.groupBy];
+                    const grains = d ? Array.isArray(d.grain) ? d.grain : [d.grain] : [];
+                    for (const g of grains) used.add(g);
+                  }
                 }
               }
             }
           }
-        }
-        const filters = { global: { spec: specFilters, state, controlIds } };
-        const datasets = {};
-        const isOpponentsSection = section.id === "opponents";
-        const isRatingSection = section.id === "rating";
-        const teammateSelected = (() => {
-          const v = state?.["teammate"];
-          if (v === "all") return false;
-          if (typeof v !== "string") return false;
-          return v.trim().length > 0;
-        })();
-        if (used.has("round") || used.has("session") || isOpponentsSection) datasets.round = await getRounds(filters);
-        if (used.has("game") || isOpponentsSection) datasets.game = await getGames(filters);
-        if (isRatingSection && Array.isArray(datasets.round)) {
-          const want = teammateSelected ? "teamduels" : "duels";
-          datasets.round = datasets.round.filter((r) => String(r?.modeFamily ?? "").toLowerCase() === want);
-        }
-        if (isRatingSection && Array.isArray(datasets.game)) {
-          const want = teammateSelected ? "teamduels" : "duels";
-          datasets.game = datasets.game.filter((g) => String(g?.modeFamily ?? "").toLowerCase() === want);
-        }
-        if (Array.isArray(datasets.round) && Array.isArray(datasets.game) && specFilters?.enabled) {
-          const allowedSet = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
-          const hasActiveRoundOnly = specFilters.controls.some((c) => {
-            if (allowedSet && !allowedSet.has(c.id)) return false;
-            const appliesRound = Array.isArray(c.appliesTo) && c.appliesTo.includes("round");
-            const appliesGame = Array.isArray(c.appliesTo) && c.appliesTo.includes("game");
-            if (!appliesRound || appliesGame) return false;
-            const v = state[c.id];
-            return typeof v === "string" ? v !== "all" && v.trim().length > 0 : false;
-          });
-          if (hasActiveRoundOnly) {
-            const rr = datasets.round;
-            if (rr.length) {
-              const allowedGames = new Set(rr.map((r) => r?.gameId).filter((x) => typeof x === "string" && x));
-              datasets.game = datasets.game.filter((g) => allowedGames.has(g?.gameId));
+          const filters = { global: { spec: specFilters, state, controlIds } };
+          const datasets = {};
+          const isOpponentsSection = section.id === "opponents";
+          const isRatingSection = section.id === "rating";
+          const teammateSelected = (() => {
+            const v = state?.["teammate"];
+            if (v === "all") return false;
+            if (typeof v !== "string") return false;
+            return v.trim().length > 0;
+          })();
+          if (used.has("round") || used.has("session") || isOpponentsSection) {
+            await showLoading("Loading rounds...");
+            datasets.round = await getRounds(filters);
+          }
+          if (used.has("game") || isOpponentsSection) {
+            await showLoading("Loading games...");
+            datasets.game = await getGames(filters);
+          }
+          if (isRatingSection && Array.isArray(datasets.round)) {
+            const want = teammateSelected ? "teamduels" : "duels";
+            datasets.round = datasets.round.filter((r) => String(r?.modeFamily ?? "").toLowerCase() === want);
+          }
+          if (isRatingSection && Array.isArray(datasets.game)) {
+            const want = teammateSelected ? "teamduels" : "duels";
+            datasets.game = datasets.game.filter((g) => String(g?.modeFamily ?? "").toLowerCase() === want);
+          }
+          if (Array.isArray(datasets.round) && Array.isArray(datasets.game) && specFilters?.enabled) {
+            const allowedSet = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
+            const hasActiveRoundOnly = specFilters.controls.some((c) => {
+              if (allowedSet && !allowedSet.has(c.id)) return false;
+              const appliesRound = Array.isArray(c.appliesTo) && c.appliesTo.includes("round");
+              const appliesGame = Array.isArray(c.appliesTo) && c.appliesTo.includes("game");
+              if (!appliesRound || appliesGame) return false;
+              const v = state[c.id];
+              return typeof v === "string" ? v !== "all" && v.trim().length > 0 : false;
+            });
+            if (hasActiveRoundOnly) {
+              const rr = datasets.round;
+              if (rr.length) {
+                const allowedGames = new Set(rr.map((r) => r?.gameId).filter((x) => typeof x === "string" && x));
+                datasets.game = datasets.game.filter((g) => allowedGames.has(g?.gameId));
+              }
             }
           }
+          if (used.has("session")) {
+            await showLoading("Building sessions...");
+            const gap = getSessionGapMinutes();
+            datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
+          }
+          if (isOpponentsSection && Array.isArray(datasets.game)) {
+            datasets.game = explodeOpponentsFromGames(datasets.game);
+          }
+          datasetsBySection[section.id] = datasets;
+          const hasDate = !controlIds || controlIds.includes("dateRange");
+          const dateVal = state["dateRange"];
+          const fromTs = hasDate && dateVal && typeof dateVal === "object" ? dateVal.fromTs ?? null : null;
+          const toTs2 = hasDate && dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
+          contextBySection[section.id] = { dateRange: { fromTs, toTs: toTs2 } };
+        };
+        const desired = typeof targetWindow.__gaActiveSectionId === "string" ? targetWindow.__gaActiveSectionId : "";
+        const initialActive = (desired && sections.some((s) => s.id === desired) ? desired : sections[0]?.id) ?? "";
+        if (initialActive) {
+          const sec = sections.find((s) => s.id === initialActive);
+          if (sec) await computeDatasetsForSection(sec);
         }
-        if (used.has("session")) {
-          const gap = getSessionGapMinutes();
-          datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
-        }
-        if (isOpponentsSection && Array.isArray(datasets.game)) {
-          datasets.game = explodeOpponentsFromGames(datasets.game);
-        }
-        datasetsBySection[section.id] = datasets;
-        const hasDate = !controlIds || controlIds.includes("dateRange");
-        const dateVal = state["dateRange"];
-        const fromTs = hasDate && dateVal && typeof dateVal === "object" ? dateVal.fromTs ?? null : null;
-        const toTs2 = hasDate && dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
-        contextBySection[section.id] = { dateRange: { fromTs, toTs: toTs2 } };
-      };
-      const desired = typeof targetWindow.__gaActiveSectionId === "string" ? targetWindow.__gaActiveSectionId : "";
-      const initialActive = (desired && sections.some((s) => s.id === desired) ? desired : sections[0]?.id) ?? "";
-      if (initialActive) {
-        const sec = sections.find((s) => s.id === initialActive);
-        if (sec) await computeDatasetsForSection(sec);
+        const datasetsDefault = initialActive ? datasetsBySection[initialActive] ?? {} : {};
+        const contextDefault = initialActive ? contextBySection[initialActive] : void 0;
+        const effectiveDashboard = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
+        await showLoading("Rendering UI...");
+        await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
+          datasets: datasetsDefault,
+          datasetsBySection,
+          context: contextDefault,
+          contextBySection,
+          initialActiveSectionId: initialActive,
+          onActiveSectionChange: async (id) => {
+            targetWindow.__gaActiveSectionId = id;
+            if (!id) return;
+            if (datasetsBySection[id]) return;
+            const sec = sections.find((s) => s.id === id);
+            if (!sec) return;
+            await showLoading(`Loading data for '${String(sec?.title ?? sec?.id ?? "section")}'...`);
+            await computeDatasetsForSection(sec);
+            hideLoading();
+          }
+        });
+      } finally {
+        hideLoading();
       }
-      const datasetsDefault = initialActive ? datasetsBySection[initialActive] ?? {} : {};
-      const contextDefault = initialActive ? contextBySection[initialActive] : void 0;
-      const effectiveDashboard = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
-      await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
-        datasets: datasetsDefault,
-        datasetsBySection,
-        context: contextDefault,
-        contextBySection,
-        initialActiveSectionId: initialActive,
-        onActiveSectionChange: async (id) => {
-          targetWindow.__gaActiveSectionId = id;
-          if (!id) return;
-          if (datasetsBySection[id]) return;
-          const sec = sections.find((s) => s.id === id);
-          if (!sec) return;
-          await computeDatasetsForSection(sec);
-        }
-      });
     };
     store.subscribe(() => {
       void renderNow();
@@ -47898,7 +47970,7 @@ ${describeError(err)}` : message;
       try {
         doc.open();
         doc.write(
-          '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;padding:0;background:#0b1020;color:#cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}#geoanalyzr-boot-placeholder{padding:16px}#geoanalyzr-boot-placeholder h1{margin:0 0 6px 0;font-size:16px;color:#fff}#geoanalyzr-boot-placeholder p{margin:0;font-size:13px;opacity:.85}</style></head><body><div id="geoanalyzr-boot-placeholder"><h1>GeoAnalyzr</h1><p>Loading analysis\u2026</p></div></body></html>'
+          '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;padding:0;background:#0b1020;color:#cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}#geoanalyzr-boot-placeholder{padding:16px}#geoanalyzr-boot-placeholder h1{margin:0 0 6px 0;font-size:16px;color:#fff}#geoanalyzr-boot-placeholder p{margin:0;font-size:13px;opacity:.85}</style></head><body><div id="geoanalyzr-boot-placeholder"><h1>GeoAnalyzr</h1><p>Loading analysis...</p></div></body></html>'
         );
         doc.close();
       } catch {
@@ -48011,7 +48083,7 @@ ${describeError(err)}` : message;
       body.innerHTML = "";
       const loader = doc.createElement("div");
       loader.className = "ga-loading";
-      loader.innerHTML = '<div class="ga-spinner"></div><div class="ga-loading-text">Loading\u2026</div>';
+      loader.innerHTML = '<div class="ga-spinner"></div><div class="ga-loading-text">Loading...</div>';
       body.appendChild(loader);
       await new Promise((r) => setTimeout(r, 0));
       boot.log("Merging semantic + validating...");

@@ -68,7 +68,7 @@ async function ensureDocumentShell(targetWindow: Window, doc: Document): Promise
       doc.write(
         "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
           "<style>html,body{margin:0;padding:0;background:#0b1020;color:#cbd5e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}#geoanalyzr-boot-placeholder{padding:16px}#geoanalyzr-boot-placeholder h1{margin:0 0 6px 0;font-size:16px;color:#fff}#geoanalyzr-boot-placeholder p{margin:0;font-size:13px;opacity:.85}</style>" +
-          "</head><body><div id=\"geoanalyzr-boot-placeholder\"><h1>GeoAnalyzr</h1><p>Loading analysis…</p></div></body></html>"
+          "</head><body><div id=\"geoanalyzr-boot-placeholder\"><h1>GeoAnalyzr</h1><p>Loading analysis...</p></div></body></html>"
       );
       doc.close();
     } catch {
@@ -215,7 +215,7 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     // Show a visible loader and yield once so the UI can paint (keeps the tab feeling responsive).
     const loader = doc.createElement("div");
     loader.className = "ga-loading";
-    loader.innerHTML = "<div class=\"ga-spinner\"></div><div class=\"ga-loading-text\">Loading…</div>";
+    loader.innerHTML = "<div class=\"ga-spinner\"></div><div class=\"ga-loading-text\">Loading...</div>";
     body.appendChild(loader);
     await new Promise<void>((r) => setTimeout(r, 0));
 
