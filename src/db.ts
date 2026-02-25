@@ -40,6 +40,9 @@ interface RoundRowBase {
   // North America enrichments (computed locally).
   trueUsState?: string;
   trueCaProvince?: string;
+  // Indonesia enrichments (computed locally).
+  trueIdProvince?: string;
+  trueIdKabupaten?: string;
   startTime?: number;
   endTime?: number;
   raw?: unknown;

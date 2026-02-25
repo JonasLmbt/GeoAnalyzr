@@ -2105,7 +2105,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 30,
+              "h": 32,
               "card": {
                 "type": "composite",
                 "children": [
@@ -2184,15 +2184,29 @@
                         "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
                       }
                     }
-                  }
-                  ,
+                  },
+                  {
+                    "widgetId": "w_country_insight_overall_hit_rate",
+                    "type": "stat_value",
+                    "title": "Overall hit rate",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE", "us", "US", "ca", "CA", "id", "ID"] },
+                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
+                    "spec": {
+                      "label": "Hit rate (overall)",
+                      "measure": "hit_rate",
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" }
+                      }
+                    }
+                  },
                   {
                     "widgetId": "w_country_insight_de_states",
                     "type": "multi_view",
                     "title": "Germany - States (Bundesländer)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
                     "spec": {
                       "activeView": "bar",
                       "views": [
@@ -2240,7 +2254,7 @@
                     "title": "United States - States",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["us", "US"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
                     "spec": {
                       "activeView": "map",
                       "views": [
@@ -2288,7 +2302,7 @@
                     "title": "Canada - Provinces & Territories",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["ca", "CA"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
                     "spec": {
                       "activeView": "map",
                       "views": [
@@ -2331,14 +2345,82 @@
                     }
                   },
                   {
+                    "widgetId": "w_country_insight_id_provinces",
+                    "type": "multi_view",
+                    "title": "Indonesia - Provinces",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
+                    "spec": {
+                      "activeView": "map",
+                      "views": [
+                        {
+                          "id": "bar",
+                          "label": "Bar",
+                          "type": "breakdown",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_id_province",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "rounds_count",
+                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                            "activeSort": { "mode": "desc" },
+                            "limit": 15,
+                            "extendable": true,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "map",
+                          "label": "Map",
+                          "type": "region_map",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_id_province",
+                            "geojsonUrl": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson",
+                            "featureKey": "shapeName",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "avg_score",
+                            "mapHeight": 380,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
                     "widgetId": "w_country_insight_de_districts",
                     "type": "breakdown",
                     "title": "Germany - Districts (Landkreise)",
                     "grain": "round",
                     "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 24, "w": 12, "h": 6 },
+                    "placement": { "x": 0, "y": 26, "w": 12, "h": 6 },
                     "spec": {
                       "dimension": "true_district",
+                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                      "activeMeasure": "rounds_count",
+                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                      "activeSort": { "mode": "desc" },
+                      "limit": 15,
+                      "extendable": true,
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_id_kabupaten",
+                    "type": "breakdown",
+                    "title": "Indonesia - Kabupaten / Regencies",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
+                    "placement": { "x": 0, "y": 26, "w": 12, "h": 6 },
+                    "spec": {
+                      "dimension": "true_id_kabupaten",
                       "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
                       "activeMeasure": "rounds_count",
                       "sorts": [{ "mode": "desc" }, { "mode": "asc" }],

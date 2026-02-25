@@ -182,6 +182,26 @@ export function trueCaProvinceKey(r: RoundRow): GroupKey | null {
   return v ? v : null;
 }
 
+export function trueIdProvinceKey(r: RoundRow): GroupKey | null {
+  const v =
+    typeof (r as any)?.trueIdProvince === "string"
+      ? String((r as any).trueIdProvince).trim()
+      : typeof (r as any)?.true_id_province === "string"
+        ? String((r as any).true_id_province).trim()
+        : "";
+  return v ? v : null;
+}
+
+export function trueIdKabupatenKey(r: RoundRow): GroupKey | null {
+  const v =
+    typeof (r as any)?.trueIdKabupaten === "string"
+      ? String((r as any).trueIdKabupaten).trim()
+      : typeof (r as any)?.true_id_kabupaten === "string"
+        ? String((r as any).true_id_kabupaten).trim()
+        : "";
+  return v ? v : null;
+}
+
 export function confusedCountriesKey(r: RoundRow): GroupKey | null {
   const truthRaw = getTrueCountry(r);
   const guessRaw = getGuessCountrySelf(r);
@@ -370,6 +390,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     true_district: trueDistrictKey,
     true_us_state: trueUsStateKey,
     true_ca_province: trueCaProvinceKey,
+    true_id_province: trueIdProvinceKey,
+    true_id_kabupaten: trueIdKabupatenKey,
     mode_family: (r: any) => {
       const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
       if (!v) return null;

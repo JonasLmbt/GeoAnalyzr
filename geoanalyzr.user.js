@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.8
+// @version      2.2.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -11,6 +11,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
+// @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
@@ -9572,6 +9573,14 @@ ${shapes}`.trim();
     const v = typeof r?.trueCaProvince === "string" ? String(r.trueCaProvince).trim() : typeof r?.true_ca_province === "string" ? String(r.true_ca_province).trim() : "";
     return v ? v : null;
   }
+  function trueIdProvinceKey(r) {
+    const v = typeof r?.trueIdProvince === "string" ? String(r.trueIdProvince).trim() : typeof r?.true_id_province === "string" ? String(r.true_id_province).trim() : "";
+    return v ? v : null;
+  }
+  function trueIdKabupatenKey(r) {
+    const v = typeof r?.trueIdKabupaten === "string" ? String(r.trueIdKabupaten).trim() : typeof r?.true_id_kabupaten === "string" ? String(r.true_id_kabupaten).trim() : "";
+    return v ? v : null;
+  }
   function confusedCountriesKey(r) {
     const truthRaw = getTrueCountry(r);
     const guessRaw = getGuessCountrySelf(r);
@@ -9728,6 +9737,8 @@ ${shapes}`.trim();
       true_district: trueDistrictKey,
       true_us_state: trueUsStateKey,
       true_ca_province: trueCaProvinceKey,
+      true_id_province: trueIdProvinceKey,
+      true_id_kabupaten: trueIdKabupatenKey,
       mode_family: (r) => {
         const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
         if (!v) return null;
@@ -10219,6 +10230,169 @@ ${shapes}`.trim();
     return null;
   }
 
+  // src/geo/idRegions.ts
+  var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
+  var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
+  function hasGmXhr4() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText3(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson3(url) {
+    if (hasGmXhr4()) {
+      const txt = await gmGetText3(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords3(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords3(c, bbox);
+  }
+  function bboxForGeometry3(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords3(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing3(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon3(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing3(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing3(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry3(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon3(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon3(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var provincesIndexPromise = null;
+  var kabupatenIndexPromise = null;
+  async function loadProvincesIndex() {
+    if (!provincesIndexPromise) {
+      provincesIndexPromise = (async () => {
+        const geo = await fetchJson3(ID_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry3(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return provincesIndexPromise;
+  }
+  async function loadKabupatenIndex() {
+    if (!kabupatenIndexPromise) {
+      kabupatenIndexPromise = (async () => {
+        const geo = await fetchJson3(ID_KABUPATEN_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry3(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return kabupatenIndexPromise;
+  }
+  function memoKey3(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains3(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var provincesMemo = /* @__PURE__ */ new Map();
+  var kabupatenMemo = /* @__PURE__ */ new Map();
+  async function resolveIdProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey3(lat, lng);
+    const cached = provincesMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadProvincesIndex();
+    for (const it of items) {
+      if (!bboxContains3(it.bbox, lon, lat)) continue;
+      if (pointInGeometry3(lon, lat, it.geom)) {
+        provincesMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveIdKabupatenByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey3(lat, lng);
+    const cached = kabupatenMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadKabupatenIndex();
+    for (const it of items) {
+      if (!bboxContains3(it.bbox, lon, lat)) continue;
+      if (pointInGeometry3(lon, lat, it.geom)) {
+        kabupatenMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
   // src/engine/queryEngine.ts
   function normalizeMovementType(raw) {
     if (typeof raw !== "string") return "unknown";
@@ -10671,6 +10845,20 @@ ${shapes}`.trim();
           if (tc === "ca" && (typeof out.trueCaProvince !== "string" || !out.trueCaProvince)) {
             const p = await resolveCaProvinceByLatLng(lat, lng);
             if (p) out.trueCaProvince = p;
+          }
+        }
+      }
+      if (tc === "id") {
+        const lat = typeof out.trueLat === "number" ? out.trueLat : void 0;
+        const lng = typeof out.trueLng === "number" ? out.trueLng : void 0;
+        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+          if (typeof out.trueIdProvince !== "string" || !out.trueIdProvince) {
+            const p = await resolveIdProvinceByLatLng(lat, lng);
+            if (p) out.trueIdProvince = p;
+          }
+          if (typeof out.trueIdKabupaten !== "string" || !out.trueIdKabupaten) {
+            const k = await resolveIdKabupatenByLatLng(lat, lng);
+            if (k) out.trueIdKabupaten = k;
           }
         }
       }
@@ -32391,6 +32579,22 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 30 }
       },
+      true_id_province: {
+        label: "Indonesia province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40 }
+      },
+      true_id_kabupaten: {
+        label: "Indonesia kabupaten",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 60, selectorRequired: true }
+      },
       true_location: {
         label: "True location",
         kind: "category",
@@ -35607,7 +35811,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 30,
+                h: 32,
                 card: {
                   type: "composite",
                   children: [
@@ -35688,12 +35892,27 @@ ${shapes}`.trim();
                       }
                     },
                     {
+                      widgetId: "w_country_insight_overall_hit_rate",
+                      type: "stat_value",
+                      title: "Overall hit rate",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE", "us", "US", "ca", "CA", "id", "ID"] },
+                      placement: { x: 0, y: 18, w: 12, h: 2 },
+                      spec: {
+                        label: "Hit rate (overall)",
+                        measure: "hit_rate",
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" }
+                        }
+                      }
+                    },
+                    {
                       widgetId: "w_country_insight_de_states",
                       type: "multi_view",
                       title: "Germany - States (Bundesl\xE4nder)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 18, w: 12, h: 6 },
+                      placement: { x: 0, y: 20, w: 12, h: 6 },
                       spec: {
                         activeView: "bar",
                         views: [
@@ -35741,7 +35960,7 @@ ${shapes}`.trim();
                       title: "United States - States",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["us", "US"] },
-                      placement: { x: 0, y: 18, w: 12, h: 6 },
+                      placement: { x: 0, y: 20, w: 12, h: 6 },
                       spec: {
                         activeView: "map",
                         views: [
@@ -35789,7 +36008,7 @@ ${shapes}`.trim();
                       title: "Canada - Provinces & Territories",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["ca", "CA"] },
-                      placement: { x: 0, y: 18, w: 12, h: 6 },
+                      placement: { x: 0, y: 20, w: 12, h: 6 },
                       spec: {
                         activeView: "map",
                         views: [
@@ -35832,14 +36051,82 @@ ${shapes}`.trim();
                       }
                     },
                     {
+                      widgetId: "w_country_insight_id_provinces",
+                      type: "multi_view",
+                      title: "Indonesia - Provinces",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
+                      placement: { x: 0, y: 20, w: 12, h: 6 },
+                      spec: {
+                        activeView: "map",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_id_province",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "rounds_count",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "region_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_id_province",
+                              geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson",
+                              featureKey: "shapeName",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "avg_score",
+                              mapHeight: 380,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
                       widgetId: "w_country_insight_de_districts",
                       type: "breakdown",
                       title: "Germany - Districts (Landkreise)",
                       grain: "round",
                       showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 24, w: 12, h: 6 },
+                      placement: { x: 0, y: 26, w: 12, h: 6 },
                       spec: {
                         dimension: "true_district",
+                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                        activeMeasure: "rounds_count",
+                        sorts: [{ mode: "desc" }, { mode: "asc" }],
+                        activeSort: { mode: "desc" },
+                        limit: 15,
+                        extendable: true,
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_id_kabupaten",
+                      type: "breakdown",
+                      title: "Indonesia - Kabupaten / Regencies",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
+                      placement: { x: 0, y: 26, w: 12, h: 6 },
+                      spec: {
+                        dimension: "true_id_kabupaten",
                         measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
                         activeMeasure: "rounds_count",
                         sorts: [{ mode: "desc" }, { mode: "asc" }],
@@ -44149,10 +44436,10 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
-  function hasGmXhr4() {
+  function hasGmXhr5() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText3(url, accept) {
+  function gmGetText4(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -44165,9 +44452,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson3(url) {
-    if (hasGmXhr4()) {
-      const txt = await gmGetText3(url, "application/json");
+  async function fetchJson4(url) {
+    if (hasGmXhr5()) {
+      const txt = await gmGetText4(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -44182,7 +44469,7 @@ ${describeError(err)}` : message;
   async function loadData() {
     if (!dataPromise) {
       dataPromise = (async () => {
-        const [geojson, countries] = await Promise.all([fetchJson3(WORLD_GEOJSON_URL), fetchJson3(ISO_MAP_URL)]);
+        const [geojson, countries] = await Promise.all([fetchJson4(WORLD_GEOJSON_URL), fetchJson4(ISO_MAP_URL)]);
         const iso3ToIso2 = /* @__PURE__ */ new Map();
         if (Array.isArray(countries)) {
           for (const c of countries) {
@@ -44696,10 +44983,10 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/regionMetricMapWidget.ts
-  function hasGmXhr5() {
+  function hasGmXhr6() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText4(url, accept) {
+  function gmGetText5(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -44712,9 +44999,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson4(url) {
-    if (hasGmXhr5()) {
-      const txt = await gmGetText4(url, "application/json");
+  async function fetchJson5(url) {
+    if (hasGmXhr6()) {
+      const txt = await gmGetText5(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -44725,7 +45012,7 @@ ${describeError(err)}` : message;
   function loadGeoJson(url) {
     const existing = geojsonCache.get(url);
     if (existing) return existing;
-    const p = fetchJson4(url);
+    const p = fetchJson5(url);
     geojsonCache.set(url, p);
     return p;
   }
@@ -45118,10 +45405,10 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/pointMapWidget.ts
-  function hasGmXhr6() {
+  function hasGmXhr7() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText5(url, accept) {
+  function gmGetText6(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -45134,9 +45421,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson5(url) {
-    if (hasGmXhr6()) {
-      const txt = await gmGetText5(url, "application/json");
+  async function fetchJson6(url) {
+    if (hasGmXhr7()) {
+      const txt = await gmGetText6(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -45146,7 +45433,7 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL2 = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var worldPromise = null;
   function loadWorldGeoJson() {
-    if (!worldPromise) worldPromise = fetchJson5(WORLD_GEOJSON_URL2);
+    if (!worldPromise) worldPromise = fetchJson6(WORLD_GEOJSON_URL2);
     return worldPromise;
   }
   function clamp2(v, min, max) {

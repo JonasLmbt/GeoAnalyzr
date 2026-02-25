@@ -136,6 +136,22 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 30 }
     },
+    "true_id_province": {
+      "label": "Indonesia province",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 40 }
+    },
+    "true_id_kabupaten": {
+      "label": "Indonesia kabupaten",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 60, "selectorRequired": true }
+    },
     "true_location": {
       "label": "True location",
       "kind": "category",

@@ -6,7 +6,7 @@ const banner = `// ==UserScript==
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.8
+// @version      2.2.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -15,6 +15,7 @@ const banner = `// ==UserScript==
 // @grant        GM_xmlhttpRequest
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
+// @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
