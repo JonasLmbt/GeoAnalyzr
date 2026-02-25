@@ -137,6 +137,77 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
     return seen.size;
   },
 
+  count_distinct_true_location: (rows) => {
+    const seen = new Set<string>();
+    for (const r of rows as any[]) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      seen.add(`${lat.toFixed(6)},${lng.toFixed(6)}`);
+    }
+    return seen.size;
+  },
+
+  count_true_location_repeat_groups: (rows) => {
+    const counts = new Map<string, number>();
+    for (const r of rows as any[]) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    let groups = 0;
+    for (const n of counts.values()) if (n > 1) groups++;
+    return groups;
+  },
+
+  count_true_location_repeat_rounds: (rows) => {
+    const counts = new Map<string, number>();
+    for (const r of rows as any[]) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    let sum = 0;
+    for (const n of counts.values()) if (n > 1) sum += n;
+    return sum;
+  },
+
+  count_true_location_repeat_pairs: (rows) => {
+    const counts = new Map<string, number>();
+    for (const r of rows as any[]) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    let pairs = 0;
+    for (const n of counts.values()) {
+      if (n > 1) pairs += (n * (n - 1)) / 2;
+    }
+    return pairs;
+  },
+
+  rate_true_location_repeat_rounds: (rows) => {
+    const n = rows.length;
+    if (!n) return 0;
+    const counts = new Map<string, number>();
+    for (const r of rows as any[]) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    let repeatRounds = 0;
+    for (const v of counts.values()) if (v > 1) repeatRounds += v;
+    return repeatRounds / n;
+  },
+
   min_played_at_ts: (rows) => {
     let min = Infinity;
     for (const r of rows) {

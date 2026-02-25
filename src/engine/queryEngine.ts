@@ -625,6 +625,26 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     return out as RoundRow;
   }));
 
+  // Coordinate repeat enrichment (true location).
+  // Useful for coordinate-focused analytics (e.g., repeats / distribution maps) without scanning repeatedly.
+  const trueKeyFor = (lat: number, lng: number): string => `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  const trueCounts = new Map<string, number>();
+  for (const r of roundsRawCache as any[]) {
+    const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+    const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+    if (lat === null || lng === null) continue;
+    const k = trueKeyFor(lat, lng);
+    trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
+  }
+  for (const r of roundsRawCache as any[]) {
+    const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+    const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+    if (lat === null || lng === null) continue;
+    const k = trueKeyFor(lat, lng);
+    (r as any).trueLocationKey = k;
+    (r as any).trueLocationRepeat = (trueCounts.get(k) ?? 0) > 1;
+  }
+
   return roundsRawCache;
 }
 

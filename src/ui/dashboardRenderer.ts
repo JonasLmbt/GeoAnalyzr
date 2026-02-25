@@ -11,6 +11,7 @@ import { renderRecordListWidget } from "./widgets/recordListWidget";
 import { renderLeaderListWidget } from "./widgets/leaderListWidget";
 import { renderCountryMetricMapWidget } from "./widgets/countryMetricMapWidget";
 import { renderRegionMetricMapWidget } from "./widgets/regionMetricMapWidget";
+import { renderPointMapWidget } from "./widgets/pointMapWidget";
 import { renderMultiViewWidget } from "./widgets/multiViewWidget";
 import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
@@ -83,6 +84,7 @@ export async function renderDashboard(
     if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "region_map") return await renderRegionMetricMapWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "point_map") return await renderPointMapWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "multi_view") {
       return await renderMultiViewWidget({
         semantic,

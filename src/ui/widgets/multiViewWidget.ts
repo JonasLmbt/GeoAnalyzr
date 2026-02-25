@@ -1,7 +1,7 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef } from "../../config/dashboard.types";
 import type { Grain } from "../../config/semantic.types";
-import type { ChartSpec, BreakdownSpec, CountryMetricMapSpec, RegionMetricMapSpec, StatListSpec, StatValueSpec, RecordListSpec } from "../../config/dashboard.types";
+import type { ChartSpec, BreakdownSpec, CountryMetricMapSpec, RegionMetricMapSpec, PointMapSpec, StatListSpec, StatValueSpec, RecordListSpec } from "../../config/dashboard.types";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
 type MultiViewItem = {
@@ -9,7 +9,7 @@ type MultiViewItem = {
   label: string;
   type: WidgetDef["type"];
   grain: Grain;
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | CountryMetricMapSpec | RegionMetricMapSpec | RecordListSpec | { rows: any[] };
+  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | CountryMetricMapSpec | RegionMetricMapSpec | PointMapSpec | RecordListSpec | { rows: any[] };
 };
 
 export type MultiViewSpec = {
@@ -119,4 +119,3 @@ export async function renderMultiViewWidget(args: {
   await renderActive();
   return wrap;
 }
-

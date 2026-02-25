@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.3
+// @version      2.2.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9481,6 +9481,21 @@ ${shapes}`.trim();
     const c = getTrueCountry(r);
     return typeof c === "string" && c.length ? c : null;
   }
+  function trueLocationKey(r) {
+    const existing = r?.trueLocationKey;
+    if (typeof existing === "string" && existing.trim()) return existing.trim();
+    const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+    const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+    if (lat === null || lng === null) return null;
+    return `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  }
+  function isTrueLocationRepeatKey(r) {
+    const key = trueLocationKey(r);
+    if (!key) return null;
+    const v = r?.trueLocationRepeat;
+    if (typeof v === "boolean") return v ? "true" : "false";
+    return null;
+  }
   function movementTypeKey(r) {
     const v = getMovementType(r);
     return typeof v === "string" && v.length ? v : null;
@@ -9684,6 +9699,8 @@ ${shapes}`.trim();
       hour: hourKey,
       game_id: (r) => typeof r?.gameId === "string" && r.gameId.trim().length ? r.gameId : null,
       true_country: trueCountryKey,
+      true_location: trueLocationKey,
+      is_true_location_repeat: isTrueLocationRepeatKey,
       movement_type: movementTypeKey,
       is_hit: isHitKey,
       is_throw: isThrowKey,
@@ -10659,6 +10676,23 @@ ${shapes}`.trim();
       }
       return out;
     }));
+    const trueKeyFor = (lat, lng) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
+    const trueCounts = /* @__PURE__ */ new Map();
+    for (const r of roundsRawCache) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const k = trueKeyFor(lat, lng);
+      trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
+    }
+    for (const r of roundsRawCache) {
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const k = trueKeyFor(lat, lng);
+      r.trueLocationKey = k;
+      r.trueLocationRepeat = (trueCounts.get(k) ?? 0) > 1;
+    }
     return roundsRawCache;
   }
   async function getRounds(filters) {
@@ -32357,6 +32391,22 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 30 }
       },
+      true_location: {
+        label: "True location",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 50, selectorRequired: true }
+      },
+      is_true_location_repeat: {
+        label: "True location repeat?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
       score_vs_opponent: {
         label: "Score vs opponents",
         kind: "category",
@@ -32638,6 +32688,42 @@ ${shapes}`.trim();
         grain: "round",
         allowedCharts: ["bar", "line"],
         formulaId: "count_distinct_game_id"
+      },
+      distinct_locations_count: {
+        label: "Distinct locations",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_true_location"
+      },
+      repeat_locations_count: {
+        label: "Repeat locations (groups)",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_true_location_repeat_groups"
+      },
+      repeat_location_rounds_count: {
+        label: "Rounds on repeat locations",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_true_location_repeat_rounds"
+      },
+      repeat_location_pairs_count: {
+        label: "Repeat location pairs",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_true_location_repeat_pairs"
+      },
+      repeat_location_rounds_rate: {
+        label: "Repeat location share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_true_location_repeat_rounds",
+        range: { min: 0, max: 1 }
       },
       first_played_at: {
         label: "First game together",
@@ -35183,6 +35269,147 @@ ${shapes}`.trim();
           }
         },
         {
+          id: "coordinates",
+          title: "Coordinates",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_coordinates",
+                title: "Coordinates",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 24,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_coordinates_repeats",
+                      type: "stat_list",
+                      title: "Coordinates - Repeats",
+                      grain: "round",
+                      placement: { x: 0, y: 0, w: 12, h: 5 },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Repeat location pairs (same coordinates)",
+                            measure: "repeat_location_pairs_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_true_location_repeat", op: "eq", value: "true" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Repeat locations (unique coords with n>1)",
+                            measure: "repeat_locations_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_true_location_repeat", op: "eq", value: "true" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Rounds on repeat locations",
+                            measure: "repeat_location_rounds_count",
+                            secondaryMeasure: "repeat_location_rounds_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [{ dimension: "is_true_location_repeat", op: "eq", value: "true" }]
+                              }
+                            }
+                          },
+                          {
+                            label: "Distinct locations",
+                            measure: "distinct_locations_count",
+                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_coordinates_map",
+                      type: "multi_view",
+                      title: "Coordinates - Distribution",
+                      grain: "round",
+                      placement: { x: 0, y: 5, w: 12, h: 19 },
+                      spec: {
+                        activeView: "true",
+                        views: [
+                          {
+                            id: "true",
+                            label: "True locations",
+                            type: "point_map",
+                            grain: "round",
+                            spec: {
+                              points: [{ id: "true", label: "True location", latField: "trueLat", lngField: "trueLng" }],
+                              mapHeight: 520,
+                              measures: ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
+                              activeMeasure: "rounds_count",
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "self",
+                            label: "Your guesses",
+                            type: "point_map",
+                            grain: "round",
+                            spec: {
+                              points: [{ id: "self", label: "Your guess", latField: "player_self_guessLat", lngField: "player_self_guessLng" }],
+                              mapHeight: 520,
+                              measures: ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
+                              activeMeasure: "rounds_count",
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "all",
+                            label: "All player guesses",
+                            type: "point_map",
+                            grain: "round",
+                            spec: {
+                              points: [
+                                { id: "self", label: "Your guess", latField: "player_self_guessLat", lngField: "player_self_guessLng" },
+                                { id: "mate", label: "Mate guess", latField: "player_mate_guessLat", lngField: "player_mate_guessLng" },
+                                { id: "opp", label: "Opponent guess", latField: "player_opponent_guessLat", lngField: "player_opponent_guessLng" },
+                                { id: "oppMate", label: "Opponent mate guess", latField: "player_opponent_mate_guessLat", lngField: "player_opponent_mate_guessLng" }
+                              ],
+                              mapHeight: 520,
+                              measures: ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
+                              activeMeasure: "rounds_count",
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
           id: "opponents",
           title: "Opponents",
           filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
@@ -35942,6 +36169,13 @@ ${shapes}`.trim();
       fill: var(--ga-map-active-fill);
       stroke: var(--ga-map-active-stroke);
       stroke-width: 2;
+    }
+    .ga-point-dot {
+      stroke: rgba(0,0,0,0.55);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      cursor: pointer;
+      transition: filter 120ms ease, r 120ms ease;
     }
     .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
     .ga-filter-btn {
@@ -38332,7 +38566,7 @@ ${shapes}`.trim();
         addRow.appendChild(mkBtn(doc, "Add stat rows", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "stat_list", cols)]), "primary"));
         addRow.appendChild(mkBtn(doc, "Add box", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "stat_value", cols)]), "primary"));
         body.appendChild(addRow);
-        const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
+        const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
         const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
         const patchWidgetAt = (wIdx, nextWidget) => {
           const next = children.map((x, i) => i === wIdx ? nextWidget : x);
@@ -38729,7 +38963,7 @@ ${shapes}`.trim();
         right.appendChild(fsBox);
       }
       right.appendChild(mkHr(doc));
-      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
+      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
       const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
       const cardsBox = doc.createElement("div");
       cardsBox.className = "ga-le-box";
@@ -39319,6 +39553,7 @@ ${shapes}`.trim();
     else if (type === "stat_list") base.spec = { rows: [{ label: "Row", measure: "" }] };
     else if (type === "chart") base.spec = { type: "bar", x: { dimension: "" }, y: { measure: "" }, actions: { hover: true } };
     else if (type === "breakdown") base.spec = { dimension: "", measure: "", limit: 12 };
+    else if (type === "point_map") base.spec = { points: [{ latField: "trueLat", lngField: "trueLng" }], measures: ["rounds_count"], activeMeasure: "rounds_count" };
     else if (type === "record_list") base.spec = { records: [] };
     else base.spec = {};
     return base;
@@ -40931,6 +41166,72 @@ ${describeError(err)}` : message;
         if (gid) seen.add(gid);
       }
       return seen.size;
+    },
+    count_distinct_true_location: (rows) => {
+      const seen = /* @__PURE__ */ new Set();
+      for (const r of rows) {
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        seen.add(`${lat.toFixed(6)},${lng.toFixed(6)}`);
+      }
+      return seen.size;
+    },
+    count_true_location_repeat_groups: (rows) => {
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      let groups = 0;
+      for (const n of counts.values()) if (n > 1) groups++;
+      return groups;
+    },
+    count_true_location_repeat_rounds: (rows) => {
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      let sum = 0;
+      for (const n of counts.values()) if (n > 1) sum += n;
+      return sum;
+    },
+    count_true_location_repeat_pairs: (rows) => {
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      let pairs = 0;
+      for (const n of counts.values()) {
+        if (n > 1) pairs += n * (n - 1) / 2;
+      }
+      return pairs;
+    },
+    rate_true_location_repeat_rounds: (rows) => {
+      const n = rows.length;
+      if (!n) return 0;
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of rows) {
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        const k = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      let repeatRounds = 0;
+      for (const v of counts.values()) if (v > 1) repeatRounds += v;
+      return repeatRounds / n;
     },
     min_played_at_ts: (rows) => {
       let min = Infinity;
@@ -44788,11 +45089,11 @@ ${describeError(err)}` : message;
         };
         applyViewport2(g, vp);
       };
-      const clamp2 = (v, a, b) => Math.max(a, Math.min(b, v));
+      const clamp3 = (v, a, b) => Math.max(a, Math.min(b, v));
       const onZoom = (delta, clientX, clientY) => {
         const p = rectPoint(clientX, clientY);
         const factor = delta > 0 ? 1.12 : 1 / 1.12;
-        const next = clamp2(vp.scale * factor, 1, 12);
+        const next = clamp3(vp.scale * factor, 1, 12);
         zoomAt(p.x, p.y, next);
       };
       svg.addEventListener(
@@ -44827,6 +45128,499 @@ ${describeError(err)}` : message;
       });
       svg.addEventListener("pointerup", () => drag = null);
       svg.addEventListener("pointercancel", () => drag = null);
+    };
+    renderHeaderRight();
+    await renderMap();
+    wrap.appendChild(title);
+    wrap.appendChild(header);
+    wrap.appendChild(box);
+    return wrap;
+  }
+
+  // src/ui/widgets/pointMapWidget.ts
+  function hasGmXhr6() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText5(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson5(url) {
+    if (hasGmXhr6()) {
+      const txt = await gmGetText5(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  var WORLD_GEOJSON_URL2 = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
+  var worldPromise = null;
+  function loadWorldGeoJson() {
+    if (!worldPromise) worldPromise = fetchJson5(WORLD_GEOJSON_URL2);
+    return worldPromise;
+  }
+  function clamp2(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+  }
+  function project3(lon, lat, w, h) {
+    const x = (lon + 180) / 360 * w;
+    const y = (90 - lat) / 180 * h;
+    return [x, y];
+  }
+  function pathFromGeo3(geometry, w, h) {
+    const d = [];
+    const addRing = (ring) => {
+      if (!Array.isArray(ring) || ring.length < 2) return;
+      const pts = ring.map((p) => Array.isArray(p) && p.length >= 2 ? [Number(p[0]), Number(p[1])] : null).filter((p) => !!p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      if (pts.length < 2) return;
+      const [x0, y0] = project3(pts[0][0], pts[0][1], w, h);
+      d.push(`M${x0.toFixed(2)},${y0.toFixed(2)}`);
+      for (let i = 1; i < pts.length; i++) {
+        const [x, y] = project3(pts[i][0], pts[i][1], w, h);
+        d.push(`L${x.toFixed(2)},${y.toFixed(2)}`);
+      }
+      d.push("Z");
+    };
+    const type = geometry?.type;
+    const coords = geometry?.coordinates;
+    if (!type || !coords) return "";
+    if (type === "Polygon") {
+      for (const ring of coords) addRing(ring);
+      return d.join(" ");
+    }
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        for (const ring of poly) addRing(ring);
+      }
+      return d.join(" ");
+    }
+    return "";
+  }
+  function applyViewport3(g, vp) {
+    g.setAttribute("transform", `translate(${vp.tx.toFixed(2)} ${vp.ty.toFixed(2)}) scale(${vp.scale.toFixed(4)})`);
+  }
+  function parseCssColor3(v) {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    if (/^#[0-9a-fA-F]{6}$/.test(s)) {
+      return { r: parseInt(s.slice(1, 3), 16), g: parseInt(s.slice(3, 5), 16), b: parseInt(s.slice(5, 7), 16) };
+    }
+    const m = s.match(/^rgb\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*\)$/);
+    if (m) {
+      const r = clamp2(parseInt(m[1], 10), 0, 255);
+      const g = clamp2(parseInt(m[2], 10), 0, 255);
+      const b = clamp2(parseInt(m[3], 10), 0, 255);
+      return { r, g, b };
+    }
+    return null;
+  }
+  function colorForValue3(base, t) {
+    const tt = clamp2(t, 0, 1);
+    const r = Math.round(base.r * tt);
+    const g = Math.round(base.g * tt);
+    const b = Math.round(base.b * tt);
+    return `rgb(${r} ${g} ${b})`;
+  }
+  function formatValue5(doc, semantic, measureId, value) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!m || !unit) return String(value);
+    if (unit.format === "percent") {
+      const decimals2 = unit.decimals ?? 1;
+      const clamped = Math.max(0, Math.min(1, value));
+      return `${(clamped * 100).toFixed(decimals2)}%`;
+    }
+    if (unit.format === "duration") {
+      const s = Math.max(0, Math.round(value));
+      const days2 = Math.floor(s / 86400);
+      const hours = Math.floor(s % 86400 / 3600);
+      const mins = Math.floor(s % 3600 / 60);
+      if (days2 > 0) return `${days2}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      if (mins > 0) return `${mins}m ${s % 60}s`;
+      return `${Math.max(0, value).toFixed(1)}s`;
+    }
+    if (unit.format === "int") {
+      const v = Math.round(value);
+      return unit.showSign && v > 0 ? `+${v}` : String(v);
+    }
+    const decimals = unit.decimals ?? 1;
+    const txt = value.toFixed(decimals);
+    return unit.showSign && value > 0 ? `+${txt}` : txt;
+  }
+  function getByPath4(obj, path) {
+    const raw = typeof path === "string" ? path.trim() : "";
+    if (!raw) return void 0;
+    if (!raw.includes(".")) return obj?.[raw];
+    let cur = obj;
+    for (const part of raw.split(".").map((p) => p.trim()).filter(Boolean)) {
+      cur = cur?.[part];
+      if (cur === void 0 || cur === null) return cur;
+    }
+    return cur;
+  }
+  function normalizeSources(points) {
+    const out = [];
+    if (!Array.isArray(points)) return out;
+    for (const p of points) {
+      const latField = typeof p?.latField === "string" ? p.latField.trim() : "";
+      const lngField = typeof p?.lngField === "string" ? p.lngField.trim() : "";
+      if (!latField || !lngField) continue;
+      out.push({
+        id: typeof p?.id === "string" ? p.id.trim() : void 0,
+        label: typeof p?.label === "string" ? p.label.trim() : void 0,
+        latField,
+        lngField
+      });
+    }
+    return out;
+  }
+  function rowKeyForGrain(grain, row) {
+    if (grain === "round") {
+      const gid = typeof row?.gameId === "string" ? row.gameId : "";
+      const rn = typeof row?.roundNumber === "number" ? row.roundNumber : null;
+      return gid && rn !== null ? `${gid}#${rn}` : JSON.stringify(row);
+    }
+    if (grain === "game") {
+      const gid = typeof row?.gameId === "string" ? row.gameId : "";
+      return gid || JSON.stringify(row);
+    }
+    const sid = typeof row?.sessionId === "string" ? row.sessionId : "";
+    return sid || JSON.stringify(row);
+  }
+  function sumDamage4(rows, kind) {
+    let sum = 0;
+    for (const r of rows) {
+      const dmg = r?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      if (kind === "dealt") sum += Math.max(0, dmg);
+      else sum += Math.max(0, -dmg);
+    }
+    return sum;
+  }
+  async function renderPointMapWidget(semantic, widget, overlay, baseRows) {
+    const spec = widget.spec;
+    const doc = overlay.getDocument();
+    const grain = widget.grain;
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-widget ga-point-map";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title;
+    const header = doc.createElement("div");
+    header.className = "ga-breakdown-header";
+    const headerLeft = doc.createElement("div");
+    headerLeft.className = "ga-breakdown-header-left";
+    headerLeft.textContent = "Coordinates";
+    const headerRight = doc.createElement("div");
+    headerRight.className = "ga-breakdown-header-right";
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+    const box = doc.createElement("div");
+    box.className = "ga-breakdown-box";
+    const legend = doc.createElement("div");
+    legend.className = "ga-country-map-legend";
+    const mapHost = doc.createElement("div");
+    mapHost.className = "ga-country-map";
+    const h = typeof spec.mapHeight === "number" && Number.isFinite(spec.mapHeight) ? Math.round(spec.mapHeight) : 420;
+    mapHost.style.setProperty("--ga-country-map-h", `${Math.max(180, Math.min(1200, h))}px`);
+    box.appendChild(legend);
+    box.appendChild(mapHost);
+    const rowsAllBase = baseRows ?? (grain === "game" ? await getGames({}) : grain === "session" ? await getSessions({}) : await getRounds({}));
+    const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
+    const sources = normalizeSources(spec.points);
+    if (sources.length === 0) throw new Error(`Point map ${widget.widgetId} has no points[] sources configured`);
+    const measures = [];
+    if (typeof spec.measure === "string" && spec.measure.trim()) measures.push(spec.measure.trim());
+    if (Array.isArray(spec.measures)) {
+      for (const m of spec.measures) if (typeof m === "string" && m.trim() && !measures.includes(m.trim())) measures.push(m.trim());
+    }
+    if (measures.length === 0) throw new Error(`Point map ${widget.widgetId} has no measure or measures[]`);
+    let activeMeasure = measures.includes(spec.activeMeasure || "") ? spec.activeMeasure : measures[0];
+    const renderHeaderRight = () => {
+      headerRight.innerHTML = "";
+      const wrapRight = doc.createElement("div");
+      wrapRight.className = "ga-breakdown-controls";
+      if (measures.length > 1) {
+        const mLabel = doc.createElement("span");
+        mLabel.className = "ga-breakdown-ctl-label";
+        mLabel.textContent = "Measure:";
+        const mSelect = doc.createElement("select");
+        mSelect.className = "ga-breakdown-ctl-select";
+        for (const mId of measures) {
+          const opt = doc.createElement("option");
+          opt.value = mId;
+          opt.textContent = semantic.measures[mId]?.label ?? mId;
+          if (mId === activeMeasure) opt.selected = true;
+          mSelect.appendChild(opt);
+        }
+        mSelect.addEventListener("change", () => {
+          const next = mSelect.value;
+          if (!measures.includes(next)) return;
+          activeMeasure = next;
+          void renderMap();
+        });
+        wrapRight.appendChild(mLabel);
+        wrapRight.appendChild(mSelect);
+      } else {
+        const mText = doc.createElement("span");
+        mText.textContent = semantic.measures[activeMeasure]?.label ?? activeMeasure;
+        wrapRight.appendChild(mText);
+      }
+      headerRight.appendChild(wrapRight);
+    };
+    const renderMap = async () => {
+      const measDef = semantic.measures[activeMeasure];
+      if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (point_map)`);
+      const precision = typeof spec.keyPrecision === "number" && Number.isFinite(spec.keyPrecision) ? Math.max(0, Math.min(10, Math.round(spec.keyPrecision))) : 6;
+      const keyFor = (lat, lng) => `${lat.toFixed(precision)},${lng.toFixed(precision)}`;
+      const expandedRows = [];
+      const grouped = /* @__PURE__ */ new Map();
+      for (const base of rowsAll) {
+        for (const src of sources) {
+          const latRaw = getByPath4(base, src.latField);
+          const lngRaw = getByPath4(base, src.lngField);
+          const lat = typeof latRaw === "number" && Number.isFinite(latRaw) ? latRaw : null;
+          const lng = typeof lngRaw === "number" && Number.isFinite(lngRaw) ? lngRaw : null;
+          if (lat === null || lng === null) continue;
+          if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+          const k = keyFor(lat, lng);
+          const pointRow = Object.create(base);
+          pointRow._gaPointLat = lat;
+          pointRow._gaPointLng = lng;
+          pointRow._gaPointSource = src.id ?? src.label ?? `${src.latField}/${src.lngField}`;
+          expandedRows.push(pointRow);
+          const g2 = grouped.get(k) ?? { lat, lng, pointRows: [], baseRows: [], baseKeys: /* @__PURE__ */ new Set() };
+          g2.pointRows.push(pointRow);
+          const rk = rowKeyForGrain(grain, base);
+          if (!g2.baseKeys.has(rk)) {
+            g2.baseKeys.add(rk);
+            g2.baseRows.push(base);
+          }
+          grouped.set(k, g2);
+        }
+      }
+      const formulaId = measDef.formulaId;
+      const shareKind = formulaId === "share_damage_dealt" ? "dealt" : formulaId === "share_damage_taken" ? "taken" : formulaId === "share_rounds" ? "rounds" : null;
+      const denom = shareKind === "rounds" ? expandedRows.length : shareKind ? sumDamage4(expandedRows, shareKind) : 0;
+      const measureFn = shareKind ? null : MEASURES_BY_GRAIN[grain]?.[formulaId];
+      if (!shareKind && !measureFn) throw new Error(`Missing measure implementation for formulaId=${formulaId}`);
+      const values = /* @__PURE__ */ new Map();
+      const allVals = [];
+      for (const [k, g2] of grouped.entries()) {
+        const v = shareKind === "rounds" ? denom > 0 ? g2.pointRows.length / denom : 0 : shareKind ? denom > 0 ? sumDamage4(g2.pointRows, shareKind) / denom : 0 : measureFn(g2.pointRows);
+        if (typeof v !== "number" || !Number.isFinite(v)) continue;
+        values.set(k, v);
+        allVals.push(v);
+      }
+      allVals.sort((a, b) => a - b);
+      const quantile = (sorted, q) => {
+        if (sorted.length === 0) return 0;
+        const qq = clamp2(q, 0, 1);
+        const idx = qq * (sorted.length - 1);
+        const lo = Math.floor(idx);
+        const hi = Math.ceil(idx);
+        if (lo === hi) return sorted[lo];
+        const t = idx - lo;
+        return sorted[lo] + (sorted[hi] - sorted[lo]) * t;
+      };
+      const scaleMin = allVals.length ? quantile(allVals, 0.05) : 0;
+      const scaleMax = allVals.length ? quantile(allVals, 0.95) : 1;
+      const scaleSpan = scaleMax - scaleMin;
+      const root = doc.querySelector(".ga-root");
+      const theme = root?.dataset?.gaTheme === "geoguessr" ? "geoguessr" : "default";
+      const styles = doc.defaultView?.getComputedStyle(doc.documentElement);
+      const baseColorRaw = theme === "geoguessr" ? styles?.getPropertyValue("--ga-warn") ?? "" : styles?.getPropertyValue("--ga-graph-color") ?? "";
+      const baseColor = parseCssColor3(baseColorRaw) ?? parseCssColor3(styles?.getPropertyValue("--ga-warn") ?? "") ?? { r: 126, g: 182, b: 255 };
+      legend.innerHTML = "";
+      const left = doc.createElement("div");
+      left.className = "ga-country-map-legend-min";
+      left.textContent = formatValue5(doc, semantic, activeMeasure, scaleMin);
+      const bar = doc.createElement("div");
+      bar.className = "ga-country-map-legend-bar";
+      bar.style.background = `linear-gradient(90deg, ${colorForValue3(baseColor, 0)}, ${colorForValue3(baseColor, 1)})`;
+      const right = doc.createElement("div");
+      right.className = "ga-country-map-legend-max";
+      right.textContent = formatValue5(doc, semantic, activeMeasure, scaleMax);
+      legend.appendChild(left);
+      legend.appendChild(bar);
+      legend.appendChild(right);
+      let geojson;
+      try {
+        geojson = await loadWorldGeoJson();
+      } catch (e) {
+        mapHost.innerHTML = "";
+        const msg = doc.createElement("div");
+        msg.className = "ga-filter-map-error";
+        msg.textContent = "Map unavailable (network/CSP).";
+        mapHost.appendChild(msg);
+        throw e;
+      }
+      mapHost.innerHTML = "";
+      const wrapMap = doc.createElement("div");
+      wrapMap.className = "ga-country-map-wrap";
+      mapHost.appendChild(wrapMap);
+      const toolbar = doc.createElement("div");
+      toolbar.className = "ga-country-map-toolbar";
+      wrapMap.appendChild(toolbar);
+      const btnMinus = doc.createElement("button");
+      btnMinus.type = "button";
+      btnMinus.className = "ga-country-map-btn";
+      btnMinus.textContent = "\u2212";
+      btnMinus.title = "Zoom out";
+      const btnPlus = doc.createElement("button");
+      btnPlus.type = "button";
+      btnPlus.className = "ga-country-map-btn";
+      btnPlus.textContent = "+";
+      btnPlus.title = "Zoom in";
+      const hint = doc.createElement("div");
+      hint.className = "ga-country-map-hint";
+      hint.textContent = "Scroll to zoom, drag to pan, click a dot to drill down.";
+      toolbar.appendChild(btnMinus);
+      toolbar.appendChild(btnPlus);
+      toolbar.appendChild(hint);
+      const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.classList.add("ga-country-map-svg");
+      wrapMap.appendChild(svg);
+      const W = 1e3;
+      const H = 500;
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      const g = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+      svg.appendChild(g);
+      const features = Array.isArray(geojson?.features) ? geojson.features : [];
+      for (const f of features) {
+        const d = pathFromGeo3(f.geometry, W, H);
+        if (!d) continue;
+        const p = doc.createElementNS("http://www.w3.org/2000/svg", "path");
+        p.setAttribute("d", d);
+        p.setAttribute("fill-rule", "evenodd");
+        p.classList.add("ga-country-shape");
+        p.style.pointerEvents = "none";
+        g.appendChild(p);
+      }
+      const pointsLayer = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.appendChild(pointsLayer);
+      let vp = { scale: 1, tx: 0, ty: 0 };
+      applyViewport3(g, vp);
+      const rectPoint = (clientX, clientY) => {
+        const r = svg.getBoundingClientRect();
+        const x = (clientX - r.left) / Math.max(1, r.width) * W;
+        const y = (clientY - r.top) / Math.max(1, r.height) * H;
+        return { x, y };
+      };
+      const zoomAt = (px, py, nextScale) => {
+        const s0 = vp.scale;
+        const sx = (px - vp.tx) / s0;
+        const sy = (py - vp.ty) / s0;
+        vp = { scale: nextScale, tx: px - nextScale * sx, ty: py - nextScale * sy };
+        applyViewport3(g, vp);
+      };
+      const setScaleCentered = (nextScale) => {
+        const cx = W / 2;
+        const cy = H / 2;
+        zoomAt(cx, cy, nextScale);
+      };
+      btnPlus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale * 1.25, 1, 20)));
+      btnMinus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale / 1.25, 1, 20)));
+      let drag = null;
+      let suppressClick = false;
+      svg.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const { x, y } = rectPoint(e.clientX, e.clientY);
+        const dir = e.deltaY > 0 ? -1 : 1;
+        const factor = dir > 0 ? 1.15 : 1 / 1.15;
+        const nextScale = clamp2(vp.scale * factor, 1, 30);
+        zoomAt(x, y, nextScale);
+      }, { passive: false });
+      svg.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        const pt = rectPoint(e.clientX, e.clientY);
+        drag = { id: e.pointerId, x: pt.x, y: pt.y, tx0: vp.tx, ty0: vp.ty, moved: false };
+        suppressClick = false;
+        e.target?.setPointerCapture?.(e.pointerId);
+      });
+      svg.addEventListener("pointermove", (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        const pt = rectPoint(e.clientX, e.clientY);
+        const dx = pt.x - drag.x;
+        const dy = pt.y - drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+        vp = { ...vp, tx: drag.tx0 + dx, ty: drag.ty0 + dy };
+        applyViewport3(g, vp);
+      });
+      svg.addEventListener("pointerup", (e) => {
+        if (!drag || e.pointerId !== drag.id) return;
+        suppressClick = drag.moved;
+        drag = null;
+        try {
+          e.target?.releasePointerCapture?.(e.pointerId);
+        } catch {
+        }
+        setTimeout(() => {
+          suppressClick = false;
+        }, 0);
+      });
+      for (const [k, g2] of grouped.entries()) {
+        const v = values.get(k);
+        const [x, y] = project3(g2.lng, g2.lat, W, H);
+        const circle = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.classList.add("ga-point-dot");
+        circle.dataset.key = k;
+        const c = g2.pointRows.length;
+        const rBase = 1.8 + Math.sqrt(Math.max(1, c)) * 0.7;
+        circle.setAttribute("cx", x.toFixed(2));
+        circle.setAttribute("cy", y.toFixed(2));
+        circle.setAttribute("r", String(clamp2(rBase, 2, 10)));
+        if (typeof v === "number" && Number.isFinite(v)) {
+          const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
+          const clampedT = clamp2(rawT, 0, 1);
+          const t = Math.pow(clampedT, 0.55);
+          circle.style.fill = colorForValue3(baseColor, t);
+          circle.style.opacity = "0.95";
+        } else {
+          circle.style.fill = "rgba(255,255,255,0.25)";
+          circle.style.opacity = "0.6";
+        }
+        const ttVal = typeof v === "number" && Number.isFinite(v) ? formatValue5(doc, semantic, activeMeasure, v) : "n/a";
+        const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
+        titleEl.textContent = `${k} \u2022 ${c} pts \u2022 ${ttVal}`;
+        circle.appendChild(titleEl);
+        circle.addEventListener("pointerenter", () => {
+          circle.style.filter = "brightness(1.15)";
+          circle.style.strokeWidth = "2";
+        });
+        circle.addEventListener("pointerleave", () => {
+          circle.style.filter = "";
+          circle.style.strokeWidth = "";
+        });
+        const click = spec.actions?.click;
+        if (click && click.type === "drilldown") {
+          circle.addEventListener("click", () => {
+            if (suppressClick) return;
+            const rowsFromPoint = click.filterFromPoint ? g2.baseRows : rowsAll;
+            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+            overlay.open(semantic, {
+              title: `${widget.title} - ${k}`,
+              target: click.target,
+              columnsPreset: click.columnsPreset,
+              rows: filteredRows,
+              extraFilters: click.extraFilters
+            });
+          });
+        }
+        pointsLayer.appendChild(circle);
+      }
     };
     renderHeaderRight();
     await renderMap();
@@ -44962,6 +45756,7 @@ ${describeError(err)}` : message;
       if (widget.type === "breakdown") return await renderBreakdownWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "country_map") return await renderCountryMetricMapWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "region_map") return await renderRegionMetricMapWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "point_map") return await renderPointMapWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "multi_view") {
         return await renderMultiViewWidget({
           semantic,

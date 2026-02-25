@@ -136,6 +136,22 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 30 }
     },
+    "true_location": {
+      "label": "True location",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 50, "selectorRequired": true }
+    },
+    "is_true_location_repeat": {
+      "label": "True location repeat?",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "small", "maxSeries": 2 }
+    },
     "score_vs_opponent": {
       "label": "Score vs opponents",
       "kind": "category",
@@ -420,6 +436,42 @@
       "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_distinct_game_id"
+    },
+    "distinct_locations_count": {
+      "label": "Distinct locations",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_distinct_true_location"
+    },
+    "repeat_locations_count": {
+      "label": "Repeat locations (groups)",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_true_location_repeat_groups"
+    },
+    "repeat_location_rounds_count": {
+      "label": "Rounds on repeat locations",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_true_location_repeat_rounds"
+    },
+    "repeat_location_pairs_count": {
+      "label": "Repeat location pairs",
+      "unit": "count",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "count_true_location_repeat_pairs"
+    },
+    "repeat_location_rounds_rate": {
+      "label": "Repeat location share",
+      "unit": "percent",
+      "grain": "round",
+      "allowedCharts": ["bar", "line"],
+      "formulaId": "rate_true_location_repeat_rounds",
+      "range": { "min": 0, "max": 1 }
     },
     "first_played_at": {
       "label": "First game together",

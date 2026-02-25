@@ -62,6 +62,23 @@ export function trueCountryKey(r: RoundRow): GroupKey | null {
   return typeof c === "string" && c.length ? c : null;
 }
 
+export function trueLocationKey(r: RoundRow): GroupKey | null {
+  const existing = (r as any)?.trueLocationKey;
+  if (typeof existing === "string" && existing.trim()) return existing.trim();
+  const lat = typeof (r as any)?.trueLat === "number" && Number.isFinite((r as any).trueLat) ? (r as any).trueLat : null;
+  const lng = typeof (r as any)?.trueLng === "number" && Number.isFinite((r as any).trueLng) ? (r as any).trueLng : null;
+  if (lat === null || lng === null) return null;
+  return `${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+export function isTrueLocationRepeatKey(r: RoundRow): GroupKey | null {
+  const key = trueLocationKey(r);
+  if (!key) return null;
+  const v = (r as any)?.trueLocationRepeat;
+  if (typeof v === "boolean") return v ? "true" : "false";
+  return null;
+}
+
 export function movementTypeKey(r: RoundRow): GroupKey | null {
   const v = getMovementType(r);
   return typeof v === "string" && v.length ? v : null;
@@ -324,6 +341,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     hour: hourKey,
     game_id: (r: any) => (typeof r?.gameId === "string" && r.gameId.trim().length ? r.gameId : null),
     true_country: trueCountryKey,
+    true_location: trueLocationKey,
+    is_true_location_repeat: isTrueLocationRepeatKey,
     movement_type: movementTypeKey,
     is_hit: isHitKey,
     is_throw: isThrowKey,

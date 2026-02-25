@@ -1780,6 +1780,148 @@
       }
       ,
       {
+        "id": "coordinates",
+        "title": "Coordinates",
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_coordinates",
+              "title": "Coordinates",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 24,
+              "card": {
+                "type": "composite",
+                "children": [
+                  {
+                    "widgetId": "w_coordinates_repeats",
+                    "type": "stat_list",
+                    "title": "Coordinates - Repeats",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 0, "w": 12, "h": 5 },
+                    "spec": {
+                      "rows": [
+                        {
+                          "label": "Repeat location pairs (same coordinates)",
+                          "measure": "repeat_location_pairs_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_true_location_repeat", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Repeat locations (unique coords with n>1)",
+                          "measure": "repeat_locations_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_true_location_repeat", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Rounds on repeat locations",
+                          "measure": "repeat_location_rounds_count",
+                          "secondaryMeasure": "repeat_location_rounds_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false,
+                              "extraFilters": [{ "dimension": "is_true_location_repeat", "op": "eq", "value": "true" }]
+                            }
+                          }
+                        },
+                        {
+                          "label": "Distinct locations",
+                          "measure": "distinct_locations_count",
+                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_coordinates_map",
+                    "type": "multi_view",
+                    "title": "Coordinates - Distribution",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 5, "w": 12, "h": 19 },
+                    "spec": {
+                      "activeView": "true",
+                      "views": [
+                        {
+                          "id": "true",
+                          "label": "True locations",
+                          "type": "point_map",
+                          "grain": "round",
+                          "spec": {
+                            "points": [{ "id": "true", "label": "True location", "latField": "trueLat", "lngField": "trueLng" }],
+                            "mapHeight": 520,
+                            "measures": ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
+                            "activeMeasure": "rounds_count",
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "self",
+                          "label": "Your guesses",
+                          "type": "point_map",
+                          "grain": "round",
+                          "spec": {
+                            "points": [{ "id": "self", "label": "Your guess", "latField": "player_self_guessLat", "lngField": "player_self_guessLng" }],
+                            "mapHeight": 520,
+                            "measures": ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
+                            "activeMeasure": "rounds_count",
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "all",
+                          "label": "All player guesses",
+                          "type": "point_map",
+                          "grain": "round",
+                          "spec": {
+                            "points": [
+                              { "id": "self", "label": "Your guess", "latField": "player_self_guessLat", "lngField": "player_self_guessLng" },
+                              { "id": "mate", "label": "Mate guess", "latField": "player_mate_guessLat", "lngField": "player_mate_guessLng" },
+                              { "id": "opp", "label": "Opponent guess", "latField": "player_opponent_guessLat", "lngField": "player_opponent_guessLng" },
+                              { "id": "oppMate", "label": "Opponent mate guess", "latField": "player_opponent_mate_guessLat", "lngField": "player_opponent_mate_guessLng" }
+                            ],
+                            "mapHeight": 520,
+                            "measures": ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
+                            "activeMeasure": "rounds_count",
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+      ,
+      {
         "id": "opponents",
         "title": "Opponents",
         "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },

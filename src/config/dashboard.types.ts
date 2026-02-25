@@ -230,6 +230,27 @@ export interface RegionMetricMapSpec {
   actions?: Actions;
 }
 
+export interface PointMapSourceDef {
+  // Optional stable id used for tooltips/debugging.
+  id?: string;
+  label?: string;
+  latField: string;
+  lngField: string;
+}
+
+export interface PointMapSpec {
+  // Each input row can contribute 0..N points (one per source where lat/lng are present).
+  points: PointMapSourceDef[];
+  // Decimal rounding used to group points into the same coordinate key. Default: 6.
+  keyPrecision?: number;
+  measure?: string;
+  measures?: string[];
+  activeMeasure?: string;
+  mapHeight?: number;
+  filters?: FilterClause[];
+  actions?: Actions;
+}
+
 export interface MultiViewItemDef {
   id: string;
   label: string;
@@ -279,14 +300,24 @@ export interface LeaderListRowDef {
 
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "country_map" | "region_map" | "multi_view" | "record_list" | "leader_list";
+  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "country_map" | "region_map" | "point_map" | "multi_view" | "record_list" | "leader_list";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
   // Optional: only render the widget when a local filter has one of the expected values.
   // Useful for country-specific insight widgets (e.g. Germany-only region breakdowns).
   showIfLocal?: { id: string; in: string[] };
-  spec: ChartSpec | StatListSpec | StatValueSpec | BreakdownSpec | CountryMetricMapSpec | RegionMetricMapSpec | MultiViewSpec | RecordListSpec | { rows: LeaderListRowDef[] };
+  spec:
+    | ChartSpec
+    | StatListSpec
+    | StatValueSpec
+    | BreakdownSpec
+    | CountryMetricMapSpec
+    | RegionMetricMapSpec
+    | PointMapSpec
+    | MultiViewSpec
+    | RecordListSpec
+    | { rows: LeaderListRowDef[] };
 }
 
 export interface CompositeCardDef {

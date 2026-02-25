@@ -257,7 +257,7 @@
       "required": ["widgetId", "type", "title", "grain", "spec"],
       "properties": {
         "widgetId": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "multi_view", "record_list", "leader_list"] },
+        "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "point_map", "multi_view", "record_list", "leader_list"] },
         "title": { "$ref": "#/$defs/title" },
         "grain": { "$ref": "#/$defs/grain" },
         "placement": { "$ref": "#/$defs/placementDef" },
@@ -279,6 +279,7 @@
         { "if": { "properties": { "type": { "const": "breakdown" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/breakdownSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "country_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/countryMapSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "region_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/regionMapSpecDef" } } } },
+        { "if": { "properties": { "type": { "const": "point_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/pointMapSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "multi_view" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/multiViewSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "record_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/recordListSpecDef" } } } },
         { "if": { "properties": { "type": { "const": "leader_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/leaderListSpecDef" } } } }
@@ -317,6 +318,36 @@
       }
     },
 
+    "pointMapSpecDef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["points"],
+      "properties": {
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["latField", "lngField"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "$ref": "#/$defs/title" },
+              "latField": { "type": "string", "minLength": 1 },
+              "lngField": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "keyPrecision": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "measure": { "type": "string", "minLength": 1 },
+        "measures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "activeMeasure": { "type": "string", "minLength": 1 },
+        "mapHeight": { "type": "integer", "minimum": 180, "maximum": 1200 },
+        "filters": { "type": "array", "items": { "$ref": "#/$defs/filterDef" } },
+        "actions": { "type": "object", "additionalProperties": true }
+      }
+    },
+
     "multiViewSpecDef": {
       "type": "object",
       "additionalProperties": false,
@@ -333,7 +364,7 @@
             "properties": {
               "id": { "$ref": "#/$defs/id" },
               "label": { "$ref": "#/$defs/title" },
-              "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "record_list", "leader_list"] },
+              "type": { "enum": ["chart", "stat_list", "stat_value", "breakdown", "country_map", "region_map", "point_map", "record_list", "leader_list"] },
               "grain": { "$ref": "#/$defs/grain" },
               "spec": {}
             },
@@ -344,6 +375,7 @@
               { "if": { "properties": { "type": { "const": "breakdown" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/breakdownSpecDef" } } } },
               { "if": { "properties": { "type": { "const": "country_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/countryMapSpecDef" } } } },
               { "if": { "properties": { "type": { "const": "region_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/regionMapSpecDef" } } } },
+              { "if": { "properties": { "type": { "const": "point_map" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/pointMapSpecDef" } } } },
               { "if": { "properties": { "type": { "const": "record_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/recordListSpecDef" } } } },
               { "if": { "properties": { "type": { "const": "leader_list" } } }, "then": { "properties": { "spec": { "$ref": "#/$defs/leaderListSpecDef" } } } }
             ]

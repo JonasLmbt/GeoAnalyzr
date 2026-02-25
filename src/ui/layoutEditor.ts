@@ -1679,7 +1679,7 @@ export function renderLayoutEditor(args: {
       addRow.appendChild(mkBtn(doc, "Add box", () => setSectionChildren(editSectionIdx!, [...children, defaultWidget(grainDefault, "stat_value", cols)]), "primary"));
       body.appendChild(addRow);
 
-      const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
+      const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
       const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
 
       const patchWidgetAt = (wIdx: number, nextWidget: any) => {
@@ -2090,7 +2090,7 @@ export function renderLayoutEditor(args: {
 
     right.appendChild(mkHr(doc));
 
-    const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list"];
+    const widgetTypes: WidgetDef["type"][] = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
     const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
 
     const cardsBox = doc.createElement("div");
@@ -2707,6 +2707,7 @@ function defaultWidget(grain: string, type: WidgetDef["type"], columns = 12): Wi
   else if (type === "stat_list") base.spec = { rows: [{ label: "Row", measure: "" }] };
   else if (type === "chart") base.spec = { type: "bar", x: { dimension: "" }, y: { measure: "" }, actions: { hover: true } };
   else if (type === "breakdown") base.spec = { dimension: "", measure: "", limit: 12 };
+  else if (type === "point_map") base.spec = { points: [{ latField: "trueLat", lngField: "trueLng" }], measures: ["rounds_count"], activeMeasure: "rounds_count" };
   else if (type === "record_list") base.spec = { records: [] };
   else base.spec = {};
   return base as WidgetDef;

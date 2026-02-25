@@ -260,6 +260,13 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       stroke: var(--ga-map-active-stroke);
       stroke-width: 2;
     }
+    .ga-point-dot {
+      stroke: rgba(0,0,0,0.55);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      cursor: pointer;
+      transition: filter 120ms ease, r 120ms ease;
+    }
     .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
     .ga-filter-btn {
       background: var(--ga-control-bg);

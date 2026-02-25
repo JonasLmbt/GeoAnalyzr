@@ -29,6 +29,11 @@ interface RoundRowBase {
   trueLat?: number;
   trueLng?: number;
   trueCountry?: string;
+  // Derived coordinate helpers (computed at query time; not persisted).
+  // `trueLocationKey` is a stable string key for trueLat/trueLng (rounded).
+  // `trueLocationRepeat` flags rounds whose true coordinates appear at least twice.
+  trueLocationKey?: string;
+  trueLocationRepeat?: boolean;
   // Germany-only enrichments (computed locally).
   trueState?: string;
   trueDistrict?: string;
