@@ -1828,64 +1828,27 @@
                   },
                   {
                     "widgetId": "w_coordinates_map",
-                    "type": "multi_view",
+                    "type": "point_map",
                     "title": "Coordinates - Distribution",
                     "grain": "round",
                     "placement": { "x": 0, "y": 5, "w": 12, "h": 19 },
                     "spec": {
-                      "activeView": "true",
-                      "views": [
-                        {
-                          "id": "true",
-                          "label": "True locations",
-                          "type": "point_map",
-                          "grain": "round",
-                          "spec": {
-                            "points": [{ "id": "true", "label": "True location", "latField": "trueLat", "lngField": "trueLng" }],
-                            "mapHeight": 520,
-                            "measures": ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
-                            "activeMeasure": "rounds_count",
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "self",
-                          "label": "Your guesses",
-                          "type": "point_map",
-                          "grain": "round",
-                          "spec": {
-                            "points": [{ "id": "self", "label": "Your guess", "latField": "player_self_guessLat", "lngField": "player_self_guessLng" }],
-                            "mapHeight": 520,
-                            "measures": ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
-                            "activeMeasure": "rounds_count",
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "all",
-                          "label": "All player guesses",
-                          "type": "point_map",
-                          "grain": "round",
-                          "spec": {
-                            "points": [
-                              { "id": "self", "label": "Your guess", "latField": "player_self_guessLat", "lngField": "player_self_guessLng" },
-                              { "id": "mate", "label": "Mate guess", "latField": "player_mate_guessLat", "lngField": "player_mate_guessLng" },
-                              { "id": "opp", "label": "Opponent guess", "latField": "player_opponent_guessLat", "lngField": "player_opponent_guessLng" },
-                              { "id": "oppMate", "label": "Opponent mate guess", "latField": "player_opponent_mate_guessLat", "lngField": "player_opponent_mate_guessLng" }
-                            ],
-                            "mapHeight": 520,
-                            "measures": ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
-                            "activeMeasure": "rounds_count",
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
+                      "points": [
+                        { "id": "true", "label": "True location", "latField": "trueLat", "lngField": "trueLng" },
+                        { "id": "self", "label": "Your guesses", "latField": "player_self_guessLat", "lngField": "player_self_guessLng" },
+                        { "id": "mate", "label": "Mate guesses", "latField": "player_mate_guessLat", "lngField": "player_mate_guessLng" },
+                        { "id": "opp", "label": "Opponent guesses", "latField": "player_opponent_guessLat", "lngField": "player_opponent_guessLng" },
+                        { "id": "oppMate", "label": "Opponent mate guesses", "latField": "player_opponent_mate_guessLat", "lngField": "player_opponent_mate_guessLng" }
+                      ],
+                      "pointSelect": { "enabled": true, "defaultId": "true", "allowAll": false },
+                      "rangeFilter": { "label": "Score", "field": "player_self_score", "min": 0, "max": 5000, "defaultMin": 0, "defaultMax": 5000, "step": 10 },
+                      "mapHeight": 520,
+                      "maxDots": 2500,
+                      "measures": ["rounds_count"],
+                      "activeMeasure": "rounds_count",
+                      "actions": {
+                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                      }
                     }
                   }
                 ]

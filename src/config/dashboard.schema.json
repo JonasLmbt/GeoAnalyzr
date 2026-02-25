@@ -340,6 +340,29 @@
         },
         "keyPrecision": { "type": "integer", "minimum": 0, "maximum": 10 },
         "maxDots": { "type": "integer", "minimum": 200, "maximum": 20000 },
+        "pointSelect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "defaultId": { "type": "string", "minLength": 1 },
+            "allowAll": { "type": "boolean" }
+          }
+        },
+        "rangeFilter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "min", "max"],
+          "properties": {
+            "label": { "$ref": "#/$defs/title" },
+            "field": { "type": "string", "minLength": 1 },
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "defaultMin": { "type": "number" },
+            "defaultMax": { "type": "number" },
+            "step": { "type": "number" }
+          }
+        },
         "measure": { "type": "string", "minLength": 1 },
         "measures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "activeMeasure": { "type": "string", "minLength": 1 },

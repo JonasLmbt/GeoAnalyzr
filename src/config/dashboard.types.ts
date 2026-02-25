@@ -245,6 +245,25 @@ export interface PointMapSpec {
   keyPrecision?: number;
   // Hard cap to avoid rendering too many SVG circles (performance). Default: 2500.
   maxDots?: number;
+  // Optional point-source selector UI (switch between items in points[]).
+  pointSelect?: {
+    enabled?: boolean;
+    // Default selected point source id. If omitted, uses the first points[] entry with an id (or index 0).
+    defaultId?: string;
+    // If true, include an "All" option combining all configured sources.
+    allowAll?: boolean;
+  };
+  // Optional range filter (e.g. score slider) applied before grouping points.
+  rangeFilter?: {
+    label?: string;
+    // Row field path (e.g. "player_self_score").
+    field: string;
+    min: number;
+    max: number;
+    defaultMin?: number;
+    defaultMax?: number;
+    step?: number;
+  };
   measure?: string;
   measures?: string[];
   activeMeasure?: string;

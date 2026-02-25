@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.6
+// @version      2.2.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -35317,64 +35317,27 @@ ${shapes}`.trim();
                     },
                     {
                       widgetId: "w_coordinates_map",
-                      type: "multi_view",
+                      type: "point_map",
                       title: "Coordinates - Distribution",
                       grain: "round",
                       placement: { x: 0, y: 5, w: 12, h: 19 },
                       spec: {
-                        activeView: "true",
-                        views: [
-                          {
-                            id: "true",
-                            label: "True locations",
-                            type: "point_map",
-                            grain: "round",
-                            spec: {
-                              points: [{ id: "true", label: "True location", latField: "trueLat", lngField: "trueLng" }],
-                              mapHeight: 520,
-                              measures: ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
-                              activeMeasure: "rounds_count",
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "self",
-                            label: "Your guesses",
-                            type: "point_map",
-                            grain: "round",
-                            spec: {
-                              points: [{ id: "self", label: "Your guess", latField: "player_self_guessLat", lngField: "player_self_guessLng" }],
-                              mapHeight: 520,
-                              measures: ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
-                              activeMeasure: "rounds_count",
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "all",
-                            label: "All player guesses",
-                            type: "point_map",
-                            grain: "round",
-                            spec: {
-                              points: [
-                                { id: "self", label: "Your guess", latField: "player_self_guessLat", lngField: "player_self_guessLng" },
-                                { id: "mate", label: "Mate guess", latField: "player_mate_guessLat", lngField: "player_mate_guessLng" },
-                                { id: "opp", label: "Opponent guess", latField: "player_opponent_guessLat", lngField: "player_opponent_guessLng" },
-                                { id: "oppMate", label: "Opponent mate guess", latField: "player_opponent_mate_guessLat", lngField: "player_opponent_mate_guessLng" }
-                              ],
-                              mapHeight: 520,
-                              measures: ["rounds_count", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate", "hit_rate"],
-                              activeMeasure: "rounds_count",
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
+                        points: [
+                          { id: "true", label: "True location", latField: "trueLat", lngField: "trueLng" },
+                          { id: "self", label: "Your guesses", latField: "player_self_guessLat", lngField: "player_self_guessLng" },
+                          { id: "mate", label: "Mate guesses", latField: "player_mate_guessLat", lngField: "player_mate_guessLng" },
+                          { id: "opp", label: "Opponent guesses", latField: "player_opponent_guessLat", lngField: "player_opponent_guessLng" },
+                          { id: "oppMate", label: "Opponent mate guesses", latField: "player_opponent_mate_guessLat", lngField: "player_opponent_mate_guessLng" }
+                        ],
+                        pointSelect: { enabled: true, defaultId: "true", allowAll: false },
+                        rangeFilter: { label: "Score", field: "player_self_score", min: 0, max: 5e3, defaultMin: 0, defaultMax: 5e3, step: 10 },
+                        mapHeight: 520,
+                        maxDots: 2500,
+                        measures: ["rounds_count"],
+                        activeMeasure: "rounds_count",
+                        actions: {
+                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                        }
                       }
                     }
                   ]
@@ -45250,8 +45213,9 @@ ${describeError(err)}` : message;
       const latField = typeof p?.latField === "string" ? p.latField.trim() : "";
       const lngField = typeof p?.lngField === "string" ? p.lngField.trim() : "";
       if (!latField || !lngField) continue;
+      const fallbackId = `${latField}:${lngField}`;
       out.push({
-        id: typeof p?.id === "string" ? p.id.trim() : void 0,
+        id: typeof p?.id === "string" && p.id.trim() ? p.id.trim() : fallbackId,
         label: typeof p?.label === "string" ? p.label.trim() : void 0,
         latField,
         lngField
@@ -45321,6 +45285,22 @@ ${describeError(err)}` : message;
     }
     if (measures.length === 0) throw new Error(`Point map ${widget.widgetId} has no measure or measures[]`);
     let activeMeasure = measures.includes(spec.activeMeasure || "") ? spec.activeMeasure : measures[0];
+    const pointSelectCfg = spec.pointSelect;
+    const pointSelectEnabled = pointSelectCfg?.enabled !== false && sources.length > 1;
+    const allowAllPoints = pointSelectCfg?.allowAll === true;
+    const defaultPointIdRaw = typeof pointSelectCfg?.defaultId === "string" ? pointSelectCfg.defaultId.trim() : "";
+    const pointIds = sources.map((s) => String(s.id ?? "").trim()).filter(Boolean);
+    let activePointId = pointSelectEnabled && defaultPointIdRaw && pointIds.includes(defaultPointIdRaw) ? defaultPointIdRaw : pointSelectEnabled && pointIds.length ? pointIds[0] : "";
+    const rangeCfg = spec.rangeFilter;
+    const rangeEnabled = !!rangeCfg && typeof rangeCfg.field === "string" && rangeCfg.field.trim();
+    const rangeLabel = typeof rangeCfg?.label === "string" && rangeCfg.label.trim() ? rangeCfg.label.trim() : "Range";
+    const rangeField = rangeEnabled ? String(rangeCfg.field).trim() : "";
+    const rangeMinBound = rangeEnabled && typeof rangeCfg.min === "number" && Number.isFinite(rangeCfg.min) ? rangeCfg.min : 0;
+    const rangeMaxBound = rangeEnabled && typeof rangeCfg.max === "number" && Number.isFinite(rangeCfg.max) ? rangeCfg.max : 5e3;
+    const rangeStep = rangeEnabled && typeof rangeCfg.step === "number" && Number.isFinite(rangeCfg.step) && rangeCfg.step > 0 ? rangeCfg.step : 10;
+    let rangeMin = rangeEnabled && typeof rangeCfg.defaultMin === "number" && Number.isFinite(rangeCfg.defaultMin) ? clamp2(rangeCfg.defaultMin, rangeMinBound, rangeMaxBound) : rangeMinBound;
+    let rangeMax = rangeEnabled && typeof rangeCfg.defaultMax === "number" && Number.isFinite(rangeCfg.defaultMax) ? clamp2(rangeCfg.defaultMax, rangeMinBound, rangeMaxBound) : rangeMaxBound;
+    if (rangeMin > rangeMax) [rangeMin, rangeMax] = [rangeMax, rangeMin];
     const renderHeaderRight = () => {
       headerRight.innerHTML = "";
       const wrapRight = doc.createElement("div");
@@ -45351,6 +45331,88 @@ ${describeError(err)}` : message;
         mText.textContent = semantic.measures[activeMeasure]?.label ?? activeMeasure;
         wrapRight.appendChild(mText);
       }
+      if (pointSelectEnabled) {
+        const pLabel = doc.createElement("span");
+        pLabel.className = "ga-breakdown-ctl-label";
+        pLabel.textContent = "Points:";
+        const pSelect = doc.createElement("select");
+        pSelect.className = "ga-breakdown-ctl-select";
+        if (allowAllPoints) {
+          const optAll = doc.createElement("option");
+          optAll.value = "__all__";
+          optAll.textContent = "All";
+          pSelect.appendChild(optAll);
+        }
+        for (const s of sources) {
+          const opt = doc.createElement("option");
+          opt.value = String(s.id);
+          opt.textContent = String(s.label ?? s.id);
+          pSelect.appendChild(opt);
+        }
+        if (activePointId) pSelect.value = activePointId;
+        pSelect.addEventListener("change", () => {
+          activePointId = pSelect.value;
+          void renderMap();
+        });
+        wrapRight.appendChild(pLabel);
+        wrapRight.appendChild(pSelect);
+      }
+      if (rangeEnabled) {
+        const box2 = doc.createElement("div");
+        box2.style.display = "flex";
+        box2.style.flexDirection = "column";
+        box2.style.gap = "4px";
+        box2.style.minWidth = "240px";
+        const rowTop = doc.createElement("div");
+        rowTop.style.display = "flex";
+        rowTop.style.justifyContent = "space-between";
+        rowTop.style.gap = "10px";
+        const lbl = doc.createElement("span");
+        lbl.className = "ga-breakdown-ctl-label";
+        lbl.textContent = `${rangeLabel}:`;
+        const val = doc.createElement("span");
+        val.style.fontSize = "12px";
+        val.style.opacity = "0.85";
+        const refreshVal = () => {
+          val.textContent = `${Math.round(rangeMin)}\u2013${Math.round(rangeMax)}`;
+        };
+        refreshVal();
+        rowTop.appendChild(lbl);
+        rowTop.appendChild(val);
+        const mkSlider = (init) => {
+          const input = doc.createElement("input");
+          input.type = "range";
+          input.min = String(rangeMinBound);
+          input.max = String(rangeMaxBound);
+          input.step = String(rangeStep);
+          input.value = String(init);
+          input.style.width = "100%";
+          return input;
+        };
+        const sMin = mkSlider(rangeMin);
+        const sMax = mkSlider(rangeMax);
+        const normalize = () => {
+          const a = Number(sMin.value);
+          const b = Number(sMax.value);
+          rangeMin = clamp2(Math.min(a, b), rangeMinBound, rangeMaxBound);
+          rangeMax = clamp2(Math.max(a, b), rangeMinBound, rangeMaxBound);
+          refreshVal();
+        };
+        sMin.addEventListener("input", () => normalize());
+        sMax.addEventListener("input", () => normalize());
+        sMin.addEventListener("change", () => {
+          normalize();
+          void renderMap();
+        });
+        sMax.addEventListener("change", () => {
+          normalize();
+          void renderMap();
+        });
+        box2.appendChild(rowTop);
+        box2.appendChild(sMin);
+        box2.appendChild(sMax);
+        wrapRight.appendChild(box2);
+      }
       headerRight.appendChild(wrapRight);
     };
     const renderMap = async () => {
@@ -45358,10 +45420,18 @@ ${describeError(err)}` : message;
       if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (point_map)`);
       const precision = typeof spec.keyPrecision === "number" && Number.isFinite(spec.keyPrecision) ? Math.max(0, Math.min(10, Math.round(spec.keyPrecision))) : 6;
       const keyFor = (lat, lng) => `${lat.toFixed(precision)},${lng.toFixed(precision)}`;
+      const rowsBase = rangeEnabled ? rowsAll.filter((r) => {
+        const vRaw = getByPath4(r, rangeField);
+        const v = typeof vRaw === "number" && Number.isFinite(vRaw) ? vRaw : null;
+        if (v === null) return false;
+        return v >= rangeMin && v <= rangeMax;
+      }) : rowsAll;
+      const includeAllPoints = allowAllPoints && activePointId === "__all__";
+      const sourcesUsed = pointSelectEnabled && !includeAllPoints && activePointId ? sources.filter((s) => String(s.id) === activePointId) : sources;
       const expandedRows = [];
       const grouped = /* @__PURE__ */ new Map();
-      for (const base of rowsAll) {
-        for (const src of sources) {
+      for (const base of rowsBase) {
+        for (const src of sourcesUsed) {
           const latRaw = getByPath4(base, src.latField);
           const lngRaw = getByPath4(base, src.lngField);
           const lat = typeof latRaw === "number" && Number.isFinite(latRaw) ? latRaw : null;

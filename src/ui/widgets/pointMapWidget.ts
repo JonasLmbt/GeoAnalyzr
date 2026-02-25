@@ -165,8 +165,9 @@ function normalizeSources(points: PointMapSourceDef[] | undefined): PointMapSour
     const latField = typeof p?.latField === "string" ? p.latField.trim() : "";
     const lngField = typeof p?.lngField === "string" ? p.lngField.trim() : "";
     if (!latField || !lngField) continue;
+    const fallbackId = `${latField}:${lngField}`;
     out.push({
-      id: typeof p?.id === "string" ? p.id.trim() : undefined,
+      id: typeof p?.id === "string" && p.id.trim() ? p.id.trim() : fallbackId,
       label: typeof p?.label === "string" ? p.label.trim() : undefined,
       latField,
       lngField
@@ -267,6 +268,35 @@ export async function renderPointMapWidget(
 
   let activeMeasure = measures.includes(spec.activeMeasure || "") ? (spec.activeMeasure as string) : measures[0];
 
+  const pointSelectCfg = (spec as any).pointSelect as any;
+  const pointSelectEnabled = pointSelectCfg?.enabled !== false && sources.length > 1;
+  const allowAllPoints = pointSelectCfg?.allowAll === true;
+  const defaultPointIdRaw = typeof pointSelectCfg?.defaultId === "string" ? pointSelectCfg.defaultId.trim() : "";
+  const pointIds = sources.map((s) => String((s as any).id ?? "").trim()).filter(Boolean);
+  let activePointId =
+    pointSelectEnabled && defaultPointIdRaw && pointIds.includes(defaultPointIdRaw)
+      ? defaultPointIdRaw
+      : pointSelectEnabled && pointIds.length
+        ? pointIds[0]
+        : "";
+
+  const rangeCfg = (spec as any).rangeFilter as any;
+  const rangeEnabled = !!rangeCfg && typeof rangeCfg.field === "string" && rangeCfg.field.trim();
+  const rangeLabel = typeof rangeCfg?.label === "string" && rangeCfg.label.trim() ? rangeCfg.label.trim() : "Range";
+  const rangeField = rangeEnabled ? String(rangeCfg.field).trim() : "";
+  const rangeMinBound = rangeEnabled && typeof rangeCfg.min === "number" && Number.isFinite(rangeCfg.min) ? rangeCfg.min : 0;
+  const rangeMaxBound = rangeEnabled && typeof rangeCfg.max === "number" && Number.isFinite(rangeCfg.max) ? rangeCfg.max : 5000;
+  const rangeStep = rangeEnabled && typeof rangeCfg.step === "number" && Number.isFinite(rangeCfg.step) && rangeCfg.step > 0 ? rangeCfg.step : 10;
+  let rangeMin =
+    rangeEnabled && typeof rangeCfg.defaultMin === "number" && Number.isFinite(rangeCfg.defaultMin)
+      ? clamp(rangeCfg.defaultMin, rangeMinBound, rangeMaxBound)
+      : rangeMinBound;
+  let rangeMax =
+    rangeEnabled && typeof rangeCfg.defaultMax === "number" && Number.isFinite(rangeCfg.defaultMax)
+      ? clamp(rangeCfg.defaultMax, rangeMinBound, rangeMaxBound)
+      : rangeMaxBound;
+  if (rangeMin > rangeMax) [rangeMin, rangeMax] = [rangeMax, rangeMin];
+
   const renderHeaderRight = (): void => {
     headerRight.innerHTML = "";
     const wrapRight = doc.createElement("div");
@@ -301,6 +331,107 @@ export async function renderPointMapWidget(
       wrapRight.appendChild(mText);
     }
 
+    if (pointSelectEnabled) {
+      const pLabel = doc.createElement("span");
+      pLabel.className = "ga-breakdown-ctl-label";
+      pLabel.textContent = "Points:";
+
+      const pSelect = doc.createElement("select");
+      pSelect.className = "ga-breakdown-ctl-select";
+
+      if (allowAllPoints) {
+        const optAll = doc.createElement("option");
+        optAll.value = "__all__";
+        optAll.textContent = "All";
+        pSelect.appendChild(optAll);
+      }
+
+      for (const s of sources) {
+        const opt = doc.createElement("option");
+        opt.value = String((s as any).id);
+        opt.textContent = String(s.label ?? (s as any).id);
+        pSelect.appendChild(opt);
+      }
+
+      if (activePointId) pSelect.value = activePointId;
+
+      pSelect.addEventListener("change", () => {
+        activePointId = pSelect.value;
+        void renderMap();
+      });
+
+      wrapRight.appendChild(pLabel);
+      wrapRight.appendChild(pSelect);
+    }
+
+    if (rangeEnabled) {
+      const box = doc.createElement("div");
+      box.style.display = "flex";
+      box.style.flexDirection = "column";
+      box.style.gap = "4px";
+      box.style.minWidth = "240px";
+
+      const rowTop = doc.createElement("div");
+      rowTop.style.display = "flex";
+      rowTop.style.justifyContent = "space-between";
+      rowTop.style.gap = "10px";
+
+      const lbl = doc.createElement("span");
+      lbl.className = "ga-breakdown-ctl-label";
+      lbl.textContent = `${rangeLabel}:`;
+
+      const val = doc.createElement("span");
+      val.style.fontSize = "12px";
+      val.style.opacity = "0.85";
+
+      const refreshVal = () => {
+        val.textContent = `${Math.round(rangeMin)}–${Math.round(rangeMax)}`;
+      };
+      refreshVal();
+
+      rowTop.appendChild(lbl);
+      rowTop.appendChild(val);
+
+      const mkSlider = (init: number) => {
+        const input = doc.createElement("input");
+        input.type = "range";
+        input.min = String(rangeMinBound);
+        input.max = String(rangeMaxBound);
+        input.step = String(rangeStep);
+        input.value = String(init);
+        input.style.width = "100%";
+        return input;
+      };
+
+      const sMin = mkSlider(rangeMin);
+      const sMax = mkSlider(rangeMax);
+
+      const normalize = () => {
+        const a = Number(sMin.value);
+        const b = Number(sMax.value);
+        rangeMin = clamp(Math.min(a, b), rangeMinBound, rangeMaxBound);
+        rangeMax = clamp(Math.max(a, b), rangeMinBound, rangeMaxBound);
+        refreshVal();
+      };
+
+      // Keep UI responsive while dragging, but only rerender on change (mouse release).
+      sMin.addEventListener("input", () => normalize());
+      sMax.addEventListener("input", () => normalize());
+      sMin.addEventListener("change", () => {
+        normalize();
+        void renderMap();
+      });
+      sMax.addEventListener("change", () => {
+        normalize();
+        void renderMap();
+      });
+
+      box.appendChild(rowTop);
+      box.appendChild(sMin);
+      box.appendChild(sMax);
+      wrapRight.appendChild(box);
+    }
+
     headerRight.appendChild(wrapRight);
   };
 
@@ -311,11 +442,25 @@ export async function renderPointMapWidget(
     const precision = typeof spec.keyPrecision === "number" && Number.isFinite(spec.keyPrecision) ? Math.max(0, Math.min(10, Math.round(spec.keyPrecision))) : 6;
     const keyFor = (lat: number, lng: number): string => `${lat.toFixed(precision)},${lng.toFixed(precision)}`;
 
+    const rowsBase = rangeEnabled
+      ? (rowsAll as any[]).filter((r) => {
+          const vRaw = getByPath(r, rangeField);
+          const v = typeof vRaw === "number" && Number.isFinite(vRaw) ? vRaw : null;
+          if (v === null) return false;
+          return v >= rangeMin && v <= rangeMax;
+        })
+      : (rowsAll as any[]);
+
+    const includeAllPoints = allowAllPoints && activePointId === "__all__";
+    const sourcesUsed = pointSelectEnabled && !includeAllPoints && activePointId
+      ? sources.filter((s) => String((s as any).id) === activePointId)
+      : sources;
+
     const expandedRows: any[] = [];
     const grouped = new Map<string, PointGroup>();
 
-    for (const base of rowsAll as any[]) {
-      for (const src of sources) {
+    for (const base of rowsBase as any[]) {
+      for (const src of sourcesUsed) {
         const latRaw = getByPath(base, src.latField);
         const lngRaw = getByPath(base, src.lngField);
         const lat = typeof latRaw === "number" && Number.isFinite(latRaw) ? latRaw : null;
