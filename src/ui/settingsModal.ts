@@ -333,9 +333,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     sectionLayoutUploadInput.type = "file";
     sectionLayoutUploadInput.accept = "application/json,.json";
     sectionLayoutUploadInput.style.display = "none";
+    const sectionLayoutReset = doc.createElement("button");
+    sectionLayoutReset.type = "button";
+    sectionLayoutReset.className = "ga-filter-btn";
+    sectionLayoutReset.textContent = "Reset to latest";
+    sectionLayoutReset.title = "Reset sections layout to the latest bundled dashboard.json";
     sectionLayoutActions.appendChild(sectionLayoutDownload);
     sectionLayoutActions.appendChild(sectionLayoutUpload);
     sectionLayoutActions.appendChild(sectionLayoutUploadInput);
+    sectionLayoutActions.appendChild(sectionLayoutReset);
     sectionLayoutPane.appendChild(sectionLayoutActions);
 
     sectionLayoutPane.appendChild(sectionLayoutHost);
@@ -363,9 +369,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     globalFiltersUploadInput.type = "file";
     globalFiltersUploadInput.accept = "application/json,.json";
     globalFiltersUploadInput.style.display = "none";
+    const globalFiltersReset = doc.createElement("button");
+    globalFiltersReset.type = "button";
+    globalFiltersReset.className = "ga-filter-btn";
+    globalFiltersReset.textContent = "Reset to latest";
+    globalFiltersReset.title = "Reset global filters to the latest bundled dashboard.json";
     globalFiltersActions.appendChild(globalFiltersDownload);
     globalFiltersActions.appendChild(globalFiltersUpload);
     globalFiltersActions.appendChild(globalFiltersUploadInput);
+    globalFiltersActions.appendChild(globalFiltersReset);
     globalFiltersPane.appendChild(globalFiltersActions);
 
     globalFiltersPane.appendChild(globalFiltersHost);
@@ -393,9 +405,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     drilldownsUploadInput.type = "file";
     drilldownsUploadInput.accept = "application/json,.json";
     drilldownsUploadInput.style.display = "none";
+    const drilldownsReset = doc.createElement("button");
+    drilldownsReset.type = "button";
+    drilldownsReset.className = "ga-filter-btn";
+    drilldownsReset.textContent = "Reset to latest";
+    drilldownsReset.title = "Reset drilldowns to the latest bundled dashboard.json";
     drilldownsActions.appendChild(drilldownsDownload);
     drilldownsActions.appendChild(drilldownsUpload);
     drilldownsActions.appendChild(drilldownsUploadInput);
+    drilldownsActions.appendChild(drilldownsReset);
     drilldownsPane.appendChild(drilldownsActions);
 
     drilldownsPane.appendChild(drilldownsHost);
@@ -548,6 +566,26 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         }
       })();
     });
+    sectionLayoutReset.addEventListener("click", () => {
+      void (async () => {
+        sectionLayoutStatus.textContent = "";
+        sectionLayoutStatus.className = "ga-settings-status";
+        try {
+          const latest = cloneDashboard(getDashboard()) as any;
+          const def = getDefaultDashboard() as any;
+          latest.dashboard.sections = cloneDashboard(def).dashboard.sections;
+          await applyDashboard(latest);
+          dashboard = latest;
+          templateEditor.value = JSON.stringify(latest, null, 2);
+          renderLayout("section_layout", sectionLayoutHost, sectionLayoutStatus);
+          sectionLayoutStatus.textContent = "Sections reset to latest version.";
+          sectionLayoutStatus.className = "ga-settings-status ok";
+        } catch (e) {
+          sectionLayoutStatus.textContent = e instanceof Error ? e.message : String(e);
+          sectionLayoutStatus.className = "ga-settings-status error";
+        }
+      })();
+    });
 
     globalFiltersDownload.addEventListener("click", () => {
       const cur = getDashboard();
@@ -576,6 +614,26 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         }
       })();
     });
+    globalFiltersReset.addEventListener("click", () => {
+      void (async () => {
+        globalFiltersStatus.textContent = "";
+        globalFiltersStatus.className = "ga-settings-status";
+        try {
+          const latest = cloneDashboard(getDashboard()) as any;
+          const def = getDefaultDashboard() as any;
+          latest.dashboard.globalFilters = cloneDashboard(def).dashboard.globalFilters;
+          await applyDashboard(latest);
+          dashboard = latest;
+          templateEditor.value = JSON.stringify(latest, null, 2);
+          renderLayout("global_filters", globalFiltersHost, globalFiltersStatus);
+          globalFiltersStatus.textContent = "Global filters reset to latest version.";
+          globalFiltersStatus.className = "ga-settings-status ok";
+        } catch (e) {
+          globalFiltersStatus.textContent = e instanceof Error ? e.message : String(e);
+          globalFiltersStatus.className = "ga-settings-status error";
+        }
+      })();
+    });
 
     drilldownsDownload.addEventListener("click", () => {
       const cur = getDashboard();
@@ -601,6 +659,26 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
           drilldownsStatus.className = "ga-settings-status error";
         } finally {
           drilldownsUploadInput.value = "";
+        }
+      })();
+    });
+    drilldownsReset.addEventListener("click", () => {
+      void (async () => {
+        drilldownsStatus.textContent = "";
+        drilldownsStatus.className = "ga-settings-status";
+        try {
+          const latest = cloneDashboard(getDashboard()) as any;
+          const def = getDefaultDashboard() as any;
+          latest.dashboard.drilldownPresets = cloneDashboard(def).dashboard.drilldownPresets;
+          await applyDashboard(latest);
+          dashboard = latest;
+          templateEditor.value = JSON.stringify(latest, null, 2);
+          renderLayout("drilldowns", drilldownsHost, drilldownsStatus);
+          drilldownsStatus.textContent = "Drilldowns reset to latest version.";
+          drilldownsStatus.className = "ga-settings-status ok";
+        } catch (e) {
+          drilldownsStatus.textContent = e instanceof Error ? e.message : String(e);
+          drilldownsStatus.className = "ga-settings-status error";
         }
       })();
     });
