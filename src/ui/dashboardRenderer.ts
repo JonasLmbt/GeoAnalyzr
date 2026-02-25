@@ -30,7 +30,7 @@ export async function renderDashboard(
     context?: { dateRange?: { fromTs: number | null; toTs: number | null } };
     contextBySection?: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }>;
     initialActiveSectionId?: string;
-    onActiveSectionChange?: (sectionId: string) => void;
+    onActiveSectionChange?: (sectionId: string) => void | Promise<void>;
   }
 ): Promise<void> {
   root.innerHTML = "";
@@ -368,7 +368,7 @@ export async function renderDashboard(
 
     const baseDatasets = datasetsBySection[section.id] ?? datasetsDefault;
     activeContext = contextBySection[section.id] ?? contextDefault;
-    opts?.onActiveSectionChange?.(section.id);
+    await opts?.onActiveSectionChange?.(section.id);
 
     const localHost = doc.createElement("div");
     content.appendChild(localHost);

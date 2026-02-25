@@ -129,14 +129,12 @@ export async function renderAnalysisApp(opts: {
     };
 
     const hasTeamDuels = await hasAnyTeamDuels();
-    const sections = hasTeamDuels
-      ? dashboard.dashboard.sections
-      : dashboard.dashboard.sections.filter((s) => s.id !== "team");
+    const sections = hasTeamDuels ? dashboard.dashboard.sections : dashboard.dashboard.sections.filter((s) => s.id !== "team");
 
     const datasetsBySection: Record<string, Partial<Record<Grain, any[]>>> = {};
     const contextBySection: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }> = {};
 
-    for (const section of sections) {
+    const computeDatasetsForSection = async (section: any): Promise<void> => {
       const controlIds = resolveControlIdsForSection(section);
 
       const used = new Set<Grain>();
@@ -220,8 +218,7 @@ export async function renderAnalysisApp(opts: {
         datasets.game = (datasets.game as any[]).filter((g) => String((g as any)?.modeFamily ?? "").toLowerCase() === want);
       }
 
-      // If we have any round-grain filters active (e.g. country/teammate/movement), ensure they influence game-grain datasets
-      // by restricting games to those that are present in the filtered rounds.
+      // If we have any round-grain filters active (e.g. country/teammate/movement), ensure they influence game-grain datasets.
       if (Array.isArray(datasets.round) && Array.isArray(datasets.game) && specFilters?.enabled) {
         const allowedSet = Array.isArray(controlIds) && controlIds.length > 0 ? new Set(controlIds) : null;
         const hasActiveRoundOnly = specFilters.controls.some((c) => {
@@ -247,57 +244,43 @@ export async function renderAnalysisApp(opts: {
       }
 
       if (isOpponentsSection && Array.isArray(datasets.game)) {
-        // Explode each game into one row per opponent (opponent + opponent_mate).
         datasets.game = explodeOpponentsFromGames(datasets.game as any[]);
       }
       datasetsBySection[section.id] = datasets;
 
-      // Context dateRange should only be set if the section includes the dateRange control.
       const hasDate = !controlIds || controlIds.includes("dateRange");
       const dateVal = state["dateRange"] as any;
       const fromTs = hasDate && dateVal && typeof dateVal === "object" ? (dateVal.fromTs ?? null) : null;
       const toTs = hasDate && dateVal && typeof dateVal === "object" ? (dateVal.toTs ?? null) : null;
       contextBySection[section.id] = { dateRange: { fromTs, toTs } };
-    }
-
-    // Default datasets/context use all controls (kept for backwards compat).
-    const allControlIds = specFilters?.enabled ? specFilters.controls.map((c) => c.id) : undefined;
-    const filtersAll = { global: { spec: specFilters, state, controlIds: allControlIds } };
-    const datasetsAll: Partial<Record<Grain, any[]>> = {};
-    // Only load what the dashboard needs.
-    const usedAll = new Set<Grain>();
-    for (const section of sections) {
-      const d = datasetsBySection[section.id];
-      if (d?.round) usedAll.add("round");
-      if (d?.game) usedAll.add("game");
-      if (d?.session) usedAll.add("session");
-    }
-    if (usedAll.has("round") || usedAll.has("session")) datasetsAll.round = await getRounds(filtersAll);
-    if (usedAll.has("game")) datasetsAll.game = await getGames(filtersAll);
-    if (usedAll.has("session")) {
-      const gap = getSessionGapMinutes();
-      datasetsAll.session = await getSessions({ global: { spec: specFilters, state, controlIds: allControlIds, sessionGapMinutes: gap } }, { rounds: datasetsAll.round as any });
-    }
-    const dateValAll = state["dateRange"] as any;
-    const fromTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.fromTs ?? null) : null;
-    const toTsAll = dateValAll && typeof dateValAll === "object" ? (dateValAll.toTs ?? null) : null;
-
-    const effectiveDashboard: DashboardDoc = {
-      ...dashboard,
-      dashboard: {
-        ...dashboard.dashboard,
-        sections
-      }
     };
 
+    const desired = typeof targetWindow.__gaActiveSectionId === "string" ? targetWindow.__gaActiveSectionId : "";
+    const initialActive = (desired && sections.some((s: any) => s.id === desired) ? desired : sections[0]?.id) ?? "";
+
+    if (initialActive) {
+      const sec = sections.find((s: any) => s.id === initialActive);
+      if (sec) await computeDatasetsForSection(sec);
+    }
+
+    const datasetsDefault = initialActive ? datasetsBySection[initialActive] ?? {} : {};
+    const contextDefault = initialActive ? contextBySection[initialActive] : undefined;
+
+    const effectiveDashboard: DashboardDoc = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
+
     await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
-      datasets: datasetsAll,
+      datasets: datasetsDefault,
       datasetsBySection,
-      context: { dateRange: { fromTs: fromTsAll, toTs: toTsAll } },
+      context: contextDefault,
       contextBySection,
-      initialActiveSectionId: targetWindow.__gaActiveSectionId,
-      onActiveSectionChange: (id) => {
+      initialActiveSectionId: initialActive,
+      onActiveSectionChange: async (id) => {
         targetWindow.__gaActiveSectionId = id;
+        if (!id) return;
+        if (datasetsBySection[id]) return;
+        const sec = sections.find((s: any) => s.id === id);
+        if (!sec) return;
+        await computeDatasetsForSection(sec);
       }
     });
   };

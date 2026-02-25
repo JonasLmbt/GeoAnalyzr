@@ -1,7 +1,8 @@
 {
   "scripts": {
-    "build": "npm run build:dev && npm run build:release",
+    "build": "npm run build:dev && npm run build:devfile && npm run build:release",
     "build:dev": "node scripts/build-release.cjs dist/userscript.user.js",
+    "build:devfile": "node scripts/build-release.cjs geoanalyzr.dev.user.js",
     "build:release": "node scripts/build-release.cjs",
     "watch": "esbuild src/main.ts --bundle --outfile=dist/userscript.user.js --format=iife --watch"
   },

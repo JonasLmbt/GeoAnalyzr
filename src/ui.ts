@@ -325,15 +325,45 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     pre.style.color = "#ff9aa2";
     const describe = (e: any): string => {
       if (e instanceof Error) return `${e.name}: ${e.message}\n${e.stack ?? ""}`.trim();
+      const name = typeof e?.name === "string" ? e.name : "";
       const msg = typeof e?.message === "string" ? e.message : "";
-      if (msg) return msg;
+      if (name || msg) return `${name ? `${name}: ` : ""}${msg}`.trim();
       try {
-        const json = JSON.stringify(e, (_k, v) => (typeof v === "bigint" ? String(v) : v), 2);
-        if (typeof json === "string" && json !== "{}") return json;
+        const seen = new WeakSet<object>();
+        const plain: any = {};
+        if (e && typeof e === "object") {
+          for (const k of Object.getOwnPropertyNames(e)) {
+            try {
+              (plain as any)[k] = (e as any)[k];
+            } catch {
+              // ignore
+            }
+          }
+        }
+        const json = JSON.stringify(
+          Object.keys(plain).length ? plain : e,
+          (_k, v) => {
+            if (typeof v === "bigint") return String(v);
+            if (v && typeof v === "object") {
+              if (seen.has(v as object)) return "[Circular]";
+              seen.add(v as object);
+            }
+            return v;
+          },
+          2
+        );
+        if (typeof json === "string" && json && json !== "{}") return json;
       } catch {
         // ignore
       }
-      return String(e);
+      try {
+        const ctor = e?.constructor?.name;
+        const tag = Object.prototype.toString.call(e);
+        const keys = e && typeof e === "object" ? Object.getOwnPropertyNames(e).slice(0, 24).join(", ") : "";
+        return `${ctor ? `${ctor} ` : ""}${tag}${keys ? ` keys=[${keys}]` : ""}`.trim();
+      } catch {
+        return String(e);
+      }
     };
     pre.textContent = `Failed to render semantic dashboard:\n${describe(error)}`;
     body.appendChild(pre);
