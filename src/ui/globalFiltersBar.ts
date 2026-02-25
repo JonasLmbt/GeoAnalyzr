@@ -198,24 +198,44 @@ export async function renderGlobalFiltersBar(args: {
 
     const sel = doc.createElement("select");
     sel.className = "ga-filter-select";
+    sel.disabled = true;
 
-    // Options can depend on other active filters; we compute distincts from DB.
-    const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
+    // Render a placeholder immediately so the UI stays interactive even if option computation is expensive.
     if (!isRequired) sel.appendChild(new Option("All", "all"));
-    for (const opt of options) {
-      const label = control.dimension === "true_country" ? formatCountry(doc, opt.label) : opt.label;
-      sel.appendChild(new Option(label, opt.value));
-    }
+    if (current && current !== "all") sel.appendChild(new Option(current, current));
+    sel.appendChild(new Option("Loading…", "__loading__"));
+    sel.value = current && current !== "all" ? current : "all";
 
-    const hasCurrent = options.some((o) => o.value === current);
-    const nextValue = hasCurrent ? current : isRequired ? (options[0]?.value ?? "") : "all";
-    if (nextValue) sel.value = nextValue;
-    if (isRequired && nextValue && nextValue !== current) {
-      updatePending(id, nextValue);
-    }
-    sel.addEventListener("change", () => {
-      updatePending(id, sel.value);
-    });
+    const token = `${Date.now()}_${Math.random()}`;
+    (sel as any).__gaOptionsToken = token;
+
+    const loadOptions = async () => {
+      // Options can depend on other active filters; we compute distincts from DB.
+      const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
+      if ((sel as any).__gaOptionsToken !== token) return;
+
+      sel.innerHTML = "";
+      if (!isRequired) sel.appendChild(new Option("All", "all"));
+      for (const opt of options) {
+        const label = control.dimension === "true_country" ? formatCountry(doc, opt.label) : opt.label;
+        sel.appendChild(new Option(label, opt.value));
+      }
+
+      const hasCurrent = options.some((o) => o.value === current);
+      const nextValue = hasCurrent ? current : isRequired ? (options[0]?.value ?? "") : "all";
+      if (nextValue) sel.value = nextValue;
+      if (isRequired && nextValue && nextValue !== current) {
+        updatePending(id, nextValue);
+      }
+
+      sel.disabled = false;
+      sel.addEventListener("change", () => {
+        updatePending(id, sel.value);
+      });
+    };
+
+    // Defer to the next tick so the browser can paint + handle clicks (Close/Settings) before heavy work runs.
+    setTimeout(() => void loadOptions(), 0);
 
     wrap.appendChild(sel);
     left.appendChild(wrap);

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.13
+// @version      2.2.14
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -47218,21 +47218,34 @@ ${describeError(err)}` : message;
       wrap.appendChild(renderControlLabel(doc, control.label));
       const sel = doc.createElement("select");
       sel.className = "ga-filter-select";
-      const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
+      sel.disabled = true;
       if (!isRequired) sel.appendChild(new Option("All", "all"));
-      for (const opt of options) {
-        const label = control.dimension === "true_country" ? formatCountry4(doc, opt.label) : opt.label;
-        sel.appendChild(new Option(label, opt.value));
-      }
-      const hasCurrent = options.some((o) => o.value === current);
-      const nextValue = hasCurrent ? current : isRequired ? options[0]?.value ?? "" : "all";
-      if (nextValue) sel.value = nextValue;
-      if (isRequired && nextValue && nextValue !== current) {
-        updatePending(id, nextValue);
-      }
-      sel.addEventListener("change", () => {
-        updatePending(id, sel.value);
-      });
+      if (current && current !== "all") sel.appendChild(new Option(current, current));
+      sel.appendChild(new Option("Loading\u2026", "__loading__"));
+      sel.value = current && current !== "all" ? current : "all";
+      const token = `${Date.now()}_${Math.random()}`;
+      sel.__gaOptionsToken = token;
+      const loadOptions = async () => {
+        const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
+        if (sel.__gaOptionsToken !== token) return;
+        sel.innerHTML = "";
+        if (!isRequired) sel.appendChild(new Option("All", "all"));
+        for (const opt of options) {
+          const label = control.dimension === "true_country" ? formatCountry4(doc, opt.label) : opt.label;
+          sel.appendChild(new Option(label, opt.value));
+        }
+        const hasCurrent = options.some((o) => o.value === current);
+        const nextValue = hasCurrent ? current : isRequired ? options[0]?.value ?? "" : "all";
+        if (nextValue) sel.value = nextValue;
+        if (isRequired && nextValue && nextValue !== current) {
+          updatePending(id, nextValue);
+        }
+        sel.disabled = false;
+        sel.addEventListener("change", () => {
+          updatePending(id, sel.value);
+        });
+      };
+      setTimeout(() => void loadOptions(), 0);
       wrap.appendChild(sel);
       left.appendChild(wrap);
     };
