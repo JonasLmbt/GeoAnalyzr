@@ -462,6 +462,40 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
       }
     }
     return n ? sum / n : 0;
+  },
+
+  mean_hit_signed: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const truth = getTrueCountry(r as any);
+      if (!truth) continue;
+      const mf = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
+      const selfGuess = getGuessCountrySelf(r as any);
+      const mateGuessRaw = (r as any)?.player_mate_guessCountry ?? (r as any)?.p2_guessCountry;
+      const mateGuess = typeof mateGuessRaw === "string" ? mateGuessRaw : undefined;
+
+      const hit =
+        mf === "teamduels"
+          ? (typeof selfGuess === "string" && selfGuess === truth) || (typeof mateGuess === "string" && mateGuess === truth)
+          : typeof selfGuess === "string" && selfGuess === truth;
+
+      sum += hit ? 1 : -1;
+      n++;
+    }
+    return n ? sum / n : 0;
+  },
+
+  mean_damage_net: (rows) => {
+    let sum = 0;
+    let n = 0;
+    for (const r of rows as any[]) {
+      const dmg = (r as any)?.damage;
+      if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+      sum += dmg;
+      n++;
+    }
+    return n ? sum / n : 0;
   }
 };
 

@@ -117,6 +117,19 @@ function colorForValue(base: { r: number; g: number; b: number }, t: number): st
   return `rgb(${r} ${g} ${b})`;
 }
 
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function mixRgb(a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }, t: number): { r: number; g: number; b: number } {
+  const tt = clamp(t, 0, 1);
+  return { r: lerp(a.r, b.r, tt), g: lerp(a.g, b.g, tt), b: lerp(a.b, b.b, tt) };
+}
+
+function rgbToCss(c: { r: number; g: number; b: number }): string {
+  return `rgb(${Math.round(c.r)} ${Math.round(c.g)} ${Math.round(c.b)})`;
+}
+
 function formatValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
   const m = semantic.measures[measureId];
   const unit = m ? semantic.units[m.unit] : undefined;
@@ -438,6 +451,7 @@ export async function renderPointMapWidget(
   const renderMap = async (): Promise<void> => {
     const measDef = semantic.measures[activeMeasure];
     if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (point_map)`);
+    const diverging = measDef.formulaId === "mean_hit_signed" || measDef.formulaId === "mean_damage_net";
 
     const precision = typeof spec.keyPrecision === "number" && Number.isFinite(spec.keyPrecision) ? Math.max(0, Math.min(10, Math.round(spec.keyPrecision))) : 6;
     const keyFor = (lat: number, lng: number): string => `${lat.toFixed(precision)},${lng.toFixed(precision)}`;
@@ -520,19 +534,31 @@ export async function renderPointMapWidget(
       return sorted[lo] + (sorted[hi] - sorted[lo]) * t;
     };
 
-    const scaleMin = allVals.length ? quantile(allVals, 0.05) : 0;
-    const scaleMax = allVals.length ? quantile(allVals, 0.95) : 1;
+    let scaleMin = allVals.length ? quantile(allVals, 0.05) : 0;
+    let scaleMax = allVals.length ? quantile(allVals, 0.95) : 1;
+    if (diverging) {
+      if (measDef.formulaId === "mean_hit_signed") {
+        scaleMin = -1;
+        scaleMax = 1;
+      } else {
+        const absVals = allVals.map((v) => Math.abs(v)).sort((a, b) => a - b);
+        const absMax = absVals.length ? quantile(absVals, 0.95) : 1;
+        const m = Math.max(1, absMax);
+        scaleMin = -m;
+        scaleMax = m;
+      }
+    }
     const scaleSpan = scaleMax - scaleMin;
 
     // Legend colors
     const root = doc.querySelector(".ga-root") as HTMLElement | null;
     const theme = root?.dataset?.gaTheme === "geoguessr" ? "geoguessr" : "default";
     const styles = doc.defaultView?.getComputedStyle(doc.documentElement);
-    const baseColorRaw =
-      theme === "geoguessr"
-        ? (styles?.getPropertyValue("--ga-warn") ?? "")
-        : (styles?.getPropertyValue("--ga-graph-color") ?? "");
+    const baseColorRaw = theme === "geoguessr" ? (styles?.getPropertyValue("--ga-warn") ?? "") : (styles?.getPropertyValue("--ga-graph-color") ?? "");
     const baseColor = parseCssColor(baseColorRaw) ?? parseCssColor(styles?.getPropertyValue("--ga-warn") ?? "") ?? { r: 126, g: 182, b: 255 };
+    const goodColor = parseCssColor(styles?.getPropertyValue("--ga-good") ?? "") ?? { r: 58, g: 232, b: 189 };
+    const badColor = parseCssColor(styles?.getPropertyValue("--ga-danger") ?? "") ?? { r: 255, g: 107, b: 107 };
+    const neutralColor = parseCssColor(styles?.getPropertyValue("--ga-axis-grid") ?? "") ?? { r: 60, g: 69, b: 85 };
 
     // Legend
     legend.innerHTML = "";
@@ -541,7 +567,11 @@ export async function renderPointMapWidget(
     left.textContent = formatValue(doc, semantic, activeMeasure, scaleMin);
     const bar = doc.createElement("div");
     bar.className = "ga-country-map-legend-bar";
-    bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
+    if (diverging) {
+      bar.style.background = `linear-gradient(90deg, ${rgbToCss(badColor)}, ${rgbToCss(neutralColor)}, ${rgbToCss(goodColor)})`;
+    } else {
+      bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
+    }
     const right = doc.createElement("div");
     right.className = "ga-country-map-legend-max";
     right.textContent = formatValue(doc, semantic, activeMeasure, scaleMax);
@@ -727,11 +757,24 @@ export async function renderPointMapWidget(
       circle.setAttribute("r", String(clamp(rBase, 2, 10)));
 
       if (typeof v === "number" && Number.isFinite(v)) {
-        const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
-        const clampedT = clamp(rawT, 0, 1);
-        const t = Math.pow(clampedT, 0.55);
-        circle.style.fill = colorForValue(baseColor, t);
-        circle.style.opacity = "0.95";
+        if (diverging) {
+          const m = Math.max(1e-6, Math.max(Math.abs(scaleMin), Math.abs(scaleMax)));
+          const raw = clamp(v / m, -1, 1);
+          if (raw >= 0) {
+            const c = mixRgb(neutralColor, goodColor, Math.pow(raw, 0.7));
+            circle.style.fill = rgbToCss(c);
+          } else {
+            const c = mixRgb(neutralColor, badColor, Math.pow(-raw, 0.7));
+            circle.style.fill = rgbToCss(c);
+          }
+          circle.style.opacity = "0.95";
+        } else {
+          const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
+          const clampedT = clamp(rawT, 0, 1);
+          const t = Math.pow(clampedT, 0.55);
+          circle.style.fill = colorForValue(baseColor, t);
+          circle.style.opacity = "0.95";
+        }
       } else {
         circle.style.fill = "rgba(255,255,255,0.25)";
         circle.style.opacity = "0.6";

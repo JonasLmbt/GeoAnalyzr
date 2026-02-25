@@ -1844,7 +1844,7 @@
                       "rangeFilter": { "label": "Score", "field": "player_self_score", "min": 0, "max": 5000, "defaultMin": 0, "defaultMax": 5000, "step": 10 },
                       "mapHeight": 520,
                       "maxDots": 2500,
-                      "measures": ["rounds_count"],
+                      "measures": ["rounds_count", "hit_signed", "damage_net_avg"],
                       "activeMeasure": "rounds_count",
                       "actions": {
                         "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }

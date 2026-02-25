@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.7
+// @version      2.2.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -33171,6 +33171,21 @@ ${shapes}`.trim();
           extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
         }
       },
+      hit_signed: {
+        label: "Hit",
+        unit: "float",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_hit_signed",
+        range: { min: -1, max: 1 }
+      },
+      damage_net_avg: {
+        label: "Damage",
+        unit: "points_delta",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_net"
+      },
       sessions_count: {
         label: "Sessions",
         unit: "count",
@@ -33371,6 +33386,7 @@ ${shapes}`.trim();
       count: { format: "int" },
       int: { format: "int" },
       points: { format: "float", decimals: 1 },
+      points_delta: { format: "float", decimals: 0, showSign: true },
       percent: { format: "percent", decimals: 1 },
       seconds: { format: "float", decimals: 1 },
       duration: { format: "duration" },
@@ -35333,7 +35349,7 @@ ${shapes}`.trim();
                         rangeFilter: { label: "Score", field: "player_self_score", min: 0, max: 5e3, defaultMin: 0, defaultMax: 5e3, step: 10 },
                         mapHeight: 520,
                         maxDots: 2500,
-                        measures: ["rounds_count"],
+                        measures: ["rounds_count", "hit_signed", "damage_net_avg"],
                         activeMeasure: "rounds_count",
                         actions: {
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
@@ -41401,6 +41417,33 @@ ${describeError(err)}` : message;
         }
       }
       return n ? sum / n : 0;
+    },
+    mean_hit_signed: (rows) => {
+      let sum = 0;
+      let n = 0;
+      for (const r of rows) {
+        const truth = getTrueCountry(r);
+        if (!truth) continue;
+        const mf = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
+        const selfGuess = getGuessCountrySelf(r);
+        const mateGuessRaw = r?.player_mate_guessCountry ?? r?.p2_guessCountry;
+        const mateGuess = typeof mateGuessRaw === "string" ? mateGuessRaw : void 0;
+        const hit = mf === "teamduels" ? typeof selfGuess === "string" && selfGuess === truth || typeof mateGuess === "string" && mateGuess === truth : typeof selfGuess === "string" && selfGuess === truth;
+        sum += hit ? 1 : -1;
+        n++;
+      }
+      return n ? sum / n : 0;
+    },
+    mean_damage_net: (rows) => {
+      let sum = 0;
+      let n = 0;
+      for (const r of rows) {
+        const dmg = r?.damage;
+        if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
+        sum += dmg;
+        n++;
+      }
+      return n ? sum / n : 0;
     }
   };
   var GAME_MEASURES_BY_FORMULA_ID = {
@@ -45168,6 +45211,16 @@ ${describeError(err)}` : message;
     const b = Math.round(base.b * tt);
     return `rgb(${r} ${g} ${b})`;
   }
+  function lerp3(a, b, t) {
+    return a + (b - a) * t;
+  }
+  function mixRgb(a, b, t) {
+    const tt = clamp2(t, 0, 1);
+    return { r: lerp3(a.r, b.r, tt), g: lerp3(a.g, b.g, tt), b: lerp3(a.b, b.b, tt) };
+  }
+  function rgbToCss(c) {
+    return `rgb(${Math.round(c.r)} ${Math.round(c.g)} ${Math.round(c.b)})`;
+  }
   function formatValue5(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
@@ -45418,6 +45471,7 @@ ${describeError(err)}` : message;
     const renderMap = async () => {
       const measDef = semantic.measures[activeMeasure];
       if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (point_map)`);
+      const diverging = measDef.formulaId === "mean_hit_signed" || measDef.formulaId === "mean_damage_net";
       const precision = typeof spec.keyPrecision === "number" && Number.isFinite(spec.keyPrecision) ? Math.max(0, Math.min(10, Math.round(spec.keyPrecision))) : 6;
       const keyFor = (lat, lng) => `${lat.toFixed(precision)},${lng.toFixed(precision)}`;
       const rowsBase = rangeEnabled ? rowsAll.filter((r) => {
@@ -45475,21 +45529,40 @@ ${describeError(err)}` : message;
         const t = idx - lo;
         return sorted[lo] + (sorted[hi] - sorted[lo]) * t;
       };
-      const scaleMin = allVals.length ? quantile(allVals, 0.05) : 0;
-      const scaleMax = allVals.length ? quantile(allVals, 0.95) : 1;
+      let scaleMin = allVals.length ? quantile(allVals, 0.05) : 0;
+      let scaleMax = allVals.length ? quantile(allVals, 0.95) : 1;
+      if (diverging) {
+        if (measDef.formulaId === "mean_hit_signed") {
+          scaleMin = -1;
+          scaleMax = 1;
+        } else {
+          const absVals = allVals.map((v) => Math.abs(v)).sort((a, b) => a - b);
+          const absMax = absVals.length ? quantile(absVals, 0.95) : 1;
+          const m = Math.max(1, absMax);
+          scaleMin = -m;
+          scaleMax = m;
+        }
+      }
       const scaleSpan = scaleMax - scaleMin;
       const root = doc.querySelector(".ga-root");
       const theme = root?.dataset?.gaTheme === "geoguessr" ? "geoguessr" : "default";
       const styles = doc.defaultView?.getComputedStyle(doc.documentElement);
       const baseColorRaw = theme === "geoguessr" ? styles?.getPropertyValue("--ga-warn") ?? "" : styles?.getPropertyValue("--ga-graph-color") ?? "";
       const baseColor = parseCssColor3(baseColorRaw) ?? parseCssColor3(styles?.getPropertyValue("--ga-warn") ?? "") ?? { r: 126, g: 182, b: 255 };
+      const goodColor = parseCssColor3(styles?.getPropertyValue("--ga-good") ?? "") ?? { r: 58, g: 232, b: 189 };
+      const badColor = parseCssColor3(styles?.getPropertyValue("--ga-danger") ?? "") ?? { r: 255, g: 107, b: 107 };
+      const neutralColor = parseCssColor3(styles?.getPropertyValue("--ga-axis-grid") ?? "") ?? { r: 60, g: 69, b: 85 };
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
       left.textContent = formatValue5(doc, semantic, activeMeasure, scaleMin);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
-      bar.style.background = `linear-gradient(90deg, ${colorForValue3(baseColor, 0)}, ${colorForValue3(baseColor, 1)})`;
+      if (diverging) {
+        bar.style.background = `linear-gradient(90deg, ${rgbToCss(badColor)}, ${rgbToCss(neutralColor)}, ${rgbToCss(goodColor)})`;
+      } else {
+        bar.style.background = `linear-gradient(90deg, ${colorForValue3(baseColor, 0)}, ${colorForValue3(baseColor, 1)})`;
+      }
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
       right.textContent = formatValue5(doc, semantic, activeMeasure, scaleMax);
@@ -45645,11 +45718,24 @@ ${describeError(err)}` : message;
         circle.setAttribute("cy", y.toFixed(2));
         circle.setAttribute("r", String(clamp2(rBase, 2, 10)));
         if (typeof v === "number" && Number.isFinite(v)) {
-          const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
-          const clampedT = clamp2(rawT, 0, 1);
-          const t = Math.pow(clampedT, 0.55);
-          circle.style.fill = colorForValue3(baseColor, t);
-          circle.style.opacity = "0.95";
+          if (diverging) {
+            const m = Math.max(1e-6, Math.max(Math.abs(scaleMin), Math.abs(scaleMax)));
+            const raw = clamp2(v / m, -1, 1);
+            if (raw >= 0) {
+              const c2 = mixRgb(neutralColor, goodColor, Math.pow(raw, 0.7));
+              circle.style.fill = rgbToCss(c2);
+            } else {
+              const c2 = mixRgb(neutralColor, badColor, Math.pow(-raw, 0.7));
+              circle.style.fill = rgbToCss(c2);
+            }
+            circle.style.opacity = "0.95";
+          } else {
+            const rawT = scaleSpan > 0 ? (v - scaleMin) / scaleSpan : 1;
+            const clampedT = clamp2(rawT, 0, 1);
+            const t = Math.pow(clampedT, 0.55);
+            circle.style.fill = colorForValue3(baseColor, t);
+            circle.style.opacity = "0.95";
+          }
         } else {
           circle.style.fill = "rgba(255,255,255,0.25)";
           circle.style.opacity = "0.6";
