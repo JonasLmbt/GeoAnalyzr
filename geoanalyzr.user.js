@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.4
+// @version      2.2.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -35294,32 +35294,6 @@ ${shapes}`.trim();
                       spec: {
                         rows: [
                           {
-                            label: "Repeat location pairs (same coordinates)",
-                            measure: "repeat_location_pairs_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_true_location_repeat", op: "eq", value: "true" }]
-                              }
-                            }
-                          },
-                          {
-                            label: "Repeat locations (unique coords with n>1)",
-                            measure: "repeat_locations_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_true_location_repeat", op: "eq", value: "true" }]
-                              }
-                            }
-                          },
-                          {
                             label: "Rounds on repeat locations",
                             measure: "repeat_location_rounds_count",
                             secondaryMeasure: "repeat_location_rounds_rate",
@@ -45395,10 +45369,7 @@ ${describeError(err)}` : message;
           if (lat === null || lng === null) continue;
           if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
           const k = keyFor(lat, lng);
-          const pointRow = Object.create(base);
-          pointRow._gaPointLat = lat;
-          pointRow._gaPointLng = lng;
-          pointRow._gaPointSource = src.id ?? src.label ?? `${src.latField}/${src.lngField}`;
+          const pointRow = base;
           expandedRows.push(pointRow);
           const g2 = grouped.get(k) ?? { lat, lng, pointRows: [], baseRows: [], baseKeys: /* @__PURE__ */ new Set() };
           g2.pointRows.push(pointRow);
@@ -45513,6 +45484,16 @@ ${describeError(err)}` : message;
       g.appendChild(pointsLayer);
       let vp = { scale: 1, tx: 0, ty: 0 };
       applyViewport3(g, vp);
+      const dots = [];
+      const updateDotSizes = () => {
+        const s = Math.max(1e-4, vp.scale);
+        for (const el2 of dots) {
+          const baseR = parseFloat(String(el2.dataset?.baseR ?? ""));
+          if (!Number.isFinite(baseR)) continue;
+          const r = clamp2(baseR / s, 1.25, 10);
+          el2.setAttribute("r", r.toFixed(3));
+        }
+      };
       const rectPoint = (clientX, clientY) => {
         const r = svg.getBoundingClientRect();
         const x = (clientX - r.left) / Math.max(1, r.width) * W;
@@ -45525,6 +45506,7 @@ ${describeError(err)}` : message;
         const sy = (py - vp.ty) / s0;
         vp = { scale: nextScale, tx: px - nextScale * sx, ty: py - nextScale * sy };
         applyViewport3(g, vp);
+        updateDotSizes();
       };
       const setScaleCentered = (nextScale) => {
         const cx = W / 2;
@@ -45571,7 +45553,16 @@ ${describeError(err)}` : message;
           suppressClick = false;
         }, 0);
       });
-      for (const [k, g2] of grouped.entries()) {
+      const maxDots = typeof spec.maxDots === "number" && Number.isFinite(spec.maxDots) ? Math.max(200, Math.round(spec.maxDots)) : 2500;
+      const allGroups = Array.from(grouped.entries()).map(([k, g2]) => ({ k, g: g2, n: g2.pointRows.length })).sort((a, b) => b.n - a.n);
+      const limited = allGroups.slice(0, Math.min(maxDots, allGroups.length));
+      if (allGroups.length > limited.length) {
+        hint.textContent = `Scroll to zoom, drag to pan, click a dot to drill down. Showing top ${limited.length}/${allGroups.length} points (by frequency).`;
+      }
+      const frag = doc.createDocumentFragment();
+      for (const item of limited) {
+        const k = item.k;
+        const g2 = item.g;
         const v = values.get(k);
         const [x, y] = project3(g2.lng, g2.lat, W, H);
         const circle = doc.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -45579,6 +45570,7 @@ ${describeError(err)}` : message;
         circle.dataset.key = k;
         const c = g2.pointRows.length;
         const rBase = 1.8 + Math.sqrt(Math.max(1, c)) * 0.7;
+        circle.dataset.baseR = String(clamp2(rBase, 2, 10));
         circle.setAttribute("cx", x.toFixed(2));
         circle.setAttribute("cy", y.toFixed(2));
         circle.setAttribute("r", String(clamp2(rBase, 2, 10)));
@@ -45596,30 +45588,43 @@ ${describeError(err)}` : message;
         const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
         titleEl.textContent = `${k} \u2022 ${c} pts \u2022 ${ttVal}`;
         circle.appendChild(titleEl);
-        circle.addEventListener("pointerenter", () => {
-          circle.style.filter = "brightness(1.15)";
-          circle.style.strokeWidth = "2";
-        });
-        circle.addEventListener("pointerleave", () => {
-          circle.style.filter = "";
-          circle.style.strokeWidth = "";
-        });
-        const click = spec.actions?.click;
-        if (click && click.type === "drilldown") {
-          circle.addEventListener("click", () => {
-            if (suppressClick) return;
-            const rowsFromPoint = click.filterFromPoint ? g2.baseRows : rowsAll;
-            const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
-            overlay.open(semantic, {
-              title: `${widget.title} - ${k}`,
-              target: click.target,
-              columnsPreset: click.columnsPreset,
-              rows: filteredRows,
-              extraFilters: click.extraFilters
-            });
+        dots.push(circle);
+        frag.appendChild(circle);
+      }
+      pointsLayer.appendChild(frag);
+      updateDotSizes();
+      pointsLayer.addEventListener("pointerenter", (e) => {
+        const el2 = e.target?.closest?.("circle.ga-point-dot");
+        if (!el2) return;
+        el2.style.filter = "brightness(1.15)";
+        el2.style.strokeWidth = "2";
+      }, true);
+      pointsLayer.addEventListener("pointerleave", (e) => {
+        const el2 = e.target?.closest?.("circle.ga-point-dot");
+        if (!el2) return;
+        el2.style.filter = "";
+        el2.style.strokeWidth = "";
+      }, true);
+      const click = spec.actions?.click;
+      if (click && click.type === "drilldown") {
+        pointsLayer.addEventListener("click", (e) => {
+          const el2 = e.target?.closest?.("circle.ga-point-dot");
+          if (!el2) return;
+          if (suppressClick) return;
+          const k = typeof el2.dataset?.key === "string" ? String(el2.dataset.key) : "";
+          if (!k) return;
+          const g2 = grouped.get(k);
+          if (!g2) return;
+          const rowsFromPoint = click.filterFromPoint ? g2.baseRows : rowsAll;
+          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+          overlay.open(semantic, {
+            title: `${widget.title} - ${k}`,
+            target: click.target,
+            columnsPreset: click.columnsPreset,
+            rows: filteredRows,
+            extraFilters: click.extraFilters
           });
-        }
-        pointsLayer.appendChild(circle);
+        });
       }
     };
     renderHeaderRight();

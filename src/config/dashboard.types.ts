@@ -243,6 +243,8 @@ export interface PointMapSpec {
   points: PointMapSourceDef[];
   // Decimal rounding used to group points into the same coordinate key. Default: 6.
   keyPrecision?: number;
+  // Hard cap to avoid rendering too many SVG circles (performance). Default: 2500.
+  maxDots?: number;
   measure?: string;
   measures?: string[];
   activeMeasure?: string;

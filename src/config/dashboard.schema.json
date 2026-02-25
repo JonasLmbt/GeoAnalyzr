@@ -339,6 +339,7 @@
           }
         },
         "keyPrecision": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "maxDots": { "type": "integer", "minimum": 200, "maximum": 20000 },
         "measure": { "type": "string", "minLength": 1 },
         "measures": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "activeMeasure": { "type": "string", "minLength": 1 },

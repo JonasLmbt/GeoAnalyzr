@@ -324,10 +324,7 @@ export async function renderPointMapWidget(
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
 
         const k = keyFor(lat, lng);
-        const pointRow = Object.create(base) as any;
-        pointRow._gaPointLat = lat;
-        pointRow._gaPointLng = lng;
-        pointRow._gaPointSource = src.id ?? src.label ?? `${src.latField}/${src.lngField}`;
+        const pointRow = base;
         expandedRows.push(pointRow);
 
         const g = grouped.get(k) ?? { lat, lng, pointRows: [], baseRows: [], baseKeys: new Set<string>() };
@@ -480,6 +477,18 @@ export async function renderPointMapWidget(
     let vp: Viewport = { scale: 1, tx: 0, ty: 0 };
     applyViewport(g, vp);
 
+    const dots: SVGCircleElement[] = [];
+    const updateDotSizes = (): void => {
+      const s = Math.max(0.0001, vp.scale);
+      for (const el of dots) {
+        const baseR = parseFloat(String((el as any).dataset?.baseR ?? ""));
+        if (!Number.isFinite(baseR)) continue;
+        // Keep dots screen-space stable while zooming by counter-scaling radius.
+        const r = clamp(baseR / s, 1.25, 10);
+        el.setAttribute("r", r.toFixed(3));
+      }
+    };
+
     const rectPoint = (clientX: number, clientY: number): { x: number; y: number } => {
       const r = svg.getBoundingClientRect();
       const x = ((clientX - r.left) / Math.max(1, r.width)) * W;
@@ -493,6 +502,7 @@ export async function renderPointMapWidget(
       const sy = (py - vp.ty) / s0;
       vp = { scale: nextScale, tx: px - nextScale * sx, ty: py - nextScale * sy };
       applyViewport(g, vp);
+      updateDotSizes();
     };
 
     const setScaleCentered = (nextScale: number) => {
@@ -542,8 +552,22 @@ export async function renderPointMapWidget(
       setTimeout(() => { suppressClick = false; }, 0);
     });
 
-    // Render points
-    for (const [k, g2] of grouped.entries()) {
+    // Render points (cap to reduce DOM overhead on very large datasets).
+    const maxDots = typeof (spec as any).maxDots === "number" && Number.isFinite((spec as any).maxDots) ? Math.max(200, Math.round((spec as any).maxDots)) : 2500;
+    const allGroups = Array.from(grouped.entries())
+      .map(([k, g2]) => ({ k, g: g2, n: g2.pointRows.length }))
+      .sort((a, b) => b.n - a.n);
+
+    const limited = allGroups.slice(0, Math.min(maxDots, allGroups.length));
+    if (allGroups.length > limited.length) {
+      hint.textContent = `Scroll to zoom, drag to pan, click a dot to drill down. Showing top ${limited.length}/${allGroups.length} points (by frequency).`;
+    }
+
+    const frag = doc.createDocumentFragment();
+
+    for (const item of limited) {
+      const k = item.k;
+      const g2 = item.g;
       const v = values.get(k);
       const [x, y] = project(g2.lng, g2.lat, W, H);
 
@@ -552,6 +576,7 @@ export async function renderPointMapWidget(
       circle.dataset.key = k;
       const c = g2.pointRows.length;
       const rBase = 1.8 + Math.sqrt(Math.max(1, c)) * 0.7;
+      (circle as any).dataset.baseR = String(clamp(rBase, 2, 10));
       circle.setAttribute("cx", x.toFixed(2));
       circle.setAttribute("cy", y.toFixed(2));
       circle.setAttribute("r", String(clamp(rBase, 2, 10)));
@@ -572,32 +597,47 @@ export async function renderPointMapWidget(
       titleEl.textContent = `${k} • ${c} pts • ${ttVal}`;
       circle.appendChild(titleEl);
 
-      circle.addEventListener("pointerenter", () => {
-        circle.style.filter = "brightness(1.15)";
-        circle.style.strokeWidth = "2";
-      });
-      circle.addEventListener("pointerleave", () => {
-        circle.style.filter = "";
-        circle.style.strokeWidth = "";
-      });
+      dots.push(circle);
+      frag.appendChild(circle);
+    }
 
-      const click = spec.actions?.click as any;
-      if (click && click.type === "drilldown") {
-        circle.addEventListener("click", () => {
-          if (suppressClick) return;
-          const rowsFromPoint = click.filterFromPoint ? g2.baseRows : (rowsAll as any[]);
-          const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
-          overlay.open(semantic, {
-            title: `${widget.title} - ${k}`,
-            target: click.target,
-            columnsPreset: click.columnsPreset,
-            rows: filteredRows,
-            extraFilters: click.extraFilters
-          });
+    pointsLayer.appendChild(frag);
+    updateDotSizes();
+
+    // Event delegation (fewer listeners = better perf on large dot counts).
+    pointsLayer.addEventListener("pointerenter", (e) => {
+      const el = (e.target as any)?.closest?.("circle.ga-point-dot") as SVGCircleElement | null;
+      if (!el) return;
+      el.style.filter = "brightness(1.15)";
+      el.style.strokeWidth = "2";
+    }, true as any);
+    pointsLayer.addEventListener("pointerleave", (e) => {
+      const el = (e.target as any)?.closest?.("circle.ga-point-dot") as SVGCircleElement | null;
+      if (!el) return;
+      el.style.filter = "";
+      el.style.strokeWidth = "";
+    }, true as any);
+
+    const click = spec.actions?.click as any;
+    if (click && click.type === "drilldown") {
+      pointsLayer.addEventListener("click", (e) => {
+        const el = (e.target as any)?.closest?.("circle.ga-point-dot") as SVGCircleElement | null;
+        if (!el) return;
+        if (suppressClick) return;
+        const k = typeof (el as any).dataset?.key === "string" ? String((el as any).dataset.key) : "";
+        if (!k) return;
+        const g2 = grouped.get(k);
+        if (!g2) return;
+        const rowsFromPoint = click.filterFromPoint ? g2.baseRows : (rowsAll as any[]);
+        const filteredRows = applyFilters(rowsFromPoint, click.extraFilters, grain);
+        overlay.open(semantic, {
+          title: `${widget.title} - ${k}`,
+          target: click.target,
+          columnsPreset: click.columnsPreset,
+          rows: filteredRows,
+          extraFilters: click.extraFilters
         });
-      }
-
-      pointsLayer.appendChild(circle);
+      });
     }
   };
 

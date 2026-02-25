@@ -1805,32 +1805,6 @@
                     "spec": {
                       "rows": [
                         {
-                          "label": "Repeat location pairs (same coordinates)",
-                          "measure": "repeat_location_pairs_count",
-                          "actions": {
-                            "click": {
-                              "type": "drilldown",
-                              "target": "rounds",
-                              "columnsPreset": "roundMode",
-                              "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_true_location_repeat", "op": "eq", "value": "true" }]
-                            }
-                          }
-                        },
-                        {
-                          "label": "Repeat locations (unique coords with n>1)",
-                          "measure": "repeat_locations_count",
-                          "actions": {
-                            "click": {
-                              "type": "drilldown",
-                              "target": "rounds",
-                              "columnsPreset": "roundMode",
-                              "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_true_location_repeat", "op": "eq", "value": "true" }]
-                            }
-                          }
-                        },
-                        {
                           "label": "Rounds on repeat locations",
                           "measure": "repeat_location_rounds_count",
                           "secondaryMeasure": "repeat_location_rounds_rate",
