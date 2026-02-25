@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.21
+// @version      2.2.22
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -36247,9 +36247,9 @@ ${shapes}`.trim();
       gap: 10px;
       padding: 16px 16px 14px 16px;
       border-radius: 16px;
-      border: 1px solid color-mix(in srgb, var(--ga-border) 65%, transparent);
-      background: color-mix(in srgb, var(--ga-card) 82%, rgba(0,0,0,0.55));
-      color: var(--ga-text);
+      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 70%, transparent);
+      background: color-mix(in srgb, var(--ga-surface, rgba(22,22,38,0.80)) 86%, rgba(0,0,0,0.65));
+      color: var(--ga-text, #f3f4ff);
       box-shadow: 0 10px 35px rgba(0,0,0,0.35);
       width: min(560px, calc(100vw - 28px));
     }
@@ -36272,7 +36272,7 @@ ${shapes}`.trim();
     }
     .ga-loading-screen-subtitle {
       font-size: 13px;
-      color: color-mix(in srgb, var(--ga-text) 82%, var(--ga-text-muted));
+      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 88%, var(--ga-text-muted, rgba(208,214,238,0.75)));
       text-shadow: 0 1px 0 rgba(0,0,0,0.35);
     }
     .ga-loading-progress {
@@ -36284,8 +36284,8 @@ ${shapes}`.trim();
       width: 100%;
       height: 10px;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--ga-control-bg) 85%, rgba(0,0,0,0.35));
-      border: 1px solid color-mix(in srgb, var(--ga-border) 72%, transparent);
+      background: color-mix(in srgb, var(--ga-control-bg, rgba(16,16,28,0.55)) 88%, rgba(0,0,0,0.45));
+      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 78%, transparent);
       overflow: hidden;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
@@ -36300,7 +36300,7 @@ ${shapes}`.trim();
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 12px;
       line-height: 1.35;
-      color: color-mix(in srgb, var(--ga-text) 80%, var(--ga-text-muted));
+      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 90%, var(--ga-text-muted, rgba(208,214,238,0.75)));
       white-space: pre-wrap;
     }
     .ga-loading-console {
@@ -36309,9 +36309,9 @@ ${shapes}`.trim();
       max-height: 160px;
       overflow: auto;
       border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
-      background: color-mix(in srgb, var(--ga-control-bg) 78%, rgba(0,0,0,0.35));
-      color: color-mix(in srgb, var(--ga-text) 86%, #fff);
+      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 80%, transparent);
+      background: color-mix(in srgb, var(--ga-control-bg, rgba(16,16,28,0.55)) 84%, rgba(0,0,0,0.55));
+      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 92%, #fff);
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 11.5px;
       line-height: 1.35;
@@ -48508,7 +48508,8 @@ ${describeError(err2)}` : message;
       }
       const subtitleEl = loadingEl.querySelector(".ga-loading-screen-subtitle");
       if (subtitleEl) subtitleEl.textContent = subtitle;
-      if (!loadingEl.isConnected) doc.body.appendChild(loadingEl);
+      const host = root ?? doc.body;
+      if (!loadingEl.isConnected) host.appendChild(loadingEl);
       if (typeof opts2?.stepTotal === "number") loadingStepTotal = opts2.stepTotal;
       if (typeof opts2?.stepCurrent === "number") loadingStepCurrent = opts2.stepCurrent;
       setLoadingProgress({ phase: subtitle });

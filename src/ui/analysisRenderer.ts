@@ -116,7 +116,8 @@ export async function renderAnalysisApp(opts: {
     }
     const subtitleEl = loadingEl.querySelector(".ga-loading-screen-subtitle") as HTMLDivElement | null;
     if (subtitleEl) subtitleEl.textContent = subtitle;
-    if (!loadingEl.isConnected) doc.body.appendChild(loadingEl);
+    const host = root ?? doc.body;
+    if (!loadingEl.isConnected) host.appendChild(loadingEl);
     if (typeof opts?.stepTotal === "number") loadingStepTotal = opts.stepTotal;
     if (typeof opts?.stepCurrent === "number") loadingStepCurrent = opts.stepCurrent;
     setLoadingProgress({ phase: subtitle });
