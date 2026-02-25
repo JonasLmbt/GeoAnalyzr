@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.15
+// @version      2.2.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9914,333 +9914,10 @@ ${shapes}`.trim();
     return `gf:${grain}:${parts.join("|")}`;
   }
 
-  // src/geo/deRegions.ts
-  var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
-  var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
-  function hasGmXhr2() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson(url) {
-    if (hasGmXhr2()) {
-      const txt = await gmGetText(url, "application/json");
-      return JSON.parse(txt);
-    }
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords(c, bbox);
-  }
-  function bboxForGeometry(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var statesIndexPromise = null;
-  var districtsIndexPromise = null;
-  async function loadStatesIndex() {
-    if (!statesIndexPromise) {
-      statesIndexPromise = (async () => {
-        const geo = await fetchJson(DE_STATES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
-          const bbox = bboxForGeometry(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return statesIndexPromise;
-  }
-  async function loadDistrictsIndex() {
-    if (!districtsIndexPromise) {
-      districtsIndexPromise = (async () => {
-        const geo = await fetchJson(DE_DISTRICTS_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.NAME_3 === "string" ? f.properties.NAME_3.trim() : "";
-          const bbox = bboxForGeometry(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return districtsIndexPromise;
-  }
-  var stateMemo = /* @__PURE__ */ new Map();
-  var districtMemo = /* @__PURE__ */ new Map();
-  function memoKey(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  async function resolveDeStateByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey(lat, lng);
-    const cached = stateMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadStatesIndex();
-    for (const it of items) {
-      if (!bboxContains(it.bbox, lon, lat)) continue;
-      if (pointInGeometry(lon, lat, it.geom)) {
-        stateMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveDeDistrictByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey(lat, lng);
-    const cached = districtMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadDistrictsIndex();
-    for (const it of items) {
-      if (!bboxContains(it.bbox, lon, lat)) continue;
-      if (pointInGeometry(lon, lat, it.geom)) {
-        districtMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
-  // src/geo/naRegions.ts
-  var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
-  var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
-  function hasGmXhr3() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText2(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson2(url) {
-    if (hasGmXhr3()) {
-      const txt = await gmGetText2(url, "application/json");
-      return JSON.parse(txt);
-    }
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords2(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords2(c, bbox);
-  }
-  function bboxForGeometry2(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords2(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing2(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon2(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing2(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing2(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry2(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon2(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon2(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var usIndexPromise = null;
-  var caIndexPromise = null;
-  async function loadUsIndex() {
-    if (!usIndexPromise) {
-      usIndexPromise = (async () => {
-        const geo = await fetchJson2(US_STATES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
-          const bbox = bboxForGeometry2(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return usIndexPromise;
-  }
-  async function loadCaIndex() {
-    if (!caIndexPromise) {
-      caIndexPromise = (async () => {
-        const geo = await fetchJson2(CA_PROVINCES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
-          const bbox = bboxForGeometry2(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return caIndexPromise;
-  }
-  function memoKey2(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains2(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  var usMemo = /* @__PURE__ */ new Map();
-  var caMemo = /* @__PURE__ */ new Map();
-  async function resolveUsStateByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey2(lat, lng);
-    const cached = usMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadUsIndex();
-    for (const it of items) {
-      if (!bboxContains2(it.bbox, lon, lat)) continue;
-      if (pointInGeometry2(lon, lat, it.geom)) {
-        usMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveCaProvinceByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey2(lat, lng);
-    const cached = caMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadCaIndex();
-    for (const it of items) {
-      if (!bboxContains2(it.bbox, lon, lat)) continue;
-      if (pointInGeometry2(lon, lat, it.geom)) {
-        caMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
   // src/engine/queryEngine.ts
+  async function yieldToEventLoop() {
+    await new Promise((r) => setTimeout(r, 0));
+  }
   function normalizeMovementType(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
@@ -10552,7 +10229,11 @@ ${shapes}`.trim();
     for (const d of details) {
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
     }
-    roundsRawCache = await Promise.all(rows.map(async (r) => {
+    const outRows = new Array(rows.length);
+    const YIELD_EVERY = 250;
+    for (let i = 0; i < rows.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      const r = rows[i];
       const out = { ...r };
       const gameId = String(out.gameId ?? "");
       const d = detailsByGame.get(gameId);
@@ -10666,47 +10347,23 @@ ${shapes}`.trim();
           }
         }
       }
-      const tc = typeof out.trueCountry === "string" ? out.trueCountry.trim().toLowerCase() : "";
-      if (tc === "de") {
-        const lat = typeof out.trueLat === "number" ? out.trueLat : void 0;
-        const lng = typeof out.trueLng === "number" ? out.trueLng : void 0;
-        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
-          if (typeof out.trueState !== "string" || !out.trueState) {
-            const s = await resolveDeStateByLatLng(lat, lng);
-            if (s) out.trueState = s;
-          }
-          if (typeof out.trueDistrict !== "string" || !out.trueDistrict) {
-            const d2 = await resolveDeDistrictByLatLng(lat, lng);
-            if (d2) out.trueDistrict = d2;
-          }
-        }
-      }
-      if (tc === "us" || tc === "ca") {
-        const lat = typeof out.trueLat === "number" ? out.trueLat : void 0;
-        const lng = typeof out.trueLng === "number" ? out.trueLng : void 0;
-        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
-          if (tc === "us" && (typeof out.trueUsState !== "string" || !out.trueUsState)) {
-            const s = await resolveUsStateByLatLng(lat, lng);
-            if (s) out.trueUsState = s;
-          }
-          if (tc === "ca" && (typeof out.trueCaProvince !== "string" || !out.trueCaProvince)) {
-            const p = await resolveCaProvinceByLatLng(lat, lng);
-            if (p) out.trueCaProvince = p;
-          }
-        }
-      }
-      return out;
-    }));
+      outRows[i] = out;
+    }
+    roundsRawCache = outRows;
     const trueKeyFor = (lat, lng) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
     const trueCounts = /* @__PURE__ */ new Map();
-    for (const r of roundsRawCache) {
+    for (let i = 0; i < roundsRawCache.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      const r = roundsRawCache[i];
       const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
       const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
       if (lat === null || lng === null) continue;
       const k = trueKeyFor(lat, lng);
       trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
     }
-    for (const r of roundsRawCache) {
+    for (let i = 0; i < roundsRawCache.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      const r = roundsRawCache[i];
       const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
       const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
       if (lat === null || lng === null) continue;
@@ -10754,7 +10411,10 @@ ${shapes}`.trim();
     const maxHealthAfterByGame = /* @__PURE__ */ new Map();
     const finalHealthAfterByGame = /* @__PURE__ */ new Map();
     const finalHealthMarkerByGame = /* @__PURE__ */ new Map();
-    for (const r of rounds) {
+    const YIELD_EVERY = 500;
+    for (let i = 0; i < rounds.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      const r = rounds[i];
       const gid = typeof r?.gameId === "string" ? r.gameId : "";
       if (!gid) continue;
       roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
@@ -43648,6 +43308,332 @@ ${describeError(err)}` : message;
   // src/geo/idRegions.ts
   var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
   var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
+  function hasGmXhr2() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson(url) {
+    if (hasGmXhr2()) {
+      const txt = await gmGetText(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords(c, bbox);
+  }
+  function bboxForGeometry(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var provincesIndexPromise = null;
+  var kabupatenIndexPromise = null;
+  async function loadProvincesIndex() {
+    if (!provincesIndexPromise) {
+      provincesIndexPromise = (async () => {
+        const geo = await fetchJson(ID_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return provincesIndexPromise;
+  }
+  async function loadKabupatenIndex() {
+    if (!kabupatenIndexPromise) {
+      kabupatenIndexPromise = (async () => {
+        const geo = await fetchJson(ID_KABUPATEN_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return kabupatenIndexPromise;
+  }
+  function memoKey(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var provincesMemo = /* @__PURE__ */ new Map();
+  var kabupatenMemo = /* @__PURE__ */ new Map();
+  async function resolveIdProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey(lat, lng);
+    const cached = provincesMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadProvincesIndex();
+    for (const it of items) {
+      if (!bboxContains(it.bbox, lon, lat)) continue;
+      if (pointInGeometry(lon, lat, it.geom)) {
+        provincesMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveIdKabupatenByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey(lat, lng);
+    const cached = kabupatenMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadKabupatenIndex();
+    for (const it of items) {
+      if (!bboxContains(it.bbox, lon, lat)) continue;
+      if (pointInGeometry(lon, lat, it.geom)) {
+        kabupatenMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/geo/deRegions.ts
+  var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
+  var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
+  function hasGmXhr3() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText2(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson2(url) {
+    if (hasGmXhr3()) {
+      const txt = await gmGetText2(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords2(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords2(c, bbox);
+  }
+  function bboxForGeometry2(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords2(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing2(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon2(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing2(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing2(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry2(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon2(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon2(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var statesIndexPromise = null;
+  var districtsIndexPromise = null;
+  async function loadStatesIndex() {
+    if (!statesIndexPromise) {
+      statesIndexPromise = (async () => {
+        const geo = await fetchJson2(DE_STATES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry2(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return statesIndexPromise;
+  }
+  async function loadDistrictsIndex() {
+    if (!districtsIndexPromise) {
+      districtsIndexPromise = (async () => {
+        const geo = await fetchJson2(DE_DISTRICTS_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.NAME_3 === "string" ? f.properties.NAME_3.trim() : "";
+          const bbox = bboxForGeometry2(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return districtsIndexPromise;
+  }
+  var stateMemo = /* @__PURE__ */ new Map();
+  var districtMemo = /* @__PURE__ */ new Map();
+  function memoKey2(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains2(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  async function resolveDeStateByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey2(lat, lng);
+    const cached = stateMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadStatesIndex();
+    for (const it of items) {
+      if (!bboxContains2(it.bbox, lon, lat)) continue;
+      if (pointInGeometry2(lon, lat, it.geom)) {
+        stateMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveDeDistrictByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey2(lat, lng);
+    const cached = districtMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadDistrictsIndex();
+    for (const it of items) {
+      if (!bboxContains2(it.bbox, lon, lat)) continue;
+      if (pointInGeometry2(lon, lat, it.geom)) {
+        districtMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/geo/naRegions.ts
+  var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
+  var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
   function hasGmXhr4() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
@@ -43731,16 +43717,16 @@ ${describeError(err)}` : message;
     }
     return false;
   }
-  var provincesIndexPromise = null;
-  var kabupatenIndexPromise = null;
-  async function loadProvincesIndex() {
-    if (!provincesIndexPromise) {
-      provincesIndexPromise = (async () => {
-        const geo = await fetchJson3(ID_PROVINCES_GEOJSON_URL);
+  var usIndexPromise = null;
+  var caIndexPromise = null;
+  async function loadUsIndex() {
+    if (!usIndexPromise) {
+      usIndexPromise = (async () => {
+        const geo = await fetchJson3(US_STATES_GEOJSON_URL);
         const feats = Array.isArray(geo?.features) ? geo.features : [];
         const out = [];
         for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
           const bbox = bboxForGeometry3(f?.geometry);
           if (!name || !bbox || !f?.geometry) continue;
           out.push({ name, bbox, geom: f.geometry });
@@ -43748,16 +43734,16 @@ ${describeError(err)}` : message;
         return out;
       })();
     }
-    return provincesIndexPromise;
+    return usIndexPromise;
   }
-  async function loadKabupatenIndex() {
-    if (!kabupatenIndexPromise) {
-      kabupatenIndexPromise = (async () => {
-        const geo = await fetchJson3(ID_KABUPATEN_GEOJSON_URL);
+  async function loadCaIndex() {
+    if (!caIndexPromise) {
+      caIndexPromise = (async () => {
+        const geo = await fetchJson3(CA_PROVINCES_GEOJSON_URL);
         const feats = Array.isArray(geo?.features) ? geo.features : [];
         const out = [];
         for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
           const bbox = bboxForGeometry3(f?.geometry);
           if (!name || !bbox || !f?.geometry) continue;
           out.push({ name, bbox, geom: f.geometry });
@@ -43765,7 +43751,7 @@ ${describeError(err)}` : message;
         return out;
       })();
     }
-    return kabupatenIndexPromise;
+    return caIndexPromise;
   }
   function memoKey3(lat, lng) {
     return `${lat.toFixed(5)},${lng.toFixed(5)}`;
@@ -43773,35 +43759,35 @@ ${describeError(err)}` : message;
   function bboxContains3(b, lon, lat) {
     return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
   }
-  var provincesMemo = /* @__PURE__ */ new Map();
-  var kabupatenMemo = /* @__PURE__ */ new Map();
-  async function resolveIdProvinceByLatLng(lat, lng) {
+  var usMemo = /* @__PURE__ */ new Map();
+  var caMemo = /* @__PURE__ */ new Map();
+  async function resolveUsStateByLatLng(lat, lng) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     const key = memoKey3(lat, lng);
-    const cached = provincesMemo.get(key);
+    const cached = usMemo.get(key);
     if (cached) return cached;
     const lon = lng;
-    const items = await loadProvincesIndex();
+    const items = await loadUsIndex();
     for (const it of items) {
       if (!bboxContains3(it.bbox, lon, lat)) continue;
       if (pointInGeometry3(lon, lat, it.geom)) {
-        provincesMemo.set(key, it.name);
+        usMemo.set(key, it.name);
         return it.name;
       }
     }
     return null;
   }
-  async function resolveIdKabupatenByLatLng(lat, lng) {
+  async function resolveCaProvinceByLatLng(lat, lng) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     const key = memoKey3(lat, lng);
-    const cached = kabupatenMemo.get(key);
+    const cached = caMemo.get(key);
     if (cached) return cached;
     const lon = lng;
-    const items = await loadKabupatenIndex();
+    const items = await loadCaIndex();
     for (const it of items) {
       if (!bboxContains3(it.bbox, lon, lat)) continue;
       if (pointInGeometry3(lon, lat, it.geom)) {
-        kabupatenMemo.set(key, it.name);
+        caMemo.set(key, it.name);
         return it.name;
       }
     }
@@ -43989,7 +43975,16 @@ ${describeError(err)}` : message;
   }
   async function maybeEnrichRoundRowsForDimension(dimId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    const supported = /* @__PURE__ */ new Set(["true_id_province", "true_id_kabupaten", "true_ph_province", "true_vn_province"]);
+    const supported = /* @__PURE__ */ new Set([
+      "true_state",
+      "true_district",
+      "true_us_state",
+      "true_ca_province",
+      "true_id_province",
+      "true_id_kabupaten",
+      "true_ph_province",
+      "true_vn_province"
+    ]);
     if (!supported.has(dimId)) return;
     const todo = [];
     for (const r of rows) {
@@ -43997,7 +43992,23 @@ ${describeError(err)}` : message;
       const lat = r?.trueLat;
       const lng = r?.trueLng;
       if (!isFiniteNum(lat) || !isFiniteNum(lng)) continue;
-      if (dimId === "true_id_province") {
+      if (dimId === "true_state") {
+        if (tc !== "de") continue;
+        const has = typeof r?.trueState === "string" && r.trueState.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_district") {
+        if (tc !== "de") continue;
+        const has = typeof r?.trueDistrict === "string" && r.trueDistrict.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_us_state") {
+        if (tc !== "us") continue;
+        const has = typeof r?.trueUsState === "string" && r.trueUsState.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_ca_province") {
+        if (tc !== "ca") continue;
+        const has = typeof r?.trueCaProvince === "string" && r.trueCaProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_id_province") {
         if (tc !== "id") continue;
         const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
         if (!has) todo.push(r);
@@ -44019,7 +44030,19 @@ ${describeError(err)}` : message;
     await runPool(todo, 6, async (r) => {
       const lat = r.trueLat;
       const lng = r.trueLng;
-      if (dimId === "true_id_province") {
+      if (dimId === "true_state") {
+        const s = await resolveDeStateByLatLng(lat, lng);
+        if (s) r.trueState = s;
+      } else if (dimId === "true_district") {
+        const d = await resolveDeDistrictByLatLng(lat, lng);
+        if (d) r.trueDistrict = d;
+      } else if (dimId === "true_us_state") {
+        const s = await resolveUsStateByLatLng(lat, lng);
+        if (s) r.trueUsState = s;
+      } else if (dimId === "true_ca_province") {
+        const p = await resolveCaProvinceByLatLng(lat, lng);
+        if (p) r.trueCaProvince = p;
+      } else if (dimId === "true_id_province") {
         const p = await resolveIdProvinceByLatLng(lat, lng);
         if (p) r.trueIdProvince = p;
       } else if (dimId === "true_id_kabupaten") {
@@ -47856,6 +47879,11 @@ ${describeError(err)}` : message;
     };
     const renderNow = async () => {
       body.innerHTML = "";
+      const loader = doc.createElement("div");
+      loader.className = "ga-loading";
+      loader.innerHTML = '<div class="ga-spinner"></div><div class="ga-loading-text">Loading\u2026</div>';
+      body.appendChild(loader);
+      await new Promise((r) => setTimeout(r, 0));
       boot.log("Merging semantic + validating...");
       const semantic = mergeSemanticWithDashboard(semanticBase, dashboard);
       validateDashboardAgainstSemantic(semantic, dashboard);

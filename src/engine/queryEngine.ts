@@ -5,8 +5,10 @@ import type { GlobalFiltersSpec } from "../config/dashboard.types";
 import { applyFilters } from "./filters";
 import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState } from "./globalFilters";
 import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
-import { resolveDeDistrictByLatLng, resolveDeStateByLatLng } from "../geo/deRegions";
-import { resolveCaProvinceByLatLng, resolveUsStateByLatLng } from "../geo/naRegions";
+
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise<void>((r) => setTimeout(r, 0));
+}
 
 export type GlobalFilters = {
   global?: {
@@ -439,7 +441,12 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
     }
 
-  roundsRawCache = await Promise.all(rows.map(async (r) => {
+  const outRows: RoundRow[] = new Array(rows.length);
+  const YIELD_EVERY = 250;
+  for (let i = 0; i < rows.length; i++) {
+    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    const r = rows[i] as any;
+
     const out: any = { ...(r as any) };
     const gameId = String(out.gameId ?? "");
     const d = detailsByGame.get(gameId);
@@ -590,52 +597,26 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       }
     }
 
-    // Germany-only region enrichment for Country Insight drilldowns (Bundesländer / Landkreise).
-    // This is computed locally from geojson boundaries and cached in-memory per session.
-    const tc = typeof out.trueCountry === "string" ? out.trueCountry.trim().toLowerCase() : "";
-    if (tc === "de") {
-      const lat = typeof out.trueLat === "number" ? out.trueLat : undefined;
-      const lng = typeof out.trueLng === "number" ? out.trueLng : undefined;
-      if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
-        if (typeof (out as any).trueState !== "string" || !(out as any).trueState) {
-          const s = await resolveDeStateByLatLng(lat, lng);
-          if (s) (out as any).trueState = s;
-        }
-        if (typeof (out as any).trueDistrict !== "string" || !(out as any).trueDistrict) {
-          const d2 = await resolveDeDistrictByLatLng(lat, lng);
-          if (d2) (out as any).trueDistrict = d2;
-        }
-      }
-    }
-    if (tc === "us" || tc === "ca") {
-      const lat = typeof out.trueLat === "number" ? out.trueLat : undefined;
-      const lng = typeof out.trueLng === "number" ? out.trueLng : undefined;
-      if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
-        if (tc === "us" && (typeof (out as any).trueUsState !== "string" || !(out as any).trueUsState)) {
-          const s = await resolveUsStateByLatLng(lat, lng);
-          if (s) (out as any).trueUsState = s;
-        }
-        if (tc === "ca" && (typeof (out as any).trueCaProvince !== "string" || !(out as any).trueCaProvince)) {
-          const p = await resolveCaProvinceByLatLng(lat, lng);
-          if (p) (out as any).trueCaProvince = p;
-        }
-      }
-    }
-    return out as RoundRow;
-  }));
+    outRows[i] = out as RoundRow;
+  }
+  roundsRawCache = outRows;
 
   // Coordinate repeat enrichment (true location).
   // Useful for coordinate-focused analytics (e.g., repeats / distribution maps) without scanning repeatedly.
   const trueKeyFor = (lat: number, lng: number): string => `${lat.toFixed(6)},${lng.toFixed(6)}`;
   const trueCounts = new Map<string, number>();
-  for (const r of roundsRawCache as any[]) {
+  for (let i = 0; i < roundsRawCache.length; i++) {
+    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    const r = roundsRawCache[i] as any;
     const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
     const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
     if (lat === null || lng === null) continue;
     const k = trueKeyFor(lat, lng);
     trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
   }
-  for (const r of roundsRawCache as any[]) {
+  for (let i = 0; i < roundsRawCache.length; i++) {
+    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    const r = roundsRawCache[i] as any;
     const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
     const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
     if (lat === null || lng === null) continue;
@@ -692,7 +673,10 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
   const maxHealthAfterByGame = new Map<string, number>();
   const finalHealthAfterByGame = new Map<string, number>();
   const finalHealthMarkerByGame = new Map<string, number>();
-  for (const r of rounds as any[]) {
+  const YIELD_EVERY = 500;
+  for (let i = 0; i < (rounds as any[]).length; i++) {
+    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    const r = (rounds as any[])[i];
     const gid = typeof r?.gameId === "string" ? r.gameId : "";
     if (!gid) continue;
     roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);

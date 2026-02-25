@@ -211,6 +211,14 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
 
   const renderNow = async (): Promise<void> => {
     body.innerHTML = "";
+
+    // Show a visible loader and yield once so the UI can paint (keeps the tab feeling responsive).
+    const loader = doc.createElement("div");
+    loader.className = "ga-loading";
+    loader.innerHTML = "<div class=\"ga-spinner\"></div><div class=\"ga-loading-text\">Loading…</div>";
+    body.appendChild(loader);
+    await new Promise<void>((r) => setTimeout(r, 0));
+
     boot.log("Merging semantic + validating...");
     const semantic = mergeSemanticWithDashboard(semanticBase, dashboard);
     validateDashboardAgainstSemantic(semantic, dashboard);
