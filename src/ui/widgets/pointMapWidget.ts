@@ -484,7 +484,7 @@ export async function renderPointMapWidget(
         const baseR = parseFloat(String((el as any).dataset?.baseR ?? ""));
         if (!Number.isFinite(baseR)) continue;
         // Keep dots screen-space stable while zooming by counter-scaling radius.
-        const r = clamp(baseR / s, 1.25, 10);
+        const r = clamp(baseR / s, 0.6, 10);
         el.setAttribute("r", r.toFixed(3));
       }
     };

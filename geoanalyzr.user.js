@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.5
+// @version      2.2.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -45490,7 +45490,7 @@ ${describeError(err)}` : message;
         for (const el2 of dots) {
           const baseR = parseFloat(String(el2.dataset?.baseR ?? ""));
           if (!Number.isFinite(baseR)) continue;
-          const r = clamp2(baseR / s, 1.25, 10);
+          const r = clamp2(baseR / s, 0.6, 10);
           el2.setAttribute("r", r.toFixed(3));
         }
       };
@@ -46874,8 +46874,7 @@ ${describeError(err)}` : message;
     let settings = loadSettings(doc);
     let root = doc.getElementById("geoanalyzr-semantic-root");
     let body;
-    boot.log("Resolving player name...");
-    const playerName = await getCurrentPlayerName();
+    let playerName;
     const applyTitleTemplate = (tpl, vars) => {
       const raw = String(tpl ?? "");
       const rendered = raw.replace(/\{\{\s*([A-Za-z0-9_\-]{3,64})\s*\}\}/g, (_, key) => {
@@ -46981,6 +46980,14 @@ ${describeError(err)}` : message;
     }
     applySettingsToRoot(root, settings);
     updateTitles();
+    boot.log("Resolving player name (async)...");
+    void (async () => {
+      try {
+        playerName = await getCurrentPlayerName();
+        updateTitles();
+      } catch {
+      }
+    })();
     try {
       await renderNow();
     } catch (error) {

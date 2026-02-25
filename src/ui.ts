@@ -177,8 +177,9 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
   let root = doc.getElementById("geoanalyzr-semantic-root") as HTMLDivElement | null;
   let body: HTMLDivElement;
 
-  boot.log("Resolving player name...");
-  const playerName = await getCurrentPlayerName();
+  // Resolve player name asynchronously so the first-open experience never shows a blank/unresponsive window.
+  // (On first run, name resolution may require network and can take a moment; subsequent opens are cached.)
+  let playerName: string | undefined;
 
   const applyTitleTemplate = (tpl: string, vars: Record<string, string | undefined>): string => {
     const raw = String(tpl ?? "");
@@ -303,6 +304,16 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
 
   applySettingsToRoot(root, settings);
   updateTitles();
+
+  boot.log("Resolving player name (async)...");
+  void (async () => {
+    try {
+      playerName = await getCurrentPlayerName();
+      updateTitles();
+    } catch {
+      // ignore
+    }
+  })();
 
   try {
     await renderNow();
