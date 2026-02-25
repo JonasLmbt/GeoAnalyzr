@@ -120,6 +120,22 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 40, "selectorRequired": true }
     },
+    "true_us_state": {
+      "label": "US state",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30 }
+    },
+    "true_ca_province": {
+      "label": "Canada province",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 30 }
+    },
     "score_vs_opponent": {
       "label": "Score vs opponents",
       "kind": "category",

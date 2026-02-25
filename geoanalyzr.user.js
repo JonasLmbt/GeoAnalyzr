@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.2
+// @version      2.2.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9549,6 +9549,14 @@ ${shapes}`.trim();
     const v = typeof r?.trueDistrict === "string" ? String(r.trueDistrict).trim() : typeof r?.true_district === "string" ? String(r.true_district).trim() : "";
     return v ? v : null;
   }
+  function trueUsStateKey(r) {
+    const v = typeof r?.trueUsState === "string" ? String(r.trueUsState).trim() : typeof r?.true_us_state === "string" ? String(r.true_us_state).trim() : "";
+    return v ? v : null;
+  }
+  function trueCaProvinceKey(r) {
+    const v = typeof r?.trueCaProvince === "string" ? String(r.trueCaProvince).trim() : typeof r?.true_ca_province === "string" ? String(r.true_ca_province).trim() : "";
+    return v ? v : null;
+  }
   function confusedCountriesKey(r) {
     const truthRaw = getTrueCountry(r);
     const guessRaw = getGuessCountrySelf(r);
@@ -9701,6 +9709,8 @@ ${shapes}`.trim();
       is_rated: isRatedKeyAny,
       true_state: trueStateKey,
       true_district: trueDistrictKey,
+      true_us_state: trueUsStateKey,
+      true_ca_province: trueCaProvinceKey,
       mode_family: (r) => {
         const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
         if (!v) return null;
@@ -10023,6 +10033,169 @@ ${shapes}`.trim();
       if (!bboxContains(it.bbox, lon, lat)) continue;
       if (pointInGeometry(lon, lat, it.geom)) {
         districtMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/geo/naRegions.ts
+  var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
+  var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
+  function hasGmXhr3() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText2(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson2(url) {
+    if (hasGmXhr3()) {
+      const txt = await gmGetText2(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords2(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords2(c, bbox);
+  }
+  function bboxForGeometry2(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords2(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing2(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon2(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing2(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing2(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry2(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon2(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon2(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var usIndexPromise = null;
+  var caIndexPromise = null;
+  async function loadUsIndex() {
+    if (!usIndexPromise) {
+      usIndexPromise = (async () => {
+        const geo = await fetchJson2(US_STATES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry2(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return usIndexPromise;
+  }
+  async function loadCaIndex() {
+    if (!caIndexPromise) {
+      caIndexPromise = (async () => {
+        const geo = await fetchJson2(CA_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.name === "string" ? f.properties.name.trim() : "";
+          const bbox = bboxForGeometry2(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return caIndexPromise;
+  }
+  function memoKey2(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains2(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var usMemo = /* @__PURE__ */ new Map();
+  var caMemo = /* @__PURE__ */ new Map();
+  async function resolveUsStateByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey2(lat, lng);
+    const cached = usMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadUsIndex();
+    for (const it of items) {
+      if (!bboxContains2(it.bbox, lon, lat)) continue;
+      if (pointInGeometry2(lon, lat, it.geom)) {
+        usMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveCaProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey2(lat, lng);
+    const cached = caMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadCaIndex();
+    for (const it of items) {
+      if (!bboxContains2(it.bbox, lon, lat)) continue;
+      if (pointInGeometry2(lon, lat, it.geom)) {
+        caMemo.set(key, it.name);
         return it.name;
       }
     }
@@ -10467,6 +10640,20 @@ ${shapes}`.trim();
           if (typeof out.trueDistrict !== "string" || !out.trueDistrict) {
             const d2 = await resolveDeDistrictByLatLng(lat, lng);
             if (d2) out.trueDistrict = d2;
+          }
+        }
+      }
+      if (tc === "us" || tc === "ca") {
+        const lat = typeof out.trueLat === "number" ? out.trueLat : void 0;
+        const lng = typeof out.trueLng === "number" ? out.trueLng : void 0;
+        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+          if (tc === "us" && (typeof out.trueUsState !== "string" || !out.trueUsState)) {
+            const s = await resolveUsStateByLatLng(lat, lng);
+            if (s) out.trueUsState = s;
+          }
+          if (tc === "ca" && (typeof out.trueCaProvince !== "string" || !out.trueCaProvince)) {
+            const p = await resolveCaProvinceByLatLng(lat, lng);
+            if (p) out.trueCaProvince = p;
           }
         }
       }
@@ -32154,6 +32341,22 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 40, selectorRequired: true }
       },
+      true_us_state: {
+        label: "US state",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      true_ca_province: {
+        label: "Canada province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
       score_vs_opponent: {
         label: "Score vs opponents",
         kind: "category",
@@ -35340,6 +35543,102 @@ ${shapes}`.trim();
                             spec: {
                               dimension: "true_state",
                               geojsonUrl: "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
+                              featureKey: "name",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "avg_score",
+                              mapHeight: 380,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_us_states",
+                      type: "multi_view",
+                      title: "United States - States",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["us", "US"] },
+                      placement: { x: 0, y: 18, w: 12, h: 6 },
+                      spec: {
+                        activeView: "map",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_us_state",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "rounds_count",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "region_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_us_state",
+                              geojsonUrl: "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson",
+                              featureKey: "name",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "avg_score",
+                              mapHeight: 380,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_ca_provinces",
+                      type: "multi_view",
+                      title: "Canada - Provinces & Territories",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["ca", "CA"] },
+                      placement: { x: 0, y: 18, w: 12, h: 6 },
+                      spec: {
+                        activeView: "map",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_ca_province",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "rounds_count",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "region_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_ca_province",
+                              geojsonUrl: "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson",
                               featureKey: "name",
                               measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
                               activeMeasure: "avg_score",
@@ -43569,10 +43868,10 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
-  function hasGmXhr3() {
+  function hasGmXhr4() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText2(url, accept) {
+  function gmGetText3(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -43585,9 +43884,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson2(url) {
-    if (hasGmXhr3()) {
-      const txt = await gmGetText2(url, "application/json");
+  async function fetchJson3(url) {
+    if (hasGmXhr4()) {
+      const txt = await gmGetText3(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -43602,7 +43901,7 @@ ${describeError(err)}` : message;
   async function loadData() {
     if (!dataPromise) {
       dataPromise = (async () => {
-        const [geojson, countries] = await Promise.all([fetchJson2(WORLD_GEOJSON_URL), fetchJson2(ISO_MAP_URL)]);
+        const [geojson, countries] = await Promise.all([fetchJson3(WORLD_GEOJSON_URL), fetchJson3(ISO_MAP_URL)]);
         const iso3ToIso2 = /* @__PURE__ */ new Map();
         if (Array.isArray(countries)) {
           for (const c of countries) {
@@ -44116,10 +44415,10 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/regionMetricMapWidget.ts
-  function hasGmXhr4() {
+  function hasGmXhr5() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText3(url, accept) {
+  function gmGetText4(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -44132,9 +44431,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson3(url) {
-    if (hasGmXhr4()) {
-      const txt = await gmGetText3(url, "application/json");
+  async function fetchJson4(url) {
+    if (hasGmXhr5()) {
+      const txt = await gmGetText4(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -44145,7 +44444,7 @@ ${describeError(err)}` : message;
   function loadGeoJson(url) {
     const existing = geojsonCache.get(url);
     if (existing) return existing;
-    const p = fetchJson3(url);
+    const p = fetchJson4(url);
     geojsonCache.set(url, p);
     return p;
   }

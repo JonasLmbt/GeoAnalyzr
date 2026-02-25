@@ -155,6 +155,16 @@ export function trueDistrictKey(r: RoundRow): GroupKey | null {
   return v ? v : null;
 }
 
+export function trueUsStateKey(r: RoundRow): GroupKey | null {
+  const v = typeof (r as any)?.trueUsState === "string" ? String((r as any).trueUsState).trim() : typeof (r as any)?.true_us_state === "string" ? String((r as any).true_us_state).trim() : "";
+  return v ? v : null;
+}
+
+export function trueCaProvinceKey(r: RoundRow): GroupKey | null {
+  const v = typeof (r as any)?.trueCaProvince === "string" ? String((r as any).trueCaProvince).trim() : typeof (r as any)?.true_ca_province === "string" ? String((r as any).true_ca_province).trim() : "";
+  return v ? v : null;
+}
+
 export function confusedCountriesKey(r: RoundRow): GroupKey | null {
   const truthRaw = getTrueCountry(r);
   const guessRaw = getGuessCountrySelf(r);
@@ -339,6 +349,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     is_rated: isRatedKeyAny,
     true_state: trueStateKey,
     true_district: trueDistrictKey,
+    true_us_state: trueUsStateKey,
+    true_ca_province: trueCaProvinceKey,
     mode_family: (r: any) => {
       const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
       if (!v) return null;

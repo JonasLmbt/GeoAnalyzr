@@ -6,6 +6,7 @@ import { applyFilters } from "./filters";
 import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState } from "./globalFilters";
 import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
 import { resolveDeDistrictByLatLng, resolveDeStateByLatLng } from "../geo/deRegions";
+import { resolveCaProvinceByLatLng, resolveUsStateByLatLng } from "../geo/naRegions";
 
 export type GlobalFilters = {
   global?: {
@@ -603,6 +604,20 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
         if (typeof (out as any).trueDistrict !== "string" || !(out as any).trueDistrict) {
           const d2 = await resolveDeDistrictByLatLng(lat, lng);
           if (d2) (out as any).trueDistrict = d2;
+        }
+      }
+    }
+    if (tc === "us" || tc === "ca") {
+      const lat = typeof out.trueLat === "number" ? out.trueLat : undefined;
+      const lng = typeof out.trueLng === "number" ? out.trueLng : undefined;
+      if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
+        if (tc === "us" && (typeof (out as any).trueUsState !== "string" || !(out as any).trueUsState)) {
+          const s = await resolveUsStateByLatLng(lat, lng);
+          if (s) (out as any).trueUsState = s;
+        }
+        if (tc === "ca" && (typeof (out as any).trueCaProvince !== "string" || !(out as any).trueCaProvince)) {
+          const p = await resolveCaProvinceByLatLng(lat, lng);
+          if (p) (out as any).trueCaProvince = p;
         }
       }
     }
