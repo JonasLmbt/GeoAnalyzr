@@ -6,6 +6,7 @@ import { applyFilters } from "../../engine/filters";
 import { groupByKey } from "../../engine/aggregate";
 import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
+import { maybeEnrichRoundRowsForDimension } from "../../engine/regionEnrichment";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
 function hasGmXhr(): boolean {
@@ -237,6 +238,10 @@ export async function renderRegionMetricMapWidget(
 
   const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
   if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
+
+  if (grain === "round") {
+    await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll as any[]);
+  }
 
   const renderHeaderRight = (): void => {
     headerRight.innerHTML = "";
@@ -509,4 +514,3 @@ export async function renderRegionMetricMapWidget(
   wrap.appendChild(box);
   return wrap;
 }
-

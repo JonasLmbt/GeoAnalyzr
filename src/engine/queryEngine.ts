@@ -7,7 +7,6 @@ import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState }
 import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
 import { resolveDeDistrictByLatLng, resolveDeStateByLatLng } from "../geo/deRegions";
 import { resolveCaProvinceByLatLng, resolveUsStateByLatLng } from "../geo/naRegions";
-import { resolveIdKabupatenByLatLng, resolveIdProvinceByLatLng } from "../geo/idRegions";
 
 export type GlobalFilters = {
   global?: {
@@ -622,21 +621,6 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
         }
       }
     }
-    if (tc === "id") {
-      const lat = typeof out.trueLat === "number" ? out.trueLat : undefined;
-      const lng = typeof out.trueLng === "number" ? out.trueLng : undefined;
-      if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
-        if (typeof (out as any).trueIdProvince !== "string" || !(out as any).trueIdProvince) {
-          const p = await resolveIdProvinceByLatLng(lat, lng);
-          if (p) (out as any).trueIdProvince = p;
-        }
-        if (typeof (out as any).trueIdKabupaten !== "string" || !(out as any).trueIdKabupaten) {
-          const k = await resolveIdKabupatenByLatLng(lat, lng);
-          if (k) (out as any).trueIdKabupaten = k;
-        }
-      }
-    }
-
     return out as RoundRow;
   }));
 

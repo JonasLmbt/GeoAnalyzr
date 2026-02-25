@@ -323,7 +323,19 @@ export async function initAnalysisWindow(opts?: { targetWindow?: Window | null }
     pre.style.margin = "12px";
     pre.style.whiteSpace = "pre-wrap";
     pre.style.color = "#ff9aa2";
-    pre.textContent = `Failed to render semantic dashboard:\n${error instanceof Error ? error.message : String(error)}`;
+    const describe = (e: any): string => {
+      if (e instanceof Error) return `${e.name}: ${e.message}\n${e.stack ?? ""}`.trim();
+      const msg = typeof e?.message === "string" ? e.message : "";
+      if (msg) return msg;
+      try {
+        const json = JSON.stringify(e, (_k, v) => (typeof v === "bigint" ? String(v) : v), 2);
+        if (typeof json === "string" && json !== "{}") return json;
+      } catch {
+        // ignore
+      }
+      return String(e);
+    };
+    pre.textContent = `Failed to render semantic dashboard:\n${describe(error)}`;
     body.appendChild(pre);
     boot.error("Failed to render semantic dashboard", error);
     throw error;

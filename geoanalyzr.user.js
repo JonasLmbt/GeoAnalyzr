@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.9
+// @version      2.2.10
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10230,169 +10230,6 @@ ${shapes}`.trim();
     return null;
   }
 
-  // src/geo/idRegions.ts
-  var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
-  var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
-  function hasGmXhr4() {
-    return typeof globalThis.GM_xmlhttpRequest === "function";
-  }
-  function gmGetText3(url, accept) {
-    return new Promise((resolve, reject) => {
-      const gm = globalThis.GM_xmlhttpRequest;
-      gm({
-        method: "GET",
-        url,
-        headers: { Accept: accept ?? "application/json" },
-        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
-        onerror: (err) => reject(err),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function fetchJson3(url) {
-    if (hasGmXhr4()) {
-      const txt = await gmGetText3(url, "application/json");
-      return JSON.parse(txt);
-    }
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    return res.json();
-  }
-  function bboxForCoords3(coords, bbox) {
-    if (!Array.isArray(coords)) return;
-    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lon = Number(coords[0]);
-      const lat = Number(coords[1]);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      bbox.minLon = Math.min(bbox.minLon, lon);
-      bbox.maxLon = Math.max(bbox.maxLon, lon);
-      bbox.minLat = Math.min(bbox.minLat, lat);
-      bbox.maxLat = Math.max(bbox.maxLat, lat);
-      return;
-    }
-    for (const c of coords) bboxForCoords3(c, bbox);
-  }
-  function bboxForGeometry3(geom) {
-    const coords = geom?.coordinates;
-    if (!coords) return null;
-    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
-    bboxForCoords3(coords, bbox);
-    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
-    return bbox;
-  }
-  function pointInRing3(lon, lat, ring) {
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const xi = ring[i]?.[0];
-      const yi = ring[i]?.[1];
-      const xj = ring[j]?.[0];
-      const yj = ring[j]?.[1];
-      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
-      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }
-  function pointInPolygon3(lon, lat, poly) {
-    if (!Array.isArray(poly) || poly.length === 0) return false;
-    const outer = poly[0];
-    if (!Array.isArray(outer) || outer.length < 3) return false;
-    if (!pointInRing3(lon, lat, outer)) return false;
-    for (let i = 1; i < poly.length; i++) {
-      const hole = poly[i];
-      if (Array.isArray(hole) && hole.length >= 3 && pointInRing3(lon, lat, hole)) return false;
-    }
-    return true;
-  }
-  function pointInGeometry3(lon, lat, geom) {
-    const type = geom?.type;
-    const coords = geom?.coordinates;
-    if (!type || !coords) return false;
-    if (type === "Polygon") return pointInPolygon3(lon, lat, coords);
-    if (type === "MultiPolygon") {
-      for (const poly of coords) {
-        if (pointInPolygon3(lon, lat, poly)) return true;
-      }
-    }
-    return false;
-  }
-  var provincesIndexPromise = null;
-  var kabupatenIndexPromise = null;
-  async function loadProvincesIndex() {
-    if (!provincesIndexPromise) {
-      provincesIndexPromise = (async () => {
-        const geo = await fetchJson3(ID_PROVINCES_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
-          const bbox = bboxForGeometry3(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return provincesIndexPromise;
-  }
-  async function loadKabupatenIndex() {
-    if (!kabupatenIndexPromise) {
-      kabupatenIndexPromise = (async () => {
-        const geo = await fetchJson3(ID_KABUPATEN_GEOJSON_URL);
-        const feats = Array.isArray(geo?.features) ? geo.features : [];
-        const out = [];
-        for (const f of feats) {
-          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
-          const bbox = bboxForGeometry3(f?.geometry);
-          if (!name || !bbox || !f?.geometry) continue;
-          out.push({ name, bbox, geom: f.geometry });
-        }
-        return out;
-      })();
-    }
-    return kabupatenIndexPromise;
-  }
-  function memoKey3(lat, lng) {
-    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
-  }
-  function bboxContains3(b, lon, lat) {
-    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
-  }
-  var provincesMemo = /* @__PURE__ */ new Map();
-  var kabupatenMemo = /* @__PURE__ */ new Map();
-  async function resolveIdProvinceByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey3(lat, lng);
-    const cached = provincesMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadProvincesIndex();
-    for (const it of items) {
-      if (!bboxContains3(it.bbox, lon, lat)) continue;
-      if (pointInGeometry3(lon, lat, it.geom)) {
-        provincesMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-  async function resolveIdKabupatenByLatLng(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    const key = memoKey3(lat, lng);
-    const cached = kabupatenMemo.get(key);
-    if (cached) return cached;
-    const lon = lng;
-    const items = await loadKabupatenIndex();
-    for (const it of items) {
-      if (!bboxContains3(it.bbox, lon, lat)) continue;
-      if (pointInGeometry3(lon, lat, it.geom)) {
-        kabupatenMemo.set(key, it.name);
-        return it.name;
-      }
-    }
-    return null;
-  }
-
   // src/engine/queryEngine.ts
   function normalizeMovementType(raw) {
     if (typeof raw !== "string") return "unknown";
@@ -10845,20 +10682,6 @@ ${shapes}`.trim();
           if (tc === "ca" && (typeof out.trueCaProvince !== "string" || !out.trueCaProvince)) {
             const p = await resolveCaProvinceByLatLng(lat, lng);
             if (p) out.trueCaProvince = p;
-          }
-        }
-      }
-      if (tc === "id") {
-        const lat = typeof out.trueLat === "number" ? out.trueLat : void 0;
-        const lng = typeof out.trueLng === "number" ? out.trueLng : void 0;
-        if (typeof lat === "number" && Number.isFinite(lat) && typeof lng === "number" && Number.isFinite(lng)) {
-          if (typeof out.trueIdProvince !== "string" || !out.trueIdProvince) {
-            const p = await resolveIdProvinceByLatLng(lat, lng);
-            if (p) out.trueIdProvince = p;
-          }
-          if (typeof out.trueIdKabupaten !== "string" || !out.trueIdKabupaten) {
-            const k = await resolveIdKabupatenByLatLng(lat, lng);
-            if (k) out.trueIdKabupaten = k;
           }
         }
       }
@@ -43583,6 +43406,217 @@ ${describeError(err)}` : message;
     return wrap;
   }
 
+  // src/geo/idRegions.ts
+  var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
+  var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
+  function hasGmXhr4() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText3(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson3(url) {
+    if (hasGmXhr4()) {
+      const txt = await gmGetText3(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords3(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords3(c, bbox);
+  }
+  function bboxForGeometry3(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords3(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing3(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon3(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing3(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing3(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry3(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon3(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon3(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var provincesIndexPromise = null;
+  var kabupatenIndexPromise = null;
+  async function loadProvincesIndex() {
+    if (!provincesIndexPromise) {
+      provincesIndexPromise = (async () => {
+        const geo = await fetchJson3(ID_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry3(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return provincesIndexPromise;
+  }
+  async function loadKabupatenIndex() {
+    if (!kabupatenIndexPromise) {
+      kabupatenIndexPromise = (async () => {
+        const geo = await fetchJson3(ID_KABUPATEN_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry3(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return kabupatenIndexPromise;
+  }
+  function memoKey3(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains3(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var provincesMemo = /* @__PURE__ */ new Map();
+  var kabupatenMemo = /* @__PURE__ */ new Map();
+  async function resolveIdProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey3(lat, lng);
+    const cached = provincesMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadProvincesIndex();
+    for (const it of items) {
+      if (!bboxContains3(it.bbox, lon, lat)) continue;
+      if (pointInGeometry3(lon, lat, it.geom)) {
+        provincesMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveIdKabupatenByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey3(lat, lng);
+    const cached = kabupatenMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadKabupatenIndex();
+    for (const it of items) {
+      if (!bboxContains3(it.bbox, lon, lat)) continue;
+      if (pointInGeometry3(lon, lat, it.geom)) {
+        kabupatenMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
+  // src/engine/regionEnrichment.ts
+  function isFiniteNum(v) {
+    return typeof v === "number" && Number.isFinite(v);
+  }
+  async function runPool(items, concurrency, fn) {
+    const n = Math.max(1, Math.min(32, Math.floor(concurrency)));
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
+      for (; ; ) {
+        const i = idx++;
+        if (i >= items.length) return;
+        await fn(items[i]);
+      }
+    });
+    await Promise.all(workers);
+  }
+  async function maybeEnrichRoundRowsForDimension(dimId, rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    if (dimId !== "true_id_province" && dimId !== "true_id_kabupaten") return;
+    const todo = [];
+    for (const r of rows) {
+      const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
+      if (tc !== "id") continue;
+      const lat = r?.trueLat;
+      const lng = r?.trueLng;
+      if (!isFiniteNum(lat) || !isFiniteNum(lng)) continue;
+      if (dimId === "true_id_province") {
+        const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else {
+        const has = typeof r?.trueIdKabupaten === "string" && r.trueIdKabupaten.trim().length > 0;
+        if (!has) todo.push(r);
+      }
+    }
+    if (todo.length === 0) return;
+    await runPool(todo, 6, async (r) => {
+      const lat = r.trueLat;
+      const lng = r.trueLng;
+      if (dimId === "true_id_province") {
+        const p = await resolveIdProvinceByLatLng(lat, lng);
+        if (p) r.trueIdProvince = p;
+      } else {
+        const k = await resolveIdKabupatenByLatLng(lat, lng);
+        if (k) r.trueIdKabupaten = k;
+      }
+    });
+  }
+
   // src/ui/widgets/breakdownWidget.ts
   function getShareKindFromFormulaId2(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
@@ -43772,6 +43806,9 @@ ${describeError(err)}` : message;
     if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+    if (grain === "round") {
+      await maybeEnrichRoundRowsForDimension(dimId, rowsAll);
+    }
     const measureIds = getMeasureIds2(spec);
     if (measureIds.length === 0) throw new Error(`Breakdown ${widget.widgetId} has no measure or measures[]`);
     const measureFnById = /* @__PURE__ */ new Map();
@@ -45171,6 +45208,9 @@ ${describeError(err)}` : message;
     const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
+    if (grain === "round") {
+      await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll);
+    }
     const renderHeaderRight = () => {
       headerRight.innerHTML = "";
       const wrapRight = doc.createElement("div");
@@ -47439,8 +47479,20 @@ ${describeError(err)}` : message;
       pre.style.margin = "12px";
       pre.style.whiteSpace = "pre-wrap";
       pre.style.color = "#ff9aa2";
+      const describe = (e) => {
+        if (e instanceof Error) return `${e.name}: ${e.message}
+${e.stack ?? ""}`.trim();
+        const msg = typeof e?.message === "string" ? e.message : "";
+        if (msg) return msg;
+        try {
+          const json = JSON.stringify(e, (_k, v) => typeof v === "bigint" ? String(v) : v, 2);
+          if (typeof json === "string" && json !== "{}") return json;
+        } catch {
+        }
+        return String(e);
+      };
       pre.textContent = `Failed to render semantic dashboard:
-${error instanceof Error ? error.message : String(error)}`;
+${describe(error)}`;
       body.appendChild(pre);
       boot.error("Failed to render semantic dashboard", error);
       throw error;

@@ -6,6 +6,7 @@ import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
+import { maybeEnrichRoundRowsForDimension } from "../../engine/regionEnrichment";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
 type Row = {
@@ -239,6 +240,10 @@ export async function renderBreakdownWidget(
 
   const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
   if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+
+  if (grain === "round") {
+    await maybeEnrichRoundRowsForDimension(dimId, rowsAll as any[]);
+  }
 
   const measureIds = getMeasureIds(spec);
   if (measureIds.length === 0) throw new Error(`Breakdown ${widget.widgetId} has no measure or measures[]`);
