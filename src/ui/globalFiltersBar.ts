@@ -198,7 +198,7 @@ export async function renderGlobalFiltersBar(args: {
 
     const sel = doc.createElement("select");
     sel.className = "ga-filter-select";
-    sel.disabled = true;
+    sel.disabled = false;
 
     // Render a placeholder immediately so the UI stays interactive even if option computation is expensive.
     if (!isRequired) sel.appendChild(new Option("All", "all"));
@@ -209,7 +209,13 @@ export async function renderGlobalFiltersBar(args: {
     const token = `${Date.now()}_${Math.random()}`;
     (sel as any).__gaOptionsToken = token;
 
+    let loaded = false;
+    let loading = false;
+
     const loadOptions = async () => {
+      if (loaded || loading) return;
+      loading = true;
+
       // Options can depend on other active filters; we compute distincts from DB.
       const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
       if ((sel as any).__gaOptionsToken !== token) return;
@@ -228,14 +234,23 @@ export async function renderGlobalFiltersBar(args: {
         updatePending(id, nextValue);
       }
 
-      sel.disabled = false;
-      sel.addEventListener("change", () => {
-        updatePending(id, sel.value);
-      });
+      if (!(sel as any).__gaChangeHandlerInstalled) {
+        (sel as any).__gaChangeHandlerInstalled = true;
+        sel.addEventListener("change", () => {
+          updatePending(id, sel.value);
+        });
+      }
+
+      loaded = true;
+      loading = false;
     };
 
-    // Defer to the next tick so the browser can paint + handle clicks (Close/Settings) before heavy work runs.
-    setTimeout(() => void loadOptions(), 0);
+    // Load options only when the user interacts with the control, to avoid blocking the UI on first render.
+    const trigger = () => {
+      void loadOptions();
+    };
+    sel.addEventListener("pointerdown", trigger, { once: true });
+    sel.addEventListener("focus", trigger, { once: true });
 
     wrap.appendChild(sel);
     left.appendChild(wrap);

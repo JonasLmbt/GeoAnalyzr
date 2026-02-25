@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.14
+// @version      2.2.15
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -47218,14 +47218,18 @@ ${describeError(err)}` : message;
       wrap.appendChild(renderControlLabel(doc, control.label));
       const sel = doc.createElement("select");
       sel.className = "ga-filter-select";
-      sel.disabled = true;
+      sel.disabled = false;
       if (!isRequired) sel.appendChild(new Option("All", "all"));
       if (current && current !== "all") sel.appendChild(new Option(current, current));
       sel.appendChild(new Option("Loading\u2026", "__loading__"));
       sel.value = current && current !== "all" ? current : "all";
       const token = `${Date.now()}_${Math.random()}`;
       sel.__gaOptionsToken = token;
+      let loaded = false;
+      let loading = false;
       const loadOptions = async () => {
+        if (loaded || loading) return;
+        loading = true;
         const options = await getDistinctOptions({ control, spec, state: applyMode ? pending : state });
         if (sel.__gaOptionsToken !== token) return;
         sel.innerHTML = "";
@@ -47240,12 +47244,20 @@ ${describeError(err)}` : message;
         if (isRequired && nextValue && nextValue !== current) {
           updatePending(id, nextValue);
         }
-        sel.disabled = false;
-        sel.addEventListener("change", () => {
-          updatePending(id, sel.value);
-        });
+        if (!sel.__gaChangeHandlerInstalled) {
+          sel.__gaChangeHandlerInstalled = true;
+          sel.addEventListener("change", () => {
+            updatePending(id, sel.value);
+          });
+        }
+        loaded = true;
+        loading = false;
       };
-      setTimeout(() => void loadOptions(), 0);
+      const trigger = () => {
+        void loadOptions();
+      };
+      sel.addEventListener("pointerdown", trigger, { once: true });
+      sel.addEventListener("focus", trigger, { once: true });
       wrap.appendChild(sel);
       left.appendChild(wrap);
     };
