@@ -4,7 +4,8 @@ import type { RoundRow, GameFactRow } from "../db";
 import type { GlobalFiltersSpec } from "../config/dashboard.types";
 import { applyFilters } from "./filters";
 import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState } from "./globalFilters";
-import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
+import { resolveCountryCodeByLatLngLocalOnlySync } from "../countries";
+import { setLoadingProgress } from "../progress";
 
 async function yieldToEventLoop(): Promise<void> {
   await new Promise<void>((r) => setTimeout(r, 0));
@@ -424,6 +425,7 @@ export async function getGamePlayedAtBounds(): Promise<{ minTs: number | null; m
 
 async function getRoundsRaw(): Promise<RoundRow[]> {
   if (roundsRawCache) return roundsRawCache;
+  setLoadingProgress({ phase: "Reading database (rounds/games/details)..." });
   const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
 
   const playedAtByGame = new Map<string, number>();
@@ -443,8 +445,10 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
 
   const outRows: RoundRow[] = new Array(rows.length);
   const YIELD_EVERY = 250;
+  setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
   for (let i = 0; i < rows.length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
     const r = rows[i] as any;
 
     const out: any = { ...(r as any) };
@@ -565,7 +569,7 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       const glat = typeof out.player_self_guessLat === "number" ? out.player_self_guessLat : typeof out.p1_guessLat === "number" ? out.p1_guessLat : undefined;
       const glng = typeof out.player_self_guessLng === "number" ? out.player_self_guessLng : typeof out.p1_guessLng === "number" ? out.p1_guessLng : undefined;
       if (typeof glat === "number" && Number.isFinite(glat) && typeof glng === "number" && Number.isFinite(glng)) {
-        const iso = await resolveCountryCodeByLatLngLocalOnly(glat, glng);
+        const iso = resolveCountryCodeByLatLngLocalOnlySync(glat, glng);
         if (iso) out.player_self_guessCountry = iso;
       }
     }
@@ -599,14 +603,17 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
 
     outRows[i] = out as RoundRow;
   }
+  setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
   roundsRawCache = outRows;
 
   // Coordinate repeat enrichment (true location).
   // Useful for coordinate-focused analytics (e.g., repeats / distribution maps) without scanning repeatedly.
   const trueKeyFor = (lat: number, lng: number): string => `${lat.toFixed(6)},${lng.toFixed(6)}`;
   const trueCounts = new Map<string, number>();
+  setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: roundsRawCache.length });
   for (let i = 0; i < roundsRawCache.length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: roundsRawCache.length });
     const r = roundsRawCache[i] as any;
     const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
     const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
@@ -614,8 +621,11 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     const k = trueKeyFor(lat, lng);
     trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
   }
+  setLoadingProgress({ phase: "Indexing repeat locations...", current: roundsRawCache.length, total: roundsRawCache.length });
+  setLoadingProgress({ phase: "Applying repeat flags...", current: 0, total: roundsRawCache.length });
   for (let i = 0; i < roundsRawCache.length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Applying repeat flags...", current: i, total: roundsRawCache.length });
     const r = roundsRawCache[i] as any;
     const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
     const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
@@ -624,6 +634,7 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     (r as any).trueLocationKey = k;
     (r as any).trueLocationRepeat = (trueCounts.get(k) ?? 0) > 1;
   }
+  setLoadingProgress({ phase: "Applying repeat flags...", current: roundsRawCache.length, total: roundsRawCache.length });
 
   return roundsRawCache;
 }

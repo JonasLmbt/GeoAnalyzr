@@ -256,29 +256,80 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
     }
     .ga-loading-screen-inner {
       display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 16px 16px 14px 16px;
       border-radius: 16px;
       border: 1px solid color-mix(in srgb, var(--ga-border) 65%, transparent);
-      background: color-mix(in srgb, var(--ga-card) 70%, rgba(0,0,0,0.35));
+      background: color-mix(in srgb, var(--ga-card) 82%, rgba(0,0,0,0.55));
       color: var(--ga-text);
       box-shadow: 0 10px 35px rgba(0,0,0,0.35);
+      width: min(560px, calc(100vw - 28px));
+    }
+    .ga-loading-top {
+      display:flex;
+      align-items:center;
+      gap: 12px;
     }
     .ga-loading-screen-text {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 4px;
       min-width: 220px;
     }
     .ga-loading-screen-title {
       font-weight: 800;
-      font-size: 13px;
-      letter-spacing: 0.2px;
+      font-size: 15px;
+      letter-spacing: 0.25px;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.45);
     }
     .ga-loading-screen-subtitle {
+      font-size: 13px;
+      color: color-mix(in srgb, var(--ga-text) 82%, var(--ga-text-muted));
+      text-shadow: 0 1px 0 rgba(0,0,0,0.35);
+    }
+    .ga-loading-progress {
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ga-loading-progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-control-bg) 85%, rgba(0,0,0,0.35));
+      border: 1px solid color-mix(in srgb, var(--ga-border) 72%, transparent);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .ga-loading-progress-bar {
+      height: 100%;
+      width: 25%;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--ga-accent2) 85%, #fff), color-mix(in srgb, var(--ga-warn) 70%, var(--ga-accent2)));
+      border-radius: 999px;
+      transition: width 120ms linear, opacity 120ms linear;
+    }
+    .ga-loading-progress-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 12px;
-      color: var(--ga-text-muted);
+      line-height: 1.35;
+      color: color-mix(in srgb, var(--ga-text) 80%, var(--ga-text-muted));
+      white-space: pre-wrap;
+    }
+    .ga-loading-console {
+      margin: 0;
+      padding: 10px 12px;
+      max-height: 160px;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+      background: color-mix(in srgb, var(--ga-control-bg) 78%, rgba(0,0,0,0.35));
+      color: color-mix(in srgb, var(--ga-text) 86%, #fff);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11.5px;
+      line-height: 1.35;
+      white-space: pre;
     }
     @keyframes ga-spin {
       from { transform: rotate(0deg); }

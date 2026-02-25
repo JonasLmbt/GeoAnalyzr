@@ -6,6 +6,8 @@ import { renderGlobalFiltersBar } from "./globalFiltersBar";
 import { getSelectOptionsForControl } from "../engine/selectOptions";
 import { getGamePlayedAtBounds, getRounds, getGames, getSessions, hasAnyTeamDuels } from "../engine/queryEngine";
 import type { Grain } from "../config/semantic.types";
+import { analysisConsole, formatConsoleEntry } from "./consoleStore";
+import { getLoadingProgress, setLoadingProgress } from "../progress";
 
 function explodeOpponentsFromGames(games: any[]): any[] {
   const out: any[] = [];
@@ -44,21 +46,92 @@ export async function renderAnalysisApp(opts: {
   };
 
   let loadingEl: HTMLDivElement | null = null;
-  const showLoading = async (subtitle: string) => {
+  let loadingConsolePre: HTMLPreElement | null = null;
+  let loadingProgressText: HTMLDivElement | null = null;
+  let loadingProgressBar: HTMLDivElement | null = null;
+  let loadingUnsub: (() => void) | null = null;
+  let loadingPoll: number | null = null;
+  let loadingStepTotal = 0;
+  let loadingStepCurrent = 0;
+
+  const renderAsciiBar = (current: number, total: number): string => {
+    const w = 22;
+    const t = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
+    const filled = Math.round(t * w);
+    return `[${"#".repeat(filled)}${"-".repeat(Math.max(0, w - filled))}] ${current}/${total}`;
+  };
+
+  const updateLoadingConsole = (): void => {
+    if (!loadingConsolePre) return;
+    const slice = analysisConsole.entries.slice(Math.max(0, analysisConsole.entries.length - 12));
+    loadingConsolePre.textContent = slice.map(formatConsoleEntry).join("\n");
+    loadingConsolePre.scrollTop = loadingConsolePre.scrollHeight;
+  };
+
+  const updateLoadingProgress = (): void => {
+    const p = getLoadingProgress();
+    const phase = p?.phase ?? "";
+    const cur = typeof p?.current === "number" ? p.current : undefined;
+    const tot = typeof p?.total === "number" ? p.total : undefined;
+
+    const pct = tot && cur !== undefined ? Math.max(0, Math.min(1, cur / tot)) : undefined;
+    if (loadingProgressBar) {
+      loadingProgressBar.style.width = pct !== undefined ? `${(pct * 100).toFixed(1)}%` : "25%";
+      loadingProgressBar.style.opacity = pct !== undefined ? "1" : "0.55";
+    }
+    if (loadingProgressText) {
+      const stepTxt = loadingStepTotal > 0 ? `Step ${Math.max(1, loadingStepCurrent)}/${loadingStepTotal}` : "";
+      const barTxt = cur !== undefined && tot !== undefined ? renderAsciiBar(cur, tot) : "";
+      const main = [stepTxt, phase].filter(Boolean).join(" • ");
+      loadingProgressText.textContent = [main, barTxt].filter(Boolean).join("\n");
+    }
+  };
+
+  const showLoading = async (subtitle: string, opts?: { stepCurrent?: number; stepTotal?: number }) => {
     if (!doc.body) return;
     if (!loadingEl) {
       loadingEl = doc.createElement("div");
       loadingEl.className = "ga-loading-screen";
       loadingEl.innerHTML =
-        "<div class=\"ga-loading-screen-inner\"><div class=\"ga-spinner\"></div><div class=\"ga-loading-screen-text\"><div class=\"ga-loading-screen-title\">GeoAnalyzr</div><div class=\"ga-loading-screen-subtitle\"></div></div></div>";
+        "<div class=\"ga-loading-screen-inner\">" +
+        "  <div class=\"ga-loading-top\">" +
+        "    <div class=\"ga-spinner\"></div>" +
+        "    <div class=\"ga-loading-screen-text\">" +
+        "      <div class=\"ga-loading-screen-title\">GeoAnalyzr</div>" +
+        "      <div class=\"ga-loading-screen-subtitle\"></div>" +
+        "    </div>" +
+        "  </div>" +
+        "  <div class=\"ga-loading-progress\">" +
+        "    <div class=\"ga-loading-progress-track\"><div class=\"ga-loading-progress-bar\"></div></div>" +
+        "    <div class=\"ga-loading-progress-text\"></div>" +
+        "  </div>" +
+        "  <pre class=\"ga-loading-console\"></pre>" +
+        "</div>";
+      loadingConsolePre = loadingEl.querySelector(".ga-loading-console") as HTMLPreElement | null;
+      loadingProgressText = loadingEl.querySelector(".ga-loading-progress-text") as HTMLDivElement | null;
+      loadingProgressBar = loadingEl.querySelector(".ga-loading-progress-bar") as HTMLDivElement | null;
+
+      loadingUnsub = analysisConsole.subscribe(() => updateLoadingConsole());
+      loadingPoll = doc.defaultView?.setInterval(() => updateLoadingProgress(), 120) ?? null;
     }
     const subtitleEl = loadingEl.querySelector(".ga-loading-screen-subtitle") as HTMLDivElement | null;
     if (subtitleEl) subtitleEl.textContent = subtitle;
     if (!loadingEl.isConnected) doc.body.appendChild(loadingEl);
+    if (typeof opts?.stepTotal === "number") loadingStepTotal = opts.stepTotal;
+    if (typeof opts?.stepCurrent === "number") loadingStepCurrent = opts.stepCurrent;
+    setLoadingProgress({ phase: subtitle });
+    analysisConsole.info(subtitle);
+    updateLoadingConsole();
+    updateLoadingProgress();
     await sleep0(); // allow paint before heavy work
   };
   const hideLoading = () => {
     loadingEl?.remove();
+    loadingUnsub?.();
+    loadingUnsub = null;
+    if (loadingPoll !== null && doc.defaultView) doc.defaultView.clearInterval(loadingPoll);
+    loadingPoll = null;
+    setLoadingProgress(null);
   };
 
   const getSessionGapMinutes = (): number => {
@@ -226,6 +299,13 @@ export async function renderAnalysisApp(opts: {
       const datasets: Partial<Record<Grain, any[]>> = {};
       const isOpponentsSection = section.id === "opponents";
       const isRatingSection = section.id === "rating";
+      const steps: string[] = [];
+      if (used.has("round") || used.has("session") || isOpponentsSection) steps.push("rounds");
+      if (used.has("game") || isOpponentsSection) steps.push("games");
+      if (used.has("session")) steps.push("sessions");
+      const totalSteps = steps.length + 1; // + rendering
+      let step = 0;
+
       const teammateSelected = (() => {
         const v = state?.["teammate"];
         if (v === "all") return false;
@@ -233,11 +313,13 @@ export async function renderAnalysisApp(opts: {
         return v.trim().length > 0;
       })();
       if (used.has("round") || used.has("session") || isOpponentsSection) {
-        await showLoading("Loading rounds...");
+        step++;
+        await showLoading("Loading rounds...", { stepCurrent: step, stepTotal: totalSteps });
         datasets.round = await getRounds(filters);
       }
       if (used.has("game") || isOpponentsSection) {
-        await showLoading("Loading games...");
+        step++;
+        await showLoading("Loading games...", { stepCurrent: step, stepTotal: totalSteps });
         datasets.game = await getGames(filters);
       }
 
@@ -271,7 +353,8 @@ export async function renderAnalysisApp(opts: {
         }
       }
       if (used.has("session")) {
-        await showLoading("Building sessions...");
+        step++;
+        await showLoading("Building sessions...", { stepCurrent: step, stepTotal: totalSteps });
         const gap = getSessionGapMinutes();
         datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
       }
@@ -301,7 +384,9 @@ export async function renderAnalysisApp(opts: {
 
     const effectiveDashboard: DashboardDoc = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
 
-    await showLoading("Rendering UI...");
+    // Rendering always counted as last step (after data).
+    const finalTotal = loadingStepTotal > 0 ? loadingStepTotal : 1;
+    await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
     await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
       datasets: datasetsDefault,
       datasetsBySection,

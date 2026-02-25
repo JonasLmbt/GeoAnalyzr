@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.20
+// @version      2.2.21
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -8138,7 +8138,7 @@ ${shapes}`.trim();
       return void 0;
     }
   }
-  async function resolveCountryCodeByLatLngInternal(lat, lng, allowNetworkFallback = true) {
+  function resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, cacheMiss) {
     const norm = normalizeLatLng(lat, lng);
     if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return void 0;
     const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
@@ -8157,18 +8157,29 @@ ${shapes}`.trim();
       guessCountryCache.set(key, isoLocal);
       return isoLocal;
     }
-    if (allowNetworkFallback) {
-      const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
-      if (fallback) {
-        guessCountryCache.set(key, fallback);
-        return fallback;
-      }
+    if (cacheMiss) guessCountryCache.set(key, void 0);
+    return void 0;
+  }
+  async function resolveCountryCodeByLatLngInternal(lat, lng, allowNetworkFallback = true) {
+    const local = resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, false);
+    if (local) return local;
+    if (!allowNetworkFallback) return void 0;
+    const norm = normalizeLatLng(lat, lng);
+    if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return void 0;
+    const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
+    const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
+    if (fallback) {
+      guessCountryCache.set(key, fallback);
+      return fallback;
     }
     guessCountryCache.set(key, void 0);
     return void 0;
   }
   async function resolveCountryCodeByLatLng(lat, lng) {
     return resolveCountryCodeByLatLngInternal(lat, lng, true);
+  }
+  function resolveCountryCodeByLatLngLocalOnlySync(lat, lng) {
+    return resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, true);
   }
   async function resolveCountryCodeByLatLngLocalOnly(lat, lng) {
     return resolveCountryCodeByLatLngInternal(lat, lng, false);
@@ -9935,6 +9946,28 @@ ${shapes}`.trim();
     return `gf:${grain}:${parts.join("|")}`;
   }
 
+  // src/progress.ts
+  var KEY = "__gaLoadingProgress";
+  function setLoadingProgress(p) {
+    try {
+      globalThis[KEY] = p;
+    } catch {
+    }
+  }
+  function getLoadingProgress() {
+    try {
+      const v = globalThis[KEY];
+      if (!v || typeof v !== "object") return null;
+      const phase = typeof v.phase === "string" ? v.phase : "";
+      if (!phase) return null;
+      const current = typeof v.current === "number" ? v.current : void 0;
+      const total = typeof v.total === "number" ? v.total : void 0;
+      return { phase, current, total };
+    } catch {
+      return null;
+    }
+  }
+
   // src/engine/queryEngine.ts
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
@@ -10236,6 +10269,7 @@ ${shapes}`.trim();
   }
   async function getRoundsRaw() {
     if (roundsRawCache) return roundsRawCache;
+    setLoadingProgress({ phase: "Reading database (rounds/games/details)..." });
     const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
     const playedAtByGame = /* @__PURE__ */ new Map();
     const modeFamilyByGame = /* @__PURE__ */ new Map();
@@ -10252,8 +10286,10 @@ ${shapes}`.trim();
     }
     const outRows = new Array(rows.length);
     const YIELD_EVERY = 250;
+    setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
     for (let i = 0; i < rows.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
       const r = rows[i];
       const out = { ...r };
       const gameId = String(out.gameId ?? "");
@@ -10340,7 +10376,7 @@ ${shapes}`.trim();
         const glat = typeof out.player_self_guessLat === "number" ? out.player_self_guessLat : typeof out.p1_guessLat === "number" ? out.p1_guessLat : void 0;
         const glng = typeof out.player_self_guessLng === "number" ? out.player_self_guessLng : typeof out.p1_guessLng === "number" ? out.p1_guessLng : void 0;
         if (typeof glat === "number" && Number.isFinite(glat) && typeof glng === "number" && Number.isFinite(glng)) {
-          const iso2 = await resolveCountryCodeByLatLngLocalOnly(glat, glng);
+          const iso2 = resolveCountryCodeByLatLngLocalOnlySync(glat, glng);
           if (iso2) out.player_self_guessCountry = iso2;
         }
       }
@@ -10370,11 +10406,14 @@ ${shapes}`.trim();
       }
       outRows[i] = out;
     }
+    setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
     roundsRawCache = outRows;
     const trueKeyFor = (lat, lng) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
     const trueCounts = /* @__PURE__ */ new Map();
+    setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: roundsRawCache.length });
     for (let i = 0; i < roundsRawCache.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: roundsRawCache.length });
       const r = roundsRawCache[i];
       const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
       const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
@@ -10382,8 +10421,11 @@ ${shapes}`.trim();
       const k = trueKeyFor(lat, lng);
       trueCounts.set(k, (trueCounts.get(k) ?? 0) + 1);
     }
+    setLoadingProgress({ phase: "Indexing repeat locations...", current: roundsRawCache.length, total: roundsRawCache.length });
+    setLoadingProgress({ phase: "Applying repeat flags...", current: 0, total: roundsRawCache.length });
     for (let i = 0; i < roundsRawCache.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      if (i > 0 && i % 750 === 0) setLoadingProgress({ phase: "Applying repeat flags...", current: i, total: roundsRawCache.length });
       const r = roundsRawCache[i];
       const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
       const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
@@ -10392,6 +10434,7 @@ ${shapes}`.trim();
       r.trueLocationKey = k;
       r.trueLocationRepeat = (trueCounts.get(k) ?? 0) > 1;
     }
+    setLoadingProgress({ phase: "Applying repeat flags...", current: roundsRawCache.length, total: roundsRawCache.length });
     return roundsRawCache;
   }
   async function getRounds(filters) {
@@ -36199,29 +36242,80 @@ ${shapes}`.trim();
     }
     .ga-loading-screen-inner {
       display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 16px 16px 14px 16px;
       border-radius: 16px;
       border: 1px solid color-mix(in srgb, var(--ga-border) 65%, transparent);
-      background: color-mix(in srgb, var(--ga-card) 70%, rgba(0,0,0,0.35));
+      background: color-mix(in srgb, var(--ga-card) 82%, rgba(0,0,0,0.55));
       color: var(--ga-text);
       box-shadow: 0 10px 35px rgba(0,0,0,0.35);
+      width: min(560px, calc(100vw - 28px));
+    }
+    .ga-loading-top {
+      display:flex;
+      align-items:center;
+      gap: 12px;
     }
     .ga-loading-screen-text {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 4px;
       min-width: 220px;
     }
     .ga-loading-screen-title {
       font-weight: 800;
-      font-size: 13px;
-      letter-spacing: 0.2px;
+      font-size: 15px;
+      letter-spacing: 0.25px;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.45);
     }
     .ga-loading-screen-subtitle {
+      font-size: 13px;
+      color: color-mix(in srgb, var(--ga-text) 82%, var(--ga-text-muted));
+      text-shadow: 0 1px 0 rgba(0,0,0,0.35);
+    }
+    .ga-loading-progress {
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ga-loading-progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-control-bg) 85%, rgba(0,0,0,0.35));
+      border: 1px solid color-mix(in srgb, var(--ga-border) 72%, transparent);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .ga-loading-progress-bar {
+      height: 100%;
+      width: 25%;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--ga-accent2) 85%, #fff), color-mix(in srgb, var(--ga-warn) 70%, var(--ga-accent2)));
+      border-radius: 999px;
+      transition: width 120ms linear, opacity 120ms linear;
+    }
+    .ga-loading-progress-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 12px;
-      color: var(--ga-text-muted);
+      line-height: 1.35;
+      color: color-mix(in srgb, var(--ga-text) 80%, var(--ga-text-muted));
+      white-space: pre-wrap;
+    }
+    .ga-loading-console {
+      margin: 0;
+      padding: 10px 12px;
+      max-height: 160px;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+      background: color-mix(in srgb, var(--ga-control-bg) 78%, rgba(0,0,0,0.35));
+      color: color-mix(in srgb, var(--ga-text) 86%, #fff);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11.5px;
+      line-height: 1.35;
+      white-space: pre;
     }
     @keyframes ga-spin {
       from { transform: rotate(0deg); }
@@ -48364,20 +48458,72 @@ ${describeError(err2)}` : message;
       await new Promise((r) => setTimeout(r, 0));
     };
     let loadingEl = null;
-    const showLoading = async (subtitle) => {
+    let loadingConsolePre = null;
+    let loadingProgressText = null;
+    let loadingProgressBar = null;
+    let loadingUnsub = null;
+    let loadingPoll = null;
+    let loadingStepTotal = 0;
+    let loadingStepCurrent = 0;
+    const renderAsciiBar = (current, total) => {
+      const w = 22;
+      const t = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
+      const filled = Math.round(t * w);
+      return `[${"#".repeat(filled)}${"-".repeat(Math.max(0, w - filled))}] ${current}/${total}`;
+    };
+    const updateLoadingConsole = () => {
+      if (!loadingConsolePre) return;
+      const slice = analysisConsole.entries.slice(Math.max(0, analysisConsole.entries.length - 12));
+      loadingConsolePre.textContent = slice.map(formatConsoleEntry).join("\n");
+      loadingConsolePre.scrollTop = loadingConsolePre.scrollHeight;
+    };
+    const updateLoadingProgress = () => {
+      const p = getLoadingProgress();
+      const phase = p?.phase ?? "";
+      const cur = typeof p?.current === "number" ? p.current : void 0;
+      const tot = typeof p?.total === "number" ? p.total : void 0;
+      const pct = tot && cur !== void 0 ? Math.max(0, Math.min(1, cur / tot)) : void 0;
+      if (loadingProgressBar) {
+        loadingProgressBar.style.width = pct !== void 0 ? `${(pct * 100).toFixed(1)}%` : "25%";
+        loadingProgressBar.style.opacity = pct !== void 0 ? "1" : "0.55";
+      }
+      if (loadingProgressText) {
+        const stepTxt = loadingStepTotal > 0 ? `Step ${Math.max(1, loadingStepCurrent)}/${loadingStepTotal}` : "";
+        const barTxt = cur !== void 0 && tot !== void 0 ? renderAsciiBar(cur, tot) : "";
+        const main = [stepTxt, phase].filter(Boolean).join(" \u2022 ");
+        loadingProgressText.textContent = [main, barTxt].filter(Boolean).join("\n");
+      }
+    };
+    const showLoading = async (subtitle, opts2) => {
       if (!doc.body) return;
       if (!loadingEl) {
         loadingEl = doc.createElement("div");
         loadingEl.className = "ga-loading-screen";
-        loadingEl.innerHTML = '<div class="ga-loading-screen-inner"><div class="ga-spinner"></div><div class="ga-loading-screen-text"><div class="ga-loading-screen-title">GeoAnalyzr</div><div class="ga-loading-screen-subtitle"></div></div></div>';
+        loadingEl.innerHTML = '<div class="ga-loading-screen-inner">  <div class="ga-loading-top">    <div class="ga-spinner"></div>    <div class="ga-loading-screen-text">      <div class="ga-loading-screen-title">GeoAnalyzr</div>      <div class="ga-loading-screen-subtitle"></div>    </div>  </div>  <div class="ga-loading-progress">    <div class="ga-loading-progress-track"><div class="ga-loading-progress-bar"></div></div>    <div class="ga-loading-progress-text"></div>  </div>  <pre class="ga-loading-console"></pre></div>';
+        loadingConsolePre = loadingEl.querySelector(".ga-loading-console");
+        loadingProgressText = loadingEl.querySelector(".ga-loading-progress-text");
+        loadingProgressBar = loadingEl.querySelector(".ga-loading-progress-bar");
+        loadingUnsub = analysisConsole.subscribe(() => updateLoadingConsole());
+        loadingPoll = doc.defaultView?.setInterval(() => updateLoadingProgress(), 120) ?? null;
       }
       const subtitleEl = loadingEl.querySelector(".ga-loading-screen-subtitle");
       if (subtitleEl) subtitleEl.textContent = subtitle;
       if (!loadingEl.isConnected) doc.body.appendChild(loadingEl);
+      if (typeof opts2?.stepTotal === "number") loadingStepTotal = opts2.stepTotal;
+      if (typeof opts2?.stepCurrent === "number") loadingStepCurrent = opts2.stepCurrent;
+      setLoadingProgress({ phase: subtitle });
+      analysisConsole.info(subtitle);
+      updateLoadingConsole();
+      updateLoadingProgress();
       await sleep0();
     };
     const hideLoading = () => {
       loadingEl?.remove();
+      loadingUnsub?.();
+      loadingUnsub = null;
+      if (loadingPoll !== null && doc.defaultView) doc.defaultView.clearInterval(loadingPoll);
+      loadingPoll = null;
+      setLoadingProgress(null);
     };
     const getSessionGapMinutes = () => {
       const raw = Number(root?.dataset.gaSessionGapMinutes);
@@ -48517,6 +48663,12 @@ ${describeError(err2)}` : message;
           const datasets = {};
           const isOpponentsSection = section.id === "opponents";
           const isRatingSection = section.id === "rating";
+          const steps = [];
+          if (used.has("round") || used.has("session") || isOpponentsSection) steps.push("rounds");
+          if (used.has("game") || isOpponentsSection) steps.push("games");
+          if (used.has("session")) steps.push("sessions");
+          const totalSteps = steps.length + 1;
+          let step = 0;
           const teammateSelected = (() => {
             const v = state?.["teammate"];
             if (v === "all") return false;
@@ -48524,11 +48676,13 @@ ${describeError(err2)}` : message;
             return v.trim().length > 0;
           })();
           if (used.has("round") || used.has("session") || isOpponentsSection) {
-            await showLoading("Loading rounds...");
+            step++;
+            await showLoading("Loading rounds...", { stepCurrent: step, stepTotal: totalSteps });
             datasets.round = await getRounds(filters);
           }
           if (used.has("game") || isOpponentsSection) {
-            await showLoading("Loading games...");
+            step++;
+            await showLoading("Loading games...", { stepCurrent: step, stepTotal: totalSteps });
             datasets.game = await getGames(filters);
           }
           if (isRatingSection && Array.isArray(datasets.round)) {
@@ -48558,7 +48712,8 @@ ${describeError(err2)}` : message;
             }
           }
           if (used.has("session")) {
-            await showLoading("Building sessions...");
+            step++;
+            await showLoading("Building sessions...", { stepCurrent: step, stepTotal: totalSteps });
             const gap = getSessionGapMinutes();
             datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
           }
@@ -48581,7 +48736,8 @@ ${describeError(err2)}` : message;
         const datasetsDefault = initialActive ? datasetsBySection[initialActive] ?? {} : {};
         const contextDefault = initialActive ? contextBySection[initialActive] : void 0;
         const effectiveDashboard = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
-        await showLoading("Rendering UI...");
+        const finalTotal = loadingStepTotal > 0 ? loadingStepTotal : 1;
+        await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
         await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
           datasets: datasetsDefault,
           datasetsBySection,

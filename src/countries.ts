@@ -59,7 +59,7 @@ async function reverseGeocodeCountry(lat: number, lng: number): Promise<string |
  * Resolve ISO2 country code for a coordinate.
  * Note: country-coder expects [longitude, latitude].
  */
-async function resolveCountryCodeByLatLngInternal(lat?: number, lng?: number, allowNetworkFallback = true): Promise<string | undefined> {
+function resolveCountryCodeByLatLngLocalSyncInternal(lat?: number, lng?: number, cacheMiss: boolean): string | undefined {
   const norm = normalizeLatLng(lat, lng);
   if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return undefined;
 
@@ -85,21 +85,34 @@ async function resolveCountryCodeByLatLngInternal(lat?: number, lng?: number, al
     return isoLocal;
   }
 
-  // 2) Optional fallback (network) for edge cases / disputed borders / coastal points
-  if (allowNetworkFallback) {
-    const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
-    if (fallback) {
-      guessCountryCache.set(key, fallback);
-      return fallback;
-    }
-  }
+  if (cacheMiss) guessCountryCache.set(key, undefined);
+  return undefined;
+}
 
+async function resolveCountryCodeByLatLngInternal(lat?: number, lng?: number, allowNetworkFallback = true): Promise<string | undefined> {
+  const local = resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, false);
+  if (local) return local;
+  if (!allowNetworkFallback) return undefined;
+
+  const norm = normalizeLatLng(lat, lng);
+  if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return undefined;
+  const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
+
+  const fallback = await reverseGeocodeCountry(norm.lat, norm.lng);
+  if (fallback) {
+    guessCountryCache.set(key, fallback);
+    return fallback;
+  }
   guessCountryCache.set(key, undefined);
   return undefined;
 }
 
 export async function resolveCountryCodeByLatLng(lat?: number, lng?: number): Promise<string | undefined> {
   return resolveCountryCodeByLatLngInternal(lat, lng, true);
+}
+
+export function resolveCountryCodeByLatLngLocalOnlySync(lat?: number, lng?: number): string | undefined {
+  return resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, true);
 }
 
 // For UI-time repair / best-effort enrichment without spamming network requests.
