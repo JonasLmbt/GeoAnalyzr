@@ -2393,6 +2393,102 @@
                     }
                   },
                   {
+                    "widgetId": "w_country_insight_ph_provinces",
+                    "type": "multi_view",
+                    "title": "Philippines - Provinces",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["ph", "PH"] },
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
+                    "spec": {
+                      "activeView": "map",
+                      "views": [
+                        {
+                          "id": "bar",
+                          "label": "Bar",
+                          "type": "breakdown",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_ph_province",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "rounds_count",
+                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                            "activeSort": { "mode": "desc" },
+                            "limit": 15,
+                            "extendable": true,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "map",
+                          "label": "Map",
+                          "type": "region_map",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_ph_province",
+                            "geojsonUrl": "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson",
+                            "featureKey": "shapeName",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "avg_score",
+                            "mapHeight": 380,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_vn_provinces",
+                    "type": "multi_view",
+                    "title": "Vietnam - Provinces",
+                    "grain": "round",
+                    "showIfLocal": { "id": "spotlightCountry", "in": ["vn", "VN"] },
+                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
+                    "spec": {
+                      "activeView": "map",
+                      "views": [
+                        {
+                          "id": "bar",
+                          "label": "Bar",
+                          "type": "breakdown",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_vn_province",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "rounds_count",
+                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
+                            "activeSort": { "mode": "desc" },
+                            "limit": 15,
+                            "extendable": true,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        },
+                        {
+                          "id": "map",
+                          "label": "Map",
+                          "type": "region_map",
+                          "grain": "round",
+                          "spec": {
+                            "dimension": "true_vn_province",
+                            "geojsonUrl": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson",
+                            "featureKey": "shapeName",
+                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                            "activeMeasure": "avg_score",
+                            "mapHeight": 380,
+                            "actions": {
+                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
                     "widgetId": "w_country_insight_de_districts",
                     "type": "breakdown",
                     "title": "Germany - Districts (Landkreise)",

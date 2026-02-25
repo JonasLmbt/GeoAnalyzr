@@ -43,6 +43,9 @@ interface RoundRowBase {
   // Indonesia enrichments (computed locally).
   trueIdProvince?: string;
   trueIdKabupaten?: string;
+  // SEA enrichments (computed locally).
+  truePhProvince?: string;
+  trueVnProvince?: string;
   startTime?: number;
   endTime?: number;
   raw?: unknown;

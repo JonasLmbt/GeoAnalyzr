@@ -152,6 +152,22 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 60, "selectorRequired": true }
     },
+    "true_ph_province": {
+      "label": "Philippines province",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 40 }
+    },
+    "true_vn_province": {
+      "label": "Vietnam province",
+      "kind": "category",
+      "grain": "round",
+      "allowedCharts": ["bar"],
+      "sortModes": ["asc", "desc"],
+      "cardinality": { "policy": "large", "maxSeries": 40 }
+    },
     "true_location": {
       "label": "True location",
       "kind": "category",

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.11
+// @version      2.2.12
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9581,6 +9581,14 @@ ${shapes}`.trim();
     const v = typeof r?.trueIdKabupaten === "string" ? String(r.trueIdKabupaten).trim() : typeof r?.true_id_kabupaten === "string" ? String(r.true_id_kabupaten).trim() : "";
     return v ? v : null;
   }
+  function truePhProvinceKey(r) {
+    const v = typeof r?.truePhProvince === "string" ? String(r.truePhProvince).trim() : typeof r?.true_ph_province === "string" ? String(r.true_ph_province).trim() : "";
+    return v ? v : null;
+  }
+  function trueVnProvinceKey(r) {
+    const v = typeof r?.trueVnProvince === "string" ? String(r.trueVnProvince).trim() : typeof r?.true_vn_province === "string" ? String(r.true_vn_province).trim() : "";
+    return v ? v : null;
+  }
   function confusedCountriesKey(r) {
     const truthRaw = getTrueCountry(r);
     const guessRaw = getGuessCountrySelf(r);
@@ -9739,6 +9747,8 @@ ${shapes}`.trim();
       true_ca_province: trueCaProvinceKey,
       true_id_province: trueIdProvinceKey,
       true_id_kabupaten: trueIdKabupatenKey,
+      true_ph_province: truePhProvinceKey,
+      true_vn_province: trueVnProvinceKey,
       mode_family: (r) => {
         const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
         if (!v) return null;
@@ -32418,6 +32428,22 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 60, selectorRequired: true }
       },
+      true_ph_province: {
+        label: "Philippines province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40 }
+      },
+      true_vn_province: {
+        label: "Vietnam province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40 }
+      },
       true_location: {
         label: "True location",
         kind: "category",
@@ -35909,6 +35935,102 @@ ${shapes}`.trim();
                             spec: {
                               dimension: "true_id_province",
                               geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson",
+                              featureKey: "shapeName",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "avg_score",
+                              mapHeight: 380,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_ph_provinces",
+                      type: "multi_view",
+                      title: "Philippines - Provinces",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["ph", "PH"] },
+                      placement: { x: 0, y: 20, w: 12, h: 6 },
+                      spec: {
+                        activeView: "map",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_ph_province",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "rounds_count",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "region_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_ph_province",
+                              geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson",
+                              featureKey: "shapeName",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "avg_score",
+                              mapHeight: 380,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_vn_provinces",
+                      type: "multi_view",
+                      title: "Vietnam - Provinces",
+                      grain: "round",
+                      showIfLocal: { id: "spotlightCountry", in: ["vn", "VN"] },
+                      placement: { x: 0, y: 20, w: 12, h: 6 },
+                      spec: {
+                        activeView: "map",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_vn_province",
+                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
+                              activeMeasure: "rounds_count",
+                              sorts: [{ mode: "desc" }, { mode: "asc" }],
+                              activeSort: { mode: "desc" },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "region_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_vn_province",
+                              geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson",
                               featureKey: "shapeName",
                               measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
                               activeMeasure: "avg_score",
@@ -43569,6 +43691,169 @@ ${describeError(err)}` : message;
     return null;
   }
 
+  // src/geo/seaRegions.ts
+  var PH_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson";
+  var VN_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson";
+  function hasGmXhr5() {
+    return typeof globalThis.GM_xmlhttpRequest === "function";
+  }
+  function gmGetText4(url, accept) {
+    return new Promise((resolve, reject) => {
+      const gm = globalThis.GM_xmlhttpRequest;
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: accept ?? "application/json" },
+        onload: (res) => resolve(typeof res?.responseText === "string" ? res.responseText : ""),
+        onerror: (err) => reject(err),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function fetchJson4(url) {
+    if (hasGmXhr5()) {
+      const txt = await gmGetText4(url, "application/json");
+      return JSON.parse(txt);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
+  }
+  function bboxForCoords4(coords, bbox) {
+    if (!Array.isArray(coords)) return;
+    if (coords.length >= 2 && typeof coords[0] === "number" && typeof coords[1] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      bbox.minLon = Math.min(bbox.minLon, lon);
+      bbox.maxLon = Math.max(bbox.maxLon, lon);
+      bbox.minLat = Math.min(bbox.minLat, lat);
+      bbox.maxLat = Math.max(bbox.maxLat, lat);
+      return;
+    }
+    for (const c of coords) bboxForCoords4(c, bbox);
+  }
+  function bboxForGeometry4(geom) {
+    const coords = geom?.coordinates;
+    if (!coords) return null;
+    const bbox = { minLon: Infinity, minLat: Infinity, maxLon: -Infinity, maxLat: -Infinity };
+    bboxForCoords4(coords, bbox);
+    if (![bbox.minLon, bbox.minLat, bbox.maxLon, bbox.maxLat].every((x) => Number.isFinite(x))) return null;
+    return bbox;
+  }
+  function pointInRing4(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i]?.[0];
+      const yi = ring[i]?.[1];
+      const xj = ring[j]?.[0];
+      const yj = ring[j]?.[1];
+      if (![xi, yi, xj, yj].every((x) => typeof x === "number" && Number.isFinite(x))) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 0) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon4(lon, lat, poly) {
+    if (!Array.isArray(poly) || poly.length === 0) return false;
+    const outer = poly[0];
+    if (!Array.isArray(outer) || outer.length < 3) return false;
+    if (!pointInRing4(lon, lat, outer)) return false;
+    for (let i = 1; i < poly.length; i++) {
+      const hole = poly[i];
+      if (Array.isArray(hole) && hole.length >= 3 && pointInRing4(lon, lat, hole)) return false;
+    }
+    return true;
+  }
+  function pointInGeometry4(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") return pointInPolygon4(lon, lat, coords);
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        if (pointInPolygon4(lon, lat, poly)) return true;
+      }
+    }
+    return false;
+  }
+  var phIndexPromise = null;
+  var vnIndexPromise = null;
+  async function loadPhIndex() {
+    if (!phIndexPromise) {
+      phIndexPromise = (async () => {
+        const geo = await fetchJson4(PH_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry4(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return phIndexPromise;
+  }
+  async function loadVnIndex() {
+    if (!vnIndexPromise) {
+      vnIndexPromise = (async () => {
+        const geo = await fetchJson4(VN_PROVINCES_GEOJSON_URL);
+        const feats = Array.isArray(geo?.features) ? geo.features : [];
+        const out = [];
+        for (const f of feats) {
+          const name = typeof f?.properties?.shapeName === "string" ? f.properties.shapeName.trim() : "";
+          const bbox = bboxForGeometry4(f?.geometry);
+          if (!name || !bbox || !f?.geometry) continue;
+          out.push({ name, bbox, geom: f.geometry });
+        }
+        return out;
+      })();
+    }
+    return vnIndexPromise;
+  }
+  function memoKey4(lat, lng) {
+    return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  }
+  function bboxContains4(b, lon, lat) {
+    return lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat;
+  }
+  var phMemo = /* @__PURE__ */ new Map();
+  var vnMemo = /* @__PURE__ */ new Map();
+  async function resolvePhProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey4(lat, lng);
+    const cached = phMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadPhIndex();
+    for (const it of items) {
+      if (!bboxContains4(it.bbox, lon, lat)) continue;
+      if (pointInGeometry4(lon, lat, it.geom)) {
+        phMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+  async function resolveVnProvinceByLatLng(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const key = memoKey4(lat, lng);
+    const cached = vnMemo.get(key);
+    if (cached) return cached;
+    const lon = lng;
+    const items = await loadVnIndex();
+    for (const it of items) {
+      if (!bboxContains4(it.bbox, lon, lat)) continue;
+      if (pointInGeometry4(lon, lat, it.geom)) {
+        vnMemo.set(key, it.name);
+        return it.name;
+      }
+    }
+    return null;
+  }
+
   // src/engine/regionEnrichment.ts
   function isFiniteNum(v) {
     return typeof v === "number" && Number.isFinite(v);
@@ -43587,19 +43872,29 @@ ${describeError(err)}` : message;
   }
   async function maybeEnrichRoundRowsForDimension(dimId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    if (dimId !== "true_id_province" && dimId !== "true_id_kabupaten") return;
+    const supported = /* @__PURE__ */ new Set(["true_id_province", "true_id_kabupaten", "true_ph_province", "true_vn_province"]);
+    if (!supported.has(dimId)) return;
     const todo = [];
     for (const r of rows) {
       const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
-      if (tc !== "id") continue;
       const lat = r?.trueLat;
       const lng = r?.trueLng;
       if (!isFiniteNum(lat) || !isFiniteNum(lng)) continue;
       if (dimId === "true_id_province") {
+        if (tc !== "id") continue;
         const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
         if (!has) todo.push(r);
-      } else {
+      } else if (dimId === "true_id_kabupaten") {
+        if (tc !== "id") continue;
         const has = typeof r?.trueIdKabupaten === "string" && r.trueIdKabupaten.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_ph_province") {
+        if (tc !== "ph") continue;
+        const has = typeof r?.truePhProvince === "string" && r.truePhProvince.trim().length > 0;
+        if (!has) todo.push(r);
+      } else if (dimId === "true_vn_province") {
+        if (tc !== "vn") continue;
+        const has = typeof r?.trueVnProvince === "string" && r.trueVnProvince.trim().length > 0;
         if (!has) todo.push(r);
       }
     }
@@ -43610,9 +43905,15 @@ ${describeError(err)}` : message;
       if (dimId === "true_id_province") {
         const p = await resolveIdProvinceByLatLng(lat, lng);
         if (p) r.trueIdProvince = p;
-      } else {
+      } else if (dimId === "true_id_kabupaten") {
         const k = await resolveIdKabupatenByLatLng(lat, lng);
         if (k) r.trueIdKabupaten = k;
+      } else if (dimId === "true_ph_province") {
+        const p = await resolvePhProvinceByLatLng(lat, lng);
+        if (p) r.truePhProvince = p;
+      } else if (dimId === "true_vn_province") {
+        const p = await resolveVnProvinceByLatLng(lat, lng);
+        if (p) r.trueVnProvince = p;
       }
     });
   }
@@ -44473,10 +44774,10 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
-  function hasGmXhr5() {
+  function hasGmXhr6() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText4(url, accept) {
+  function gmGetText5(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -44489,9 +44790,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson4(url) {
-    if (hasGmXhr5()) {
-      const txt = await gmGetText4(url, "application/json");
+  async function fetchJson5(url) {
+    if (hasGmXhr6()) {
+      const txt = await gmGetText5(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -44506,7 +44807,7 @@ ${describeError(err)}` : message;
   async function loadData() {
     if (!dataPromise) {
       dataPromise = (async () => {
-        const [geojson, countries] = await Promise.all([fetchJson4(WORLD_GEOJSON_URL), fetchJson4(ISO_MAP_URL)]);
+        const [geojson, countries] = await Promise.all([fetchJson5(WORLD_GEOJSON_URL), fetchJson5(ISO_MAP_URL)]);
         const iso3ToIso2 = /* @__PURE__ */ new Map();
         if (Array.isArray(countries)) {
           for (const c of countries) {
@@ -45020,10 +45321,10 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/regionMetricMapWidget.ts
-  function hasGmXhr6() {
+  function hasGmXhr7() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText5(url, accept) {
+  function gmGetText6(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -45036,9 +45337,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson5(url) {
-    if (hasGmXhr6()) {
-      const txt = await gmGetText5(url, "application/json");
+  async function fetchJson6(url) {
+    if (hasGmXhr7()) {
+      const txt = await gmGetText6(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -45049,7 +45350,7 @@ ${describeError(err)}` : message;
   function loadGeoJson(url) {
     const existing = geojsonCache.get(url);
     if (existing) return existing;
-    const p = fetchJson5(url);
+    const p = fetchJson6(url);
     geojsonCache.set(url, p);
     return p;
   }
@@ -45445,10 +45746,10 @@ ${describeError(err)}` : message;
   }
 
   // src/ui/widgets/pointMapWidget.ts
-  function hasGmXhr7() {
+  function hasGmXhr8() {
     return typeof globalThis.GM_xmlhttpRequest === "function";
   }
-  function gmGetText6(url, accept) {
+  function gmGetText7(url, accept) {
     return new Promise((resolve, reject) => {
       const gm = globalThis.GM_xmlhttpRequest;
       gm({
@@ -45461,9 +45762,9 @@ ${describeError(err)}` : message;
       });
     });
   }
-  async function fetchJson6(url) {
-    if (hasGmXhr7()) {
-      const txt = await gmGetText6(url, "application/json");
+  async function fetchJson7(url) {
+    if (hasGmXhr8()) {
+      const txt = await gmGetText7(url, "application/json");
       return JSON.parse(txt);
     }
     const res = await fetch(url);
@@ -45473,7 +45774,7 @@ ${describeError(err)}` : message;
   var WORLD_GEOJSON_URL2 = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var worldPromise = null;
   function loadWorldGeoJson() {
-    if (!worldPromise) worldPromise = fetchJson6(WORLD_GEOJSON_URL2);
+    if (!worldPromise) worldPromise = fetchJson7(WORLD_GEOJSON_URL2);
     return worldPromise;
   }
   function clamp2(v, min, max) {

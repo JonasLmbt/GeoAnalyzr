@@ -1,4 +1,5 @@
 import { resolveIdKabupatenByLatLng, resolveIdProvinceByLatLng } from "../geo/idRegions";
+import { resolvePhProvinceByLatLng, resolveVnProvinceByLatLng } from "../geo/seaRegions";
 
 function isFiniteNum(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -19,21 +20,31 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
 
 export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[]): Promise<void> {
   if (!Array.isArray(rows) || rows.length === 0) return;
-  if (dimId !== "true_id_province" && dimId !== "true_id_kabupaten") return;
+  const supported = new Set(["true_id_province", "true_id_kabupaten", "true_ph_province", "true_vn_province"]);
+  if (!supported.has(dimId)) return;
 
   const todo: any[] = [];
   for (const r of rows) {
     const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
-    if (tc !== "id") continue;
     const lat = r?.trueLat;
     const lng = r?.trueLng;
     if (!isFiniteNum(lat) || !isFiniteNum(lng)) continue;
 
     if (dimId === "true_id_province") {
+      if (tc !== "id") continue;
       const has = typeof r?.trueIdProvince === "string" && r.trueIdProvince.trim().length > 0;
       if (!has) todo.push(r);
-    } else {
+    } else if (dimId === "true_id_kabupaten") {
+      if (tc !== "id") continue;
       const has = typeof r?.trueIdKabupaten === "string" && r.trueIdKabupaten.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "true_ph_province") {
+      if (tc !== "ph") continue;
+      const has = typeof r?.truePhProvince === "string" && r.truePhProvince.trim().length > 0;
+      if (!has) todo.push(r);
+    } else if (dimId === "true_vn_province") {
+      if (tc !== "vn") continue;
+      const has = typeof r?.trueVnProvince === "string" && r.trueVnProvince.trim().length > 0;
       if (!has) todo.push(r);
     }
   }
@@ -45,10 +56,15 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
     if (dimId === "true_id_province") {
       const p = await resolveIdProvinceByLatLng(lat, lng);
       if (p) r.trueIdProvince = p;
-    } else {
+    } else if (dimId === "true_id_kabupaten") {
       const k = await resolveIdKabupatenByLatLng(lat, lng);
       if (k) r.trueIdKabupaten = k;
+    } else if (dimId === "true_ph_province") {
+      const p = await resolvePhProvinceByLatLng(lat, lng);
+      if (p) r.truePhProvince = p;
+    } else if (dimId === "true_vn_province") {
+      const p = await resolveVnProvinceByLatLng(lat, lng);
+      if (p) r.trueVnProvince = p;
     }
   });
 }
-

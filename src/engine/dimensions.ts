@@ -202,6 +202,26 @@ export function trueIdKabupatenKey(r: RoundRow): GroupKey | null {
   return v ? v : null;
 }
 
+export function truePhProvinceKey(r: RoundRow): GroupKey | null {
+  const v =
+    typeof (r as any)?.truePhProvince === "string"
+      ? String((r as any).truePhProvince).trim()
+      : typeof (r as any)?.true_ph_province === "string"
+        ? String((r as any).true_ph_province).trim()
+        : "";
+  return v ? v : null;
+}
+
+export function trueVnProvinceKey(r: RoundRow): GroupKey | null {
+  const v =
+    typeof (r as any)?.trueVnProvince === "string"
+      ? String((r as any).trueVnProvince).trim()
+      : typeof (r as any)?.true_vn_province === "string"
+        ? String((r as any).true_vn_province).trim()
+        : "";
+  return v ? v : null;
+}
+
 export function confusedCountriesKey(r: RoundRow): GroupKey | null {
   const truthRaw = getTrueCountry(r);
   const guessRaw = getGuessCountrySelf(r);
@@ -392,6 +412,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     true_ca_province: trueCaProvinceKey,
     true_id_province: trueIdProvinceKey,
     true_id_kabupaten: trueIdKabupatenKey,
+    true_ph_province: truePhProvinceKey,
+    true_vn_province: trueVnProvinceKey,
     mode_family: (r: any) => {
       const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
       if (!v) return null;
