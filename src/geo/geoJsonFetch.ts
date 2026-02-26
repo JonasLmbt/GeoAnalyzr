@@ -12,6 +12,20 @@ function canonicalizeUrl(url: string): string {
   return url;
 }
 
+function toMediaUrl(url: string): string {
+  const m = url.match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/i);
+  if (m) {
+    const [, owner, repo, ref, path] = m;
+    return `https://media.githubusercontent.com/media/${owner}/${repo}/${ref}/${path}`;
+  }
+  const m2 = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/i);
+  if (m2) {
+    const [, owner, repo, ref, path] = m2;
+    return `https://media.githubusercontent.com/media/${owner}/${repo}/${ref}/${path}`;
+  }
+  return url;
+}
+
 function hasGmXhr(): boolean {
   return typeof getGmXmlhttpRequest() === "function";
 }
@@ -78,9 +92,22 @@ function isGitLfsPointer(text: string): boolean {
   return text.startsWith("version https://git-lfs.github.com/spec/v1");
 }
 
+function isGitLfsPointerBytes(buf: ArrayBuffer): boolean {
+  try {
+    const u8 = new Uint8Array(buf, 0, Math.min(buf.byteLength, 80));
+    const text =
+      typeof TextDecoder !== "undefined"
+        ? new TextDecoder("utf-8").decode(u8)
+        : String.fromCharCode(...Array.from(u8));
+    return isGitLfsPointer(text);
+  } catch {
+    return false;
+  }
+}
+
 function parseGeoBoundariesPrefixFromUrl(url: string): { prefix: string; baseName: string; zipUrl: string; entryName: string } | null {
   const baseName = url.split("/").pop() ?? "";
-  const m = baseName.match(/^(geoBoundaries-[A-Z]{3}-ADM\\d)_simplified\\.geojson$/);
+  const m = baseName.match(/^(geoBoundaries-[A-Z]{3}-ADM\d)_simplified\.geojson$/);
   if (!m) return null;
   const prefix = m[1];
   const zipUrl = url.slice(0, url.length - baseName.length) + `${prefix}-all.zip`;
@@ -107,13 +134,25 @@ export function loadGeoJson(url: string): Promise<any> {
 
     if (isGitLfsPointer(text)) {
       const parsed = parseGeoBoundariesPrefixFromUrl(canon);
+
+      // Most geoBoundaries artifacts are stored in Git LFS. `raw.githubusercontent.com` returns only the pointer,
+      // but `media.githubusercontent.com` serves the actual content without requiring Git LFS auth.
+      const mediaUrl = toMediaUrl(canon);
+      if (mediaUrl !== canon) {
+        const mediaText = await fetchText(mediaUrl, "application/json");
+        if (mediaText && !isGitLfsPointer(mediaText)) return JSON.parse(mediaText);
+      }
+
       if (!parsed) throw new Error(`Git LFS pointer returned for ${canon}`);
       let zipBuf: ArrayBuffer;
       try {
-        zipBuf = await fetchArrayBuffer(parsed.zipUrl, "application/zip");
+        zipBuf = await fetchArrayBuffer(toMediaUrl(parsed.zipUrl), "application/zip");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`GeoJSON zip fetch failed for ${parsed.zipUrl}: ${msg}`);
+      }
+      if (isGitLfsPointerBytes(zipBuf)) {
+        throw new Error(`Git LFS pointer returned for ${parsed.zipUrl}`);
       }
       const files = unzipSync(new Uint8Array(zipBuf));
       const entry = (files as any)[parsed.entryName] as Uint8Array | undefined;
