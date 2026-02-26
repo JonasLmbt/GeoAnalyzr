@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.24
+// @version      2.2.25
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -46241,7 +46241,35 @@ ${describeError(err2)}` : message;
       return isoOrName;
     }
   }
-  function formatValue4(doc, semantic, measureId, value) {
+  function formatNumericWithSuffix(unitId, unit, numericText, value) {
+    const sign = unit?.showSign && value > 0 ? "+" : "";
+    const base = `${sign}${numericText}`;
+    const u = String(unitId ?? "").trim().toLowerCase();
+    if (u === "km") return `${base} km`;
+    if (u === "seconds") return `${base} s`;
+    return base;
+  }
+  function compactNumberPerValue(value, decimals) {
+    const abs = Math.abs(value);
+    if (abs < 1e4) return value.toFixed(decimals);
+    try {
+      const nf = new Intl.NumberFormat("en", {
+        notation: "compact",
+        compactDisplay: "short",
+        maximumFractionDigits: Math.max(0, Math.min(3, decimals + 1))
+      });
+      return nf.format(value);
+    } catch {
+      return value.toFixed(decimals);
+    }
+  }
+  function chooseLegendScale(maxAbs) {
+    if (maxAbs >= 1e9) return { div: 1e9, suffix: "B" };
+    if (maxAbs >= 1e6) return { div: 1e6, suffix: "M" };
+    if (maxAbs >= 1e3) return { div: 1e3, suffix: "k" };
+    return { div: 1, suffix: "" };
+  }
+  function formatValueTooltip(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
     if (!m || !unit) return String(value);
@@ -46265,8 +46293,21 @@ ${describeError(err2)}` : message;
       return unit.showSign && v > 0 ? `+${v}` : String(v);
     }
     const decimals = unit.decimals ?? 1;
-    const txt = value.toFixed(decimals);
-    return unit.showSign && value > 0 ? `+${txt}` : txt;
+    const txt = compactNumberPerValue(value, decimals);
+    return formatNumericWithSuffix(m.unit, unit, txt, value);
+  }
+  function formatValueLegend(doc, semantic, measureId, value, scale) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!m || !unit) return String(value);
+    if (unit.format === "percent" || unit.format === "duration" || unit.format === "datetime") {
+      return formatValueTooltip(doc, semantic, measureId, value);
+    }
+    const decimals = unit.format === "int" ? 0 : unit.decimals ?? 1;
+    const scaled = scale.div > 1 ? value / scale.div : value;
+    const txt = unit.format === "int" ? String(Math.round(scaled)) : scaled.toFixed(decimals);
+    const withSuffix = `${txt}${scale.suffix}`;
+    return formatNumericWithSuffix(m.unit, unit, withSuffix, value);
   }
   function normalizeIso2Key(key) {
     const v = key.trim().toLowerCase();
@@ -46436,6 +46477,7 @@ ${describeError(err2)}` : message;
       const scaleMin = Math.min(p10, p90);
       const scaleMax = Math.max(p10, p90);
       const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
+      const legendScale = chooseLegendScale(Math.max(Math.abs(scaleMin), Math.abs(scaleMax)));
       const rootEl = doc.querySelector(".ga-root") ?? null;
       const theme = rootEl?.dataset?.gaTheme ?? "";
       const styles = rootEl ? getComputedStyle(rootEl) : null;
@@ -46444,13 +46486,13 @@ ${describeError(err2)}` : message;
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue4(doc, semantic, activeMeasure, scaleMin);
+      left.textContent = formatValueLegend(doc, semantic, activeMeasure, scaleMin, legendScale);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
       bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue4(doc, semantic, activeMeasure, scaleMax);
+      right.textContent = formatValueLegend(doc, semantic, activeMeasure, scaleMax, legendScale);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -46485,7 +46527,7 @@ ${describeError(err2)}` : message;
           p.style.opacity = "1";
         }
         const label = iso2 ? formatCountry3(doc, iso2.toUpperCase()) : "";
-        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue4(doc, semantic, activeMeasure, v) : "n/a";
+        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValueTooltip(doc, semantic, activeMeasure, v) : "n/a";
         const tt = `${label}${label && valTxt ? ": " : ""}${valTxt}`;
         let titleEl = p.querySelector("title");
         if (!titleEl) {
@@ -46591,7 +46633,35 @@ ${describeError(err2)}` : message;
     const b = Math.round(base.b * (1 - mixToBlack));
     return `rgba(${r},${g},${b},${a.toFixed(3)})`;
   }
-  function formatValue5(doc, semantic, measureId, value) {
+  function formatNumericWithSuffix2(unitId, unit, numericText, value) {
+    const sign = unit?.showSign && value > 0 ? "+" : "";
+    const base = `${sign}${numericText}`;
+    const u = String(unitId ?? "").trim().toLowerCase();
+    if (u === "km") return `${base} km`;
+    if (u === "seconds") return `${base} s`;
+    return base;
+  }
+  function compactNumberPerValue2(value, decimals) {
+    const abs = Math.abs(value);
+    if (abs < 1e4) return value.toFixed(decimals);
+    try {
+      const nf = new Intl.NumberFormat("en", {
+        notation: "compact",
+        compactDisplay: "short",
+        maximumFractionDigits: Math.max(0, Math.min(3, decimals + 1))
+      });
+      return nf.format(value);
+    } catch {
+      return value.toFixed(decimals);
+    }
+  }
+  function chooseLegendScale2(maxAbs) {
+    if (maxAbs >= 1e9) return { div: 1e9, suffix: "B" };
+    if (maxAbs >= 1e6) return { div: 1e6, suffix: "M" };
+    if (maxAbs >= 1e3) return { div: 1e3, suffix: "k" };
+    return { div: 1, suffix: "" };
+  }
+  function formatValueTooltip2(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
     if (!m || !unit) return String(value);
@@ -46615,8 +46685,18 @@ ${describeError(err2)}` : message;
       return unit.showSign && v > 0 ? `+${v}` : String(v);
     }
     const decimals = unit.decimals ?? 1;
-    const txt = value.toFixed(decimals);
-    return unit.showSign && value > 0 ? `+${txt}` : txt;
+    const txt = compactNumberPerValue2(value, decimals);
+    return formatNumericWithSuffix2(m.unit, unit, txt, value);
+  }
+  function formatValueLegend2(doc, semantic, measureId, value, scale) {
+    const m = semantic.measures[measureId];
+    const unit = m ? semantic.units[m.unit] : void 0;
+    if (!m || !unit) return String(value);
+    if (unit.format === "percent" || unit.format === "duration") return formatValueTooltip2(doc, semantic, measureId, value);
+    const decimals = unit.format === "int" ? 0 : unit.decimals ?? 1;
+    const scaled = scale.div > 1 ? value / scale.div : value;
+    const txt = unit.format === "int" ? String(Math.round(scaled)) : scaled.toFixed(decimals);
+    return formatNumericWithSuffix2(m.unit, unit, `${txt}${scale.suffix}`, value);
   }
   function getMeasureIds3(spec) {
     const out = [];
@@ -46735,6 +46815,7 @@ ${describeError(err2)}` : message;
       const scaleMin = Math.min(p10, p90);
       const scaleMax = Math.max(p10, p90);
       const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
+      const legendScale = chooseLegendScale2(Math.max(Math.abs(scaleMin), Math.abs(scaleMax)));
       const rootEl = doc.querySelector(".ga-root") ?? null;
       const theme = rootEl?.dataset?.gaTheme ?? "";
       const styles = rootEl ? getComputedStyle(rootEl) : null;
@@ -46743,13 +46824,13 @@ ${describeError(err2)}` : message;
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue5(doc, semantic, activeMeasure, scaleMin);
+      left.textContent = formatValueLegend2(doc, semantic, activeMeasure, scaleMin, legendScale);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
       bar.style.background = `linear-gradient(90deg, ${colorForValue2(baseColor, 0)}, ${colorForValue2(baseColor, 1)})`;
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue5(doc, semantic, activeMeasure, scaleMax);
+      right.textContent = formatValueLegend2(doc, semantic, activeMeasure, scaleMax, legendScale);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -46809,7 +46890,7 @@ ${describeError(err2)}` : message;
         } else {
           p.style.opacity = "0.35";
         }
-        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue5(doc, semantic, activeMeasure, v) : "n/a";
+        const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValueTooltip2(doc, semantic, activeMeasure, v) : "n/a";
         const tt = `${key}${valTxt ? ": " : ""}${valTxt}`;
         const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
         titleEl.textContent = tt;
@@ -47008,7 +47089,7 @@ ${describeError(err2)}` : message;
   function rgbToCss(c) {
     return `rgb(${Math.round(c.r)} ${Math.round(c.g)} ${Math.round(c.b)})`;
   }
-  function formatValue6(doc, semantic, measureId, value) {
+  function formatValue4(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
     if (!m || !unit) return String(value);
@@ -47342,7 +47423,7 @@ ${describeError(err2)}` : message;
       legend.innerHTML = "";
       const left = doc.createElement("div");
       left.className = "ga-country-map-legend-min";
-      left.textContent = formatValue6(doc, semantic, activeMeasure, scaleMin);
+      left.textContent = formatValue4(doc, semantic, activeMeasure, scaleMin);
       const bar = doc.createElement("div");
       bar.className = "ga-country-map-legend-bar";
       if (diverging) {
@@ -47352,7 +47433,7 @@ ${describeError(err2)}` : message;
       }
       const right = doc.createElement("div");
       right.className = "ga-country-map-legend-max";
-      right.textContent = formatValue6(doc, semantic, activeMeasure, scaleMax);
+      right.textContent = formatValue4(doc, semantic, activeMeasure, scaleMax);
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
@@ -47527,7 +47608,7 @@ ${describeError(err2)}` : message;
           circle.style.fill = "rgba(255,255,255,0.25)";
           circle.style.opacity = "0.6";
         }
-        const ttVal = typeof v === "number" && Number.isFinite(v) ? formatValue6(doc, semantic, activeMeasure, v) : "n/a";
+        const ttVal = typeof v === "number" && Number.isFinite(v) ? formatValue4(doc, semantic, activeMeasure, v) : "n/a";
         const titleEl = doc.createElementNS("http://www.w3.org/2000/svg", "title");
         titleEl.textContent = `${k} \u2022 ${c} pts \u2022 ${ttVal}`;
         circle.appendChild(titleEl);

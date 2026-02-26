@@ -28,7 +28,40 @@ function formatCountry(doc: Document, isoOrName: string): string {
   }
 }
 
-function formatValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
+function formatNumericWithSuffix(unitId: string, unit: any, numericText: string, value: number): string {
+  const sign = unit?.showSign && value > 0 ? "+" : "";
+  const base = `${sign}${numericText}`;
+  const u = String(unitId ?? "").trim().toLowerCase();
+  if (u === "km") return `${base} km`;
+  if (u === "seconds") return `${base} s`;
+  return base;
+}
+
+function compactNumberPerValue(value: number, decimals: number): string {
+  // Compact per-value formatting: 12,345 -> 12.3K, 1,234,567 -> 1.23M
+  // Only apply when numbers are "large enough" to help readability.
+  const abs = Math.abs(value);
+  if (abs < 10000) return value.toFixed(decimals);
+  try {
+    const nf = new Intl.NumberFormat("en", {
+      notation: "compact",
+      compactDisplay: "short",
+      maximumFractionDigits: Math.max(0, Math.min(3, decimals + 1))
+    } as any);
+    return nf.format(value);
+  } catch {
+    return value.toFixed(decimals);
+  }
+}
+
+function chooseLegendScale(maxAbs: number): { div: number; suffix: string } {
+  if (maxAbs >= 1e9) return { div: 1e9, suffix: "B" };
+  if (maxAbs >= 1e6) return { div: 1e6, suffix: "M" };
+  if (maxAbs >= 1e3) return { div: 1e3, suffix: "k" };
+  return { div: 1, suffix: "" };
+}
+
+function formatValueTooltip(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
   const m = semantic.measures[measureId];
   const unit = m ? semantic.units[m.unit] : undefined;
   if (!m || !unit) return String(value);
@@ -53,8 +86,24 @@ function formatValue(doc: Document, semantic: SemanticRegistry, measureId: strin
     return unit.showSign && v > 0 ? `+${v}` : String(v);
   }
   const decimals = unit.decimals ?? 1;
-  const txt = value.toFixed(decimals);
-  return unit.showSign && value > 0 ? `+${txt}` : txt;
+  const txt = compactNumberPerValue(value, decimals);
+  return formatNumericWithSuffix(m.unit, unit as any, txt, value);
+}
+
+function formatValueLegend(doc: Document, semantic: SemanticRegistry, measureId: string, value: number, scale: { div: number; suffix: string }): string {
+  const m = semantic.measures[measureId];
+  const unit = m ? semantic.units[m.unit] : undefined;
+  if (!m || !unit) return String(value);
+
+  // Legend must be consistent across values: apply one scale.
+  if (unit.format === "percent" || unit.format === "duration" || unit.format === "datetime") {
+    return formatValueTooltip(doc, semantic, measureId, value);
+  }
+  const decimals = unit.format === "int" ? 0 : unit.decimals ?? 1;
+  const scaled = scale.div > 1 ? value / scale.div : value;
+  const txt = unit.format === "int" ? String(Math.round(scaled)) : scaled.toFixed(decimals);
+  const withSuffix = `${txt}${scale.suffix}`;
+  return formatNumericWithSuffix(m.unit, unit as any, withSuffix, value);
 }
 
 function normalizeIso2Key(key: string): string | null {
@@ -274,6 +323,7 @@ export async function renderCountryMetricMapWidget(
     const scaleMin = Math.min(p10, p90);
     const scaleMax = Math.max(p10, p90);
     const scaleSpan = Math.max(1e-9, scaleMax - scaleMin);
+    const legendScale = chooseLegendScale(Math.max(Math.abs(scaleMin), Math.abs(scaleMax)));
 
     const rootEl = (doc.querySelector(".ga-root") as HTMLElement | null) ?? null;
     const theme = rootEl?.dataset?.gaTheme ?? "";
@@ -288,13 +338,13 @@ export async function renderCountryMetricMapWidget(
     legend.innerHTML = "";
     const left = doc.createElement("div");
     left.className = "ga-country-map-legend-min";
-    left.textContent = formatValue(doc, semantic, activeMeasure, scaleMin);
+    left.textContent = formatValueLegend(doc, semantic, activeMeasure, scaleMin, legendScale);
     const bar = doc.createElement("div");
     bar.className = "ga-country-map-legend-bar";
     bar.style.background = `linear-gradient(90deg, ${colorForValue(baseColor, 0)}, ${colorForValue(baseColor, 1)})`;
     const right = doc.createElement("div");
     right.className = "ga-country-map-legend-max";
-    right.textContent = formatValue(doc, semantic, activeMeasure, scaleMax);
+    right.textContent = formatValueLegend(doc, semantic, activeMeasure, scaleMax, legendScale);
     legend.appendChild(left);
     legend.appendChild(bar);
     legend.appendChild(right);
@@ -335,7 +385,7 @@ export async function renderCountryMetricMapWidget(
 
       // Tooltip
       const label = iso2 ? formatCountry(doc, iso2.toUpperCase()) : "";
-      const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValue(doc, semantic, activeMeasure, v) : "n/a";
+      const valTxt = typeof v === "number" && Number.isFinite(v) ? formatValueTooltip(doc, semantic, activeMeasure, v) : "n/a";
       const tt = `${label}${label && valTxt ? ": " : ""}${valTxt}`;
       let titleEl = p.querySelector("title");
       if (!titleEl) {
