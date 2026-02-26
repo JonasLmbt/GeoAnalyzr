@@ -1,6 +1,17 @@
 import { unzipSync, strFromU8 } from "fflate";
 import { getGmXmlhttpRequest } from "../gm";
 
+function canonicalizeUrl(url: string): string {
+  // Prefer raw.githubusercontent.com to avoid multi-step redirects from github.com/.../raw/...
+  // that some userscript managers treat as a different @connect host.
+  const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/i);
+  if (m) {
+    const [, owner, repo, ref, path] = m;
+    return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`;
+  }
+  return url;
+}
+
 function hasGmXhr(): boolean {
   return typeof getGmXmlhttpRequest() === "function";
 }
@@ -80,22 +91,23 @@ function parseGeoBoundariesPrefixFromUrl(url: string): { prefix: string; baseNam
 const geoJsonCache = new Map<string, Promise<any>>();
 
 export function loadGeoJson(url: string): Promise<any> {
-  const existing = geoJsonCache.get(url);
+  const canon = canonicalizeUrl(url);
+  const existing = geoJsonCache.get(canon);
   if (existing) return existing;
 
   const p = (async () => {
     let text: string;
     try {
-      text = await fetchText(url, "application/json");
+      text = await fetchText(canon, "application/json");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      throw new Error(`GeoJSON fetch failed for ${url}: ${msg}`);
+      throw new Error(`GeoJSON fetch failed for ${canon}: ${msg}`);
     }
     if (!text) throw new Error(`Empty response for ${url}`);
 
     if (isGitLfsPointer(text)) {
-      const parsed = parseGeoBoundariesPrefixFromUrl(url);
-      if (!parsed) throw new Error(`Git LFS pointer returned for ${url}`);
+      const parsed = parseGeoBoundariesPrefixFromUrl(canon);
+      if (!parsed) throw new Error(`Git LFS pointer returned for ${canon}`);
       let zipBuf: ArrayBuffer;
       try {
         zipBuf = await fetchArrayBuffer(parsed.zipUrl, "application/zip");
@@ -113,6 +125,6 @@ export function loadGeoJson(url: string): Promise<any> {
     return JSON.parse(text);
   })();
 
-  geoJsonCache.set(url, p);
+  geoJsonCache.set(canon, p);
   return p;
 }

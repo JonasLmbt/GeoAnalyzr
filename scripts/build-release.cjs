@@ -7,7 +7,7 @@ const banner = `// ==UserScript==
 // @name         ${isDev ? "GeoAnalyzr (Dev)" : "GeoAnalyzr"}
 // @namespace    ${isDev ? "geoanalyzr-dev" : "geoanalyzr"}
 // @author       JonasLmbt
-// @version      2.2.23
+// @version      2.2.24
 // @updateURL    ${isDev ? "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js" : "https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js"}
 // @downloadURL  ${isDev ? "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js" : "https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js"}
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -18,6 +18,8 @@ const banner = `// ==UserScript==
 // @connect      game-server.geoguessr.com
 // @connect      github.com
 // @connect      raw.githubusercontent.com
+// @connect      media.githubusercontent.com
+// @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
 // ==/UserScript==`;

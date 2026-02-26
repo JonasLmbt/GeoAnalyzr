@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.23
+// @version      2.2.24
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -13,6 +13,8 @@
 // @connect      game-server.geoguessr.com
 // @connect      github.com
 // @connect      raw.githubusercontent.com
+// @connect      media.githubusercontent.com
+// @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
 // ==/UserScript==
@@ -42802,6 +42804,14 @@ ${describeError(err2)}` : message;
   }
 
   // src/geo/geoJsonFetch.ts
+  function canonicalizeUrl(url) {
+    const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/i);
+    if (m) {
+      const [, owner, repo, ref, path] = m;
+      return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`;
+    }
+    return url;
+  }
   function hasGmXhr() {
     return typeof getGmXmlhttpRequest() === "function";
   }
@@ -42872,20 +42882,21 @@ ${describeError(err2)}` : message;
   }
   var geoJsonCache = /* @__PURE__ */ new Map();
   function loadGeoJson(url) {
-    const existing = geoJsonCache.get(url);
+    const canon = canonicalizeUrl(url);
+    const existing = geoJsonCache.get(canon);
     if (existing) return existing;
     const p = (async () => {
       let text;
       try {
-        text = await fetchText(url, "application/json");
+        text = await fetchText(canon, "application/json");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        throw new Error(`GeoJSON fetch failed for ${url}: ${msg}`);
+        throw new Error(`GeoJSON fetch failed for ${canon}: ${msg}`);
       }
       if (!text) throw new Error(`Empty response for ${url}`);
       if (isGitLfsPointer(text)) {
-        const parsed = parseGeoBoundariesPrefixFromUrl(url);
-        if (!parsed) throw new Error(`Git LFS pointer returned for ${url}`);
+        const parsed = parseGeoBoundariesPrefixFromUrl(canon);
+        if (!parsed) throw new Error(`Git LFS pointer returned for ${canon}`);
         let zipBuf;
         try {
           zipBuf = await fetchArrayBuffer(parsed.zipUrl, "application/zip");
@@ -42901,7 +42912,7 @@ ${describeError(err2)}` : message;
       }
       return JSON.parse(text);
     })();
-    geoJsonCache.set(url, p);
+    geoJsonCache.set(canon, p);
     return p;
   }
 
