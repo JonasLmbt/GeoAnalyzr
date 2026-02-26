@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.25
+// @version      2.2.26
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10287,9 +10287,6 @@ ${shapes}`.trim();
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
     }
     const outRows = new Array(rows.length);
-    const trueKeyFor = (lat, lng) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
-    const trueLocationCount = /* @__PURE__ */ new Map();
-    const firstRoundByLocation = /* @__PURE__ */ new Map();
     const YIELD_EVERY = 250;
     setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
     for (let i = 0; i < rows.length; i++) {
@@ -10384,24 +10381,6 @@ ${shapes}`.trim();
           if (iso2) out.player_self_guessCountry = iso2;
         }
       }
-      const tlat = typeof out?.trueLat === "number" && Number.isFinite(out.trueLat) ? out.trueLat : null;
-      const tlng = typeof out?.trueLng === "number" && Number.isFinite(out.trueLng) ? out.trueLng : null;
-      if (tlat !== null && tlng !== null) {
-        const k = trueKeyFor(tlat, tlng);
-        out.trueLocationKey = k;
-        const next = (trueLocationCount.get(k) ?? 0) + 1;
-        trueLocationCount.set(k, next);
-        if (next === 1) {
-          out.trueLocationRepeat = false;
-          firstRoundByLocation.set(k, out);
-        } else {
-          out.trueLocationRepeat = true;
-          if (next === 2) {
-            const first = firstRoundByLocation.get(k);
-            if (first) first.trueLocationRepeat = true;
-          }
-        }
-      }
       if (typeof out.damage !== "number") {
         const mf = String(out.modeFamily ?? "");
         if (mf === "duels") {
@@ -10455,7 +10434,15 @@ ${shapes}`.trim();
   }
   async function getGamesRaw() {
     if (gamesRawCache) return gamesRawCache;
-    const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
+    setLoadingProgress({ phase: "Reading database (games/details)..." });
+    const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
+    let rounds;
+    if (roundsRawCache) {
+      rounds = roundsRawCache;
+    } else {
+      setLoadingProgress({ phase: "Reading database (rounds)..." });
+      rounds = await db.rounds.toArray();
+    }
     const roundsCountByGame = /* @__PURE__ */ new Map();
     const movementByGame = /* @__PURE__ */ new Map();
     const scoreSumByGame = /* @__PURE__ */ new Map();
@@ -10471,8 +10458,10 @@ ${shapes}`.trim();
     const finalHealthAfterByGame = /* @__PURE__ */ new Map();
     const finalHealthMarkerByGame = /* @__PURE__ */ new Map();
     const YIELD_EVERY = 500;
+    setLoadingProgress({ phase: "Aggregating rounds into games...", current: 0, total: rounds.length });
     for (let i = 0; i < rounds.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      if (i > 0 && i % 1e3 === 0) setLoadingProgress({ phase: "Aggregating rounds into games...", current: i, total: rounds.length });
       const r = rounds[i];
       const gid = typeof r?.gameId === "string" ? r.gameId : "";
       if (!gid) continue;
@@ -10525,11 +10514,14 @@ ${shapes}`.trim();
         }
       }
     }
+    setLoadingProgress({ phase: "Aggregating rounds into games...", current: rounds.length, total: rounds.length });
     const detailsByGame = /* @__PURE__ */ new Map();
     for (const d of details) {
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
     }
-    gamesRawCache = games.map((g) => {
+    setLoadingProgress({ phase: "Merging game facts...", current: 0, total: games.length });
+    gamesRawCache = games.map((g, idx) => {
+      if (idx > 0 && idx % 500 === 0) setLoadingProgress({ phase: "Merging game facts...", current: idx, total: games.length });
       const d = detailsByGame.get(g.gameId);
       const out = { ...g, ...d ? d : {} };
       if (typeof g.playedAt === "number" && Number.isFinite(g.playedAt)) {
@@ -10599,6 +10591,7 @@ ${shapes}`.trim();
       }
       return out;
     });
+    setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
     return gamesRawCache;
   }
   async function getGames(filters) {

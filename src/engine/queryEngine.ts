@@ -444,10 +444,6 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     }
 
   const outRows: RoundRow[] = new Array(rows.length);
-  // Coordinate repeat enrichment (true location) done in a single pass to avoid extra full-table scans.
-  const trueKeyFor = (lat: number, lng: number): string => `${lat.toFixed(6)},${lng.toFixed(6)}`;
-  const trueLocationCount = new Map<string, number>();
-  const firstRoundByLocation = new Map<string, any>();
   const YIELD_EVERY = 250;
   setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
   for (let i = 0; i < rows.length; i++) {
@@ -576,26 +572,6 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
       }
     }
 
-    // Repeat true locations (used by Coordinates section).
-    const tlat = typeof out?.trueLat === "number" && Number.isFinite(out.trueLat) ? out.trueLat : null;
-    const tlng = typeof out?.trueLng === "number" && Number.isFinite(out.trueLng) ? out.trueLng : null;
-    if (tlat !== null && tlng !== null) {
-      const k = trueKeyFor(tlat, tlng);
-      out.trueLocationKey = k;
-      const next = (trueLocationCount.get(k) ?? 0) + 1;
-      trueLocationCount.set(k, next);
-      if (next === 1) {
-        out.trueLocationRepeat = false;
-        firstRoundByLocation.set(k, out);
-      } else {
-        out.trueLocationRepeat = true;
-        if (next === 2) {
-          const first = firstRoundByLocation.get(k);
-          if (first) first.trueLocationRepeat = true;
-        }
-      }
-    }
-
     if (typeof out.damage !== "number") {
       const mf = String(out.modeFamily ?? "");
       if (mf === "duels") {
@@ -660,7 +636,15 @@ export async function getRounds(filters: GlobalFilters): Promise<RoundRow[]> {
 
 async function getGamesRaw(): Promise<GameFactRow[]> {
   if (gamesRawCache) return gamesRawCache;
-  const [games, details, rounds] = await Promise.all([db.games.toArray(), db.details.toArray(), db.rounds.toArray()]);
+  setLoadingProgress({ phase: "Reading database (games/details)..." });
+  const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
+  let rounds: any[];
+  if (roundsRawCache) {
+    rounds = roundsRawCache as any[];
+  } else {
+    setLoadingProgress({ phase: "Reading database (rounds)..." });
+    rounds = (await db.rounds.toArray()) as any[];
+  }
 
   const roundsCountByGame = new Map<string, number>();
   const movementByGame = new Map<string, string>();
@@ -677,8 +661,10 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
   const finalHealthAfterByGame = new Map<string, number>();
   const finalHealthMarkerByGame = new Map<string, number>();
   const YIELD_EVERY = 500;
+  setLoadingProgress({ phase: "Aggregating rounds into games...", current: 0, total: (rounds as any[]).length });
   for (let i = 0; i < (rounds as any[]).length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+    if (i > 0 && i % 1000 === 0) setLoadingProgress({ phase: "Aggregating rounds into games...", current: i, total: (rounds as any[]).length });
     const r = (rounds as any[])[i];
     const gid = typeof r?.gameId === "string" ? r.gameId : "";
     if (!gid) continue;
@@ -741,13 +727,16 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       }
     }
   }
+  setLoadingProgress({ phase: "Aggregating rounds into games...", current: (rounds as any[]).length, total: (rounds as any[]).length });
 
   const detailsByGame = new Map<string, any>();
   for (const d of details) {
     if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
   }
 
-  gamesRawCache = games.map((g) => {
+  setLoadingProgress({ phase: "Merging game facts...", current: 0, total: games.length });
+  gamesRawCache = games.map((g, idx) => {
+    if (idx > 0 && idx % 500 === 0) setLoadingProgress({ phase: "Merging game facts...", current: idx, total: games.length });
     const d = detailsByGame.get(g.gameId);
     const out: any = { ...(g as any), ...(d ? (d as any) : {}) };
     if (typeof g.playedAt === "number" && Number.isFinite(g.playedAt)) {
@@ -839,6 +828,7 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
 
     return out as GameFactRow;
   });
+  setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
 
   return gamesRawCache;
 }
