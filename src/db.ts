@@ -274,6 +274,27 @@ export type GameRow =
 // Convenience "fact" row for analytics (feed + details merged, with a stable time field).
 export type GameFactRow = FeedGameRow & Partial<GameRow> & { ts?: number; result?: "Win" | "Loss" };
 
+export interface GameAggRow {
+  gameId: string; // PK
+  aggVersion: number;
+  computedAt: number;
+  // Round-derived aggregates
+  roundsCount: number;
+  movementType?: "moving" | "no_move" | "nmpz" | "mixed" | "unknown";
+  scoreSum?: number;
+  scoreCount?: number;
+  fivekCount?: number;
+  throwCount?: number;
+  hitCount?: number;
+  hitDenom?: number;
+  minStart?: number;
+  maxEnd?: number;
+  minHealthAfter?: number;
+  maxHealthAfter?: number;
+  finalHealthAfter?: number;
+  finalHealthMarker?: number;
+}
+
 export interface LegacyDetailsRowCompat {
   gameId: string; // PK
   status: "missing" | "ok" | "error";
@@ -307,6 +328,7 @@ export class GGDB extends Dexie {
   games!: Table<FeedGameRow, string>;
   rounds!: Table<RoundRow, string>;
   details!: Table<GameRow, string>;
+  gameAgg!: Table<GameAggRow, string>;
   meta!: Table<MetaRow, string>;
 
   constructor() {
@@ -358,6 +380,33 @@ export class GGDB extends Dexie {
         "player_mate_id",
         "player_opponent_country"
       ].join(", "),
+      meta: "key, updatedAt"
+    });
+
+    // v5: persistent per-game aggregates (avoid rescanning rounds on every open)
+    this.version(5).stores({
+      games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+      rounds: [
+        "id",
+        "gameId",
+        "roundNumber",
+        "[gameId+roundNumber]",
+        "playedAt",
+        "trueCountry",
+        "movementType",
+        "player_self_score"
+      ].join(", "),
+      details: [
+        "gameId",
+        "status",
+        "fetchedAt",
+        "modeFamily",
+        "isTeamDuels",
+        "player_self_id",
+        "player_mate_id",
+        "player_opponent_country"
+      ].join(", "),
+      gameAgg: "gameId, computedAt, aggVersion",
       meta: "key, updatedAt"
     });
   }

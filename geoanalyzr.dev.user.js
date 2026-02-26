@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.26
+// @version      2.2.27
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -7188,6 +7188,7 @@ ${shapes}`.trim();
     games;
     rounds;
     details;
+    gameAgg;
     meta;
     constructor() {
       super("gg_analyzer_db");
@@ -7230,6 +7231,31 @@ ${shapes}`.trim();
           "player_mate_id",
           "player_opponent_country"
         ].join(", "),
+        meta: "key, updatedAt"
+      });
+      this.version(5).stores({
+        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+        rounds: [
+          "id",
+          "gameId",
+          "roundNumber",
+          "[gameId+roundNumber]",
+          "playedAt",
+          "trueCountry",
+          "movementType",
+          "player_self_score"
+        ].join(", "),
+        details: [
+          "gameId",
+          "status",
+          "fetchedAt",
+          "modeFamily",
+          "isTeamDuels",
+          "player_self_id",
+          "player_mate_id",
+          "player_opponent_country"
+        ].join(", "),
+        gameAgg: "gameId, computedAt, aggVersion",
         meta: "key, updatedAt"
       });
     }
@@ -8183,8 +8209,71 @@ ${shapes}`.trim();
   function resolveCountryCodeByLatLngLocalOnlySync(lat, lng) {
     return resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, true);
   }
-  async function resolveCountryCodeByLatLngLocalOnly(lat, lng) {
-    return resolveCountryCodeByLatLngInternal(lat, lng, false);
+
+  // src/engine/gameAgg.ts
+  var GAME_AGG_VERSION = 1;
+  function normalizeMovementType(raw) {
+    if (typeof raw !== "string") return "unknown";
+    const s = raw.trim().toLowerCase();
+    if (!s) return "unknown";
+    if (s === "mixed") return "mixed";
+    if (s.includes("nmpz")) return "nmpz";
+    if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+    if (s.includes("moving")) return "moving";
+    return "unknown";
+  }
+  function computeGameAggFromRounds(gameId, rounds) {
+    const agg = {
+      gameId,
+      aggVersion: GAME_AGG_VERSION,
+      computedAt: Date.now(),
+      roundsCount: 0
+    };
+    let movement;
+    for (const r of rounds) {
+      if (!r || typeof r !== "object") continue;
+      const gid = typeof r.gameId === "string" ? r.gameId : "";
+      if (gid !== gameId) continue;
+      agg.roundsCount++;
+      const mvRaw = r.movementType ?? r.movement_type;
+      const mv = normalizeMovementType(mvRaw);
+      if (mv && mv !== "unknown") {
+        if (!movement) movement = mv;
+        else if (movement !== mv && movement !== "mixed") movement = "mixed";
+      }
+      const score = typeof r.player_self_score === "number" ? r.player_self_score : typeof r.p1_score === "number" ? r.p1_score : typeof r.score === "number" ? r.score : null;
+      if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+        agg.scoreSum = (agg.scoreSum ?? 0) + score;
+        agg.scoreCount = (agg.scoreCount ?? 0) + 1;
+        if (score >= 5e3) agg.fivekCount = (agg.fivekCount ?? 0) + 1;
+        if (score < 50) agg.throwCount = (agg.throwCount ?? 0) + 1;
+      }
+      const truth = typeof r.trueCountry === "string" ? r.trueCountry : typeof r.true_country === "string" ? r.true_country : "";
+      const guess = typeof r.player_self_guessCountry === "string" ? r.player_self_guessCountry : typeof r.p1_guessCountry === "string" ? r.p1_guessCountry : typeof r.guessCountry === "string" ? r.guessCountry : "";
+      if (truth && guess) {
+        agg.hitDenom = (agg.hitDenom ?? 0) + 1;
+        if (guess === truth) agg.hitCount = (agg.hitCount ?? 0) + 1;
+      }
+      const start = typeof r.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
+      const end = typeof r.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
+      if (start !== null) agg.minStart = agg.minStart === void 0 ? start : Math.min(agg.minStart, start);
+      if (end !== null) agg.maxEnd = agg.maxEnd === void 0 ? end : Math.max(agg.maxEnd, end);
+      const h = typeof r.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
+      if (h !== null) {
+        agg.minHealthAfter = agg.minHealthAfter === void 0 ? h : Math.min(agg.minHealthAfter, h);
+        agg.maxHealthAfter = agg.maxHealthAfter === void 0 ? h : Math.max(agg.maxHealthAfter, h);
+        const marker = (typeof r.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ?? (typeof r.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ?? (typeof r.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
+        if (marker !== null) {
+          const curMarker = agg.finalHealthMarker;
+          if (curMarker === void 0 || marker >= curMarker) {
+            agg.finalHealthMarker = marker;
+            agg.finalHealthAfter = h;
+          }
+        }
+      }
+    }
+    agg.movementType = movement ?? "unknown";
+    return agg;
   }
 
   // src/details.ts
@@ -8852,9 +8941,11 @@ ${shapes}`.trim();
           const { data, endpoint } = await fetchDetailJson(game, opts.ncfa);
           const prev = existingByGameAndRound.get(game.gameId);
           const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, opts.ncfa, prev);
-          await db.transaction("rw", db.details, db.rounds, async () => {
+          const agg = computeGameAggFromRounds(game.gameId, normalized.rounds);
+          await db.transaction("rw", db.details, db.rounds, db.gameAgg, async () => {
             await db.details.put(normalized.detail);
             await db.rounds.bulkPut(normalized.rounds);
+            await db.gameAgg.put(agg);
           });
           ok++;
         } catch (e) {
@@ -9307,6 +9398,7 @@ ${shapes}`.trim();
     const total = await db.rounds.count();
     let scanned = 0;
     let updated = 0;
+    let mutated = false;
     onStatus(`Normalizing legacy rounds... (0/${total})`);
     for (let offset = 0; offset < total; offset += batchSize) {
       const chunk = await db.rounds.offset(offset).limit(batchSize).toArray();
@@ -9321,6 +9413,7 @@ ${shapes}`.trim();
       if (patch.length > 0) {
         await db.rounds.bulkPut(patch);
         updated += patch.length;
+        mutated = true;
       }
       if (scanned % (batchSize * 5) === 0 || scanned === total) {
         onStatus(`Normalizing legacy rounds... (${scanned}/${total}, updated ${updated})`);
@@ -9331,6 +9424,12 @@ ${shapes}`.trim();
       value: { doneAt: Date.now(), scanned, updated },
       updatedAt: Date.now()
     });
+    if (mutated) {
+      try {
+        await db.gameAgg.clear();
+      } catch {
+      }
+    }
     return { scanned, updated };
   }
 
@@ -9349,13 +9448,13 @@ ${shapes}`.trim();
     const lng = r?.[`${role}_guessLng`];
     return typeof id === "string" && id.trim().length > 0 || isFiniteNumber2(lat) && isFiniteNumber2(lng);
   }
-  async function maybeFillRole(out, role) {
+  function maybeFillRole(out, role) {
     const existing = normalizeIso23(out?.[`${role}_guessCountry`]);
     if (existing) return false;
     const lat = out?.[`${role}_guessLat`];
     const lng = out?.[`${role}_guessLng`];
     if (!isFiniteNumber2(lat) || !isFiniteNumber2(lng)) return false;
-    const iso2 = await resolveCountryCodeByLatLngLocalOnly(lat, lng);
+    const iso2 = resolveCountryCodeByLatLngLocalOnlySync(lat, lng);
     if (!iso2) return false;
     out[`${role}_guessCountry`] = iso2;
     return true;
@@ -9375,6 +9474,7 @@ ${shapes}`.trim();
     const total = await db.rounds.count();
     let scanned = 0;
     let updated = 0;
+    let mutated = false;
     onStatus(`Backfilling guessCountry... (0/${total})`);
     for (let offset = 0; offset < total; offset += batchSize) {
       const chunk = await db.rounds.offset(offset).limit(batchSize).toArray();
@@ -9382,17 +9482,18 @@ ${shapes}`.trim();
       const patch = [];
       for (const r of chunk) {
         if (!r || typeof r !== "object") continue;
-        const out = { ...r };
+        const out = r;
         let changed = false;
-        if (hasRole(r, "player_self")) changed = await maybeFillRole(out, "player_self") || changed;
-        if (hasRole(r, "player_opponent")) changed = await maybeFillRole(out, "player_opponent") || changed;
-        if (hasRole(r, "player_mate")) changed = await maybeFillRole(out, "player_mate") || changed;
-        if (hasRole(r, "player_opponent_mate")) changed = await maybeFillRole(out, "player_opponent_mate") || changed;
+        if (hasRole(r, "player_self")) changed = maybeFillRole(out, "player_self") || changed;
+        if (hasRole(r, "player_opponent")) changed = maybeFillRole(out, "player_opponent") || changed;
+        if (hasRole(r, "player_mate")) changed = maybeFillRole(out, "player_mate") || changed;
+        if (hasRole(r, "player_opponent_mate")) changed = maybeFillRole(out, "player_opponent_mate") || changed;
         if (changed) patch.push(out);
       }
       if (patch.length > 0) {
         await db.rounds.bulkPut(patch);
         updated += patch.length;
+        mutated = true;
       }
       if (scanned % (batchSize * 5) === 0 || scanned === total) {
         onStatus(`Backfilling guessCountry... (${scanned}/${total}, updated ${updated})`);
@@ -9403,6 +9504,12 @@ ${shapes}`.trim();
       value: { doneAt: Date.now(), scanned, updated },
       updatedAt: Date.now()
     });
+    if (mutated) {
+      try {
+        await db.gameAgg.clear();
+      } catch {
+      }
+    }
     return { scanned, updated };
   }
 
@@ -9974,7 +10081,7 @@ ${shapes}`.trim();
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
-  function normalizeMovementType(raw) {
+  function normalizeMovementType2(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
     if (!s) return "unknown";
@@ -10346,7 +10453,7 @@ ${shapes}`.trim();
       if (typeof out.movementType !== "string" || !out.movementType) {
         const fromDetail = asTrimmedString2(d?.gameModeSimple);
         const fromGame = gameModeByGame.get(gameId);
-        out.movementType = normalizeMovementType(fromDetail ?? fromGame);
+        out.movementType = normalizeMovementType2(fromDetail ?? fromGame);
       }
       if (d) {
         const v = typeof d.player_self_victory === "boolean" ? d.player_self_victory : typeof d.teamOneVictory === "boolean" ? d.teamOneVictory : typeof d.playerOneVictory === "boolean" ? d.playerOneVictory : void 0;
@@ -10436,88 +10543,108 @@ ${shapes}`.trim();
     if (gamesRawCache) return gamesRawCache;
     setLoadingProgress({ phase: "Reading database (games/details)..." });
     const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
-    let rounds;
-    if (roundsRawCache) {
-      rounds = roundsRawCache;
-    } else {
-      setLoadingProgress({ phase: "Reading database (rounds)..." });
-      rounds = await db.rounds.toArray();
-    }
-    const roundsCountByGame = /* @__PURE__ */ new Map();
-    const movementByGame = /* @__PURE__ */ new Map();
-    const scoreSumByGame = /* @__PURE__ */ new Map();
-    const scoreCountByGame = /* @__PURE__ */ new Map();
-    const fivekCountByGame = /* @__PURE__ */ new Map();
-    const throwCountByGame = /* @__PURE__ */ new Map();
-    const hitCountByGame = /* @__PURE__ */ new Map();
-    const hitDenomByGame = /* @__PURE__ */ new Map();
-    const minStartByGame = /* @__PURE__ */ new Map();
-    const maxEndByGame = /* @__PURE__ */ new Map();
-    const minHealthAfterByGame = /* @__PURE__ */ new Map();
-    const maxHealthAfterByGame = /* @__PURE__ */ new Map();
-    const finalHealthAfterByGame = /* @__PURE__ */ new Map();
-    const finalHealthMarkerByGame = /* @__PURE__ */ new Map();
-    const YIELD_EVERY = 500;
-    setLoadingProgress({ phase: "Aggregating rounds into games...", current: 0, total: rounds.length });
-    for (let i = 0; i < rounds.length; i++) {
-      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-      if (i > 0 && i % 1e3 === 0) setLoadingProgress({ phase: "Aggregating rounds into games...", current: i, total: rounds.length });
-      const r = rounds[i];
-      const gid = typeof r?.gameId === "string" ? r.gameId : "";
-      if (!gid) continue;
-      roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
-      const mv = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
-      const cur = movementByGame.get(gid);
-      if (mv) {
-        if (!cur) {
-          movementByGame.set(gid, mv);
-        } else if (cur !== mv && cur !== "mixed") {
-          movementByGame.set(gid, "mixed");
-        }
-      }
-      const score = typeof r?.player_self_score === "number" ? r.player_self_score : typeof r?.p1_score === "number" ? r.p1_score : typeof r?.score === "number" ? r.score : null;
-      if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
-        scoreSumByGame.set(gid, (scoreSumByGame.get(gid) ?? 0) + score);
-        scoreCountByGame.set(gid, (scoreCountByGame.get(gid) ?? 0) + 1);
-        if (score >= 5e3) fivekCountByGame.set(gid, (fivekCountByGame.get(gid) ?? 0) + 1);
-        if (score < 50) throwCountByGame.set(gid, (throwCountByGame.get(gid) ?? 0) + 1);
-      }
-      const truth = typeof r?.trueCountry === "string" ? r.trueCountry : typeof r?.true_country === "string" ? r.true_country : "";
-      const guess = typeof r?.player_self_guessCountry === "string" ? r.player_self_guessCountry : typeof r?.p1_guessCountry === "string" ? r.p1_guessCountry : typeof r?.guessCountry === "string" ? r.guessCountry : "";
-      if (truth && guess) {
-        hitDenomByGame.set(gid, (hitDenomByGame.get(gid) ?? 0) + 1);
-        if (guess === truth) hitCountByGame.set(gid, (hitCountByGame.get(gid) ?? 0) + 1);
-      }
-      const start = typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
-      const end = typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
-      if (start !== null) {
-        const curMin = minStartByGame.get(gid);
-        minStartByGame.set(gid, curMin === void 0 ? start : Math.min(curMin, start));
-      }
-      if (end !== null) {
-        const curMax = maxEndByGame.get(gid);
-        maxEndByGame.set(gid, curMax === void 0 ? end : Math.max(curMax, end));
-      }
-      const h = typeof r?.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
-      if (h !== null) {
-        const curMin = minHealthAfterByGame.get(gid);
-        const curMax = maxHealthAfterByGame.get(gid);
-        minHealthAfterByGame.set(gid, curMin === void 0 ? h : Math.min(curMin, h));
-        maxHealthAfterByGame.set(gid, curMax === void 0 ? h : Math.max(curMax, h));
-        const marker = (typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ?? (typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ?? (typeof r?.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
-        if (marker !== null) {
-          const curMarker = finalHealthMarkerByGame.get(gid);
-          if (curMarker === void 0 || marker >= curMarker) {
-            finalHealthMarkerByGame.set(gid, marker);
-            finalHealthAfterByGame.set(gid, h);
-          }
-        }
-      }
-    }
-    setLoadingProgress({ phase: "Aggregating rounds into games...", current: rounds.length, total: rounds.length });
     const detailsByGame = /* @__PURE__ */ new Map();
     for (const d of details) {
       if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
+    }
+    const needGameIds = [];
+    for (const g of games) {
+      const gid = typeof g?.gameId === "string" ? g.gameId : "";
+      if (gid) needGameIds.push(gid);
+    }
+    const aggByGame = /* @__PURE__ */ new Map();
+    try {
+      const cached = await db.gameAgg.toArray();
+      for (const a of cached) {
+        const gid = typeof a?.gameId === "string" ? a.gameId : "";
+        const v = typeof a?.aggVersion === "number" ? a.aggVersion : 0;
+        if (!gid || v !== GAME_AGG_VERSION) continue;
+        aggByGame.set(gid, a);
+      }
+    } catch {
+    }
+    const missingIds = needGameIds.filter((gid) => !aggByGame.has(gid));
+    if (missingIds.length > 0) {
+      const missingSet = new Set(missingIds);
+      let rounds;
+      if (roundsRawCache) {
+        rounds = roundsRawCache;
+      } else {
+        setLoadingProgress({ phase: "Reading database (rounds)..." });
+        rounds = await db.rounds.toArray();
+      }
+      const YIELD_EVERY = 2e3;
+      setLoadingProgress({ phase: "Aggregating rounds into games...", current: 0, total: rounds.length });
+      for (let i = 0; i < rounds.length; i++) {
+        if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+        if (i > 0 && i % 4e3 === 0) setLoadingProgress({ phase: "Aggregating rounds into games...", current: i, total: rounds.length });
+        const r = rounds[i];
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (!gid || !missingSet.has(gid)) continue;
+        let agg = aggByGame.get(gid);
+        if (!agg) {
+          agg = { gameId: gid, aggVersion: GAME_AGG_VERSION, computedAt: 0, roundsCount: 0, movementType: "unknown" };
+          aggByGame.set(gid, agg);
+        }
+        agg.roundsCount++;
+        const mvRaw = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
+        const mv = normalizeMovementType2(mvRaw);
+        const curMv = agg.movementType;
+        if (mv && mv !== "unknown") {
+          if (!curMv || curMv === "unknown") agg.movementType = mv;
+          else if (curMv !== mv && curMv !== "mixed") agg.movementType = "mixed";
+        }
+        const score = typeof r?.player_self_score === "number" ? r.player_self_score : typeof r?.p1_score === "number" ? r.p1_score : typeof r?.score === "number" ? r.score : null;
+        if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+          agg.scoreSum = (agg.scoreSum ?? 0) + score;
+          agg.scoreCount = (agg.scoreCount ?? 0) + 1;
+          if (score >= 5e3) agg.fivekCount = (agg.fivekCount ?? 0) + 1;
+          if (score < 50) agg.throwCount = (agg.throwCount ?? 0) + 1;
+        }
+        const truth = typeof r?.trueCountry === "string" ? r.trueCountry : typeof r?.true_country === "string" ? r.true_country : "";
+        const guess = typeof r?.player_self_guessCountry === "string" ? r.player_self_guessCountry : typeof r?.p1_guessCountry === "string" ? r.p1_guessCountry : typeof r?.guessCountry === "string" ? r.guessCountry : "";
+        if (truth && guess) {
+          agg.hitDenom = (agg.hitDenom ?? 0) + 1;
+          if (guess === truth) agg.hitCount = (agg.hitCount ?? 0) + 1;
+        }
+        const start = typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
+        const end = typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
+        if (start !== null) agg.minStart = agg.minStart === void 0 ? start : Math.min(agg.minStart, start);
+        if (end !== null) agg.maxEnd = agg.maxEnd === void 0 ? end : Math.max(agg.maxEnd, end);
+        const h = typeof r?.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
+        if (h !== null) {
+          agg.minHealthAfter = agg.minHealthAfter === void 0 ? h : Math.min(agg.minHealthAfter, h);
+          agg.maxHealthAfter = agg.maxHealthAfter === void 0 ? h : Math.max(agg.maxHealthAfter, h);
+          const marker = (typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ?? (typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ?? (typeof r?.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
+          if (marker !== null) {
+            const curMarker = agg.finalHealthMarker;
+            if (curMarker === void 0 || marker >= curMarker) {
+              agg.finalHealthMarker = marker;
+              agg.finalHealthAfter = h;
+            }
+          }
+        }
+      }
+      setLoadingProgress({ phase: "Aggregating rounds into games...", current: rounds.length, total: rounds.length });
+      const computedAt = Date.now();
+      const toWrite = [];
+      for (const gid of missingIds) {
+        const agg = aggByGame.get(gid);
+        if (!agg) continue;
+        agg.computedAt = computedAt;
+        agg.aggVersion = GAME_AGG_VERSION;
+        if (!agg.movementType) agg.movementType = "unknown";
+        toWrite.push(agg);
+      }
+      if (toWrite.length > 0) {
+        try {
+          setLoadingProgress({ phase: `Saving game aggregates... (${toWrite.length})` });
+          await db.gameAgg.bulkPut(toWrite);
+        } catch {
+        }
+      }
+    } else {
+      setLoadingProgress({ phase: `Using cached game aggregates... (${aggByGame.size})` });
     }
     setLoadingProgress({ phase: "Merging game facts...", current: 0, total: games.length });
     gamesRawCache = games.map((g, idx) => {
@@ -10528,35 +10655,36 @@ ${shapes}`.trim();
         out.playedAt = g.playedAt;
         out.ts = g.playedAt;
       }
-      out.roundsCount = roundsCountByGame.get(g.gameId) ?? 0;
-      if (typeof out.movementType !== "string" || !out.movementType) {
-        const mv = movementByGame.get(g.gameId);
-        if (mv) out.movementType = mv;
+      const agg = aggByGame.get(g.gameId);
+      out.roundsCount = agg?.roundsCount ?? 0;
+      if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
+        const fromAgg = agg?.movementType;
+        if (fromAgg && fromAgg !== "unknown") out.movementType = fromAgg;
       }
       if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
         const raw = asTrimmedString2(out.gameModeSimple) ?? asTrimmedString2(out.gameMode) ?? asTrimmedString2(out.mode) ?? asTrimmedString2(out.gameType);
-        const norm = normalizeMovementType(raw);
+        const norm = normalizeMovementType2(raw);
         if (norm !== "unknown") out.movementType = norm;
       }
-      const scoreSum = scoreSumByGame.get(g.gameId);
-      const scoreCount = scoreCountByGame.get(g.gameId);
+      const scoreSum = agg?.scoreSum;
+      const scoreCount = agg?.scoreCount;
       if (typeof scoreSum === "number") out.scoreSum = scoreSum;
       if (typeof scoreCount === "number") out.scoreCount = scoreCount;
-      out.fivekCount = fivekCountByGame.get(g.gameId) ?? 0;
-      out.throwCount = throwCountByGame.get(g.gameId) ?? 0;
-      out.hitCount = hitCountByGame.get(g.gameId) ?? 0;
-      out.hitDenom = hitDenomByGame.get(g.gameId) ?? 0;
-      const minStart = minStartByGame.get(g.gameId);
-      const maxEnd = maxEndByGame.get(g.gameId);
+      out.fivekCount = agg?.fivekCount ?? 0;
+      out.throwCount = agg?.throwCount ?? 0;
+      out.hitCount = agg?.hitCount ?? 0;
+      out.hitDenom = agg?.hitDenom ?? 0;
+      const minStart = agg?.minStart;
+      const maxEnd = agg?.maxEnd;
       if (typeof minStart === "number" && typeof maxEnd === "number" && Number.isFinite(minStart) && Number.isFinite(maxEnd) && maxEnd > minStart) {
         out.gameDurationSeconds = (maxEnd - minStart) / 1e3;
       }
-      const minH = minHealthAfterByGame.get(g.gameId);
-      const maxH = maxHealthAfterByGame.get(g.gameId);
+      const minH = agg?.minHealthAfter;
+      const maxH = agg?.maxHealthAfter;
       if (typeof minH === "number" && typeof maxH === "number" && Number.isFinite(minH) && Number.isFinite(maxH) && minH === maxH && maxH > 0) {
         out.isFlawless = true;
       }
-      const finalH = finalHealthAfterByGame.get(g.gameId);
+      const finalH = agg?.finalHealthAfter;
       if (typeof finalH === "number" && Number.isFinite(finalH) && finalH >= 0) {
         out.player_self_finalHealth = finalH;
       }

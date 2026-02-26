@@ -11,6 +11,7 @@ import {
 } from "./db";
 import { httpGetJson } from "./http";
 import { resolveCountryCodeByLatLng } from "./countries";
+import { computeGameAggFromRounds } from "./engine/gameAgg";
 
 let cachedOwnPlayerId: string | null | undefined;
 const profileCache = new Map<string, { nick?: string; countryCode?: string; countryName?: string }>();
@@ -823,9 +824,12 @@ export async function fetchDetailsForGames(opts: {
         const prev = existingByGameAndRound.get(game.gameId);
         const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, opts.ncfa, prev);
 
-        await db.transaction("rw", db.details, db.rounds, async () => {
+        const agg = computeGameAggFromRounds(game.gameId, normalized.rounds as any[]);
+
+        await db.transaction("rw", db.details, db.rounds, db.gameAgg, async () => {
           await db.details.put(normalized.detail);
           await db.rounds.bulkPut(normalized.rounds);
+          await db.gameAgg.put(agg);
         });
 
         ok++;

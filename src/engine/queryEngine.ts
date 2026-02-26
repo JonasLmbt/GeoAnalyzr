@@ -1,11 +1,12 @@
 // src/engine/queryEngine.ts
 import { db } from "../db";
-import type { RoundRow, GameFactRow } from "../db";
+import type { RoundRow, GameAggRow, GameFactRow } from "../db";
 import type { GlobalFiltersSpec } from "../config/dashboard.types";
 import { applyFilters } from "./filters";
 import { buildAppliedFilters, normalizeGlobalFilterKey, type GlobalFilterState } from "./globalFilters";
 import { resolveCountryCodeByLatLngLocalOnlySync } from "../countries";
 import { setLoadingProgress } from "../progress";
+import { GAME_AGG_VERSION } from "./gameAgg";
 
 async function yieldToEventLoop(): Promise<void> {
   await new Promise<void>((r) => setTimeout(r, 0));
@@ -638,115 +639,161 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
   if (gamesRawCache) return gamesRawCache;
   setLoadingProgress({ phase: "Reading database (games/details)..." });
   const [games, details] = await Promise.all([db.games.toArray(), db.details.toArray()]);
-  let rounds: any[];
-  if (roundsRawCache) {
-    rounds = roundsRawCache as any[];
-  } else {
-    setLoadingProgress({ phase: "Reading database (rounds)..." });
-    rounds = (await db.rounds.toArray()) as any[];
+
+  const detailsByGame = new Map<string, any>();
+  for (const d of details as any[]) {
+    if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
   }
 
-  const roundsCountByGame = new Map<string, number>();
-  const movementByGame = new Map<string, string>();
-  const scoreSumByGame = new Map<string, number>();
-  const scoreCountByGame = new Map<string, number>();
-  const fivekCountByGame = new Map<string, number>();
-  const throwCountByGame = new Map<string, number>();
-  const hitCountByGame = new Map<string, number>();
-  const hitDenomByGame = new Map<string, number>();
-  const minStartByGame = new Map<string, number>();
-  const maxEndByGame = new Map<string, number>();
-  const minHealthAfterByGame = new Map<string, number>();
-  const maxHealthAfterByGame = new Map<string, number>();
-  const finalHealthAfterByGame = new Map<string, number>();
-  const finalHealthMarkerByGame = new Map<string, number>();
-  const YIELD_EVERY = 500;
-  setLoadingProgress({ phase: "Aggregating rounds into games...", current: 0, total: (rounds as any[]).length });
-  for (let i = 0; i < (rounds as any[]).length; i++) {
-    if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-    if (i > 0 && i % 1000 === 0) setLoadingProgress({ phase: "Aggregating rounds into games...", current: i, total: (rounds as any[]).length });
-    const r = (rounds as any[])[i];
-    const gid = typeof r?.gameId === "string" ? r.gameId : "";
-    if (!gid) continue;
-    roundsCountByGame.set(gid, (roundsCountByGame.get(gid) ?? 0) + 1);
+  const needGameIds: string[] = [];
+  for (const g of games as any[]) {
+    const gid = typeof g?.gameId === "string" ? g.gameId : "";
+    if (gid) needGameIds.push(gid);
+  }
 
-    const mv = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
-    const cur = movementByGame.get(gid);
-    if (mv) {
-      if (!cur) {
-        movementByGame.set(gid, mv);
-      } else if (cur !== mv && cur !== "mixed") {
-        movementByGame.set(gid, "mixed");
+  const aggByGame = new Map<string, GameAggRow>();
+  try {
+    const cached = await db.gameAgg.toArray();
+    for (const a of cached as any[]) {
+      const gid = typeof a?.gameId === "string" ? a.gameId : "";
+      const v = typeof a?.aggVersion === "number" ? a.aggVersion : 0;
+      if (!gid || v !== GAME_AGG_VERSION) continue;
+      aggByGame.set(gid, a as GameAggRow);
+    }
+  } catch {
+    // ignore (first run on older DB)
+  }
+
+  const missingIds = needGameIds.filter((gid) => !aggByGame.has(gid));
+  if (missingIds.length > 0) {
+    const missingSet = new Set(missingIds);
+
+    let rounds: any[];
+    if (roundsRawCache) {
+      rounds = roundsRawCache as any[];
+    } else {
+      setLoadingProgress({ phase: "Reading database (rounds)..." });
+      rounds = (await db.rounds.toArray()) as any[];
+    }
+
+    const YIELD_EVERY = 2000;
+    setLoadingProgress({ phase: "Aggregating rounds into games...", current: 0, total: rounds.length });
+    for (let i = 0; i < rounds.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      if (i > 0 && i % 4000 === 0) setLoadingProgress({ phase: "Aggregating rounds into games...", current: i, total: rounds.length });
+
+      const r = rounds[i];
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      if (!gid || !missingSet.has(gid)) continue;
+
+      let agg = aggByGame.get(gid);
+      if (!agg) {
+        agg = { gameId: gid, aggVersion: GAME_AGG_VERSION, computedAt: 0, roundsCount: 0, movementType: "unknown" };
+        aggByGame.set(gid, agg);
       }
-    }
 
-    // Round aggregates (for game-level records).
-    const score = typeof r?.player_self_score === "number" ? r.player_self_score : typeof r?.p1_score === "number" ? r.p1_score : typeof r?.score === "number" ? r.score : null;
-    if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
-      scoreSumByGame.set(gid, (scoreSumByGame.get(gid) ?? 0) + score);
-      scoreCountByGame.set(gid, (scoreCountByGame.get(gid) ?? 0) + 1);
-      if (score >= 5000) fivekCountByGame.set(gid, (fivekCountByGame.get(gid) ?? 0) + 1);
-      if (score < 50) throwCountByGame.set(gid, (throwCountByGame.get(gid) ?? 0) + 1);
-    }
+      agg.roundsCount++;
 
-    const truth = typeof r?.trueCountry === "string" ? r.trueCountry : typeof r?.true_country === "string" ? r.true_country : "";
-    const guess = typeof r?.player_self_guessCountry === "string" ? r.player_self_guessCountry : typeof r?.p1_guessCountry === "string" ? r.p1_guessCountry : typeof r?.guessCountry === "string" ? r.guessCountry : "";
-    if (truth && guess) {
-      hitDenomByGame.set(gid, (hitDenomByGame.get(gid) ?? 0) + 1);
-      if (guess === truth) hitCountByGame.set(gid, (hitCountByGame.get(gid) ?? 0) + 1);
-    }
+      const mvRaw = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
+      const mv = normalizeMovementType(mvRaw);
+      const curMv = agg.movementType;
+      if (mv && mv !== "unknown") {
+        if (!curMv || curMv === "unknown") agg.movementType = mv;
+        else if (curMv !== mv && curMv !== "mixed") agg.movementType = "mixed";
+      }
 
-    const start = typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
-    const end = typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
-    if (start !== null) {
-      const curMin = minStartByGame.get(gid);
-      minStartByGame.set(gid, curMin === undefined ? start : Math.min(curMin, start));
-    }
-    if (end !== null) {
-      const curMax = maxEndByGame.get(gid);
-      maxEndByGame.set(gid, curMax === undefined ? end : Math.max(curMax, end));
-    }
+      const score =
+        typeof r?.player_self_score === "number"
+          ? r.player_self_score
+          : typeof r?.p1_score === "number"
+            ? r.p1_score
+            : typeof r?.score === "number"
+              ? r.score
+              : null;
+      if (typeof score === "number" && Number.isFinite(score) && score >= 0) {
+        agg.scoreSum = (agg.scoreSum ?? 0) + score;
+        agg.scoreCount = (agg.scoreCount ?? 0) + 1;
+        if (score >= 5000) agg.fivekCount = (agg.fivekCount ?? 0) + 1;
+        if (score < 50) agg.throwCount = (agg.throwCount ?? 0) + 1;
+      }
 
-    const h = typeof r?.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
-    if (h !== null) {
-      const curMin = minHealthAfterByGame.get(gid);
-      const curMax = maxHealthAfterByGame.get(gid);
-      minHealthAfterByGame.set(gid, curMin === undefined ? h : Math.min(curMin, h));
-      maxHealthAfterByGame.set(gid, curMax === undefined ? h : Math.max(curMax, h));
+      const truth = typeof r?.trueCountry === "string" ? r.trueCountry : typeof r?.true_country === "string" ? r.true_country : "";
+      const guess =
+        typeof r?.player_self_guessCountry === "string"
+          ? r.player_self_guessCountry
+          : typeof r?.p1_guessCountry === "string"
+            ? r.p1_guessCountry
+            : typeof r?.guessCountry === "string"
+              ? r.guessCountry
+              : "";
+      if (truth && guess) {
+        agg.hitDenom = (agg.hitDenom ?? 0) + 1;
+        if (guess === truth) agg.hitCount = (agg.hitCount ?? 0) + 1;
+      }
 
-      const marker =
-        (typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ??
-        (typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ??
-        (typeof r?.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
-      if (marker !== null) {
-        const curMarker = finalHealthMarkerByGame.get(gid);
-        if (curMarker === undefined || marker >= curMarker) {
-          finalHealthMarkerByGame.set(gid, marker);
-          finalHealthAfterByGame.set(gid, h);
+      const start = typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null;
+      const end = typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null;
+      if (start !== null) agg.minStart = agg.minStart === undefined ? start : Math.min(agg.minStart, start);
+      if (end !== null) agg.maxEnd = agg.maxEnd === undefined ? end : Math.max(agg.maxEnd, end);
+
+      const h = typeof r?.player_self_healthAfter === "number" && Number.isFinite(r.player_self_healthAfter) ? r.player_self_healthAfter : null;
+      if (h !== null) {
+        agg.minHealthAfter = agg.minHealthAfter === undefined ? h : Math.min(agg.minHealthAfter, h);
+        agg.maxHealthAfter = agg.maxHealthAfter === undefined ? h : Math.max(agg.maxHealthAfter, h);
+
+        const marker =
+          (typeof r?.endTime === "number" && Number.isFinite(r.endTime) ? r.endTime : null) ??
+          (typeof r?.startTime === "number" && Number.isFinite(r.startTime) ? r.startTime : null) ??
+          (typeof r?.roundNumber === "number" && Number.isFinite(r.roundNumber) ? r.roundNumber : null);
+        if (marker !== null) {
+          const curMarker = agg.finalHealthMarker;
+          if (curMarker === undefined || marker >= curMarker) {
+            agg.finalHealthMarker = marker;
+            agg.finalHealthAfter = h;
+          }
         }
       }
     }
-  }
-  setLoadingProgress({ phase: "Aggregating rounds into games...", current: (rounds as any[]).length, total: (rounds as any[]).length });
+    setLoadingProgress({ phase: "Aggregating rounds into games...", current: rounds.length, total: rounds.length });
 
-  const detailsByGame = new Map<string, any>();
-  for (const d of details) {
-    if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
+    const computedAt = Date.now();
+    const toWrite: GameAggRow[] = [];
+    for (const gid of missingIds) {
+      const agg = aggByGame.get(gid);
+      if (!agg) continue;
+      agg.computedAt = computedAt;
+      agg.aggVersion = GAME_AGG_VERSION;
+      if (!agg.movementType) agg.movementType = "unknown";
+      toWrite.push(agg);
+    }
+    if (toWrite.length > 0) {
+      try {
+        setLoadingProgress({ phase: `Saving game aggregates... (${toWrite.length})` });
+        await db.gameAgg.bulkPut(toWrite);
+      } catch {
+        // ignore (best-effort cache)
+      }
+    }
+  } else {
+    setLoadingProgress({ phase: `Using cached game aggregates... (${aggByGame.size})` });
   }
 
   setLoadingProgress({ phase: "Merging game facts...", current: 0, total: games.length });
   gamesRawCache = games.map((g, idx) => {
     if (idx > 0 && idx % 500 === 0) setLoadingProgress({ phase: "Merging game facts...", current: idx, total: games.length });
-    const d = detailsByGame.get(g.gameId);
+    const d = detailsByGame.get((g as any).gameId);
     const out: any = { ...(g as any), ...(d ? (d as any) : {}) };
-    if (typeof g.playedAt === "number" && Number.isFinite(g.playedAt)) {
-      out.playedAt = g.playedAt;
-      out.ts = g.playedAt;
+    if (typeof (g as any).playedAt === "number" && Number.isFinite((g as any).playedAt)) {
+      out.playedAt = (g as any).playedAt;
+      out.ts = (g as any).playedAt;
     }
-    out.roundsCount = roundsCountByGame.get(g.gameId) ?? 0;
-    if (typeof out.movementType !== "string" || !out.movementType) {
-      const mv = movementByGame.get(g.gameId);
-      if (mv) out.movementType = mv;
+
+    const agg = aggByGame.get((g as any).gameId);
+    out.roundsCount = agg?.roundsCount ?? 0;
+
+    if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
+      const fromAgg = agg?.movementType;
+      if (fromAgg && fromAgg !== "unknown") out.movementType = fromAgg;
     }
     if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
       const raw =
@@ -758,29 +805,28 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       if (norm !== "unknown") out.movementType = norm;
     }
 
-    const scoreSum = scoreSumByGame.get(g.gameId);
-    const scoreCount = scoreCountByGame.get(g.gameId);
+    const scoreSum = agg?.scoreSum;
+    const scoreCount = agg?.scoreCount;
     if (typeof scoreSum === "number") out.scoreSum = scoreSum;
     if (typeof scoreCount === "number") out.scoreCount = scoreCount;
-    out.fivekCount = fivekCountByGame.get(g.gameId) ?? 0;
-    out.throwCount = throwCountByGame.get(g.gameId) ?? 0;
-    out.hitCount = hitCountByGame.get(g.gameId) ?? 0;
-    out.hitDenom = hitDenomByGame.get(g.gameId) ?? 0;
+    out.fivekCount = agg?.fivekCount ?? 0;
+    out.throwCount = agg?.throwCount ?? 0;
+    out.hitCount = agg?.hitCount ?? 0;
+    out.hitDenom = agg?.hitDenom ?? 0;
 
-    const minStart = minStartByGame.get(g.gameId);
-    const maxEnd = maxEndByGame.get(g.gameId);
+    const minStart = agg?.minStart;
+    const maxEnd = agg?.maxEnd;
     if (typeof minStart === "number" && typeof maxEnd === "number" && Number.isFinite(minStart) && Number.isFinite(maxEnd) && maxEnd > minStart) {
       out.gameDurationSeconds = (maxEnd - minStart) / 1000;
     }
 
-    // Flawless win (no damage taken) approximated via constant healthAfter across all rounds.
-    const minH = minHealthAfterByGame.get(g.gameId);
-    const maxH = maxHealthAfterByGame.get(g.gameId);
+    const minH = agg?.minHealthAfter;
+    const maxH = agg?.maxHealthAfter;
     if (typeof minH === "number" && typeof maxH === "number" && Number.isFinite(minH) && Number.isFinite(maxH) && minH === maxH && maxH > 0) {
       out.isFlawless = true;
     }
 
-    const finalH = finalHealthAfterByGame.get(g.gameId);
+    const finalH = agg?.finalHealthAfter;
     if (typeof finalH === "number" && Number.isFinite(finalH) && finalH >= 0) {
       out.player_self_finalHealth = finalH;
     }
@@ -810,7 +856,6 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
       }
     }
 
-    // Best-effort normalize a result string for the "result" dimension.
     const v =
       typeof out.player_self_victory === "boolean"
         ? out.player_self_victory

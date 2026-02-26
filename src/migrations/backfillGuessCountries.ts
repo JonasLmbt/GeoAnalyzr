@@ -1,6 +1,6 @@
 import { db } from "../db";
 import type { RoundRow } from "../db";
-import { resolveCountryCodeByLatLngLocalOnly } from "../countries";
+import { resolveCountryCodeByLatLngLocalOnlySync } from "../countries";
 
 type BackfillGuessCountriesResult = {
   scanned: number;
@@ -24,13 +24,13 @@ function hasRole(r: any, role: string): boolean {
   return typeof id === "string" && id.trim().length > 0 || (isFiniteNumber(lat) && isFiniteNumber(lng));
 }
 
-async function maybeFillRole(out: any, role: string): Promise<boolean> {
+function maybeFillRole(out: any, role: string): boolean {
   const existing = normalizeIso2(out?.[`${role}_guessCountry`]);
   if (existing) return false;
   const lat = out?.[`${role}_guessLat`];
   const lng = out?.[`${role}_guessLng`];
   if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) return false;
-  const iso = await resolveCountryCodeByLatLngLocalOnly(lat, lng);
+  const iso = resolveCountryCodeByLatLngLocalOnlySync(lat, lng);
   if (!iso) return false;
   out[`${role}_guessCountry`] = iso;
   return true;
@@ -57,6 +57,7 @@ export async function backfillGuessCountries(opts: {
   const total = await db.rounds.count();
   let scanned = 0;
   let updated = 0;
+  let mutated = false;
 
   onStatus(`Backfilling guessCountry... (0/${total})`);
 
@@ -67,14 +68,14 @@ export async function backfillGuessCountries(opts: {
     const patch: RoundRow[] = [];
     for (const r of chunk as any[]) {
       if (!r || typeof r !== "object") continue;
-      const out: any = { ...r };
+      const out: any = r;
       let changed = false;
 
       // Duel: self/opponent. Team duel: + mate/opponent_mate.
-      if (hasRole(r, "player_self")) changed = (await maybeFillRole(out, "player_self")) || changed;
-      if (hasRole(r, "player_opponent")) changed = (await maybeFillRole(out, "player_opponent")) || changed;
-      if (hasRole(r, "player_mate")) changed = (await maybeFillRole(out, "player_mate")) || changed;
-      if (hasRole(r, "player_opponent_mate")) changed = (await maybeFillRole(out, "player_opponent_mate")) || changed;
+      if (hasRole(r, "player_self")) changed = maybeFillRole(out, "player_self") || changed;
+      if (hasRole(r, "player_opponent")) changed = maybeFillRole(out, "player_opponent") || changed;
+      if (hasRole(r, "player_mate")) changed = maybeFillRole(out, "player_mate") || changed;
+      if (hasRole(r, "player_opponent_mate")) changed = maybeFillRole(out, "player_opponent_mate") || changed;
 
       if (changed) patch.push(out as RoundRow);
     }
@@ -82,6 +83,7 @@ export async function backfillGuessCountries(opts: {
     if (patch.length > 0) {
       await db.rounds.bulkPut(patch);
       updated += patch.length;
+      mutated = true;
     }
 
     if (scanned % (batchSize * 5) === 0 || scanned === total) {
@@ -95,6 +97,14 @@ export async function backfillGuessCountries(opts: {
     updatedAt: Date.now()
   });
 
+  // guessCountry changes affect hit-rate aggregates.
+  if (mutated) {
+    try {
+      await db.gameAgg.clear();
+    } catch {
+      // ignore - cache is best-effort
+    }
+  }
+
   return { scanned, updated };
 }
-

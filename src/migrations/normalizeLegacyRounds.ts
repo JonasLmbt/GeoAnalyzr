@@ -109,6 +109,7 @@ export async function normalizeLegacyRounds(opts: {
   const total = await db.rounds.count();
   let scanned = 0;
   let updated = 0;
+  let mutated = false;
 
   onStatus(`Normalizing legacy rounds... (0/${total})`);
 
@@ -126,6 +127,7 @@ export async function normalizeLegacyRounds(opts: {
     if (patch.length > 0) {
       await db.rounds.bulkPut(patch);
       updated += patch.length;
+      mutated = true;
     }
 
     if (scanned % (batchSize * 5) === 0 || scanned === total) {
@@ -138,6 +140,15 @@ export async function normalizeLegacyRounds(opts: {
     value: { doneAt: Date.now(), scanned, updated },
     updatedAt: Date.now()
   });
+
+  // Round mutations can change per-game aggregates (hit rate, scores, etc).
+  if (mutated) {
+    try {
+      await db.gameAgg.clear();
+    } catch {
+      // ignore - cache is best-effort
+    }
+  }
 
   return { scanned, updated };
 }
