@@ -53,6 +53,7 @@ export async function renderAnalysisApp(opts: {
   let loadingPoll: number | null = null;
   let loadingStepTotal = 0;
   let loadingStepCurrent = 0;
+  let didInitialRender = false;
 
   const renderAsciiBar = (current: number, total: number): string => {
     const w = 22;
@@ -198,7 +199,7 @@ export async function renderAnalysisApp(opts: {
   }
 
   const renderNow = async () => {
-    await showLoading("Rendering dashboard...");
+    if (!didInitialRender) await showLoading("Rendering dashboard...");
     const specFilters = spec;
     let state = store.getState();
 
@@ -234,7 +235,6 @@ export async function renderAnalysisApp(opts: {
     const contextBySection: Record<string, { dateRange?: { fromTs: number | null; toTs: number | null } }> = {};
 
     const computeDatasetsForSection = async (section: any): Promise<void> => {
-      await showLoading(`Loading data for '${String(section?.title ?? section?.id ?? "section")}'...`);
       const controlIds = resolveControlIdsForSection(section);
 
       const used = new Set<Grain>();
@@ -315,12 +315,10 @@ export async function renderAnalysisApp(opts: {
       })();
       if (used.has("round") || used.has("session") || isOpponentsSection) {
         step++;
-        await showLoading("Loading rounds...", { stepCurrent: step, stepTotal: totalSteps });
         datasets.round = await getRounds(filters);
       }
       if (used.has("game") || isOpponentsSection) {
         step++;
-        await showLoading("Loading games...", { stepCurrent: step, stepTotal: totalSteps });
         datasets.game = await getGames(filters);
       }
 
@@ -355,7 +353,6 @@ export async function renderAnalysisApp(opts: {
       }
       if (used.has("session")) {
         step++;
-        await showLoading("Building sessions...", { stepCurrent: step, stepTotal: totalSteps });
         const gap = getSessionGapMinutes();
         datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round as any });
       }
@@ -387,7 +384,7 @@ export async function renderAnalysisApp(opts: {
 
     // Rendering always counted as last step (after data).
     const finalTotal = loadingStepTotal > 0 ? loadingStepTotal : 1;
-    await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
+    if (!didInitialRender) await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
     await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
       datasets: datasetsDefault,
       datasetsBySection,
@@ -400,12 +397,11 @@ export async function renderAnalysisApp(opts: {
         if (datasetsBySection[id]) return;
         const sec = sections.find((s: any) => s.id === id);
         if (!sec) return;
-        await showLoading(`Loading data for '${String(sec?.title ?? sec?.id ?? "section")}'...`);
         await computeDatasetsForSection(sec);
-        hideLoading();
       }
     });
     } finally {
+      didInitialRender = true;
       hideLoading();
     }
   };

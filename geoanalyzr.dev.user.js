@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.28
+// @version      2.2.29
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -8470,6 +8470,15 @@ ${shapes}`.trim();
     if (fm && fz && fr) return "nmpz";
     return void 0;
   }
+  function normalizeMovementType2(raw) {
+    if (typeof raw !== "string") return "unknown";
+    const s = raw.trim().toLowerCase();
+    if (!s) return "unknown";
+    if (s.includes("nmpz")) return "nmpz";
+    if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+    if (s.includes("moving")) return "moving";
+    return "unknown";
+  }
   function extractRatingChange(player) {
     const paths = [
       "progressChange.rankedSystemProgress",
@@ -8737,6 +8746,7 @@ ${shapes}`.trim();
       };
       detail = duelDetail;
     }
+    const movementType = normalizeMovementType2(detectSimpleGameMode(gameData?.movementOptions));
     const normalizedRounds = [];
     for (let i = 0; i < rounds.length; i++) {
       const r = rounds[i];
@@ -8748,6 +8758,7 @@ ${shapes}`.trim();
         mapName: commonBase.mapName,
         mapSlug: commonBase.mapSlug,
         isRated: commonBase.isRated,
+        movementType,
         trueLat: asNum(r?.panorama?.lat),
         trueLng: asNum(r?.panorama?.lng),
         trueCountry: normalizeIso22(r?.panorama?.countryCode),
@@ -8781,6 +8792,7 @@ ${shapes}`.trim();
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
           round[`${role}_playerId`] = readPlayerId(player);
+          round[`${role}_name`] = (typeof readPlayerId(player) === "string" ? profiles.get(String(readPlayerId(player)))?.nick : void 0) ?? (typeof player?.nick === "string" ? player.nick : void 0);
           round[`${role}_teamId`] = teamId || void 0;
           round[`${role}_guessLat`] = guessLat;
           round[`${role}_guessLng`] = guessLng;
@@ -8804,6 +8816,7 @@ ${shapes}`.trim();
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
           round[`${role}_playerId`] = readPlayerId(player);
+          round[`${role}_name`] = (typeof readPlayerId(player) === "string" ? profiles.get(String(readPlayerId(player)))?.nick : void 0) ?? (typeof player?.nick === "string" ? player.nick : void 0);
           round[`${role}_guessLat`] = guessLat;
           round[`${role}_guessLng`] = guessLng;
           round[`${role}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
@@ -10081,7 +10094,7 @@ ${shapes}`.trim();
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
-  function normalizeMovementType2(raw) {
+  function normalizeMovementType3(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
     if (!s) return "unknown";
@@ -10378,20 +10391,75 @@ ${shapes}`.trim();
   }
   async function getRoundsRaw() {
     if (roundsRawCache) return roundsRawCache;
-    setLoadingProgress({ phase: "Reading database (rounds/games/details)..." });
-    const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
-    const playedAtByGame = /* @__PURE__ */ new Map();
-    const modeFamilyByGame = /* @__PURE__ */ new Map();
-    const gameModeByGame = /* @__PURE__ */ new Map();
-    for (const g of games) {
-      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
-      if (typeof g.modeFamily === "string" && g.modeFamily) modeFamilyByGame.set(g.gameId, g.modeFamily);
-      const gm = asTrimmedString2(g.gameMode ?? g.mode);
-      if (gm) gameModeByGame.set(g.gameId, gm);
-    }
-    const detailsByGame = /* @__PURE__ */ new Map();
-    for (const d of details) {
-      if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
+    setLoadingProgress({ phase: "Reading database (rounds)..." });
+    const rows = await db.rounds.toArray();
+    try {
+      const metaKey = "migration_round_names_from_details_v1";
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      const recentlyDone = typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 365 * 24 * 60 * 60 * 1e3;
+      if (!recentlyDone) {
+        const needs = rows.some((r) => {
+          const mf = String(r?.modeFamily ?? "").toLowerCase();
+          if (mf !== "teamduels") return false;
+          const mateName = typeof r?.player_mate_name === "string" ? String(r.player_mate_name).trim() : "";
+          const movementType = typeof r?.movementType === "string" ? String(r.movementType).trim() : "";
+          return !mateName || !movementType;
+        });
+        if (needs) {
+          setLoadingProgress({ phase: "Backfilling round names/movement from cached details..." });
+          const details = await db.details.where("modeFamily").equals("teamduels").toArray();
+          const byGame = /* @__PURE__ */ new Map();
+          for (const d of details) {
+            const gid = typeof d?.gameId === "string" ? d.gameId : "";
+            if (!gid) continue;
+            byGame.set(gid, d);
+          }
+          let updated = 0;
+          const patch = [];
+          const BATCH = 500;
+          for (let i = 0; i < rows.length; i++) {
+            if (i > 0 && i % 1e3 === 0) setLoadingProgress({ phase: "Backfilling round names/movement from cached details...", current: i, total: rows.length });
+            const r = rows[i];
+            const mf = String(r?.modeFamily ?? "").toLowerCase();
+            if (mf !== "teamduels") continue;
+            const gid = typeof r?.gameId === "string" ? r.gameId : "";
+            if (!gid) continue;
+            const d = byGame.get(gid);
+            if (!d) continue;
+            let changed = false;
+            if (typeof r.player_mate_name !== "string" || !String(r.player_mate_name).trim()) {
+              const n = asTrimmedString2(d?.player_mate_name);
+              if (n) {
+                r.player_mate_name = n;
+                changed = true;
+              }
+            }
+            if (typeof r.movementType !== "string" || !String(r.movementType).trim() || String(r.movementType).toLowerCase() === "unknown") {
+              const raw = asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode);
+              const norm = normalizeMovementType3(raw);
+              if (norm !== "unknown") {
+                r.movementType = norm;
+                changed = true;
+              }
+            }
+            if (changed) {
+              patch.push(r);
+              updated++;
+              if (patch.length >= BATCH) {
+                await db.rounds.bulkPut(patch);
+                patch.length = 0;
+              }
+            }
+          }
+          if (patch.length) await db.rounds.bulkPut(patch);
+          setLoadingProgress({ phase: "Backfilling round names/movement from cached details...", current: rows.length, total: rows.length });
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), updated }, updatedAt: Date.now() });
+        } else {
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), updated: 0 }, updatedAt: Date.now() });
+        }
+      }
+    } catch {
     }
     const outRows = new Array(rows.length);
     const YIELD_EVERY = 250;
@@ -10401,27 +10469,9 @@ ${shapes}`.trim();
       if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
       const out = rows[i];
       const gameId = String(out.gameId ?? "");
-      const d = detailsByGame.get(gameId);
-      if (d) {
-        if (typeof out.mapSlug !== "string" || !out.mapSlug) {
-          const ms = typeof d?.mapSlug === "string" ? d.mapSlug : typeof d?.raw?.options?.map?.slug === "string" ? d.raw.options.map.slug : "";
-          if (ms) out.mapSlug = ms;
-        }
-        if (typeof out.mapName !== "string" || !out.mapName) {
-          const mn = typeof d?.mapName === "string" ? d.mapName : typeof d?.raw?.options?.map?.name === "string" ? d.raw.options.map.name : "";
-          if (mn) out.mapName = mn;
-        }
-        if (typeof out.isRated !== "boolean") {
-          const ir = d?.isRated;
-          const rawIr = d?.raw?.options?.isRated;
-          if (ir === true || ir === false) out.isRated = ir;
-          else if (rawIr === true || rawIr === false) out.isRated = rawIr;
-        }
-      }
       const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : void 0;
       const roundEnd = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : void 0;
-      const gamePlayedAt = playedAtByGame.get(gameId);
-      const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : void 0) ?? gamePlayedAt;
+      const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : void 0);
       if (typeof bestTime === "number" && Number.isFinite(bestTime)) {
         out.playedAt = bestTime;
         out.ts = bestTime;
@@ -10443,41 +10493,15 @@ ${shapes}`.trim();
         }
       }
       if (typeof out.modeFamily !== "string" || !out.modeFamily) {
-        const mf = asTrimmedString2(out.modeFamily) ?? asTrimmedString2(d?.modeFamily) ?? modeFamilyByGame.get(gameId);
+        const mf = asTrimmedString2(out.modeFamily);
         if (mf) out.modeFamily = mf;
       }
       if (typeof out.gameMode !== "string" || !out.gameMode) {
-        const gm = asTrimmedString2(out.gameMode) ?? asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode) ?? gameModeByGame.get(gameId);
+        const gm = asTrimmedString2(out.gameMode);
         if (gm) out.gameMode = gm;
       }
       if (typeof out.movementType !== "string" || !out.movementType) {
-        const fromDetail = asTrimmedString2(d?.gameModeSimple);
-        const fromGame = gameModeByGame.get(gameId);
-        out.movementType = normalizeMovementType2(fromDetail ?? fromGame);
-      }
-      if (d) {
-        const v = typeof d.player_self_victory === "boolean" ? d.player_self_victory : typeof d.teamOneVictory === "boolean" ? d.teamOneVictory : typeof d.playerOneVictory === "boolean" ? d.playerOneVictory : void 0;
-        if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
-        if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
-          const selfId = asTrimmedString2(out.player_self_playerId) ?? asTrimmedString2(out.player_self_id);
-          const selfName = asTrimmedString2(out.player_self_name) ?? asTrimmedString2(d.player_self_name);
-          const t1id = asTrimmedString2(d.teamOnePlayerOneId);
-          const t2id = asTrimmedString2(d.teamOnePlayerTwoId);
-          const t1name = asTrimmedString2(d.teamOnePlayerOneName);
-          const t2name = asTrimmedString2(d.teamOnePlayerTwoName);
-          const u1id = asTrimmedString2(d.teamTwoPlayerOneId);
-          const u2id = asTrimmedString2(d.teamTwoPlayerTwoId);
-          const u1name = asTrimmedString2(d.teamTwoPlayerOneName);
-          const u2name = asTrimmedString2(d.teamTwoPlayerTwoName);
-          let mateName;
-          if (selfId && selfId === t1id) mateName = t2name;
-          else if (selfId && selfId === t2id) mateName = t1name;
-          else if (selfId && selfId === u1id) mateName = u2name;
-          else if (selfId && selfId === u2id) mateName = u1name;
-          else mateName = asTrimmedString2(pickFirst3(d, ["player_mate_name", "teamOnePlayerTwoName", "p2_name"]));
-          if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
-          if (mateName) out.teammateName = mateName;
-        }
+        out.movementType = normalizeMovementType3(asTrimmedString2(out.gameMode));
       }
       const existingGuess = typeof out.player_self_guessCountry === "string" ? out.player_self_guessCountry : typeof out.p1_guessCountry === "string" ? out.p1_guessCountry : typeof out.guessCountry === "string" ? out.guessCountry : "";
       if (!existingGuess) {
@@ -10588,7 +10612,7 @@ ${shapes}`.trim();
         }
         agg.roundsCount++;
         const mvRaw = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
-        const mv = normalizeMovementType2(mvRaw);
+        const mv = normalizeMovementType3(mvRaw);
         const curMv = agg.movementType;
         if (mv && mv !== "unknown") {
           if (!curMv || curMv === "unknown") agg.movementType = mv;
@@ -10663,7 +10687,7 @@ ${shapes}`.trim();
       }
       if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
         const raw = asTrimmedString2(out.gameModeSimple) ?? asTrimmedString2(out.gameMode) ?? asTrimmedString2(out.mode) ?? asTrimmedString2(out.gameType);
-        const norm = normalizeMovementType2(raw);
+        const norm = normalizeMovementType3(raw);
         if (norm !== "unknown") out.movementType = norm;
       }
       const scoreSum = agg?.scoreSum;
@@ -48629,7 +48653,7 @@ ${describeError(err2)}` : message;
       const gamesByMate = /* @__PURE__ */ new Map();
       const roundsByMate = /* @__PURE__ */ new Map();
       for (const r of rows) {
-        const mate = r.teammateName;
+        const mate = r.teammateName ?? r.player_mate_name ?? r.player_mateName;
         const name = typeof mate === "string" ? mate.trim() : "";
         const gameId = String(r.gameId ?? "");
         if (!gameId) continue;
@@ -48727,6 +48751,7 @@ ${describeError(err2)}` : message;
     let loadingPoll = null;
     let loadingStepTotal = 0;
     let loadingStepCurrent = 0;
+    let didInitialRender = false;
     const renderAsciiBar = (current, total) => {
       const w = 22;
       const t = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
@@ -48836,7 +48861,7 @@ ${describeError(err2)}` : message;
       }
     }
     const renderNow = async () => {
-      await showLoading("Rendering dashboard...");
+      if (!didInitialRender) await showLoading("Rendering dashboard...");
       const specFilters = spec;
       let state = store.getState();
       try {
@@ -48865,7 +48890,6 @@ ${describeError(err2)}` : message;
         const datasetsBySection = {};
         const contextBySection = {};
         const computeDatasetsForSection = async (section) => {
-          await showLoading(`Loading data for '${String(section?.title ?? section?.id ?? "section")}'...`);
           const controlIds = resolveControlIdsForSection(section);
           const used = /* @__PURE__ */ new Set();
           for (const placed of section.layout.cards) {
@@ -48940,12 +48964,10 @@ ${describeError(err2)}` : message;
           })();
           if (used.has("round") || used.has("session") || isOpponentsSection) {
             step++;
-            await showLoading("Loading rounds...", { stepCurrent: step, stepTotal: totalSteps });
             datasets.round = await getRounds(filters);
           }
           if (used.has("game") || isOpponentsSection) {
             step++;
-            await showLoading("Loading games...", { stepCurrent: step, stepTotal: totalSteps });
             datasets.game = await getGames(filters);
           }
           if (isRatingSection && Array.isArray(datasets.round)) {
@@ -48976,7 +48998,6 @@ ${describeError(err2)}` : message;
           }
           if (used.has("session")) {
             step++;
-            await showLoading("Building sessions...", { stepCurrent: step, stepTotal: totalSteps });
             const gap = getSessionGapMinutes();
             datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
           }
@@ -49000,7 +49021,7 @@ ${describeError(err2)}` : message;
         const contextDefault = initialActive ? contextBySection[initialActive] : void 0;
         const effectiveDashboard = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
         const finalTotal = loadingStepTotal > 0 ? loadingStepTotal : 1;
-        await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
+        if (!didInitialRender) await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
         await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
           datasets: datasetsDefault,
           datasetsBySection,
@@ -49013,12 +49034,11 @@ ${describeError(err2)}` : message;
             if (datasetsBySection[id]) return;
             const sec = sections.find((s) => s.id === id);
             if (!sec) return;
-            await showLoading(`Loading data for '${String(sec?.title ?? sec?.id ?? "section")}'...`);
             await computeDatasetsForSection(sec);
-            hideLoading();
           }
         });
       } finally {
+        didInitialRender = true;
         hideLoading();
       }
     };

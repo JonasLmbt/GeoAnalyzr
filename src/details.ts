@@ -239,6 +239,16 @@ function detectSimpleGameMode(movementOptions: any): string | undefined {
   return undefined;
 }
 
+function normalizeMovementType(raw: unknown): "moving" | "no_move" | "nmpz" | "unknown" {
+  if (typeof raw !== "string") return "unknown";
+  const s = raw.trim().toLowerCase();
+  if (!s) return "unknown";
+  if (s.includes("nmpz")) return "nmpz";
+  if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+  if (s.includes("moving")) return "moving";
+  return "unknown";
+}
+
 function extractRatingChange(player: any): { before?: number; after?: number } {
   const paths = [
     "progressChange.rankedSystemProgress",
@@ -557,6 +567,8 @@ async function normalizeGameAndRounds(
     detail = duelDetail;
   }
 
+  const movementType = normalizeMovementType(detectSimpleGameMode(gameData?.movementOptions));
+
   const normalizedRounds: RoundRow[] = [];
   for (let i = 0; i < rounds.length; i++) {
     const r = rounds[i];
@@ -569,6 +581,7 @@ async function normalizeGameAndRounds(
       mapName: commonBase.mapName,
       mapSlug: commonBase.mapSlug,
       isRated: commonBase.isRated,
+      movementType,
       trueLat: asNum(r?.panorama?.lat),
       trueLng: asNum(r?.panorama?.lng),
       trueCountry: normalizeIso2(r?.panorama?.countryCode),
@@ -604,6 +617,9 @@ async function normalizeGameAndRounds(
         const distanceMeters = asNum(guess?.distance);
 
         (round as any)[`${role}_playerId`] = readPlayerId(player);
+        (round as any)[`${role}_name`] =
+          (typeof readPlayerId(player) === "string" ? profiles.get(String(readPlayerId(player)))?.nick : undefined) ??
+          (typeof player?.nick === "string" ? player.nick : undefined);
         (round as any)[`${role}_teamId`] = teamId || undefined;
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
@@ -628,6 +644,9 @@ async function normalizeGameAndRounds(
         const distanceMeters = asNum(guess?.distance);
 
         (round as any)[`${role}_playerId`] = readPlayerId(player);
+        (round as any)[`${role}_name`] =
+          (typeof readPlayerId(player) === "string" ? profiles.get(String(readPlayerId(player)))?.nick : undefined) ??
+          (typeof player?.nick === "string" ? player.nick : undefined);
         (round as any)[`${role}_guessLat`] = guessLat;
         (round as any)[`${role}_guessLng`] = guessLng;
         (round as any)[`${role}_distanceKm`] = distanceMeters !== undefined ? distanceMeters / 1e3 : undefined;

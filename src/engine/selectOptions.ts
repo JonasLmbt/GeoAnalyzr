@@ -46,7 +46,7 @@ export async function getSelectOptionsForControl(opts: {
     const gamesByMate = new Map<string, Set<string>>();
     const roundsByMate = new Map<string, number>();
     for (const r of rows) {
-      const mate = (r as any).teammateName;
+      const mate = (r as any).teammateName ?? (r as any).player_mate_name ?? (r as any).player_mateName;
       const name = typeof mate === "string" ? mate.trim() : "";
       const gameId = String((r as any).gameId ?? "");
       if (!gameId) continue;

@@ -426,23 +426,86 @@ export async function getGamePlayedAtBounds(): Promise<{ minTs: number | null; m
 
 async function getRoundsRaw(): Promise<RoundRow[]> {
   if (roundsRawCache) return roundsRawCache;
-  setLoadingProgress({ phase: "Reading database (rounds/games/details)..." });
-  const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
+  setLoadingProgress({ phase: "Reading database (rounds)..." });
+  const rows = await db.rounds.toArray();
 
-  const playedAtByGame = new Map<string, number>();
-  const modeFamilyByGame = new Map<string, string>();
-  const gameModeByGame = new Map<string, string>();
-  for (const g of games) {
-    if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
-    if (typeof (g as any).modeFamily === "string" && (g as any).modeFamily) modeFamilyByGame.set(g.gameId, (g as any).modeFamily);
-    const gm = asTrimmedString((g as any).gameMode ?? (g as any).mode);
-    if (gm) gameModeByGame.set(g.gameId, gm);
-  }
+  // One-time local backfill: older DBs may have details but rounds without cached player names / movementType.
+  // We avoid loading db.details on every analysis open (raw payloads are huge), but do a focused one-time pass.
+  try {
+    const metaKey = "migration_round_names_from_details_v1";
+    const meta = await db.meta.get(metaKey);
+    const doneAt = (meta?.value as any)?.doneAt as number | undefined;
+    const recentlyDone = typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 365 * 24 * 60 * 60 * 1000;
 
-  const detailsByGame = new Map<string, any>();
-    for (const d of details) {
-      if (d && typeof (d as any).gameId === "string") detailsByGame.set((d as any).gameId, d as any);
+    if (!recentlyDone) {
+      const needs = (rows as any[]).some((r) => {
+        const mf = String(r?.modeFamily ?? "").toLowerCase();
+        if (mf !== "teamduels") return false;
+        const mateName = typeof (r as any)?.player_mate_name === "string" ? String((r as any).player_mate_name).trim() : "";
+        const movementType = typeof (r as any)?.movementType === "string" ? String((r as any).movementType).trim() : "";
+        return !mateName || !movementType;
+      });
+
+      if (needs) {
+        setLoadingProgress({ phase: "Backfilling round names/movement from cached details..." });
+        const details = await db.details.where("modeFamily").equals("teamduels" as any).toArray();
+        const byGame = new Map<string, any>();
+        for (const d of details as any[]) {
+          const gid = typeof d?.gameId === "string" ? d.gameId : "";
+          if (!gid) continue;
+          byGame.set(gid, d);
+        }
+
+        let updated = 0;
+        const patch: any[] = [];
+        const BATCH = 500;
+        for (let i = 0; i < (rows as any[]).length; i++) {
+          if (i > 0 && i % 1000 === 0) setLoadingProgress({ phase: "Backfilling round names/movement from cached details...", current: i, total: rows.length });
+          const r = (rows as any[])[i];
+          const mf = String(r?.modeFamily ?? "").toLowerCase();
+          if (mf !== "teamduels") continue;
+          const gid = typeof r?.gameId === "string" ? r.gameId : "";
+          if (!gid) continue;
+          const d = byGame.get(gid);
+          if (!d) continue;
+
+          let changed = false;
+          if (typeof r.player_mate_name !== "string" || !String(r.player_mate_name).trim()) {
+            const n = asTrimmedString(d?.player_mate_name);
+            if (n) {
+              r.player_mate_name = n;
+              changed = true;
+            }
+          }
+          if (typeof r.movementType !== "string" || !String(r.movementType).trim() || String(r.movementType).toLowerCase() === "unknown") {
+            const raw = asTrimmedString(d?.gameModeSimple) ?? asTrimmedString(d?.gameMode);
+            const norm = normalizeMovementType(raw);
+            if (norm !== "unknown") {
+              r.movementType = norm;
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            patch.push(r);
+            updated++;
+            if (patch.length >= BATCH) {
+              await db.rounds.bulkPut(patch as any);
+              patch.length = 0;
+            }
+          }
+        }
+        if (patch.length) await db.rounds.bulkPut(patch as any);
+        setLoadingProgress({ phase: "Backfilling round names/movement from cached details...", current: rows.length, total: rows.length });
+
+        await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), updated }, updatedAt: Date.now() });
+      } else {
+        await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), updated: 0 }, updatedAt: Date.now() });
+      }
     }
+  } catch {
+    // ignore - best-effort performance backfill
+  }
 
   const outRows: RoundRow[] = new Array(rows.length);
   const YIELD_EVERY = 250;
@@ -452,31 +515,11 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
     const out: any = rows[i] as any;
     const gameId = String(out.gameId ?? "");
-    const d = detailsByGame.get(gameId);
-
-    // Backfill game-level fields onto rounds for round-grain filters/exports.
-    if (d) {
-      if (typeof out.mapSlug !== "string" || !out.mapSlug) {
-        const ms = typeof d?.mapSlug === "string" ? d.mapSlug : typeof d?.raw?.options?.map?.slug === "string" ? d.raw.options.map.slug : "";
-        if (ms) out.mapSlug = ms;
-      }
-      if (typeof out.mapName !== "string" || !out.mapName) {
-        const mn = typeof d?.mapName === "string" ? d.mapName : typeof d?.raw?.options?.map?.name === "string" ? d.raw.options.map.name : "";
-        if (mn) out.mapName = mn;
-      }
-      if (typeof out.isRated !== "boolean") {
-        const ir = d?.isRated;
-        const rawIr = d?.raw?.options?.isRated;
-        if (ir === true || ir === false) out.isRated = ir;
-        else if (rawIr === true || rawIr === false) out.isRated = rawIr;
-      }
-    }
 
     // Prefer round start time where available (round-specific).
     const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : undefined;
     const roundEnd = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : undefined;
-    const gamePlayedAt = playedAtByGame.get(gameId);
-    const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : undefined) ?? gamePlayedAt;
+    const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : undefined);
 
     if (typeof bestTime === "number" && Number.isFinite(bestTime)) {
       // Use playedAt as the canonical time field for charts/filters.
@@ -511,55 +554,22 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
 
     // Fill mode fields if missing.
     if (typeof out.modeFamily !== "string" || !out.modeFamily) {
-      const mf = asTrimmedString(out.modeFamily) ?? asTrimmedString(d?.modeFamily) ?? modeFamilyByGame.get(gameId);
+      const mf = asTrimmedString(out.modeFamily);
       if (mf) out.modeFamily = mf;
     }
     if (typeof out.gameMode !== "string" || !out.gameMode) {
-      const gm = asTrimmedString(out.gameMode) ?? asTrimmedString(d?.gameModeSimple) ?? asTrimmedString(d?.gameMode) ?? gameModeByGame.get(gameId);
+      const gm = asTrimmedString(out.gameMode);
       if (gm) out.gameMode = gm;
     }
 
     // Movement type can be derived from details.gameModeSimple or games.gameMode.
     if (typeof out.movementType !== "string" || !out.movementType) {
-      const fromDetail = asTrimmedString(d?.gameModeSimple);
-      const fromGame = gameModeByGame.get(gameId);
-      out.movementType = normalizeMovementType(fromDetail ?? fromGame);
+      out.movementType = normalizeMovementType(asTrimmedString(out.gameMode));
     }
 
     // Convenience fields for drilldown rendering (result + teammateName).
-    if (d) {
-      const v =
-        typeof d.player_self_victory === "boolean"
-          ? d.player_self_victory
-          : typeof d.teamOneVictory === "boolean"
-            ? d.teamOneVictory
-            : typeof d.playerOneVictory === "boolean"
-              ? d.playerOneVictory
-              : undefined;
-      if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
-
-      if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
-        // Prefer resolving teammate name based on self playerId when possible.
-        const selfId = asTrimmedString(out.player_self_playerId) ?? asTrimmedString((out as any).player_self_id);
-        const selfName = asTrimmedString((out as any).player_self_name) ?? asTrimmedString((d as any).player_self_name);
-        const t1id = asTrimmedString(d.teamOnePlayerOneId);
-        const t2id = asTrimmedString(d.teamOnePlayerTwoId);
-        const t1name = asTrimmedString(d.teamOnePlayerOneName);
-        const t2name = asTrimmedString(d.teamOnePlayerTwoName);
-        const u1id = asTrimmedString((d as any).teamTwoPlayerOneId);
-        const u2id = asTrimmedString((d as any).teamTwoPlayerTwoId);
-        const u1name = asTrimmedString((d as any).teamTwoPlayerOneName);
-        const u2name = asTrimmedString((d as any).teamTwoPlayerTwoName);
-        let mateName: string | undefined;
-        if (selfId && selfId === t1id) mateName = t2name;
-        else if (selfId && selfId === t2id) mateName = t1name;
-        else if (selfId && selfId === u1id) mateName = u2name;
-        else if (selfId && selfId === u2id) mateName = u1name;
-        else mateName = asTrimmedString(pickFirst(d, ["player_mate_name", "teamOnePlayerTwoName", "p2_name"]));
-        if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = undefined;
-        if (mateName) out.teammateName = mateName;
-      }
-    }
+    // NOTE: We intentionally avoid loading db.details here (it can be huge due to raw payloads).
+    // Fields like map/rated/mate names are persisted onto rounds at detail-fetch time.
 
     // Best-effort: ensure guessCountry exists for confusion matrix / hit-rate dimensions.
     // Do this locally only (no network), and only if we have a guess coordinate.
