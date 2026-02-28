@@ -429,6 +429,60 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   setLoadingProgress({ phase: "Reading database (rounds)..." });
   const rows = await db.rounds.toArray();
 
+  // One-time storage optimization: older DBs may have huge per-round `raw` payloads.
+  // Strip them to speed up future loads; preserve derived fields (e.g. trueHeadingDeg).
+  try {
+    const metaKey = "migration_strip_round_raw_v1";
+    const meta = await db.meta.get(metaKey);
+    const doneAt = (meta?.value as any)?.doneAt as number | undefined;
+    const recentlyDone = typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 365 * 24 * 60 * 60 * 1000;
+
+    if (!recentlyDone) {
+      const shouldStrip = (rows as any[]).some((r) => r && typeof r === "object" && r.raw && typeof r.raw === "object");
+      if (shouldStrip) {
+        let scanned = 0;
+        let updated = 0;
+        const patch: any[] = [];
+        const BATCH = 500;
+        setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: 0, total: rows.length });
+        for (let i = 0; i < (rows as any[]).length; i++) {
+          const r = (rows as any[])[i];
+          scanned++;
+          if (!r || typeof r !== "object") continue;
+          const raw = (r as any).raw;
+          if (!raw || typeof raw !== "object") continue;
+
+          // Preserve heading if it can be derived from raw.
+          if (typeof (r as any).trueHeadingDeg !== "number") {
+            const pano = (raw as any)?.panorama;
+            const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? (raw as any)?.heading ?? (raw as any)?.bearing ?? (raw as any)?.rotation;
+            if (typeof v === "number" && Number.isFinite(v)) (r as any).trueHeadingDeg = v;
+            else if (typeof v === "string") {
+              const n = Number(v);
+              if (Number.isFinite(n)) (r as any).trueHeadingDeg = n;
+            }
+          }
+
+          delete (r as any).raw;
+          patch.push(r);
+          updated++;
+          if (patch.length >= BATCH) {
+            await db.rounds.bulkPut(patch as any);
+            patch.length = 0;
+            setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: i + 1, total: rows.length });
+          }
+        }
+        if (patch.length) await db.rounds.bulkPut(patch as any);
+        setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: rows.length, total: rows.length });
+        await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), scanned, updated }, updatedAt: Date.now() });
+      } else {
+        await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), scanned: rows.length, updated: 0 }, updatedAt: Date.now() });
+      }
+    }
+  } catch {
+    // ignore - best-effort optimization
+  }
+
   // One-time local backfill: older DBs may have details but rounds without cached player names / movementType.
   // We avoid loading db.details on every analysis open (raw payloads are huge), but do a focused one-time pass.
   try {
@@ -508,11 +562,16 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   }
 
   const outRows: RoundRow[] = new Array(rows.length);
-  const YIELD_EVERY = 250;
+  const YIELD_EVERY = 2000;
   setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
+  const progressStep = Math.max(10, Math.floor(rows.length / 120)); // ~1% increments, at least 10 rows
+  let nextProgressAt = progressStep;
   for (let i = 0; i < rows.length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-    if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
+    if (i >= nextProgressAt) {
+      setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
+      nextProgressAt = Math.min(rows.length, nextProgressAt + progressStep);
+    }
     const out: any = rows[i] as any;
     const gameId = String(out.gameId ?? "");
 

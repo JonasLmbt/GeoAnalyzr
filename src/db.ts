@@ -29,6 +29,7 @@ interface RoundRowBase {
   trueLat?: number;
   trueLng?: number;
   trueCountry?: string;
+  trueHeadingDeg?: number;
   // Derived coordinate helpers (computed at query time; not persisted).
   // `trueLocationKey` is a stable string key for trueLat/trueLng (rounded).
   // `trueLocationRepeat` flags rounds whose true coordinates appear at least twice.

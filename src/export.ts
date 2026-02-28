@@ -353,16 +353,7 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     const mateCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_mate_guessCountry"));
     const oppCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_opponent_guessCountry"));
     const oppMateCountry = resolveGuessCountryForExport(pickWithAliases(r, "player_opponent_mate_guessCountry"));
-    const trueHeading = asFiniteNumber(
-      pickFirst((r as any).raw, [
-        "panorama.heading",
-        "panorama.bearing",
-        "panorama.rotation",
-        "heading",
-        "bearing",
-        "rotation"
-      ])
-    );
+    const trueHeading = asFiniteNumber((r as any).trueHeadingDeg);
     const rowBase: any = {
       gameId: r.gameId,
       roundNumber: r.roundNumber,

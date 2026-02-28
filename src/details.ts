@@ -249,6 +249,17 @@ function normalizeMovementType(raw: unknown): "moving" | "no_move" | "nmpz" | "u
   return "unknown";
 }
 
+function extractTrueHeadingDeg(roundRaw: any): number | undefined {
+  const pano = roundRaw?.panorama;
+  const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? roundRaw?.heading ?? roundRaw?.bearing ?? roundRaw?.rotation;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return undefined;
+}
+
 function extractRatingChange(player: any): { before?: number; after?: number } {
   const paths = [
     "progressChange.rankedSystemProgress",
@@ -585,6 +596,7 @@ async function normalizeGameAndRounds(
       trueLat: asNum(r?.panorama?.lat),
       trueLng: asNum(r?.panorama?.lng),
       trueCountry: normalizeIso2(r?.panorama?.countryCode),
+      trueHeadingDeg: extractTrueHeadingDeg(r),
       damageMultiplier: asNum(r?.damageMultiplier),
       isHealingRound: Boolean(r?.isHealingRound),
       startTime: toTs(r?.startTime),
@@ -594,7 +606,8 @@ async function normalizeGameAndRounds(
         const e = toTs(r?.endTime);
         return s !== undefined && e !== undefined && e >= s ? (e - s) / 1000 : undefined;
       })(),
-      raw: r
+      // Avoid storing full raw payloads per round (huge). Persist only the derived fields above.
+      raw: undefined
     };
 
     if (family === "teamduels") {

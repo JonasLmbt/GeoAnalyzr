@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.29
+// @version      2.2.30
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -8479,6 +8479,16 @@ ${shapes}`.trim();
     if (s.includes("moving")) return "moving";
     return "unknown";
   }
+  function extractTrueHeadingDeg(roundRaw) {
+    const pano = roundRaw?.panorama;
+    const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? roundRaw?.heading ?? roundRaw?.bearing ?? roundRaw?.rotation;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return void 0;
+  }
   function extractRatingChange(player) {
     const paths = [
       "progressChange.rankedSystemProgress",
@@ -8762,6 +8772,7 @@ ${shapes}`.trim();
         trueLat: asNum(r?.panorama?.lat),
         trueLng: asNum(r?.panorama?.lng),
         trueCountry: normalizeIso22(r?.panorama?.countryCode),
+        trueHeadingDeg: extractTrueHeadingDeg(r),
         damageMultiplier: asNum(r?.damageMultiplier),
         isHealingRound: Boolean(r?.isHealingRound),
         startTime: toTs(r?.startTime),
@@ -8771,7 +8782,8 @@ ${shapes}`.trim();
           const e = toTs(r?.endTime);
           return s !== void 0 && e !== void 0 && e >= s ? (e - s) / 1e3 : void 0;
         })(),
-        raw: r
+        // Avoid storing full raw payloads per round (huge). Persist only the derived fields above.
+        raw: void 0
       };
       if (family === "teamduels") {
         const round = { ...roundBase, modeFamily: "teamduels" };
@@ -10394,6 +10406,52 @@ ${shapes}`.trim();
     setLoadingProgress({ phase: "Reading database (rounds)..." });
     const rows = await db.rounds.toArray();
     try {
+      const metaKey = "migration_strip_round_raw_v1";
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      const recentlyDone = typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 365 * 24 * 60 * 60 * 1e3;
+      if (!recentlyDone) {
+        const shouldStrip = rows.some((r) => r && typeof r === "object" && r.raw && typeof r.raw === "object");
+        if (shouldStrip) {
+          let scanned = 0;
+          let updated = 0;
+          const patch = [];
+          const BATCH = 500;
+          setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: 0, total: rows.length });
+          for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            scanned++;
+            if (!r || typeof r !== "object") continue;
+            const raw = r.raw;
+            if (!raw || typeof raw !== "object") continue;
+            if (typeof r.trueHeadingDeg !== "number") {
+              const pano = raw?.panorama;
+              const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? raw?.heading ?? raw?.bearing ?? raw?.rotation;
+              if (typeof v === "number" && Number.isFinite(v)) r.trueHeadingDeg = v;
+              else if (typeof v === "string") {
+                const n = Number(v);
+                if (Number.isFinite(n)) r.trueHeadingDeg = n;
+              }
+            }
+            delete r.raw;
+            patch.push(r);
+            updated++;
+            if (patch.length >= BATCH) {
+              await db.rounds.bulkPut(patch);
+              patch.length = 0;
+              setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: i + 1, total: rows.length });
+            }
+          }
+          if (patch.length) await db.rounds.bulkPut(patch);
+          setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: rows.length, total: rows.length });
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), scanned, updated }, updatedAt: Date.now() });
+        } else {
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), scanned: rows.length, updated: 0 }, updatedAt: Date.now() });
+        }
+      }
+    } catch {
+    }
+    try {
       const metaKey = "migration_round_names_from_details_v1";
       const meta = await db.meta.get(metaKey);
       const doneAt = meta?.value?.doneAt;
@@ -10462,11 +10520,16 @@ ${shapes}`.trim();
     } catch {
     }
     const outRows = new Array(rows.length);
-    const YIELD_EVERY = 250;
+    const YIELD_EVERY = 2e3;
     setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
+    const progressStep = Math.max(10, Math.floor(rows.length / 120));
+    let nextProgressAt = progressStep;
     for (let i = 0; i < rows.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-      if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
+      if (i >= nextProgressAt) {
+        setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
+        nextProgressAt = Math.min(rows.length, nextProgressAt + progressStep);
+      }
       const out = rows[i];
       const gameId = String(out.gameId ?? "");
       const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : void 0;
@@ -31558,16 +31621,7 @@ ${shapes}`.trim();
       const mateCountry = resolveGuessCountryForExport(pickWithAliases2(r, "player_mate_guessCountry"));
       const oppCountry = resolveGuessCountryForExport(pickWithAliases2(r, "player_opponent_guessCountry"));
       const oppMateCountry = resolveGuessCountryForExport(pickWithAliases2(r, "player_opponent_mate_guessCountry"));
-      const trueHeading = asFiniteNumber(
-        pickFirst4(r.raw, [
-          "panorama.heading",
-          "panorama.bearing",
-          "panorama.rotation",
-          "heading",
-          "bearing",
-          "rotation"
-        ])
-      );
+      const trueHeading = asFiniteNumber(r.trueHeadingDeg);
       const rowBase = {
         gameId: r.gameId,
         roundNumber: r.roundNumber,
