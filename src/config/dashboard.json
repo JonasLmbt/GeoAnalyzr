@@ -2105,7 +2105,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 32,
+              "h": 35,
               "card": {
                 "type": "composite",
                 "children": [
@@ -2629,6 +2629,16 @@
                       "actions": {
                         "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
                       }
+                    }
+                  },
+                  {
+                    "widgetId": "w_country_insight_admin_enrich",
+                    "type": "admin_enrichment",
+                    "title": "Detailed admin analysis",
+                    "grain": "round",
+                    "placement": { "x": 0, "y": 32, "w": 12, "h": 3 },
+                    "spec": {
+                      "description": "Start an on-demand enrichment for this country (downloads admin boundaries and computes province/state fields). This makes admin hit-rate rows and region maps available."
                     }
                   }
                 ]

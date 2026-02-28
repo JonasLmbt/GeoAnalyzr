@@ -321,7 +321,18 @@ export interface LeaderListRowDef {
 
 export interface WidgetDef {
   widgetId: string;
-  type: "chart" | "stat_list" | "stat_value" | "breakdown" | "country_map" | "region_map" | "point_map" | "multi_view" | "record_list" | "leader_list";
+  type:
+    | "chart"
+    | "stat_list"
+    | "stat_value"
+    | "breakdown"
+    | "country_map"
+    | "region_map"
+    | "point_map"
+    | "multi_view"
+    | "record_list"
+    | "leader_list"
+    | "admin_enrichment";
   title: string;
   grain: Grain;
   placement?: PlacementDef;
@@ -338,7 +349,13 @@ export interface WidgetDef {
     | PointMapSpec
     | MultiViewSpec
     | RecordListSpec
-    | { rows: LeaderListRowDef[] };
+    | { rows: LeaderListRowDef[] }
+    | AdminEnrichmentSpec;
+}
+
+export interface AdminEnrichmentSpec {
+  // Optional description shown in the widget.
+  description?: string;
 }
 
 export interface CompositeCardDef {

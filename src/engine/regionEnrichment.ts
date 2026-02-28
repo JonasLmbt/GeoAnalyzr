@@ -2,6 +2,63 @@ import { resolveIdKabupatenByLatLng, resolveIdProvinceByLatLng } from "../geo/id
 import { resolveDeDistrictByLatLng, resolveDeStateByLatLng } from "../geo/deRegions";
 import { resolveCaProvinceByLatLng, resolveUsStateByLatLng } from "../geo/naRegions";
 import { resolvePhProvinceByLatLng, resolveVnProvinceByLatLng } from "../geo/seaRegions";
+import { db } from "../db";
+
+const ADMIN_DIM_TO_COUNTRY: Record<string, string> = {
+  true_state: "de",
+  guess_state: "de",
+  true_district: "de",
+  guess_district: "de",
+  true_us_state: "us",
+  guess_us_state: "us",
+  true_ca_province: "ca",
+  guess_ca_province: "ca",
+  true_id_province: "id",
+  guess_id_province: "id",
+  true_id_kabupaten: "id",
+  guess_id_kabupaten: "id",
+  true_ph_province: "ph",
+  guess_ph_province: "ph",
+  true_vn_province: "vn",
+  guess_vn_province: "vn",
+};
+
+const SUPPORTED_ADMIN_DIMS = new Set(Object.keys(ADMIN_DIM_TO_COUNTRY));
+
+type AdminEnabledCacheEntry = { enabled: boolean; fetchedAt: number };
+const ADMIN_ENABLED_CACHE = new Map<string, AdminEnabledCacheEntry>();
+const ADMIN_ENABLED_CACHE_TTL_MS = 2_000;
+
+export function getAdminEnrichmentRequiredCountry(dimId: string): string | null {
+  const iso2 = ADMIN_DIM_TO_COUNTRY[dimId];
+  return typeof iso2 === "string" && iso2 ? iso2 : null;
+}
+
+export function invalidateAdminEnrichmentEnabledCache(countryIso2?: string): void {
+  if (typeof countryIso2 === "string" && countryIso2.trim()) {
+    ADMIN_ENABLED_CACHE.delete(countryIso2.trim().toLowerCase());
+    return;
+  }
+  ADMIN_ENABLED_CACHE.clear();
+}
+
+export async function isAdminEnrichmentEnabledForCountry(countryIso2: string): Promise<boolean> {
+  const iso2 = typeof countryIso2 === "string" ? countryIso2.trim().toLowerCase() : "";
+  if (!iso2) return false;
+
+  const cached = ADMIN_ENABLED_CACHE.get(iso2);
+  if (cached && Date.now() - cached.fetchedAt < ADMIN_ENABLED_CACHE_TTL_MS) return cached.enabled;
+
+  try {
+    const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
+    const enabled = (meta?.value as any)?.enabled === true;
+    ADMIN_ENABLED_CACHE.set(iso2, { enabled, fetchedAt: Date.now() });
+    return enabled;
+  } catch {
+    ADMIN_ENABLED_CACHE.set(iso2, { enabled: false, fetchedAt: Date.now() });
+    return false;
+  }
+}
 
 function isFiniteNum(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -26,25 +83,12 @@ async function runPool<T>(items: T[], concurrency: number, fn: (item: T) => Prom
 
 export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[]): Promise<void> {
   if (!Array.isArray(rows) || rows.length === 0) return;
-  const supported = new Set([
-    "true_state",
-    "true_district",
-    "true_us_state",
-    "true_ca_province",
-    "true_id_province",
-    "true_id_kabupaten",
-    "true_ph_province",
-    "true_vn_province",
-    "guess_state",
-    "guess_district",
-    "guess_us_state",
-    "guess_ca_province",
-    "guess_id_province",
-    "guess_id_kabupaten",
-    "guess_ph_province",
-    "guess_vn_province",
-  ]);
-  if (!supported.has(dimId)) return;
+  if (!SUPPORTED_ADMIN_DIMS.has(dimId)) return;
+
+  const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
+
+  // By default, admin-level enrichment is opt-in (triggered from the Country Insight "Start detailed analysis" widget).
+  if (requiredCountry && !(await isAdminEnrichmentEnabledForCountry(requiredCountry))) return;
 
   const guessLatLngOf = (r: any): { lat: number; lng: number } | null => {
     const lat =

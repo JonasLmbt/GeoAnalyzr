@@ -14,6 +14,7 @@ import { renderCountryMetricMapWidget } from "./widgets/countryMetricMapWidget";
 import { renderRegionMetricMapWidget } from "./widgets/regionMetricMapWidget";
 import { renderPointMapWidget } from "./widgets/pointMapWidget";
 import { renderMultiViewWidget } from "./widgets/multiViewWidget";
+import { renderAdminEnrichmentWidget } from "./widgets/adminEnrichmentWidget";
 import { renderCountryMapPicker } from "./countryMapPicker";
 import type { LocalFilterControlSpec, LocalFiltersSpec } from "../config/dashboard.types";
 import { ROUND_DIMENSION_EXTRACTORS } from "../engine/dimensions";
@@ -102,6 +103,7 @@ export async function renderDashboard(
     }
     if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows as any);
     if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows as any);
+    if (widget.type === "admin_enrichment") return await renderAdminEnrichmentWidget(semantic, widget, overlay, baseRows as any);
 
     // placeholders for the next iterations
     const ph = doc.createElement("div");

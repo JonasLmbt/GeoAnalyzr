@@ -6,7 +6,11 @@ import { applyFilters } from "../../engine/filters";
 import { groupByKey } from "../../engine/aggregate";
 import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
-import { maybeEnrichRoundRowsForDimension } from "../../engine/regionEnrichment";
+import {
+  getAdminEnrichmentRequiredCountry,
+  isAdminEnrichmentEnabledForCountry,
+  maybeEnrichRoundRowsForDimension,
+} from "../../engine/regionEnrichment";
 import { DrilldownOverlay } from "../drilldownOverlay";
 import { loadGeoJson } from "../../geo/geoJsonFetch";
 
@@ -246,7 +250,10 @@ export async function renderRegionMetricMapWidget(
   const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
   if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
 
-  if (grain === "round") {
+  const requiredCountry = getAdminEnrichmentRequiredCountry(spec.dimension);
+  const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForCountry(requiredCountry) : true;
+
+  if (grain === "round" && adminEnabled) {
     await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll as any[]);
   }
 
@@ -289,6 +296,17 @@ export async function renderRegionMetricMapWidget(
 
   const renderMap = async (): Promise<void> => {
     mapHost.innerHTML = "";
+
+    if (requiredCountry && !adminEnabled) {
+      legend.innerHTML = "";
+      const msg = doc.createElement("div");
+      msg.style.padding = "12px 10px";
+      msg.style.opacity = "0.9";
+      msg.style.fontSize = "12px";
+      msg.textContent = `Detailed admin analysis is disabled for ${requiredCountry.toUpperCase()}. Scroll down to “Detailed admin analysis” and click “Start detailed analysis” to download boundaries and enable this map.`;
+      mapHost.appendChild(msg);
+      return;
+    }
 
     const measDef = semantic.measures[activeMeasure];
     if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (region_map)`);

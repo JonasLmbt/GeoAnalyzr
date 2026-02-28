@@ -6,7 +6,11 @@ import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import { applyFilters } from "../../engine/filters";
-import { maybeEnrichRoundRowsForDimension } from "../../engine/regionEnrichment";
+import {
+  getAdminEnrichmentRequiredCountry,
+  isAdminEnrichmentEnabledForCountry,
+  maybeEnrichRoundRowsForDimension,
+} from "../../engine/regionEnrichment";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
 type Row = {
@@ -240,6 +244,31 @@ export async function renderBreakdownWidget(
 
   const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
   if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+
+  const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
+  if (requiredCountry && !(await isAdminEnrichmentEnabledForCountry(requiredCountry))) {
+    const headerLeft = doc.createElement("div");
+    headerLeft.className = "ga-breakdown-header-left";
+    headerLeft.textContent = dimDef.label;
+
+    const headerRight = doc.createElement("div");
+    headerRight.className = "ga-breakdown-header-right";
+
+    header.appendChild(headerLeft);
+    header.appendChild(headerRight);
+
+    const msg = doc.createElement("div");
+    msg.style.padding = "12px 10px";
+    msg.style.opacity = "0.9";
+    msg.style.fontSize = "12px";
+    msg.textContent = `Detailed admin analysis is disabled for ${requiredCountry.toUpperCase()}. Scroll down to “Detailed admin analysis” and click “Start detailed analysis” to compute the required fields.`;
+    box.appendChild(msg);
+
+    wrap.appendChild(title);
+    wrap.appendChild(header);
+    wrap.appendChild(box);
+    return wrap;
+  }
 
   if (grain === "round") {
     await maybeEnrichRoundRowsForDimension(dimId, rowsAll as any[]);

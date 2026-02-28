@@ -410,5 +410,8 @@ export async function renderAnalysisApp(opts: {
     void renderNow();
   });
 
+  // Allow widgets to request a rerender after background data enrichment.
+  (globalThis as any).__gaRequestRerender = () => void renderNow();
+
   await renderNow();
 }

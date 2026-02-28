@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.30
+// @version      2.2.31
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -35642,7 +35642,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 32,
+                h: 35,
                 card: {
                   type: "composite",
                   children: [
@@ -36166,6 +36166,16 @@ ${shapes}`.trim();
                         actions: {
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
                         }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_enrich",
+                      type: "admin_enrichment",
+                      title: "Detailed admin analysis",
+                      grain: "round",
+                      placement: { x: 0, y: 32, w: 12, h: 3 },
+                      spec: {
+                        description: "Start an on-demand enrichment for this country (downloads admin boundaries and computes province/state fields). This makes admin hit-rate rows and region maps available."
                       }
                     }
                   ]
@@ -43750,6 +43760,53 @@ ${describeError(err2)}` : message;
   }
 
   // src/engine/regionEnrichment.ts
+  var ADMIN_DIM_TO_COUNTRY = {
+    true_state: "de",
+    guess_state: "de",
+    true_district: "de",
+    guess_district: "de",
+    true_us_state: "us",
+    guess_us_state: "us",
+    true_ca_province: "ca",
+    guess_ca_province: "ca",
+    true_id_province: "id",
+    guess_id_province: "id",
+    true_id_kabupaten: "id",
+    guess_id_kabupaten: "id",
+    true_ph_province: "ph",
+    guess_ph_province: "ph",
+    true_vn_province: "vn",
+    guess_vn_province: "vn"
+  };
+  var SUPPORTED_ADMIN_DIMS = new Set(Object.keys(ADMIN_DIM_TO_COUNTRY));
+  var ADMIN_ENABLED_CACHE = /* @__PURE__ */ new Map();
+  var ADMIN_ENABLED_CACHE_TTL_MS = 2e3;
+  function getAdminEnrichmentRequiredCountry(dimId) {
+    const iso2 = ADMIN_DIM_TO_COUNTRY[dimId];
+    return typeof iso2 === "string" && iso2 ? iso2 : null;
+  }
+  function invalidateAdminEnrichmentEnabledCache(countryIso2) {
+    if (typeof countryIso2 === "string" && countryIso2.trim()) {
+      ADMIN_ENABLED_CACHE.delete(countryIso2.trim().toLowerCase());
+      return;
+    }
+    ADMIN_ENABLED_CACHE.clear();
+  }
+  async function isAdminEnrichmentEnabledForCountry(countryIso2) {
+    const iso2 = typeof countryIso2 === "string" ? countryIso2.trim().toLowerCase() : "";
+    if (!iso2) return false;
+    const cached = ADMIN_ENABLED_CACHE.get(iso2);
+    if (cached && Date.now() - cached.fetchedAt < ADMIN_ENABLED_CACHE_TTL_MS) return cached.enabled;
+    try {
+      const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
+      const enabled = meta?.value?.enabled === true;
+      ADMIN_ENABLED_CACHE.set(iso2, { enabled, fetchedAt: Date.now() });
+      return enabled;
+    } catch {
+      ADMIN_ENABLED_CACHE.set(iso2, { enabled: false, fetchedAt: Date.now() });
+      return false;
+    }
+  }
   function isFiniteNum(v) {
     return typeof v === "number" && Number.isFinite(v);
   }
@@ -43770,25 +43827,9 @@ ${describeError(err2)}` : message;
   }
   async function maybeEnrichRoundRowsForDimension(dimId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    const supported = /* @__PURE__ */ new Set([
-      "true_state",
-      "true_district",
-      "true_us_state",
-      "true_ca_province",
-      "true_id_province",
-      "true_id_kabupaten",
-      "true_ph_province",
-      "true_vn_province",
-      "guess_state",
-      "guess_district",
-      "guess_us_state",
-      "guess_ca_province",
-      "guess_id_province",
-      "guess_id_kabupaten",
-      "guess_ph_province",
-      "guess_vn_province"
-    ]);
-    if (!supported.has(dimId)) return;
+    if (!SUPPORTED_ADMIN_DIMS.has(dimId)) return;
+    const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
+    if (requiredCountry && !await isAdminEnrichmentEnabledForCountry(requiredCountry)) return;
     const guessLatLngOf = (r) => {
       const lat = typeof r?.player_self_guessLat === "number" ? r.player_self_guessLat : typeof r?.p1_guessLat === "number" ? r.p1_guessLat : typeof r?.guessLat === "number" ? r.guessLat : null;
       const lng = typeof r?.player_self_guessLng === "number" ? r.player_self_guessLng : typeof r?.p1_guessLng === "number" ? r.p1_guessLng : typeof r?.guessLng === "number" ? r.guessLng : null;
@@ -45526,6 +45567,26 @@ ${describeError(err2)}` : message;
     if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+    const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
+    if (requiredCountry && !await isAdminEnrichmentEnabledForCountry(requiredCountry)) {
+      const headerLeft2 = doc.createElement("div");
+      headerLeft2.className = "ga-breakdown-header-left";
+      headerLeft2.textContent = dimDef.label;
+      const headerRight2 = doc.createElement("div");
+      headerRight2.className = "ga-breakdown-header-right";
+      header.appendChild(headerLeft2);
+      header.appendChild(headerRight2);
+      const msg = doc.createElement("div");
+      msg.style.padding = "12px 10px";
+      msg.style.opacity = "0.9";
+      msg.style.fontSize = "12px";
+      msg.textContent = `Detailed admin analysis is disabled for ${requiredCountry.toUpperCase()}. Scroll down to \u201CDetailed admin analysis\u201D and click \u201CStart detailed analysis\u201D to compute the required fields.`;
+      box.appendChild(msg);
+      wrap.appendChild(title);
+      wrap.appendChild(header);
+      wrap.appendChild(box);
+      return wrap;
+    }
     if (grain === "round") {
       await maybeEnrichRoundRowsForDimension(dimId, rowsAll);
     }
@@ -46976,7 +47037,9 @@ ${describeError(err2)}` : message;
     const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
-    if (grain === "round") {
+    const requiredCountry = getAdminEnrichmentRequiredCountry(spec.dimension);
+    const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForCountry(requiredCountry) : true;
+    if (grain === "round" && adminEnabled) {
       await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll);
     }
     const renderHeaderRight = () => {
@@ -47013,6 +47076,16 @@ ${describeError(err2)}` : message;
     };
     const renderMap = async () => {
       mapHost.innerHTML = "";
+      if (requiredCountry && !adminEnabled) {
+        legend.innerHTML = "";
+        const msg = doc.createElement("div");
+        msg.style.padding = "12px 10px";
+        msg.style.opacity = "0.9";
+        msg.style.fontSize = "12px";
+        msg.textContent = `Detailed admin analysis is disabled for ${requiredCountry.toUpperCase()}. Scroll down to \u201CDetailed admin analysis\u201D and click \u201CStart detailed analysis\u201D to download boundaries and enable this map.`;
+        mapHost.appendChild(msg);
+        return;
+      }
       const measDef = semantic.measures[activeMeasure];
       if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (region_map)`);
       const unit = semantic.units[measDef.unit];
@@ -47969,6 +48042,174 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
+  // src/ui/widgets/adminEnrichmentWidget.ts
+  function asIso2(v) {
+    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+    return /^[a-z]{2}$/.test(s) ? s : "";
+  }
+  function buildPlan(countryIso2) {
+    const iso2 = asIso2(countryIso2);
+    if (!iso2) return null;
+    if (iso2 === "de") return { countryIso2: iso2, label: "Germany (Bundesl\xE4nder + Landkreise)", dimIds: ["true_state", "guess_state", "true_district", "guess_district"] };
+    if (iso2 === "us") return { countryIso2: iso2, label: "United States (States)", dimIds: ["true_us_state", "guess_us_state"] };
+    if (iso2 === "ca") return { countryIso2: iso2, label: "Canada (Provinces)", dimIds: ["true_ca_province", "guess_ca_province"] };
+    if (iso2 === "id") return { countryIso2: iso2, label: "Indonesia (Provinces + Kabupaten)", dimIds: ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"] };
+    if (iso2 === "ph") return { countryIso2: iso2, label: "Philippines (Provinces)", dimIds: ["true_ph_province", "guess_ph_province"] };
+    if (iso2 === "vn") return { countryIso2: iso2, label: "Vietnam (Provinces)", dimIds: ["true_vn_province", "guess_vn_province"] };
+    return null;
+  }
+  function metaKeyForCountry(iso2) {
+    return `admin_enrichment_enabled_${iso2.toLowerCase()}`;
+  }
+  async function renderAdminEnrichmentWidget(_semantic, widget, _overlay, baseRows) {
+    const doc = document;
+    const el2 = doc.createElement("div");
+    el2.className = "ga-widget ga-admin-enrichment";
+    const title = doc.createElement("div");
+    title.style.fontWeight = "600";
+    title.style.marginBottom = "6px";
+    title.textContent = widget.title || "Detailed administrative regions";
+    el2.appendChild(title);
+    const hint = doc.createElement("div");
+    hint.style.opacity = "0.9";
+    hint.style.fontSize = "12px";
+    hint.style.marginBottom = "10px";
+    hint.textContent = widget.spec?.description ?? "Optional: download admin boundaries and compute region fields (e.g. province/state) for this country. This enables hit-rate stats and region maps.";
+    el2.appendChild(hint);
+    const body = doc.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "8px";
+    el2.appendChild(body);
+    const countryIso2 = (() => {
+      const first = Array.isArray(baseRows) ? baseRows.find((r) => r && typeof r === "object") : null;
+      return asIso2(first?.trueCountry ?? first?.true_country);
+    })();
+    if (!countryIso2) {
+      const msg = doc.createElement("div");
+      msg.textContent = "Select a country in Country Insight to enable detailed admin analysis.";
+      body.appendChild(msg);
+      return el2;
+    }
+    const plan = buildPlan(countryIso2);
+    if (!plan) {
+      const msg = doc.createElement("div");
+      msg.textContent = `No detailed admin-level dataset configured for '${countryIso2.toUpperCase()}' yet.`;
+      body.appendChild(msg);
+      return el2;
+    }
+    const status = doc.createElement("div");
+    status.style.fontSize = "12px";
+    status.style.opacity = "0.9";
+    body.appendChild(status);
+    const progress = doc.createElement("div");
+    progress.style.height = "8px";
+    progress.style.borderRadius = "999px";
+    progress.style.background = "rgba(255,255,255,0.10)";
+    progress.style.overflow = "hidden";
+    const progressFill = doc.createElement("div");
+    progressFill.style.height = "100%";
+    progressFill.style.width = "0%";
+    progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
+    progress.appendChild(progressFill);
+    body.appendChild(progress);
+    const actions = doc.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "10px";
+    actions.style.flexWrap = "wrap";
+    body.appendChild(actions);
+    const btn = doc.createElement("button");
+    btn.className = "ga-filter-btn";
+    btn.textContent = "Start detailed analysis";
+    actions.appendChild(btn);
+    const clearBtn = doc.createElement("button");
+    clearBtn.className = "ga-filter-btn";
+    clearBtn.textContent = "Disable";
+    actions.appendChild(clearBtn);
+    const refresh = async () => {
+      const meta = await db.meta.get(metaKeyForCountry(countryIso2));
+      const enabled = meta?.value?.enabled === true;
+      const doneAt = meta?.value?.doneAt;
+      const doneTxt = typeof doneAt === "number" && Number.isFinite(doneAt) ? new Date(doneAt).toLocaleString() : "";
+      status.textContent = enabled ? `Enabled for ${plan.label}. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : `Disabled for ${plan.label}.`;
+      btn.textContent = enabled ? "Re-run detailed analysis" : "Start detailed analysis";
+    };
+    const setBusy = (pct, msg) => {
+      progressFill.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
+      status.textContent = msg;
+    };
+    btn.addEventListener("click", () => {
+      void (async () => {
+        btn.disabled = true;
+        clearBtn.disabled = true;
+        try {
+          await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: true }, updatedAt: Date.now() });
+          invalidateAdminEnrichmentEnabledCache(countryIso2);
+          analysisConsole.info(`Admin enrichment: loading rounds for ${countryIso2.toUpperCase()}...`);
+          setBusy(2, `Loading rounds for ${countryIso2.toUpperCase()}...`);
+          const rows = await db.rounds.where("trueCountry").equals(countryIso2).toArray();
+          const total = rows.length;
+          if (!total) {
+            setBusy(0, "No rounds found for this country.");
+            return;
+          }
+          analysisConsole.info(`Admin enrichment: computing ${plan.dimIds.length} dimensions for ${total} rounds...`);
+          for (let i = 0; i < plan.dimIds.length; i++) {
+            const dimId = plan.dimIds[i];
+            const pct = 5 + i / Math.max(1, plan.dimIds.length) * 70;
+            setBusy(pct, `Computing ${dimId}... (${i + 1}/${plan.dimIds.length})`);
+            await maybeEnrichRoundRowsForDimension(dimId, rows);
+          }
+          analysisConsole.info("Admin enrichment: saving enriched rounds...");
+          setBusy(80, "Saving enriched rounds...");
+          const batchSize = 200;
+          for (let offset = 0; offset < total; offset += batchSize) {
+            const chunk = rows.slice(offset, offset + batchSize);
+            await db.rounds.bulkPut(chunk);
+            setBusy(80 + offset / Math.max(1, total) * 18, "Saving enriched rounds...");
+            if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise((r) => setTimeout(r, 0));
+          }
+          await db.meta.put({
+            key: metaKeyForCountry(countryIso2),
+            value: { enabled: true, doneAt: Date.now(), dimIds: plan.dimIds, rounds: total },
+            updatedAt: Date.now()
+          });
+          invalidateAdminEnrichmentEnabledCache(countryIso2);
+          invalidateRoundsCache();
+          globalThis.__gaRequestRerender?.();
+          setBusy(100, "Done. Refreshing view...");
+          analysisConsole.info("Admin enrichment: done.");
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          analysisConsole.error(`Admin enrichment failed: ${msg}`);
+          setBusy(0, `Error: ${msg}`);
+        } finally {
+          btn.disabled = false;
+          clearBtn.disabled = false;
+          await refresh();
+        }
+      })();
+    });
+    clearBtn.addEventListener("click", () => {
+      void (async () => {
+        clearBtn.disabled = true;
+        btn.disabled = true;
+        try {
+          await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: false, doneAt: Date.now() }, updatedAt: Date.now() });
+          invalidateAdminEnrichmentEnabledCache(countryIso2);
+          invalidateRoundsCache();
+          globalThis.__gaRequestRerender?.();
+        } finally {
+          clearBtn.disabled = false;
+          btn.disabled = false;
+          await refresh();
+        }
+      })();
+    });
+    await refresh();
+    return el2;
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
@@ -48030,6 +48271,7 @@ ${describeError(err2)}` : message;
       }
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "admin_enrichment") return await renderAdminEnrichmentWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
@@ -49099,6 +49341,7 @@ ${describeError(err2)}` : message;
     store.subscribe(() => {
       void renderNow();
     });
+    globalThis.__gaRequestRerender = () => void renderNow();
     await renderNow();
   }
 
