@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.0
+// @version      2.3.1
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -48628,7 +48628,7 @@ ${describeError(err2)}` : message;
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
-      const geojson = await loadGeoJson(spec.geojsonUrl);
+      const geojson = spec.geojson ?? await loadGeoJson(spec.geojsonUrl);
       const wrap2 = doc.createElement("div");
       wrap2.className = "ga-country-map-wrap";
       mapHost.appendChild(wrap2);
@@ -48725,7 +48725,7 @@ ${describeError(err2)}` : message;
           const spanY = Math.max(1, maxY - minY);
           const margin = 0.08;
           const s = Math.min(W * (1 - margin * 2) / spanX, H * (1 - margin * 2) / spanY);
-          const scale = Math.max(1, Math.min(12, s));
+          const scale = Math.max(1, Math.min(24, s));
           const tx = (W - spanX * scale) / 2 - minX * scale;
           const ty = (H - spanY * scale) / 2 - minY * scale;
           vp = { scale, tx, ty };
@@ -48753,7 +48753,7 @@ ${describeError(err2)}` : message;
       const onZoom = (delta, clientX, clientY) => {
         const p = rectPoint(clientX, clientY);
         const factor = delta > 0 ? 1.12 : 1 / 1.12;
-        const next = clamp4(vp.scale * factor, 1, 12);
+        const next = clamp4(vp.scale * factor, 1, 24);
         zoomAt(p.x, p.y, next);
       };
       svg.addEventListener(
@@ -50112,7 +50112,7 @@ ${describeError(err2)}` : message;
     const savedMetaByKey = /* @__PURE__ */ new Map();
     const missingByKey = /* @__PURE__ */ new Map();
     const sizeHintKbByKey = /* @__PURE__ */ new Map();
-    let persistBusyKey = null;
+    const persistStateByKey = /* @__PURE__ */ new Map();
     const makeRoundCacheId = (k, r) => {
       const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
       const rn = typeof r?.roundNumber === "number" ? r.roundNumber : typeof r?.round_number === "number" ? r.round_number : null;
@@ -50171,9 +50171,10 @@ ${describeError(err2)}` : message;
     };
     const saveLevel = async (lvl) => {
       const k = levelKey(lvl);
-      persistBusyKey = k;
+      if (!isLoaded(lvl)) return;
+      if (persistStateByKey.has(k)) return;
+      persistStateByKey.set(k, "saving");
       renderLevelsList();
-      chartsHost.innerHTML = "";
       setBusy(5, `Saving ${lvl.id}...`);
       try {
         const loaded = await loadLevel(
@@ -50234,15 +50235,15 @@ ${describeError(err2)}` : message;
         analysisConsole.error(`Save failed: ${msg}`);
         setBusy(0, `Error: ${msg}`);
       } finally {
-        persistBusyKey = null;
+        persistStateByKey.delete(k);
         renderLevelsList();
       }
     };
     const refreshSavedLabels = async (lvl) => {
       const k = levelKey(lvl);
-      persistBusyKey = k;
+      if (persistStateByKey.has(k)) return;
+      persistStateByKey.set(k, "refreshing");
       renderLevelsList();
-      chartsHost.innerHTML = "";
       setBusy(5, `Refreshing ${lvl.id}...`);
       try {
         const loaded = await loadLevel(
@@ -50294,13 +50295,14 @@ ${describeError(err2)}` : message;
         analysisConsole.error(`Refresh failed: ${msg}`);
         setBusy(0, `Error: ${msg}`);
       } finally {
-        persistBusyKey = null;
+        persistStateByKey.delete(k);
         renderLevelsList();
       }
     };
     const deleteSaved = async (lvl) => {
       const k = levelKey(lvl);
-      persistBusyKey = k;
+      if (persistStateByKey.has(k)) return;
+      persistStateByKey.set(k, "deleting");
       renderLevelsList();
       setBusy(5, `Deleting ${lvl.id}...`);
       try {
@@ -50315,7 +50317,7 @@ ${describeError(err2)}` : message;
         analysisConsole.error(`Delete failed: ${msg}`);
         setBusy(0, `Error: ${msg}`);
       } finally {
-        persistBusyKey = null;
+        persistStateByKey.delete(k);
         renderLevelsList();
       }
     };
@@ -50344,17 +50346,24 @@ ${describeError(err2)}` : message;
         const k = levelKey(lvl);
         const saved = savedMetaByKey.get(k);
         const missing = missingByKey.get(k);
+        const persistMode = persistStateByKey.get(k) ?? null;
         const persistBtn = doc.createElement("button");
         persistBtn.className = "ga-filter-btn";
-        persistBtn.disabled = persistBusyKey !== null;
+        persistBtn.disabled = persistMode !== null;
         if (!saved) {
           const kb = sizeHintKbByKey.get(k);
-          persistBtn.textContent = typeof kb === "number" ? `Save (${kb} KB)` : "Save";
-          persistBtn.addEventListener("click", () => void saveLevel(lvl));
+          const loadedNow = isLoaded(lvl);
+          persistBtn.textContent = persistMode === "saving" ? "Saving\u2026" : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+          if (!loadedNow) {
+            persistBtn.disabled = true;
+            persistBtn.title = "Load this level first to enable saving.";
+          } else if (persistMode === null) {
+            persistBtn.addEventListener("click", () => void saveLevel(lvl));
+          }
         } else {
           if (typeof missing === "number" && missing > 0) {
-            persistBtn.textContent = `Refresh (${missing})`;
-            persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+            persistBtn.textContent = persistMode === "refreshing" ? "Refreshing\u2026" : `Refresh (${missing})`;
+            if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
           } else {
             const kb = Math.max(1, Math.round(saved.byteSize / 1024));
             persistBtn.textContent = `Saved (${kb} KB)`;
@@ -50367,10 +50376,10 @@ ${describeError(err2)}` : message;
           btnDelete.className = "ga-filter-btn";
           btnDelete.textContent = "\u{1F5D1}";
           btnDelete.title = "Delete saved boundaries + labels";
-          btnDelete.disabled = persistBusyKey !== null;
+          btnDelete.disabled = persistMode !== null;
           btnDelete.style.borderColor = "rgba(255, 90, 90, 0.75)";
           btnDelete.style.color = "rgba(255, 120, 120, 0.95)";
-          btnDelete.addEventListener("click", () => void deleteSaved(lvl));
+          if (persistMode === null) btnDelete.addEventListener("click", () => void deleteSaved(lvl));
           right.appendChild(btnDelete);
         }
         const loaded = isLoaded(lvl);
@@ -50429,7 +50438,30 @@ ${describeError(err2)}` : message;
         chartsHost.appendChild(msg);
         return;
       }
-      setBusy(55, "Computing per-round regions...");
+      const activeKey = levelKey(active);
+      const hasSaved = savedMetaByKey.has(activeKey);
+      let savedById = null;
+      let idsByRow = null;
+      if (hasSaved) {
+        setBusy(55, "Loading cached labels...");
+        idsByRow = countryRows.map((r) => makeRoundCacheId(activeKey, r));
+        const ids = idsByRow.filter(Boolean);
+        if (ids.length) {
+          const got = await adminCacheDb.labels.bulkGet(ids);
+          savedById = /* @__PURE__ */ new Map();
+          for (let i = 0; i < ids.length; i++) {
+            const row = got[i];
+            if (!row) continue;
+            const t = typeof row.trueUnit === "string" ? row.trueUnit : "";
+            const g = typeof row.guessUnit === "string" ? row.guessUnit : "";
+            savedById.set(ids[i], { trueUnit: t, guessUnit: g });
+          }
+        } else {
+          savedById = /* @__PURE__ */ new Map();
+        }
+      } else {
+        setBusy(55, "Computing per-round regions...");
+      }
       const derived = [];
       let lastStep = -1;
       for (let i = 0; i < countryRows.length; i++) {
@@ -50438,11 +50470,18 @@ ${describeError(err2)}` : message;
         let t = cached?.t ?? null;
         let g = cached?.g ?? null;
         if (!cached) {
-          const lat = Number(r?.trueLat);
-          const lng = Number(r?.trueLng);
-          const guess = guessLatLngOf(r);
-          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-          g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          if (hasSaved && savedById && idsByRow) {
+            const id = idsByRow[i];
+            const saved = id ? savedById.get(id) : void 0;
+            t = saved?.trueUnit ?? null;
+            g = saved?.guessUnit ?? null;
+          } else {
+            const lat = Number(r?.trueLat);
+            const lng = Number(r?.trueLng);
+            const guess = guessLatLngOf(r);
+            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+            g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          }
           loaded.computed.set(r, { t, g });
         }
         derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
@@ -50450,7 +50489,8 @@ ${describeError(err2)}` : message;
         const step = Math.floor(pctRaw / 5) * 5;
         if (step !== lastStep) {
           lastStep = step;
-          setBusy(step, `Computing per-round regions... (${i}/${countryRows.length})`);
+          const phase = hasSaved ? `Applying cached labels... (${i}/${countryRows.length})` : `Computing per-round regions... (${i}/${countryRows.length})`;
+          setBusy(step, phase);
           await new Promise((res) => setTimeout(res, 0));
         }
       }
@@ -50512,6 +50552,7 @@ ${describeError(err2)}` : message;
           spec: {
             dimension: "admin_true_unit",
             geojsonUrl: active.geojsonUrl,
+            geojson: loaded.geojson,
             featureKey: loaded.level.featureKey,
             fitToGeoJson: true,
             measures,

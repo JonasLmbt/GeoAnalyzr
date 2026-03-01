@@ -220,6 +220,8 @@ export interface CountryMetricMapSpec {
 export interface RegionMetricMapSpec {
   dimension: string;
   geojsonUrl: string;
+  // Optional preloaded GeoJSON object (skips network fetch). Useful for cached admin levels.
+  geojson?: any;
   // Feature property name used as key (must match the extracted dimension values).
   featureKey: string;
   // If true, initial viewport zooms/pans to fit the GeoJSON bounds (useful for country-level maps).

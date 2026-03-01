@@ -758,7 +758,32 @@ export async function renderAdminAnalysisWidget(
       return;
     }
 
-    setBusy(55, "Computing per-round regions...");
+    const activeKey = levelKey(active);
+    const hasSaved = savedMetaByKey.has(activeKey);
+    let savedById: Map<string, { trueUnit: string; guessUnit: string }> | null = null;
+    let idsByRow: (string | null)[] | null = null;
+
+    if (hasSaved) {
+      setBusy(55, "Loading cached labels...");
+      idsByRow = countryRows.map((r) => makeRoundCacheId(activeKey, r));
+      const ids = idsByRow.filter(Boolean) as string[];
+      if (ids.length) {
+        const got = await adminCacheDb.labels.bulkGet(ids);
+        savedById = new Map();
+        for (let i = 0; i < ids.length; i++) {
+          const row = got[i] as any;
+          if (!row) continue;
+          const t = typeof row.trueUnit === "string" ? row.trueUnit : "";
+          const g = typeof row.guessUnit === "string" ? row.guessUnit : "";
+          savedById.set(ids[i], { trueUnit: t, guessUnit: g });
+        }
+      } else {
+        savedById = new Map();
+      }
+    } else {
+      setBusy(55, "Computing per-round regions...");
+    }
+
     const derived: any[] = [];
     let lastStep = -1;
     for (let i = 0; i < countryRows.length; i++) {
@@ -767,11 +792,20 @@ export async function renderAdminAnalysisWidget(
       let t: string | null = cached?.t ?? null;
       let g: string | null = cached?.g ?? null;
       if (!cached) {
-        const lat = Number(r?.trueLat);
-        const lng = Number(r?.trueLng);
-        const guess = guessLatLngOf(r);
-        t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-        g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+        if (hasSaved && savedById && idsByRow) {
+          const id = idsByRow[i];
+          const saved = id ? savedById.get(id) : undefined;
+          // IMPORTANT: Do not auto-compute missing labels here. If the user has new rounds,
+          // the UI will show "Refresh (n)" and the user can opt-in to computing them.
+          t = saved?.trueUnit ?? null;
+          g = saved?.guessUnit ?? null;
+        } else {
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+          g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+        }
         loaded.computed.set(r, { t, g });
       }
       derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
@@ -779,7 +813,8 @@ export async function renderAdminAnalysisWidget(
       const step = Math.floor(pctRaw / 5) * 5;
       if (step !== lastStep) {
         lastStep = step;
-        setBusy(step, `Computing per-round regions... (${i}/${countryRows.length})`);
+        const phase = hasSaved ? `Applying cached labels... (${i}/${countryRows.length})` : `Computing per-round regions... (${i}/${countryRows.length})`;
+        setBusy(step, phase);
         await new Promise<void>((res) => setTimeout(res, 0));
       }
     }
@@ -847,6 +882,7 @@ export async function renderAdminAnalysisWidget(
         spec: {
           dimension: "admin_true_unit",
           geojsonUrl: active.geojsonUrl,
+          geojson: loaded.geojson,
           featureKey: loaded.level.featureKey,
           fitToGeoJson: true,
           measures,

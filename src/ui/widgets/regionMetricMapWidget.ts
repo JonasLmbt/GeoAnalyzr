@@ -400,7 +400,7 @@ export async function renderRegionMetricMapWidget(
     legend.appendChild(bar);
     legend.appendChild(right);
 
-    const geojson = await loadGeoJson(spec.geojsonUrl);
+    const geojson = spec.geojson ?? (await loadGeoJson(spec.geojsonUrl));
     const wrap = doc.createElement("div");
     wrap.className = "ga-country-map-wrap";
     mapHost.appendChild(wrap);

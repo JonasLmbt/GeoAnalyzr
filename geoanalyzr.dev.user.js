@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.1-dev
+// @version      2.3.2-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -48628,7 +48628,7 @@ ${describeError(err2)}` : message;
       legend.appendChild(left);
       legend.appendChild(bar);
       legend.appendChild(right);
-      const geojson = await loadGeoJson(spec.geojsonUrl);
+      const geojson = spec.geojson ?? await loadGeoJson(spec.geojsonUrl);
       const wrap2 = doc.createElement("div");
       wrap2.className = "ga-country-map-wrap";
       mapHost.appendChild(wrap2);
@@ -50438,7 +50438,30 @@ ${describeError(err2)}` : message;
         chartsHost.appendChild(msg);
         return;
       }
-      setBusy(55, "Computing per-round regions...");
+      const activeKey = levelKey(active);
+      const hasSaved = savedMetaByKey.has(activeKey);
+      let savedById = null;
+      let idsByRow = null;
+      if (hasSaved) {
+        setBusy(55, "Loading cached labels...");
+        idsByRow = countryRows.map((r) => makeRoundCacheId(activeKey, r));
+        const ids = idsByRow.filter(Boolean);
+        if (ids.length) {
+          const got = await adminCacheDb.labels.bulkGet(ids);
+          savedById = /* @__PURE__ */ new Map();
+          for (let i = 0; i < ids.length; i++) {
+            const row = got[i];
+            if (!row) continue;
+            const t = typeof row.trueUnit === "string" ? row.trueUnit : "";
+            const g = typeof row.guessUnit === "string" ? row.guessUnit : "";
+            savedById.set(ids[i], { trueUnit: t, guessUnit: g });
+          }
+        } else {
+          savedById = /* @__PURE__ */ new Map();
+        }
+      } else {
+        setBusy(55, "Computing per-round regions...");
+      }
       const derived = [];
       let lastStep = -1;
       for (let i = 0; i < countryRows.length; i++) {
@@ -50447,11 +50470,18 @@ ${describeError(err2)}` : message;
         let t = cached?.t ?? null;
         let g = cached?.g ?? null;
         if (!cached) {
-          const lat = Number(r?.trueLat);
-          const lng = Number(r?.trueLng);
-          const guess = guessLatLngOf(r);
-          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-          g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          if (hasSaved && savedById && idsByRow) {
+            const id = idsByRow[i];
+            const saved = id ? savedById.get(id) : void 0;
+            t = saved?.trueUnit ?? null;
+            g = saved?.guessUnit ?? null;
+          } else {
+            const lat = Number(r?.trueLat);
+            const lng = Number(r?.trueLng);
+            const guess = guessLatLngOf(r);
+            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+            g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          }
           loaded.computed.set(r, { t, g });
         }
         derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
@@ -50459,7 +50489,8 @@ ${describeError(err2)}` : message;
         const step = Math.floor(pctRaw / 5) * 5;
         if (step !== lastStep) {
           lastStep = step;
-          setBusy(step, `Computing per-round regions... (${i}/${countryRows.length})`);
+          const phase = hasSaved ? `Applying cached labels... (${i}/${countryRows.length})` : `Computing per-round regions... (${i}/${countryRows.length})`;
+          setBusy(step, phase);
           await new Promise((res) => setTimeout(res, 0));
         }
       }
@@ -50521,6 +50552,7 @@ ${describeError(err2)}` : message;
           spec: {
             dimension: "admin_true_unit",
             geojsonUrl: active.geojsonUrl,
+            geojson: loaded.geojson,
             featureKey: loaded.level.featureKey,
             fitToGeoJson: true,
             measures,
