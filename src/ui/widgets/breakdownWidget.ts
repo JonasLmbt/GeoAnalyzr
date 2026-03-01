@@ -11,6 +11,7 @@ import {
   isAdminEnrichmentEnabledForCountry,
   maybeEnrichRoundRowsForDimension,
 } from "../../engine/regionEnrichment";
+import { getAdminEnrichmentPlan, runAdminEnrichment } from "./adminEnrichmentWidget";
 import { DrilldownOverlay } from "../drilldownOverlay";
 
 type Row = {
@@ -257,12 +258,39 @@ export async function renderBreakdownWidget(
     header.appendChild(headerLeft);
     header.appendChild(headerRight);
 
-    const msg = doc.createElement("div");
-    msg.style.padding = "12px 10px";
-    msg.style.opacity = "0.9";
-    msg.style.fontSize = "12px";
-    msg.textContent = `Detailed admin analysis is disabled for ${requiredCountry.toUpperCase()}. Scroll down to “Detailed admin analysis” and click “Start detailed analysis” to compute the required fields.`;
-    box.appendChild(msg);
+    const wrapCta = doc.createElement("div");
+    wrapCta.style.display = "flex";
+    wrapCta.style.justifyContent = "center";
+    wrapCta.style.alignItems = "center";
+    wrapCta.style.minHeight = "70px";
+
+    const btn = doc.createElement("button");
+    btn.className = "ga-filter-btn";
+    btn.textContent = `Load detailed regions (${requiredCountry.toUpperCase()})`;
+    btn.title = "Download admin boundaries and compute province/state/district fields for this country.";
+
+    const plan = getAdminEnrichmentPlan(requiredCountry);
+    if (!plan) {
+      btn.disabled = true;
+      btn.title = "No detailed admin dataset configured for this country yet.";
+    }
+
+    btn.addEventListener("click", () => {
+      void (async () => {
+        btn.disabled = true;
+        const prevText = btn.textContent;
+        btn.textContent = "Loading...";
+        try {
+          await runAdminEnrichment(requiredCountry);
+        } finally {
+          btn.textContent = prevText || "Load detailed regions";
+          btn.disabled = false;
+        }
+      })();
+    });
+
+    wrapCta.appendChild(btn);
+    box.appendChild(wrapCta);
 
     wrap.appendChild(title);
     wrap.appendChild(header);

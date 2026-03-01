@@ -16,7 +16,7 @@ function asIso2(v: unknown): string {
   return /^[a-z]{2}$/.test(s) ? s : "";
 }
 
-function buildPlan(countryIso2: string): EnrichPlan | null {
+export function getAdminEnrichmentPlan(countryIso2: string): EnrichPlan | null {
   const iso2 = asIso2(countryIso2);
   if (!iso2) return null;
   if (iso2 === "de") return { countryIso2: iso2, label: "Germany (Bundesländer + Landkreise)", dimIds: ["true_state", "guess_state", "true_district", "guess_district"] };
@@ -30,6 +30,68 @@ function buildPlan(countryIso2: string): EnrichPlan | null {
 
 function metaKeyForCountry(iso2: string): string {
   return `admin_enrichment_enabled_${iso2.toLowerCase()}`;
+}
+
+export async function runAdminEnrichment(
+  countryIso2: string,
+  opts?: {
+    onStatus?: (msg: string) => void;
+    onPct?: (pct: number) => void;
+  }
+): Promise<void> {
+  const iso2 = asIso2(countryIso2);
+  if (!iso2) throw new Error("Missing country ISO2 for admin enrichment");
+  const plan = getAdminEnrichmentPlan(iso2);
+  if (!plan) throw new Error(`No admin-level dataset configured for '${iso2.toUpperCase()}' yet.`);
+
+  const set = (pct: number, msg: string) => {
+    opts?.onPct?.(pct);
+    opts?.onStatus?.(msg);
+  };
+
+  await db.meta.put({ key: metaKeyForCountry(iso2), value: { enabled: true }, updatedAt: Date.now() });
+  invalidateAdminEnrichmentEnabledCache(iso2);
+
+  analysisConsole.info(`Admin enrichment: loading rounds for ${iso2.toUpperCase()}...`);
+  set(2, `Loading rounds for ${iso2.toUpperCase()}...`);
+
+  const rows = await db.rounds.where("trueCountry").equals(iso2 as any).toArray();
+  const total = rows.length;
+  if (!total) {
+    set(0, "No rounds found for this country.");
+    return;
+  }
+
+  analysisConsole.info(`Admin enrichment: computing ${plan.dimIds.length} dimensions for ${total} rounds...`);
+  for (let i = 0; i < plan.dimIds.length; i++) {
+    const dimId = plan.dimIds[i];
+    const pct = 5 + (i / Math.max(1, plan.dimIds.length)) * 70;
+    set(pct, `Computing ${dimId}... (${i + 1}/${plan.dimIds.length})`);
+    await maybeEnrichRoundRowsForDimension(dimId, rows as any[]);
+  }
+
+  analysisConsole.info("Admin enrichment: saving enriched rounds...");
+  set(80, "Saving enriched rounds...");
+
+  const batchSize = 200;
+  for (let offset = 0; offset < total; offset += batchSize) {
+    const chunk = rows.slice(offset, offset + batchSize);
+    await db.rounds.bulkPut(chunk as any);
+    set(80 + (offset / Math.max(1, total)) * 18, "Saving enriched rounds...");
+    if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise<void>((r) => setTimeout(r, 0));
+  }
+
+  await db.meta.put({
+    key: metaKeyForCountry(iso2),
+    value: { enabled: true, doneAt: Date.now(), dimIds: plan.dimIds, rounds: total },
+    updatedAt: Date.now()
+  });
+  invalidateAdminEnrichmentEnabledCache(iso2);
+
+  invalidateRoundsCache();
+  (globalThis as any).__gaRequestRerender?.();
+  set(100, "Done.");
+  analysisConsole.info("Admin enrichment: done.");
 }
 
 export async function renderAdminEnrichmentWidget(
@@ -75,7 +137,7 @@ export async function renderAdminEnrichmentWidget(
     return el;
   }
 
-  const plan = buildPlan(countryIso2);
+  const plan = getAdminEnrichmentPlan(countryIso2);
   if (!plan) {
     const msg = doc.createElement("div");
     msg.textContent = `No detailed admin-level dataset configured for '${countryIso2.toUpperCase()}' yet.`;
@@ -135,49 +197,20 @@ export async function renderAdminEnrichmentWidget(
       btn.disabled = true;
       clearBtn.disabled = true;
       try {
-        await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: true }, updatedAt: Date.now() });
-        invalidateAdminEnrichmentEnabledCache(countryIso2);
-
-        analysisConsole.info(`Admin enrichment: loading rounds for ${countryIso2.toUpperCase()}...`);
-        setBusy(2, `Loading rounds for ${countryIso2.toUpperCase()}...`);
-
-        const rows = await db.rounds.where("trueCountry").equals(countryIso2 as any).toArray();
-        const total = rows.length;
-        if (!total) {
-          setBusy(0, "No rounds found for this country.");
-          return;
-        }
-
-        analysisConsole.info(`Admin enrichment: computing ${plan.dimIds.length} dimensions for ${total} rounds...`);
-        for (let i = 0; i < plan.dimIds.length; i++) {
-          const dimId = plan.dimIds[i];
-          const pct = 5 + (i / Math.max(1, plan.dimIds.length)) * 70;
-          setBusy(pct, `Computing ${dimId}... (${i + 1}/${plan.dimIds.length})`);
-          await maybeEnrichRoundRowsForDimension(dimId, rows as any[]);
-        }
-
-        analysisConsole.info("Admin enrichment: saving enriched rounds...");
-        setBusy(80, "Saving enriched rounds...");
-
-        const batchSize = 200;
-        for (let offset = 0; offset < total; offset += batchSize) {
-          const chunk = rows.slice(offset, offset + batchSize);
-          await db.rounds.bulkPut(chunk as any);
-          setBusy(80 + (offset / Math.max(1, total)) * 18, "Saving enriched rounds...");
-          if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise<void>((r) => setTimeout(r, 0));
-        }
-
-        await db.meta.put({
-          key: metaKeyForCountry(countryIso2),
-          value: { enabled: true, doneAt: Date.now(), dimIds: plan.dimIds, rounds: total },
-          updatedAt: Date.now()
+        let pct = 0;
+        let msg = "";
+        const sync = () => setBusy(pct, msg);
+        await runAdminEnrichment(countryIso2, {
+          onPct: (p) => {
+            pct = p;
+            sync();
+          },
+          onStatus: (m) => {
+            msg = m;
+            sync();
+          }
         });
-        invalidateAdminEnrichmentEnabledCache(countryIso2);
-
-        invalidateRoundsCache();
-        (globalThis as any).__gaRequestRerender?.();
         setBusy(100, "Done. Refreshing view...");
-        analysisConsole.info("Admin enrichment: done.");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         analysisConsole.error(`Admin enrichment failed: ${msg}`);
