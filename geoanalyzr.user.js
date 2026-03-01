@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.35
+// @version      2.3.0
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -17,6 +17,7 @@
 // @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
+// @connect      www.geoboundaries.org
 // ==/UserScript==
 (() => {
   var __create = Object.create;
@@ -7774,7 +7775,7 @@ ${shapes}`.trim();
       loadM49(feature2);
       loadTLD(feature2);
       loadIsoStatus(feature2);
-      loadLevel(feature2);
+      loadLevel2(feature2);
       loadGroups(feature2);
       loadFlag(feature2);
       cacheFeatureByIDs(feature2);
@@ -7848,7 +7849,7 @@ ${shapes}`.trim();
         props.isoStatus = "official";
       }
     }
-    function loadLevel(feature2) {
+    function loadLevel2(feature2) {
       const props = feature2.properties;
       if (props.level)
         return;
@@ -9546,9 +9547,9 @@ ${shapes}`.trim();
     return void 0;
   }
   function getSelfScore(r) {
-    const selfRaw = legacy(r, "player_self_score", "p1_score", "score");
-    const self2 = typeof selfRaw === "number" ? selfRaw : void 0;
-    return typeof self2 === "number" ? self2 : void 0;
+    const hasExplicitSelfScoreKey = r && typeof r === "object" && ("player_self_score" in r || "playerSelfScore" in r || "p1_score" in r || "p1Score" in r);
+    const selfRaw = hasExplicitSelfScoreKey ? legacy(r, "player_self_score", "p1_score") : legacy(r, "player_self_score", "p1_score", "score");
+    return typeof selfRaw === "number" ? selfRaw : void 0;
   }
   function getPlayedAt(r) {
     return r.playedAt;
@@ -9930,6 +9931,14 @@ ${shapes}`.trim();
       true_id_kabupaten: trueIdKabupatenKey,
       true_ph_province: truePhProvinceKey,
       true_vn_province: trueVnProvinceKey,
+      admin_true_unit: (r) => {
+        const v = typeof r?.adminTrueUnit === "string" ? String(r.adminTrueUnit).trim() : "";
+        return v ? v : null;
+      },
+      admin_guess_unit: (r) => {
+        const v = typeof r?.adminGuessUnit === "string" ? String(r.adminGuessUnit).trim() : "";
+        return v ? v : null;
+      },
       mode_family: (r) => {
         const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
         if (!v) return null;
@@ -10649,6 +10658,9 @@ ${shapes}`.trim();
         if (n > 25) invalid.add(gid);
       }
       setLoadingProgress({ phase: "Validating games (round indices)...", current: outRows.length, total: outRows.length });
+      for (const [gid, n] of uniqueRoundCountByGame.entries()) {
+        if (n < 2) invalid.add(gid);
+      }
       corruptedGameIdsCache = invalid;
     } catch {
     }
@@ -10913,7 +10925,7 @@ ${shapes}`.trim();
       const gid = typeof g?.gameId === "string" ? g.gameId : "";
       if (gid && corruptedGameIdsCache?.has(gid)) return false;
       const rc = typeof g?.roundsCount === "number" && Number.isFinite(g.roundsCount) ? g.roundsCount : 0;
-      return rc <= 25;
+      return rc >= 2 && rc <= 25;
     });
     setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
     return gamesRawCache;
@@ -32492,6 +32504,22 @@ ${shapes}`.trim();
         sortModes: ["asc", "desc"],
         cardinality: { policy: "large", maxSeries: 40 }
       },
+      admin_true_unit: {
+        label: "Admin unit",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "map"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
+      },
+      admin_guess_unit: {
+        label: "Guessed admin unit",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
+      },
       true_location: {
         label: "True location",
         kind: "category",
@@ -33213,6 +33241,30 @@ ${shapes}`.trim();
         formulaId: "rate_vn_province_hit",
         range: { min: 0, max: 100 }
       },
+      admin_unit_hit_rate: {
+        label: "Admin-unit hit rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line", "map"],
+        formulaId: "rate_admin_unit_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_unit_hit_count: {
+        label: "Admin hits",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line", "map"],
+        formulaId: "count_admin_unit_hit",
+        range: { min: 0 }
+      },
+      admin_unit_miss_count: {
+        label: "Admin misses",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line", "map"],
+        formulaId: "count_admin_unit_miss",
+        range: { min: 0 }
+      },
       hit_count: {
         label: "Hit count",
         unit: "count",
@@ -33689,14 +33741,23 @@ ${shapes}`.trim();
       },
       globalFilters: {
         enabled: true,
-        layout: { variant: "compact" },
+        layout: {
+          variant: "compact"
+        },
         controls: [
           {
             id: "dateRange",
             type: "date_range",
             label: "From / To",
-            default: { fromTs: null, toTs: null },
-            appliesTo: ["round", "game", "session"]
+            default: {
+              fromTs: null,
+              toTs: null
+            },
+            appliesTo: [
+              "round",
+              "game",
+              "session"
+            ]
           },
           {
             id: "modeFamily",
@@ -33705,7 +33766,10 @@ ${shapes}`.trim();
             dimension: "mode_family",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round", "game"]
+            appliesTo: [
+              "round",
+              "game"
+            ]
           },
           {
             id: "rated",
@@ -33714,7 +33778,10 @@ ${shapes}`.trim();
             dimension: "is_rated",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round", "game"]
+            appliesTo: [
+              "round",
+              "game"
+            ]
           },
           {
             id: "map",
@@ -33724,7 +33791,10 @@ ${shapes}`.trim();
             dimension: "map_slug",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round", "game"]
+            appliesTo: [
+              "round",
+              "game"
+            ]
           },
           {
             id: "teammate",
@@ -33733,7 +33803,10 @@ ${shapes}`.trim();
             dimension: "teammate_name",
             default: "all",
             options: "auto_teammates",
-            appliesTo: ["round", "game"]
+            appliesTo: [
+              "round",
+              "game"
+            ]
           },
           {
             id: "movement",
@@ -33742,7 +33815,10 @@ ${shapes}`.trim();
             dimension: "movement_type",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round", "game"]
+            appliesTo: [
+              "round",
+              "game"
+            ]
           },
           {
             id: "guessTimeBucket",
@@ -33751,7 +33827,9 @@ ${shapes}`.trim();
             dimension: "duration_bucket",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round"]
+            appliesTo: [
+              "round"
+            ]
           },
           {
             id: "country",
@@ -33760,28 +33838,95 @@ ${shapes}`.trim();
             dimension: "true_country",
             default: "all",
             options: "auto_distinct",
-            appliesTo: ["round"]
+            appliesTo: [
+              "round"
+            ]
           }
         ],
-        buttons: { apply: false, reset: true }
+        buttons: {
+          apply: false,
+          reset: true
+        }
       },
       drilldownPresets: {
         rounds: {
           entity: "round",
           columnsPresets: {
             roundMode: [
-              { key: "ts", label: "Date", sortable: true },
-              { key: "result", label: "Result", sortable: true, colored: true },
-              { key: "roundNumber", label: "Round", sortable: true },
-              { key: "movementType", label: "Movement", sortable: true },
-              { key: "player_self_score", label: "Score", sortable: true },
-              { key: "true_country", label: "Country", sortable: true },
-              { key: "durationSeconds", label: "Guess Duration", sortable: true },
-              { key: "damage", label: "Damage", sortable: true, colored: true },
-              { key: "teammateName", label: "Mate", sortable: true },
-              { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
-              { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
-              { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
+              {
+                key: "ts",
+                label: "Date",
+                sortable: true
+              },
+              {
+                key: "result",
+                label: "Result",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "roundNumber",
+                label: "Round",
+                sortable: true
+              },
+              {
+                key: "movementType",
+                label: "Movement",
+                sortable: true
+              },
+              {
+                key: "player_self_score",
+                label: "Score",
+                sortable: true
+              },
+              {
+                key: "true_country",
+                label: "Country",
+                sortable: true
+              },
+              {
+                key: "durationSeconds",
+                label: "Guess Duration",
+                sortable: true
+              },
+              {
+                key: "damage",
+                label: "Damage",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "teammateName",
+                label: "Mate",
+                sortable: true
+              },
+              {
+                key: "gameId",
+                label: "Game",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 8
+                }
+              },
+              {
+                key: "guess_maps",
+                label: "Guess Maps",
+                type: "link",
+                link: {
+                  kind: "guess_maps",
+                  label: "Open"
+                }
+              },
+              {
+                key: "street_view",
+                label: "True Street View",
+                type: "link",
+                link: {
+                  kind: "street_view",
+                  label: "Open"
+                }
+              }
             ]
           },
           defaultPreset: "roundMode"
@@ -33790,12 +33935,41 @@ ${shapes}`.trim();
           entity: "session",
           columnsPresets: {
             sessionMode: [
-              { key: "sessionStartTs", label: "Start", sortable: true },
-              { key: "sessionEndTs", label: "End", sortable: true },
-              { key: "gamesCount", label: "Games", sortable: true },
-              { key: "roundsCount", label: "Rounds", sortable: true },
-              { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
-              { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } }
+              {
+                key: "sessionStartTs",
+                label: "Start",
+                sortable: true
+              },
+              {
+                key: "sessionEndTs",
+                label: "End",
+                sortable: true
+              },
+              {
+                key: "gamesCount",
+                label: "Games",
+                sortable: true
+              },
+              {
+                key: "roundsCount",
+                label: "Rounds",
+                sortable: true
+              },
+              {
+                key: "ratingDelta",
+                label: "Rating Delta",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "sessionId",
+                label: "Session",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 2
+                }
+              }
             ]
           },
           defaultPreset: "sessionMode"
@@ -33804,16 +33978,66 @@ ${shapes}`.trim();
           entity: "game",
           columnsPresets: {
             gameMode: [
-              { key: "ts", label: "Date", sortable: true },
-              { key: "modeFamily", label: "Game Mode", sortable: true },
-              { key: "movementType", label: "Movement", sortable: true },
-              { key: "teammateName", label: "Mate", sortable: true },
-              { key: "roundsCount", label: "Rounds", sortable: true },
-              { key: "result", label: "Result", sortable: true, colored: true },
-              { key: "endRating", label: "End Rating", sortable: true },
-              { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
-              { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
-              { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
+              {
+                key: "ts",
+                label: "Date",
+                sortable: true
+              },
+              {
+                key: "modeFamily",
+                label: "Game Mode",
+                sortable: true
+              },
+              {
+                key: "movementType",
+                label: "Movement",
+                sortable: true
+              },
+              {
+                key: "teammateName",
+                label: "Mate",
+                sortable: true
+              },
+              {
+                key: "roundsCount",
+                label: "Rounds",
+                sortable: true
+              },
+              {
+                key: "result",
+                label: "Result",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "endRating",
+                label: "End Rating",
+                sortable: true
+              },
+              {
+                key: "ratingDelta",
+                label: "Rating Delta",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "sessionId",
+                label: "Session",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 2
+                }
+              },
+              {
+                key: "gameId",
+                label: "Game",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 8
+                }
+              }
             ]
           },
           defaultPreset: "gameMode"
@@ -33822,18 +34046,76 @@ ${shapes}`.trim();
           entity: "game",
           columnsPresets: {
             opponentMode: [
-              { key: "ts", label: "Date", sortable: true },
-              { key: "modeFamily", label: "Game Mode", sortable: true },
-              { key: "movementType", label: "Movement", sortable: true },
-              { key: "roundsCount", label: "Rounds", sortable: true },
-              { key: "teammateName", label: "Mate", sortable: true },
-              { key: "result", label: "Result", sortable: true, colored: true },
-              { key: "player_opponent_name", label: "Opponent", sortable: true },
-              { key: "player_opponent_mate_name", label: "Opponent Mate", sortable: true },
-              { key: "endRating", label: "End Rating", sortable: true },
-              { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
-              { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
-              { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
+              {
+                key: "ts",
+                label: "Date",
+                sortable: true
+              },
+              {
+                key: "modeFamily",
+                label: "Game Mode",
+                sortable: true
+              },
+              {
+                key: "movementType",
+                label: "Movement",
+                sortable: true
+              },
+              {
+                key: "roundsCount",
+                label: "Rounds",
+                sortable: true
+              },
+              {
+                key: "teammateName",
+                label: "Mate",
+                sortable: true
+              },
+              {
+                key: "result",
+                label: "Result",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "player_opponent_name",
+                label: "Opponent",
+                sortable: true
+              },
+              {
+                key: "player_opponent_mate_name",
+                label: "Opponent Mate",
+                sortable: true
+              },
+              {
+                key: "endRating",
+                label: "End Rating",
+                sortable: true
+              },
+              {
+                key: "ratingDelta",
+                label: "Rating Delta",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "sessionId",
+                label: "Session",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 2
+                }
+              },
+              {
+                key: "gameId",
+                label: "Game",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 8
+                }
+              }
             ]
           },
           defaultPreset: "opponentMode"
@@ -33862,13 +34144,25 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Results, Win Rate & Streaks",
                       grain: "game",
-                      placement: { x: 0, y: 0, w: 12, h: 7 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 7
+                      },
                       spec: {
                         rows: [
                           {
                             label: "Games with result data",
                             measure: "games_with_result_count",
-                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Wins",
@@ -33879,7 +34173,13 @@ ${shapes}`.trim();
                                 target: "players",
                                 columnsPreset: "opponentMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -33892,7 +34192,13 @@ ${shapes}`.trim();
                                 target: "players",
                                 columnsPreset: "opponentMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Loss"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -33905,7 +34211,13 @@ ${shapes}`.trim();
                                 target: "players",
                                 columnsPreset: "opponentMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -33918,7 +34230,10 @@ ${shapes}`.trim();
                                 target: "players",
                                 columnsPreset: "opponentMode",
                                 filterFromPoint: false,
-                                initialSort: { key: "endRating", dir: "desc" }
+                                initialSort: {
+                                  key: "endRating",
+                                  dir: "desc"
+                                }
                               }
                             }
                           },
@@ -33950,37 +34265,79 @@ ${shapes}`.trim();
                             label: "Avg score (pts)",
                             measure: "avg_score",
                             grain: "round",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Avg distance (km)",
                             measure: "avg_distance_km",
                             grain: "round",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Avg time (s)",
                             measure: "avg_guess_duration",
                             grain: "round",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Time played",
                             measure: "time_played_seconds",
                             grain: "round",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Perfect 5k rounds",
                             measure: "fivek_count",
                             grain: "round",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Throws (<50)",
                             measure: "throw_count",
                             grain: "round",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           }
                         ]
                       }
@@ -33990,12 +34347,22 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Mode Breakdown",
                       grain: "game",
-                      placement: { x: 0, y: 7, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 7,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         dimension: "mode_family",
-                        excludeKeys: ["other", "Streak"],
+                        excludeKeys: [
+                          "other",
+                          "Streak"
+                        ],
                         measure: "games_count",
-                        sort: { mode: "desc" },
+                        sort: {
+                          mode: "desc"
+                        },
                         limit: 12,
                         actions: {
                           click: {
@@ -34012,11 +34379,18 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Movement Breakdown",
                       grain: "round",
-                      placement: { x: 0, y: 11, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 11,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         dimension: "movement_type",
                         measure: "rounds_count",
-                        sort: { mode: "desc" },
+                        sort: {
+                          mode: "desc"
+                        },
                         limit: 12,
                         actions: {
                           click: {
@@ -34033,11 +34407,18 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Time progression metrics",
                       grain: "round",
-                      placement: { x: 0, y: 15, w: 12, h: 7 },
+                      placement: {
+                        x: 0,
+                        y: 15,
+                        w: 12,
+                        h: 7
+                      },
                       spec: {
                         type: "line",
                         maxPoints: 100,
-                        x: { dimension: "time_day" },
+                        x: {
+                          dimension: "time_day"
+                        },
                         y: {
                           measures: [
                             "games_count",
@@ -34060,13 +34441,23 @@ ${shapes}`.trim();
                             "damage_taken_avg"
                           ],
                           activeMeasure: "games_count",
-                          accumulations: ["period", "to_date"],
+                          accumulations: [
+                            "period",
+                            "to_date"
+                          ],
                           activeAccumulation: "to_date"
                         },
-                        sort: { mode: "chronological" },
+                        sort: {
+                          mode: "chronological"
+                        },
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     }
@@ -34079,7 +34470,13 @@ ${shapes}`.trim();
         {
           id: "rating",
           title: "Rating",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -34099,21 +34496,49 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Rating",
                       grain: "game",
-                      placement: { x: 0, y: 0, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         rows: [
-                          { label: "Current rating", measure: "end_rating" },
-                          { label: "Trend", measure: "rating_trend" },
-                          { label: "Avg rating delta", measure: "rating_delta_avg" },
+                          {
+                            label: "Current rating",
+                            measure: "end_rating"
+                          },
+                          {
+                            label: "Trend",
+                            measure: "rating_trend"
+                          },
+                          {
+                            label: "Avg rating delta",
+                            measure: "rating_delta_avg"
+                          },
                           {
                             label: "Highest rating delta",
                             measure: "rating_delta_highest",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             label: "Lowest rating delta",
                             measure: "rating_delta_lowest",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           }
                         ]
                       }
@@ -34123,7 +34548,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Sessions",
                       grain: "session",
-                      placement: { x: 0, y: 4, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 4,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         records: [
                           {
@@ -34132,7 +34562,14 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "biggest_session_rating_loss",
@@ -34140,7 +34577,14 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           }
                         ]
                       }
@@ -34150,13 +34594,27 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Rating over time",
                       grain: "game",
-                      placement: { x: 0, y: 8, w: 12, h: 8 },
+                      placement: {
+                        x: 0,
+                        y: 8,
+                        w: 12,
+                        h: 8
+                      },
                       spec: {
                         type: "line",
                         maxPoints: 220,
-                        x: { dimension: "time_day" },
-                        y: { measures: ["end_rating"], activeMeasure: "end_rating" },
-                        sort: { mode: "chronological" },
+                        x: {
+                          dimension: "time_day"
+                        },
+                        y: {
+                          measures: [
+                            "end_rating"
+                          ],
+                          activeMeasure: "end_rating"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
                         actions: {
                           hover: true,
                           click: {
@@ -34177,7 +34635,12 @@ ${shapes}`.trim();
         {
           id: "personal_records",
           title: "Personal Records",
-          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -34197,7 +34660,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Round Records",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 6 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 6
+                      },
                       spec: {
                         records: [
                           {
@@ -34206,7 +34674,14 @@ ${shapes}`.trim();
                             metric: "round_score",
                             groupBy: "round_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "lowest_score_round",
@@ -34214,7 +34689,14 @@ ${shapes}`.trim();
                             metric: "round_score",
                             groupBy: "round_id",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "biggest_damage_dealt_round",
@@ -34222,7 +34704,14 @@ ${shapes}`.trim();
                             metric: "round_damage_dealt",
                             groupBy: "round_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "biggest_damage_taken_round",
@@ -34230,7 +34719,14 @@ ${shapes}`.trim();
                             metric: "round_damage_taken",
                             groupBy: "round_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "fastest_round",
@@ -34238,7 +34734,14 @@ ${shapes}`.trim();
                             metric: "round_guess_duration",
                             groupBy: "round_id",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "slowest_round",
@@ -34246,7 +34749,14 @@ ${shapes}`.trim();
                             metric: "round_guess_duration",
                             groupBy: "round_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "fastest_5k",
@@ -34254,14 +34764,26 @@ ${shapes}`.trim();
                             metric: "round_guess_duration",
                             groupBy: "round_id",
                             extreme: "min",
-                            filters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
+                            filters: [
+                              {
+                                dimension: "score_bucket",
+                                op: "eq",
+                                value: "5000"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34271,14 +34793,26 @@ ${shapes}`.trim();
                             metric: "round_guess_duration",
                             groupBy: "round_id",
                             extreme: "max",
-                            filters: [{ dimension: "is_throw", op: "eq", value: "true" }],
+                            filters: [
+                              {
+                                dimension: "is_throw",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34288,7 +34822,14 @@ ${shapes}`.trim();
                             metric: "round_score_per_second",
                             groupBy: "round_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "worst_region_guess",
@@ -34296,14 +34837,26 @@ ${shapes}`.trim();
                             metric: "round_score",
                             groupBy: "round_id",
                             extreme: "min",
-                            filters: [{ dimension: "is_hit", op: "eq", value: "true" }],
+                            filters: [
+                              {
+                                dimension: "is_hit",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_hit",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           }
@@ -34315,7 +34868,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Game Records",
                       grain: "game",
-                      placement: { x: 0, y: 6, w: 12, h: 7 },
+                      placement: {
+                        x: 0,
+                        y: 6,
+                        w: 12,
+                        h: 7
+                      },
                       spec: {
                         records: [
                           {
@@ -34329,7 +34887,13 @@ ${shapes}`.trim();
                                 target: "games",
                                 columnsPreset: "gameMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_flawless_win", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_flawless_win",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34339,7 +34903,14 @@ ${shapes}`.trim();
                             metric: "game_avg_score",
                             groupBy: "game_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "lowest_avg_score_game",
@@ -34347,7 +34918,14 @@ ${shapes}`.trim();
                             metric: "game_avg_score",
                             groupBy: "game_id",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_5ks_in_game",
@@ -34355,7 +34933,14 @@ ${shapes}`.trim();
                             metric: "game_5k_count",
                             groupBy: "game_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_throws_in_game",
@@ -34363,7 +34948,14 @@ ${shapes}`.trim();
                             metric: "game_throw_count",
                             groupBy: "game_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "worst_hit_rate_game",
@@ -34371,7 +34963,14 @@ ${shapes}`.trim();
                             metric: "game_hit_rate",
                             groupBy: "game_id",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "highest_rating_gain_game",
@@ -34379,7 +34978,14 @@ ${shapes}`.trim();
                             metric: "game_rating_delta",
                             groupBy: "game_id",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "fastest_win_game",
@@ -34387,14 +34993,26 @@ ${shapes}`.trim();
                             metric: "game_duration",
                             groupBy: "game_id",
                             extreme: "min",
-                            filters: [{ dimension: "result", op: "eq", value: "Win" }],
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Win"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "games",
                                 columnsPreset: "gameMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34404,14 +35022,26 @@ ${shapes}`.trim();
                             metric: "game_duration",
                             groupBy: "game_id",
                             extreme: "max",
-                            filters: [{ dimension: "result", op: "eq", value: "Win" }],
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Win"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "games",
                                 columnsPreset: "gameMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34421,14 +35051,26 @@ ${shapes}`.trim();
                             metric: "game_final_health",
                             groupBy: "game_id",
                             extreme: "min",
-                            filters: [{ dimension: "result", op: "eq", value: "Win" }],
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Win"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "games",
                                 columnsPreset: "gameMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Win" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34438,14 +35080,26 @@ ${shapes}`.trim();
                             metric: "game_final_health",
                             groupBy: "game_id",
                             extreme: "max",
-                            filters: [{ dimension: "result", op: "eq", value: "Loss" }],
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Loss"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "games",
                                 columnsPreset: "gameMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "result", op: "eq", value: "Loss" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Loss"
+                                  }
+                                ]
                               }
                             }
                           }
@@ -34457,7 +35111,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Session Records",
                       grain: "session",
-                      placement: { x: 0, y: 13, w: 12, h: 6 },
+                      placement: {
+                        x: 0,
+                        y: 13,
+                        w: 12,
+                        h: 6
+                      },
                       spec: {
                         records: [
                           {
@@ -34466,7 +35125,14 @@ ${shapes}`.trim();
                             metric: "session_win_rate",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "highest_avg_score_session",
@@ -34474,7 +35140,14 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "lowest_avg_score_session",
@@ -34482,7 +35155,14 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_games_session",
@@ -34490,7 +35170,14 @@ ${shapes}`.trim();
                             metric: "session_games_count",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "longest_session_total_duration",
@@ -34498,7 +35185,14 @@ ${shapes}`.trim();
                             metric: "session_duration_minutes",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_5ks_session",
@@ -34506,7 +35200,14 @@ ${shapes}`.trim();
                             metric: "session_5k_count",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "best_hit_rate_session",
@@ -34514,7 +35215,14 @@ ${shapes}`.trim();
                             metric: "session_hit_rate",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "highest_throw_rate_session",
@@ -34522,7 +35230,14 @@ ${shapes}`.trim();
                             metric: "session_throw_rate",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "biggest_rating_gain_in_session",
@@ -34530,7 +35245,14 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "biggest_rating_loss_in_session",
@@ -34538,7 +35260,14 @@ ${shapes}`.trim();
                             metric: "session_delta_rating",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           }
                         ]
                       }
@@ -34548,7 +35277,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Day Records",
                       grain: "session",
-                      placement: { x: 0, y: 19, w: 12, h: 7 },
+                      placement: {
+                        x: 0,
+                        y: 19,
+                        w: 12,
+                        h: 7
+                      },
                       spec: {
                         records: [
                           {
@@ -34557,7 +35291,14 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "time_day",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "worst_day_by_avg_score",
@@ -34565,7 +35306,14 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "time_day",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_sessions_in_a_day",
@@ -34573,7 +35321,14 @@ ${shapes}`.trim();
                             metric: "sessions_count",
                             groupBy: "time_day",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_games_in_a_day",
@@ -34581,7 +35336,14 @@ ${shapes}`.trim();
                             metric: "session_games_count",
                             groupBy: "time_day",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_time_played_in_a_day",
@@ -34589,7 +35351,14 @@ ${shapes}`.trim();
                             metric: "session_duration_minutes",
                             groupBy: "time_day",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "most_5ks_in_a_day",
@@ -34597,7 +35366,14 @@ ${shapes}`.trim();
                             metric: "session_5k_count",
                             groupBy: "time_day",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "best_win_rate_day",
@@ -34605,7 +35381,14 @@ ${shapes}`.trim();
                             metric: "day_win_rate_min5",
                             groupBy: "time_day",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "worst_win_rate_day",
@@ -34613,7 +35396,14 @@ ${shapes}`.trim();
                             metric: "day_win_rate_min5",
                             groupBy: "time_day",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           }
                         ]
                       }
@@ -34623,12 +35413,26 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Day Streaks",
                       grain: "session",
-                      placement: { x: 0, y: 26, w: 12, h: 3 },
+                      placement: {
+                        x: 0,
+                        y: 26,
+                        w: 12,
+                        h: 3
+                      },
                       spec: {
                         rows: [
-                          { label: "Most consecutive days without games", measure: "max_consecutive_days_without_games" },
-                          { label: "Longest active streak (min 1 game/day)", measure: "longest_active_streak_days" },
-                          { label: "Longest 5k day streak (min 1 5k/day)", measure: "longest_5k_day_streak_days" }
+                          {
+                            label: "Most consecutive days without games",
+                            measure: "max_consecutive_days_without_games"
+                          },
+                          {
+                            label: "Longest active streak (min 1 game/day)",
+                            measure: "longest_active_streak_days"
+                          },
+                          {
+                            label: "Longest 5k day streak (min 1 5k/day)",
+                            measure: "longest_5k_day_streak_days"
+                          }
                         ]
                       }
                     }
@@ -34641,7 +35445,12 @@ ${shapes}`.trim();
         {
           id: "sessions",
           title: "Sessions",
-          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -34661,16 +35470,34 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Sessions",
                       grain: "session",
-                      placement: { x: 0, y: 0, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         rows: [
                           {
                             label: "Sessions detected (gap >45m)",
                             measure: "sessions_count",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
-                          { label: "Longest break between sessions", measure: "sessions_longest_break_seconds" },
-                          { label: "Avg games per session", measure: "sessions_avg_games" }
+                          {
+                            label: "Longest break between sessions",
+                            measure: "sessions_longest_break_seconds"
+                          },
+                          {
+                            label: "Avg games per session",
+                            measure: "sessions_avg_games"
+                          }
                         ]
                       }
                     },
@@ -34679,7 +35506,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Session Records",
                       grain: "session",
-                      placement: { x: 0, y: 4, w: 12, h: 5 },
+                      placement: {
+                        x: 0,
+                        y: 4,
+                        w: 12,
+                        h: 5
+                      },
                       spec: {
                         records: [
                           {
@@ -34688,7 +35520,14 @@ ${shapes}`.trim();
                             metric: "session_games_count",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "best_session",
@@ -34696,7 +35535,14 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "worst_session",
@@ -34704,7 +35550,14 @@ ${shapes}`.trim();
                             metric: "session_avg_score",
                             groupBy: "session_start",
                             extreme: "min",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           }
                         ]
                       }
@@ -34714,11 +35567,18 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Sessions over time (line)",
                       grain: "session",
-                      placement: { x: 0, y: 9, w: 12, h: 5 },
+                      placement: {
+                        x: 0,
+                        y: 9,
+                        w: 12,
+                        h: 5
+                      },
                       spec: {
                         type: "line",
                         maxPoints: 120,
-                        x: { dimension: "session_index" },
+                        x: {
+                          dimension: "session_index"
+                        },
                         y: {
                           measures: [
                             "session_avg_score",
@@ -34741,11 +35601,24 @@ ${shapes}`.trim();
                             "session_avg_distance_km"
                           ],
                           activeMeasure: "session_avg_score",
-                          accumulations: ["period", "to_date"],
+                          accumulations: [
+                            "period",
+                            "to_date"
+                          ],
                           activeAccumulation: "period"
                         },
-                        sort: { mode: "chronological" },
-                        actions: { hover: true, click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                        sort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "sessions",
+                            columnsPreset: "sessionMode",
+                            filterFromPoint: true
+                          }
+                        }
                       }
                     },
                     {
@@ -34753,7 +35626,12 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Sessions (bar)",
                       grain: "session",
-                      placement: { x: 0, y: 14, w: 12, h: 6 },
+                      placement: {
+                        x: 0,
+                        y: 14,
+                        w: 12,
+                        h: 6
+                      },
                       spec: {
                         dimension: "session_start",
                         measures: [
@@ -34775,11 +35653,30 @@ ${shapes}`.trim();
                           "session_rounds_count"
                         ],
                         activeMeasure: "session_avg_score",
-                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "chronological" },
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
                         limit: 12,
                         extendable: true,
-                        actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "sessions",
+                            columnsPreset: "sessionMode",
+                            filterFromPoint: true
+                          }
+                        }
                       }
                     }
                   ]
@@ -34791,7 +35688,12 @@ ${shapes}`.trim();
         {
           id: "tempo",
           title: "Tempo",
-          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -34811,7 +35713,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Tempo",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 6 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 6
+                      },
                       spec: {
                         records: [
                           {
@@ -34821,7 +35728,14 @@ ${shapes}`.trim();
                             groupBy: "round_id",
                             extreme: "min",
                             displayKey: "none",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "slowest_guess",
@@ -34830,7 +35744,14 @@ ${shapes}`.trim();
                             groupBy: "round_id",
                             extreme: "max",
                             displayKey: "none",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "fastest_5k",
@@ -34838,7 +35759,13 @@ ${shapes}`.trim();
                             metric: "avg_guess_duration",
                             groupBy: "round_id",
                             extreme: "min",
-                            filters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
+                            filters: [
+                              {
+                                dimension: "score_bucket",
+                                op: "eq",
+                                value: "5000"
+                              }
+                            ],
                             displayKey: "none",
                             actions: {
                               click: {
@@ -34846,7 +35773,13 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34856,7 +35789,13 @@ ${shapes}`.trim();
                             metric: "avg_guess_duration",
                             groupBy: "round_id",
                             extreme: "max",
-                            filters: [{ dimension: "is_throw", op: "eq", value: "true" }],
+                            filters: [
+                              {
+                                dimension: "is_throw",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
                             displayKey: "none",
                             actions: {
                               click: {
@@ -34864,7 +35803,13 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           }
@@ -34876,13 +35821,36 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Tempo - Time bucket metrics",
                       grain: "round",
-                      placement: { x: 0, y: 6, w: 12, h: 8 },
+                      placement: {
+                        x: 0,
+                        y: 6,
+                        w: 12,
+                        h: 8
+                      },
                       spec: {
                         dimension: "duration_bucket",
-                        measures: ["avg_score", "fivek_rate", "throw_rate", "hit_rate", "avg_guess_duration"],
+                        measures: [
+                          "avg_score",
+                          "fivek_rate",
+                          "throw_rate",
+                          "hit_rate",
+                          "avg_guess_duration"
+                        ],
                         activeMeasure: "avg_score",
-                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "chronological" },
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
                         limit: 12,
                         actions: {
                           click: {
@@ -34903,7 +35871,12 @@ ${shapes}`.trim();
         {
           id: "scores",
           title: "Scores",
-          filterScope: { exclude: ["movement", "guessTimeBucket"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -34923,7 +35896,12 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Scores",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         rows: [
                           {
@@ -34936,7 +35914,13 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34950,7 +35934,13 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_near_perfect", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_near_perfect",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34964,7 +35954,13 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_low_score", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_low_score",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -34978,7 +35974,13 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           }
@@ -34990,14 +35992,26 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Score vs opponents",
                       grain: "round",
-                      placement: { x: 0, y: 4, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 4,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         dimension: "score_vs_opponent",
                         measure: "rounds_share",
-                        sort: { mode: "desc" },
+                        sort: {
+                          mode: "desc"
+                        },
                         limit: 3,
                         actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     },
@@ -35006,16 +36020,32 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Scores - Score distribution (smoothed)",
                       grain: "round",
-                      placement: { x: 0, y: 8, w: 12, h: 10 },
+                      placement: {
+                        x: 0,
+                        y: 8,
+                        w: 12,
+                        h: 10
+                      },
                       spec: {
                         type: "bar",
                         limit: 200,
-                        x: { dimension: "score_bucket" },
-                        y: { measure: "rounds_count" },
-                        sort: { mode: "chronological" },
+                        x: {
+                          dimension: "score_bucket"
+                        },
+                        y: {
+                          measure: "rounds_count"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     }
@@ -35028,7 +36058,13 @@ ${shapes}`.trim();
         {
           id: "rounds",
           title: "Rounds",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -35048,7 +36084,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Rounds",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 7 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 7
+                      },
                       spec: {
                         records: [
                           {
@@ -35058,7 +36099,14 @@ ${shapes}`.trim();
                             groupBy: "game_id",
                             extreme: "max",
                             displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "game_fewest_rounds",
@@ -35067,7 +36115,14 @@ ${shapes}`.trim();
                             groupBy: "game_id",
                             extreme: "min",
                             displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "largest_score_spread_game",
@@ -35076,20 +36131,39 @@ ${shapes}`.trim();
                             groupBy: "game_id",
                             extreme: "max",
                             displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "fast_round_streak",
                             label: "Fastest round streak (<20s)",
                             kind: "streak",
-                            streakFilters: [{ dimension: "duration_bucket", op: "eq", value: "<20 sec" }],
+                            streakFilters: [
+                              {
+                                dimension: "duration_bucket",
+                                op: "eq",
+                                value: "<20 sec"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "duration_bucket", op: "eq", value: "<20 sec" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "duration_bucket",
+                                    op: "eq",
+                                    value: "<20 sec"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -35097,14 +36171,26 @@ ${shapes}`.trim();
                             id: "damage_dealt_streak",
                             label: "Damage dealt streak",
                             kind: "streak",
-                            streakFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }],
+                            streakFilters: [
+                              {
+                                dimension: "is_damage_dealt",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_damage_dealt",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -35112,14 +36198,26 @@ ${shapes}`.trim();
                             id: "damage_taken_streak",
                             label: "Damage taken streak",
                             kind: "streak",
-                            streakFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }],
+                            streakFilters: [
+                              {
+                                dimension: "is_damage_taken",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_damage_taken",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -35128,20 +36226,39 @@ ${shapes}`.trim();
                             label: "Longest same-country streak",
                             kind: "same_value_streak",
                             dimension: "true_country",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
                           },
                           {
                             id: "correct_country_streak",
                             label: "Correct-country streak",
                             kind: "streak",
-                            streakFilters: [{ dimension: "is_hit", op: "eq", value: "true" }],
+                            streakFilters: [
+                              {
+                                dimension: "is_hit",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
                             actions: {
                               click: {
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: true,
-                                extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_hit",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           }
@@ -35153,10 +36270,17 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Rounds - Round progression metrics",
                       grain: "round",
-                      placement: { x: 0, y: 7, w: 12, h: 8 },
+                      placement: {
+                        x: 0,
+                        y: 7,
+                        w: 12,
+                        h: 8
+                      },
                       spec: {
                         type: "bar",
-                        x: { dimension: "round_number" },
+                        x: {
+                          dimension: "round_number"
+                        },
                         y: {
                           measures: [
                             "avg_score",
@@ -35171,12 +36295,29 @@ ${shapes}`.trim();
                           ],
                           activeMeasure: "avg_score"
                         },
-                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "chronological" },
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
                         limit: 20,
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     },
@@ -35185,20 +36326,51 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Rounds - Performance by game length (rounds per game, 2+)",
                       grain: "game",
-                      placement: { x: 0, y: 15, w: 12, h: 9 },
+                      placement: {
+                        x: 0,
+                        y: 15,
+                        w: 12,
+                        h: 9
+                      },
                       spec: {
                         type: "bar",
-                        x: { dimension: "game_length" },
+                        x: {
+                          dimension: "game_length"
+                        },
                         y: {
-                          measures: ["games_count", "win_rate", "win_count", "loss_count", "tie_count", "best_end_rating"],
+                          measures: [
+                            "games_count",
+                            "win_rate",
+                            "win_count",
+                            "loss_count",
+                            "tie_count",
+                            "best_end_rating"
+                          ],
                           activeMeasure: "games_count"
                         },
-                        sorts: [{ mode: "chronological" }, { mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "chronological" },
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
                         limit: 20,
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     }
@@ -35230,10 +36402,17 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Weekday Analysis",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 10
+                      },
                       spec: {
                         type: "bar",
-                        x: { dimension: "weekday" },
+                        x: {
+                          dimension: "weekday"
+                        },
                         y: {
                           measures: [
                             "games_count",
@@ -35255,8 +36434,20 @@ ${shapes}`.trim();
                           ],
                           activeMeasure: "games_count"
                         },
-                        sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
-                        activeSort: { mode: "chronological" },
+                        sorts: [
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          },
+                          {
+                            mode: "chronological"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
                         actions: {
                           hover: true,
                           click: {
@@ -35286,10 +36477,17 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Hour Analysis",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 10 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 10
+                      },
                       spec: {
                         type: "bar",
-                        x: { dimension: "hour" },
+                        x: {
+                          dimension: "hour"
+                        },
                         y: {
                           measures: [
                             "games_count",
@@ -35311,8 +36509,20 @@ ${shapes}`.trim();
                           ],
                           activeMeasure: "games_count"
                         },
-                        sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
-                        activeSort: { mode: "chronological" },
+                        sorts: [
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          },
+                          {
+                            mode: "chronological"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
                         actions: {
                           hover: true,
                           click: {
@@ -35333,7 +36543,13 @@ ${shapes}`.trim();
         {
           id: "countries",
           title: "Countries",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -35353,7 +36569,12 @@ ${shapes}`.trim();
                       type: "multi_view",
                       title: "Countries - Country metrics",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 18 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 18
+                      },
                       spec: {
                         activeView: "bar",
                         views: [
@@ -35382,12 +36603,26 @@ ${shapes}`.trim();
                                 "damage_taken_share"
                               ],
                               activeMeasure: "avg_score",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
+                              sorts: [
+                                {
+                                  mode: "desc"
+                                },
+                                {
+                                  mode: "asc"
+                                }
+                              ],
+                              activeSort: {
+                                mode: "desc"
+                              },
                               limit: 15,
                               extendable: true,
                               actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                                click: {
+                                  type: "drilldown",
+                                  target: "rounds",
+                                  columnsPreset: "roundMode",
+                                  filterFromPoint: true
+                                }
                               }
                             }
                           },
@@ -35418,7 +36653,12 @@ ${shapes}`.trim();
                               ],
                               activeMeasure: "avg_score",
                               actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                                click: {
+                                  type: "drilldown",
+                                  target: "rounds",
+                                  columnsPreset: "roundMode",
+                                  filterFromPoint: true
+                                }
                               }
                             }
                           }
@@ -35430,16 +36670,32 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Countries - Confusion matrix (top pairs)",
                       grain: "round",
-                      placement: { x: 0, y: 18, w: 12, h: 8 },
+                      placement: {
+                        x: 0,
+                        y: 18,
+                        w: 12,
+                        h: 8
+                      },
                       spec: {
                         type: "bar",
                         limit: 20,
-                        x: { dimension: "confused_countries" },
-                        y: { measure: "rounds_count" },
-                        sort: { mode: "desc" },
+                        x: {
+                          dimension: "confused_countries"
+                        },
+                        y: {
+                          measure: "rounds_count"
+                        },
+                        sort: {
+                          mode: "desc"
+                        },
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     }
@@ -35471,7 +36727,12 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Coordinates - Repeats",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 5 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 5
+                      },
                       spec: {
                         rows: [
                           {
@@ -35484,14 +36745,27 @@ ${shapes}`.trim();
                                 target: "rounds",
                                 columnsPreset: "roundMode",
                                 filterFromPoint: false,
-                                extraFilters: [{ dimension: "is_true_location_repeat", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_true_location_repeat",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           },
                           {
                             label: "Distinct locations",
                             measure: "distinct_locations_count",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
                           }
                         ]
                       }
@@ -35501,23 +36775,74 @@ ${shapes}`.trim();
                       type: "point_map",
                       title: "Coordinates - Distribution",
                       grain: "round",
-                      placement: { x: 0, y: 5, w: 12, h: 19 },
+                      placement: {
+                        x: 0,
+                        y: 5,
+                        w: 12,
+                        h: 19
+                      },
                       spec: {
                         points: [
-                          { id: "true", label: "True location", latField: "trueLat", lngField: "trueLng" },
-                          { id: "self", label: "Your guesses", latField: "player_self_guessLat", lngField: "player_self_guessLng" },
-                          { id: "mate", label: "Mate guesses", latField: "player_mate_guessLat", lngField: "player_mate_guessLng" },
-                          { id: "opp", label: "Opponent guesses", latField: "player_opponent_guessLat", lngField: "player_opponent_guessLng" },
-                          { id: "oppMate", label: "Opponent mate guesses", latField: "player_opponent_mate_guessLat", lngField: "player_opponent_mate_guessLng" }
+                          {
+                            id: "true",
+                            label: "True location",
+                            latField: "trueLat",
+                            lngField: "trueLng"
+                          },
+                          {
+                            id: "self",
+                            label: "Your guesses",
+                            latField: "player_self_guessLat",
+                            lngField: "player_self_guessLng"
+                          },
+                          {
+                            id: "mate",
+                            label: "Mate guesses",
+                            latField: "player_mate_guessLat",
+                            lngField: "player_mate_guessLng"
+                          },
+                          {
+                            id: "opp",
+                            label: "Opponent guesses",
+                            latField: "player_opponent_guessLat",
+                            lngField: "player_opponent_guessLng"
+                          },
+                          {
+                            id: "oppMate",
+                            label: "Opponent mate guesses",
+                            latField: "player_opponent_mate_guessLat",
+                            lngField: "player_opponent_mate_guessLng"
+                          }
                         ],
-                        pointSelect: { enabled: true, defaultId: "true", allowAll: false },
-                        rangeFilter: { label: "Score", field: "player_self_score", min: 0, max: 5e3, defaultMin: 0, defaultMax: 5e3, step: 10 },
+                        pointSelect: {
+                          enabled: true,
+                          defaultId: "true",
+                          allowAll: false
+                        },
+                        rangeFilter: {
+                          label: "Score",
+                          field: "player_self_score",
+                          min: 0,
+                          max: 5e3,
+                          defaultMin: 0,
+                          defaultMax: 5e3,
+                          step: 10
+                        },
                         mapHeight: 520,
                         maxDots: 2500,
-                        measures: ["rounds_count", "hit_signed", "damage_net_avg"],
+                        measures: [
+                          "rounds_count",
+                          "hit_signed",
+                          "damage_net_avg"
+                        ],
                         activeMeasure: "rounds_count",
                         actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     }
@@ -35530,7 +36855,13 @@ ${shapes}`.trim();
         {
           id: "opponents",
           title: "Opponents",
-          filterScope: { exclude: ["movement", "guessTimeBucket", "country"] },
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
           layout: {
             mode: "grid",
             columns: 12,
@@ -35550,20 +36881,45 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Scope",
                       grain: "game",
-                      placement: { x: 0, y: 0, w: 12, h: 3 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 3
+                      },
                       spec: {
                         rows: [
-                          { label: "Unique opponents", measure: "unique_opponents_count" },
-                          { label: "Unique countries", measure: "unique_opponent_countries_count" },
+                          {
+                            label: "Unique opponents",
+                            measure: "unique_opponents_count"
+                          },
+                          {
+                            label: "Unique countries",
+                            measure: "unique_opponent_countries_count"
+                          },
                           {
                             label: "Strongest opponent (rating)",
                             measure: "strongest_opponent_rating",
-                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
                           {
                             label: "Strongest defeated opponent (rating)",
                             measure: "strongest_defeated_opponent_rating",
-                            actions: { click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
                           }
                         ]
                       }
@@ -35573,16 +36929,32 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Opponents - Match-ups by opponent country",
                       grain: "game",
-                      placement: { x: 0, y: 3, w: 12, h: 8 },
+                      placement: {
+                        x: 0,
+                        y: 3,
+                        w: 12,
+                        h: 8
+                      },
                       spec: {
                         type: "bar",
                         limit: 20,
-                        x: { dimension: "opponent_country" },
-                        y: { measure: "matchups_count" },
-                        sort: { mode: "desc" },
+                        x: {
+                          dimension: "opponent_country"
+                        },
+                        y: {
+                          measure: "matchups_count"
+                        },
+                        sort: {
+                          mode: "desc"
+                        },
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     },
@@ -35591,15 +36963,27 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Opponents - Top opponents",
                       grain: "game",
-                      placement: { x: 0, y: 11, w: 12, h: 7 },
+                      placement: {
+                        x: 0,
+                        y: 11,
+                        w: 12,
+                        h: 7
+                      },
                       spec: {
                         dimension: "opponent_name",
                         measure: "matchups_count",
-                        sort: { mode: "desc" },
+                        sort: {
+                          mode: "desc"
+                        },
                         limit: 15,
                         extendable: true,
                         actions: {
-                          click: { type: "drilldown", target: "players", columnsPreset: "opponentMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     }
@@ -35623,10 +37007,14 @@ ${shapes}`.trim();
                 default: "auto_top",
                 options: "auto_teammates",
                 required: true,
-                appliesTo: ["round"]
+                appliesTo: [
+                  "round"
+                ]
               }
             ],
-            buttons: { reset: true }
+            buttons: {
+              reset: true
+            }
           },
           layout: {
             mode: "grid",
@@ -35647,32 +37035,69 @@ ${shapes}`.trim();
                       type: "leader_list",
                       title: "Head-to-head questions",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 5 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 5
+                      },
                       spec: {
                         rows: [
                           {
                             label: "Closer guesses",
                             dimension: "team_closer_winner",
-                            excludeKeys: ["Tie"],
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
                           },
                           {
                             label: "Higher score rounds",
                             dimension: "team_higher_score_winner",
-                            excludeKeys: ["Tie"],
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
                           },
                           {
                             label: "Fewer throws (<50)",
                             dimension: "team_fewer_throw_winner",
-                            excludeKeys: ["Tie"],
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
                           },
                           {
                             label: "More 5k rounds",
                             dimension: "team_more_5k_winner",
-                            excludeKeys: ["Tie"],
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
                           }
                         ]
                       }
@@ -35682,14 +37107,70 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Team facts",
                       grain: "round",
-                      placement: { x: 0, y: 5, w: 12, h: 5 },
+                      placement: {
+                        x: 0,
+                        y: 5,
+                        w: 12,
+                        h: 5
+                      },
                       spec: {
                         rows: [
-                          { label: "Games together", measure: "games_distinct_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "Rounds together", measure: "rounds_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "Time played together", measure: "time_played_seconds", secondaryMeasure: "rounds_with_time_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "First game together", measure: "first_played_at", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "Most recent game together", measure: "last_played_at", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } }
+                          {
+                            label: "Games together",
+                            measure: "games_distinct_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Rounds together",
+                            measure: "rounds_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Time played together",
+                            measure: "time_played_seconds",
+                            secondaryMeasure: "rounds_with_time_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "First game together",
+                            measure: "first_played_at",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Most recent game together",
+                            measure: "last_played_at",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          }
                         ]
                       }
                     },
@@ -35698,7 +37179,12 @@ ${shapes}`.trim();
                       type: "record_list",
                       title: "Session records together",
                       grain: "session",
-                      placement: { x: 0, y: 10, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 10,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         records: [
                           {
@@ -35707,7 +37193,14 @@ ${shapes}`.trim();
                             metric: "session_games_count",
                             groupBy: "session_start",
                             extreme: "max",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
                           }
                         ]
                       }
@@ -35717,16 +37210,34 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Session stats together",
                       grain: "session",
-                      placement: { x: 0, y: 14, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 14,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         rows: [
                           {
                             label: "Sessions detected (gap > session standard)",
                             measure: "sessions_count",
-                            actions: { click: { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: false } }
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: false
+                              }
+                            }
                           },
-                          { label: "Longest break between sessions", measure: "sessions_longest_break_seconds" },
-                          { label: "Avg games per session", measure: "sessions_avg_games" }
+                          {
+                            label: "Longest break between sessions",
+                            measure: "sessions_longest_break_seconds"
+                          },
+                          {
+                            label: "Avg games per session",
+                            measure: "sessions_avg_games"
+                          }
                         ]
                       }
                     }
@@ -35757,10 +37268,14 @@ ${shapes}`.trim();
                 default: "auto_top",
                 options: "auto_distinct",
                 required: true,
-                appliesTo: ["round"]
+                appliesTo: [
+                  "round"
+                ]
               }
             ],
-            buttons: { reset: false }
+            buttons: {
+              reset: false
+            }
           },
           layout: {
             mode: "grid",
@@ -35772,7 +37287,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 35,
+                h: 18,
                 card: {
                   type: "composite",
                   children: [
@@ -35781,13 +37296,59 @@ ${shapes}`.trim();
                       type: "stat_list",
                       title: "Country spotlight",
                       grain: "round",
-                      placement: { x: 0, y: 0, w: 12, h: 6 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 6
+                      },
                       spec: {
                         rows: [
-                          { label: "Rounds", measure: "rounds_count", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "Hit rate", measure: "hit_rate", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "Avg score", measure: "avg_score", secondaryMeasure: "score_median", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
-                          { label: "Avg distance", measure: "avg_distance_km", actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } } },
+                          {
+                            label: "Rounds",
+                            measure: "rounds_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Hit rate",
+                            measure: "hit_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg score",
+                            measure: "avg_score",
+                            secondaryMeasure: "score_median",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg distance",
+                            measure: "avg_distance_km",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
                           {
                             label: "Perfect 5k in this country",
                             measure: "fivek_count",
@@ -35797,7 +37358,13 @@ ${shapes}`.trim();
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
-                                extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
                               }
                             }
                           },
@@ -35810,7 +37377,13 @@ ${shapes}`.trim();
                                 type: "drilldown",
                                 target: "rounds",
                                 columnsPreset: "roundMode",
-                                extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
                               }
                             }
                           }
@@ -35822,15 +37395,33 @@ ${shapes}`.trim();
                       type: "breakdown",
                       title: "Top confusions (guessed country on misses)",
                       grain: "round",
-                      placement: { x: 0, y: 6, w: 12, h: 4 },
+                      placement: {
+                        x: 0,
+                        y: 6,
+                        w: 12,
+                        h: 4
+                      },
                       spec: {
                         dimension: "guess_country",
                         measure: "rounds_count",
-                        filters: [{ dimension: "is_hit", op: "eq", value: "false" }],
-                        sort: { mode: "desc" },
+                        filters: [
+                          {
+                            dimension: "is_hit",
+                            op: "eq",
+                            value: "false"
+                          }
+                        ],
+                        sort: {
+                          mode: "desc"
+                        },
                         limit: 3,
                         actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
                     },
@@ -35839,473 +37430,91 @@ ${shapes}`.trim();
                       type: "chart",
                       title: "Score distribution (smoothed)",
                       grain: "round",
-                      placement: { x: 0, y: 10, w: 12, h: 8 },
+                      placement: {
+                        x: 0,
+                        y: 10,
+                        w: 12,
+                        h: 8
+                      },
                       spec: {
                         type: "bar",
                         limit: 200,
-                        x: { dimension: "score_bucket" },
-                        y: { measure: "rounds_count" },
-                        sort: { mode: "chronological" },
+                        x: {
+                          dimension: "score_bucket"
+                        },
+                        y: {
+                          measure: "rounds_count"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
                         actions: {
                           hover: true,
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
                         }
                       }
-                    },
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "admin",
+          title: "Regions",
+          localFilters: {
+            enabled: true,
+            controls: [
+              {
+                id: "adminCountry",
+                type: "select",
+                label: "Country",
+                dimension: "true_country",
+                default: "auto_top",
+                options: "auto_distinct",
+                required: true,
+                appliesTo: [
+                  "round"
+                ]
+              }
+            ],
+            buttons: {
+              reset: true
+            }
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_admin",
+                title: "Regions: {{local.adminCountry}}",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 22,
+                card: {
+                  type: "composite",
+                  children: [
                     {
-                      widgetId: "w_country_insight_admin_hit_de",
-                      type: "stat_list",
-                      title: "Administrative unit accuracy (selected country)",
+                      widgetId: "w_admin_analysis",
+                      type: "admin_analysis",
+                      title: "Regions",
                       grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 18, w: 12, h: 3 },
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 18
+                      },
                       spec: {
-                        enrichDimensions: ["true_state", "guess_state", "true_district", "guess_district"],
-                        rows: [
-                          {
-                            label: "Correct Bundesland (ADM1)",
-                            measure: "admin_hit_rate_de_state",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          },
-                          {
-                            label: "Correct Landkreis (ADM2)",
-                            measure: "admin_hit_rate_de_district",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_admin_hit_id",
-                      type: "stat_list",
-                      title: "Administrative unit accuracy (selected country)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
-                      placement: { x: 0, y: 18, w: 12, h: 3 },
-                      spec: {
-                        enrichDimensions: ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"],
-                        rows: [
-                          {
-                            label: "Correct province (ADM1)",
-                            measure: "admin_hit_rate_id_province",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          },
-                          {
-                            label: "Correct kabupaten / regency (ADM2)",
-                            measure: "admin_hit_rate_id_kabupaten",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_admin_hit_us",
-                      type: "stat_list",
-                      title: "Administrative unit accuracy (selected country)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["us", "US"] },
-                      placement: { x: 0, y: 18, w: 12, h: 2 },
-                      spec: {
-                        enrichDimensions: ["true_us_state", "guess_us_state"],
-                        rows: [
-                          {
-                            label: "Correct state (ADM1)",
-                            measure: "admin_hit_rate_us_state",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_admin_hit_ca",
-                      type: "stat_list",
-                      title: "Administrative unit accuracy (selected country)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["ca", "CA"] },
-                      placement: { x: 0, y: 18, w: 12, h: 2 },
-                      spec: {
-                        enrichDimensions: ["true_ca_province", "guess_ca_province"],
-                        rows: [
-                          {
-                            label: "Correct province / territory (ADM1)",
-                            measure: "admin_hit_rate_ca_province",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_admin_hit_ph",
-                      type: "stat_list",
-                      title: "Administrative unit accuracy (selected country)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["ph", "PH"] },
-                      placement: { x: 0, y: 18, w: 12, h: 2 },
-                      spec: {
-                        enrichDimensions: ["true_ph_province", "guess_ph_province"],
-                        rows: [
-                          {
-                            label: "Correct province (ADM1)",
-                            measure: "admin_hit_rate_ph_province",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_admin_hit_vn",
-                      type: "stat_list",
-                      title: "Administrative unit accuracy (selected country)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["vn", "VN"] },
-                      placement: { x: 0, y: 18, w: 12, h: 2 },
-                      spec: {
-                        enrichDimensions: ["true_vn_province", "guess_vn_province"],
-                        rows: [
-                          {
-                            label: "Correct province (ADM1)",
-                            measure: "admin_hit_rate_vn_province",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode" } }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_de_states",
-                      type: "multi_view",
-                      title: "Germany - Level 1: States (Bundesl\xE4nder)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 21, w: 12, h: 6 },
-                      spec: {
-                        activeView: "bar",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_state",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "rounds_count",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
-                              limit: 12,
-                              extendable: true,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "region_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_state",
-                              geojsonUrl: "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
-                              featureKey: "name",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "avg_score",
-                              mapHeight: 380,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_us_states",
-                      type: "multi_view",
-                      title: "United States - States",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["us", "US"] },
-                      placement: { x: 0, y: 20, w: 12, h: 6 },
-                      spec: {
-                        activeView: "map",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_us_state",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "rounds_count",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
-                              limit: 15,
-                              extendable: true,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "region_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_us_state",
-                              geojsonUrl: "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson",
-                              featureKey: "name",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "avg_score",
-                              mapHeight: 380,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_ca_provinces",
-                      type: "multi_view",
-                      title: "Canada - Provinces & Territories",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["ca", "CA"] },
-                      placement: { x: 0, y: 20, w: 12, h: 6 },
-                      spec: {
-                        activeView: "map",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_ca_province",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "rounds_count",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
-                              limit: 15,
-                              extendable: true,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "region_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_ca_province",
-                              geojsonUrl: "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson",
-                              featureKey: "name",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "avg_score",
-                              mapHeight: 380,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_id_provinces",
-                      type: "multi_view",
-                      title: "Indonesia - Level 1: Provinces",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
-                      placement: { x: 0, y: 21, w: 12, h: 6 },
-                      spec: {
-                        activeView: "map",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_id_province",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "rounds_count",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
-                              limit: 15,
-                              extendable: true,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "region_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_id_province",
-                              geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson",
-                              featureKey: "shapeName",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "avg_score",
-                              mapHeight: 380,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_ph_provinces",
-                      type: "multi_view",
-                      title: "Philippines - Provinces",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["ph", "PH"] },
-                      placement: { x: 0, y: 20, w: 12, h: 6 },
-                      spec: {
-                        activeView: "map",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_ph_province",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "rounds_count",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
-                              limit: 15,
-                              extendable: true,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "region_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_ph_province",
-                              geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson",
-                              featureKey: "shapeName",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "avg_score",
-                              mapHeight: 380,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_vn_provinces",
-                      type: "multi_view",
-                      title: "Vietnam - Provinces",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["vn", "VN"] },
-                      placement: { x: 0, y: 20, w: 12, h: 6 },
-                      spec: {
-                        activeView: "map",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_vn_province",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "rounds_count",
-                              sorts: [{ mode: "desc" }, { mode: "asc" }],
-                              activeSort: { mode: "desc" },
-                              limit: 15,
-                              extendable: true,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "region_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_vn_province",
-                              geojsonUrl: "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson",
-                              featureKey: "shapeName",
-                              measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                              activeMeasure: "avg_score",
-                              mapHeight: 380,
-                              actions: {
-                                click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_de_districts",
-                      type: "breakdown",
-                      title: "Germany - Level 2: Districts (Landkreise)",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["de", "DE"] },
-                      placement: { x: 0, y: 27, w: 12, h: 5 },
-                      spec: {
-                        dimension: "true_district",
-                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                        activeMeasure: "rounds_count",
-                        sorts: [{ mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "desc" },
-                        limit: 15,
-                        extendable: true,
-                        actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_id_kabupaten",
-                      type: "breakdown",
-                      title: "Indonesia - Level 2: Kabupaten / Regencies",
-                      grain: "round",
-                      showIfLocal: { id: "spotlightCountry", in: ["id", "ID"] },
-                      placement: { x: 0, y: 27, w: 12, h: 5 },
-                      spec: {
-                        dimension: "true_id_kabupaten",
-                        measures: ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                        activeMeasure: "rounds_count",
-                        sorts: [{ mode: "desc" }, { mode: "asc" }],
-                        activeSort: { mode: "desc" },
-                        limit: 15,
-                        extendable: true,
-                        actions: {
-                          click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_admin_enrich",
-                      type: "admin_enrichment",
-                      title: "Detailed admin analysis",
-                      grain: "round",
-                      placement: { x: 0, y: 32, w: 12, h: 3 },
-                      spec: {
-                        description: "Start an on-demand enrichment for this country (downloads admin boundaries and computes province/state fields). This makes admin hit-rate rows and region maps available."
+                        description: "Load province/state/county boundaries on-demand to compute regional accuracy. Nothing is saved into your database."
                       }
                     }
                   ]
@@ -41727,6 +42936,26 @@ ${describeError(err2)}` : message;
     }
     return denom ? num / denom : 0;
   }
+  function countStringFieldEq(rows, trueKey, guessKey) {
+    let n = 0;
+    for (const r of rows) {
+      const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
+      const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
+      if (!t || !g) continue;
+      if (t === g) n++;
+    }
+    return n;
+  }
+  function countStringFieldNeq(rows, trueKey, guessKey) {
+    let n = 0;
+    for (const r of rows) {
+      const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
+      const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
+      if (!t || !g) continue;
+      if (t !== g) n++;
+    }
+    return n;
+  }
   function isThrowLt50(r) {
     const s = getSelfScore(r);
     return typeof s === "number" && s < 50;
@@ -41892,13 +43121,15 @@ ${describeError(err2)}` : message;
     spread_player_self_score: (rows) => {
       let min = Infinity;
       let max2 = -Infinity;
+      let n = 0;
       for (const r of rows) {
         const s = getSelfScore(r);
         if (typeof s !== "number" || !Number.isFinite(s)) continue;
+        n++;
         if (s < min) min = s;
         if (s > max2) max2 = s;
       }
-      if (!Number.isFinite(min) || !Number.isFinite(max2)) return 0;
+      if (n < 2 || !Number.isFinite(min) || !Number.isFinite(max2)) return NaN;
       return Math.max(0, max2 - min);
     },
     // Share-of-total measures are normalized in chart/breakdown widgets (they need access to total rows).
@@ -41988,6 +43219,10 @@ ${describeError(err2)}` : message;
     rate_id_kabupaten_hit: (rows) => rateStringFieldEq(rows, "trueIdKabupaten", "guessIdKabupaten"),
     rate_ph_province_hit: (rows) => rateStringFieldEq(rows, "truePhProvince", "guessPhProvince"),
     rate_vn_province_hit: (rows) => rateStringFieldEq(rows, "trueVnProvince", "guessVnProvince"),
+    // Dynamic, on-demand admin unit hit-rate (used by the Regions section; values are computed in-memory only).
+    rate_admin_unit_hit: (rows) => rateStringFieldEq(rows, "adminTrueUnit", "adminGuessUnit"),
+    count_admin_unit_hit: (rows) => countStringFieldEq(rows, "adminTrueUnit", "adminGuessUnit"),
+    count_admin_unit_miss: (rows) => countStringFieldNeq(rows, "adminTrueUnit", "adminGuessUnit"),
     rate_throw_round: (rows) => {
       const n = rows.length;
       if (!n) return 0;
@@ -43910,7 +45145,6 @@ ${describeError(err2)}` : message;
   };
   var SUPPORTED_ADMIN_DIMS = new Set(Object.keys(ADMIN_DIM_TO_COUNTRY));
   var ADMIN_ENABLED_CACHE = /* @__PURE__ */ new Map();
-  var ADMIN_ENABLED_CACHE_TTL_MS = 2e3;
   function getAdminEnrichmentRequiredCountry(dimId) {
     const iso2 = ADMIN_DIM_TO_COUNTRY[dimId];
     return typeof iso2 === "string" && iso2 ? iso2 : null;
@@ -43922,20 +45156,23 @@ ${describeError(err2)}` : message;
     }
     ADMIN_ENABLED_CACHE.clear();
   }
-  async function isAdminEnrichmentEnabledForCountry(countryIso2) {
-    const iso2 = typeof countryIso2 === "string" ? countryIso2.trim().toLowerCase() : "";
-    if (!iso2) return false;
-    const cached = ADMIN_ENABLED_CACHE.get(iso2);
-    if (cached && Date.now() - cached.fetchedAt < ADMIN_ENABLED_CACHE_TTL_MS) return cached.enabled;
-    try {
-      const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
-      const enabled = meta?.value?.enabled === true;
-      ADMIN_ENABLED_CACHE.set(iso2, { enabled, fetchedAt: Date.now() });
-      return enabled;
-    } catch {
-      ADMIN_ENABLED_CACHE.set(iso2, { enabled: false, fetchedAt: Date.now() });
+  async function isAdminEnrichmentEnabledForDimension(dimId) {
+    const iso2 = getAdminEnrichmentRequiredCountry(dimId);
+    if (!iso2) return true;
+    const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
+    const v = meta?.value ?? {};
+    const anyEnabled = v.enabled === true || v.levels && typeof v.levels === "object" && Object.values(v.levels).some((x) => x && x.enabled === true);
+    if (!anyEnabled) return false;
+    if (v.levels && typeof v.levels === "object") {
+      for (const lvl of Object.values(v.levels)) {
+        const enabled = lvl?.enabled === true;
+        const ids = Array.isArray(lvl?.dimIds) ? lvl.dimIds : [];
+        if (enabled && ids.includes(dimId)) return true;
+      }
       return false;
     }
+    const done = Array.isArray(v.dimIdsDone) ? v.dimIdsDone : Array.isArray(v.dimIds) ? v.dimIds : [];
+    return done.includes(dimId);
   }
   function isFiniteNum(v) {
     return typeof v === "number" && Number.isFinite(v);
@@ -43959,8 +45196,8 @@ ${describeError(err2)}` : message;
     if (!Array.isArray(rows) || rows.length === 0) return;
     if (!SUPPORTED_ADMIN_DIMS.has(dimId)) return;
     const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
-    if (requiredCountry && !await isAdminEnrichmentEnabledForCountry(requiredCountry)) return;
-    const guessLatLngOf = (r) => {
+    if (requiredCountry && !await isAdminEnrichmentEnabledForDimension(dimId)) return;
+    const guessLatLngOf2 = (r) => {
       const lat = typeof r?.player_self_guessLat === "number" ? r.player_self_guessLat : typeof r?.p1_guessLat === "number" ? r.p1_guessLat : typeof r?.guessLat === "number" ? r.guessLat : null;
       const lng = typeof r?.player_self_guessLng === "number" ? r.player_self_guessLng : typeof r?.p1_guessLng === "number" ? r.p1_guessLng : typeof r?.guessLng === "number" ? r.guessLng : null;
       if (!isFiniteNum(lat) || !isFiniteNum(lng)) return null;
@@ -43971,7 +45208,7 @@ ${describeError(err2)}` : message;
       const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
       const lat = r?.trueLat;
       const lng = r?.trueLng;
-      const g = guessLatLngOf(r);
+      const g = guessLatLngOf2(r);
       const wantTrue = dimId.startsWith("true_");
       const wantGuess = dimId.startsWith("guess_");
       if (wantTrue && (!isFiniteNum(lat) || !isFiniteNum(lng))) continue;
@@ -44047,7 +45284,7 @@ ${describeError(err2)}` : message;
       const tc = typeof r?.trueCountry === "string" ? r.trueCountry.trim().toLowerCase() : "";
       const lat = r.trueLat;
       const lng = r.trueLng;
-      const g = guessLatLngOf(r);
+      const g = guessLatLngOf2(r);
       if (dimId === "true_state") {
         const s = await resolveDeStateByLatLng(lat, lng);
         if (s) r.trueState = s;
@@ -45508,198 +46745,6 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/adminEnrichmentWidget.ts
-  function asIso2(v) {
-    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
-    return /^[a-z]{2}$/.test(s) ? s : "";
-  }
-  function getAdminEnrichmentPlan(countryIso2) {
-    const iso2 = asIso2(countryIso2);
-    if (!iso2) return null;
-    if (iso2 === "de") return { countryIso2: iso2, label: "Germany (Bundesl\xE4nder + Landkreise)", dimIds: ["true_state", "guess_state", "true_district", "guess_district"] };
-    if (iso2 === "us") return { countryIso2: iso2, label: "United States (States)", dimIds: ["true_us_state", "guess_us_state"] };
-    if (iso2 === "ca") return { countryIso2: iso2, label: "Canada (Provinces)", dimIds: ["true_ca_province", "guess_ca_province"] };
-    if (iso2 === "id") return { countryIso2: iso2, label: "Indonesia (Provinces + Kabupaten)", dimIds: ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"] };
-    if (iso2 === "ph") return { countryIso2: iso2, label: "Philippines (Provinces)", dimIds: ["true_ph_province", "guess_ph_province"] };
-    if (iso2 === "vn") return { countryIso2: iso2, label: "Vietnam (Provinces)", dimIds: ["true_vn_province", "guess_vn_province"] };
-    return null;
-  }
-  function metaKeyForCountry(iso2) {
-    return `admin_enrichment_enabled_${iso2.toLowerCase()}`;
-  }
-  async function runAdminEnrichment(countryIso2, opts) {
-    const iso2 = asIso2(countryIso2);
-    if (!iso2) throw new Error("Missing country ISO2 for admin enrichment");
-    const plan = getAdminEnrichmentPlan(iso2);
-    if (!plan) throw new Error(`No admin-level dataset configured for '${iso2.toUpperCase()}' yet.`);
-    const set = (pct, msg) => {
-      opts?.onPct?.(pct);
-      opts?.onStatus?.(msg);
-    };
-    await db.meta.put({ key: metaKeyForCountry(iso2), value: { enabled: true }, updatedAt: Date.now() });
-    invalidateAdminEnrichmentEnabledCache(iso2);
-    analysisConsole.info(`Admin enrichment: loading rounds for ${iso2.toUpperCase()}...`);
-    set(2, `Loading rounds for ${iso2.toUpperCase()}...`);
-    const rows = await db.rounds.where("trueCountry").equals(iso2).toArray();
-    const total = rows.length;
-    if (!total) {
-      set(0, "No rounds found for this country.");
-      return;
-    }
-    analysisConsole.info(`Admin enrichment: computing ${plan.dimIds.length} dimensions for ${total} rounds...`);
-    for (let i = 0; i < plan.dimIds.length; i++) {
-      const dimId = plan.dimIds[i];
-      const pct = 5 + i / Math.max(1, plan.dimIds.length) * 70;
-      set(pct, `Computing ${dimId}... (${i + 1}/${plan.dimIds.length})`);
-      await maybeEnrichRoundRowsForDimension(dimId, rows);
-    }
-    analysisConsole.info("Admin enrichment: saving enriched rounds...");
-    set(80, "Saving enriched rounds...");
-    const batchSize = 200;
-    for (let offset = 0; offset < total; offset += batchSize) {
-      const chunk = rows.slice(offset, offset + batchSize);
-      await db.rounds.bulkPut(chunk);
-      set(80 + offset / Math.max(1, total) * 18, "Saving enriched rounds...");
-      if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise((r) => setTimeout(r, 0));
-    }
-    await db.meta.put({
-      key: metaKeyForCountry(iso2),
-      value: { enabled: true, doneAt: Date.now(), dimIds: plan.dimIds, rounds: total },
-      updatedAt: Date.now()
-    });
-    invalidateAdminEnrichmentEnabledCache(iso2);
-    invalidateRoundsCache();
-    globalThis.__gaRequestRerender?.();
-    set(100, "Done.");
-    analysisConsole.info("Admin enrichment: done.");
-  }
-  async function renderAdminEnrichmentWidget(_semantic, widget, _overlay, baseRows) {
-    const doc = document;
-    const el2 = doc.createElement("div");
-    el2.className = "ga-widget ga-admin-enrichment";
-    const title = doc.createElement("div");
-    title.style.fontWeight = "600";
-    title.style.marginBottom = "6px";
-    title.textContent = widget.title || "Detailed administrative regions";
-    el2.appendChild(title);
-    const hint = doc.createElement("div");
-    hint.style.opacity = "0.9";
-    hint.style.fontSize = "12px";
-    hint.style.marginBottom = "10px";
-    hint.textContent = widget.spec?.description ?? "Optional: download admin boundaries and compute region fields (e.g. province/state) for this country. This enables hit-rate stats and region maps.";
-    el2.appendChild(hint);
-    const body = doc.createElement("div");
-    body.style.display = "flex";
-    body.style.flexDirection = "column";
-    body.style.gap = "8px";
-    el2.appendChild(body);
-    const countryIso2 = (() => {
-      const first = Array.isArray(baseRows) ? baseRows.find((r) => r && typeof r === "object") : null;
-      return asIso2(first?.trueCountry ?? first?.true_country);
-    })();
-    if (!countryIso2) {
-      const msg = doc.createElement("div");
-      msg.textContent = "Select a country in Country Insight to enable detailed admin analysis.";
-      body.appendChild(msg);
-      return el2;
-    }
-    const plan = getAdminEnrichmentPlan(countryIso2);
-    if (!plan) {
-      const msg = doc.createElement("div");
-      msg.textContent = `No detailed admin-level dataset configured for '${countryIso2.toUpperCase()}' yet.`;
-      body.appendChild(msg);
-      return el2;
-    }
-    const status = doc.createElement("div");
-    status.style.fontSize = "12px";
-    status.style.opacity = "0.9";
-    body.appendChild(status);
-    const progress = doc.createElement("div");
-    progress.style.height = "8px";
-    progress.style.borderRadius = "999px";
-    progress.style.background = "rgba(255,255,255,0.10)";
-    progress.style.overflow = "hidden";
-    const progressFill = doc.createElement("div");
-    progressFill.style.height = "100%";
-    progressFill.style.width = "0%";
-    progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
-    progress.appendChild(progressFill);
-    body.appendChild(progress);
-    const actions = doc.createElement("div");
-    actions.style.display = "flex";
-    actions.style.gap = "10px";
-    actions.style.flexWrap = "wrap";
-    body.appendChild(actions);
-    const btn = doc.createElement("button");
-    btn.className = "ga-filter-btn";
-    btn.textContent = "Start detailed analysis";
-    actions.appendChild(btn);
-    const clearBtn = doc.createElement("button");
-    clearBtn.className = "ga-filter-btn";
-    clearBtn.textContent = "Disable";
-    actions.appendChild(clearBtn);
-    const refresh = async () => {
-      const meta = await db.meta.get(metaKeyForCountry(countryIso2));
-      const enabled = meta?.value?.enabled === true;
-      const doneAt = meta?.value?.doneAt;
-      const doneTxt = typeof doneAt === "number" && Number.isFinite(doneAt) ? new Date(doneAt).toLocaleString() : "";
-      status.textContent = enabled ? `Enabled for ${plan.label}. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : `Disabled for ${plan.label}.`;
-      btn.textContent = enabled ? "Re-run detailed analysis" : "Start detailed analysis";
-    };
-    const setBusy = (pct, msg) => {
-      progressFill.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
-      status.textContent = msg;
-    };
-    btn.addEventListener("click", () => {
-      void (async () => {
-        btn.disabled = true;
-        clearBtn.disabled = true;
-        try {
-          let pct = 0;
-          let msg = "";
-          const sync = () => setBusy(pct, msg);
-          await runAdminEnrichment(countryIso2, {
-            onPct: (p) => {
-              pct = p;
-              sync();
-            },
-            onStatus: (m) => {
-              msg = m;
-              sync();
-            }
-          });
-          setBusy(100, "Done. Refreshing view...");
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          analysisConsole.error(`Admin enrichment failed: ${msg}`);
-          setBusy(0, `Error: ${msg}`);
-        } finally {
-          btn.disabled = false;
-          clearBtn.disabled = false;
-          await refresh();
-        }
-      })();
-    });
-    clearBtn.addEventListener("click", () => {
-      void (async () => {
-        clearBtn.disabled = true;
-        btn.disabled = true;
-        try {
-          await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: false, doneAt: Date.now() }, updatedAt: Date.now() });
-          invalidateAdminEnrichmentEnabledCache(countryIso2);
-          invalidateRoundsCache();
-          globalThis.__gaRequestRerender?.();
-        } finally {
-          clearBtn.disabled = false;
-          btn.disabled = false;
-          await refresh();
-        }
-      })();
-    });
-    await refresh();
-    return el2;
-  }
-
   // src/ui/widgets/breakdownWidget.ts
   function getShareKindFromFormulaId2(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
@@ -45890,7 +46935,7 @@ ${describeError(err2)}` : message;
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
     const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
-    if (requiredCountry && !await isAdminEnrichmentEnabledForCountry(requiredCountry)) {
+    if (requiredCountry && !await isAdminEnrichmentEnabledForDimension(dimId)) {
       const headerLeft2 = doc.createElement("div");
       headerLeft2.className = "ga-breakdown-header-left";
       headerLeft2.textContent = dimDef.label;
@@ -45903,29 +46948,12 @@ ${describeError(err2)}` : message;
       wrapCta.style.justifyContent = "center";
       wrapCta.style.alignItems = "center";
       wrapCta.style.minHeight = "70px";
-      const btn = doc.createElement("button");
-      btn.className = "ga-filter-btn";
-      btn.textContent = `Load detailed regions (${requiredCountry.toUpperCase()})`;
-      btn.title = "Download admin boundaries and compute province/state/district fields for this country.";
-      const plan = getAdminEnrichmentPlan(requiredCountry);
-      if (!plan) {
-        btn.disabled = true;
-        btn.title = "No detailed admin dataset configured for this country yet.";
-      }
-      btn.addEventListener("click", () => {
-        void (async () => {
-          btn.disabled = true;
-          const prevText = btn.textContent;
-          btn.textContent = "Loading...";
-          try {
-            await runAdminEnrichment(requiredCountry);
-          } finally {
-            btn.textContent = prevText || "Load detailed regions";
-            btn.disabled = false;
-          }
-        })();
-      });
-      wrapCta.appendChild(btn);
+      const msg = doc.createElement("div");
+      msg.className = "ga-muted";
+      msg.style.fontSize = "12px";
+      msg.style.textAlign = "center";
+      msg.textContent = `Detailed admin analysis required for ${requiredCountry.toUpperCase()}. Open the \u201CDetailed admin analysis\u201D section to load this level.`;
+      wrapCta.appendChild(msg);
       box.appendChild(wrapCta);
       wrap.appendChild(title);
       wrap.appendChild(header);
@@ -46232,6 +47260,7 @@ ${describeError(err2)}` : message;
     const isPlausibleGameGroup = (rows) => {
       if (groupById !== "game_id") return true;
       if (!Array.isArray(rows) || rows.length === 0) return false;
+      if (rows.length < 2) return false;
       if (rows.length > 25) return false;
       const nums = [];
       const seen = /* @__PURE__ */ new Set();
@@ -46282,6 +47311,13 @@ ${describeError(err2)}` : message;
         if (valid === 0) continue;
         if (valid / Math.max(1, total) < 0.5) continue;
       }
+      if (grain === "round" && metricId === "score_spread") {
+        const total = g.length;
+        let valid = 0;
+        for (const r of g) if (getScore(r, semantic) !== null) valid++;
+        if (valid < 2) continue;
+        if (groupById === "game_id" && valid !== total) continue;
+      }
       const v = (() => {
         if (grain === "round" && metricId === "avg_score") {
           let sum = 0;
@@ -46304,6 +47340,19 @@ ${describeError(err2)}` : message;
             n++;
           }
           return n ? sum / n : NaN;
+        }
+        if (grain === "round" && metricId === "score_spread") {
+          let min = Infinity;
+          let max2 = -Infinity;
+          let n = 0;
+          for (const r of g) {
+            const s = getScore(r, semantic);
+            if (s === null) continue;
+            n++;
+            if (s < min) min = s;
+            if (s > max2) max2 = s;
+          }
+          return n >= 2 && Number.isFinite(min) && Number.isFinite(max2) ? Math.max(0, max2 - min) : NaN;
         }
         return fn(g);
       })();
@@ -47260,6 +48309,31 @@ ${describeError(err2)}` : message;
     const y = (90 - lat) / 180 * h;
     return [x, y];
   }
+  function boundsFromGeoJson(geojson) {
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    const add2 = (lon, lat) => {
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      minLon = Math.min(minLon, lon);
+      minLat = Math.min(minLat, lat);
+      maxLon = Math.max(maxLon, lon);
+      maxLat = Math.max(maxLat, lat);
+    };
+    const walk = (c) => {
+      if (!Array.isArray(c)) return;
+      if (c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number") {
+        add2(Number(c[0]), Number(c[1]));
+        return;
+      }
+      for (const x of c) walk(x);
+    };
+    for (const f of features) {
+      const coords = f?.geometry?.coordinates;
+      if (coords) walk(coords);
+    }
+    if (!Number.isFinite(minLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLon) || !Number.isFinite(maxLat)) return null;
+    return { minLon, minLat, maxLon, maxLat };
+  }
   function pathFromGeo2(geometry, w, h) {
     const d = [];
     const addRing = (ring) => {
@@ -47449,7 +48523,7 @@ ${describeError(err2)}` : message;
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
     const requiredCountry = getAdminEnrichmentRequiredCountry(spec.dimension);
-    const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForCountry(requiredCountry) : true;
+    const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForDimension(spec.dimension) : true;
     if (grain === "round" && adminEnabled) {
       await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll);
     }
@@ -47495,29 +48569,12 @@ ${describeError(err2)}` : message;
         wrapCta.style.alignItems = "center";
         wrapCta.style.height = "100%";
         wrapCta.style.minHeight = "180px";
-        const btn = doc.createElement("button");
-        btn.className = "ga-filter-btn";
-        btn.textContent = `Load detailed regions (${requiredCountry.toUpperCase()})`;
-        btn.title = "Download admin boundaries and compute province/state/district fields for this country.";
-        const plan = getAdminEnrichmentPlan(requiredCountry);
-        if (!plan) {
-          btn.disabled = true;
-          btn.title = "No detailed admin dataset configured for this country yet.";
-        }
-        btn.addEventListener("click", () => {
-          void (async () => {
-            btn.disabled = true;
-            const prevText = btn.textContent;
-            btn.textContent = "Loading...";
-            try {
-              await runAdminEnrichment(requiredCountry);
-            } finally {
-              btn.textContent = prevText || "Load detailed regions";
-              btn.disabled = false;
-            }
-          })();
-        });
-        wrapCta.appendChild(btn);
+        const msg = doc.createElement("div");
+        msg.className = "ga-muted";
+        msg.style.fontSize = "12px";
+        msg.style.textAlign = "center";
+        msg.textContent = `Detailed admin analysis required for ${requiredCountry.toUpperCase()}. Open the \u201CDetailed admin analysis\u201D section to load this level.`;
+        wrapCta.appendChild(msg);
         mapHost.appendChild(wrapCta);
         return;
       }
@@ -47655,6 +48712,25 @@ ${describeError(err2)}` : message;
         });
       }
       let vp = { scale: 1, tx: 0, ty: 0 };
+      if (spec.fitToGeoJson) {
+        const b = boundsFromGeoJson(geojson);
+        if (b) {
+          const [x0, y0] = project2(b.minLon, b.maxLat, W, H);
+          const [x1, y1] = project2(b.maxLon, b.minLat, W, H);
+          const minX = Math.min(x0, x1);
+          const maxX = Math.max(x0, x1);
+          const minY = Math.min(y0, y1);
+          const maxY = Math.max(y0, y1);
+          const spanX = Math.max(1, maxX - minX);
+          const spanY = Math.max(1, maxY - minY);
+          const margin = 0.08;
+          const s = Math.min(W * (1 - margin * 2) / spanX, H * (1 - margin * 2) / spanY);
+          const scale = Math.max(1, Math.min(12, s));
+          const tx = (W - spanX * scale) / 2 - minX * scale;
+          const ty = (H - spanY * scale) / 2 - minY * scale;
+          vp = { scale, tx, ty };
+        }
+      }
       applyViewport2(g, vp);
       const rectPoint = (clientX, clientY) => {
         const r = svg.getBoundingClientRect();
@@ -47673,11 +48749,11 @@ ${describeError(err2)}` : message;
         };
         applyViewport2(g, vp);
       };
-      const clamp3 = (v, a, b) => Math.max(a, Math.min(b, v));
+      const clamp4 = (v, a, b) => Math.max(a, Math.min(b, v));
       const onZoom = (delta, clientX, clientY) => {
         const p = rectPoint(clientX, clientY);
         const factor = delta > 0 ? 1.12 : 1 / 1.12;
-        const next = clamp3(vp.scale * factor, 1, 12);
+        const next = clamp4(vp.scale * factor, 1, 12);
         zoomAt(p.x, p.y, next);
       };
       svg.addEventListener(
@@ -48477,6 +49553,1061 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
+  // src/ui/widgets/adminEnrichmentWidget.ts
+  function asIso2(v) {
+    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+    return /^[a-z]{2}$/.test(s) ? s : "";
+  }
+  function getAdminEnrichmentPlan(countryIso2) {
+    const iso2 = asIso2(countryIso2);
+    if (!iso2) return null;
+    if (iso2 === "de")
+      return {
+        countryIso2: iso2,
+        label: "Germany (Bundesl\xE4nder + Landkreise)",
+        levels: [
+          { id: "adm1", label: "States (ADM1)", dimIds: ["true_state", "guess_state"] },
+          { id: "adm2", label: "Districts (ADM2)", dimIds: ["true_district", "guess_district"] }
+        ]
+      };
+    if (iso2 === "us")
+      return {
+        countryIso2: iso2,
+        label: "United States (States)",
+        levels: [{ id: "adm1", label: "States (ADM1)", dimIds: ["true_us_state", "guess_us_state"] }]
+      };
+    if (iso2 === "ca")
+      return {
+        countryIso2: iso2,
+        label: "Canada (Provinces)",
+        levels: [{ id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_ca_province", "guess_ca_province"] }]
+      };
+    if (iso2 === "id")
+      return {
+        countryIso2: iso2,
+        label: "Indonesia (Provinces + Kabupaten)",
+        levels: [
+          { id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_id_province", "guess_id_province"] },
+          { id: "adm2", label: "Kabupaten (ADM2)", dimIds: ["true_id_kabupaten", "guess_id_kabupaten"] }
+        ]
+      };
+    if (iso2 === "ph")
+      return {
+        countryIso2: iso2,
+        label: "Philippines (Provinces)",
+        levels: [{ id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_ph_province", "guess_ph_province"] }]
+      };
+    if (iso2 === "vn")
+      return {
+        countryIso2: iso2,
+        label: "Vietnam (Provinces)",
+        levels: [{ id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_vn_province", "guess_vn_province"] }]
+      };
+    return null;
+  }
+  function metaKeyForCountry(iso2) {
+    return `admin_enrichment_enabled_${iso2.toLowerCase()}`;
+  }
+  async function runAdminEnrichment(countryIso2, opts) {
+    const iso2 = asIso2(countryIso2);
+    if (!iso2) throw new Error("Missing country ISO2 for admin enrichment");
+    const plan = getAdminEnrichmentPlan(iso2);
+    if (!plan) throw new Error(`No admin-level dataset configured for '${iso2.toUpperCase()}' yet.`);
+    const set = (pct, msg) => {
+      opts?.onPct?.(pct);
+      opts?.onStatus?.(msg);
+    };
+    const wantedLevelId = typeof opts?.levelId === "string" && opts.levelId.trim() ? opts.levelId.trim() : "all";
+    const levels2 = wantedLevelId === "all" ? plan.levels : plan.levels.filter((l) => l.id === wantedLevelId || l.label === wantedLevelId);
+    if (!levels2.length) throw new Error(`Unknown admin level '${wantedLevelId}' for ${iso2.toUpperCase()}.`);
+    const dimIds = Array.from(new Set(levels2.flatMap((l) => l.dimIds)));
+    const existing = await db.meta.get(metaKeyForCountry(iso2));
+    const existingValue = existing?.value ?? {};
+    const nextValue = {
+      ...existingValue,
+      enabled: true,
+      levels: { ...existingValue.levels ?? {} }
+    };
+    for (const lvl of levels2) {
+      nextValue.levels[lvl.id] = { ...nextValue.levels[lvl.id] ?? {}, enabled: true, inProgress: true, startedAt: Date.now(), dimIds: lvl.dimIds };
+    }
+    await db.meta.put({ key: metaKeyForCountry(iso2), value: nextValue, updatedAt: Date.now() });
+    invalidateAdminEnrichmentEnabledCache(iso2);
+    analysisConsole.info(`Admin enrichment: loading rounds for ${iso2.toUpperCase()}...`);
+    set(2, `Loading rounds for ${iso2.toUpperCase()}...`);
+    const rows = await db.rounds.where("trueCountry").equals(iso2).toArray();
+    const total = rows.length;
+    if (!total) {
+      set(0, "No rounds found for this country.");
+      return;
+    }
+    analysisConsole.info(`Admin enrichment: computing ${dimIds.length} dimensions for ${total} rounds...`);
+    for (let i = 0; i < dimIds.length; i++) {
+      const dimId = dimIds[i];
+      const pct = 5 + i / Math.max(1, dimIds.length) * 70;
+      set(pct, `Computing ${dimId}... (${i + 1}/${dimIds.length})`);
+      await maybeEnrichRoundRowsForDimension(dimId, rows);
+    }
+    analysisConsole.info("Admin enrichment: saving enriched rounds...");
+    set(80, "Saving enriched rounds...");
+    const batchSize = 200;
+    for (let offset = 0; offset < total; offset += batchSize) {
+      const chunk = rows.slice(offset, offset + batchSize);
+      await db.rounds.bulkPut(chunk);
+      set(80 + offset / Math.max(1, total) * 18, "Saving enriched rounds...");
+      if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+    const prev = await db.meta.get(metaKeyForCountry(iso2));
+    const prevValue = prev?.value ?? {};
+    const finalValue = {
+      ...prevValue,
+      enabled: true,
+      doneAt: Date.now(),
+      rounds: total,
+      dimIdsDone: Array.from(/* @__PURE__ */ new Set([...prevValue.dimIdsDone ?? [], ...dimIds])),
+      levels: { ...prevValue.levels ?? {} }
+    };
+    for (const lvl of levels2) {
+      finalValue.levels[lvl.id] = { ...finalValue.levels[lvl.id] ?? {}, enabled: true, inProgress: false, doneAt: Date.now(), dimIds: lvl.dimIds };
+    }
+    await db.meta.put({ key: metaKeyForCountry(iso2), value: finalValue, updatedAt: Date.now() });
+    invalidateAdminEnrichmentEnabledCache(iso2);
+    invalidateRoundsCache();
+    globalThis.__gaRequestRerender?.();
+    set(100, "Done.");
+    analysisConsole.info("Admin enrichment: done.");
+  }
+  async function renderAdminEnrichmentWidget(_semantic, widget, _overlay, baseRows) {
+    const doc = document;
+    const el2 = doc.createElement("div");
+    el2.className = "ga-widget ga-admin-enrichment";
+    const title = doc.createElement("div");
+    title.style.fontWeight = "600";
+    title.style.marginBottom = "6px";
+    title.textContent = widget.title || "Detailed administrative regions";
+    el2.appendChild(title);
+    const hint = doc.createElement("div");
+    hint.style.opacity = "0.9";
+    hint.style.fontSize = "12px";
+    hint.style.marginBottom = "10px";
+    hint.textContent = widget.spec?.description ?? "Optional: download admin boundaries and compute region fields (e.g. province/state) for this country. This enables hit-rate stats and region maps.";
+    el2.appendChild(hint);
+    const body = doc.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "8px";
+    el2.appendChild(body);
+    const countryIso2 = (() => {
+      const first = Array.isArray(baseRows) ? baseRows.find((r) => r && typeof r === "object") : null;
+      return asIso2(first?.trueCountry ?? first?.true_country);
+    })();
+    if (!countryIso2) {
+      const msg = doc.createElement("div");
+      msg.textContent = "Select a country in Country Insight to enable detailed admin analysis.";
+      body.appendChild(msg);
+      return el2;
+    }
+    const plan = getAdminEnrichmentPlan(countryIso2);
+    if (!plan) {
+      const msg = doc.createElement("div");
+      msg.textContent = `No detailed admin-level dataset configured for '${countryIso2.toUpperCase()}' yet.`;
+      body.appendChild(msg);
+      return el2;
+    }
+    const status = doc.createElement("div");
+    status.style.fontSize = "12px";
+    status.style.opacity = "0.9";
+    body.appendChild(status);
+    const progress = doc.createElement("div");
+    progress.style.height = "8px";
+    progress.style.borderRadius = "999px";
+    progress.style.background = "rgba(255,255,255,0.10)";
+    progress.style.overflow = "hidden";
+    const progressFill = doc.createElement("div");
+    progressFill.style.height = "100%";
+    progressFill.style.width = "0%";
+    progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
+    progress.appendChild(progressFill);
+    body.appendChild(progress);
+    const actions = doc.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "10px";
+    actions.style.flexWrap = "wrap";
+    body.appendChild(actions);
+    const btn = doc.createElement("button");
+    btn.className = "ga-filter-btn";
+    btn.textContent = "Start detailed analysis";
+    actions.appendChild(btn);
+    const clearBtn = doc.createElement("button");
+    clearBtn.className = "ga-filter-btn";
+    clearBtn.textContent = "Disable";
+    actions.appendChild(clearBtn);
+    const refresh = async () => {
+      const meta = await db.meta.get(metaKeyForCountry(countryIso2));
+      const enabled = meta?.value?.enabled === true;
+      const doneAt = meta?.value?.doneAt;
+      const doneTxt = typeof doneAt === "number" && Number.isFinite(doneAt) ? new Date(doneAt).toLocaleString() : "";
+      status.textContent = enabled ? `Enabled for ${plan.label}. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : `Disabled for ${plan.label}.`;
+      btn.textContent = enabled ? "Re-run detailed analysis" : "Start detailed analysis";
+    };
+    const setBusy = (pct, msg) => {
+      progressFill.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
+      status.textContent = msg;
+    };
+    btn.addEventListener("click", () => {
+      void (async () => {
+        btn.disabled = true;
+        clearBtn.disabled = true;
+        try {
+          let pct = 0;
+          let msg = "";
+          const sync = () => setBusy(pct, msg);
+          await runAdminEnrichment(countryIso2, {
+            onPct: (p) => {
+              pct = p;
+              sync();
+            },
+            onStatus: (m) => {
+              msg = m;
+              sync();
+            }
+          });
+          setBusy(100, "Done. Refreshing view...");
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          analysisConsole.error(`Admin enrichment failed: ${msg}`);
+          setBusy(0, `Error: ${msg}`);
+        } finally {
+          btn.disabled = false;
+          clearBtn.disabled = false;
+          await refresh();
+        }
+      })();
+    });
+    clearBtn.addEventListener("click", () => {
+      void (async () => {
+        clearBtn.disabled = true;
+        btn.disabled = true;
+        try {
+          await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: false, doneAt: Date.now() }, updatedAt: Date.now() });
+          invalidateAdminEnrichmentEnabledCache(countryIso2);
+          invalidateRoundsCache();
+          globalThis.__gaRequestRerender?.();
+        } finally {
+          clearBtn.disabled = false;
+          btn.disabled = false;
+          await refresh();
+        }
+      })();
+    });
+    await refresh();
+    return el2;
+  }
+
+  // src/db/adminCacheDb.ts
+  var AdminCacheDB = class extends import_wrapper_default {
+    geojson;
+    labels;
+    constructor() {
+      super("gg_analyzer_admin_cache");
+      this.version(1).stores({
+        geojson: "levelKey, iso3, iso2, adm, savedAt",
+        labels: "id, levelKey, gameId, roundNumber, updatedAt"
+      });
+    }
+  };
+  var adminCacheDb = new AdminCacheDB();
+
+  // src/ui/widgets/adminAnalysisWidget.ts
+  var LEVEL_CACHE = /* @__PURE__ */ new Map();
+  var ISO3_CACHE = /* @__PURE__ */ new Map();
+  var ISO_NAME_CACHE = /* @__PURE__ */ new Map();
+  var ISO_LOOKUP_URL = "https://raw.githubusercontent.com/lukes/ISO-3166-Countries-with-Regional-Codes/master/all/all.json";
+  var ISO_LOOKUP_PROMISE = null;
+  function asIso22(v) {
+    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+    return /^[a-z]{2}$/.test(s) ? s : "";
+  }
+  function clamp3(v, a, b) {
+    return Math.max(a, Math.min(b, v));
+  }
+  async function ensureIsoLookupLoaded() {
+    if (ISO_LOOKUP_PROMISE) return ISO_LOOKUP_PROMISE;
+    ISO_LOOKUP_PROMISE = (async () => {
+      try {
+        const res = await fetch(ISO_LOOKUP_URL, { credentials: "omit" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const arr = await res.json();
+        if (!Array.isArray(arr)) return;
+        for (const item of arr) {
+          const a2 = typeof item?.["alpha-2"] === "string" ? item["alpha-2"].trim().toLowerCase() : "";
+          const a3 = typeof item?.["alpha-3"] === "string" ? item["alpha-3"].trim().toUpperCase() : "";
+          const name = typeof item?.name === "string" ? item.name.trim() : "";
+          if (a2 && a3 && /^[a-z]{2}$/.test(a2) && /^[A-Z]{3}$/.test(a3)) {
+            ISO3_CACHE.set(a2, a3);
+            if (name) ISO_NAME_CACHE.set(a2, name);
+          }
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.warn(`ISO mapping fetch failed (${msg}). Only a small built-in mapping will work.`);
+      }
+    })();
+    return ISO_LOOKUP_PROMISE;
+  }
+  async function iso2ToIso3(iso2) {
+    const key = asIso22(iso2);
+    if (!key) return null;
+    const builtIn = {
+      de: "DEU",
+      us: "USA",
+      ca: "CAN",
+      id: "IDN",
+      ph: "PHL",
+      vn: "VNM"
+    };
+    if (builtIn[key]) return builtIn[key];
+    await ensureIsoLookupLoaded();
+    return ISO3_CACHE.get(key) ?? null;
+  }
+  async function fetchGeoBoundariesMeta(iso3, adm) {
+    const url = `https://www.geoboundaries.org/api/current/gbOpen/${encodeURIComponent(iso3)}/${encodeURIComponent(adm)}/`;
+    const gm = getGmXmlhttpRequest();
+    if (typeof gm === "function") {
+      return await new Promise((resolve, reject) => {
+        gm({
+          method: "GET",
+          url,
+          headers: { Accept: "application/json" },
+          onload: (res2) => {
+            const status = typeof res2?.status === "number" ? res2.status : 0;
+            if (status === 404) return resolve(null);
+            if (status >= 400) return reject(new Error(`GeoBoundaries API error: HTTP ${status}`));
+            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+            try {
+              resolve(JSON.parse(text));
+            } catch (e) {
+              reject(e instanceof Error ? e : new Error(String(e)));
+            }
+          },
+          onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error(`GM_xmlhttpRequest failed for ${url}`)),
+          ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+        });
+      });
+    }
+    const res = await fetch(url, { credentials: "omit" });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GeoBoundaries API error: HTTP ${res.status}`);
+    return await res.json();
+  }
+  function pickFeatureKey(geojson) {
+    const first = geojson?.features?.[0]?.properties ?? null;
+    if (!first || typeof first !== "object") return "shapeName";
+    const candidates = ["shapeName", "name", "NAME_1", "NAME_2", "adm1_name", "adm2_name"];
+    for (const k of candidates) if (k in first) return k;
+    for (const [k, v] of Object.entries(first)) if (typeof v === "string" && v.trim()) return k;
+    return "shapeName";
+  }
+  function bboxFromGeometry(geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return null;
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    const add2 = (lon, lat) => {
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      minLon = Math.min(minLon, lon);
+      minLat = Math.min(minLat, lat);
+      maxLon = Math.max(maxLon, lon);
+      maxLat = Math.max(maxLat, lat);
+    };
+    const walk = (c) => {
+      if (!Array.isArray(c)) return;
+      if (c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number") {
+        add2(c[0], c[1]);
+        return;
+      }
+      for (const x of c) walk(x);
+    };
+    walk(coords);
+    if (!Number.isFinite(minLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLon) || !Number.isFinite(maxLat)) return null;
+    return [minLon, minLat, maxLon, maxLat];
+  }
+  function pointInRing5(lon, lat, ring) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = Number(ring[i]?.[0]);
+      const yi = Number(ring[i]?.[1]);
+      const xj = Number(ring[j]?.[0]);
+      const yj = Number(ring[j]?.[1]);
+      if (!Number.isFinite(xi) || !Number.isFinite(yi) || !Number.isFinite(xj) || !Number.isFinite(yj)) continue;
+      const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  function pointInPolygon5(lon, lat, geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return false;
+    if (type === "Polygon") {
+      const rings = coords;
+      if (!Array.isArray(rings) || rings.length === 0) return false;
+      if (!pointInRing5(lon, lat, rings[0])) return false;
+      for (let i = 1; i < rings.length; i++) if (pointInRing5(lon, lat, rings[i])) return false;
+      return true;
+    }
+    if (type === "MultiPolygon") {
+      for (const poly of coords) {
+        const rings = poly;
+        if (!Array.isArray(rings) || rings.length === 0) continue;
+        if (!pointInRing5(lon, lat, rings[0])) continue;
+        let inHole = false;
+        for (let i = 1; i < rings.length; i++) if (pointInRing5(lon, lat, rings[i])) inHole = true;
+        if (!inHole) return true;
+      }
+      return false;
+    }
+    return false;
+  }
+  function findFeatureName(level, lat, lng) {
+    const lon = lng;
+    const y = lat;
+    for (const f of level.features) {
+      const [minLon, minLat, maxLon, maxLat] = f.bbox;
+      if (lon < minLon || lon > maxLon || y < minLat || y > maxLat) continue;
+      if (pointInPolygon5(lon, y, f.geometry)) return f.name || null;
+    }
+    return null;
+  }
+  function guessLatLngOf(r) {
+    const lat = typeof r?.player_self_guessLat === "number" ? r.player_self_guessLat : typeof r?.p1_guessLat === "number" ? r.p1_guessLat : typeof r?.guessLat === "number" ? r.guessLat : null;
+    const lng = typeof r?.player_self_guessLng === "number" ? r.player_self_guessLng : typeof r?.p1_guessLng === "number" ? r.p1_guessLng : typeof r?.guessLng === "number" ? r.guessLng : null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  }
+  async function listAvailableLevels(iso2) {
+    const iso3 = await iso2ToIso3(iso2);
+    if (!iso3) return [];
+    const jobs = [1, 2, 3, 4].map(async (n) => {
+      const adm = `ADM${n}`;
+      try {
+        const meta = await fetchGeoBoundariesMeta(iso3, adm);
+        if (!meta) return null;
+        const geojsonUrl = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON.trim() : "";
+        if (!geojsonUrl) return null;
+        const name = typeof meta.boundaryName === "string" && meta.boundaryName.trim() ? meta.boundaryName.trim() : n === 1 ? "Provinces / States" : n === 2 ? "Counties / Districts" : `Admin level ${n}`;
+        return {
+          id: adm,
+          label: `${name} (${adm})`,
+          iso2,
+          iso3,
+          geojsonUrl,
+          featureKey: "shapeName"
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.warn(`GeoBoundaries meta fetch failed for ${iso3} ${adm}: ${msg}`);
+        return null;
+      }
+    });
+    const levels2 = await Promise.all(jobs);
+    return levels2.filter(Boolean);
+  }
+  async function loadLevel(level, onPct, onStatus) {
+    const key = `${level.iso3}:${level.id}`;
+    const cached = LEVEL_CACHE.get(key);
+    if (cached) return cached;
+    onStatus(`Downloading boundaries (${level.id})...`);
+    onPct(10);
+    const saved = await adminCacheDb.geojson.get(key);
+    const geojson = saved?.geojson ?? await loadGeoJson(level.geojsonUrl);
+    const featureKey = saved?.featureKey ?? pickFeatureKey(geojson);
+    onStatus("Indexing features...");
+    onPct(25);
+    const feats = [];
+    const features = Array.isArray(geojson?.features) ? geojson.features : [];
+    for (let i = 0; i < features.length; i++) {
+      const f = features[i];
+      const props = f?.properties ?? {};
+      const name = typeof props?.[featureKey] === "string" ? String(props[featureKey]) : "";
+      const bbox = bboxFromGeometry(f?.geometry);
+      if (!bbox || !name) continue;
+      feats.push({ name, bbox, geometry: f.geometry });
+      if (i % 200 === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+    const loaded = { level: { ...level, featureKey }, geojson, features: feats, computed: /* @__PURE__ */ new WeakMap() };
+    LEVEL_CACHE.set(key, loaded);
+    return loaded;
+  }
+  async function renderAdminAnalysisWidget(semantic, widget, overlay, baseRows) {
+    const doc = overlay.getDocument();
+    const el2 = doc.createElement("div");
+    el2.className = "ga-widget ga-admin-analysis";
+    const title = doc.createElement("div");
+    title.className = "ga-widget-title";
+    title.textContent = widget.title || "Regional accuracy";
+    el2.appendChild(title);
+    const rows = Array.isArray(baseRows) ? baseRows : [];
+    void ensureIsoLookupLoaded();
+    const countryIso2 = (() => {
+      const first = rows.find((r) => r && typeof r === "object");
+      return asIso22(first?.trueCountry ?? first?.true_country);
+    })();
+    const hint = doc.createElement("div");
+    hint.className = "ga-muted";
+    hint.style.fontSize = "12px";
+    hint.textContent = countryIso2 ? "Load a region level (ADM1/ADM2/\u2026) to see accuracy + maps. Nothing is stored in your database." : "Pick a country using the section filter first.";
+    el2.appendChild(hint);
+    if (!countryIso2) return el2;
+    const summary = doc.createElement("div");
+    summary.className = "ga-muted";
+    summary.style.fontSize = "12px";
+    summary.style.marginTop = "10px";
+    summary.textContent = `Country: ${countryIso2.toUpperCase()} \u2022 Rounds in selection: ${rows.length}`;
+    el2.appendChild(summary);
+    void (async () => {
+      await ensureIsoLookupLoaded();
+      const name = ISO_NAME_CACHE.get(countryIso2);
+      if (!name) return;
+      summary.textContent = `Country: ${name} (${countryIso2.toUpperCase()}) \u2022 Rounds in selection: ${rows.length}`;
+    })();
+    const levelsTitle = doc.createElement("div");
+    levelsTitle.style.marginTop = "12px";
+    levelsTitle.style.fontWeight = "600";
+    levelsTitle.textContent = "Available admin levels";
+    el2.appendChild(levelsTitle);
+    const levelsBox = doc.createElement("div");
+    levelsBox.className = "ga-statlist-box";
+    el2.appendChild(levelsBox);
+    const status = doc.createElement("div");
+    status.className = "ga-muted";
+    status.style.fontSize = "12px";
+    status.style.marginTop = "8px";
+    el2.appendChild(status);
+    const progress = doc.createElement("div");
+    progress.style.height = "8px";
+    progress.style.borderRadius = "999px";
+    progress.style.background = "rgba(255,255,255,0.10)";
+    progress.style.overflow = "hidden";
+    const progressFill = doc.createElement("div");
+    progressFill.style.height = "100%";
+    progressFill.style.width = "0%";
+    progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
+    progress.appendChild(progressFill);
+    el2.appendChild(progress);
+    const chartsHost = doc.createElement("div");
+    chartsHost.style.display = "flex";
+    chartsHost.style.flexDirection = "column";
+    chartsHost.style.gap = "14px";
+    chartsHost.style.marginTop = "12px";
+    el2.appendChild(chartsHost);
+    const setBusy = (pct, msg) => {
+      progressFill.style.width = `${clamp3(pct, 0, 100).toFixed(1)}%`;
+      status.textContent = msg;
+    };
+    let levels2 = [];
+    let active = null;
+    const levelKey = (lvl) => `${lvl.iso3}:${lvl.id}`;
+    const isLoaded = (lvl) => LEVEL_CACHE.has(levelKey(lvl));
+    const savedMetaByKey = /* @__PURE__ */ new Map();
+    const missingByKey = /* @__PURE__ */ new Map();
+    const sizeHintKbByKey = /* @__PURE__ */ new Map();
+    let persistBusyKey = null;
+    const makeRoundCacheId = (k, r) => {
+      const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
+      const rn = typeof r?.roundNumber === "number" ? r.roundNumber : typeof r?.round_number === "number" ? r.round_number : null;
+      if (!gid || !Number.isFinite(rn)) return null;
+      return `${k}:${gid}:${rn}`;
+    };
+    const getCountryRows = () => rows.filter((r) => asIso22(r?.trueCountry ?? r?.true_country) === countryIso2);
+    const refreshSavedMeta = async () => {
+      savedMetaByKey.clear();
+      missingByKey.clear();
+      const iso3 = levels2[0]?.iso3;
+      if (!iso3) return;
+      const saved = await adminCacheDb.geojson.where("iso3").equals(iso3).toArray();
+      for (const s of saved) {
+        if (!s || typeof s.levelKey !== "string") continue;
+        savedMetaByKey.set(s.levelKey, { byteSize: Number(s.byteSize) || 0, savedAt: Number(s.savedAt) || 0 });
+      }
+      const countryRows = getCountryRows();
+      await Promise.all(
+        levels2.map(async (lvl) => {
+          const k = levelKey(lvl);
+          if (!savedMetaByKey.has(k)) return;
+          const ids = countryRows.map((r) => makeRoundCacheId(k, r)).filter(Boolean);
+          if (!ids.length) {
+            missingByKey.set(k, 0);
+            return;
+          }
+          const got = await adminCacheDb.labels.bulkGet(ids);
+          let missing = 0;
+          for (const x of got) if (!x) missing++;
+          missingByKey.set(k, missing);
+        })
+      );
+    };
+    const prefetchSizeHints = () => {
+      const gm = getGmXmlhttpRequest();
+      if (typeof gm !== "function") return;
+      for (const lvl of levels2) {
+        const k = levelKey(lvl);
+        if (sizeHintKbByKey.has(k)) continue;
+        gm({
+          method: "HEAD",
+          url: lvl.geojsonUrl,
+          headers: { Accept: "application/json" },
+          onload: (res) => {
+            const raw = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+            const m = raw.match(/content-length:\\s*(\\d+)/i);
+            if (!m) return;
+            const bytes = Number(m[1]);
+            if (!Number.isFinite(bytes) || bytes <= 0) return;
+            sizeHintKbByKey.set(k, Math.max(1, Math.round(bytes / 1024)));
+            renderLevelsList();
+          }
+        });
+      }
+    };
+    const saveLevel = async (lvl) => {
+      const k = levelKey(lvl);
+      persistBusyKey = k;
+      renderLevelsList();
+      chartsHost.innerHTML = "";
+      setBusy(5, `Saving ${lvl.id}...`);
+      try {
+        const loaded = await loadLevel(
+          lvl,
+          (p) => setBusy(p, status.textContent || ""),
+          (s) => setBusy(parseFloat(progressFill.style.width) || 10, s)
+        );
+        setBusy(30, "Writing boundaries to cache...");
+        const geojsonText = JSON.stringify(loaded.geojson);
+        const byteSize = geojsonText.length;
+        await adminCacheDb.geojson.put({
+          levelKey: k,
+          iso2: lvl.iso2,
+          iso3: lvl.iso3,
+          adm: lvl.id,
+          featureKey: loaded.level.featureKey,
+          geojson: loaded.geojson,
+          byteSize,
+          savedAt: Date.now()
+        });
+        const countryRows = getCountryRows();
+        setBusy(40, `Computing cached labels... (0/${countryRows.length})`);
+        const labelRows = [];
+        let lastStep = -1;
+        for (let i = 0; i < countryRows.length; i++) {
+          const r = countryRows[i];
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+          const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          const id = makeRoundCacheId(k, r);
+          if (id) {
+            labelRows.push({
+              id,
+              levelKey: k,
+              gameId: String(r.gameId ?? r.game_id ?? ""),
+              roundNumber: Number(r.roundNumber ?? r.round_number ?? 0),
+              trueUnit: t ?? "",
+              guessUnit: g ?? "",
+              updatedAt: Date.now()
+            });
+          }
+          const pctRaw = 40 + i / Math.max(1, countryRows.length) * 55;
+          const step = Math.floor(pctRaw / 5) * 5;
+          if (step !== lastStep) {
+            lastStep = step;
+            setBusy(step, `Computing cached labels... (${i}/${countryRows.length})`);
+            await new Promise((res) => setTimeout(res, 0));
+          }
+        }
+        setBusy(96, "Writing labels...");
+        if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows);
+        setBusy(100, "Saved.");
+        await refreshSavedMeta();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Save failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      } finally {
+        persistBusyKey = null;
+        renderLevelsList();
+      }
+    };
+    const refreshSavedLabels = async (lvl) => {
+      const k = levelKey(lvl);
+      persistBusyKey = k;
+      renderLevelsList();
+      chartsHost.innerHTML = "";
+      setBusy(5, `Refreshing ${lvl.id}...`);
+      try {
+        const loaded = await loadLevel(
+          lvl,
+          (p) => setBusy(p, status.textContent || ""),
+          (s) => setBusy(parseFloat(progressFill.style.width) || 10, s)
+        );
+        const countryRows = getCountryRows();
+        const ids = countryRows.map((r) => makeRoundCacheId(k, r)).filter(Boolean);
+        const existing = ids.length ? await adminCacheDb.labels.bulkGet(ids) : [];
+        const missingRows = [];
+        for (let i = 0; i < ids.length; i++) if (!existing[i]) missingRows.push(countryRows[i]);
+        setBusy(35, `Computing new labels... (0/${missingRows.length})`);
+        const labelRows = [];
+        let lastStep = -1;
+        for (let i = 0; i < missingRows.length; i++) {
+          const r = missingRows[i];
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+          const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          const id = makeRoundCacheId(k, r);
+          if (id) {
+            labelRows.push({
+              id,
+              levelKey: k,
+              gameId: String(r.gameId ?? r.game_id ?? ""),
+              roundNumber: Number(r.roundNumber ?? r.round_number ?? 0),
+              trueUnit: t ?? "",
+              guessUnit: g ?? "",
+              updatedAt: Date.now()
+            });
+          }
+          const pctRaw = 35 + i / Math.max(1, missingRows.length) * 60;
+          const step = Math.floor(pctRaw / 5) * 5;
+          if (step !== lastStep) {
+            lastStep = step;
+            setBusy(step, `Computing new labels... (${i}/${missingRows.length})`);
+            await new Promise((res) => setTimeout(res, 0));
+          }
+        }
+        setBusy(97, "Writing labels...");
+        if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows);
+        setBusy(100, "Refreshed.");
+        await refreshSavedMeta();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Refresh failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      } finally {
+        persistBusyKey = null;
+        renderLevelsList();
+      }
+    };
+    const deleteSaved = async (lvl) => {
+      const k = levelKey(lvl);
+      persistBusyKey = k;
+      renderLevelsList();
+      setBusy(5, `Deleting ${lvl.id}...`);
+      try {
+        await adminCacheDb.transaction("rw", adminCacheDb.geojson, adminCacheDb.labels, async () => {
+          await adminCacheDb.geojson.delete(k);
+          await adminCacheDb.labels.where("levelKey").equals(k).delete();
+        });
+        await refreshSavedMeta();
+        setBusy(0, "Deleted.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Delete failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      } finally {
+        persistBusyKey = null;
+        renderLevelsList();
+      }
+    };
+    const renderLevelsList = () => {
+      levelsBox.innerHTML = "";
+      if (!levels2.length) {
+        const msg = doc.createElement("div");
+        msg.className = "ga-muted";
+        msg.style.fontSize = "12px";
+        msg.textContent = "No admin levels found for this country.";
+        levelsBox.appendChild(msg);
+        return;
+      }
+      for (const lvl of levels2) {
+        const row = doc.createElement("div");
+        row.className = "ga-statrow";
+        row.style.alignItems = "center";
+        const left = doc.createElement("div");
+        left.className = "ga-statrow-label";
+        left.textContent = lvl.label;
+        const right = doc.createElement("div");
+        right.className = "ga-statrow-value";
+        right.style.display = "flex";
+        right.style.gap = "8px";
+        right.style.alignItems = "center";
+        const k = levelKey(lvl);
+        const saved = savedMetaByKey.get(k);
+        const missing = missingByKey.get(k);
+        const persistBtn = doc.createElement("button");
+        persistBtn.className = "ga-filter-btn";
+        persistBtn.disabled = persistBusyKey !== null;
+        if (!saved) {
+          const kb = sizeHintKbByKey.get(k);
+          persistBtn.textContent = typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+          persistBtn.addEventListener("click", () => void saveLevel(lvl));
+        } else {
+          if (typeof missing === "number" && missing > 0) {
+            persistBtn.textContent = `Refresh (${missing})`;
+            persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+          } else {
+            const kb = Math.max(1, Math.round(saved.byteSize / 1024));
+            persistBtn.textContent = `Saved (${kb} KB)`;
+            persistBtn.disabled = true;
+          }
+        }
+        right.appendChild(persistBtn);
+        if (saved) {
+          const btnDelete = doc.createElement("button");
+          btnDelete.className = "ga-filter-btn";
+          btnDelete.textContent = "\u{1F5D1}";
+          btnDelete.title = "Delete saved boundaries + labels";
+          btnDelete.disabled = persistBusyKey !== null;
+          btnDelete.style.borderColor = "rgba(255, 90, 90, 0.75)";
+          btnDelete.style.color = "rgba(255, 120, 120, 0.95)";
+          btnDelete.addEventListener("click", () => void deleteSaved(lvl));
+          right.appendChild(btnDelete);
+        }
+        const loaded = isLoaded(lvl);
+        if (loaded) {
+          const btnView = doc.createElement("button");
+          btnView.className = "ga-filter-btn";
+          btnView.textContent = active?.id === lvl.id ? "Viewing" : "View";
+          btnView.disabled = active?.id === lvl.id;
+          btnView.addEventListener("click", () => {
+            active = lvl;
+            void renderCharts();
+            renderLevelsList();
+          });
+          right.appendChild(btnView);
+          const btnRefresh = doc.createElement("button");
+          btnRefresh.className = "ga-filter-btn";
+          btnRefresh.textContent = "Reload";
+          btnRefresh.addEventListener("click", () => void doLoad(lvl, true));
+          right.appendChild(btnRefresh);
+          const btnUnload = doc.createElement("button");
+          btnUnload.className = "ga-filter-btn";
+          btnUnload.textContent = "Unload";
+          btnUnload.addEventListener("click", () => {
+            LEVEL_CACHE.delete(levelKey(lvl));
+            if (active?.id === lvl.id) {
+              active = null;
+              chartsHost.innerHTML = "";
+            }
+            setBusy(0, "Unloaded.");
+            renderLevelsList();
+          });
+          right.appendChild(btnUnload);
+        } else {
+          const btnLoad = doc.createElement("button");
+          btnLoad.className = "ga-filter-btn";
+          btnLoad.textContent = "Load";
+          btnLoad.addEventListener("click", () => void doLoad(lvl, false));
+          right.appendChild(btnLoad);
+        }
+        row.appendChild(left);
+        row.appendChild(right);
+        levelsBox.appendChild(row);
+      }
+    };
+    const renderCharts = async () => {
+      chartsHost.innerHTML = "";
+      if (!active) return;
+      const loaded = LEVEL_CACHE.get(levelKey(active));
+      if (!loaded) return;
+      const countryRows = rows.filter((r) => asIso22(r?.trueCountry ?? r?.true_country) === countryIso2);
+      if (!countryRows.length) {
+        const msg = doc.createElement("div");
+        msg.className = "ga-muted";
+        msg.style.fontSize = "12px";
+        msg.textContent = "No rounds for this country in the current selection.";
+        chartsHost.appendChild(msg);
+        return;
+      }
+      setBusy(55, "Computing per-round regions...");
+      const derived = [];
+      let lastStep = -1;
+      for (let i = 0; i < countryRows.length; i++) {
+        const r = countryRows[i];
+        const cached = loaded.computed.get(r);
+        let t = cached?.t ?? null;
+        let g = cached?.g ?? null;
+        if (!cached) {
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+          g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          loaded.computed.set(r, { t, g });
+        }
+        derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
+        const pctRaw = 55 + i / Math.max(1, countryRows.length) * 35;
+        const step = Math.floor(pctRaw / 5) * 5;
+        if (step !== lastStep) {
+          lastStep = step;
+          setBusy(step, `Computing per-round regions... (${i}/${countryRows.length})`);
+          await new Promise((res) => setTimeout(res, 0));
+        }
+      }
+      setBusy(92, "Rendering charts...");
+      const accuracyTitle = doc.createElement("div");
+      accuracyTitle.style.fontWeight = "600";
+      accuracyTitle.textContent = `${active.label} accuracy`;
+      chartsHost.appendChild(accuracyTitle);
+      const accuracyBox = doc.createElement("div");
+      accuracyBox.className = "ga-statlist-box";
+      chartsHost.appendChild(accuracyBox);
+      const overall = (() => {
+        let n = 0, hit = 0;
+        for (const r of derived) {
+          const tt = typeof r.adminTrueUnit === "string" ? r.adminTrueUnit.trim() : "";
+          const gg = typeof r.adminGuessUnit === "string" ? r.adminGuessUnit.trim() : "";
+          if (!tt || !gg) continue;
+          n++;
+          if (tt === gg) hit++;
+        }
+        return n ? hit / n : 0;
+      })();
+      const line = doc.createElement("div");
+      line.className = "ga-statrow";
+      const left = doc.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = "Admin hit rate (overall)";
+      const right = doc.createElement("div");
+      right.className = "ga-statrow-value";
+      right.textContent = `${(overall * 100).toFixed(1)}%`;
+      line.appendChild(left);
+      line.appendChild(right);
+      accuracyBox.appendChild(line);
+      const measures = [
+        "admin_unit_hit_rate",
+        "admin_unit_hit_count",
+        "admin_unit_miss_count",
+        "rounds_count",
+        "avg_score",
+        "avg_score_hit_only",
+        "avg_distance_km",
+        "avg_guess_duration",
+        "round_score_per_second",
+        "hit_rate",
+        "fivek_rate",
+        "near_perfect_rate",
+        "low_score_rate",
+        "throw_rate",
+        "damage_dealt_avg",
+        "damage_taken_avg",
+        "damage_net_avg"
+      ];
+      const views = [
+        {
+          id: "map",
+          label: "Map",
+          type: "region_map",
+          grain: "round",
+          spec: {
+            dimension: "admin_true_unit",
+            geojsonUrl: active.geojsonUrl,
+            featureKey: loaded.level.featureKey,
+            fitToGeoJson: true,
+            measures,
+            activeMeasure: "admin_unit_hit_rate",
+            mapHeight: 420,
+            actions: {
+              click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+            }
+          }
+        },
+        {
+          id: "bar",
+          label: "Bar",
+          type: "breakdown",
+          grain: "round",
+          spec: {
+            dimension: "admin_true_unit",
+            measures,
+            activeMeasure: "rounds_count",
+            sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
+            activeSort: { mode: "desc" },
+            limit: 15,
+            extendable: true,
+            actions: {
+              click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+            }
+          }
+        }
+      ];
+      const mvWidget = {
+        widgetId: `${widget.widgetId}__${countryIso2}__${active.id}`,
+        type: "multi_view",
+        title: `${active.label}`,
+        grain: "round",
+        spec: { activeView: "map", views }
+      };
+      const mvEl = await renderMultiViewWidget({
+        semantic,
+        widget: mvWidget,
+        overlay,
+        datasets: { round: derived },
+        renderChild: async (child) => {
+          if (child.type === "breakdown") return await renderBreakdownWidget(semantic, child, overlay, derived);
+          if (child.type === "region_map") return await renderRegionMetricMapWidget(semantic, child, overlay, derived);
+          const ph = doc.createElement("div");
+          ph.className = "ga-widget ga-placeholder";
+          ph.textContent = `Widget type '${child.type}' not implemented here`;
+          return ph;
+        }
+      });
+      chartsHost.appendChild(mvEl);
+      setBusy(100, "Done.");
+    };
+    const doLoad = async (lvl, forceReload) => {
+      const key = levelKey(lvl);
+      if (forceReload) LEVEL_CACHE.delete(key);
+      setBusy(8, `Loading ${lvl.id}\u2026`);
+      chartsHost.innerHTML = "";
+      renderLevelsList();
+      try {
+        await loadLevel(
+          lvl,
+          (p) => setBusy(p, status.textContent || ""),
+          (s) => setBusy(parseFloat(progressFill.style.width) || 10, s)
+        );
+        active = { ...lvl, featureKey: LEVEL_CACHE.get(key)?.level.featureKey ?? lvl.featureKey };
+        setBusy(45, "Loaded boundaries.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Admin level load failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+        return;
+      }
+      renderLevelsList();
+      await renderCharts();
+    };
+    const refreshLevels = async () => {
+      setBusy(5, "Loading available admin levels...");
+      try {
+        levels2 = await listAvailableLevels(countryIso2);
+        active = null;
+        await refreshSavedMeta();
+        prefetchSizeHints();
+        renderLevelsList();
+        setBusy(0, levels2.length ? "Ready." : "No admin levels found for this country.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Admin levels load failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      }
+    };
+    await refreshLevels();
+    await renderCharts();
+    return el2;
+  }
+
   // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
@@ -48539,6 +50670,7 @@ ${describeError(err2)}` : message;
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "admin_enrichment") return await renderAdminEnrichmentWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "admin_analysis") return await renderAdminAnalysisWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
@@ -49356,9 +51488,17 @@ ${describeError(err2)}` : message;
       }
       if (loadingProgressText) {
         const stepTxt = loadingStepTotal > 0 ? `Step ${Math.max(1, loadingStepCurrent)}/${loadingStepTotal}` : "";
-        const barTxt = cur !== void 0 && tot !== void 0 ? renderAsciiBar(cur, tot) : "";
-        const main = [stepTxt, phase].filter(Boolean).join(" \u2022 ");
-        loadingProgressText.textContent = [main, barTxt].filter(Boolean).join("\n");
+        const countTxt = cur !== void 0 && tot !== void 0 ? `${cur}/${tot}` : "";
+        const main = [stepTxt, countTxt].filter(Boolean).join(" \u2022 ");
+        loadingProgressText.textContent = main;
+      }
+      const win = doc.defaultView;
+      if (phase && win) {
+        if (typeof win.__gaLastLoadingPhase !== "string") win.__gaLastLoadingPhase = "";
+        if (win.__gaLastLoadingPhase !== phase) {
+          win.__gaLastLoadingPhase = phase;
+          analysisConsole.info(phase);
+        }
       }
     };
     const showLoading = async (subtitle, opts2) => {

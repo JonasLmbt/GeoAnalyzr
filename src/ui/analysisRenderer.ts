@@ -100,9 +100,19 @@ export async function renderAnalysisApp(opts: {
     }
     if (loadingProgressText) {
       const stepTxt = loadingStepTotal > 0 ? `Step ${Math.max(1, loadingStepCurrent)}/${loadingStepTotal}` : "";
-      const barTxt = cur !== undefined && tot !== undefined ? renderAsciiBar(cur, tot) : "";
-      const main = [stepTxt, phase].filter(Boolean).join(" • ");
-      loadingProgressText.textContent = [main, barTxt].filter(Boolean).join("\n");
+      const countTxt = cur !== undefined && tot !== undefined ? `${cur}/${tot}` : "";
+      const main = [stepTxt, countTxt].filter(Boolean).join(" • ");
+      loadingProgressText.textContent = main;
+    }
+
+    // Log phase transitions into the loading console (but don't spam every poll tick).
+    const win = doc.defaultView as any;
+    if (phase && win) {
+      if (typeof win.__gaLastLoadingPhase !== "string") win.__gaLastLoadingPhase = "";
+      if (win.__gaLastLoadingPhase !== phase) {
+        win.__gaLastLoadingPhase = phase;
+        analysisConsole.info(phase);
+      }
     }
   };
 

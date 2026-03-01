@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.36
+// @version      2.3.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -49804,6 +49804,20 @@ ${describeError(err2)}` : message;
     return el2;
   }
 
+  // src/db/adminCacheDb.ts
+  var AdminCacheDB = class extends import_wrapper_default {
+    geojson;
+    labels;
+    constructor() {
+      super("gg_analyzer_admin_cache");
+      this.version(1).stores({
+        geojson: "levelKey, iso3, iso2, adm, savedAt",
+        labels: "id, levelKey, gameId, roundNumber, updatedAt"
+      });
+    }
+  };
+  var adminCacheDb = new AdminCacheDB();
+
   // src/ui/widgets/adminAnalysisWidget.ts
   var LEVEL_CACHE = /* @__PURE__ */ new Map();
   var ISO3_CACHE = /* @__PURE__ */ new Map();
@@ -50005,8 +50019,9 @@ ${describeError(err2)}` : message;
     if (cached) return cached;
     onStatus(`Downloading boundaries (${level.id})...`);
     onPct(10);
-    const geojson = await loadGeoJson(level.geojsonUrl);
-    const featureKey = pickFeatureKey(geojson);
+    const saved = await adminCacheDb.geojson.get(key);
+    const geojson = saved?.geojson ?? await loadGeoJson(level.geojsonUrl);
+    const featureKey = saved?.featureKey ?? pickFeatureKey(geojson);
     onStatus("Indexing features...");
     onPct(25);
     const feats = [];
@@ -50094,6 +50109,216 @@ ${describeError(err2)}` : message;
     let active = null;
     const levelKey = (lvl) => `${lvl.iso3}:${lvl.id}`;
     const isLoaded = (lvl) => LEVEL_CACHE.has(levelKey(lvl));
+    const savedMetaByKey = /* @__PURE__ */ new Map();
+    const missingByKey = /* @__PURE__ */ new Map();
+    const sizeHintKbByKey = /* @__PURE__ */ new Map();
+    let persistBusyKey = null;
+    const makeRoundCacheId = (k, r) => {
+      const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
+      const rn = typeof r?.roundNumber === "number" ? r.roundNumber : typeof r?.round_number === "number" ? r.round_number : null;
+      if (!gid || !Number.isFinite(rn)) return null;
+      return `${k}:${gid}:${rn}`;
+    };
+    const getCountryRows = () => rows.filter((r) => asIso22(r?.trueCountry ?? r?.true_country) === countryIso2);
+    const refreshSavedMeta = async () => {
+      savedMetaByKey.clear();
+      missingByKey.clear();
+      const iso3 = levels2[0]?.iso3;
+      if (!iso3) return;
+      const saved = await adminCacheDb.geojson.where("iso3").equals(iso3).toArray();
+      for (const s of saved) {
+        if (!s || typeof s.levelKey !== "string") continue;
+        savedMetaByKey.set(s.levelKey, { byteSize: Number(s.byteSize) || 0, savedAt: Number(s.savedAt) || 0 });
+      }
+      const countryRows = getCountryRows();
+      await Promise.all(
+        levels2.map(async (lvl) => {
+          const k = levelKey(lvl);
+          if (!savedMetaByKey.has(k)) return;
+          const ids = countryRows.map((r) => makeRoundCacheId(k, r)).filter(Boolean);
+          if (!ids.length) {
+            missingByKey.set(k, 0);
+            return;
+          }
+          const got = await adminCacheDb.labels.bulkGet(ids);
+          let missing = 0;
+          for (const x of got) if (!x) missing++;
+          missingByKey.set(k, missing);
+        })
+      );
+    };
+    const prefetchSizeHints = () => {
+      const gm = getGmXmlhttpRequest();
+      if (typeof gm !== "function") return;
+      for (const lvl of levels2) {
+        const k = levelKey(lvl);
+        if (sizeHintKbByKey.has(k)) continue;
+        gm({
+          method: "HEAD",
+          url: lvl.geojsonUrl,
+          headers: { Accept: "application/json" },
+          onload: (res) => {
+            const raw = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+            const m = raw.match(/content-length:\\s*(\\d+)/i);
+            if (!m) return;
+            const bytes = Number(m[1]);
+            if (!Number.isFinite(bytes) || bytes <= 0) return;
+            sizeHintKbByKey.set(k, Math.max(1, Math.round(bytes / 1024)));
+            renderLevelsList();
+          }
+        });
+      }
+    };
+    const saveLevel = async (lvl) => {
+      const k = levelKey(lvl);
+      persistBusyKey = k;
+      renderLevelsList();
+      chartsHost.innerHTML = "";
+      setBusy(5, `Saving ${lvl.id}...`);
+      try {
+        const loaded = await loadLevel(
+          lvl,
+          (p) => setBusy(p, status.textContent || ""),
+          (s) => setBusy(parseFloat(progressFill.style.width) || 10, s)
+        );
+        setBusy(30, "Writing boundaries to cache...");
+        const geojsonText = JSON.stringify(loaded.geojson);
+        const byteSize = geojsonText.length;
+        await adminCacheDb.geojson.put({
+          levelKey: k,
+          iso2: lvl.iso2,
+          iso3: lvl.iso3,
+          adm: lvl.id,
+          featureKey: loaded.level.featureKey,
+          geojson: loaded.geojson,
+          byteSize,
+          savedAt: Date.now()
+        });
+        const countryRows = getCountryRows();
+        setBusy(40, `Computing cached labels... (0/${countryRows.length})`);
+        const labelRows = [];
+        let lastStep = -1;
+        for (let i = 0; i < countryRows.length; i++) {
+          const r = countryRows[i];
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+          const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          const id = makeRoundCacheId(k, r);
+          if (id) {
+            labelRows.push({
+              id,
+              levelKey: k,
+              gameId: String(r.gameId ?? r.game_id ?? ""),
+              roundNumber: Number(r.roundNumber ?? r.round_number ?? 0),
+              trueUnit: t ?? "",
+              guessUnit: g ?? "",
+              updatedAt: Date.now()
+            });
+          }
+          const pctRaw = 40 + i / Math.max(1, countryRows.length) * 55;
+          const step = Math.floor(pctRaw / 5) * 5;
+          if (step !== lastStep) {
+            lastStep = step;
+            setBusy(step, `Computing cached labels... (${i}/${countryRows.length})`);
+            await new Promise((res) => setTimeout(res, 0));
+          }
+        }
+        setBusy(96, "Writing labels...");
+        if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows);
+        setBusy(100, "Saved.");
+        await refreshSavedMeta();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Save failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      } finally {
+        persistBusyKey = null;
+        renderLevelsList();
+      }
+    };
+    const refreshSavedLabels = async (lvl) => {
+      const k = levelKey(lvl);
+      persistBusyKey = k;
+      renderLevelsList();
+      chartsHost.innerHTML = "";
+      setBusy(5, `Refreshing ${lvl.id}...`);
+      try {
+        const loaded = await loadLevel(
+          lvl,
+          (p) => setBusy(p, status.textContent || ""),
+          (s) => setBusy(parseFloat(progressFill.style.width) || 10, s)
+        );
+        const countryRows = getCountryRows();
+        const ids = countryRows.map((r) => makeRoundCacheId(k, r)).filter(Boolean);
+        const existing = ids.length ? await adminCacheDb.labels.bulkGet(ids) : [];
+        const missingRows = [];
+        for (let i = 0; i < ids.length; i++) if (!existing[i]) missingRows.push(countryRows[i]);
+        setBusy(35, `Computing new labels... (0/${missingRows.length})`);
+        const labelRows = [];
+        let lastStep = -1;
+        for (let i = 0; i < missingRows.length; i++) {
+          const r = missingRows[i];
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+          const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          const id = makeRoundCacheId(k, r);
+          if (id) {
+            labelRows.push({
+              id,
+              levelKey: k,
+              gameId: String(r.gameId ?? r.game_id ?? ""),
+              roundNumber: Number(r.roundNumber ?? r.round_number ?? 0),
+              trueUnit: t ?? "",
+              guessUnit: g ?? "",
+              updatedAt: Date.now()
+            });
+          }
+          const pctRaw = 35 + i / Math.max(1, missingRows.length) * 60;
+          const step = Math.floor(pctRaw / 5) * 5;
+          if (step !== lastStep) {
+            lastStep = step;
+            setBusy(step, `Computing new labels... (${i}/${missingRows.length})`);
+            await new Promise((res) => setTimeout(res, 0));
+          }
+        }
+        setBusy(97, "Writing labels...");
+        if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows);
+        setBusy(100, "Refreshed.");
+        await refreshSavedMeta();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Refresh failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      } finally {
+        persistBusyKey = null;
+        renderLevelsList();
+      }
+    };
+    const deleteSaved = async (lvl) => {
+      const k = levelKey(lvl);
+      persistBusyKey = k;
+      renderLevelsList();
+      setBusy(5, `Deleting ${lvl.id}...`);
+      try {
+        await adminCacheDb.transaction("rw", adminCacheDb.geojson, adminCacheDb.labels, async () => {
+          await adminCacheDb.geojson.delete(k);
+          await adminCacheDb.labels.where("levelKey").equals(k).delete();
+        });
+        await refreshSavedMeta();
+        setBusy(0, "Deleted.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.error(`Delete failed: ${msg}`);
+        setBusy(0, `Error: ${msg}`);
+      } finally {
+        persistBusyKey = null;
+        renderLevelsList();
+      }
+    };
     const renderLevelsList = () => {
       levelsBox.innerHTML = "";
       if (!levels2.length) {
@@ -50116,6 +50341,38 @@ ${describeError(err2)}` : message;
         right.style.display = "flex";
         right.style.gap = "8px";
         right.style.alignItems = "center";
+        const k = levelKey(lvl);
+        const saved = savedMetaByKey.get(k);
+        const missing = missingByKey.get(k);
+        const persistBtn = doc.createElement("button");
+        persistBtn.className = "ga-filter-btn";
+        persistBtn.disabled = persistBusyKey !== null;
+        if (!saved) {
+          const kb = sizeHintKbByKey.get(k);
+          persistBtn.textContent = typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+          persistBtn.addEventListener("click", () => void saveLevel(lvl));
+        } else {
+          if (typeof missing === "number" && missing > 0) {
+            persistBtn.textContent = `Refresh (${missing})`;
+            persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+          } else {
+            const kb = Math.max(1, Math.round(saved.byteSize / 1024));
+            persistBtn.textContent = `Saved (${kb} KB)`;
+            persistBtn.disabled = true;
+          }
+        }
+        right.appendChild(persistBtn);
+        if (saved) {
+          const btnDelete = doc.createElement("button");
+          btnDelete.className = "ga-filter-btn";
+          btnDelete.textContent = "\u{1F5D1}";
+          btnDelete.title = "Delete saved boundaries + labels";
+          btnDelete.disabled = persistBusyKey !== null;
+          btnDelete.style.borderColor = "rgba(255, 90, 90, 0.75)";
+          btnDelete.style.color = "rgba(255, 120, 120, 0.95)";
+          btnDelete.addEventListener("click", () => void deleteSaved(lvl));
+          right.appendChild(btnDelete);
+        }
         const loaded = isLoaded(lvl);
         if (loaded) {
           const btnView = doc.createElement("button");
@@ -50130,7 +50387,7 @@ ${describeError(err2)}` : message;
           right.appendChild(btnView);
           const btnRefresh = doc.createElement("button");
           btnRefresh.className = "ga-filter-btn";
-          btnRefresh.textContent = "Refresh";
+          btnRefresh.textContent = "Reload";
           btnRefresh.addEventListener("click", () => void doLoad(lvl, true));
           right.appendChild(btnRefresh);
           const btnUnload = doc.createElement("button");
@@ -50174,6 +50431,7 @@ ${describeError(err2)}` : message;
       }
       setBusy(55, "Computing per-round regions...");
       const derived = [];
+      let lastStep = -1;
       for (let i = 0; i < countryRows.length; i++) {
         const r = countryRows[i];
         const cached = loaded.computed.get(r);
@@ -50188,9 +50446,11 @@ ${describeError(err2)}` : message;
           loaded.computed.set(r, { t, g });
         }
         derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
-        if (i % 50 === 0) {
-          const pct = 55 + i / Math.max(1, countryRows.length) * 35;
-          setBusy(pct, `Computing per-round regions... (${i}/${countryRows.length})`);
+        const pctRaw = 55 + i / Math.max(1, countryRows.length) * 35;
+        const step = Math.floor(pctRaw / 5) * 5;
+        if (step !== lastStep) {
+          lastStep = step;
+          setBusy(step, `Computing per-round regions... (${i}/${countryRows.length})`);
           await new Promise((res) => setTimeout(res, 0));
         }
       }
@@ -50333,6 +50593,8 @@ ${describeError(err2)}` : message;
       try {
         levels2 = await listAvailableLevels(countryIso2);
         active = null;
+        await refreshSavedMeta();
+        prefetchSizeHints();
         renderLevelsList();
         setBusy(0, levels2.length ? "Ready." : "No admin levels found for this country.");
       } catch (e) {
@@ -51226,9 +51488,17 @@ ${describeError(err2)}` : message;
       }
       if (loadingProgressText) {
         const stepTxt = loadingStepTotal > 0 ? `Step ${Math.max(1, loadingStepCurrent)}/${loadingStepTotal}` : "";
-        const barTxt = cur !== void 0 && tot !== void 0 ? renderAsciiBar(cur, tot) : "";
-        const main = [stepTxt, phase].filter(Boolean).join(" \u2022 ");
-        loadingProgressText.textContent = [main, barTxt].filter(Boolean).join("\n");
+        const countTxt = cur !== void 0 && tot !== void 0 ? `${cur}/${tot}` : "";
+        const main = [stepTxt, countTxt].filter(Boolean).join(" \u2022 ");
+        loadingProgressText.textContent = main;
+      }
+      const win = doc.defaultView;
+      if (phase && win) {
+        if (typeof win.__gaLastLoadingPhase !== "string") win.__gaLastLoadingPhase = "";
+        if (win.__gaLastLoadingPhase !== phase) {
+          win.__gaLastLoadingPhase = phase;
+          analysisConsole.info(phase);
+        }
       }
     };
     const showLoading = async (subtitle, opts2) => {
