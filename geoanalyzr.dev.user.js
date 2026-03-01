@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.3-dev
+// @version      2.3.4-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -6826,7 +6826,7 @@ ${shapes}`.trim();
     style.textContent = `
     .ga-ui-icon {
       position: fixed;
-      right: 16px;
+      left: 16px;
       bottom: 16px;
       z-index: 999999;
       width: 44px;
@@ -6845,7 +6845,7 @@ ${shapes}`.trim();
 
     .ga-ui-panel {
       position: fixed;
-      right: 16px;
+      left: 16px;
       bottom: 68px;
       z-index: 999999;
       width: 360px;
@@ -10667,26 +10667,35 @@ ${shapes}`.trim();
     try {
       const counts = /* @__PURE__ */ new Map();
       setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: outRows.length });
+      const progressStepRepeat = Math.max(10, Math.floor(outRows.length / 400));
+      let nextRepeatAt = progressStepRepeat;
       for (let i = 0; i < outRows.length; i++) {
         if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
         const r = outRows[i];
         const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
         const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
         if (lat === null || lng === null) continue;
-        const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        const key = `${Math.round(lat * 1e6)},${Math.round(lng * 1e6)}`;
         r.trueLocationKey = key;
         counts.set(key, (counts.get(key) ?? 0) + 1);
-        if (i > 0 && i % 5e3 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+        if (i >= nextRepeatAt) {
+          setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+          nextRepeatAt = Math.min(outRows.length, nextRepeatAt + progressStepRepeat);
+        }
       }
       setLoadingProgress({ phase: "Indexing repeat locations...", current: outRows.length, total: outRows.length });
       setLoadingProgress({ phase: "Marking repeat locations...", current: 0, total: outRows.length });
+      let nextMarkAt = progressStepRepeat;
       for (let i = 0; i < outRows.length; i++) {
         if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
         const r = outRows[i];
         const key = typeof r?.trueLocationKey === "string" ? r.trueLocationKey : "";
         if (!key) continue;
         r.trueLocationRepeat = (counts.get(key) ?? 0) > 1;
-        if (i > 0 && i % 5e3 === 0) setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+        if (i >= nextMarkAt) {
+          setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+          nextMarkAt = Math.min(outRows.length, nextMarkAt + progressStepRepeat);
+        }
       }
       setLoadingProgress({ phase: "Marking repeat locations...", current: outRows.length, total: outRows.length });
     } catch {

@@ -728,27 +728,37 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   try {
     const counts = new Map<string, number>();
     setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: outRows.length });
+    const progressStepRepeat = Math.max(10, Math.floor(outRows.length / 400)); // frequent, but bounded updates
+    let nextRepeatAt = progressStepRepeat;
     for (let i = 0; i < outRows.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
       const r: any = outRows[i];
       const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
       const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
       if (lat === null || lng === null) continue;
-      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      // Use integer microdegrees to avoid expensive toFixed() on large datasets.
+      const key = `${Math.round(lat * 1e6)},${Math.round(lng * 1e6)}`;
       r.trueLocationKey = key;
       counts.set(key, (counts.get(key) ?? 0) + 1);
-      if (i > 0 && i % 5000 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+      if (i >= nextRepeatAt) {
+        setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+        nextRepeatAt = Math.min(outRows.length, nextRepeatAt + progressStepRepeat);
+      }
     }
     setLoadingProgress({ phase: "Indexing repeat locations...", current: outRows.length, total: outRows.length });
 
     setLoadingProgress({ phase: "Marking repeat locations...", current: 0, total: outRows.length });
+    let nextMarkAt = progressStepRepeat;
     for (let i = 0; i < outRows.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
       const r: any = outRows[i];
       const key = typeof r?.trueLocationKey === "string" ? r.trueLocationKey : "";
       if (!key) continue;
       r.trueLocationRepeat = (counts.get(key) ?? 0) > 1;
-      if (i > 0 && i % 5000 === 0) setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+      if (i >= nextMarkAt) {
+        setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+        nextMarkAt = Math.min(outRows.length, nextMarkAt + progressStepRepeat);
+      }
     }
     setLoadingProgress({ phase: "Marking repeat locations...", current: outRows.length, total: outRows.length });
   } catch {
