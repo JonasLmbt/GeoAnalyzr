@@ -51,13 +51,41 @@ export async function isAdminEnrichmentEnabledForCountry(countryIso2: string): P
 
   try {
     const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
-    const enabled = (meta?.value as any)?.enabled === true;
+    const v = (meta?.value as any) ?? {};
+    const enabled =
+      v.enabled === true ||
+      (v.levels && typeof v.levels === "object" && Object.values(v.levels).some((x: any) => x && x.enabled === true));
     ADMIN_ENABLED_CACHE.set(iso2, { enabled, fetchedAt: Date.now() });
     return enabled;
   } catch {
     ADMIN_ENABLED_CACHE.set(iso2, { enabled: false, fetchedAt: Date.now() });
     return false;
   }
+}
+
+export async function isAdminEnrichmentEnabledForDimension(dimId: string): Promise<boolean> {
+  const iso2 = getAdminEnrichmentRequiredCountry(dimId);
+  if (!iso2) return true;
+  const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
+  const v = (meta?.value as any) ?? {};
+  const anyEnabled =
+    v.enabled === true ||
+    (v.levels && typeof v.levels === "object" && Object.values(v.levels).some((x: any) => x && x.enabled === true));
+  if (!anyEnabled) return false;
+
+  // New format: gate by enabled level that owns the dim id.
+  if (v.levels && typeof v.levels === "object") {
+    for (const lvl of Object.values(v.levels) as any[]) {
+      const enabled = lvl?.enabled === true;
+      const ids = Array.isArray(lvl?.dimIds) ? lvl.dimIds : [];
+      if (enabled && ids.includes(dimId)) return true;
+    }
+    return false;
+  }
+
+  // Legacy format: simple per-country enabled toggle + done list.
+  const done: string[] = Array.isArray(v.dimIdsDone) ? v.dimIdsDone : Array.isArray(v.dimIds) ? v.dimIds : [];
+  return done.includes(dimId);
 }
 
 function isFiniteNum(v: unknown): v is number {
@@ -88,7 +116,7 @@ export async function maybeEnrichRoundRowsForDimension(dimId: string, rows: any[
   const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
 
   // By default, admin-level enrichment is opt-in (triggered from the Country Insight "Start detailed analysis" widget).
-  if (requiredCountry && !(await isAdminEnrichmentEnabledForCountry(requiredCountry))) return;
+  if (requiredCountry && !(await isAdminEnrichmentEnabledForDimension(dimId))) return;
 
   const guessLatLngOf = (r: any): { lat: number; lng: number } | null => {
     const lat =

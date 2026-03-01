@@ -8,7 +8,7 @@ import { invalidateRoundsCache } from "../../engine/queryEngine";
 type EnrichPlan = {
   countryIso2: string;
   label: string;
-  dimIds: string[];
+  levels: { id: string; label: string; dimIds: string[] }[];
 };
 
 function asIso2(v: unknown): string {
@@ -19,12 +19,48 @@ function asIso2(v: unknown): string {
 export function getAdminEnrichmentPlan(countryIso2: string): EnrichPlan | null {
   const iso2 = asIso2(countryIso2);
   if (!iso2) return null;
-  if (iso2 === "de") return { countryIso2: iso2, label: "Germany (Bundesländer + Landkreise)", dimIds: ["true_state", "guess_state", "true_district", "guess_district"] };
-  if (iso2 === "us") return { countryIso2: iso2, label: "United States (States)", dimIds: ["true_us_state", "guess_us_state"] };
-  if (iso2 === "ca") return { countryIso2: iso2, label: "Canada (Provinces)", dimIds: ["true_ca_province", "guess_ca_province"] };
-  if (iso2 === "id") return { countryIso2: iso2, label: "Indonesia (Provinces + Kabupaten)", dimIds: ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"] };
-  if (iso2 === "ph") return { countryIso2: iso2, label: "Philippines (Provinces)", dimIds: ["true_ph_province", "guess_ph_province"] };
-  if (iso2 === "vn") return { countryIso2: iso2, label: "Vietnam (Provinces)", dimIds: ["true_vn_province", "guess_vn_province"] };
+  if (iso2 === "de")
+    return {
+      countryIso2: iso2,
+      label: "Germany (Bundesländer + Landkreise)",
+      levels: [
+        { id: "adm1", label: "States (ADM1)", dimIds: ["true_state", "guess_state"] },
+        { id: "adm2", label: "Districts (ADM2)", dimIds: ["true_district", "guess_district"] }
+      ]
+    };
+  if (iso2 === "us")
+    return {
+      countryIso2: iso2,
+      label: "United States (States)",
+      levels: [{ id: "adm1", label: "States (ADM1)", dimIds: ["true_us_state", "guess_us_state"] }]
+    };
+  if (iso2 === "ca")
+    return {
+      countryIso2: iso2,
+      label: "Canada (Provinces)",
+      levels: [{ id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_ca_province", "guess_ca_province"] }]
+    };
+  if (iso2 === "id")
+    return {
+      countryIso2: iso2,
+      label: "Indonesia (Provinces + Kabupaten)",
+      levels: [
+        { id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_id_province", "guess_id_province"] },
+        { id: "adm2", label: "Kabupaten (ADM2)", dimIds: ["true_id_kabupaten", "guess_id_kabupaten"] }
+      ]
+    };
+  if (iso2 === "ph")
+    return {
+      countryIso2: iso2,
+      label: "Philippines (Provinces)",
+      levels: [{ id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_ph_province", "guess_ph_province"] }]
+    };
+  if (iso2 === "vn")
+    return {
+      countryIso2: iso2,
+      label: "Vietnam (Provinces)",
+      levels: [{ id: "adm1", label: "Provinces (ADM1)", dimIds: ["true_vn_province", "guess_vn_province"] }]
+    };
   return null;
 }
 
@@ -35,6 +71,7 @@ function metaKeyForCountry(iso2: string): string {
 export async function runAdminEnrichment(
   countryIso2: string,
   opts?: {
+    levelId?: string;
     onStatus?: (msg: string) => void;
     onPct?: (pct: number) => void;
   }
@@ -49,7 +86,23 @@ export async function runAdminEnrichment(
     opts?.onStatus?.(msg);
   };
 
-  await db.meta.put({ key: metaKeyForCountry(iso2), value: { enabled: true }, updatedAt: Date.now() });
+  const wantedLevelId = typeof opts?.levelId === "string" && opts.levelId.trim() ? opts.levelId.trim() : "all";
+  const levels =
+    wantedLevelId === "all" ? plan.levels : plan.levels.filter((l) => l.id === wantedLevelId || l.label === wantedLevelId);
+  if (!levels.length) throw new Error(`Unknown admin level '${wantedLevelId}' for ${iso2.toUpperCase()}.`);
+  const dimIds = Array.from(new Set(levels.flatMap((l) => l.dimIds)));
+
+  const existing = await db.meta.get(metaKeyForCountry(iso2));
+  const existingValue = (existing?.value as any) ?? {};
+  const nextValue: any = {
+    ...existingValue,
+    enabled: true,
+    levels: { ...(existingValue.levels ?? {}) }
+  };
+  for (const lvl of levels) {
+    nextValue.levels[lvl.id] = { ...(nextValue.levels[lvl.id] ?? {}), enabled: true, inProgress: true, startedAt: Date.now(), dimIds: lvl.dimIds };
+  }
+  await db.meta.put({ key: metaKeyForCountry(iso2), value: nextValue, updatedAt: Date.now() });
   invalidateAdminEnrichmentEnabledCache(iso2);
 
   analysisConsole.info(`Admin enrichment: loading rounds for ${iso2.toUpperCase()}...`);
@@ -62,11 +115,11 @@ export async function runAdminEnrichment(
     return;
   }
 
-  analysisConsole.info(`Admin enrichment: computing ${plan.dimIds.length} dimensions for ${total} rounds...`);
-  for (let i = 0; i < plan.dimIds.length; i++) {
-    const dimId = plan.dimIds[i];
-    const pct = 5 + (i / Math.max(1, plan.dimIds.length)) * 70;
-    set(pct, `Computing ${dimId}... (${i + 1}/${plan.dimIds.length})`);
+  analysisConsole.info(`Admin enrichment: computing ${dimIds.length} dimensions for ${total} rounds...`);
+  for (let i = 0; i < dimIds.length; i++) {
+    const dimId = dimIds[i];
+    const pct = 5 + (i / Math.max(1, dimIds.length)) * 70;
+    set(pct, `Computing ${dimId}... (${i + 1}/${dimIds.length})`);
     await maybeEnrichRoundRowsForDimension(dimId, rows as any[]);
   }
 
@@ -81,11 +134,20 @@ export async function runAdminEnrichment(
     if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise<void>((r) => setTimeout(r, 0));
   }
 
-  await db.meta.put({
-    key: metaKeyForCountry(iso2),
-    value: { enabled: true, doneAt: Date.now(), dimIds: plan.dimIds, rounds: total },
-    updatedAt: Date.now()
-  });
+  const prev = await db.meta.get(metaKeyForCountry(iso2));
+  const prevValue = (prev?.value as any) ?? {};
+  const finalValue: any = {
+    ...prevValue,
+    enabled: true,
+    doneAt: Date.now(),
+    rounds: total,
+    dimIdsDone: Array.from(new Set([...(prevValue.dimIdsDone ?? []), ...dimIds])),
+    levels: { ...(prevValue.levels ?? {}) }
+  };
+  for (const lvl of levels) {
+    finalValue.levels[lvl.id] = { ...(finalValue.levels[lvl.id] ?? {}), enabled: true, inProgress: false, doneAt: Date.now(), dimIds: lvl.dimIds };
+  }
+  await db.meta.put({ key: metaKeyForCountry(iso2), value: finalValue, updatedAt: Date.now() });
   invalidateAdminEnrichmentEnabledCache(iso2);
 
   invalidateRoundsCache();

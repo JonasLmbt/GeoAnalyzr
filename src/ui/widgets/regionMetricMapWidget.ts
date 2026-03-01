@@ -8,10 +8,9 @@ import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
 import {
   getAdminEnrichmentRequiredCountry,
-  isAdminEnrichmentEnabledForCountry,
+  isAdminEnrichmentEnabledForDimension,
   maybeEnrichRoundRowsForDimension,
 } from "../../engine/regionEnrichment";
-import { getAdminEnrichmentPlan, runAdminEnrichment } from "./adminEnrichmentWidget";
 import { DrilldownOverlay } from "../drilldownOverlay";
 import { loadGeoJson } from "../../geo/geoJsonFetch";
 
@@ -252,7 +251,7 @@ export async function renderRegionMetricMapWidget(
   if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
 
   const requiredCountry = getAdminEnrichmentRequiredCountry(spec.dimension);
-  const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForCountry(requiredCountry) : true;
+  const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForDimension(spec.dimension) : true;
 
   if (grain === "round" && adminEnabled) {
     await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll as any[]);
@@ -298,44 +297,24 @@ export async function renderRegionMetricMapWidget(
   const renderMap = async (): Promise<void> => {
     mapHost.innerHTML = "";
 
-    if (requiredCountry && !adminEnabled) {
-      legend.innerHTML = "";
-      const wrapCta = doc.createElement("div");
-      wrapCta.style.display = "flex";
-      wrapCta.style.justifyContent = "center";
-      wrapCta.style.alignItems = "center";
-      wrapCta.style.height = "100%";
-      wrapCta.style.minHeight = "180px";
+      if (requiredCountry && !adminEnabled) {
+        legend.innerHTML = "";
+        const wrapCta = doc.createElement("div");
+        wrapCta.style.display = "flex";
+        wrapCta.style.justifyContent = "center";
+        wrapCta.style.alignItems = "center";
+        wrapCta.style.height = "100%";
+        wrapCta.style.minHeight = "180px";
 
-      const btn = doc.createElement("button");
-      btn.className = "ga-filter-btn";
-      btn.textContent = `Load detailed regions (${requiredCountry.toUpperCase()})`;
-      btn.title = "Download admin boundaries and compute province/state/district fields for this country.";
-
-      const plan = getAdminEnrichmentPlan(requiredCountry);
-      if (!plan) {
-        btn.disabled = true;
-        btn.title = "No detailed admin dataset configured for this country yet.";
+        const msg = doc.createElement("div");
+        msg.className = "ga-muted";
+        msg.style.fontSize = "12px";
+        msg.style.textAlign = "center";
+        msg.textContent = `Detailed admin analysis required for ${requiredCountry.toUpperCase()}. Open the “Detailed admin analysis” section to load this level.`;
+        wrapCta.appendChild(msg);
+        mapHost.appendChild(wrapCta);
+        return;
       }
-
-      btn.addEventListener("click", () => {
-        void (async () => {
-          btn.disabled = true;
-          const prevText = btn.textContent;
-          btn.textContent = "Loading...";
-          try {
-            await runAdminEnrichment(requiredCountry);
-          } finally {
-            btn.textContent = prevText || "Load detailed regions";
-            btn.disabled = false;
-          }
-        })();
-      });
-
-      wrapCta.appendChild(btn);
-      mapHost.appendChild(wrapCta);
-      return;
-    }
 
     const measDef = semantic.measures[activeMeasure];
     if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (region_map)`);

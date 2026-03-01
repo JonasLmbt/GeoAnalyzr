@@ -4,6 +4,7 @@ import type { Grain } from "../../config/semantic.types";
 import { db } from "../../db";
 import { analysisConsole } from "../consoleStore";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
+import { invalidateAdminEnrichmentEnabledCache } from "../../engine/regionEnrichment";
 import { renderMultiViewWidget } from "./multiViewWidget";
 import { renderBreakdownWidget } from "./breakdownWidget";
 import { renderRegionMetricMapWidget } from "./regionMetricMapWidget";
@@ -187,11 +188,32 @@ const ADMIN_SPECS_BY_COUNTRY: Record<string, { label: string; levels: AdminLevel
     }
   };
 
-async function isAdminEnabled(iso2: string): Promise<{ enabled: boolean; doneAt?: number }> {
+type AdminMetaValue = {
+  enabled?: boolean;
+  doneAt?: number;
+  rounds?: number;
+  dimIdsDone?: string[];
+  levels?: Record<
+    string,
+    {
+      enabled?: boolean;
+      inProgress?: boolean;
+      startedAt?: number;
+      doneAt?: number;
+      dimIds?: string[];
+    }
+  >;
+};
+
+async function getAdminMeta(iso2: string): Promise<AdminMetaValue> {
   const meta = await db.meta.get(metaKeyForCountry(iso2));
-  const enabled = (meta?.value as any)?.enabled === true;
-  const doneAt = (meta?.value as any)?.doneAt as number | undefined;
-  return { enabled, doneAt };
+  const v = (meta?.value as any) ?? {};
+  return v as AdminMetaValue;
+}
+
+async function putAdminMeta(iso2: string, value: AdminMetaValue): Promise<void> {
+  await db.meta.put({ key: metaKeyForCountry(iso2), value, updatedAt: Date.now() });
+  invalidateAdminEnrichmentEnabledCache(iso2);
 }
 
 export async function renderAdminAnalysisWidget(
@@ -271,21 +293,17 @@ export async function renderAdminAnalysisWidget(
   progress.appendChild(progressFill);
   body.appendChild(progress);
 
-  const actions = doc.createElement("div");
-  actions.style.display = "flex";
-  actions.style.gap = "10px";
-  actions.style.flexWrap = "wrap";
-  body.appendChild(actions);
+  const controls = doc.createElement("div");
+  controls.style.display = "flex";
+  controls.style.flexDirection = "column";
+  controls.style.gap = "10px";
+  body.appendChild(controls);
 
-  const btn = doc.createElement("button");
-  btn.className = "ga-filter-btn";
-  btn.textContent = "Start detailed analysis";
-  actions.appendChild(btn);
-
-  const clearBtn = doc.createElement("button");
-  clearBtn.className = "ga-filter-btn";
-  clearBtn.textContent = "Disable";
-  actions.appendChild(clearBtn);
+  const disableHint = doc.createElement("div");
+  disableHint.className = "ga-muted";
+  disableHint.style.fontSize = "12px";
+  disableHint.textContent = "Disable hides a level in this section and prevents admin dimensions from rendering. Computed fields stay in your database.";
+  body.appendChild(disableHint);
 
   const chartsHost = doc.createElement("div");
   chartsHost.style.display = "flex";
@@ -298,18 +316,36 @@ export async function renderAdminAnalysisWidget(
     status.textContent = msg;
   };
 
-  const refreshHeader = async (): Promise<{ enabled: boolean }> => {
-    const { enabled, doneAt } = await isAdminEnabled(countryIso2);
-    const doneTxt = typeof doneAt === "number" && Number.isFinite(doneAt) ? new Date(doneAt).toLocaleString() : "";
-    status.textContent = enabled ? `Enabled. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : "Disabled.";
-    btn.textContent = enabled ? "Re-run detailed analysis" : "Start detailed analysis";
-    return { enabled };
+  const isAnyLevelEnabled = (meta: AdminMetaValue): boolean => {
+    if (meta.enabled === true) return true;
+    const levels = meta.levels ?? {};
+    return Object.values(levels).some((x) => x && x.enabled === true);
+  };
+
+  const setMetaLevelEnabled = async (levelId: string, enabled: boolean): Promise<void> => {
+    const meta = await getAdminMeta(countryIso2);
+    const next: AdminMetaValue = { ...meta, levels: { ...(meta.levels ?? {}) } };
+    // If we're upgrading from legacy {enabled:true} without per-level state, assume all plan levels were enabled.
+    if (meta.enabled === true && (!meta.levels || Object.keys(meta.levels).length === 0)) {
+      for (const lvl of plan.levels) next.levels![lvl.id] = { enabled: true, dimIds: lvl.dimIds, doneAt: meta.doneAt };
+    }
+    next.levels![levelId] = { ...(next.levels![levelId] ?? {}), enabled, inProgress: false };
+    next.enabled = enabled || isAnyLevelEnabled(next);
+    await putAdminMeta(countryIso2, next);
+    (globalThis as any).__gaRequestRerender?.();
+  };
+
+  const refreshHeader = async (): Promise<void> => {
+    const meta = await getAdminMeta(countryIso2);
+    const any = isAnyLevelEnabled(meta);
+    const doneTxt = typeof meta.doneAt === "number" && Number.isFinite(meta.doneAt) ? new Date(meta.doneAt).toLocaleString() : "";
+    status.textContent = any ? `Enabled. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : "Disabled.";
   };
 
   const renderCharts = async (): Promise<void> => {
     chartsHost.innerHTML = "";
-    const { enabled } = await isAdminEnabled(countryIso2);
-    if (!enabled) return;
+    const meta = await getAdminMeta(countryIso2);
+    if (!isAnyLevelEnabled(meta)) return;
 
     const rows = Array.isArray(baseRows) ? baseRows : [];
     const countryRows = rows.filter((r: any) => asIso2(r?.trueCountry ?? r?.true_country) === countryIso2);
@@ -331,7 +367,20 @@ export async function renderAdminAnalysisWidget(
     accuracyBox.className = "ga-statlist-box";
     chartsHost.appendChild(accuracyBox);
 
+    const enabledIds = (() => {
+      const levels = meta.levels ?? {};
+      const enabled = Object.entries(levels)
+        .filter(([, v]) => v && v.enabled === true)
+        .map(([k]) => k);
+      if (enabled.length) return enabled;
+      // Legacy: country-wide toggle enabled => treat all known levels as enabled.
+      if (meta.enabled === true) return spec.levels.map((l) => l.id);
+      return [];
+    })();
+    const enabledLevelIds = new Set<string>(enabledIds);
+
     for (const lvl of spec.levels) {
+      if (!enabledLevelIds.has(lvl.id)) continue;
       const m = semantic.measures[lvl.hitMeasureId];
       const fn = m ? MEASURES_BY_GRAIN.round?.[m.formulaId] : undefined;
       const v = fn ? fn(countryRows as any[]) : NaN;
@@ -352,6 +401,7 @@ export async function renderAdminAnalysisWidget(
     }
 
     for (const lvl of spec.levels) {
+      if (!enabledLevelIds.has(lvl.id)) continue;
       const mvViews: any[] = [];
       mvViews.push({
         id: "bar",
@@ -419,59 +469,135 @@ export async function renderAdminAnalysisWidget(
     }
   };
 
-  btn.addEventListener("click", () => {
-    void (async () => {
-      btn.disabled = true;
-      clearBtn.disabled = true;
-      chartsHost.innerHTML = "";
-      try {
-        let pct = 0;
-        let msg = "";
-        const sync = () => setBusy(pct, msg);
-        await runAdminEnrichment(countryIso2, {
-          onPct: (p) => {
-            pct = p;
-            sync();
-          },
-          onStatus: (m) => {
-            msg = m;
-            sync();
-          }
-        });
-        setBusy(100, "Done. Refreshing view...");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        analysisConsole.error(`Admin enrichment failed: ${message}`);
-        setBusy(0, `Error: ${message}`);
-      } finally {
-        btn.disabled = false;
-        clearBtn.disabled = false;
-        await refreshHeader();
-        await renderCharts();
-      }
-    })();
-  });
+  const renderControls = async (): Promise<void> => {
+    controls.innerHTML = "";
+    const meta = await getAdminMeta(countryIso2);
 
-  clearBtn.addEventListener("click", () => {
-    void (async () => {
-      clearBtn.disabled = true;
-      btn.disabled = true;
-      try {
-        await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: false, doneAt: Date.now() }, updatedAt: Date.now() });
+    for (const lvlPlan of plan.levels) {
+      const row = doc.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "10px";
+      row.style.flexWrap = "wrap";
+
+      const left = doc.createElement("div");
+      left.style.minWidth = "240px";
+
+      const label = doc.createElement("div");
+      label.style.fontWeight = "600";
+      label.textContent = lvlPlan.label;
+
+      const legacyEnabled = meta.enabled === true && (!meta.levels || Object.keys(meta.levels).length === 0);
+      const lvlMeta = legacyEnabled ? { enabled: true, doneAt: meta.doneAt } : (meta.levels?.[lvlPlan.id] ?? {});
+      const enabled = lvlMeta.enabled === true;
+      const inProgress = lvlMeta.inProgress === true;
+      const doneAt = typeof lvlMeta.doneAt === "number" && Number.isFinite(lvlMeta.doneAt) ? new Date(lvlMeta.doneAt).toLocaleString() : "";
+
+      const sub = doc.createElement("div");
+      sub.className = "ga-muted";
+      sub.style.fontSize = "12px";
+      sub.textContent = inProgress
+        ? "Loading…"
+        : enabled
+          ? `Loaded${doneAt ? ` (last run: ${doneAt})` : ""}`
+          : "Not loaded";
+
+      left.appendChild(label);
+      left.appendChild(sub);
+
+      const loadBtn = doc.createElement("button");
+      loadBtn.className = "ga-filter-btn";
+      loadBtn.textContent = enabled ? "Re-run" : "Load";
+      loadBtn.disabled = inProgress;
+
+      const disableBtn = doc.createElement("button");
+      disableBtn.className = "ga-filter-btn";
+      disableBtn.textContent = "Disable";
+      disableBtn.disabled = inProgress || !enabled;
+
+      loadBtn.addEventListener("click", () => {
+        void (async () => {
+          loadBtn.disabled = true;
+          disableBtn.disabled = true;
+          chartsHost.innerHTML = "";
+          try {
+            let pct = 0;
+            let msg = "";
+            const sync = () => setBusy(pct, msg);
+            await runAdminEnrichment(countryIso2, {
+              levelId: lvlPlan.id,
+              onPct: (p) => {
+                pct = p;
+                sync();
+              },
+              onStatus: (m) => {
+                msg = m;
+                sync();
+              }
+            });
+            setBusy(100, "Done. Refreshing view...");
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            analysisConsole.error(`Admin enrichment failed: ${message}`);
+            setBusy(0, `Error: ${message}`);
+          } finally {
+            await refreshHeader();
+            await renderControls();
+            await renderCharts();
+          }
+        })();
+      });
+
+      disableBtn.addEventListener("click", () => {
+        void (async () => {
+          disableBtn.disabled = true;
+          loadBtn.disabled = true;
+          try {
+            await setMetaLevelEnabled(lvlPlan.id, false);
+            setBusy(0, "Disabled.");
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            analysisConsole.error(`Disable admin enrichment failed: ${message}`);
+          } finally {
+            await refreshHeader();
+            await renderControls();
+            await renderCharts();
+          }
+        })();
+      });
+
+      row.appendChild(left);
+      row.appendChild(loadBtn);
+      row.appendChild(disableBtn);
+      controls.appendChild(row);
+    }
+
+    const disableAll = doc.createElement("button");
+    disableAll.className = "ga-filter-btn";
+    disableAll.textContent = "Disable all levels";
+    disableAll.disabled = !isAnyLevelEnabled(meta);
+    disableAll.addEventListener("click", () => {
+      void (async () => {
+        disableAll.disabled = true;
+        const current = await getAdminMeta(countryIso2);
+        const next: AdminMetaValue = { ...current, enabled: false, levels: { ...(current.levels ?? {}) }, doneAt: Date.now() };
+        if (current.enabled === true && (!current.levels || Object.keys(current.levels).length === 0)) {
+          for (const lvl of plan.levels) next.levels![lvl.id] = { enabled: false, dimIds: lvl.dimIds, doneAt: current.doneAt };
+        }
+        for (const k of Object.keys(next.levels ?? {})) next.levels![k] = { ...(next.levels![k] ?? {}), enabled: false, inProgress: false };
+        await putAdminMeta(countryIso2, next);
+        (globalThis as any).__gaRequestRerender?.();
         setBusy(0, "Disabled.");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        analysisConsole.error(`Disable admin enrichment failed: ${message}`);
-      } finally {
-        clearBtn.disabled = false;
-        btn.disabled = false;
         await refreshHeader();
-        chartsHost.innerHTML = "";
-      }
-    })();
-  });
+        await renderControls();
+        await renderCharts();
+      })();
+    });
+    controls.appendChild(disableAll);
+  };
 
   await refreshHeader();
+  await renderControls();
   await renderCharts();
   return el;
 }
