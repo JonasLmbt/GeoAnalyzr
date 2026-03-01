@@ -242,13 +242,15 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
   spread_player_self_score: (rows) => {
     let min = Infinity;
     let max = -Infinity;
+    let n = 0;
     for (const r of rows) {
       const s = getSelfScore(r);
       if (typeof s !== "number" || !Number.isFinite(s)) continue;
+      n++;
       if (s < min) min = s;
       if (s > max) max = s;
     }
-    if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
+    if (n < 2 || !Number.isFinite(min) || !Number.isFinite(max)) return NaN;
     return Math.max(0, max - min);
   },
 

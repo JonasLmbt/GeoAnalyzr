@@ -10,14 +10,23 @@
     },
     "globalFilters": {
       "enabled": true,
-      "layout": { "variant": "compact" },
+      "layout": {
+        "variant": "compact"
+      },
       "controls": [
         {
           "id": "dateRange",
           "type": "date_range",
           "label": "From / To",
-          "default": { "fromTs": null, "toTs": null },
-          "appliesTo": ["round", "game", "session"]
+          "default": {
+            "fromTs": null,
+            "toTs": null
+          },
+          "appliesTo": [
+            "round",
+            "game",
+            "session"
+          ]
         },
         {
           "id": "modeFamily",
@@ -26,7 +35,10 @@
           "dimension": "mode_family",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round", "game"]
+          "appliesTo": [
+            "round",
+            "game"
+          ]
         },
         {
           "id": "rated",
@@ -35,7 +47,10 @@
           "dimension": "is_rated",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round", "game"]
+          "appliesTo": [
+            "round",
+            "game"
+          ]
         },
         {
           "id": "map",
@@ -45,7 +60,10 @@
           "dimension": "map_slug",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round", "game"]
+          "appliesTo": [
+            "round",
+            "game"
+          ]
         },
         {
           "id": "teammate",
@@ -54,7 +72,10 @@
           "dimension": "teammate_name",
           "default": "all",
           "options": "auto_teammates",
-          "appliesTo": ["round", "game"]
+          "appliesTo": [
+            "round",
+            "game"
+          ]
         },
         {
           "id": "movement",
@@ -63,7 +84,10 @@
           "dimension": "movement_type",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round", "game"]
+          "appliesTo": [
+            "round",
+            "game"
+          ]
         },
         {
           "id": "guessTimeBucket",
@@ -72,7 +96,9 @@
           "dimension": "duration_bucket",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round"]
+          "appliesTo": [
+            "round"
+          ]
         },
         {
           "id": "country",
@@ -81,28 +107,95 @@
           "dimension": "true_country",
           "default": "all",
           "options": "auto_distinct",
-          "appliesTo": ["round"]
+          "appliesTo": [
+            "round"
+          ]
         }
       ],
-      "buttons": { "apply": false, "reset": true }
+      "buttons": {
+        "apply": false,
+        "reset": true
+      }
     },
     "drilldownPresets": {
       "rounds": {
         "entity": "round",
         "columnsPresets": {
           "roundMode": [
-            { "key": "ts", "label": "Date", "sortable": true },
-            { "key": "result", "label": "Result", "sortable": true, "colored": true },
-            { "key": "roundNumber", "label": "Round", "sortable": true },
-            { "key": "movementType", "label": "Movement", "sortable": true },
-            { "key": "player_self_score", "label": "Score", "sortable": true },
-            { "key": "true_country", "label": "Country", "sortable": true },
-            { "key": "durationSeconds", "label": "Guess Duration", "sortable": true },
-            { "key": "damage", "label": "Damage", "sortable": true, "colored": true },
-            { "key": "teammateName", "label": "Mate", "sortable": true },
-            { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } },
-            { "key": "guess_maps", "label": "Guess Maps", "type": "link", "link": { "kind": "guess_maps", "label": "Open" } },
-            { "key": "street_view", "label": "True Street View", "type": "link", "link": { "kind": "street_view", "label": "Open" } }
+            {
+              "key": "ts",
+              "label": "Date",
+              "sortable": true
+            },
+            {
+              "key": "result",
+              "label": "Result",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "roundNumber",
+              "label": "Round",
+              "sortable": true
+            },
+            {
+              "key": "movementType",
+              "label": "Movement",
+              "sortable": true
+            },
+            {
+              "key": "player_self_score",
+              "label": "Score",
+              "sortable": true
+            },
+            {
+              "key": "true_country",
+              "label": "Country",
+              "sortable": true
+            },
+            {
+              "key": "durationSeconds",
+              "label": "Guess Duration",
+              "sortable": true
+            },
+            {
+              "key": "damage",
+              "label": "Damage",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "teammateName",
+              "label": "Mate",
+              "sortable": true
+            },
+            {
+              "key": "gameId",
+              "label": "Game",
+              "sortable": true,
+              "display": {
+                "truncate": true,
+                "truncateHead": 8
+              }
+            },
+            {
+              "key": "guess_maps",
+              "label": "Guess Maps",
+              "type": "link",
+              "link": {
+                "kind": "guess_maps",
+                "label": "Open"
+              }
+            },
+            {
+              "key": "street_view",
+              "label": "True Street View",
+              "type": "link",
+              "link": {
+                "kind": "street_view",
+                "label": "Open"
+              }
+            }
           ]
         },
         "defaultPreset": "roundMode"
@@ -111,12 +204,41 @@
         "entity": "session",
         "columnsPresets": {
           "sessionMode": [
-            { "key": "sessionStartTs", "label": "Start", "sortable": true },
-            { "key": "sessionEndTs", "label": "End", "sortable": true },
-            { "key": "gamesCount", "label": "Games", "sortable": true },
-            { "key": "roundsCount", "label": "Rounds", "sortable": true },
-            { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
-            { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } }
+            {
+              "key": "sessionStartTs",
+              "label": "Start",
+              "sortable": true
+            },
+            {
+              "key": "sessionEndTs",
+              "label": "End",
+              "sortable": true
+            },
+            {
+              "key": "gamesCount",
+              "label": "Games",
+              "sortable": true
+            },
+            {
+              "key": "roundsCount",
+              "label": "Rounds",
+              "sortable": true
+            },
+            {
+              "key": "ratingDelta",
+              "label": "Rating Delta",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "sessionId",
+              "label": "Session",
+              "sortable": true,
+              "display": {
+                "truncate": true,
+                "truncateHead": 2
+              }
+            }
           ]
         },
         "defaultPreset": "sessionMode"
@@ -125,16 +247,66 @@
         "entity": "game",
         "columnsPresets": {
           "gameMode": [
-            { "key": "ts", "label": "Date", "sortable": true },
-            { "key": "modeFamily", "label": "Game Mode", "sortable": true },
-            { "key": "movementType", "label": "Movement", "sortable": true },
-            { "key": "teammateName", "label": "Mate", "sortable": true },
-            { "key": "roundsCount", "label": "Rounds", "sortable": true },
-            { "key": "result", "label": "Result", "sortable": true, "colored": true },
-            { "key": "endRating", "label": "End Rating", "sortable": true },
-            { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
-            { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } },
-            { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } }
+            {
+              "key": "ts",
+              "label": "Date",
+              "sortable": true
+            },
+            {
+              "key": "modeFamily",
+              "label": "Game Mode",
+              "sortable": true
+            },
+            {
+              "key": "movementType",
+              "label": "Movement",
+              "sortable": true
+            },
+            {
+              "key": "teammateName",
+              "label": "Mate",
+              "sortable": true
+            },
+            {
+              "key": "roundsCount",
+              "label": "Rounds",
+              "sortable": true
+            },
+            {
+              "key": "result",
+              "label": "Result",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "endRating",
+              "label": "End Rating",
+              "sortable": true
+            },
+            {
+              "key": "ratingDelta",
+              "label": "Rating Delta",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "sessionId",
+              "label": "Session",
+              "sortable": true,
+              "display": {
+                "truncate": true,
+                "truncateHead": 2
+              }
+            },
+            {
+              "key": "gameId",
+              "label": "Game",
+              "sortable": true,
+              "display": {
+                "truncate": true,
+                "truncateHead": 8
+              }
+            }
           ]
         },
         "defaultPreset": "gameMode"
@@ -143,18 +315,76 @@
         "entity": "game",
         "columnsPresets": {
           "opponentMode": [
-            { "key": "ts", "label": "Date", "sortable": true },
-            { "key": "modeFamily", "label": "Game Mode", "sortable": true },
-            { "key": "movementType", "label": "Movement", "sortable": true },
-            { "key": "roundsCount", "label": "Rounds", "sortable": true },
-            { "key": "teammateName", "label": "Mate", "sortable": true },
-            { "key": "result", "label": "Result", "sortable": true, "colored": true },
-            { "key": "player_opponent_name", "label": "Opponent", "sortable": true },
-            { "key": "player_opponent_mate_name", "label": "Opponent Mate", "sortable": true },
-            { "key": "endRating", "label": "End Rating", "sortable": true },
-            { "key": "ratingDelta", "label": "Rating Delta", "sortable": true, "colored": true },
-            { "key": "sessionId", "label": "Session", "sortable": true, "display": { "truncate": true, "truncateHead": 2 } },
-            { "key": "gameId", "label": "Game", "sortable": true, "display": { "truncate": true, "truncateHead": 8 } }
+            {
+              "key": "ts",
+              "label": "Date",
+              "sortable": true
+            },
+            {
+              "key": "modeFamily",
+              "label": "Game Mode",
+              "sortable": true
+            },
+            {
+              "key": "movementType",
+              "label": "Movement",
+              "sortable": true
+            },
+            {
+              "key": "roundsCount",
+              "label": "Rounds",
+              "sortable": true
+            },
+            {
+              "key": "teammateName",
+              "label": "Mate",
+              "sortable": true
+            },
+            {
+              "key": "result",
+              "label": "Result",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "player_opponent_name",
+              "label": "Opponent",
+              "sortable": true
+            },
+            {
+              "key": "player_opponent_mate_name",
+              "label": "Opponent Mate",
+              "sortable": true
+            },
+            {
+              "key": "endRating",
+              "label": "End Rating",
+              "sortable": true
+            },
+            {
+              "key": "ratingDelta",
+              "label": "Rating Delta",
+              "sortable": true,
+              "colored": true
+            },
+            {
+              "key": "sessionId",
+              "label": "Session",
+              "sortable": true,
+              "display": {
+                "truncate": true,
+                "truncateHead": 2
+              }
+            },
+            {
+              "key": "gameId",
+              "label": "Game",
+              "sortable": true,
+              "display": {
+                "truncate": true,
+                "truncateHead": 8
+              }
+            }
           ]
         },
         "defaultPreset": "opponentMode"
@@ -183,13 +413,25 @@
                     "type": "stat_list",
                     "title": "Results, Win Rate & Streaks",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 7 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 7
+                    },
                     "spec": {
                       "rows": [
                         {
                           "label": "Games with result data",
                           "measure": "games_with_result_count",
-                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Wins",
@@ -200,7 +442,13 @@
                               "target": "players",
                               "columnsPreset": "opponentMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Win"
+                                }
+                              ]
                             }
                           }
                         },
@@ -213,7 +461,13 @@
                               "target": "players",
                               "columnsPreset": "opponentMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Loss" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Loss"
+                                }
+                              ]
                             }
                           }
                         },
@@ -226,7 +480,13 @@
                               "target": "players",
                               "columnsPreset": "opponentMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Win"
+                                }
+                              ]
                             }
                           }
                         },
@@ -239,7 +499,10 @@
                               "target": "players",
                               "columnsPreset": "opponentMode",
                               "filterFromPoint": false,
-                              "initialSort": { "key": "endRating", "dir": "desc" }
+                              "initialSort": {
+                                "key": "endRating",
+                                "dir": "desc"
+                              }
                             }
                           }
                         },
@@ -271,53 +534,104 @@
                           "label": "Avg score (pts)",
                           "measure": "avg_score",
                           "grain": "round",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Avg distance (km)",
                           "measure": "avg_distance_km",
                           "grain": "round",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Avg time (s)",
                           "measure": "avg_guess_duration",
                           "grain": "round",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Time played",
                           "measure": "time_played_seconds",
                           "grain": "round",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Perfect 5k rounds",
                           "measure": "fivek_count",
                           "grain": "round",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Throws (<50)",
                           "measure": "throw_count",
                           "grain": "round",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         }
                       ]
                     }
                   },
-
                   {
                     "widgetId": "w_overview_mode_breakdown",
                     "type": "breakdown",
                     "title": "Mode Breakdown",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 7, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 7,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "dimension": "mode_family",
-                      "excludeKeys": ["other", "Streak"],
+                      "excludeKeys": [
+                        "other",
+                        "Streak"
+                      ],
                       "measure": "games_count",
-                      "sort": { "mode": "desc" },
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "limit": 12,
                       "actions": {
                         "click": {
@@ -329,17 +643,23 @@
                       }
                     }
                   },
-
                   {
                     "widgetId": "w_overview_movement_breakdown",
                     "type": "breakdown",
                     "title": "Movement Breakdown",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 11, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 11,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "dimension": "movement_type",
                       "measure": "rounds_count",
-                      "sort": { "mode": "desc" },
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "limit": 12,
                       "actions": {
                         "click": {
@@ -351,17 +671,23 @@
                       }
                     }
                   },
-
                   {
                     "widgetId": "w_overview_time_progression",
                     "type": "chart",
                     "title": "Time progression metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 15, "w": 12, "h": 7 },
+                    "placement": {
+                      "x": 0,
+                      "y": 15,
+                      "w": 12,
+                      "h": 7
+                    },
                     "spec": {
                       "type": "line",
                       "maxPoints": 100,
-                      "x": { "dimension": "time_day" },
+                      "x": {
+                        "dimension": "time_day"
+                      },
                       "y": {
                         "measures": [
                           "games_count",
@@ -384,13 +710,23 @@
                           "damage_taken_avg"
                         ],
                         "activeMeasure": "games_count",
-                        "accumulations": ["period", "to_date"],
+                        "accumulations": [
+                          "period",
+                          "to_date"
+                        ],
                         "activeAccumulation": "to_date"
                       },
-                      "sort": { "mode": "chronological" },
+                      "sort": {
+                        "mode": "chronological"
+                      },
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   }
@@ -403,7 +739,13 @@
       {
         "id": "rating",
         "title": "Rating",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket",
+            "country"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -423,21 +765,49 @@
                     "type": "stat_list",
                     "title": "Rating",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "rows": [
-                        { "label": "Current rating", "measure": "end_rating" },
-                        { "label": "Trend", "measure": "rating_trend" },
-                        { "label": "Avg rating delta", "measure": "rating_delta_avg" },
+                        {
+                          "label": "Current rating",
+                          "measure": "end_rating"
+                        },
+                        {
+                          "label": "Trend",
+                          "measure": "rating_trend"
+                        },
+                        {
+                          "label": "Avg rating delta",
+                          "measure": "rating_delta_avg"
+                        },
                         {
                           "label": "Highest rating delta",
                           "measure": "rating_delta_highest",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "label": "Lowest rating delta",
                           "measure": "rating_delta_lowest",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         }
                       ]
                     }
@@ -447,7 +817,12 @@
                     "type": "record_list",
                     "title": "Sessions",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 4, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 4,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "records": [
                         {
@@ -456,7 +831,14 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "biggest_session_rating_loss",
@@ -464,7 +846,14 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         }
                       ]
                     }
@@ -474,13 +863,27 @@
                     "type": "chart",
                     "title": "Rating over time",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 8, "w": 12, "h": 8 },
+                    "placement": {
+                      "x": 0,
+                      "y": 8,
+                      "w": 12,
+                      "h": 8
+                    },
                     "spec": {
                       "type": "line",
                       "maxPoints": 220,
-                      "x": { "dimension": "time_day" },
-                      "y": { "measures": ["end_rating"], "activeMeasure": "end_rating" },
-                      "sort": { "mode": "chronological" },
+                      "x": {
+                        "dimension": "time_day"
+                      },
+                      "y": {
+                        "measures": [
+                          "end_rating"
+                        ],
+                        "activeMeasure": "end_rating"
+                      },
+                      "sort": {
+                        "mode": "chronological"
+                      },
                       "actions": {
                         "hover": true,
                         "click": {
@@ -501,7 +904,12 @@
       {
         "id": "personal_records",
         "title": "Personal Records",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -521,7 +929,12 @@
                     "type": "record_list",
                     "title": "Round Records",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 6
+                    },
                     "spec": {
                       "records": [
                         {
@@ -530,7 +943,14 @@
                           "metric": "round_score",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "lowest_score_round",
@@ -538,7 +958,14 @@
                           "metric": "round_score",
                           "groupBy": "round_id",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "biggest_damage_dealt_round",
@@ -546,7 +973,14 @@
                           "metric": "round_damage_dealt",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "biggest_damage_taken_round",
@@ -554,7 +988,14 @@
                           "metric": "round_damage_taken",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "fastest_round",
@@ -562,7 +1003,14 @@
                           "metric": "round_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "slowest_round",
@@ -570,7 +1018,14 @@
                           "metric": "round_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "fastest_5k",
@@ -578,14 +1033,26 @@
                           "metric": "round_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "min",
-                          "filters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
+                          "filters": [
+                            {
+                              "dimension": "score_bucket",
+                              "op": "eq",
+                              "value": "5000"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "score_bucket",
+                                  "op": "eq",
+                                  "value": "5000"
+                                }
+                              ]
                             }
                           }
                         },
@@ -595,14 +1062,26 @@
                           "metric": "round_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "filters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
+                          "filters": [
+                            {
+                              "dimension": "is_throw",
+                              "op": "eq",
+                              "value": "true"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_throw",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
@@ -612,7 +1091,14 @@
                           "metric": "round_score_per_second",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "worst_region_guess",
@@ -620,14 +1106,26 @@
                           "metric": "round_score",
                           "groupBy": "round_id",
                           "extreme": "min",
-                          "filters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }],
+                          "filters": [
+                            {
+                              "dimension": "is_hit",
+                              "op": "eq",
+                              "value": "true"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_hit",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         }
@@ -639,7 +1137,12 @@
                     "type": "record_list",
                     "title": "Game Records",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 6, "w": 12, "h": 7 },
+                    "placement": {
+                      "x": 0,
+                      "y": 6,
+                      "w": 12,
+                      "h": 7
+                    },
                     "spec": {
                       "records": [
                         {
@@ -653,7 +1156,13 @@
                               "target": "games",
                               "columnsPreset": "gameMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_flawless_win", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_flawless_win",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
@@ -663,7 +1172,14 @@
                           "metric": "game_avg_score",
                           "groupBy": "game_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "lowest_avg_score_game",
@@ -671,7 +1187,14 @@
                           "metric": "game_avg_score",
                           "groupBy": "game_id",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_5ks_in_game",
@@ -679,7 +1202,14 @@
                           "metric": "game_5k_count",
                           "groupBy": "game_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_throws_in_game",
@@ -687,7 +1217,14 @@
                           "metric": "game_throw_count",
                           "groupBy": "game_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "worst_hit_rate_game",
@@ -695,7 +1232,14 @@
                           "metric": "game_hit_rate",
                           "groupBy": "game_id",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "highest_rating_gain_game",
@@ -703,7 +1247,14 @@
                           "metric": "game_rating_delta",
                           "groupBy": "game_id",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "fastest_win_game",
@@ -711,14 +1262,26 @@
                           "metric": "game_duration",
                           "groupBy": "game_id",
                           "extreme": "min",
-                          "filters": [{ "dimension": "result", "op": "eq", "value": "Win" }],
+                          "filters": [
+                            {
+                              "dimension": "result",
+                              "op": "eq",
+                              "value": "Win"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "games",
                               "columnsPreset": "gameMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Win"
+                                }
+                              ]
                             }
                           }
                         },
@@ -728,14 +1291,26 @@
                           "metric": "game_duration",
                           "groupBy": "game_id",
                           "extreme": "max",
-                          "filters": [{ "dimension": "result", "op": "eq", "value": "Win" }],
+                          "filters": [
+                            {
+                              "dimension": "result",
+                              "op": "eq",
+                              "value": "Win"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "games",
                               "columnsPreset": "gameMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Win"
+                                }
+                              ]
                             }
                           }
                         },
@@ -745,14 +1320,26 @@
                           "metric": "game_final_health",
                           "groupBy": "game_id",
                           "extreme": "min",
-                          "filters": [{ "dimension": "result", "op": "eq", "value": "Win" }],
+                          "filters": [
+                            {
+                              "dimension": "result",
+                              "op": "eq",
+                              "value": "Win"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "games",
                               "columnsPreset": "gameMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Win" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Win"
+                                }
+                              ]
                             }
                           }
                         },
@@ -762,14 +1349,26 @@
                           "metric": "game_final_health",
                           "groupBy": "game_id",
                           "extreme": "max",
-                          "filters": [{ "dimension": "result", "op": "eq", "value": "Loss" }],
+                          "filters": [
+                            {
+                              "dimension": "result",
+                              "op": "eq",
+                              "value": "Loss"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "games",
                               "columnsPreset": "gameMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "result", "op": "eq", "value": "Loss" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "result",
+                                  "op": "eq",
+                                  "value": "Loss"
+                                }
+                              ]
                             }
                           }
                         }
@@ -781,7 +1380,12 @@
                     "type": "record_list",
                     "title": "Session Records",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 13, "w": 12, "h": 6 },
+                    "placement": {
+                      "x": 0,
+                      "y": 13,
+                      "w": 12,
+                      "h": 6
+                    },
                     "spec": {
                       "records": [
                         {
@@ -790,7 +1394,14 @@
                           "metric": "session_win_rate",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "highest_avg_score_session",
@@ -798,7 +1409,14 @@
                           "metric": "session_avg_score",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "lowest_avg_score_session",
@@ -806,7 +1424,14 @@
                           "metric": "session_avg_score",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_games_session",
@@ -814,7 +1439,14 @@
                           "metric": "session_games_count",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "longest_session_total_duration",
@@ -822,7 +1454,14 @@
                           "metric": "session_duration_minutes",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_5ks_session",
@@ -830,7 +1469,14 @@
                           "metric": "session_5k_count",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "best_hit_rate_session",
@@ -838,7 +1484,14 @@
                           "metric": "session_hit_rate",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "highest_throw_rate_session",
@@ -846,7 +1499,14 @@
                           "metric": "session_throw_rate",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "biggest_rating_gain_in_session",
@@ -854,7 +1514,14 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "biggest_rating_loss_in_session",
@@ -862,7 +1529,14 @@
                           "metric": "session_delta_rating",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         }
                       ]
                     }
@@ -872,7 +1546,12 @@
                     "type": "record_list",
                     "title": "Day Records",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 19, "w": 12, "h": 7 },
+                    "placement": {
+                      "x": 0,
+                      "y": 19,
+                      "w": 12,
+                      "h": 7
+                    },
                     "spec": {
                       "records": [
                         {
@@ -881,7 +1560,14 @@
                           "metric": "session_avg_score",
                           "groupBy": "time_day",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "worst_day_by_avg_score",
@@ -889,7 +1575,14 @@
                           "metric": "session_avg_score",
                           "groupBy": "time_day",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_sessions_in_a_day",
@@ -897,7 +1590,14 @@
                           "metric": "sessions_count",
                           "groupBy": "time_day",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_games_in_a_day",
@@ -905,7 +1605,14 @@
                           "metric": "session_games_count",
                           "groupBy": "time_day",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_time_played_in_a_day",
@@ -913,7 +1620,14 @@
                           "metric": "session_duration_minutes",
                           "groupBy": "time_day",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "most_5ks_in_a_day",
@@ -921,7 +1635,14 @@
                           "metric": "session_5k_count",
                           "groupBy": "time_day",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "best_win_rate_day",
@@ -929,7 +1650,14 @@
                           "metric": "day_win_rate_min5",
                           "groupBy": "time_day",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "worst_win_rate_day",
@@ -937,7 +1665,14 @@
                           "metric": "day_win_rate_min5",
                           "groupBy": "time_day",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         }
                       ]
                     }
@@ -947,12 +1682,26 @@
                     "type": "stat_list",
                     "title": "Day Streaks",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 26, "w": 12, "h": 3 },
+                    "placement": {
+                      "x": 0,
+                      "y": 26,
+                      "w": 12,
+                      "h": 3
+                    },
                     "spec": {
                       "rows": [
-                        { "label": "Most consecutive days without games", "measure": "max_consecutive_days_without_games" },
-                        { "label": "Longest active streak (min 1 game/day)", "measure": "longest_active_streak_days" },
-                        { "label": "Longest 5k day streak (min 1 5k/day)", "measure": "longest_5k_day_streak_days" }
+                        {
+                          "label": "Most consecutive days without games",
+                          "measure": "max_consecutive_days_without_games"
+                        },
+                        {
+                          "label": "Longest active streak (min 1 game/day)",
+                          "measure": "longest_active_streak_days"
+                        },
+                        {
+                          "label": "Longest 5k day streak (min 1 5k/day)",
+                          "measure": "longest_5k_day_streak_days"
+                        }
                       ]
                     }
                   }
@@ -965,7 +1714,12 @@
       {
         "id": "sessions",
         "title": "Sessions",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -985,16 +1739,34 @@
                     "type": "stat_list",
                     "title": "Sessions",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "rows": [
                         {
                           "label": "Sessions detected (gap >45m)",
                           "measure": "sessions_count",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
-                        { "label": "Longest break between sessions", "measure": "sessions_longest_break_seconds" },
-                        { "label": "Avg games per session", "measure": "sessions_avg_games" }
+                        {
+                          "label": "Longest break between sessions",
+                          "measure": "sessions_longest_break_seconds"
+                        },
+                        {
+                          "label": "Avg games per session",
+                          "measure": "sessions_avg_games"
+                        }
                       ]
                     }
                   },
@@ -1003,7 +1775,12 @@
                     "type": "record_list",
                     "title": "Session Records",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 4, "w": 12, "h": 5 },
+                    "placement": {
+                      "x": 0,
+                      "y": 4,
+                      "w": 12,
+                      "h": 5
+                    },
                     "spec": {
                       "records": [
                         {
@@ -1012,7 +1789,14 @@
                           "metric": "session_games_count",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "best_session",
@@ -1020,7 +1804,14 @@
                           "metric": "session_avg_score",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "worst_session",
@@ -1028,7 +1819,14 @@
                           "metric": "session_avg_score",
                           "groupBy": "session_start",
                           "extreme": "min",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         }
                       ]
                     }
@@ -1038,11 +1836,18 @@
                     "type": "chart",
                     "title": "Sessions over time (line)",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 9, "w": 12, "h": 5 },
+                    "placement": {
+                      "x": 0,
+                      "y": 9,
+                      "w": 12,
+                      "h": 5
+                    },
                     "spec": {
                       "type": "line",
                       "maxPoints": 120,
-                      "x": { "dimension": "session_index" },
+                      "x": {
+                        "dimension": "session_index"
+                      },
                       "y": {
                         "measures": [
                           "session_avg_score",
@@ -1065,11 +1870,24 @@
                           "session_avg_distance_km"
                         ],
                         "activeMeasure": "session_avg_score",
-                        "accumulations": ["period", "to_date"],
+                        "accumulations": [
+                          "period",
+                          "to_date"
+                        ],
                         "activeAccumulation": "period"
                       },
-                      "sort": { "mode": "chronological" },
-                      "actions": { "hover": true, "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                      "sort": {
+                        "mode": "chronological"
+                      },
+                      "actions": {
+                        "hover": true,
+                        "click": {
+                          "type": "drilldown",
+                          "target": "sessions",
+                          "columnsPreset": "sessionMode",
+                          "filterFromPoint": true
+                        }
+                      }
                     }
                   },
                   {
@@ -1077,7 +1895,12 @@
                     "type": "breakdown",
                     "title": "Sessions (bar)",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 14, "w": 12, "h": 6 },
+                    "placement": {
+                      "x": 0,
+                      "y": 14,
+                      "w": 12,
+                      "h": 6
+                    },
                     "spec": {
                       "dimension": "session_start",
                       "measures": [
@@ -1099,11 +1922,30 @@
                         "session_rounds_count"
                       ],
                       "activeMeasure": "session_avg_score",
-                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "chronological" },
+                      "sorts": [
+                        {
+                          "mode": "chronological"
+                        },
+                        {
+                          "mode": "desc"
+                        },
+                        {
+                          "mode": "asc"
+                        }
+                      ],
+                      "activeSort": {
+                        "mode": "chronological"
+                      },
                       "limit": 12,
                       "extendable": true,
-                      "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                      "actions": {
+                        "click": {
+                          "type": "drilldown",
+                          "target": "sessions",
+                          "columnsPreset": "sessionMode",
+                          "filterFromPoint": true
+                        }
+                      }
                     }
                   }
                 ]
@@ -1115,7 +1957,12 @@
       {
         "id": "tempo",
         "title": "Tempo",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1135,7 +1982,12 @@
                     "type": "record_list",
                     "title": "Tempo",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 6
+                    },
                     "spec": {
                       "records": [
                         {
@@ -1145,7 +1997,14 @@
                           "groupBy": "round_id",
                           "extreme": "min",
                           "displayKey": "none",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "slowest_guess",
@@ -1154,7 +2013,14 @@
                           "groupBy": "round_id",
                           "extreme": "max",
                           "displayKey": "none",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "fastest_5k",
@@ -1162,7 +2028,13 @@
                           "metric": "avg_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "min",
-                          "filters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
+                          "filters": [
+                            {
+                              "dimension": "score_bucket",
+                              "op": "eq",
+                              "value": "5000"
+                            }
+                          ],
                           "displayKey": "none",
                           "actions": {
                             "click": {
@@ -1170,7 +2042,13 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "score_bucket",
+                                  "op": "eq",
+                                  "value": "5000"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1180,7 +2058,13 @@
                           "metric": "avg_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "filters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
+                          "filters": [
+                            {
+                              "dimension": "is_throw",
+                              "op": "eq",
+                              "value": "true"
+                            }
+                          ],
                           "displayKey": "none",
                           "actions": {
                             "click": {
@@ -1188,7 +2072,13 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_throw",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         }
@@ -1200,13 +2090,36 @@
                     "type": "breakdown",
                     "title": "Tempo - Time bucket metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 6, "w": 12, "h": 8 },
+                    "placement": {
+                      "x": 0,
+                      "y": 6,
+                      "w": 12,
+                      "h": 8
+                    },
                     "spec": {
                       "dimension": "duration_bucket",
-                      "measures": ["avg_score", "fivek_rate", "throw_rate", "hit_rate", "avg_guess_duration"],
+                      "measures": [
+                        "avg_score",
+                        "fivek_rate",
+                        "throw_rate",
+                        "hit_rate",
+                        "avg_guess_duration"
+                      ],
                       "activeMeasure": "avg_score",
-                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "chronological" },
+                      "sorts": [
+                        {
+                          "mode": "chronological"
+                        },
+                        {
+                          "mode": "desc"
+                        },
+                        {
+                          "mode": "asc"
+                        }
+                      ],
+                      "activeSort": {
+                        "mode": "chronological"
+                      },
                       "limit": 12,
                       "actions": {
                         "click": {
@@ -1227,7 +2140,12 @@
       {
         "id": "scores",
         "title": "Scores",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1247,7 +2165,12 @@
                     "type": "stat_list",
                     "title": "Scores",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "rows": [
                         {
@@ -1260,7 +2183,13 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "score_bucket",
+                                  "op": "eq",
+                                  "value": "5000"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1274,7 +2203,13 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_near_perfect", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_near_perfect",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1288,7 +2223,13 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_low_score", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_low_score",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1302,7 +2243,13 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_throw",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         }
@@ -1314,14 +2261,26 @@
                     "type": "breakdown",
                     "title": "Score vs opponents",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 4, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 4,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "dimension": "score_vs_opponent",
                       "measure": "rounds_share",
-                      "sort": { "mode": "desc" },
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "limit": 3,
                       "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   },
@@ -1330,16 +2289,32 @@
                     "type": "chart",
                     "title": "Scores - Score distribution (smoothed)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 8, "w": 12, "h": 10 },
+                    "placement": {
+                      "x": 0,
+                      "y": 8,
+                      "w": 12,
+                      "h": 10
+                    },
                     "spec": {
                       "type": "bar",
                       "limit": 200,
-                      "x": { "dimension": "score_bucket" },
-                      "y": { "measure": "rounds_count" },
-                      "sort": { "mode": "chronological" },
+                      "x": {
+                        "dimension": "score_bucket"
+                      },
+                      "y": {
+                        "measure": "rounds_count"
+                      },
+                      "sort": {
+                        "mode": "chronological"
+                      },
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   }
@@ -1349,11 +2324,16 @@
           ]
         }
       },
-
       {
         "id": "rounds",
         "title": "Rounds",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket",
+            "country"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1373,7 +2353,12 @@
                     "type": "record_list",
                     "title": "Rounds",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 7 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 7
+                    },
                     "spec": {
                       "records": [
                         {
@@ -1383,7 +2368,14 @@
                           "groupBy": "game_id",
                           "extreme": "max",
                           "displayKey": "first_ts",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "game_fewest_rounds",
@@ -1392,7 +2384,14 @@
                           "groupBy": "game_id",
                           "extreme": "min",
                           "displayKey": "first_ts",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "largest_score_spread_game",
@@ -1401,20 +2400,39 @@
                           "groupBy": "game_id",
                           "extreme": "max",
                           "displayKey": "first_ts",
-                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "games",
+                              "columnsPreset": "gameMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "fast_round_streak",
                           "label": "Fastest round streak (<20s)",
                           "kind": "streak",
-                          "streakFilters": [{ "dimension": "duration_bucket", "op": "eq", "value": "<20 sec" }],
+                          "streakFilters": [
+                            {
+                              "dimension": "duration_bucket",
+                              "op": "eq",
+                              "value": "<20 sec"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "duration_bucket", "op": "eq", "value": "<20 sec" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "duration_bucket",
+                                  "op": "eq",
+                                  "value": "<20 sec"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1422,14 +2440,26 @@
                           "id": "damage_dealt_streak",
                           "label": "Damage dealt streak",
                           "kind": "streak",
-                          "streakFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }],
+                          "streakFilters": [
+                            {
+                              "dimension": "is_damage_dealt",
+                              "op": "eq",
+                              "value": "true"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_damage_dealt", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_damage_dealt",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1437,14 +2467,26 @@
                           "id": "damage_taken_streak",
                           "label": "Damage taken streak",
                           "kind": "streak",
-                          "streakFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }],
+                          "streakFilters": [
+                            {
+                              "dimension": "is_damage_taken",
+                              "op": "eq",
+                              "value": "true"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_damage_taken", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_damage_taken",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
@@ -1453,20 +2495,39 @@
                           "label": "Longest same-country streak",
                           "kind": "same_value_streak",
                           "dimension": "true_country",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         },
                         {
                           "id": "correct_country_streak",
                           "label": "Correct-country streak",
                           "kind": "streak",
-                          "streakFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }],
+                          "streakFilters": [
+                            {
+                              "dimension": "is_hit",
+                              "op": "eq",
+                              "value": "true"
+                            }
+                          ],
                           "actions": {
                             "click": {
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": true,
-                              "extraFilters": [{ "dimension": "is_hit", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_hit",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         }
@@ -1478,10 +2539,17 @@
                     "type": "chart",
                     "title": "Rounds - Round progression metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 7, "w": 12, "h": 8 },
+                    "placement": {
+                      "x": 0,
+                      "y": 7,
+                      "w": 12,
+                      "h": 8
+                    },
                     "spec": {
                       "type": "bar",
-                      "x": { "dimension": "round_number" },
+                      "x": {
+                        "dimension": "round_number"
+                      },
                       "y": {
                         "measures": [
                           "avg_score",
@@ -1496,12 +2564,29 @@
                         ],
                         "activeMeasure": "avg_score"
                       },
-                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "chronological" },
+                      "sorts": [
+                        {
+                          "mode": "chronological"
+                        },
+                        {
+                          "mode": "desc"
+                        },
+                        {
+                          "mode": "asc"
+                        }
+                      ],
+                      "activeSort": {
+                        "mode": "chronological"
+                      },
                       "limit": 20,
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   },
@@ -1510,20 +2595,51 @@
                     "type": "chart",
                     "title": "Rounds - Performance by game length (rounds per game, 2+)",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 15, "w": 12, "h": 9 },
+                    "placement": {
+                      "x": 0,
+                      "y": 15,
+                      "w": 12,
+                      "h": 9
+                    },
                     "spec": {
                       "type": "bar",
-                      "x": { "dimension": "game_length" },
+                      "x": {
+                        "dimension": "game_length"
+                      },
                       "y": {
-                        "measures": ["games_count", "win_rate", "win_count", "loss_count", "tie_count", "best_end_rating"],
+                        "measures": [
+                          "games_count",
+                          "win_rate",
+                          "win_count",
+                          "loss_count",
+                          "tie_count",
+                          "best_end_rating"
+                        ],
                         "activeMeasure": "games_count"
                       },
-                      "sorts": [{ "mode": "chronological" }, { "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "chronological" },
+                      "sorts": [
+                        {
+                          "mode": "chronological"
+                        },
+                        {
+                          "mode": "desc"
+                        },
+                        {
+                          "mode": "asc"
+                        }
+                      ],
+                      "activeSort": {
+                        "mode": "chronological"
+                      },
                       "limit": 20,
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "players",
+                          "columnsPreset": "opponentMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   }
@@ -1533,7 +2649,6 @@
           ]
         }
       },
-
       {
         "id": "time_patterns",
         "title": "Time Patterns",
@@ -1556,10 +2671,17 @@
                     "type": "chart",
                     "title": "Weekday Analysis",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 10
+                    },
                     "spec": {
                       "type": "bar",
-                      "x": { "dimension": "weekday" },
+                      "x": {
+                        "dimension": "weekday"
+                      },
                       "y": {
                         "measures": [
                           "games_count",
@@ -1581,8 +2703,20 @@
                         ],
                         "activeMeasure": "games_count"
                       },
-                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }, { "mode": "chronological" }],
-                      "activeSort": { "mode": "chronological" },
+                      "sorts": [
+                        {
+                          "mode": "desc"
+                        },
+                        {
+                          "mode": "asc"
+                        },
+                        {
+                          "mode": "chronological"
+                        }
+                      ],
+                      "activeSort": {
+                        "mode": "chronological"
+                      },
                       "actions": {
                         "hover": true,
                         "click": {
@@ -1597,7 +2731,6 @@
                 ]
               }
             },
-
             {
               "cardId": "card_by_hour",
               "title": "By hour",
@@ -1613,10 +2746,17 @@
                     "type": "chart",
                     "title": "Hour Analysis",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 10 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 10
+                    },
                     "spec": {
                       "type": "bar",
-                      "x": { "dimension": "hour" },
+                      "x": {
+                        "dimension": "hour"
+                      },
                       "y": {
                         "measures": [
                           "games_count",
@@ -1638,8 +2778,20 @@
                         ],
                         "activeMeasure": "games_count"
                       },
-                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }, { "mode": "chronological" }],
-                      "activeSort": { "mode": "chronological" },
+                      "sorts": [
+                        {
+                          "mode": "desc"
+                        },
+                        {
+                          "mode": "asc"
+                        },
+                        {
+                          "mode": "chronological"
+                        }
+                      ],
+                      "activeSort": {
+                        "mode": "chronological"
+                      },
                       "actions": {
                         "hover": true,
                         "click": {
@@ -1657,11 +2809,16 @@
           ]
         }
       },
-
       {
         "id": "countries",
         "title": "Countries",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket",
+            "country"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1681,7 +2838,12 @@
                     "type": "multi_view",
                     "title": "Countries - Country metrics",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 18 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 18
+                    },
                     "spec": {
                       "activeView": "bar",
                       "views": [
@@ -1710,12 +2872,26 @@
                               "damage_taken_share"
                             ],
                             "activeMeasure": "avg_score",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
+                            "sorts": [
+                              {
+                                "mode": "desc"
+                              },
+                              {
+                                "mode": "asc"
+                              }
+                            ],
+                            "activeSort": {
+                              "mode": "desc"
+                            },
                             "limit": 15,
                             "extendable": true,
                             "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                              "click": {
+                                "type": "drilldown",
+                                "target": "rounds",
+                                "columnsPreset": "roundMode",
+                                "filterFromPoint": true
+                              }
                             }
                           }
                         },
@@ -1746,29 +2922,49 @@
                             ],
                             "activeMeasure": "avg_score",
                             "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                              "click": {
+                                "type": "drilldown",
+                                "target": "rounds",
+                                "columnsPreset": "roundMode",
+                                "filterFromPoint": true
+                              }
                             }
                           }
                         }
                       ]
                     }
-                  }
-                  ,
+                  },
                   {
                     "widgetId": "w_country_confusion",
                     "type": "chart",
                     "title": "Countries - Confusion matrix (top pairs)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 8 },
+                    "placement": {
+                      "x": 0,
+                      "y": 18,
+                      "w": 12,
+                      "h": 8
+                    },
                     "spec": {
                       "type": "bar",
                       "limit": 20,
-                      "x": { "dimension": "confused_countries" },
-                      "y": { "measure": "rounds_count" },
-                      "sort": { "mode": "desc" },
+                      "x": {
+                        "dimension": "confused_countries"
+                      },
+                      "y": {
+                        "measure": "rounds_count"
+                      },
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   }
@@ -1777,8 +2973,7 @@
             }
           ]
         }
-      }
-      ,
+      },
       {
         "id": "coordinates",
         "title": "Coordinates",
@@ -1801,7 +2996,12 @@
                     "type": "stat_list",
                     "title": "Coordinates - Repeats",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 5 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 5
+                    },
                     "spec": {
                       "rows": [
                         {
@@ -1814,14 +3014,27 @@
                               "target": "rounds",
                               "columnsPreset": "roundMode",
                               "filterFromPoint": false,
-                              "extraFilters": [{ "dimension": "is_true_location_repeat", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_true_location_repeat",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         },
                         {
                           "label": "Distinct locations",
                           "measure": "distinct_locations_count",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         }
                       ]
                     }
@@ -1831,23 +3044,74 @@
                     "type": "point_map",
                     "title": "Coordinates - Distribution",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 5, "w": 12, "h": 19 },
+                    "placement": {
+                      "x": 0,
+                      "y": 5,
+                      "w": 12,
+                      "h": 19
+                    },
                     "spec": {
                       "points": [
-                        { "id": "true", "label": "True location", "latField": "trueLat", "lngField": "trueLng" },
-                        { "id": "self", "label": "Your guesses", "latField": "player_self_guessLat", "lngField": "player_self_guessLng" },
-                        { "id": "mate", "label": "Mate guesses", "latField": "player_mate_guessLat", "lngField": "player_mate_guessLng" },
-                        { "id": "opp", "label": "Opponent guesses", "latField": "player_opponent_guessLat", "lngField": "player_opponent_guessLng" },
-                        { "id": "oppMate", "label": "Opponent mate guesses", "latField": "player_opponent_mate_guessLat", "lngField": "player_opponent_mate_guessLng" }
+                        {
+                          "id": "true",
+                          "label": "True location",
+                          "latField": "trueLat",
+                          "lngField": "trueLng"
+                        },
+                        {
+                          "id": "self",
+                          "label": "Your guesses",
+                          "latField": "player_self_guessLat",
+                          "lngField": "player_self_guessLng"
+                        },
+                        {
+                          "id": "mate",
+                          "label": "Mate guesses",
+                          "latField": "player_mate_guessLat",
+                          "lngField": "player_mate_guessLng"
+                        },
+                        {
+                          "id": "opp",
+                          "label": "Opponent guesses",
+                          "latField": "player_opponent_guessLat",
+                          "lngField": "player_opponent_guessLng"
+                        },
+                        {
+                          "id": "oppMate",
+                          "label": "Opponent mate guesses",
+                          "latField": "player_opponent_mate_guessLat",
+                          "lngField": "player_opponent_mate_guessLng"
+                        }
                       ],
-                      "pointSelect": { "enabled": true, "defaultId": "true", "allowAll": false },
-                      "rangeFilter": { "label": "Score", "field": "player_self_score", "min": 0, "max": 5000, "defaultMin": 0, "defaultMax": 5000, "step": 10 },
+                      "pointSelect": {
+                        "enabled": true,
+                        "defaultId": "true",
+                        "allowAll": false
+                      },
+                      "rangeFilter": {
+                        "label": "Score",
+                        "field": "player_self_score",
+                        "min": 0,
+                        "max": 5000,
+                        "defaultMin": 0,
+                        "defaultMax": 5000,
+                        "step": 10
+                      },
                       "mapHeight": 520,
                       "maxDots": 2500,
-                      "measures": ["rounds_count", "hit_signed", "damage_net_avg"],
+                      "measures": [
+                        "rounds_count",
+                        "hit_signed",
+                        "damage_net_avg"
+                      ],
                       "activeMeasure": "rounds_count",
                       "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   }
@@ -1856,12 +3120,17 @@
             }
           ]
         }
-      }
-      ,
+      },
       {
         "id": "opponents",
         "title": "Opponents",
-        "filterScope": { "exclude": ["movement", "guessTimeBucket", "country"] },
+        "filterScope": {
+          "exclude": [
+            "movement",
+            "guessTimeBucket",
+            "country"
+          ]
+        },
         "layout": {
           "mode": "grid",
           "columns": 12,
@@ -1881,20 +3150,45 @@
                     "type": "stat_list",
                     "title": "Scope",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 3 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 3
+                    },
                     "spec": {
                       "rows": [
-                        { "label": "Unique opponents", "measure": "unique_opponents_count" },
-                        { "label": "Unique countries", "measure": "unique_opponent_countries_count" },
+                        {
+                          "label": "Unique opponents",
+                          "measure": "unique_opponents_count"
+                        },
+                        {
+                          "label": "Unique countries",
+                          "measure": "unique_opponent_countries_count"
+                        },
                         {
                           "label": "Strongest opponent (rating)",
                           "measure": "strongest_opponent_rating",
-                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
                         {
                           "label": "Strongest defeated opponent (rating)",
                           "measure": "strongest_defeated_opponent_rating",
-                          "actions": { "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "players",
+                              "columnsPreset": "opponentMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         }
                       ]
                     }
@@ -1904,16 +3198,32 @@
                     "type": "chart",
                     "title": "Opponents - Match-ups by opponent country",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 3, "w": 12, "h": 8 },
+                    "placement": {
+                      "x": 0,
+                      "y": 3,
+                      "w": 12,
+                      "h": 8
+                    },
                     "spec": {
                       "type": "bar",
                       "limit": 20,
-                      "x": { "dimension": "opponent_country" },
-                      "y": { "measure": "matchups_count" },
-                      "sort": { "mode": "desc" },
+                      "x": {
+                        "dimension": "opponent_country"
+                      },
+                      "y": {
+                        "measure": "matchups_count"
+                      },
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "players",
+                          "columnsPreset": "opponentMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   },
@@ -1922,15 +3232,27 @@
                     "type": "breakdown",
                     "title": "Opponents - Top opponents",
                     "grain": "game",
-                    "placement": { "x": 0, "y": 11, "w": 12, "h": 7 },
+                    "placement": {
+                      "x": 0,
+                      "y": 11,
+                      "w": 12,
+                      "h": 7
+                    },
                     "spec": {
                       "dimension": "opponent_name",
                       "measure": "matchups_count",
-                      "sort": { "mode": "desc" },
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "limit": 15,
                       "extendable": true,
                       "actions": {
-                        "click": { "type": "drilldown", "target": "players", "columnsPreset": "opponentMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "players",
+                          "columnsPreset": "opponentMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   }
@@ -1939,8 +3261,7 @@
             }
           ]
         }
-      }
-      ,
+      },
       {
         "id": "team",
         "title": "Team",
@@ -1955,10 +3276,14 @@
               "default": "auto_top",
               "options": "auto_teammates",
               "required": true,
-              "appliesTo": ["round"]
+              "appliesTo": [
+                "round"
+              ]
             }
           ],
-          "buttons": { "reset": true }
+          "buttons": {
+            "reset": true
+          }
         },
         "layout": {
           "mode": "grid",
@@ -1979,32 +3304,69 @@
                     "type": "leader_list",
                     "title": "Head-to-head questions",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 5 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 5
+                    },
                     "spec": {
                       "rows": [
                         {
                           "label": "Closer guesses",
                           "dimension": "team_closer_winner",
-                          "excludeKeys": ["Tie"],
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                          "excludeKeys": [
+                            "Tie"
+                          ],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
                         },
                         {
                           "label": "Higher score rounds",
                           "dimension": "team_higher_score_winner",
-                          "excludeKeys": ["Tie"],
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                          "excludeKeys": [
+                            "Tie"
+                          ],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
                         },
                         {
                           "label": "Fewer throws (<50)",
                           "dimension": "team_fewer_throw_winner",
-                          "excludeKeys": ["Tie"],
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                          "excludeKeys": [
+                            "Tie"
+                          ],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
                         },
                         {
                           "label": "More 5k rounds",
                           "dimension": "team_more_5k_winner",
-                          "excludeKeys": ["Tie"],
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
+                          "excludeKeys": [
+                            "Tie"
+                          ],
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
                         }
                       ]
                     }
@@ -2014,14 +3376,70 @@
                     "type": "stat_list",
                     "title": "Team facts",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 5, "w": 12, "h": 5 },
+                    "placement": {
+                      "x": 0,
+                      "y": 5,
+                      "w": 12,
+                      "h": 5
+                    },
                     "spec": {
                       "rows": [
-                        { "label": "Games together", "measure": "games_distinct_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "Rounds together", "measure": "rounds_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "Time played together", "measure": "time_played_seconds", "secondaryMeasure": "rounds_with_time_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "First game together", "measure": "first_played_at", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "Most recent game together", "measure": "last_played_at", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } }
+                        {
+                          "label": "Games together",
+                          "measure": "games_distinct_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "Rounds together",
+                          "measure": "rounds_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "Time played together",
+                          "measure": "time_played_seconds",
+                          "secondaryMeasure": "rounds_with_time_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "First game together",
+                          "measure": "first_played_at",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "Most recent game together",
+                          "measure": "last_played_at",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        }
                       ]
                     }
                   },
@@ -2030,7 +3448,12 @@
                     "type": "record_list",
                     "title": "Session records together",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 10, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 10,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "records": [
                         {
@@ -2039,7 +3462,14 @@
                           "metric": "session_games_count",
                           "groupBy": "session_start",
                           "extreme": "max",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": true } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": true
+                            }
+                          }
                         }
                       ]
                     }
@@ -2049,16 +3479,34 @@
                     "type": "stat_list",
                     "title": "Session stats together",
                     "grain": "session",
-                    "placement": { "x": 0, "y": 14, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 14,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "rows": [
                         {
                           "label": "Sessions detected (gap > session standard)",
                           "measure": "sessions_count",
-                          "actions": { "click": { "type": "drilldown", "target": "sessions", "columnsPreset": "sessionMode", "filterFromPoint": false } }
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "sessions",
+                              "columnsPreset": "sessionMode",
+                              "filterFromPoint": false
+                            }
+                          }
                         },
-                        { "label": "Longest break between sessions", "measure": "sessions_longest_break_seconds" },
-                        { "label": "Avg games per session", "measure": "sessions_avg_games" }
+                        {
+                          "label": "Longest break between sessions",
+                          "measure": "sessions_longest_break_seconds"
+                        },
+                        {
+                          "label": "Avg games per session",
+                          "measure": "sessions_avg_games"
+                        }
                       ]
                     }
                   }
@@ -2067,8 +3515,7 @@
             }
           ]
         }
-      }
-      ,
+      },
       {
         "id": "country_insight",
         "title": "Country Insight",
@@ -2090,10 +3537,14 @@
               "default": "auto_top",
               "options": "auto_distinct",
               "required": true,
-              "appliesTo": ["round"]
+              "appliesTo": [
+                "round"
+              ]
             }
           ],
-          "buttons": { "reset": false }
+          "buttons": {
+            "reset": false
+          }
         },
         "layout": {
           "mode": "grid",
@@ -2105,7 +3556,7 @@
               "x": 0,
               "y": 0,
               "w": 12,
-              "h": 35,
+              "h": 18,
               "card": {
                 "type": "composite",
                 "children": [
@@ -2114,13 +3565,59 @@
                     "type": "stat_list",
                     "title": "Country spotlight",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 0, "w": 12, "h": 6 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 6
+                    },
                     "spec": {
                       "rows": [
-                        { "label": "Rounds", "measure": "rounds_count", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "Hit rate", "measure": "hit_rate", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "Avg score", "measure": "avg_score", "secondaryMeasure": "score_median", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
-                        { "label": "Avg distance", "measure": "avg_distance_km", "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } } },
+                        {
+                          "label": "Rounds",
+                          "measure": "rounds_count",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "Hit rate",
+                          "measure": "hit_rate",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "Avg score",
+                          "measure": "avg_score",
+                          "secondaryMeasure": "score_median",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
+                        {
+                          "label": "Avg distance",
+                          "measure": "avg_distance_km",
+                          "actions": {
+                            "click": {
+                              "type": "drilldown",
+                              "target": "rounds",
+                              "columnsPreset": "roundMode"
+                            }
+                          }
+                        },
                         {
                           "label": "Perfect 5k in this country",
                           "measure": "fivek_count",
@@ -2130,7 +3627,13 @@
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
-                              "extraFilters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "score_bucket",
+                                  "op": "eq",
+                                  "value": "5000"
+                                }
+                              ]
                             }
                           }
                         },
@@ -2143,7 +3646,13 @@
                               "type": "drilldown",
                               "target": "rounds",
                               "columnsPreset": "roundMode",
-                              "extraFilters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }]
+                              "extraFilters": [
+                                {
+                                  "dimension": "is_throw",
+                                  "op": "eq",
+                                  "value": "true"
+                                }
+                              ]
                             }
                           }
                         }
@@ -2155,15 +3664,33 @@
                     "type": "breakdown",
                     "title": "Top confusions (guessed country on misses)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 6, "w": 12, "h": 4 },
+                    "placement": {
+                      "x": 0,
+                      "y": 6,
+                      "w": 12,
+                      "h": 4
+                    },
                     "spec": {
                       "dimension": "guess_country",
                       "measure": "rounds_count",
-                      "filters": [{ "dimension": "is_hit", "op": "eq", "value": "false" }],
-                      "sort": { "mode": "desc" },
+                      "filters": [
+                        {
+                          "dimension": "is_hit",
+                          "op": "eq",
+                          "value": "false"
+                        }
+                      ],
+                      "sort": {
+                        "mode": "desc"
+                      },
                       "limit": 3,
                       "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
                   },
@@ -2172,473 +3699,91 @@
                     "type": "chart",
                     "title": "Score distribution (smoothed)",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 10, "w": 12, "h": 8 },
+                    "placement": {
+                      "x": 0,
+                      "y": 10,
+                      "w": 12,
+                      "h": 8
+                    },
                     "spec": {
                       "type": "bar",
                       "limit": 200,
-                      "x": { "dimension": "score_bucket" },
-                      "y": { "measure": "rounds_count" },
-                      "sort": { "mode": "chronological" },
+                      "x": {
+                        "dimension": "score_bucket"
+                      },
+                      "y": {
+                        "measure": "rounds_count"
+                      },
+                      "sort": {
+                        "mode": "chronological"
+                      },
                       "actions": {
                         "hover": true,
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
+                        "click": {
+                          "type": "drilldown",
+                          "target": "rounds",
+                          "columnsPreset": "roundMode",
+                          "filterFromPoint": true
+                        }
                       }
                     }
-                  },
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+        {
+          "id": "admin",
+          "title": "Detailed admin analysis",
+          "localFilters": {
+            "enabled": true,
+            "controls": [
+            {
+              "id": "adminCountry",
+              "type": "select",
+              "label": "Country",
+              "dimension": "true_country",
+              "default": "auto_top",
+              "options": "auto_distinct",
+              "required": true,
+              "appliesTo": [
+                "round"
+              ]
+            }
+          ],
+          "buttons": {
+            "reset": true
+          }
+        },
+        "layout": {
+          "mode": "grid",
+          "columns": 12,
+          "cards": [
+            {
+              "cardId": "card_admin",
+              "title": "Detailed admin analysis: {{local.adminCountry}}",
+              "x": 0,
+              "y": 0,
+              "w": 12,
+              "h": 22,
+              "card": {
+                "type": "composite",
+                "children": [
                   {
-                    "widgetId": "w_country_insight_admin_hit_de",
-                    "type": "stat_list",
-                    "title": "Administrative unit accuracy (selected country)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 3 },
-                    "spec": {
-                      "enrichDimensions": ["true_state", "guess_state", "true_district", "guess_district"],
-                      "rows": [
-                        {
-                          "label": "Correct Bundesland (ADM1)",
-                          "measure": "admin_hit_rate_de_state",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        },
-                        {
-                          "label": "Correct Landkreis (ADM2)",
-                          "measure": "admin_hit_rate_de_district",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_admin_hit_id",
-                    "type": "stat_list",
-                    "title": "Administrative unit accuracy (selected country)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 3 },
-                    "spec": {
-                      "enrichDimensions": ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"],
-                      "rows": [
-                        {
-                          "label": "Correct province (ADM1)",
-                          "measure": "admin_hit_rate_id_province",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        },
-                        {
-                          "label": "Correct kabupaten / regency (ADM2)",
-                          "measure": "admin_hit_rate_id_kabupaten",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_admin_hit_us",
-                    "type": "stat_list",
-                    "title": "Administrative unit accuracy (selected country)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["us", "US"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
-                    "spec": {
-                      "enrichDimensions": ["true_us_state", "guess_us_state"],
-                      "rows": [
-                        {
-                          "label": "Correct state (ADM1)",
-                          "measure": "admin_hit_rate_us_state",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_admin_hit_ca",
-                    "type": "stat_list",
-                    "title": "Administrative unit accuracy (selected country)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["ca", "CA"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
-                    "spec": {
-                      "enrichDimensions": ["true_ca_province", "guess_ca_province"],
-                      "rows": [
-                        {
-                          "label": "Correct province / territory (ADM1)",
-                          "measure": "admin_hit_rate_ca_province",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_admin_hit_ph",
-                    "type": "stat_list",
-                    "title": "Administrative unit accuracy (selected country)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["ph", "PH"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
-                    "spec": {
-                      "enrichDimensions": ["true_ph_province", "guess_ph_province"],
-                      "rows": [
-                        {
-                          "label": "Correct province (ADM1)",
-                          "measure": "admin_hit_rate_ph_province",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_admin_hit_vn",
-                    "type": "stat_list",
-                    "title": "Administrative unit accuracy (selected country)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["vn", "VN"] },
-                    "placement": { "x": 0, "y": 18, "w": 12, "h": 2 },
-                    "spec": {
-                      "enrichDimensions": ["true_vn_province", "guess_vn_province"],
-                      "rows": [
-                        {
-                          "label": "Correct province (ADM1)",
-                          "measure": "admin_hit_rate_vn_province",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode" } }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_de_states",
-                    "type": "multi_view",
-                    "title": "Germany - Level 1: States (Bundesländer)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 21, "w": 12, "h": 6 },
-                    "spec": {
-                      "activeView": "bar",
-                      "views": [
-                        {
-                          "id": "bar",
-                          "label": "Bar",
-                          "type": "breakdown",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_state",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "rounds_count",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
-                            "limit": 12,
-                            "extendable": true,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "map",
-                          "label": "Map",
-                          "type": "region_map",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_state",
-                            "geojsonUrl": "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
-                            "featureKey": "name",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "avg_score",
-                            "mapHeight": 380,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_us_states",
-                    "type": "multi_view",
-                    "title": "United States - States",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["us", "US"] },
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
-                    "spec": {
-                      "activeView": "map",
-                      "views": [
-                        {
-                          "id": "bar",
-                          "label": "Bar",
-                          "type": "breakdown",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_us_state",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "rounds_count",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
-                            "limit": 15,
-                            "extendable": true,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "map",
-                          "label": "Map",
-                          "type": "region_map",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_us_state",
-                            "geojsonUrl": "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson",
-                            "featureKey": "name",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "avg_score",
-                            "mapHeight": 380,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_ca_provinces",
-                    "type": "multi_view",
-                    "title": "Canada - Provinces & Territories",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["ca", "CA"] },
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
-                    "spec": {
-                      "activeView": "map",
-                      "views": [
-                        {
-                          "id": "bar",
-                          "label": "Bar",
-                          "type": "breakdown",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_ca_province",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "rounds_count",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
-                            "limit": 15,
-                            "extendable": true,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "map",
-                          "label": "Map",
-                          "type": "region_map",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_ca_province",
-                            "geojsonUrl": "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson",
-                            "featureKey": "name",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "avg_score",
-                            "mapHeight": 380,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_id_provinces",
-                    "type": "multi_view",
-                    "title": "Indonesia - Level 1: Provinces",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
-                    "placement": { "x": 0, "y": 21, "w": 12, "h": 6 },
-                    "spec": {
-                      "activeView": "map",
-                      "views": [
-                        {
-                          "id": "bar",
-                          "label": "Bar",
-                          "type": "breakdown",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_id_province",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "rounds_count",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
-                            "limit": 15,
-                            "extendable": true,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "map",
-                          "label": "Map",
-                          "type": "region_map",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_id_province",
-                            "geojsonUrl": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson",
-                            "featureKey": "shapeName",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "avg_score",
-                            "mapHeight": 380,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_ph_provinces",
-                    "type": "multi_view",
-                    "title": "Philippines - Provinces",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["ph", "PH"] },
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
-                    "spec": {
-                      "activeView": "map",
-                      "views": [
-                        {
-                          "id": "bar",
-                          "label": "Bar",
-                          "type": "breakdown",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_ph_province",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "rounds_count",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
-                            "limit": 15,
-                            "extendable": true,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "map",
-                          "label": "Map",
-                          "type": "region_map",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_ph_province",
-                            "geojsonUrl": "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson",
-                            "featureKey": "shapeName",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "avg_score",
-                            "mapHeight": 380,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_vn_provinces",
-                    "type": "multi_view",
-                    "title": "Vietnam - Provinces",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["vn", "VN"] },
-                    "placement": { "x": 0, "y": 20, "w": 12, "h": 6 },
-                    "spec": {
-                      "activeView": "map",
-                      "views": [
-                        {
-                          "id": "bar",
-                          "label": "Bar",
-                          "type": "breakdown",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_vn_province",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "rounds_count",
-                            "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                            "activeSort": { "mode": "desc" },
-                            "limit": 15,
-                            "extendable": true,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        },
-                        {
-                          "id": "map",
-                          "label": "Map",
-                          "type": "region_map",
-                          "grain": "round",
-                          "spec": {
-                            "dimension": "true_vn_province",
-                            "geojsonUrl": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson",
-                            "featureKey": "shapeName",
-                            "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                            "activeMeasure": "avg_score",
-                            "mapHeight": 380,
-                            "actions": {
-                              "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_de_districts",
-                    "type": "breakdown",
-                    "title": "Germany - Level 2: Districts (Landkreise)",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["de", "DE"] },
-                    "placement": { "x": 0, "y": 27, "w": 12, "h": 5 },
-                    "spec": {
-                      "dimension": "true_district",
-                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                      "activeMeasure": "rounds_count",
-                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "desc" },
-                      "limit": 15,
-                      "extendable": true,
-                      "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                      }
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_id_kabupaten",
-                    "type": "breakdown",
-                    "title": "Indonesia - Level 2: Kabupaten / Regencies",
-                    "grain": "round",
-                    "showIfLocal": { "id": "spotlightCountry", "in": ["id", "ID"] },
-                    "placement": { "x": 0, "y": 27, "w": 12, "h": 5 },
-                    "spec": {
-                      "dimension": "true_id_kabupaten",
-                      "measures": ["rounds_count", "hit_rate", "avg_score", "avg_distance_km", "avg_guess_duration", "fivek_rate", "throw_rate"],
-                      "activeMeasure": "rounds_count",
-                      "sorts": [{ "mode": "desc" }, { "mode": "asc" }],
-                      "activeSort": { "mode": "desc" },
-                      "limit": 15,
-                      "extendable": true,
-                      "actions": {
-                        "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true }
-                      }
-                    }
-                  },
-                  {
-                    "widgetId": "w_country_insight_admin_enrich",
-                    "type": "admin_enrichment",
+                    "widgetId": "w_admin_analysis",
+                    "type": "admin_analysis",
                     "title": "Detailed admin analysis",
                     "grain": "round",
-                    "placement": { "x": 0, "y": 32, "w": 12, "h": 3 },
+                    "placement": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 12,
+                      "h": 18
+                    },
                     "spec": {
-                      "description": "Start an on-demand enrichment for this country (downloads admin boundaries and computes province/state fields). This makes admin hit-rate rows and region maps available."
+                      "description": "Run an on-demand enrichment for the selected country to enable admin-level accuracy stats and region maps."
                     }
                   }
                 ]

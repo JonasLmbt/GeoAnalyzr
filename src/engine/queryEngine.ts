@@ -714,6 +714,10 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     }
     setLoadingProgress({ phase: "Validating games (round indices)...", current: outRows.length, total: outRows.length });
 
+    for (const [gid, n] of uniqueRoundCountByGame.entries()) {
+      if (n < 2) invalid.add(gid);
+    }
+
     corruptedGameIdsCache = invalid;
   } catch {
     // ignore - best-effort data quality cache
@@ -1054,7 +1058,7 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
     const gid = typeof g?.gameId === "string" ? g.gameId : "";
     if (gid && corruptedGameIdsCache?.has(gid)) return false;
     const rc = typeof g?.roundsCount === "number" && Number.isFinite(g.roundsCount) ? g.roundsCount : 0;
-    return rc <= 25;
+    return rc >= 2 && rc <= 25;
   });
   setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
 

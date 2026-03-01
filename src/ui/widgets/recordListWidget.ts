@@ -147,6 +147,8 @@ function buildGroupExtreme(
   const isPlausibleGameGroup = (rows: any[]): boolean => {
     if (groupById !== "game_id") return true;
     if (!Array.isArray(rows) || rows.length === 0) return false;
+    // A "game" with <2 rounds is invalid (even 1 round shouldn't exist for Duels/Team Duels).
+    if (rows.length < 2) return false;
     if (rows.length > 25) return false;
 
     const nums: number[] = [];
@@ -202,6 +204,15 @@ function buildGroupExtreme(
       if (valid === 0) continue;
       if (valid / Math.max(1, total) < 0.5) continue;
     }
+    if (grain === "round" && metricId === "score_spread") {
+      const total = g.length;
+      let valid = 0;
+      for (const r of g) if (getScore(r, semantic) !== null) valid++;
+      if (valid < 2) continue;
+      // For per-game spreads we must have complete coverage; otherwise a missing round score can
+      // incorrectly look like a huge spread (e.g. 5000 - 0) due to legacy fallbacks.
+      if (groupById === "game_id" && valid !== total) continue;
+    }
 
     const v = (() => {
       if (grain === "round" && metricId === "avg_score") {
@@ -225,6 +236,19 @@ function buildGroupExtreme(
           n++;
         }
         return n ? sum / n : NaN;
+      }
+      if (grain === "round" && metricId === "score_spread") {
+        let min = Infinity;
+        let max = -Infinity;
+        let n = 0;
+        for (const r of g as any[]) {
+          const s = getScore(r, semantic);
+          if (s === null) continue;
+          n++;
+          if (s < min) min = s;
+          if (s > max) max = s;
+        }
+        return n >= 2 && Number.isFinite(min) && Number.isFinite(max) ? Math.max(0, max - min) : NaN;
       }
       return fn(g);
     })();

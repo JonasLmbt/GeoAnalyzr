@@ -9,9 +9,18 @@ function legacy(obj: any, ...keys: string[]): any {
 }
 
 export function getSelfScore(r: RoundRow): number | undefined {
-  const selfRaw = legacy(r, "player_self_score", "p1_score", "score");
-  const self = typeof selfRaw === "number" ? selfRaw : undefined;
-  return typeof self === "number" ? self : undefined;
+  // Prefer explicit "self score" fields. Only fall back to a generic `score` if the row does not
+  // appear to be in the newer denormalized shape (where `score` can mean something else / be unset).
+  const hasExplicitSelfScoreKey =
+    r &&
+    typeof r === "object" &&
+    ("player_self_score" in (r as any) ||
+      "playerSelfScore" in (r as any) ||
+      "p1_score" in (r as any) ||
+      "p1Score" in (r as any));
+
+  const selfRaw = hasExplicitSelfScoreKey ? legacy(r, "player_self_score", "p1_score") : legacy(r, "player_self_score", "p1_score", "score");
+  return typeof selfRaw === "number" ? selfRaw : undefined;
 }
 
 export function getPlayedAt(r: RoundRow): number | undefined {
