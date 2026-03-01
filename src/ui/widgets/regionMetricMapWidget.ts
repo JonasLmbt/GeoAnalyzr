@@ -22,6 +22,32 @@ function project(lon: number, lat: number, w: number, h: number): [number, numbe
   return [x, y];
 }
 
+function boundsFromGeoJson(geojson: any): { minLon: number; minLat: number; maxLon: number; maxLat: number } | null {
+  const features = Array.isArray(geojson?.features) ? geojson.features : [];
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  const add = (lon: number, lat: number) => {
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+    minLon = Math.min(minLon, lon);
+    minLat = Math.min(minLat, lat);
+    maxLon = Math.max(maxLon, lon);
+    maxLat = Math.max(maxLat, lat);
+  };
+  const walk = (c: any): void => {
+    if (!Array.isArray(c)) return;
+    if (c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number") {
+      add(Number(c[0]), Number(c[1]));
+      return;
+    }
+    for (const x of c) walk(x);
+  };
+  for (const f of features) {
+    const coords = f?.geometry?.coordinates;
+    if (coords) walk(coords);
+  }
+  if (!Number.isFinite(minLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLon) || !Number.isFinite(maxLat)) return null;
+  return { minLon, minLat, maxLon, maxLat };
+}
+
 function pathFromGeo(geometry: any, w: number, h: number): string {
   const d: string[] = [];
   const addRing = (ring: any[]) => {
@@ -473,8 +499,27 @@ export async function renderRegionMetricMapWidget(
       });
     }
 
-    let vp: Viewport = { scale: 1, tx: 0, ty: 0 };
-    applyViewport(g, vp);
+      let vp: Viewport = { scale: 1, tx: 0, ty: 0 };
+      if (spec.fitToGeoJson) {
+        const b = boundsFromGeoJson(geojson);
+        if (b) {
+          const [x0, y0] = project(b.minLon, b.maxLat, W, H);
+          const [x1, y1] = project(b.maxLon, b.minLat, W, H);
+          const minX = Math.min(x0, x1);
+          const maxX = Math.max(x0, x1);
+          const minY = Math.min(y0, y1);
+          const maxY = Math.max(y0, y1);
+          const spanX = Math.max(1, maxX - minX);
+          const spanY = Math.max(1, maxY - minY);
+          const margin = 0.08;
+          const s = Math.min((W * (1 - margin * 2)) / spanX, (H * (1 - margin * 2)) / spanY);
+          const scale = Math.max(1, Math.min(12, s));
+          const tx = (W - spanX * scale) / 2 - minX * scale;
+          const ty = (H - spanY * scale) / 2 - minY * scale;
+          vp = { scale, tx, ty };
+        }
+      }
+      applyViewport(g, vp);
 
     const rectPoint = (clientX: number, clientY: number): { x: number; y: number } => {
       const r = svg.getBoundingClientRect();

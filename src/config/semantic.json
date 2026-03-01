@@ -160,18 +160,34 @@
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 40 }
     },
-    "true_vn_province": {
-      "label": "Vietnam province",
-      "kind": "category",
-      "grain": "round",
-      "allowedCharts": ["bar"],
-      "sortModes": ["asc", "desc"],
-      "cardinality": { "policy": "large", "maxSeries": 40 }
-    },
-    "true_location": {
-      "label": "True location",
-      "kind": "category",
-      "grain": "round",
+      "true_vn_province": {
+        "label": "Vietnam province",
+        "kind": "category",
+        "grain": "round",
+        "allowedCharts": ["bar"],
+        "sortModes": ["asc", "desc"],
+        "cardinality": { "policy": "large", "maxSeries": 40 }
+      },
+      "admin_true_unit": {
+        "label": "Admin unit",
+        "kind": "category",
+        "grain": "round",
+        "allowedCharts": ["bar", "map"],
+        "sortModes": ["asc", "desc"],
+        "cardinality": { "policy": "large", "maxSeries": 80, "selectorRequired": true }
+      },
+      "admin_guess_unit": {
+        "label": "Guessed admin unit",
+        "kind": "category",
+        "grain": "round",
+        "allowedCharts": ["bar"],
+        "sortModes": ["asc", "desc"],
+        "cardinality": { "policy": "large", "maxSeries": 80, "selectorRequired": true }
+      },
+      "true_location": {
+        "label": "True location",
+        "kind": "category",
+        "grain": "round",
       "allowedCharts": ["bar"],
       "sortModes": ["asc", "desc"],
       "cardinality": { "policy": "large", "maxSeries": 50, "selectorRequired": true }
@@ -887,18 +903,42 @@
       "formulaId": "rate_ph_province_hit",
       "range": { "min": 0, "max": 100 }
     },
-    "admin_hit_rate_vn_province": {
-      "label": "Admin-unit hit rate (VN ADM1)",
-      "unit": "percent",
-      "grain": "round",
-      "allowedCharts": ["bar", "line"],
-      "formulaId": "rate_vn_province_hit",
-      "range": { "min": 0, "max": 100 }
-    },
-    "hit_count": {
-      "label": "Hit count",
-      "unit": "count",
-      "grain": "round",
+      "admin_hit_rate_vn_province": {
+        "label": "Admin-unit hit rate (VN ADM1)",
+        "unit": "percent",
+        "grain": "round",
+        "allowedCharts": ["bar", "line"],
+        "formulaId": "rate_vn_province_hit",
+        "range": { "min": 0, "max": 100 }
+      },
+      "admin_unit_hit_rate": {
+        "label": "Admin-unit hit rate",
+        "unit": "percent",
+        "grain": "round",
+        "allowedCharts": ["bar", "line", "map"],
+        "formulaId": "rate_admin_unit_hit",
+        "range": { "min": 0, "max": 100 }
+      },
+      "admin_unit_hit_count": {
+        "label": "Admin hits",
+        "unit": "count",
+        "grain": "round",
+        "allowedCharts": ["bar", "line", "map"],
+        "formulaId": "count_admin_unit_hit",
+        "range": { "min": 0 }
+      },
+      "admin_unit_miss_count": {
+        "label": "Admin misses",
+        "unit": "count",
+        "grain": "round",
+        "allowedCharts": ["bar", "line", "map"],
+        "formulaId": "count_admin_unit_miss",
+        "range": { "min": 0 }
+      },
+      "hit_count": {
+        "label": "Hit count",
+        "unit": "count",
+        "grain": "round",
       "allowedCharts": ["bar", "line"],
       "formulaId": "count_hit_round",
       "range": { "min": 0 },

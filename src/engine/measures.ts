@@ -49,6 +49,28 @@ function rateStringFieldEq(rows: any[], trueKey: string, guessKey: string): numb
   return denom ? num / denom : 0;
 }
 
+function countStringFieldEq(rows: any[], trueKey: string, guessKey: string): number {
+  let n = 0;
+  for (const r of rows as any[]) {
+    const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
+    const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
+    if (!t || !g) continue;
+    if (t === g) n++;
+  }
+  return n;
+}
+
+function countStringFieldNeq(rows: any[], trueKey: string, guessKey: string): number {
+  let n = 0;
+  for (const r of rows as any[]) {
+    const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
+    const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
+    if (!t || !g) continue;
+    if (t !== g) n++;
+  }
+  return n;
+}
+
 function isThrowLt50(r: RoundRow): boolean {
   const s = getSelfScore(r);
   return typeof s === "number" && s < 50;
@@ -344,9 +366,14 @@ export const ROUND_MEASURES_BY_FORMULA_ID: Record<string, (rows: RoundRow[]) => 
   rate_us_state_hit: (rows) => rateStringFieldEq(rows as any[], "trueUsState", "guessUsState"),
   rate_ca_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueCaProvince", "guessCaProvince"),
   rate_id_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueIdProvince", "guessIdProvince"),
-  rate_id_kabupaten_hit: (rows) => rateStringFieldEq(rows as any[], "trueIdKabupaten", "guessIdKabupaten"),
-  rate_ph_province_hit: (rows) => rateStringFieldEq(rows as any[], "truePhProvince", "guessPhProvince"),
-  rate_vn_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueVnProvince", "guessVnProvince"),
+    rate_id_kabupaten_hit: (rows) => rateStringFieldEq(rows as any[], "trueIdKabupaten", "guessIdKabupaten"),
+    rate_ph_province_hit: (rows) => rateStringFieldEq(rows as any[], "truePhProvince", "guessPhProvince"),
+    rate_vn_province_hit: (rows) => rateStringFieldEq(rows as any[], "trueVnProvince", "guessVnProvince"),
+
+    // Dynamic, on-demand admin unit hit-rate (used by the Regions section; values are computed in-memory only).
+    rate_admin_unit_hit: (rows) => rateStringFieldEq(rows as any[], "adminTrueUnit", "adminGuessUnit"),
+    count_admin_unit_hit: (rows) => countStringFieldEq(rows as any[], "adminTrueUnit", "adminGuessUnit"),
+    count_admin_unit_miss: (rows) => countStringFieldNeq(rows as any[], "adminTrueUnit", "adminGuessUnit"),
 
   rate_throw_round: (rows) => {
     const n = rows.length;

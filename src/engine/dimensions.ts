@@ -427,14 +427,22 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
     true_district: trueDistrictKey,
     true_us_state: trueUsStateKey,
     true_ca_province: trueCaProvinceKey,
-    true_id_province: trueIdProvinceKey,
-    true_id_kabupaten: trueIdKabupatenKey,
-    true_ph_province: truePhProvinceKey,
-    true_vn_province: trueVnProvinceKey,
-    mode_family: (r: any) => {
-      const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
-      if (!v) return null;
-      if (v === "duels") return "Duel";
+      true_id_province: trueIdProvinceKey,
+      true_id_kabupaten: trueIdKabupatenKey,
+      true_ph_province: truePhProvinceKey,
+      true_vn_province: trueVnProvinceKey,
+      admin_true_unit: (r: any) => {
+        const v = typeof (r as any)?.adminTrueUnit === "string" ? String((r as any).adminTrueUnit).trim() : "";
+        return v ? v : null;
+      },
+      admin_guess_unit: (r: any) => {
+        const v = typeof (r as any)?.adminGuessUnit === "string" ? String((r as any).adminGuessUnit).trim() : "";
+        return v ? v : null;
+      },
+      mode_family: (r: any) => {
+        const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
+        if (!v) return null;
+        if (v === "duels") return "Duel";
       if (v === "teamduels") return "Team Duel";
       return v;
     },

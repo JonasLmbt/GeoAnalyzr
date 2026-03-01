@@ -1,219 +1,303 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef } from "../../config/dashboard.types";
 import type { Grain } from "../../config/semantic.types";
-import { db } from "../../db";
 import { analysisConsole } from "../consoleStore";
-import { MEASURES_BY_GRAIN } from "../../engine/measures";
-import { invalidateAdminEnrichmentEnabledCache } from "../../engine/regionEnrichment";
 import { renderMultiViewWidget } from "./multiViewWidget";
 import { renderBreakdownWidget } from "./breakdownWidget";
 import { renderRegionMetricMapWidget } from "./regionMetricMapWidget";
 import { DrilldownOverlay } from "../drilldownOverlay";
-import { getAdminEnrichmentPlan, runAdminEnrichment } from "./adminEnrichmentWidget";
+
+type AdminLevel = {
+  id: string; // e.g. "ADM1"
+  label: string; // e.g. "Provinces (ADM1)"
+  iso2: string;
+  iso3: string;
+  geojsonUrl: string;
+  featureKey: string;
+};
+
+type LoadedLevel = {
+  level: AdminLevel;
+  geojson: any;
+  // per-feature bbox to speed up point-in-polygon lookups
+  features: { name: string; bbox: [number, number, number, number]; geometry: any }[];
+  // cache computed labels for row objects (not persisted; survives only until page refresh)
+  computed: WeakMap<any, { t: string | null; g: string | null }>;
+};
+
+const LEVEL_CACHE = new Map<string, LoadedLevel>(); // key: `${iso3}:${ADM}`
+const ISO3_CACHE = new Map<string, string>(); // iso2 -> iso3
+const ISO_NAME_CACHE = new Map<string, string>(); // iso2 -> country name
+const ISO_LOOKUP_URL = "https://raw.githubusercontent.com/lukes/ISO-3166-Countries-with-Regional-Codes/master/all/all.json";
+let ISO_LOOKUP_PROMISE: Promise<void> | null = null;
 
 function asIso2(v: unknown): string {
   const s = typeof v === "string" ? v.trim().toLowerCase() : "";
   return /^[a-z]{2}$/.test(s) ? s : "";
 }
 
-function metaKeyForCountry(iso2: string): string {
-  return `admin_enrichment_enabled_${iso2.toLowerCase()}`;
+function clamp(v: number, a: number, b: number): number {
+  return Math.max(a, Math.min(b, v));
 }
 
-function formatValue(doc: Document, semantic: SemanticRegistry, measureId: string, value: number): string {
-  const m = semantic.measures[measureId];
-  const unit = m ? semantic.units[m.unit] : undefined;
-  if (!unit) return String(value);
-
-  if (unit.format === "percent") {
-    const decimals = unit.decimals ?? 1;
-    const clamped = Math.max(0, Math.min(1, value));
-    return `${(clamped * 100).toFixed(decimals)}%`;
-  }
-  if (unit.format === "duration") {
-    const s = Math.max(0, Math.round(value));
-    const days = Math.floor(s / 86400);
-    const hours = Math.floor((s % 86400) / 3600);
-    const mins = Math.floor((s % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h`;
-    if (hours > 0) return `${hours}h ${mins}m`;
-    if (mins > 0) return `${mins}m ${s % 60}s`;
-    return `${(Math.max(0, value)).toFixed(1)}s`;
-  }
-  if (unit.format === "int") {
-    const v = Math.round(value);
-    return unit.showSign && v > 0 ? `+${v}` : String(v);
-  }
-  if (unit.format === "datetime") {
-    const d = new Date(value);
-    return Number.isFinite(d.getTime()) ? d.toLocaleString() : String(value);
-  }
-
-  const decimals = unit.decimals ?? 1;
-  const txt = Number.isFinite(value) ? value.toFixed(decimals) : String(value);
-  return unit.showSign && value > 0 ? `+${txt}` : txt;
-}
-
-type AdminLevelSpec = {
-  id: string;
-  label: string;
-  trueDim: string;
-  hitMeasureId: string;
-  map?: { geojsonUrl: string; featureKey: string };
-};
-
-const GEOBOUNDARIES_SHA = "9469f09592ced973a3448cf66b6100b741b64c0d";
-const geoBoundariesMedia = (iso3: string, adm: string): string =>
-  `https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/${GEOBOUNDARIES_SHA}/releaseData/gbOpen/${iso3}/${adm}/geoBoundaries-${iso3}-${adm}_simplified.geojson`;
-
-const DEFAULT_MEASURES: string[] = [
-  "rounds_count",
-  "hit_rate",
-  "avg_score",
-  "avg_distance_km",
-  "avg_guess_duration",
-  "fivek_rate",
-  "throw_rate",
-  "damage_dealt_avg",
-  "damage_taken_avg",
-  "damage_net_avg"
-];
-
-const ADMIN_SPECS_BY_COUNTRY: Record<string, { label: string; levels: AdminLevelSpec[] }> = {
-    de: {
-      label: "Germany",
-      levels: [
-        {
-          id: "adm1",
-          label: "States (Bundesländer) (ADM1)",
-          trueDim: "true_state",
-          hitMeasureId: "admin_hit_rate_de_state",
-          map: {
-            geojsonUrl: "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json",
-            featureKey: "name"
-          }
-        },
-        {
-          id: "adm2",
-          label: "Districts (Landkreise) (ADM2)",
-          trueDim: "true_district",
-          hitMeasureId: "admin_hit_rate_de_district"
+async function ensureIsoLookupLoaded(): Promise<void> {
+  if (ISO_LOOKUP_PROMISE) return ISO_LOOKUP_PROMISE;
+  ISO_LOOKUP_PROMISE = (async () => {
+    try {
+      const res = await fetch(ISO_LOOKUP_URL, { credentials: "omit" as any });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arr = (await res.json()) as any[];
+      if (!Array.isArray(arr)) return;
+      for (const item of arr) {
+        const a2 = typeof item?.["alpha-2"] === "string" ? item["alpha-2"].trim().toLowerCase() : "";
+        const a3 = typeof item?.["alpha-3"] === "string" ? item["alpha-3"].trim().toUpperCase() : "";
+        const name = typeof item?.name === "string" ? item.name.trim() : "";
+        if (a2 && a3 && /^[a-z]{2}$/.test(a2) && /^[A-Z]{3}$/.test(a3)) {
+          ISO3_CACHE.set(a2, a3);
+          if (name) ISO_NAME_CACHE.set(a2, name);
         }
-      ]
-    },
-    us: {
-      label: "United States",
-      levels: [
-        {
-          id: "adm1",
-          label: "States (ADM1)",
-          trueDim: "true_us_state",
-          hitMeasureId: "admin_hit_rate_us_state",
-          map: {
-            geojsonUrl: "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson",
-            featureKey: "name"
-          }
-        }
-      ]
-    },
-    ca: {
-      label: "Canada",
-      levels: [
-        {
-          id: "adm1",
-          label: "Provinces & Territories (ADM1)",
-          trueDim: "true_ca_province",
-          hitMeasureId: "admin_hit_rate_ca_province",
-          map: {
-            geojsonUrl: "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson",
-            featureKey: "name"
-          }
-        }
-      ]
-    },
-    id: {
-      label: "Indonesia",
-      levels: [
-        {
-          id: "adm1",
-          label: "Provinces (ADM1)",
-          trueDim: "true_id_province",
-          hitMeasureId: "admin_hit_rate_id_province",
-          map: {
-            geojsonUrl: geoBoundariesMedia("IDN", "ADM1"),
-            featureKey: "shapeName"
-          }
-        },
-        {
-          id: "adm2",
-          label: "Kabupaten / Regencies (ADM2)",
-          trueDim: "true_id_kabupaten",
-          hitMeasureId: "admin_hit_rate_id_kabupaten",
-          map: {
-            geojsonUrl: geoBoundariesMedia("IDN", "ADM2"),
-            featureKey: "shapeName"
-          }
-        }
-      ]
-    },
-    ph: {
-      label: "Philippines",
-      levels: [
-        {
-          id: "adm1",
-          label: "Provinces (ADM1)",
-          trueDim: "true_ph_province",
-          hitMeasureId: "admin_hit_rate_ph_province",
-          map: {
-            geojsonUrl: geoBoundariesMedia("PHL", "ADM1"),
-            featureKey: "shapeName"
-          }
-        }
-      ]
-    },
-    vn: {
-      label: "Vietnam",
-      levels: [
-        {
-          id: "adm1",
-          label: "Provinces (ADM1)",
-          trueDim: "true_vn_province",
-          hitMeasureId: "admin_hit_rate_vn_province",
-          map: {
-            geojsonUrl: geoBoundariesMedia("VNM", "ADM1"),
-            featureKey: "shapeName"
-          }
-        }
-      ]
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      analysisConsole.warn(`ISO mapping fetch failed (${msg}). Only a small built-in mapping will work.`);
     }
+  })();
+  return ISO_LOOKUP_PROMISE;
+}
+
+async function iso2ToIso3(iso2: string): Promise<string | null> {
+  const key = asIso2(iso2);
+  if (!key) return null;
+  const builtIn: Record<string, string> = {
+    de: "DEU",
+    us: "USA",
+    ca: "CAN",
+    id: "IDN",
+    ph: "PHL",
+    vn: "VNM"
   };
-
-type AdminMetaValue = {
-  enabled?: boolean;
-  doneAt?: number;
-  rounds?: number;
-  dimIdsDone?: string[];
-  levels?: Record<
-    string,
-    {
-      enabled?: boolean;
-      inProgress?: boolean;
-      startedAt?: number;
-      doneAt?: number;
-      dimIds?: string[];
-    }
-  >;
-};
-
-async function getAdminMeta(iso2: string): Promise<AdminMetaValue> {
-  const meta = await db.meta.get(metaKeyForCountry(iso2));
-  const v = (meta?.value as any) ?? {};
-  return v as AdminMetaValue;
+  if (builtIn[key]) return builtIn[key];
+  await ensureIsoLookupLoaded();
+  return ISO3_CACHE.get(key) ?? null;
 }
 
-async function putAdminMeta(iso2: string, value: AdminMetaValue): Promise<void> {
-  await db.meta.put({ key: metaKeyForCountry(iso2), value, updatedAt: Date.now() });
-  invalidateAdminEnrichmentEnabledCache(iso2);
+type GeoBoundariesMeta = {
+  boundaryISO?: string;
+  boundaryType?: string;
+  boundaryName?: string;
+  simplifiedGeometryGeoJSON?: string;
+  staticDownloadLink?: string;
+};
+
+const GEOBOUNDARIES_SHA_BY_KEY = new Map<string, string>(); // key: `${iso3}:${adm}`
+
+async function fetchGeoBoundariesMeta(iso3: string, adm: string): Promise<GeoBoundariesMeta | null> {
+  const url = `https://www.geoboundaries.org/api/current/gbOpen/${encodeURIComponent(iso3)}/${encodeURIComponent(adm)}/`;
+  const res = await fetch(url, { credentials: "omit" as any });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GeoBoundaries API error: HTTP ${res.status}`);
+  return (await res.json()) as GeoBoundariesMeta;
+}
+
+async function resolveGeoBoundariesShaFromZip(meta: GeoBoundariesMeta, iso3: string, adm: string): Promise<string | null> {
+  const cacheKey = `${iso3}:${adm}`;
+  const cached = GEOBOUNDARIES_SHA_BY_KEY.get(cacheKey);
+  if (cached) return cached;
+  const zip = typeof meta.staticDownloadLink === "string" ? meta.staticDownloadLink : "";
+  if (!zip) return null;
+  const res = await fetch(zip, { method: "HEAD", redirect: "follow", credentials: "omit" as any });
+  // The final URL usually is a media.githubusercontent.com link containing the full SHA.
+  const finalUrl = (res as any)?.url as string | undefined;
+  const u = typeof finalUrl === "string" ? finalUrl : "";
+  const m = u.match(/media\/wmgeolab\/geoBoundaries\/([0-9a-f]{40})\//i);
+  if (!m) return null;
+  const sha = m[1];
+  GEOBOUNDARIES_SHA_BY_KEY.set(cacheKey, sha);
+  return sha;
+}
+
+async function resolveGeoJsonUrl(meta: GeoBoundariesMeta, iso3: string, adm: string): Promise<string> {
+  const raw = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON : "";
+  if (!raw) throw new Error("Missing simplifiedGeometryGeoJSON URL from GeoBoundaries API");
+  if (raw.includes("media.githubusercontent.com")) return raw;
+  // GitHub raw often returns Git LFS pointer text. Use the media URL by resolving the repo SHA via the zip redirect.
+  const sha = await resolveGeoBoundariesShaFromZip(meta, iso3, adm);
+  if (!sha) return raw; // fallback (may still fail)
+  return `https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/${sha}/releaseData/gbOpen/${iso3}/${adm}/geoBoundaries-${iso3}-${adm}_simplified.geojson`;
+}
+
+function pickFeatureKey(geojson: any): string {
+  const first = geojson?.features?.[0]?.properties ?? null;
+  if (!first || typeof first !== "object") return "shapeName";
+  const candidates = ["shapeName", "name", "NAME_1", "NAME_2", "adm1_name", "adm2_name"];
+  for (const k of candidates) if (k in first) return k;
+  // fallback: first string-like property
+  for (const [k, v] of Object.entries(first)) if (typeof v === "string" && v.trim()) return k;
+  return "shapeName";
+}
+
+function bboxFromGeometry(geom: any): [number, number, number, number] | null {
+  const type = geom?.type;
+  const coords = geom?.coordinates;
+  if (!type || !coords) return null;
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  const add = (lon: number, lat: number) => {
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+    minLon = Math.min(minLon, lon);
+    minLat = Math.min(minLat, lat);
+    maxLon = Math.max(maxLon, lon);
+    maxLat = Math.max(maxLat, lat);
+  };
+  const walk = (c: any): void => {
+    if (!Array.isArray(c)) return;
+    if (c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number") {
+      add(c[0], c[1]);
+      return;
+    }
+    for (const x of c) walk(x);
+  };
+  walk(coords);
+  if (!Number.isFinite(minLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLon) || !Number.isFinite(maxLat)) return null;
+  return [minLon, minLat, maxLon, maxLat];
+}
+
+function pointInRing(lon: number, lat: number, ring: any[]): boolean {
+  // Ray casting algorithm (lon=x, lat=y)
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = Number(ring[i]?.[0]);
+    const yi = Number(ring[i]?.[1]);
+    const xj = Number(ring[j]?.[0]);
+    const yj = Number(ring[j]?.[1]);
+    if (!Number.isFinite(xi) || !Number.isFinite(yi) || !Number.isFinite(xj) || !Number.isFinite(yj)) continue;
+    const intersect = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygon(lon: number, lat: number, geom: any): boolean {
+  const type = geom?.type;
+  const coords = geom?.coordinates;
+  if (!type || !coords) return false;
+  if (type === "Polygon") {
+    const rings = coords as any[];
+    if (!Array.isArray(rings) || rings.length === 0) return false;
+    if (!pointInRing(lon, lat, rings[0] as any[])) return false;
+    for (let i = 1; i < rings.length; i++) if (pointInRing(lon, lat, rings[i] as any[])) return false;
+    return true;
+  }
+  if (type === "MultiPolygon") {
+    for (const poly of coords as any[]) {
+      const rings = poly as any[];
+      if (!Array.isArray(rings) || rings.length === 0) continue;
+      if (!pointInRing(lon, lat, rings[0] as any[])) continue;
+      let inHole = false;
+      for (let i = 1; i < rings.length; i++) if (pointInRing(lon, lat, rings[i] as any[])) inHole = true;
+      if (!inHole) return true;
+    }
+    return false;
+  }
+  return false;
+}
+
+function findFeatureName(level: LoadedLevel, lat: number, lng: number): string | null {
+  const lon = lng;
+  const y = lat;
+  for (const f of level.features) {
+    const [minLon, minLat, maxLon, maxLat] = f.bbox;
+    if (lon < minLon || lon > maxLon || y < minLat || y > maxLat) continue;
+    if (pointInPolygon(lon, y, f.geometry)) return f.name || null;
+  }
+  return null;
+}
+
+function guessLatLngOf(r: any): { lat: number; lng: number } | null {
+  const lat =
+    typeof r?.player_self_guessLat === "number"
+      ? r.player_self_guessLat
+      : typeof r?.p1_guessLat === "number"
+        ? r.p1_guessLat
+        : typeof r?.guessLat === "number"
+          ? r.guessLat
+          : null;
+  const lng =
+    typeof r?.player_self_guessLng === "number"
+      ? r.player_self_guessLng
+      : typeof r?.p1_guessLng === "number"
+        ? r.p1_guessLng
+        : typeof r?.guessLng === "number"
+          ? r.guessLng
+          : null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
+
+async function listAvailableLevels(iso2: string): Promise<AdminLevel[]> {
+  const iso3 = await iso2ToIso3(iso2);
+  if (!iso3) return [];
+
+  const jobs = [1, 2, 3, 4].map(async (n) => {
+    const adm = `ADM${n}`;
+    const meta = await fetchGeoBoundariesMeta(iso3, adm);
+    if (!meta) return null;
+    const geojsonUrl = await resolveGeoJsonUrl(meta, iso3, adm);
+    const name =
+      typeof meta.boundaryName === "string" && meta.boundaryName.trim()
+        ? meta.boundaryName.trim()
+        : n === 1
+          ? "Provinces / States"
+          : n === 2
+            ? "Counties / Districts"
+            : `Admin level ${n}`;
+    return {
+      id: adm,
+      label: `${name} (${adm})`,
+      iso2,
+      iso3,
+      geojsonUrl,
+      featureKey: "shapeName"
+    } satisfies AdminLevel;
+  });
+
+  const levels = await Promise.all(jobs);
+  return levels.filter(Boolean) as AdminLevel[];
+}
+
+async function loadLevel(level: AdminLevel, onPct: (p: number) => void, onStatus: (s: string) => void): Promise<LoadedLevel> {
+  const key = `${level.iso3}:${level.id}`;
+  const cached = LEVEL_CACHE.get(key);
+  if (cached) return cached;
+
+  onStatus(`Downloading boundaries (${level.id})...`);
+  onPct(10);
+  const res = await fetch(level.geojsonUrl, { credentials: "omit" as any });
+  if (!res.ok) throw new Error(`GeoJSON fetch failed: HTTP ${res.status}`);
+  const txt = await res.text();
+  if (txt.trim().startsWith("version https://git-lfs.github.com/spec")) {
+    throw new Error("GeoJSON fetch returned a Git LFS pointer. Try again or pick another provider.");
+  }
+  const geojson = JSON.parse(txt);
+
+  const featureKey = pickFeatureKey(geojson);
+  onStatus("Indexing features...");
+  onPct(25);
+
+  const feats: LoadedLevel["features"] = [];
+  const features = Array.isArray(geojson?.features) ? geojson.features : [];
+  for (let i = 0; i < features.length; i++) {
+    const f = features[i];
+    const props = f?.properties ?? {};
+    const name = typeof props?.[featureKey] === "string" ? String(props[featureKey]) : "";
+    const bbox = bboxFromGeometry(f?.geometry);
+    if (!bbox || !name) continue;
+    feats.push({ name, bbox, geometry: f.geometry });
+    if (i % 200 === 0) await new Promise<void>((r) => setTimeout(r, 0));
+  }
+
+  const loaded: LoadedLevel = { level: { ...level, featureKey }, geojson, features: feats, computed: new WeakMap() };
+  LEVEL_CACHE.set(key, loaded);
+  return loaded;
 }
 
 export async function renderAdminAnalysisWidget(
@@ -228,58 +312,55 @@ export async function renderAdminAnalysisWidget(
 
   const title = doc.createElement("div");
   title.className = "ga-widget-title";
-  title.textContent = widget.title || "Detailed admin analysis";
+  title.textContent = widget.title || "Regional accuracy";
   el.appendChild(title);
 
-  const body = doc.createElement("div");
-  body.style.display = "flex";
-  body.style.flexDirection = "column";
-  body.style.gap = "10px";
-  el.appendChild(body);
-
+  const rows = Array.isArray(baseRows) ? baseRows : [];
+  void ensureIsoLookupLoaded();
   const countryIso2 = (() => {
-    const first = Array.isArray(baseRows) ? baseRows.find((r) => r && typeof r === "object") : null;
+    const first = rows.find((r) => r && typeof r === "object");
     return asIso2(first?.trueCountry ?? first?.true_country);
   })();
 
-  if (!countryIso2) {
-    const msg = doc.createElement("div");
-    msg.textContent = "Pick a country using the Admin section's country filter.";
-    body.appendChild(msg);
-    return el;
-  }
+  const hint = doc.createElement("div");
+  hint.className = "ga-muted";
+  hint.style.fontSize = "12px";
+  hint.textContent = countryIso2
+    ? "Load a region level (ADM1/ADM2/…) to see accuracy + maps. Nothing is stored in your database."
+    : "Pick a country using the section filter first.";
+  el.appendChild(hint);
 
-  const plan = getAdminEnrichmentPlan(countryIso2);
-  const spec = ADMIN_SPECS_BY_COUNTRY[countryIso2];
-  if (!plan || !spec) {
-    const msg = doc.createElement("div");
-    msg.textContent = `No detailed admin-level dataset configured for '${countryIso2.toUpperCase()}' yet.`;
-    body.appendChild(msg);
-    return el;
-  }
+  if (!countryIso2) return el;
 
   const summary = doc.createElement("div");
+  summary.className = "ga-muted";
   summary.style.fontSize = "12px";
-  summary.style.opacity = "0.9";
-  summary.textContent = "Available admin levels:";
-  body.appendChild(summary);
+  summary.style.marginTop = "10px";
+  summary.textContent = `Country: ${countryIso2.toUpperCase()} • Rounds in selection: ${rows.length}`;
+  el.appendChild(summary);
 
-  const list = doc.createElement("ul");
-  list.style.margin = "0";
-  list.style.paddingLeft = "16px";
-  list.style.fontSize = "12px";
-  list.style.opacity = "0.9";
-  for (const lvl of spec.levels) {
-    const li = doc.createElement("li");
-    li.textContent = `${lvl.label}${lvl.map ? " (map)" : ""}`;
-    list.appendChild(li);
-  }
-  body.appendChild(list);
+  void (async () => {
+    await ensureIsoLookupLoaded();
+    const name = ISO_NAME_CACHE.get(countryIso2);
+    if (!name) return;
+    summary.textContent = `Country: ${name} (${countryIso2.toUpperCase()}) • Rounds in selection: ${rows.length}`;
+  })();
+
+  const levelsTitle = doc.createElement("div");
+  levelsTitle.style.marginTop = "12px";
+  levelsTitle.style.fontWeight = "600";
+  levelsTitle.textContent = "Available admin levels";
+  el.appendChild(levelsTitle);
+
+  const levelsBox = doc.createElement("div");
+  levelsBox.className = "ga-statlist-box";
+  el.appendChild(levelsBox);
 
   const status = doc.createElement("div");
+  status.className = "ga-muted";
   status.style.fontSize = "12px";
-  status.style.opacity = "0.9";
-  body.appendChild(status);
+  status.style.marginTop = "8px";
+  el.appendChild(status);
 
   const progress = doc.createElement("div");
   progress.style.height = "8px";
@@ -291,128 +372,222 @@ export async function renderAdminAnalysisWidget(
   progressFill.style.width = "0%";
   progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
   progress.appendChild(progressFill);
-  body.appendChild(progress);
-
-  const controls = doc.createElement("div");
-  controls.style.display = "flex";
-  controls.style.flexDirection = "column";
-  controls.style.gap = "10px";
-  body.appendChild(controls);
-
-  const disableHint = doc.createElement("div");
-  disableHint.className = "ga-muted";
-  disableHint.style.fontSize = "12px";
-  disableHint.textContent = "Disable hides a level in this section and prevents admin dimensions from rendering. Computed fields stay in your database.";
-  body.appendChild(disableHint);
+  el.appendChild(progress);
 
   const chartsHost = doc.createElement("div");
   chartsHost.style.display = "flex";
   chartsHost.style.flexDirection = "column";
   chartsHost.style.gap = "14px";
-  body.appendChild(chartsHost);
+  chartsHost.style.marginTop = "12px";
+  el.appendChild(chartsHost);
 
   const setBusy = (pct: number, msg: string) => {
-    progressFill.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
+    progressFill.style.width = `${clamp(pct, 0, 100).toFixed(1)}%`;
     status.textContent = msg;
   };
 
-  const isAnyLevelEnabled = (meta: AdminMetaValue): boolean => {
-    if (meta.enabled === true) return true;
-    const levels = meta.levels ?? {};
-    return Object.values(levels).some((x) => x && x.enabled === true);
-  };
+  let levels: AdminLevel[] = [];
+  let active: AdminLevel | null = null;
 
-  const setMetaLevelEnabled = async (levelId: string, enabled: boolean): Promise<void> => {
-    const meta = await getAdminMeta(countryIso2);
-    const next: AdminMetaValue = { ...meta, levels: { ...(meta.levels ?? {}) } };
-    // If we're upgrading from legacy {enabled:true} without per-level state, assume all plan levels were enabled.
-    if (meta.enabled === true && (!meta.levels || Object.keys(meta.levels).length === 0)) {
-      for (const lvl of plan.levels) next.levels![lvl.id] = { enabled: true, dimIds: lvl.dimIds, doneAt: meta.doneAt };
+  const levelKey = (lvl: AdminLevel) => `${lvl.iso3}:${lvl.id}`;
+  const isLoaded = (lvl: AdminLevel) => LEVEL_CACHE.has(levelKey(lvl));
+
+  const renderLevelsList = () => {
+    levelsBox.innerHTML = "";
+
+    if (!levels.length) {
+      const msg = doc.createElement("div");
+      msg.className = "ga-muted";
+      msg.style.fontSize = "12px";
+      msg.textContent = "No admin levels found for this country.";
+      levelsBox.appendChild(msg);
+      return;
     }
-    next.levels![levelId] = { ...(next.levels![levelId] ?? {}), enabled, inProgress: false };
-    next.enabled = enabled || isAnyLevelEnabled(next);
-    await putAdminMeta(countryIso2, next);
-    (globalThis as any).__gaRequestRerender?.();
-  };
 
-  const refreshHeader = async (): Promise<void> => {
-    const meta = await getAdminMeta(countryIso2);
-    const any = isAnyLevelEnabled(meta);
-    const doneTxt = typeof meta.doneAt === "number" && Number.isFinite(meta.doneAt) ? new Date(meta.doneAt).toLocaleString() : "";
-    status.textContent = any ? `Enabled. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : "Disabled.";
+    for (const lvl of levels) {
+      const row = doc.createElement("div");
+      row.className = "ga-statrow";
+      row.style.alignItems = "center";
+
+      const left = doc.createElement("div");
+      left.className = "ga-statrow-label";
+      left.textContent = lvl.label;
+
+      const right = doc.createElement("div");
+      right.className = "ga-statrow-value";
+      right.style.display = "flex";
+      right.style.gap = "8px";
+      right.style.alignItems = "center";
+
+      const loaded = isLoaded(lvl);
+      if (loaded) {
+        const btnView = doc.createElement("button");
+        btnView.className = "ga-filter-btn";
+        btnView.textContent = active?.id === lvl.id ? "Viewing" : "View";
+        btnView.disabled = active?.id === lvl.id;
+        btnView.addEventListener("click", () => {
+          active = lvl;
+          void renderCharts();
+          renderLevelsList();
+        });
+        right.appendChild(btnView);
+
+        const btnRefresh = doc.createElement("button");
+        btnRefresh.className = "ga-filter-btn";
+        btnRefresh.textContent = "Refresh";
+        btnRefresh.addEventListener("click", () => void doLoad(lvl, true));
+        right.appendChild(btnRefresh);
+
+        const btnUnload = doc.createElement("button");
+        btnUnload.className = "ga-filter-btn";
+        btnUnload.textContent = "Unload";
+        btnUnload.addEventListener("click", () => {
+          LEVEL_CACHE.delete(levelKey(lvl));
+          if (active?.id === lvl.id) {
+            active = null;
+            chartsHost.innerHTML = "";
+          }
+          setBusy(0, "Unloaded.");
+          renderLevelsList();
+        });
+        right.appendChild(btnUnload);
+      } else {
+        const btnLoad = doc.createElement("button");
+        btnLoad.className = "ga-filter-btn";
+        btnLoad.textContent = "Load";
+        btnLoad.addEventListener("click", () => void doLoad(lvl, false));
+        right.appendChild(btnLoad);
+      }
+
+      row.appendChild(left);
+      row.appendChild(right);
+      levelsBox.appendChild(row);
+    }
   };
 
   const renderCharts = async (): Promise<void> => {
     chartsHost.innerHTML = "";
-    const meta = await getAdminMeta(countryIso2);
-    if (!isAnyLevelEnabled(meta)) return;
+    if (!active) return;
 
-    const rows = Array.isArray(baseRows) ? baseRows : [];
+    const loaded = LEVEL_CACHE.get(levelKey(active));
+    if (!loaded) return;
+
     const countryRows = rows.filter((r: any) => asIso2(r?.trueCountry ?? r?.true_country) === countryIso2);
     if (!countryRows.length) {
       const msg = doc.createElement("div");
-      msg.style.opacity = "0.85";
+      msg.className = "ga-muted";
       msg.style.fontSize = "12px";
-      msg.textContent = "No rounds found for this country within the current filter selection.";
+      msg.textContent = "No rounds for this country in the current selection.";
       chartsHost.appendChild(msg);
       return;
     }
 
+    setBusy(55, "Computing per-round regions...");
+    const derived: any[] = [];
+    for (let i = 0; i < countryRows.length; i++) {
+      const r = countryRows[i];
+      const cached = loaded.computed.get(r);
+      let t: string | null = cached?.t ?? null;
+      let g: string | null = cached?.g ?? null;
+      if (!cached) {
+        const lat = Number(r?.trueLat);
+        const lng = Number(r?.trueLng);
+        const guess = guessLatLngOf(r);
+        t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
+        g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+        loaded.computed.set(r, { t, g });
+      }
+      derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
+      if (i % 50 === 0) {
+        const pct = 55 + (i / Math.max(1, countryRows.length)) * 35;
+        setBusy(pct, `Computing per-round regions... (${i}/${countryRows.length})`);
+        await new Promise<void>((res) => setTimeout(res, 0));
+      }
+    }
+    setBusy(92, "Rendering charts...");
+
     const accuracyTitle = doc.createElement("div");
     accuracyTitle.style.fontWeight = "600";
-    accuracyTitle.textContent = "Administrative unit accuracy (selected country)";
+    accuracyTitle.textContent = `${active.label} accuracy`;
     chartsHost.appendChild(accuracyTitle);
 
     const accuracyBox = doc.createElement("div");
     accuracyBox.className = "ga-statlist-box";
     chartsHost.appendChild(accuracyBox);
 
-    const enabledIds = (() => {
-      const levels = meta.levels ?? {};
-      const enabled = Object.entries(levels)
-        .filter(([, v]) => v && v.enabled === true)
-        .map(([k]) => k);
-      if (enabled.length) return enabled;
-      // Legacy: country-wide toggle enabled => treat all known levels as enabled.
-      if (meta.enabled === true) return spec.levels.map((l) => l.id);
-      return [];
+    const overall = (() => {
+      let n = 0, hit = 0;
+      for (const r of derived) {
+        const tt = typeof r.adminTrueUnit === "string" ? r.adminTrueUnit.trim() : "";
+        const gg = typeof r.adminGuessUnit === "string" ? r.adminGuessUnit.trim() : "";
+        if (!tt || !gg) continue;
+        n++;
+        if (tt === gg) hit++;
+      }
+      return n ? hit / n : 0;
     })();
-    const enabledLevelIds = new Set<string>(enabledIds);
 
-    for (const lvl of spec.levels) {
-      if (!enabledLevelIds.has(lvl.id)) continue;
-      const m = semantic.measures[lvl.hitMeasureId];
-      const fn = m ? MEASURES_BY_GRAIN.round?.[m.formulaId] : undefined;
-      const v = fn ? fn(countryRows as any[]) : NaN;
-      const line = doc.createElement("div");
-      line.className = "ga-statrow";
+    const line = doc.createElement("div");
+    line.className = "ga-statrow";
+    const left = doc.createElement("div");
+    left.className = "ga-statrow-label";
+    left.textContent = "Admin hit rate (overall)";
+    const right = doc.createElement("div");
+    right.className = "ga-statrow-value";
+    right.textContent = `${(overall * 100).toFixed(1)}%`;
+    line.appendChild(left);
+    line.appendChild(right);
+    accuracyBox.appendChild(line);
 
-      const left = doc.createElement("div");
-      left.className = "ga-statrow-label";
-      left.textContent = `Admin hit rate: ${lvl.label}`;
+    const measures = [
+      "admin_unit_hit_rate",
+      "admin_unit_hit_count",
+      "admin_unit_miss_count",
+      "rounds_count",
+      "avg_score",
+      "avg_score_hit_only",
+      "avg_distance_km",
+      "avg_guess_duration",
+      "round_score_per_second",
+      "hit_rate",
+      "fivek_rate",
+      "near_perfect_rate",
+      "low_score_rate",
+      "throw_rate",
+      "damage_dealt_avg",
+      "damage_taken_avg",
+      "damage_net_avg"
+    ];
 
-      const right = doc.createElement("div");
-      right.className = "ga-statrow-value";
-      right.textContent = Number.isFinite(v) ? formatValue(doc, semantic, lvl.hitMeasureId, v) : "-";
-
-      line.appendChild(left);
-      line.appendChild(right);
-      accuracyBox.appendChild(line);
-    }
-
-    for (const lvl of spec.levels) {
-      if (!enabledLevelIds.has(lvl.id)) continue;
-      const mvViews: any[] = [];
-      mvViews.push({
+    const views: any[] = [
+      {
+        id: "map",
+        label: "Map",
+        type: "region_map",
+        grain: "round",
+        spec: {
+          dimension: "admin_true_unit",
+          geojsonUrl: active.geojsonUrl,
+          featureKey: loaded.level.featureKey,
+          fitToGeoJson: true,
+          measures,
+          activeMeasure: "admin_unit_hit_rate",
+          mapHeight: 420,
+          actions: {
+            click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
+          }
+        }
+      },
+      {
         id: "bar",
         label: "Bar",
         type: "breakdown",
         grain: "round",
         spec: {
-          dimension: lvl.trueDim,
-          measures: DEFAULT_MEASURES,
+          dimension: "admin_true_unit",
+          measures,
           activeMeasure: "rounds_count",
-          sorts: [{ mode: "desc" }, { mode: "asc" }],
+          sorts: [{ mode: "desc" }, { mode: "asc" }, { mode: "chronological" }],
           activeSort: { mode: "desc" },
           limit: 15,
           extendable: true,
@@ -420,184 +595,74 @@ export async function renderAdminAnalysisWidget(
             click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
           }
         }
-      });
-
-      if (lvl.map) {
-        mvViews.push({
-          id: "map",
-          label: "Map",
-          type: "region_map",
-          grain: "round",
-          spec: {
-            dimension: lvl.trueDim,
-            geojsonUrl: lvl.map.geojsonUrl,
-            featureKey: lvl.map.featureKey,
-            measures: DEFAULT_MEASURES,
-            activeMeasure: "avg_score",
-            mapHeight: 380,
-            actions: {
-              click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
-            }
-          }
-        });
       }
+    ];
 
-      const mvWidget: WidgetDef = {
-        widgetId: `${widget.widgetId}__${countryIso2}__${lvl.id}`,
-        type: "multi_view",
-        title: `${spec.label} - ${lvl.label}`,
-        grain: "round",
-        spec: { activeView: lvl.map ? "map" : "bar", views: mvViews }
-      };
+    const mvWidget: WidgetDef = {
+      widgetId: `${widget.widgetId}__${countryIso2}__${active.id}`,
+      type: "multi_view",
+      title: `${active.label}`,
+      grain: "round",
+      spec: { activeView: "map", views }
+    };
 
-      const mvEl = await renderMultiViewWidget({
-        semantic,
-        widget: mvWidget,
-        overlay,
-        datasets: { round: countryRows as any[] },
-        renderChild: async (child) => {
-          const rows = countryRows as any[];
-          if (child.type === "breakdown") return await renderBreakdownWidget(semantic, child, overlay, rows);
-          if (child.type === "region_map") return await renderRegionMetricMapWidget(semantic, child, overlay, rows);
-          const ph = doc.createElement("div");
-          ph.className = "ga-widget ga-placeholder";
-          ph.textContent = `Widget type '${child.type}' not implemented here`;
-          return ph;
-        }
-      });
-      chartsHost.appendChild(mvEl);
-    }
-  };
-
-  const renderControls = async (): Promise<void> => {
-    controls.innerHTML = "";
-    const meta = await getAdminMeta(countryIso2);
-
-    for (const lvlPlan of plan.levels) {
-      const row = doc.createElement("div");
-      row.style.display = "flex";
-      row.style.alignItems = "center";
-      row.style.gap = "10px";
-      row.style.flexWrap = "wrap";
-
-      const left = doc.createElement("div");
-      left.style.minWidth = "240px";
-
-      const label = doc.createElement("div");
-      label.style.fontWeight = "600";
-      label.textContent = lvlPlan.label;
-
-      const legacyEnabled = meta.enabled === true && (!meta.levels || Object.keys(meta.levels).length === 0);
-      const lvlMeta = legacyEnabled ? { enabled: true, doneAt: meta.doneAt } : (meta.levels?.[lvlPlan.id] ?? {});
-      const enabled = lvlMeta.enabled === true;
-      const inProgress = lvlMeta.inProgress === true;
-      const doneAt = typeof lvlMeta.doneAt === "number" && Number.isFinite(lvlMeta.doneAt) ? new Date(lvlMeta.doneAt).toLocaleString() : "";
-
-      const sub = doc.createElement("div");
-      sub.className = "ga-muted";
-      sub.style.fontSize = "12px";
-      sub.textContent = inProgress
-        ? "Loading…"
-        : enabled
-          ? `Loaded${doneAt ? ` (last run: ${doneAt})` : ""}`
-          : "Not loaded";
-
-      left.appendChild(label);
-      left.appendChild(sub);
-
-      const loadBtn = doc.createElement("button");
-      loadBtn.className = "ga-filter-btn";
-      loadBtn.textContent = enabled ? "Re-run" : "Load";
-      loadBtn.disabled = inProgress;
-
-      const disableBtn = doc.createElement("button");
-      disableBtn.className = "ga-filter-btn";
-      disableBtn.textContent = "Disable";
-      disableBtn.disabled = inProgress || !enabled;
-
-      loadBtn.addEventListener("click", () => {
-        void (async () => {
-          loadBtn.disabled = true;
-          disableBtn.disabled = true;
-          chartsHost.innerHTML = "";
-          try {
-            let pct = 0;
-            let msg = "";
-            const sync = () => setBusy(pct, msg);
-            await runAdminEnrichment(countryIso2, {
-              levelId: lvlPlan.id,
-              onPct: (p) => {
-                pct = p;
-                sync();
-              },
-              onStatus: (m) => {
-                msg = m;
-                sync();
-              }
-            });
-            setBusy(100, "Done. Refreshing view...");
-          } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            analysisConsole.error(`Admin enrichment failed: ${message}`);
-            setBusy(0, `Error: ${message}`);
-          } finally {
-            await refreshHeader();
-            await renderControls();
-            await renderCharts();
-          }
-        })();
-      });
-
-      disableBtn.addEventListener("click", () => {
-        void (async () => {
-          disableBtn.disabled = true;
-          loadBtn.disabled = true;
-          try {
-            await setMetaLevelEnabled(lvlPlan.id, false);
-            setBusy(0, "Disabled.");
-          } catch (e) {
-            const message = e instanceof Error ? e.message : String(e);
-            analysisConsole.error(`Disable admin enrichment failed: ${message}`);
-          } finally {
-            await refreshHeader();
-            await renderControls();
-            await renderCharts();
-          }
-        })();
-      });
-
-      row.appendChild(left);
-      row.appendChild(loadBtn);
-      row.appendChild(disableBtn);
-      controls.appendChild(row);
-    }
-
-    const disableAll = doc.createElement("button");
-    disableAll.className = "ga-filter-btn";
-    disableAll.textContent = "Disable all levels";
-    disableAll.disabled = !isAnyLevelEnabled(meta);
-    disableAll.addEventListener("click", () => {
-      void (async () => {
-        disableAll.disabled = true;
-        const current = await getAdminMeta(countryIso2);
-        const next: AdminMetaValue = { ...current, enabled: false, levels: { ...(current.levels ?? {}) }, doneAt: Date.now() };
-        if (current.enabled === true && (!current.levels || Object.keys(current.levels).length === 0)) {
-          for (const lvl of plan.levels) next.levels![lvl.id] = { enabled: false, dimIds: lvl.dimIds, doneAt: current.doneAt };
-        }
-        for (const k of Object.keys(next.levels ?? {})) next.levels![k] = { ...(next.levels![k] ?? {}), enabled: false, inProgress: false };
-        await putAdminMeta(countryIso2, next);
-        (globalThis as any).__gaRequestRerender?.();
-        setBusy(0, "Disabled.");
-        await refreshHeader();
-        await renderControls();
-        await renderCharts();
-      })();
+    const mvEl = await renderMultiViewWidget({
+      semantic,
+      widget: mvWidget,
+      overlay,
+      datasets: { round: derived },
+      renderChild: async (child) => {
+        if (child.type === "breakdown") return await renderBreakdownWidget(semantic, child, overlay, derived);
+        if (child.type === "region_map") return await renderRegionMetricMapWidget(semantic, child, overlay, derived);
+        const ph = doc.createElement("div");
+        ph.className = "ga-widget ga-placeholder";
+        ph.textContent = `Widget type '${child.type}' not implemented here`;
+        return ph;
+      }
     });
-    controls.appendChild(disableAll);
+    chartsHost.appendChild(mvEl);
+    setBusy(100, "Done.");
   };
 
-  await refreshHeader();
-  await renderControls();
+  const doLoad = async (lvl: AdminLevel, forceReload: boolean): Promise<void> => {
+    const key = levelKey(lvl);
+    if (forceReload) LEVEL_CACHE.delete(key);
+    setBusy(8, `Loading ${lvl.id}…`);
+    chartsHost.innerHTML = "";
+    renderLevelsList();
+    try {
+      await loadLevel(
+        lvl,
+        (p) => setBusy(p, status.textContent || ""),
+        (s) => setBusy(parseFloat(progressFill.style.width) || 10, s)
+      );
+      active = { ...lvl, featureKey: LEVEL_CACHE.get(key)?.level.featureKey ?? lvl.featureKey };
+      setBusy(45, "Loaded boundaries.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      analysisConsole.error(`Admin level load failed: ${msg}`);
+      setBusy(0, `Error: ${msg}`);
+      return;
+    }
+    renderLevelsList();
+    await renderCharts();
+  };
+
+  const refreshLevels = async () => {
+    setBusy(5, "Loading available admin levels...");
+    try {
+      levels = await listAvailableLevels(countryIso2);
+      active = null;
+      renderLevelsList();
+      setBusy(0, levels.length ? "Ready." : "No admin levels found for this country.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      analysisConsole.error(`Admin levels load failed: ${msg}`);
+      setBusy(0, `Error: ${msg}`);
+    }
+  };
+
+  await refreshLevels();
   await renderCharts();
   return el;
 }

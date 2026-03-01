@@ -222,6 +222,8 @@ export interface RegionMetricMapSpec {
   geojsonUrl: string;
   // Feature property name used as key (must match the extracted dimension values).
   featureKey: string;
+  // If true, initial viewport zooms/pans to fit the GeoJSON bounds (useful for country-level maps).
+  fitToGeoJson?: boolean;
   measure?: string;
   measures?: string[];
   activeMeasure?: string;

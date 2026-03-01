@@ -3736,7 +3736,7 @@
       },
         {
           "id": "admin",
-          "title": "Detailed admin analysis",
+          "title": "Regions",
           "localFilters": {
             "enabled": true,
             "controls": [
@@ -3763,7 +3763,7 @@
           "cards": [
             {
               "cardId": "card_admin",
-              "title": "Detailed admin analysis: {{local.adminCountry}}",
+              "title": "Regions: {{local.adminCountry}}",
               "x": 0,
               "y": 0,
               "w": 12,
@@ -3774,7 +3774,7 @@
                   {
                     "widgetId": "w_admin_analysis",
                     "type": "admin_analysis",
-                    "title": "Detailed admin analysis",
+                    "title": "Regions",
                     "grain": "round",
                     "placement": {
                       "x": 0,
@@ -3783,7 +3783,7 @@
                       "h": 18
                     },
                     "spec": {
-                      "description": "Run an on-demand enrichment for the selected country to enable admin-level accuracy stats and region maps."
+                      "description": "Load province/state/county boundaries on-demand to compute regional accuracy. Nothing is saved into your database."
                     }
                   }
                 ]
