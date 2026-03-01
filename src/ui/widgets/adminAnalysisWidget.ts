@@ -160,10 +160,26 @@ function bboxFromGeometry(geom: any): [number, number, number, number] | null {
   return [minLon, minLat, maxLon, maxLat];
 }
 
-function pointInRing(lon: number, lat: number, ring: any[]): boolean {
+class BudgetExceededError extends Error {
+  override name = "BudgetExceededError";
+  constructor(message = "Computation budget exceeded") {
+    super(message);
+  }
+}
+
+const nowMs = (): number => (typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now());
+
+function checkBudget(deadlineMs?: number, iteration?: number): void {
+  if (deadlineMs === undefined) return;
+  if (iteration !== undefined && iteration % 256 !== 0) return;
+  if (nowMs() > deadlineMs) throw new BudgetExceededError();
+}
+
+function pointInRing(lon: number, lat: number, ring: any[], deadlineMs?: number): boolean {
   // Ray casting algorithm (lon=x, lat=y)
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    checkBudget(deadlineMs, i);
     const xi = Number(ring[i]?.[0]);
     const yi = Number(ring[i]?.[1]);
     const xj = Number(ring[j]?.[0]);
@@ -175,24 +191,26 @@ function pointInRing(lon: number, lat: number, ring: any[]): boolean {
   return inside;
 }
 
-function pointInPolygon(lon: number, lat: number, geom: any): boolean {
+function pointInPolygon(lon: number, lat: number, geom: any, deadlineMs?: number): boolean {
   const type = geom?.type;
   const coords = geom?.coordinates;
   if (!type || !coords) return false;
   if (type === "Polygon") {
     const rings = coords as any[];
     if (!Array.isArray(rings) || rings.length === 0) return false;
-    if (!pointInRing(lon, lat, rings[0] as any[])) return false;
-    for (let i = 1; i < rings.length; i++) if (pointInRing(lon, lat, rings[i] as any[])) return false;
+    if (!pointInRing(lon, lat, rings[0] as any[], deadlineMs)) return false;
+    for (let i = 1; i < rings.length; i++) if (pointInRing(lon, lat, rings[i] as any[], deadlineMs)) return false;
     return true;
   }
   if (type === "MultiPolygon") {
-    for (const poly of coords as any[]) {
+    for (let p = 0; p < (coords as any[]).length; p++) {
+      checkBudget(deadlineMs, p);
+      const poly = (coords as any[])[p];
       const rings = poly as any[];
       if (!Array.isArray(rings) || rings.length === 0) continue;
-      if (!pointInRing(lon, lat, rings[0] as any[])) continue;
+      if (!pointInRing(lon, lat, rings[0] as any[], deadlineMs)) continue;
       let inHole = false;
-      for (let i = 1; i < rings.length; i++) if (pointInRing(lon, lat, rings[i] as any[])) inHole = true;
+      for (let i = 1; i < rings.length; i++) if (pointInRing(lon, lat, rings[i] as any[], deadlineMs)) inHole = true;
       if (!inHole) return true;
     }
     return false;
@@ -200,13 +218,16 @@ function pointInPolygon(lon: number, lat: number, geom: any): boolean {
   return false;
 }
 
-function findFeatureName(level: LoadedLevel, lat: number, lng: number): string | null {
+function findFeatureName(level: LoadedLevel, lat: number, lng: number, budgetMs?: number): string | null {
+  const deadlineMs = typeof budgetMs === "number" && Number.isFinite(budgetMs) && budgetMs > 0 ? nowMs() + budgetMs : undefined;
   const lon = lng;
   const y = lat;
-  for (const f of level.features) {
+  for (let i = 0; i < level.features.length; i++) {
+    checkBudget(deadlineMs, i);
+    const f = level.features[i];
     const [minLon, minLat, maxLon, maxLat] = f.bbox;
     if (lon < minLon || lon > maxLon || y < minLat || y > maxLat) continue;
-    if (pointInPolygon(lon, y, f.geometry)) return f.name || null;
+    if (pointInPolygon(lon, y, f.geometry, deadlineMs)) return f.name || null;
   }
   return null;
 }
@@ -493,14 +514,28 @@ export async function renderAdminAnalysisWidget(
       setBusy(40, `Computing cached labels... (0/${countryRows.length})`);
 
       const labelRows: any[] = [];
-      let lastStep = -1;
+      const perLookupBudgetMs = lvl.id === "ADM2" ? 220 : lvl.id === "ADM3" ? 180 : 140;
+      let skipped = 0;
+      let lastYieldAt = nowMs();
       for (let i = 0; i < countryRows.length; i++) {
         const r = countryRows[i];
         const lat = Number(r?.trueLat);
         const lng = Number(r?.trueLng);
         const guess = guessLatLngOf(r);
-        const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-        const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+        let t: string | null = null;
+        let g: string | null = null;
+        try {
+          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+          g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+        } catch (e) {
+          skipped++;
+          const gid = String(r?.gameId ?? r?.game_id ?? "");
+          const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+          const msg = e instanceof Error ? e.message : String(e);
+          analysisConsole.warn(`Save: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+          t = null;
+          g = null;
+        }
         const id = makeRoundCacheId(k, r);
         if (id) {
           labelRows.push({
@@ -514,11 +549,10 @@ export async function renderAdminAnalysisWidget(
           });
         }
 
-        const pctRaw = 40 + (i / Math.max(1, countryRows.length)) * 55;
-        const step = Math.floor(pctRaw / 5) * 5;
-        if (step !== lastStep) {
-          lastStep = step;
-          setBusy(step, `Computing cached labels... (${i}/${countryRows.length})`);
+        const pct = 40 + ((i + 1) / Math.max(1, countryRows.length)) * 55;
+        setBusy(pct, `Computing cached labels... (${i + 1}/${countryRows.length})${skipped ? ` • skipped ${skipped}` : ""}`);
+        if (nowMs() - lastYieldAt > 16) {
+          lastYieldAt = nowMs();
           await new Promise<void>((res) => setTimeout(res, 0));
         }
       }
@@ -560,14 +594,28 @@ export async function renderAdminAnalysisWidget(
 
       setBusy(35, `Computing new labels... (0/${missingRows.length})`);
       const labelRows: any[] = [];
-      let lastStep = -1;
+      const perLookupBudgetMs = lvl.id === "ADM2" ? 220 : lvl.id === "ADM3" ? 180 : 140;
+      let skipped = 0;
+      let lastYieldAt = nowMs();
       for (let i = 0; i < missingRows.length; i++) {
         const r = missingRows[i];
         const lat = Number(r?.trueLat);
         const lng = Number(r?.trueLng);
         const guess = guessLatLngOf(r);
-        const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-        const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+        let t: string | null = null;
+        let g: string | null = null;
+        try {
+          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+          g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+        } catch (e) {
+          skipped++;
+          const gid = String(r?.gameId ?? r?.game_id ?? "");
+          const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+          const msg = e instanceof Error ? e.message : String(e);
+          analysisConsole.warn(`Refresh: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+          t = null;
+          g = null;
+        }
         const id = makeRoundCacheId(k, r);
         if (id) {
           labelRows.push({
@@ -581,11 +629,10 @@ export async function renderAdminAnalysisWidget(
           });
         }
 
-        const pctRaw = 35 + (i / Math.max(1, missingRows.length)) * 60;
-        const step = Math.floor(pctRaw / 5) * 5;
-        if (step !== lastStep) {
-          lastStep = step;
-          setBusy(step, `Computing new labels... (${i}/${missingRows.length})`);
+        const pct = 35 + ((i + 1) / Math.max(1, missingRows.length)) * 60;
+        setBusy(pct, `Computing new labels... (${i + 1}/${missingRows.length})${skipped ? ` • skipped ${skipped}` : ""}`);
+        if (nowMs() - lastYieldAt > 16) {
+          lastYieldAt = nowMs();
           await new Promise<void>((res) => setTimeout(res, 0));
         }
       }
@@ -794,7 +841,9 @@ export async function renderAdminAnalysisWidget(
     }
 
     const derived: any[] = [];
-    let lastStep = -1;
+    const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
+    let skipped = 0;
+    let lastYieldAt = nowMs();
     for (let i = 0; i < countryRows.length; i++) {
       const r = countryRows[i];
       const cached = loaded.computed.get(r);
@@ -812,18 +861,35 @@ export async function renderAdminAnalysisWidget(
           const lat = Number(r?.trueLat);
           const lng = Number(r?.trueLng);
           const guess = guessLatLngOf(r);
-          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-          g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          try {
+            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+            g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+          } catch (e) {
+            // If one round is pathological (very complex polygon / corrupted geometry),
+            // skip it instead of stalling the whole computation.
+            skipped++;
+            t = null;
+            g = null;
+            const gid = String(r?.gameId ?? r?.game_id ?? "");
+            const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+            const msg = e instanceof Error ? e.message : String(e);
+            analysisConsole.warn(`Skipping round for ${activeKey} due to error/budget: ${msg} (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+          }
         }
         loaded.computed.set(r, { t, g });
       }
       derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
-      const pctRaw = 55 + (i / Math.max(1, countryRows.length)) * 35;
-      const step = Math.floor(pctRaw / 5) * 5;
-      if (step !== lastStep) {
-        lastStep = step;
-        const phase = hasSaved ? `Applying cached labels... (${i}/${countryRows.length})` : `Computing per-round regions... (${i}/${countryRows.length})`;
-        setBusy(step, phase);
+
+      // Update progress every round so the counter always moves (even if some rounds are slow).
+      const pct = 55 + ((i + 1) / Math.max(1, countryRows.length)) * 35;
+      const phase = hasSaved
+        ? `Applying cached labels... (${i + 1}/${countryRows.length})`
+        : `Computing per-round regions... (${i + 1}/${countryRows.length})${skipped ? ` • skipped ${skipped}` : ""}`;
+      setBusy(pct, phase);
+
+      // Yield regularly to keep the UI responsive.
+      if (nowMs() - lastYieldAt > 16) {
+        lastYieldAt = nowMs();
         await new Promise<void>((res) => setTimeout(res, 0));
       }
     }

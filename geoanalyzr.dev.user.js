@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.2-dev
+// @version      2.3.3-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -49932,9 +49932,22 @@ ${describeError(err2)}` : message;
     if (!Number.isFinite(minLon) || !Number.isFinite(minLat) || !Number.isFinite(maxLon) || !Number.isFinite(maxLat)) return null;
     return [minLon, minLat, maxLon, maxLat];
   }
-  function pointInRing5(lon, lat, ring) {
+  var BudgetExceededError = class extends Error {
+    name = "BudgetExceededError";
+    constructor(message = "Computation budget exceeded") {
+      super(message);
+    }
+  };
+  var nowMs = () => typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  function checkBudget(deadlineMs, iteration) {
+    if (deadlineMs === void 0) return;
+    if (iteration !== void 0 && iteration % 256 !== 0) return;
+    if (nowMs() > deadlineMs) throw new BudgetExceededError();
+  }
+  function pointInRing5(lon, lat, ring, deadlineMs) {
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      checkBudget(deadlineMs, i);
       const xi = Number(ring[i]?.[0]);
       const yi = Number(ring[i]?.[1]);
       const xj = Number(ring[j]?.[0]);
@@ -49945,37 +49958,42 @@ ${describeError(err2)}` : message;
     }
     return inside;
   }
-  function pointInPolygon5(lon, lat, geom) {
+  function pointInPolygon5(lon, lat, geom, deadlineMs) {
     const type = geom?.type;
     const coords = geom?.coordinates;
     if (!type || !coords) return false;
     if (type === "Polygon") {
       const rings = coords;
       if (!Array.isArray(rings) || rings.length === 0) return false;
-      if (!pointInRing5(lon, lat, rings[0])) return false;
-      for (let i = 1; i < rings.length; i++) if (pointInRing5(lon, lat, rings[i])) return false;
+      if (!pointInRing5(lon, lat, rings[0], deadlineMs)) return false;
+      for (let i = 1; i < rings.length; i++) if (pointInRing5(lon, lat, rings[i], deadlineMs)) return false;
       return true;
     }
     if (type === "MultiPolygon") {
-      for (const poly of coords) {
+      for (let p = 0; p < coords.length; p++) {
+        checkBudget(deadlineMs, p);
+        const poly = coords[p];
         const rings = poly;
         if (!Array.isArray(rings) || rings.length === 0) continue;
-        if (!pointInRing5(lon, lat, rings[0])) continue;
+        if (!pointInRing5(lon, lat, rings[0], deadlineMs)) continue;
         let inHole = false;
-        for (let i = 1; i < rings.length; i++) if (pointInRing5(lon, lat, rings[i])) inHole = true;
+        for (let i = 1; i < rings.length; i++) if (pointInRing5(lon, lat, rings[i], deadlineMs)) inHole = true;
         if (!inHole) return true;
       }
       return false;
     }
     return false;
   }
-  function findFeatureName(level, lat, lng) {
+  function findFeatureName(level, lat, lng, budgetMs) {
+    const deadlineMs = typeof budgetMs === "number" && Number.isFinite(budgetMs) && budgetMs > 0 ? nowMs() + budgetMs : void 0;
     const lon = lng;
     const y = lat;
-    for (const f of level.features) {
+    for (let i = 0; i < level.features.length; i++) {
+      checkBudget(deadlineMs, i);
+      const f = level.features[i];
       const [minLon, minLat, maxLon, maxLat] = f.bbox;
       if (lon < minLon || lon > maxLon || y < minLat || y > maxLat) continue;
-      if (pointInPolygon5(lon, y, f.geometry)) return f.name || null;
+      if (pointInPolygon5(lon, y, f.geometry, deadlineMs)) return f.name || null;
     }
     return null;
   }
@@ -50198,14 +50216,28 @@ ${describeError(err2)}` : message;
         const countryRows = getCountryRows();
         setBusy(40, `Computing cached labels... (0/${countryRows.length})`);
         const labelRows = [];
-        let lastStep = -1;
+        const perLookupBudgetMs = lvl.id === "ADM2" ? 220 : lvl.id === "ADM3" ? 180 : 140;
+        let skipped = 0;
+        let lastYieldAt = nowMs();
         for (let i = 0; i < countryRows.length; i++) {
           const r = countryRows[i];
           const lat = Number(r?.trueLat);
           const lng = Number(r?.trueLng);
           const guess = guessLatLngOf(r);
-          const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-          const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          let t = null;
+          let g = null;
+          try {
+            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+            g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+          } catch (e) {
+            skipped++;
+            const gid = String(r?.gameId ?? r?.game_id ?? "");
+            const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+            const msg = e instanceof Error ? e.message : String(e);
+            analysisConsole.warn(`Save: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+            t = null;
+            g = null;
+          }
           const id = makeRoundCacheId(k, r);
           if (id) {
             labelRows.push({
@@ -50218,11 +50250,10 @@ ${describeError(err2)}` : message;
               updatedAt: Date.now()
             });
           }
-          const pctRaw = 40 + i / Math.max(1, countryRows.length) * 55;
-          const step = Math.floor(pctRaw / 5) * 5;
-          if (step !== lastStep) {
-            lastStep = step;
-            setBusy(step, `Computing cached labels... (${i}/${countryRows.length})`);
+          const pct = 40 + (i + 1) / Math.max(1, countryRows.length) * 55;
+          setBusy(pct, `Computing cached labels... (${i + 1}/${countryRows.length})${skipped ? ` \u2022 skipped ${skipped}` : ""}`);
+          if (nowMs() - lastYieldAt > 16) {
+            lastYieldAt = nowMs();
             await new Promise((res) => setTimeout(res, 0));
           }
         }
@@ -50258,14 +50289,28 @@ ${describeError(err2)}` : message;
         for (let i = 0; i < ids.length; i++) if (!existing[i]) missingRows.push(countryRows[i]);
         setBusy(35, `Computing new labels... (0/${missingRows.length})`);
         const labelRows = [];
-        let lastStep = -1;
+        const perLookupBudgetMs = lvl.id === "ADM2" ? 220 : lvl.id === "ADM3" ? 180 : 140;
+        let skipped = 0;
+        let lastYieldAt = nowMs();
         for (let i = 0; i < missingRows.length; i++) {
           const r = missingRows[i];
           const lat = Number(r?.trueLat);
           const lng = Number(r?.trueLng);
           const guess = guessLatLngOf(r);
-          const t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-          const g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+          let t = null;
+          let g = null;
+          try {
+            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+            g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+          } catch (e) {
+            skipped++;
+            const gid = String(r?.gameId ?? r?.game_id ?? "");
+            const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+            const msg = e instanceof Error ? e.message : String(e);
+            analysisConsole.warn(`Refresh: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+            t = null;
+            g = null;
+          }
           const id = makeRoundCacheId(k, r);
           if (id) {
             labelRows.push({
@@ -50278,11 +50323,10 @@ ${describeError(err2)}` : message;
               updatedAt: Date.now()
             });
           }
-          const pctRaw = 35 + i / Math.max(1, missingRows.length) * 60;
-          const step = Math.floor(pctRaw / 5) * 5;
-          if (step !== lastStep) {
-            lastStep = step;
-            setBusy(step, `Computing new labels... (${i}/${missingRows.length})`);
+          const pct = 35 + (i + 1) / Math.max(1, missingRows.length) * 60;
+          setBusy(pct, `Computing new labels... (${i + 1}/${missingRows.length})${skipped ? ` \u2022 skipped ${skipped}` : ""}`);
+          if (nowMs() - lastYieldAt > 16) {
+            lastYieldAt = nowMs();
             await new Promise((res) => setTimeout(res, 0));
           }
         }
@@ -50466,7 +50510,9 @@ ${describeError(err2)}` : message;
         setBusy(55, "Computing per-round regions...");
       }
       const derived = [];
-      let lastStep = -1;
+      const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
+      let skipped = 0;
+      let lastYieldAt = nowMs();
       for (let i = 0; i < countryRows.length; i++) {
         const r = countryRows[i];
         const cached = loaded.computed.get(r);
@@ -50482,18 +50528,27 @@ ${describeError(err2)}` : message;
             const lat = Number(r?.trueLat);
             const lng = Number(r?.trueLng);
             const guess = guessLatLngOf(r);
-            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng) : null;
-            g = guess ? findFeatureName(loaded, guess.lat, guess.lng) : null;
+            try {
+              t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+              g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+            } catch (e) {
+              skipped++;
+              t = null;
+              g = null;
+              const gid = String(r?.gameId ?? r?.game_id ?? "");
+              const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+              const msg = e instanceof Error ? e.message : String(e);
+              analysisConsole.warn(`Skipping round for ${activeKey} due to error/budget: ${msg} (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+            }
           }
           loaded.computed.set(r, { t, g });
         }
         derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
-        const pctRaw = 55 + i / Math.max(1, countryRows.length) * 35;
-        const step = Math.floor(pctRaw / 5) * 5;
-        if (step !== lastStep) {
-          lastStep = step;
-          const phase = hasSaved ? `Applying cached labels... (${i}/${countryRows.length})` : `Computing per-round regions... (${i}/${countryRows.length})`;
-          setBusy(step, phase);
+        const pct = 55 + (i + 1) / Math.max(1, countryRows.length) * 35;
+        const phase = hasSaved ? `Applying cached labels... (${i + 1}/${countryRows.length})` : `Computing per-round regions... (${i + 1}/${countryRows.length})${skipped ? ` \u2022 skipped ${skipped}` : ""}`;
+        setBusy(pct, phase);
+        if (nowMs() - lastYieldAt > 16) {
+          lastYieldAt = nowMs();
           await new Promise((res) => setTimeout(res, 0));
         }
       }
