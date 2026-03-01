@@ -513,7 +513,7 @@ export async function renderRegionMetricMapWidget(
           const spanY = Math.max(1, maxY - minY);
           const margin = 0.08;
           const s = Math.min((W * (1 - margin * 2)) / spanX, (H * (1 - margin * 2)) / spanY);
-          const scale = Math.max(1, Math.min(12, s));
+          const scale = Math.max(1, Math.min(24, s));
           const tx = (W - spanX * scale) / 2 - minX * scale;
           const ty = (H - spanY * scale) / 2 - minY * scale;
           vp = { scale, tx, ty };
@@ -545,7 +545,7 @@ export async function renderRegionMetricMapWidget(
     const onZoom = (delta: number, clientX: number, clientY: number) => {
       const p = rectPoint(clientX, clientY);
       const factor = delta > 0 ? 1.12 : 1 / 1.12;
-      const next = clamp(vp.scale * factor, 1, 12);
+      const next = clamp(vp.scale * factor, 1, 24);
       zoomAt(p.x, p.y, next);
     };
 

@@ -396,7 +396,7 @@ export async function renderAdminAnalysisWidget(
   const savedMetaByKey = new Map<string, { byteSize: number; savedAt: number }>();
   const missingByKey = new Map<string, number>();
   const sizeHintKbByKey = new Map<string, number>();
-  let persistBusyKey: string | null = null;
+  const persistStateByKey = new Map<string, "saving" | "refreshing" | "deleting">();
 
   const makeRoundCacheId = (k: string, r: any): string | null => {
     const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
@@ -461,9 +461,10 @@ export async function renderAdminAnalysisWidget(
 
   const saveLevel = async (lvl: AdminLevel): Promise<void> => {
     const k = levelKey(lvl);
-    persistBusyKey = k;
+    if (!isLoaded(lvl)) return;
+    if (persistStateByKey.has(k)) return;
+    persistStateByKey.set(k, "saving");
     renderLevelsList();
-    chartsHost.innerHTML = "";
     setBusy(5, `Saving ${lvl.id}...`);
 
     try {
@@ -532,16 +533,16 @@ export async function renderAdminAnalysisWidget(
       analysisConsole.error(`Save failed: ${msg}`);
       setBusy(0, `Error: ${msg}`);
     } finally {
-      persistBusyKey = null;
+      persistStateByKey.delete(k);
       renderLevelsList();
     }
   };
 
   const refreshSavedLabels = async (lvl: AdminLevel): Promise<void> => {
     const k = levelKey(lvl);
-    persistBusyKey = k;
+    if (persistStateByKey.has(k)) return;
+    persistStateByKey.set(k, "refreshing");
     renderLevelsList();
-    chartsHost.innerHTML = "";
     setBusy(5, `Refreshing ${lvl.id}...`);
 
     try {
@@ -598,14 +599,15 @@ export async function renderAdminAnalysisWidget(
       analysisConsole.error(`Refresh failed: ${msg}`);
       setBusy(0, `Error: ${msg}`);
     } finally {
-      persistBusyKey = null;
+      persistStateByKey.delete(k);
       renderLevelsList();
     }
   };
 
   const deleteSaved = async (lvl: AdminLevel): Promise<void> => {
     const k = levelKey(lvl);
-    persistBusyKey = k;
+    if (persistStateByKey.has(k)) return;
+    persistStateByKey.set(k, "deleting");
     renderLevelsList();
     setBusy(5, `Deleting ${lvl.id}...`);
     try {
@@ -620,7 +622,7 @@ export async function renderAdminAnalysisWidget(
       analysisConsole.error(`Delete failed: ${msg}`);
       setBusy(0, `Error: ${msg}`);
     } finally {
-      persistBusyKey = null;
+      persistStateByKey.delete(k);
       renderLevelsList();
     }
   };
@@ -655,17 +657,24 @@ export async function renderAdminAnalysisWidget(
       const k = levelKey(lvl);
       const saved = savedMetaByKey.get(k);
       const missing = missingByKey.get(k);
+      const persistMode = persistStateByKey.get(k) ?? null;
       const persistBtn = doc.createElement("button");
       persistBtn.className = "ga-filter-btn";
-      persistBtn.disabled = persistBusyKey !== null;
+      persistBtn.disabled = persistMode !== null;
       if (!saved) {
         const kb = sizeHintKbByKey.get(k);
-        persistBtn.textContent = typeof kb === "number" ? `Save (${kb} KB)` : "Save";
-        persistBtn.addEventListener("click", () => void saveLevel(lvl));
+        const loadedNow = isLoaded(lvl);
+        persistBtn.textContent = persistMode === "saving" ? "Saving…" : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+        if (!loadedNow) {
+          persistBtn.disabled = true;
+          persistBtn.title = "Load this level first to enable saving.";
+        } else if (persistMode === null) {
+          persistBtn.addEventListener("click", () => void saveLevel(lvl));
+        }
       } else {
         if (typeof missing === "number" && missing > 0) {
-          persistBtn.textContent = `Refresh (${missing})`;
-          persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+          persistBtn.textContent = persistMode === "refreshing" ? "Refreshing…" : `Refresh (${missing})`;
+          if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
         } else {
           const kb = Math.max(1, Math.round(saved.byteSize / 1024));
           persistBtn.textContent = `Saved (${kb} KB)`;
@@ -679,10 +688,10 @@ export async function renderAdminAnalysisWidget(
         btnDelete.className = "ga-filter-btn";
         btnDelete.textContent = "🗑";
         btnDelete.title = "Delete saved boundaries + labels";
-        btnDelete.disabled = persistBusyKey !== null;
+        btnDelete.disabled = persistMode !== null;
         btnDelete.style.borderColor = "rgba(255, 90, 90, 0.75)";
         btnDelete.style.color = "rgba(255, 120, 120, 0.95)";
-        btnDelete.addEventListener("click", () => void deleteSaved(lvl));
+        if (persistMode === null) btnDelete.addEventListener("click", () => void deleteSaved(lvl));
         right.appendChild(btnDelete);
       }
 
