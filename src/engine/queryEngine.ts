@@ -51,6 +51,7 @@ let gamesRawCache: GameFactRow[] | null = null;
 const gamesFilteredCache = new Map<string, GameFactRow[]>();
 let sessionsRawCache: any[] | null = null;
 const sessionsFilteredCache = new Map<string, any[]>();
+let corruptedGameIdsCache: Set<string> | null = null;
 
 export function invalidateRoundsCache(): void {
   roundsRawCache = null;
@@ -59,6 +60,7 @@ export function invalidateRoundsCache(): void {
   gamesFilteredCache.clear();
   sessionsRawCache = null;
   sessionsFilteredCache.clear();
+  corruptedGameIdsCache = null;
 }
 
 export async function hasAnyTeamDuels(): Promise<boolean> {
@@ -673,6 +675,50 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   }
   setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
 
+  // Detect obviously corrupted games and cache their IDs so we can exclude them from all analytics.
+  // Example: "games" with >25 rounds or duplicated round numbers (should never exist).
+  try {
+    const invalid = new Set<string>();
+    const roundMaskByGame = new Map<string, number>();
+    const uniqueRoundCountByGame = new Map<string, number>();
+
+    const YIELD_EVERY_VALIDATE = 4000;
+    setLoadingProgress({ phase: "Validating games (round indices)...", current: 0, total: outRows.length });
+    for (let i = 0; i < outRows.length; i++) {
+      if (i > 0 && i % YIELD_EVERY_VALIDATE === 0) await yieldToEventLoop();
+      if (i > 0 && i % 8000 === 0) setLoadingProgress({ phase: "Validating games (round indices)...", current: i, total: outRows.length });
+
+      const r: any = outRows[i];
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      if (!gid || invalid.has(gid)) continue;
+
+      const rn = r?.roundNumber;
+      if (typeof rn !== "number" || !Number.isFinite(rn)) continue;
+
+      if (rn < 1 || rn > 25) {
+        invalid.add(gid);
+        continue;
+      }
+
+      const bit = 1 << rn;
+      const prevMask = roundMaskByGame.get(gid) ?? 0;
+      if ((prevMask & bit) !== 0) {
+        invalid.add(gid);
+        continue;
+      }
+      roundMaskByGame.set(gid, prevMask | bit);
+
+      const n = (uniqueRoundCountByGame.get(gid) ?? 0) + 1;
+      uniqueRoundCountByGame.set(gid, n);
+      if (n > 25) invalid.add(gid);
+    }
+    setLoadingProgress({ phase: "Validating games (round indices)...", current: outRows.length, total: outRows.length });
+
+    corruptedGameIdsCache = invalid;
+  } catch {
+    // ignore - best-effort data quality cache
+  }
+
   // Derive repeat-location helpers for drilldowns/dimensions.
   // These are not persisted (they are cheap to compute once per load and cached in roundsRawCache).
   try {
@@ -755,6 +801,13 @@ export async function getRounds(filters: GlobalFilters): Promise<RoundRow[]> {
   }
 
   rows = applyFilters(rows, applied.clauses, "round");
+
+  if (corruptedGameIdsCache && corruptedGameIdsCache.size > 0) {
+    rows = rows.filter((r: any) => {
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      return !gid || !corruptedGameIdsCache?.has(gid);
+    });
+  }
 
   roundsFilteredCache.set(key, rows);
   return rows;
@@ -997,6 +1050,11 @@ async function getGamesRaw(): Promise<GameFactRow[]> {
     }
 
     return out as GameFactRow;
+  }).filter((g: any) => {
+    const gid = typeof g?.gameId === "string" ? g.gameId : "";
+    if (gid && corruptedGameIdsCache?.has(gid)) return false;
+    const rc = typeof g?.roundsCount === "number" && Number.isFinite(g.roundsCount) ? g.roundsCount : 0;
+    return rc <= 25;
   });
   setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
 

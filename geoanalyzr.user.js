@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.2.28
+// @version      2.2.35
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -8470,6 +8470,25 @@ ${shapes}`.trim();
     if (fm && fz && fr) return "nmpz";
     return void 0;
   }
+  function normalizeMovementType2(raw) {
+    if (typeof raw !== "string") return "unknown";
+    const s = raw.trim().toLowerCase();
+    if (!s) return "unknown";
+    if (s.includes("nmpz")) return "nmpz";
+    if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
+    if (s.includes("moving")) return "moving";
+    return "unknown";
+  }
+  function extractTrueHeadingDeg(roundRaw) {
+    const pano = roundRaw?.panorama;
+    const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? roundRaw?.heading ?? roundRaw?.bearing ?? roundRaw?.rotation;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return void 0;
+  }
   function extractRatingChange(player) {
     const paths = [
       "progressChange.rankedSystemProgress",
@@ -8737,6 +8756,7 @@ ${shapes}`.trim();
       };
       detail = duelDetail;
     }
+    const movementType = normalizeMovementType2(detectSimpleGameMode(gameData?.movementOptions));
     const normalizedRounds = [];
     for (let i = 0; i < rounds.length; i++) {
       const r = rounds[i];
@@ -8748,9 +8768,11 @@ ${shapes}`.trim();
         mapName: commonBase.mapName,
         mapSlug: commonBase.mapSlug,
         isRated: commonBase.isRated,
+        movementType,
         trueLat: asNum(r?.panorama?.lat),
         trueLng: asNum(r?.panorama?.lng),
         trueCountry: normalizeIso22(r?.panorama?.countryCode),
+        trueHeadingDeg: extractTrueHeadingDeg(r),
         damageMultiplier: asNum(r?.damageMultiplier),
         isHealingRound: Boolean(r?.isHealingRound),
         startTime: toTs(r?.startTime),
@@ -8760,7 +8782,8 @@ ${shapes}`.trim();
           const e = toTs(r?.endTime);
           return s !== void 0 && e !== void 0 && e >= s ? (e - s) / 1e3 : void 0;
         })(),
-        raw: r
+        // Avoid storing full raw payloads per round (huge). Persist only the derived fields above.
+        raw: void 0
       };
       if (family === "teamduels") {
         const round = { ...roundBase, modeFamily: "teamduels" };
@@ -8781,6 +8804,7 @@ ${shapes}`.trim();
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
           round[`${role}_playerId`] = readPlayerId(player);
+          round[`${role}_name`] = (typeof readPlayerId(player) === "string" ? profiles.get(String(readPlayerId(player)))?.nick : void 0) ?? (typeof player?.nick === "string" ? player.nick : void 0);
           round[`${role}_teamId`] = teamId || void 0;
           round[`${role}_guessLat`] = guessLat;
           round[`${role}_guessLng`] = guessLng;
@@ -8804,6 +8828,7 @@ ${shapes}`.trim();
           const guessLng = guessPos.lng;
           const distanceMeters = asNum(guess?.distance);
           round[`${role}_playerId`] = readPlayerId(player);
+          round[`${role}_name`] = (typeof readPlayerId(player) === "string" ? profiles.get(String(readPlayerId(player)))?.nick : void 0) ?? (typeof player?.nick === "string" ? player.nick : void 0);
           round[`${role}_guessLat`] = guessLat;
           round[`${role}_guessLng`] = guessLng;
           round[`${role}_distanceKm`] = distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0;
@@ -9588,10 +9613,25 @@ ${shapes}`.trim();
 
   // src/engine/dimensions.ts
   function getRowTs(row) {
-    const a = row?.playedAt;
-    if (typeof a === "number" && Number.isFinite(a)) return a;
-    const b = row?.ts;
-    if (typeof b === "number" && Number.isFinite(b)) return b;
+    const coerce = (v) => {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const s = v.trim();
+        if (!s) return void 0;
+        const n = Number(s);
+        if (Number.isFinite(n)) return n;
+        return void 0;
+      }
+      if (v instanceof Date) {
+        const n = v.getTime();
+        return Number.isFinite(n) ? n : void 0;
+      }
+      return void 0;
+    };
+    const a = coerce(row?.playedAt);
+    if (typeof a === "number") return a;
+    const b = coerce(row?.ts);
+    if (typeof b === "number") return b;
     return void 0;
   }
   function scoreBucketKey(r) {
@@ -10081,7 +10121,7 @@ ${shapes}`.trim();
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
-  function normalizeMovementType2(raw) {
+  function normalizeMovementType3(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
     if (!s) return "unknown";
@@ -10108,6 +10148,7 @@ ${shapes}`.trim();
   var gamesFilteredCache = /* @__PURE__ */ new Map();
   var sessionsRawCache = null;
   var sessionsFilteredCache = /* @__PURE__ */ new Map();
+  var corruptedGameIdsCache = null;
   function invalidateRoundsCache() {
     roundsRawCache = null;
     roundsFilteredCache.clear();
@@ -10115,6 +10156,7 @@ ${shapes}`.trim();
     gamesFilteredCache.clear();
     sessionsRawCache = null;
     sessionsFilteredCache.clear();
+    corruptedGameIdsCache = null;
   }
   async function hasAnyTeamDuels() {
     const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
@@ -10378,50 +10420,138 @@ ${shapes}`.trim();
   }
   async function getRoundsRaw() {
     if (roundsRawCache) return roundsRawCache;
-    setLoadingProgress({ phase: "Reading database (rounds/games/details)..." });
-    const [rows, games, details] = await Promise.all([db.rounds.toArray(), db.games.toArray(), db.details.toArray()]);
-    const playedAtByGame = /* @__PURE__ */ new Map();
-    const modeFamilyByGame = /* @__PURE__ */ new Map();
-    const gameModeByGame = /* @__PURE__ */ new Map();
-    for (const g of games) {
-      if (typeof g.playedAt === "number") playedAtByGame.set(g.gameId, g.playedAt);
-      if (typeof g.modeFamily === "string" && g.modeFamily) modeFamilyByGame.set(g.gameId, g.modeFamily);
-      const gm = asTrimmedString2(g.gameMode ?? g.mode);
-      if (gm) gameModeByGame.set(g.gameId, gm);
-    }
-    const detailsByGame = /* @__PURE__ */ new Map();
-    for (const d of details) {
-      if (d && typeof d.gameId === "string") detailsByGame.set(d.gameId, d);
-    }
-    const outRows = new Array(rows.length);
-    const YIELD_EVERY = 250;
-    setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
-    for (let i = 0; i < rows.length; i++) {
-      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
-      if (i > 0 && i % 500 === 0) setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
-      const out = rows[i];
-      const gameId = String(out.gameId ?? "");
-      const d = detailsByGame.get(gameId);
-      if (d) {
-        if (typeof out.mapSlug !== "string" || !out.mapSlug) {
-          const ms = typeof d?.mapSlug === "string" ? d.mapSlug : typeof d?.raw?.options?.map?.slug === "string" ? d.raw.options.map.slug : "";
-          if (ms) out.mapSlug = ms;
-        }
-        if (typeof out.mapName !== "string" || !out.mapName) {
-          const mn = typeof d?.mapName === "string" ? d.mapName : typeof d?.raw?.options?.map?.name === "string" ? d.raw.options.map.name : "";
-          if (mn) out.mapName = mn;
-        }
-        if (typeof out.isRated !== "boolean") {
-          const ir = d?.isRated;
-          const rawIr = d?.raw?.options?.isRated;
-          if (ir === true || ir === false) out.isRated = ir;
-          else if (rawIr === true || rawIr === false) out.isRated = rawIr;
+    setLoadingProgress({ phase: "Reading database (rounds)..." });
+    const rows = await db.rounds.toArray();
+    try {
+      const metaKey = "migration_strip_round_raw_v1";
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      const recentlyDone = typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 365 * 24 * 60 * 60 * 1e3;
+      if (!recentlyDone) {
+        const shouldStrip = rows.some((r) => r && typeof r === "object" && r.raw && typeof r.raw === "object");
+        if (shouldStrip) {
+          let scanned = 0;
+          let updated = 0;
+          const patch = [];
+          const BATCH = 500;
+          setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: 0, total: rows.length });
+          for (let i = 0; i < rows.length; i++) {
+            const r = rows[i];
+            scanned++;
+            if (!r || typeof r !== "object") continue;
+            const raw = r.raw;
+            if (!raw || typeof raw !== "object") continue;
+            if (typeof r.trueHeadingDeg !== "number") {
+              const pano = raw?.panorama;
+              const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? raw?.heading ?? raw?.bearing ?? raw?.rotation;
+              if (typeof v === "number" && Number.isFinite(v)) r.trueHeadingDeg = v;
+              else if (typeof v === "string") {
+                const n = Number(v);
+                if (Number.isFinite(n)) r.trueHeadingDeg = n;
+              }
+            }
+            delete r.raw;
+            patch.push(r);
+            updated++;
+            if (patch.length >= BATCH) {
+              await db.rounds.bulkPut(patch);
+              patch.length = 0;
+              setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: i + 1, total: rows.length });
+            }
+          }
+          if (patch.length) await db.rounds.bulkPut(patch);
+          setLoadingProgress({ phase: "Optimizing storage (stripping round raw payloads)...", current: rows.length, total: rows.length });
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), scanned, updated }, updatedAt: Date.now() });
+        } else {
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), scanned: rows.length, updated: 0 }, updatedAt: Date.now() });
         }
       }
+    } catch {
+    }
+    try {
+      const metaKey = "migration_round_names_from_details_v1";
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      const recentlyDone = typeof doneAt === "number" && Number.isFinite(doneAt) && Date.now() - doneAt < 365 * 24 * 60 * 60 * 1e3;
+      if (!recentlyDone) {
+        const needs = rows.some((r) => {
+          const mf = String(r?.modeFamily ?? "").toLowerCase();
+          if (mf !== "teamduels") return false;
+          const mateName = typeof r?.player_mate_name === "string" ? String(r.player_mate_name).trim() : "";
+          const movementType = typeof r?.movementType === "string" ? String(r.movementType).trim() : "";
+          return !mateName || !movementType;
+        });
+        if (needs) {
+          setLoadingProgress({ phase: "Backfilling round names/movement from cached details..." });
+          const details = await db.details.where("modeFamily").equals("teamduels").toArray();
+          const byGame = /* @__PURE__ */ new Map();
+          for (const d of details) {
+            const gid = typeof d?.gameId === "string" ? d.gameId : "";
+            if (!gid) continue;
+            byGame.set(gid, d);
+          }
+          let updated = 0;
+          const patch = [];
+          const BATCH = 500;
+          for (let i = 0; i < rows.length; i++) {
+            if (i > 0 && i % 1e3 === 0) setLoadingProgress({ phase: "Backfilling round names/movement from cached details...", current: i, total: rows.length });
+            const r = rows[i];
+            const mf = String(r?.modeFamily ?? "").toLowerCase();
+            if (mf !== "teamduels") continue;
+            const gid = typeof r?.gameId === "string" ? r.gameId : "";
+            if (!gid) continue;
+            const d = byGame.get(gid);
+            if (!d) continue;
+            let changed = false;
+            if (typeof r.player_mate_name !== "string" || !String(r.player_mate_name).trim()) {
+              const n = asTrimmedString2(d?.player_mate_name);
+              if (n) {
+                r.player_mate_name = n;
+                changed = true;
+              }
+            }
+            if (typeof r.movementType !== "string" || !String(r.movementType).trim() || String(r.movementType).toLowerCase() === "unknown") {
+              const raw = asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode);
+              const norm = normalizeMovementType3(raw);
+              if (norm !== "unknown") {
+                r.movementType = norm;
+                changed = true;
+              }
+            }
+            if (changed) {
+              patch.push(r);
+              updated++;
+              if (patch.length >= BATCH) {
+                await db.rounds.bulkPut(patch);
+                patch.length = 0;
+              }
+            }
+          }
+          if (patch.length) await db.rounds.bulkPut(patch);
+          setLoadingProgress({ phase: "Backfilling round names/movement from cached details...", current: rows.length, total: rows.length });
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), updated }, updatedAt: Date.now() });
+        } else {
+          await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), updated: 0 }, updatedAt: Date.now() });
+        }
+      }
+    } catch {
+    }
+    const outRows = new Array(rows.length);
+    const YIELD_EVERY = 2e3;
+    setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
+    const progressStep = Math.max(10, Math.floor(rows.length / 120));
+    let nextProgressAt = progressStep;
+    for (let i = 0; i < rows.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      if (i >= nextProgressAt) {
+        setLoadingProgress({ phase: "Processing rounds...", current: i, total: rows.length });
+        nextProgressAt = Math.min(rows.length, nextProgressAt + progressStep);
+      }
+      const out = rows[i];
+      const gameId = String(out.gameId ?? "");
       const roundStart = typeof out.startTime === "number" && Number.isFinite(out.startTime) ? out.startTime : void 0;
       const roundEnd = typeof out.endTime === "number" && Number.isFinite(out.endTime) ? out.endTime : void 0;
-      const gamePlayedAt = playedAtByGame.get(gameId);
-      const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : void 0) ?? gamePlayedAt;
+      const bestTime = roundStart ?? roundEnd ?? (typeof out.playedAt === "number" ? out.playedAt : void 0);
       if (typeof bestTime === "number" && Number.isFinite(bestTime)) {
         out.playedAt = bestTime;
         out.ts = bestTime;
@@ -10443,41 +10573,15 @@ ${shapes}`.trim();
         }
       }
       if (typeof out.modeFamily !== "string" || !out.modeFamily) {
-        const mf = asTrimmedString2(out.modeFamily) ?? asTrimmedString2(d?.modeFamily) ?? modeFamilyByGame.get(gameId);
+        const mf = asTrimmedString2(out.modeFamily);
         if (mf) out.modeFamily = mf;
       }
       if (typeof out.gameMode !== "string" || !out.gameMode) {
-        const gm = asTrimmedString2(out.gameMode) ?? asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode) ?? gameModeByGame.get(gameId);
+        const gm = asTrimmedString2(out.gameMode);
         if (gm) out.gameMode = gm;
       }
       if (typeof out.movementType !== "string" || !out.movementType) {
-        const fromDetail = asTrimmedString2(d?.gameModeSimple);
-        const fromGame = gameModeByGame.get(gameId);
-        out.movementType = normalizeMovementType2(fromDetail ?? fromGame);
-      }
-      if (d) {
-        const v = typeof d.player_self_victory === "boolean" ? d.player_self_victory : typeof d.teamOneVictory === "boolean" ? d.teamOneVictory : typeof d.playerOneVictory === "boolean" ? d.playerOneVictory : void 0;
-        if (typeof v === "boolean") out.result = v ? "Win" : "Loss";
-        if (typeof out.teammateName !== "string" || !out.teammateName.trim()) {
-          const selfId = asTrimmedString2(out.player_self_playerId) ?? asTrimmedString2(out.player_self_id);
-          const selfName = asTrimmedString2(out.player_self_name) ?? asTrimmedString2(d.player_self_name);
-          const t1id = asTrimmedString2(d.teamOnePlayerOneId);
-          const t2id = asTrimmedString2(d.teamOnePlayerTwoId);
-          const t1name = asTrimmedString2(d.teamOnePlayerOneName);
-          const t2name = asTrimmedString2(d.teamOnePlayerTwoName);
-          const u1id = asTrimmedString2(d.teamTwoPlayerOneId);
-          const u2id = asTrimmedString2(d.teamTwoPlayerTwoId);
-          const u1name = asTrimmedString2(d.teamTwoPlayerOneName);
-          const u2name = asTrimmedString2(d.teamTwoPlayerTwoName);
-          let mateName;
-          if (selfId && selfId === t1id) mateName = t2name;
-          else if (selfId && selfId === t2id) mateName = t1name;
-          else if (selfId && selfId === u1id) mateName = u2name;
-          else if (selfId && selfId === u2id) mateName = u1name;
-          else mateName = asTrimmedString2(pickFirst3(d, ["player_mate_name", "teamOnePlayerTwoName", "p2_name"]));
-          if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
-          if (mateName) out.teammateName = mateName;
-        }
+        out.movementType = normalizeMovementType3(asTrimmedString2(out.gameMode));
       }
       const existingGuess = typeof out.player_self_guessCountry === "string" ? out.player_self_guessCountry : typeof out.p1_guessCountry === "string" ? out.p1_guessCountry : typeof out.guessCountry === "string" ? out.guessCountry : "";
       if (!existingGuess) {
@@ -10515,6 +10619,66 @@ ${shapes}`.trim();
       outRows[i] = out;
     }
     setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
+    try {
+      const invalid = /* @__PURE__ */ new Set();
+      const roundMaskByGame = /* @__PURE__ */ new Map();
+      const uniqueRoundCountByGame = /* @__PURE__ */ new Map();
+      const YIELD_EVERY_VALIDATE = 4e3;
+      setLoadingProgress({ phase: "Validating games (round indices)...", current: 0, total: outRows.length });
+      for (let i = 0; i < outRows.length; i++) {
+        if (i > 0 && i % YIELD_EVERY_VALIDATE === 0) await yieldToEventLoop();
+        if (i > 0 && i % 8e3 === 0) setLoadingProgress({ phase: "Validating games (round indices)...", current: i, total: outRows.length });
+        const r = outRows[i];
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (!gid || invalid.has(gid)) continue;
+        const rn = r?.roundNumber;
+        if (typeof rn !== "number" || !Number.isFinite(rn)) continue;
+        if (rn < 1 || rn > 25) {
+          invalid.add(gid);
+          continue;
+        }
+        const bit = 1 << rn;
+        const prevMask = roundMaskByGame.get(gid) ?? 0;
+        if ((prevMask & bit) !== 0) {
+          invalid.add(gid);
+          continue;
+        }
+        roundMaskByGame.set(gid, prevMask | bit);
+        const n = (uniqueRoundCountByGame.get(gid) ?? 0) + 1;
+        uniqueRoundCountByGame.set(gid, n);
+        if (n > 25) invalid.add(gid);
+      }
+      setLoadingProgress({ phase: "Validating games (round indices)...", current: outRows.length, total: outRows.length });
+      corruptedGameIdsCache = invalid;
+    } catch {
+    }
+    try {
+      const counts = /* @__PURE__ */ new Map();
+      setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: outRows.length });
+      for (let i = 0; i < outRows.length; i++) {
+        if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+        const r = outRows[i];
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        r.trueLocationKey = key;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        if (i > 0 && i % 5e3 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+      }
+      setLoadingProgress({ phase: "Indexing repeat locations...", current: outRows.length, total: outRows.length });
+      setLoadingProgress({ phase: "Marking repeat locations...", current: 0, total: outRows.length });
+      for (let i = 0; i < outRows.length; i++) {
+        if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+        const r = outRows[i];
+        const key = typeof r?.trueLocationKey === "string" ? r.trueLocationKey : "";
+        if (!key) continue;
+        r.trueLocationRepeat = (counts.get(key) ?? 0) > 1;
+        if (i > 0 && i % 5e3 === 0) setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+      }
+      setLoadingProgress({ phase: "Marking repeat locations...", current: outRows.length, total: outRows.length });
+    } catch {
+    }
     roundsRawCache = outRows;
     return roundsRawCache;
   }
@@ -10532,10 +10696,37 @@ ${shapes}`.trim();
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
       const toTs2 = applied.date.toTs ?? null;
-      if (fromTs !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt >= fromTs);
-      if (toTs2 !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt <= toTs2);
+      const tsOf = (r) => {
+        const a = r?.playedAt;
+        if (typeof a === "number" && Number.isFinite(a)) return a;
+        if (typeof a === "string") {
+          const n = Number(a.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        const b = r?.ts;
+        if (typeof b === "number" && Number.isFinite(b)) return b;
+        if (typeof b === "string") {
+          const n = Number(b.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      };
+      if (fromTs !== null) rows = rows.filter((r) => {
+        const ts = tsOf(r);
+        return ts !== null && ts >= fromTs;
+      });
+      if (toTs2 !== null) rows = rows.filter((r) => {
+        const ts = tsOf(r);
+        return ts !== null && ts <= toTs2;
+      });
     }
     rows = applyFilters(rows, applied.clauses, "round");
+    if (corruptedGameIdsCache && corruptedGameIdsCache.size > 0) {
+      rows = rows.filter((r) => {
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        return !gid || !corruptedGameIdsCache?.has(gid);
+      });
+    }
     roundsFilteredCache.set(key, rows);
     return rows;
   }
@@ -10588,7 +10779,7 @@ ${shapes}`.trim();
         }
         agg.roundsCount++;
         const mvRaw = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
-        const mv = normalizeMovementType2(mvRaw);
+        const mv = normalizeMovementType3(mvRaw);
         const curMv = agg.movementType;
         if (mv && mv !== "unknown") {
           if (!curMv || curMv === "unknown") agg.movementType = mv;
@@ -10663,7 +10854,7 @@ ${shapes}`.trim();
       }
       if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
         const raw = asTrimmedString2(out.gameModeSimple) ?? asTrimmedString2(out.gameMode) ?? asTrimmedString2(out.mode) ?? asTrimmedString2(out.gameType);
-        const norm = normalizeMovementType2(raw);
+        const norm = normalizeMovementType3(raw);
         if (norm !== "unknown") out.movementType = norm;
       }
       const scoreSum = agg?.scoreSum;
@@ -10718,6 +10909,11 @@ ${shapes}`.trim();
         out.isFlawlessWin = res === "win" || res === "w" || res === "true";
       }
       return out;
+    }).filter((g) => {
+      const gid = typeof g?.gameId === "string" ? g.gameId : "";
+      if (gid && corruptedGameIdsCache?.has(gid)) return false;
+      const rc = typeof g?.roundsCount === "number" && Number.isFinite(g.roundsCount) ? g.roundsCount : 0;
+      return rc <= 25;
     });
     setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
     return gamesRawCache;
@@ -10736,8 +10932,29 @@ ${shapes}`.trim();
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
       const toTs2 = applied.date.toTs ?? null;
-      if (fromTs !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt >= fromTs);
-      if (toTs2 !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt <= toTs2);
+      const tsOf = (g) => {
+        const a = g?.playedAt;
+        if (typeof a === "number" && Number.isFinite(a)) return a;
+        if (typeof a === "string") {
+          const n = Number(a.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        const b = g?.ts;
+        if (typeof b === "number" && Number.isFinite(b)) return b;
+        if (typeof b === "string") {
+          const n = Number(b.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      };
+      if (fromTs !== null) rows = rows.filter((g) => {
+        const ts = tsOf(g);
+        return ts !== null && ts >= fromTs;
+      });
+      if (toTs2 !== null) rows = rows.filter((g) => {
+        const ts = tsOf(g);
+        return ts !== null && ts <= toTs2;
+      });
     }
     rows = applyFilters(rows, applied.clauses, "game");
     gamesFilteredCache.set(key, rows);
@@ -31534,16 +31751,7 @@ ${shapes}`.trim();
       const mateCountry = resolveGuessCountryForExport(pickWithAliases2(r, "player_mate_guessCountry"));
       const oppCountry = resolveGuessCountryForExport(pickWithAliases2(r, "player_opponent_guessCountry"));
       const oppMateCountry = resolveGuessCountryForExport(pickWithAliases2(r, "player_opponent_mate_guessCountry"));
-      const trueHeading = asFiniteNumber(
-        pickFirst4(r.raw, [
-          "panorama.heading",
-          "panorama.bearing",
-          "panorama.rotation",
-          "heading",
-          "bearing",
-          "rotation"
-        ])
-      );
+      const trueHeading = asFiniteNumber(r.trueHeadingDeg);
       const rowBase = {
         gameId: r.gameId,
         roundNumber: r.roundNumber,
@@ -34612,7 +34820,7 @@ ${shapes}`.trim();
                             metric: "avg_guess_duration",
                             groupBy: "round_id",
                             extreme: "min",
-                            displayKey: "first_ts_score",
+                            displayKey: "none",
                             actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
                           },
                           {
@@ -34621,7 +34829,7 @@ ${shapes}`.trim();
                             metric: "avg_guess_duration",
                             groupBy: "round_id",
                             extreme: "max",
-                            displayKey: "first_ts_score",
+                            displayKey: "none",
                             actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
                           },
                           {
@@ -34631,7 +34839,7 @@ ${shapes}`.trim();
                             groupBy: "round_id",
                             extreme: "min",
                             filters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
-                            displayKey: "first_ts",
+                            displayKey: "none",
                             actions: {
                               click: {
                                 type: "drilldown",
@@ -34649,7 +34857,7 @@ ${shapes}`.trim();
                             groupBy: "round_id",
                             extreme: "max",
                             filters: [{ dimension: "is_throw", op: "eq", value: "true" }],
-                            displayKey: "first_ts_score",
+                            displayKey: "none",
                             actions: {
                               click: {
                                 type: "drilldown",
@@ -34868,7 +35076,7 @@ ${shapes}`.trim();
                             groupBy: "game_id",
                             extreme: "max",
                             displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
                           },
                           {
                             id: "fast_round_streak",
@@ -35564,7 +35772,7 @@ ${shapes}`.trim();
                 x: 0,
                 y: 0,
                 w: 12,
-                h: 32,
+                h: 35,
                 card: {
                   type: "composite",
                   children: [
@@ -36088,6 +36296,16 @@ ${shapes}`.trim();
                         actions: {
                           click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true }
                         }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_admin_enrich",
+                      type: "admin_enrichment",
+                      title: "Detailed admin analysis",
+                      grain: "round",
+                      placement: { x: 0, y: 32, w: 12, h: 3 },
+                      spec: {
+                        description: "Start an on-demand enrichment for this country (downloads admin boundaries and computes province/state fields). This makes admin hit-rate rows and region maps available."
                       }
                     }
                   ]
@@ -43672,6 +43890,53 @@ ${describeError(err2)}` : message;
   }
 
   // src/engine/regionEnrichment.ts
+  var ADMIN_DIM_TO_COUNTRY = {
+    true_state: "de",
+    guess_state: "de",
+    true_district: "de",
+    guess_district: "de",
+    true_us_state: "us",
+    guess_us_state: "us",
+    true_ca_province: "ca",
+    guess_ca_province: "ca",
+    true_id_province: "id",
+    guess_id_province: "id",
+    true_id_kabupaten: "id",
+    guess_id_kabupaten: "id",
+    true_ph_province: "ph",
+    guess_ph_province: "ph",
+    true_vn_province: "vn",
+    guess_vn_province: "vn"
+  };
+  var SUPPORTED_ADMIN_DIMS = new Set(Object.keys(ADMIN_DIM_TO_COUNTRY));
+  var ADMIN_ENABLED_CACHE = /* @__PURE__ */ new Map();
+  var ADMIN_ENABLED_CACHE_TTL_MS = 2e3;
+  function getAdminEnrichmentRequiredCountry(dimId) {
+    const iso2 = ADMIN_DIM_TO_COUNTRY[dimId];
+    return typeof iso2 === "string" && iso2 ? iso2 : null;
+  }
+  function invalidateAdminEnrichmentEnabledCache(countryIso2) {
+    if (typeof countryIso2 === "string" && countryIso2.trim()) {
+      ADMIN_ENABLED_CACHE.delete(countryIso2.trim().toLowerCase());
+      return;
+    }
+    ADMIN_ENABLED_CACHE.clear();
+  }
+  async function isAdminEnrichmentEnabledForCountry(countryIso2) {
+    const iso2 = typeof countryIso2 === "string" ? countryIso2.trim().toLowerCase() : "";
+    if (!iso2) return false;
+    const cached = ADMIN_ENABLED_CACHE.get(iso2);
+    if (cached && Date.now() - cached.fetchedAt < ADMIN_ENABLED_CACHE_TTL_MS) return cached.enabled;
+    try {
+      const meta = await db.meta.get(`admin_enrichment_enabled_${iso2}`);
+      const enabled = meta?.value?.enabled === true;
+      ADMIN_ENABLED_CACHE.set(iso2, { enabled, fetchedAt: Date.now() });
+      return enabled;
+    } catch {
+      ADMIN_ENABLED_CACHE.set(iso2, { enabled: false, fetchedAt: Date.now() });
+      return false;
+    }
+  }
   function isFiniteNum(v) {
     return typeof v === "number" && Number.isFinite(v);
   }
@@ -43692,25 +43957,9 @@ ${describeError(err2)}` : message;
   }
   async function maybeEnrichRoundRowsForDimension(dimId, rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
-    const supported = /* @__PURE__ */ new Set([
-      "true_state",
-      "true_district",
-      "true_us_state",
-      "true_ca_province",
-      "true_id_province",
-      "true_id_kabupaten",
-      "true_ph_province",
-      "true_vn_province",
-      "guess_state",
-      "guess_district",
-      "guess_us_state",
-      "guess_ca_province",
-      "guess_id_province",
-      "guess_id_kabupaten",
-      "guess_ph_province",
-      "guess_vn_province"
-    ]);
-    if (!supported.has(dimId)) return;
+    if (!SUPPORTED_ADMIN_DIMS.has(dimId)) return;
+    const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
+    if (requiredCountry && !await isAdminEnrichmentEnabledForCountry(requiredCountry)) return;
     const guessLatLngOf = (r) => {
       const lat = typeof r?.player_self_guessLat === "number" ? r.player_self_guessLat : typeof r?.p1_guessLat === "number" ? r.p1_guessLat : typeof r?.guessLat === "number" ? r.guessLat : null;
       const lng = typeof r?.player_self_guessLng === "number" ? r.player_self_guessLng : typeof r?.p1_guessLng === "number" ? r.p1_guessLng : typeof r?.guessLng === "number" ? r.guessLng : null;
@@ -45259,6 +45508,198 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
+  // src/ui/widgets/adminEnrichmentWidget.ts
+  function asIso2(v) {
+    const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+    return /^[a-z]{2}$/.test(s) ? s : "";
+  }
+  function getAdminEnrichmentPlan(countryIso2) {
+    const iso2 = asIso2(countryIso2);
+    if (!iso2) return null;
+    if (iso2 === "de") return { countryIso2: iso2, label: "Germany (Bundesl\xE4nder + Landkreise)", dimIds: ["true_state", "guess_state", "true_district", "guess_district"] };
+    if (iso2 === "us") return { countryIso2: iso2, label: "United States (States)", dimIds: ["true_us_state", "guess_us_state"] };
+    if (iso2 === "ca") return { countryIso2: iso2, label: "Canada (Provinces)", dimIds: ["true_ca_province", "guess_ca_province"] };
+    if (iso2 === "id") return { countryIso2: iso2, label: "Indonesia (Provinces + Kabupaten)", dimIds: ["true_id_province", "guess_id_province", "true_id_kabupaten", "guess_id_kabupaten"] };
+    if (iso2 === "ph") return { countryIso2: iso2, label: "Philippines (Provinces)", dimIds: ["true_ph_province", "guess_ph_province"] };
+    if (iso2 === "vn") return { countryIso2: iso2, label: "Vietnam (Provinces)", dimIds: ["true_vn_province", "guess_vn_province"] };
+    return null;
+  }
+  function metaKeyForCountry(iso2) {
+    return `admin_enrichment_enabled_${iso2.toLowerCase()}`;
+  }
+  async function runAdminEnrichment(countryIso2, opts) {
+    const iso2 = asIso2(countryIso2);
+    if (!iso2) throw new Error("Missing country ISO2 for admin enrichment");
+    const plan = getAdminEnrichmentPlan(iso2);
+    if (!plan) throw new Error(`No admin-level dataset configured for '${iso2.toUpperCase()}' yet.`);
+    const set = (pct, msg) => {
+      opts?.onPct?.(pct);
+      opts?.onStatus?.(msg);
+    };
+    await db.meta.put({ key: metaKeyForCountry(iso2), value: { enabled: true }, updatedAt: Date.now() });
+    invalidateAdminEnrichmentEnabledCache(iso2);
+    analysisConsole.info(`Admin enrichment: loading rounds for ${iso2.toUpperCase()}...`);
+    set(2, `Loading rounds for ${iso2.toUpperCase()}...`);
+    const rows = await db.rounds.where("trueCountry").equals(iso2).toArray();
+    const total = rows.length;
+    if (!total) {
+      set(0, "No rounds found for this country.");
+      return;
+    }
+    analysisConsole.info(`Admin enrichment: computing ${plan.dimIds.length} dimensions for ${total} rounds...`);
+    for (let i = 0; i < plan.dimIds.length; i++) {
+      const dimId = plan.dimIds[i];
+      const pct = 5 + i / Math.max(1, plan.dimIds.length) * 70;
+      set(pct, `Computing ${dimId}... (${i + 1}/${plan.dimIds.length})`);
+      await maybeEnrichRoundRowsForDimension(dimId, rows);
+    }
+    analysisConsole.info("Admin enrichment: saving enriched rounds...");
+    set(80, "Saving enriched rounds...");
+    const batchSize = 200;
+    for (let offset = 0; offset < total; offset += batchSize) {
+      const chunk = rows.slice(offset, offset + batchSize);
+      await db.rounds.bulkPut(chunk);
+      set(80 + offset / Math.max(1, total) * 18, "Saving enriched rounds...");
+      if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise((r) => setTimeout(r, 0));
+    }
+    await db.meta.put({
+      key: metaKeyForCountry(iso2),
+      value: { enabled: true, doneAt: Date.now(), dimIds: plan.dimIds, rounds: total },
+      updatedAt: Date.now()
+    });
+    invalidateAdminEnrichmentEnabledCache(iso2);
+    invalidateRoundsCache();
+    globalThis.__gaRequestRerender?.();
+    set(100, "Done.");
+    analysisConsole.info("Admin enrichment: done.");
+  }
+  async function renderAdminEnrichmentWidget(_semantic, widget, _overlay, baseRows) {
+    const doc = document;
+    const el2 = doc.createElement("div");
+    el2.className = "ga-widget ga-admin-enrichment";
+    const title = doc.createElement("div");
+    title.style.fontWeight = "600";
+    title.style.marginBottom = "6px";
+    title.textContent = widget.title || "Detailed administrative regions";
+    el2.appendChild(title);
+    const hint = doc.createElement("div");
+    hint.style.opacity = "0.9";
+    hint.style.fontSize = "12px";
+    hint.style.marginBottom = "10px";
+    hint.textContent = widget.spec?.description ?? "Optional: download admin boundaries and compute region fields (e.g. province/state) for this country. This enables hit-rate stats and region maps.";
+    el2.appendChild(hint);
+    const body = doc.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "8px";
+    el2.appendChild(body);
+    const countryIso2 = (() => {
+      const first = Array.isArray(baseRows) ? baseRows.find((r) => r && typeof r === "object") : null;
+      return asIso2(first?.trueCountry ?? first?.true_country);
+    })();
+    if (!countryIso2) {
+      const msg = doc.createElement("div");
+      msg.textContent = "Select a country in Country Insight to enable detailed admin analysis.";
+      body.appendChild(msg);
+      return el2;
+    }
+    const plan = getAdminEnrichmentPlan(countryIso2);
+    if (!plan) {
+      const msg = doc.createElement("div");
+      msg.textContent = `No detailed admin-level dataset configured for '${countryIso2.toUpperCase()}' yet.`;
+      body.appendChild(msg);
+      return el2;
+    }
+    const status = doc.createElement("div");
+    status.style.fontSize = "12px";
+    status.style.opacity = "0.9";
+    body.appendChild(status);
+    const progress = doc.createElement("div");
+    progress.style.height = "8px";
+    progress.style.borderRadius = "999px";
+    progress.style.background = "rgba(255,255,255,0.10)";
+    progress.style.overflow = "hidden";
+    const progressFill = doc.createElement("div");
+    progressFill.style.height = "100%";
+    progressFill.style.width = "0%";
+    progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
+    progress.appendChild(progressFill);
+    body.appendChild(progress);
+    const actions = doc.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "10px";
+    actions.style.flexWrap = "wrap";
+    body.appendChild(actions);
+    const btn = doc.createElement("button");
+    btn.className = "ga-filter-btn";
+    btn.textContent = "Start detailed analysis";
+    actions.appendChild(btn);
+    const clearBtn = doc.createElement("button");
+    clearBtn.className = "ga-filter-btn";
+    clearBtn.textContent = "Disable";
+    actions.appendChild(clearBtn);
+    const refresh = async () => {
+      const meta = await db.meta.get(metaKeyForCountry(countryIso2));
+      const enabled = meta?.value?.enabled === true;
+      const doneAt = meta?.value?.doneAt;
+      const doneTxt = typeof doneAt === "number" && Number.isFinite(doneAt) ? new Date(doneAt).toLocaleString() : "";
+      status.textContent = enabled ? `Enabled for ${plan.label}. ${doneTxt ? `Last run: ${doneTxt}.` : ""}` : `Disabled for ${plan.label}.`;
+      btn.textContent = enabled ? "Re-run detailed analysis" : "Start detailed analysis";
+    };
+    const setBusy = (pct, msg) => {
+      progressFill.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
+      status.textContent = msg;
+    };
+    btn.addEventListener("click", () => {
+      void (async () => {
+        btn.disabled = true;
+        clearBtn.disabled = true;
+        try {
+          let pct = 0;
+          let msg = "";
+          const sync = () => setBusy(pct, msg);
+          await runAdminEnrichment(countryIso2, {
+            onPct: (p) => {
+              pct = p;
+              sync();
+            },
+            onStatus: (m) => {
+              msg = m;
+              sync();
+            }
+          });
+          setBusy(100, "Done. Refreshing view...");
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          analysisConsole.error(`Admin enrichment failed: ${msg}`);
+          setBusy(0, `Error: ${msg}`);
+        } finally {
+          btn.disabled = false;
+          clearBtn.disabled = false;
+          await refresh();
+        }
+      })();
+    });
+    clearBtn.addEventListener("click", () => {
+      void (async () => {
+        clearBtn.disabled = true;
+        btn.disabled = true;
+        try {
+          await db.meta.put({ key: metaKeyForCountry(countryIso2), value: { enabled: false, doneAt: Date.now() }, updatedAt: Date.now() });
+          invalidateAdminEnrichmentEnabledCache(countryIso2);
+          invalidateRoundsCache();
+          globalThis.__gaRequestRerender?.();
+        } finally {
+          clearBtn.disabled = false;
+          btn.disabled = false;
+          await refresh();
+        }
+      })();
+    });
+    await refresh();
+    return el2;
+  }
+
   // src/ui/widgets/breakdownWidget.ts
   function getShareKindFromFormulaId2(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
@@ -45448,6 +45889,49 @@ ${describeError(err2)}` : message;
     if (!dimDef) throw new Error(`Unknown dimension '${dimId}' in breakdown ${widget.widgetId}`);
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[dimId];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${dimId}' (breakdown)`);
+    const requiredCountry = getAdminEnrichmentRequiredCountry(dimId);
+    if (requiredCountry && !await isAdminEnrichmentEnabledForCountry(requiredCountry)) {
+      const headerLeft2 = doc.createElement("div");
+      headerLeft2.className = "ga-breakdown-header-left";
+      headerLeft2.textContent = dimDef.label;
+      const headerRight2 = doc.createElement("div");
+      headerRight2.className = "ga-breakdown-header-right";
+      header.appendChild(headerLeft2);
+      header.appendChild(headerRight2);
+      const wrapCta = doc.createElement("div");
+      wrapCta.style.display = "flex";
+      wrapCta.style.justifyContent = "center";
+      wrapCta.style.alignItems = "center";
+      wrapCta.style.minHeight = "70px";
+      const btn = doc.createElement("button");
+      btn.className = "ga-filter-btn";
+      btn.textContent = `Load detailed regions (${requiredCountry.toUpperCase()})`;
+      btn.title = "Download admin boundaries and compute province/state/district fields for this country.";
+      const plan = getAdminEnrichmentPlan(requiredCountry);
+      if (!plan) {
+        btn.disabled = true;
+        btn.title = "No detailed admin dataset configured for this country yet.";
+      }
+      btn.addEventListener("click", () => {
+        void (async () => {
+          btn.disabled = true;
+          const prevText = btn.textContent;
+          btn.textContent = "Loading...";
+          try {
+            await runAdminEnrichment(requiredCountry);
+          } finally {
+            btn.textContent = prevText || "Load detailed regions";
+            btn.disabled = false;
+          }
+        })();
+      });
+      wrapCta.appendChild(btn);
+      box.appendChild(wrapCta);
+      wrap.appendChild(title);
+      wrap.appendChild(header);
+      wrap.appendChild(box);
+      return wrap;
+    }
     if (grain === "round") {
       await maybeEnrichRoundRowsForDimension(dimId, rowsAll);
     }
@@ -45644,6 +46128,11 @@ ${describeError(err2)}` : message;
   }
 
   // src/ui/widgets/recordListWidget.ts
+  function shouldHideTimestampForRoundRecord(rec, grain) {
+    if (grain !== "round") return false;
+    const click = rec.actions?.click;
+    return click?.type === "drilldown";
+  }
   function formatMetricValue(semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
@@ -45740,6 +46229,36 @@ ${describeError(err2)}` : message;
     if (!fn) return null;
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
     if (!keyFn) return null;
+    const isPlausibleGameGroup = (rows) => {
+      if (groupById !== "game_id") return true;
+      if (!Array.isArray(rows) || rows.length === 0) return false;
+      if (rows.length > 25) return false;
+      const nums = [];
+      const seen = /* @__PURE__ */ new Set();
+      let dup2 = 0;
+      let nDur = 0;
+      let n120 = 0;
+      for (const r of rows) {
+        const rn = r?.roundNumber;
+        if (typeof rn === "number" && Number.isFinite(rn) && rn > 0) {
+          nums.push(rn);
+          if (seen.has(rn)) dup2++;
+          else seen.add(rn);
+        }
+        const d = r?.durationSeconds;
+        if (typeof d === "number" && Number.isFinite(d) && d > 0) {
+          nDur++;
+          if (Math.abs(d - 120) < 1e-6) n120++;
+        }
+      }
+      if (dup2 > 0) return false;
+      if (nums.length > 0) {
+        const max2 = Math.max(...nums);
+        if (max2 > 25) return false;
+      }
+      if (rows.length >= 10 && nDur >= Math.floor(rows.length * 0.8) && n120 >= Math.floor(nDur * 0.9)) return false;
+      return true;
+    };
     const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
     const grouped = groupByKey(inputRows, keyFn);
     let bestKey = null;
@@ -45747,6 +46266,7 @@ ${describeError(err2)}` : message;
     let bestRows = [];
     for (const [k, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
+      if (!isPlausibleGameGroup(g)) continue;
       if (grain === "round" && metricId === "avg_score") {
         const total = g.length;
         let valid = 0;
@@ -45803,15 +46323,18 @@ ${describeError(err2)}` : message;
     }
     if (!bestKey || bestVal === null) return null;
     const metricText = formatMetricValue(semantic, metricId, bestVal);
-    const displayKey = rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
+    const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+    const displayKey = hideTs ? "none" : rec.displayKey === "none" ? "none" : rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
     const firstTs = (() => {
       const ts = bestRows.map(getRowTs2).filter((x) => typeof x === "number");
       return ts.length ? Math.min(...ts) : null;
     })();
-    const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
+    const keyText = displayKey === "none" ? "" : displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
     let tieCount = 0;
+    const tieRows = [];
     for (const [, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
+      if (!isPlausibleGameGroup(g)) continue;
       const v = (() => {
         if (grain === "round" && metricId === "avg_score") {
           let sum = 0;
@@ -45838,20 +46361,30 @@ ${describeError(err2)}` : message;
         return fn(g);
       })();
       if (!Number.isFinite(v)) continue;
-      if (v === bestVal) tieCount++;
+      if (v === bestVal) {
+        tieCount++;
+        tieRows.push(...g);
+      }
     }
     const tieSuffix = tieCount > 1 ? ` (${tieCount}x)` : "";
+    const rowsForDrilldown = tieCount > 1 ? tieRows : bestRows;
     if (grain === "session" && metricId === "session_delta_rating") {
-      return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
+      return { keyText: "", valueText: metricText, rows: rowsForDrilldown, click: rec.actions?.click };
     }
     if (groupById === "game_id" && metricId === "rounds_count") {
       if (extreme === "max") {
-        return { keyText, valueText: `${metricText} rounds (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
+        return {
+          keyText: hideTs ? "" : keyText,
+          valueText: hideTs || !keyText ? `${metricText} rounds${tieSuffix}` : `${metricText} rounds (${keyText})${tieSuffix}`,
+          rows: rowsForDrilldown,
+          click: rec.actions?.click
+        };
       }
       const tied = [];
       let tieCount2 = 0;
       for (const [, g] of grouped.entries()) {
         if (!g || g.length === 0) continue;
+        if (!isPlausibleGameGroup(g)) continue;
         const v = fn(g);
         if (!Number.isFinite(v) || v !== bestVal) continue;
         tieCount2++;
@@ -45859,14 +46392,19 @@ ${describeError(err2)}` : message;
       }
       const rows = tied.length ? tied : bestRows;
       return {
-        keyText,
+        keyText: hideTs ? "" : keyText,
         valueText: `${metricText} rounds${tieCount2 > 1 ? ` (${tieCount2}x)` : ""}`,
         rows,
         click: rec.actions?.click
       };
     }
     if (groupById === "game_id" && metricId === "score_spread") {
-      return { keyText, valueText: `${metricText} points (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
+      return {
+        keyText: hideTs ? "" : keyText,
+        valueText: hideTs || !keyText ? `${metricText} points${tieSuffix}` : `${metricText} points (${keyText})${tieSuffix}`,
+        rows: rowsForDrilldown,
+        click: rec.actions?.click
+      };
     }
     if (displayKey === "first_ts_score") {
       let scoreText = "";
@@ -45879,7 +46417,7 @@ ${describeError(err2)}` : message;
       return { keyText, valueText: `${metricText} on ${keyText}${scoreText}${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
     }
     const valueText = `${metricText}${tieSuffix}`;
-    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+    return { keyText, valueText, rows: rowsForDrilldown, click: rec.actions?.click };
   }
   function buildStreak(semantic, grain, rowsAll, rec) {
     const clauses = Array.isArray(rec.streakFilters) ? rec.streakFilters : [];
@@ -45908,8 +46446,9 @@ ${describeError(err2)}` : message;
       const ts = getRowTs2(bestRows[0]);
       return ts !== null ? formatTs(ts) : "";
     })() : "";
-    const valueText = best > 0 ? `${best} rounds in a row${keyText ? ` (${keyText})` : ""}` : "0";
-    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+    const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+    const valueText = best > 0 ? `${best} rounds in a row${!hideTs && keyText ? ` (${keyText})` : ""}` : "0";
+    return { keyText: hideTs ? "" : keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   function buildSameValueStreak(semantic, grain, rowsAll, rec) {
     const dimId = typeof rec.dimension === "string" ? rec.dimension.trim() : "";
@@ -45949,8 +46488,9 @@ ${describeError(err2)}` : message;
     const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
     const ts = bestRows.length ? getRowTs2(bestRows[0]) : null;
     const keyText = ts !== null ? formatTs(ts) : "";
-    const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${keyText ? ` (${keyText})` : ""}`.trim() : "0";
-    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+    const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+    const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${!hideTs && keyText ? ` (${keyText})` : ""}`.trim() : "0";
+    return { keyText: hideTs ? "" : keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   async function renderRecordListWidget(semantic, widget, overlay, baseRows) {
     const spec = widget.spec;
@@ -46001,6 +46541,16 @@ ${describeError(err2)}` : message;
               const gIds = s?.gameIds;
               if (!Array.isArray(gIds)) continue;
               for (const id of gIds) if (typeof id === "string" && id) ids.add(id);
+            }
+            const allGames = await getGames({});
+            sourceRows = allGames.filter((g) => typeof g?.gameId === "string" && ids.has(g.gameId));
+          }
+          if (grain === "round" && click.target === "games") {
+            targetGrain = "game";
+            const ids = /* @__PURE__ */ new Set();
+            for (const r of sourceRows) {
+              const gid = typeof r?.gameId === "string" ? r.gameId : "";
+              if (gid) ids.add(gid);
             }
             const allGames = await getGames({});
             sourceRows = allGames.filter((g) => typeof g?.gameId === "string" && ids.has(g.gameId));
@@ -46898,7 +47448,9 @@ ${describeError(err2)}` : message;
     const rowsAll = applyFilters(rowsAllBase, spec.filters, grain);
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[spec.dimension];
     if (!keyFn) throw new Error(`No extractor implemented for dimension '${spec.dimension}' (region_map)`);
-    if (grain === "round") {
+    const requiredCountry = getAdminEnrichmentRequiredCountry(spec.dimension);
+    const adminEnabled = requiredCountry ? await isAdminEnrichmentEnabledForCountry(requiredCountry) : true;
+    if (grain === "round" && adminEnabled) {
       await maybeEnrichRoundRowsForDimension(spec.dimension, rowsAll);
     }
     const renderHeaderRight = () => {
@@ -46935,6 +47487,40 @@ ${describeError(err2)}` : message;
     };
     const renderMap = async () => {
       mapHost.innerHTML = "";
+      if (requiredCountry && !adminEnabled) {
+        legend.innerHTML = "";
+        const wrapCta = doc.createElement("div");
+        wrapCta.style.display = "flex";
+        wrapCta.style.justifyContent = "center";
+        wrapCta.style.alignItems = "center";
+        wrapCta.style.height = "100%";
+        wrapCta.style.minHeight = "180px";
+        const btn = doc.createElement("button");
+        btn.className = "ga-filter-btn";
+        btn.textContent = `Load detailed regions (${requiredCountry.toUpperCase()})`;
+        btn.title = "Download admin boundaries and compute province/state/district fields for this country.";
+        const plan = getAdminEnrichmentPlan(requiredCountry);
+        if (!plan) {
+          btn.disabled = true;
+          btn.title = "No detailed admin dataset configured for this country yet.";
+        }
+        btn.addEventListener("click", () => {
+          void (async () => {
+            btn.disabled = true;
+            const prevText = btn.textContent;
+            btn.textContent = "Loading...";
+            try {
+              await runAdminEnrichment(requiredCountry);
+            } finally {
+              btn.textContent = prevText || "Load detailed regions";
+              btn.disabled = false;
+            }
+          })();
+        });
+        wrapCta.appendChild(btn);
+        mapHost.appendChild(wrapCta);
+        return;
+      }
       const measDef = semantic.measures[activeMeasure];
       if (!measDef) throw new Error(`Unknown measure '${activeMeasure}' (region_map)`);
       const unit = semantic.units[measDef.unit];
@@ -47952,6 +48538,7 @@ ${describeError(err2)}` : message;
       }
       if (widget.type === "record_list") return await renderRecordListWidget(semantic, widget, overlay, baseRows);
       if (widget.type === "leader_list") return await renderLeaderListWidget(semantic, widget, overlay, baseRows);
+      if (widget.type === "admin_enrichment") return await renderAdminEnrichmentWidget(semantic, widget, overlay, baseRows);
       const ph = doc.createElement("div");
       ph.className = "ga-widget ga-placeholder";
       ph.textContent = `Widget type '${widget.type}' not implemented yet`;
@@ -48629,7 +49216,7 @@ ${describeError(err2)}` : message;
       const gamesByMate = /* @__PURE__ */ new Map();
       const roundsByMate = /* @__PURE__ */ new Map();
       for (const r of rows) {
-        const mate = r.teammateName;
+        const mate = r.teammateName ?? r.player_mate_name ?? r.player_mateName;
         const name = typeof mate === "string" ? mate.trim() : "";
         const gameId = String(r.gameId ?? "");
         if (!gameId) continue;
@@ -48700,14 +49287,31 @@ ${describeError(err2)}` : message;
       const base = { ...g };
       const mf = String(base?.modeFamily ?? "").toLowerCase();
       const matchups = mf === "teamduels" ? 2 : 1;
-      const pushOpp = (name, country) => {
-        const n = typeof name === "string" ? name.trim() : "";
-        if (!n) return;
-        const c = typeof country === "string" ? country.trim() : "";
-        out.push({ ...base, opponentName: n, opponentCountry: c || "Unknown", matchups });
+      const pickFirstNonEmpty = (...vals) => {
+        for (const v of vals) {
+          const s = typeof v === "string" ? v.trim() : "";
+          if (s) return s;
+        }
+        return "";
       };
-      pushOpp(base.player_opponent_name ?? base.playerOpponentName, base.player_opponent_country ?? base.playerOpponentCountry);
-      pushOpp(base.player_opponent_mate_name ?? base.playerOpponentMateName, base.player_opponent_mate_country ?? base.playerOpponentMateCountry);
+      const pushOpp = (name, id, country) => {
+        const n = pickFirstNonEmpty(name);
+        const pid = pickFirstNonEmpty(id);
+        const label = n || (pid ? `Unknown (${pid.slice(0, 6)}\u2026)` : "");
+        if (!label) return;
+        const c = pickFirstNonEmpty(country);
+        out.push({ ...base, opponentName: label, opponentCountry: c || "Unknown", matchups });
+      };
+      pushOpp(
+        base.player_opponent_name ?? base.playerTwoName ?? base.playerOpponentName,
+        base.player_opponent_id ?? base.playerTwoId ?? base.playerOpponentId,
+        base.player_opponent_country ?? base.playerTwoCountry ?? base.playerOpponentCountry
+      );
+      pushOpp(
+        base.player_opponent_mate_name ?? base.teamTwoPlayerTwoName ?? base.playerOpponentMateName,
+        base.player_opponent_mate_id ?? base.teamTwoPlayerTwoId ?? base.playerOpponentMateId,
+        base.player_opponent_mate_country ?? base.teamTwoPlayerTwoCountry ?? base.playerOpponentMateCountry
+      );
     }
     return out;
   }
@@ -48727,6 +49331,7 @@ ${describeError(err2)}` : message;
     let loadingPoll = null;
     let loadingStepTotal = 0;
     let loadingStepCurrent = 0;
+    let didInitialRender = false;
     const renderAsciiBar = (current, total) => {
       const w = 22;
       const t = total > 0 ? Math.max(0, Math.min(1, current / total)) : 0;
@@ -48836,7 +49441,7 @@ ${describeError(err2)}` : message;
       }
     }
     const renderNow = async () => {
-      await showLoading("Rendering dashboard...");
+      if (!didInitialRender) await showLoading("Rendering dashboard...");
       const specFilters = spec;
       let state = store.getState();
       try {
@@ -48865,7 +49470,6 @@ ${describeError(err2)}` : message;
         const datasetsBySection = {};
         const contextBySection = {};
         const computeDatasetsForSection = async (section) => {
-          await showLoading(`Loading data for '${String(section?.title ?? section?.id ?? "section")}'...`);
           const controlIds = resolveControlIdsForSection(section);
           const used = /* @__PURE__ */ new Set();
           for (const placed of section.layout.cards) {
@@ -48940,12 +49544,10 @@ ${describeError(err2)}` : message;
           })();
           if (used.has("round") || used.has("session") || isOpponentsSection) {
             step++;
-            await showLoading("Loading rounds...", { stepCurrent: step, stepTotal: totalSteps });
             datasets.round = await getRounds(filters);
           }
           if (used.has("game") || isOpponentsSection) {
             step++;
-            await showLoading("Loading games...", { stepCurrent: step, stepTotal: totalSteps });
             datasets.game = await getGames(filters);
           }
           if (isRatingSection && Array.isArray(datasets.round)) {
@@ -48976,7 +49578,6 @@ ${describeError(err2)}` : message;
           }
           if (used.has("session")) {
             step++;
-            await showLoading("Building sessions...", { stepCurrent: step, stepTotal: totalSteps });
             const gap = getSessionGapMinutes();
             datasets.session = await getSessions({ global: { spec: specFilters, state, controlIds, sessionGapMinutes: gap } }, { rounds: datasets.round });
           }
@@ -49000,7 +49601,7 @@ ${describeError(err2)}` : message;
         const contextDefault = initialActive ? contextBySection[initialActive] : void 0;
         const effectiveDashboard = { ...dashboard, dashboard: { ...dashboard.dashboard, sections } };
         const finalTotal = loadingStepTotal > 0 ? loadingStepTotal : 1;
-        await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
+        if (!didInitialRender) await showLoading("Rendering UI...", { stepCurrent: finalTotal, stepTotal: finalTotal });
         await renderDashboard(dashboardHost, semantic, effectiveDashboard, {
           datasets: datasetsDefault,
           datasetsBySection,
@@ -49013,18 +49614,18 @@ ${describeError(err2)}` : message;
             if (datasetsBySection[id]) return;
             const sec = sections.find((s) => s.id === id);
             if (!sec) return;
-            await showLoading(`Loading data for '${String(sec?.title ?? sec?.id ?? "section")}'...`);
             await computeDatasetsForSection(sec);
-            hideLoading();
           }
         });
       } finally {
+        didInitialRender = true;
         hideLoading();
       }
     };
     store.subscribe(() => {
       void renderNow();
     });
+    globalThis.__gaRequestRerender = () => void renderNow();
     await renderNow();
   }
 

@@ -16,6 +16,12 @@ type RecordResult = {
   click?: Actions["click"];
 };
 
+function shouldHideTimestampForRoundRecord(rec: RecordItemDef, grain: Grain): boolean {
+  if (grain !== "round") return false;
+  const click = rec.actions?.click;
+  return click?.type === "drilldown";
+}
+
 function formatMetricValue(semantic: SemanticRegistry, measureId: string, value: number): string {
   const m = semantic.measures[measureId];
   const unit = m ? semantic.units[m.unit] : undefined;
@@ -138,6 +144,38 @@ function buildGroupExtreme(
   const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
   if (!keyFn) return null;
 
+  const isPlausibleGameGroup = (rows: any[]): boolean => {
+    if (groupById !== "game_id") return true;
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    if (rows.length > 25) return false;
+
+    const nums: number[] = [];
+    const seen = new Set<number>();
+    let dup = 0;
+    let nDur = 0;
+    let n120 = 0;
+    for (const r of rows as any[]) {
+      const rn = (r as any)?.roundNumber;
+      if (typeof rn === "number" && Number.isFinite(rn) && rn > 0) {
+        nums.push(rn);
+        if (seen.has(rn)) dup++;
+        else seen.add(rn);
+      }
+      const d = (r as any)?.durationSeconds;
+      if (typeof d === "number" && Number.isFinite(d) && d > 0) {
+        nDur++;
+        if (Math.abs(d - 120) < 1e-6) n120++;
+      }
+    }
+    if (dup > 0) return false;
+    if (nums.length > 0) {
+      const max = Math.max(...nums);
+      if (max > 25) return false;
+    }
+    if (rows.length >= 10 && nDur >= Math.floor(rows.length * 0.8) && n120 >= Math.floor(nDur * 0.9)) return false;
+    return true;
+  };
+
   const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
   const grouped = groupByKey(inputRows, keyFn);
   let bestKey: string | null = null;
@@ -146,6 +184,7 @@ function buildGroupExtreme(
 
   for (const [k, g] of grouped.entries()) {
     if (!g || g.length === 0) continue;
+    if (!isPlausibleGameGroup(g as any[])) continue;
     // Data quality guardrails for a few problematic record metrics.
     // Record ranking should not consider groups where the underlying data is missing/obviously broken.
     if (grain === "round" && metricId === "avg_score") {
@@ -208,8 +247,11 @@ function buildGroupExtreme(
 
   const metricText = formatMetricValue(semantic, metricId, bestVal);
 
+  const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
   const displayKey =
-    rec.displayKey === "none"
+    hideTs
+      ? "none"
+      : rec.displayKey === "none"
       ? "none"
       : rec.displayKey === "first_ts_score"
         ? "first_ts_score"
@@ -230,8 +272,10 @@ function buildGroupExtreme(
       : bestKey;
 
   let tieCount = 0;
+  const tieRows: any[] = [];
   for (const [, g] of grouped.entries()) {
     if (!g || g.length === 0) continue;
+    if (!isPlausibleGameGroup(g as any[])) continue;
     const v = (() => {
       if (grain === "round" && metricId === "avg_score") {
         let sum = 0;
@@ -258,25 +302,35 @@ function buildGroupExtreme(
       return fn(g);
     })();
     if (!Number.isFinite(v)) continue;
-    if (v === bestVal) tieCount++;
+    if (v === bestVal) {
+      tieCount++;
+      tieRows.push(...(g as any[]));
+    }
   }
   const tieSuffix = tieCount > 1 ? ` (${tieCount}x)` : "";
+  const rowsForDrilldown = tieCount > 1 ? tieRows : bestRows;
 
   if (grain === "session" && metricId === "session_delta_rating") {
     // Keep it compact; drilldown can show exact dates per game if needed.
-    return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
+    return { keyText: "", valueText: metricText, rows: rowsForDrilldown, click: rec.actions?.click };
   }
 
   // Special-case a few legacy-style "Rounds" records so the value reads naturally.
   if (groupById === "game_id" && metricId === "rounds_count") {
     if (extreme === "max") {
-      return { keyText, valueText: `${metricText} rounds (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
+      return {
+        keyText: hideTs ? "" : keyText,
+        valueText: hideTs || !keyText ? `${metricText} rounds${tieSuffix}` : `${metricText} rounds (${keyText})${tieSuffix}`,
+        rows: rowsForDrilldown,
+        click: rec.actions?.click
+      };
     }
     // For "fewest rounds", show how many games share the minimum.
     const tied: any[] = [];
     let tieCount = 0;
     for (const [, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
+      if (!isPlausibleGameGroup(g as any[])) continue;
       const v = fn(g);
       if (!Number.isFinite(v) || v !== bestVal) continue;
       tieCount++;
@@ -284,7 +338,7 @@ function buildGroupExtreme(
     }
     const rows = tied.length ? tied : bestRows;
     return {
-      keyText,
+      keyText: hideTs ? "" : keyText,
       valueText: `${metricText} rounds${tieCount > 1 ? ` (${tieCount}x)` : ""}`,
       rows,
       click: rec.actions?.click
@@ -292,7 +346,12 @@ function buildGroupExtreme(
   }
 
   if (groupById === "game_id" && metricId === "score_spread") {
-    return { keyText, valueText: `${metricText} points (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
+    return {
+      keyText: hideTs ? "" : keyText,
+      valueText: hideTs || !keyText ? `${metricText} points${tieSuffix}` : `${metricText} points (${keyText})${tieSuffix}`,
+      rows: rowsForDrilldown,
+      click: rec.actions?.click
+    };
   }
 
   if (displayKey === "first_ts_score") {
@@ -309,7 +368,7 @@ function buildGroupExtreme(
 
   const valueText = `${metricText}${tieSuffix}`;
 
-  return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+  return { keyText, valueText, rows: rowsForDrilldown, click: rec.actions?.click };
 }
 
 function buildStreak(
@@ -347,9 +406,10 @@ function buildStreak(
     const ts = getRowTs(bestRows[0]);
     return ts !== null ? formatTs(ts) : "";
   })() : "";
-  const valueText = best > 0 ? `${best} rounds in a row${keyText ? ` (${keyText})` : ""}` : "0";
+  const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+  const valueText = best > 0 ? `${best} rounds in a row${!hideTs && keyText ? ` (${keyText})` : ""}` : "0";
 
-  return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+  return { keyText: hideTs ? "" : keyText, valueText, rows: bestRows, click: rec.actions?.click };
 }
 
 function buildSameValueStreak(
@@ -399,8 +459,9 @@ function buildSameValueStreak(
   const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
   const ts = bestRows.length ? getRowTs(bestRows[0]) : null;
   const keyText = ts !== null ? formatTs(ts) : "";
-  const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${keyText ? ` (${keyText})` : ""}`.trim() : "0";
-  return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+  const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+  const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${!hideTs && keyText ? ` (${keyText})` : ""}`.trim() : "0";
+  return { keyText: hideTs ? "" : keyText, valueText, rows: bestRows, click: rec.actions?.click };
 }
 
 export async function renderRecordListWidget(
@@ -482,6 +543,16 @@ export async function renderRecordListWidget(
             const gIds = (s as any)?.gameIds;
             if (!Array.isArray(gIds)) continue;
             for (const id of gIds) if (typeof id === "string" && id) ids.add(id);
+          }
+          const allGames = await getGames({});
+          sourceRows = allGames.filter((g: any) => typeof g?.gameId === "string" && ids.has(g.gameId));
+        }
+        if (grain === "round" && click.target === "games") {
+          targetGrain = "game";
+          const ids = new Set<string>();
+          for (const r of sourceRows as any[]) {
+            const gid = typeof (r as any)?.gameId === "string" ? (r as any).gameId : "";
+            if (gid) ids.add(gid);
           }
           const allGames = await getGames({});
           sourceRows = allGames.filter((g: any) => typeof g?.gameId === "string" && ids.has(g.gameId));

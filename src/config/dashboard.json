@@ -1401,7 +1401,7 @@
                           "groupBy": "game_id",
                           "extreme": "max",
                           "displayKey": "first_ts",
-                          "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
+                          "actions": { "click": { "type": "drilldown", "target": "games", "columnsPreset": "gameMode", "filterFromPoint": true } }
                         },
                         {
                           "id": "fast_round_streak",

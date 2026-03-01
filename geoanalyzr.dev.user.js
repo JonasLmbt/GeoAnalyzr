@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.34
+// @version      2.2.35
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10148,6 +10148,7 @@ ${shapes}`.trim();
   var gamesFilteredCache = /* @__PURE__ */ new Map();
   var sessionsRawCache = null;
   var sessionsFilteredCache = /* @__PURE__ */ new Map();
+  var corruptedGameIdsCache = null;
   function invalidateRoundsCache() {
     roundsRawCache = null;
     roundsFilteredCache.clear();
@@ -10155,6 +10156,7 @@ ${shapes}`.trim();
     gamesFilteredCache.clear();
     sessionsRawCache = null;
     sessionsFilteredCache.clear();
+    corruptedGameIdsCache = null;
   }
   async function hasAnyTeamDuels() {
     const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
@@ -10618,6 +10620,39 @@ ${shapes}`.trim();
     }
     setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
     try {
+      const invalid = /* @__PURE__ */ new Set();
+      const roundMaskByGame = /* @__PURE__ */ new Map();
+      const uniqueRoundCountByGame = /* @__PURE__ */ new Map();
+      const YIELD_EVERY_VALIDATE = 4e3;
+      setLoadingProgress({ phase: "Validating games (round indices)...", current: 0, total: outRows.length });
+      for (let i = 0; i < outRows.length; i++) {
+        if (i > 0 && i % YIELD_EVERY_VALIDATE === 0) await yieldToEventLoop();
+        if (i > 0 && i % 8e3 === 0) setLoadingProgress({ phase: "Validating games (round indices)...", current: i, total: outRows.length });
+        const r = outRows[i];
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (!gid || invalid.has(gid)) continue;
+        const rn = r?.roundNumber;
+        if (typeof rn !== "number" || !Number.isFinite(rn)) continue;
+        if (rn < 1 || rn > 25) {
+          invalid.add(gid);
+          continue;
+        }
+        const bit = 1 << rn;
+        const prevMask = roundMaskByGame.get(gid) ?? 0;
+        if ((prevMask & bit) !== 0) {
+          invalid.add(gid);
+          continue;
+        }
+        roundMaskByGame.set(gid, prevMask | bit);
+        const n = (uniqueRoundCountByGame.get(gid) ?? 0) + 1;
+        uniqueRoundCountByGame.set(gid, n);
+        if (n > 25) invalid.add(gid);
+      }
+      setLoadingProgress({ phase: "Validating games (round indices)...", current: outRows.length, total: outRows.length });
+      corruptedGameIdsCache = invalid;
+    } catch {
+    }
+    try {
       const counts = /* @__PURE__ */ new Map();
       setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: outRows.length });
       for (let i = 0; i < outRows.length; i++) {
@@ -10686,6 +10721,12 @@ ${shapes}`.trim();
       });
     }
     rows = applyFilters(rows, applied.clauses, "round");
+    if (corruptedGameIdsCache && corruptedGameIdsCache.size > 0) {
+      rows = rows.filter((r) => {
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        return !gid || !corruptedGameIdsCache?.has(gid);
+      });
+    }
     roundsFilteredCache.set(key, rows);
     return rows;
   }
@@ -10868,6 +10909,11 @@ ${shapes}`.trim();
         out.isFlawlessWin = res === "win" || res === "w" || res === "true";
       }
       return out;
+    }).filter((g) => {
+      const gid = typeof g?.gameId === "string" ? g.gameId : "";
+      if (gid && corruptedGameIdsCache?.has(gid)) return false;
+      const rc = typeof g?.roundsCount === "number" && Number.isFinite(g.roundsCount) ? g.roundsCount : 0;
+      return rc <= 25;
     });
     setLoadingProgress({ phase: "Merging game facts...", current: games.length, total: games.length });
     return gamesRawCache;
@@ -35030,7 +35076,7 @@ ${shapes}`.trim();
                             groupBy: "game_id",
                             extreme: "max",
                             displayKey: "first_ts",
-                            actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
+                            actions: { click: { type: "drilldown", target: "games", columnsPreset: "gameMode", filterFromPoint: true } }
                           },
                           {
                             id: "fast_round_streak",
@@ -46082,6 +46128,11 @@ ${describeError(err2)}` : message;
   }
 
   // src/ui/widgets/recordListWidget.ts
+  function shouldHideTimestampForRoundRecord(rec, grain) {
+    if (grain !== "round") return false;
+    const click = rec.actions?.click;
+    return click?.type === "drilldown";
+  }
   function formatMetricValue(semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
@@ -46178,6 +46229,36 @@ ${describeError(err2)}` : message;
     if (!fn) return null;
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
     if (!keyFn) return null;
+    const isPlausibleGameGroup = (rows) => {
+      if (groupById !== "game_id") return true;
+      if (!Array.isArray(rows) || rows.length === 0) return false;
+      if (rows.length > 25) return false;
+      const nums = [];
+      const seen = /* @__PURE__ */ new Set();
+      let dup2 = 0;
+      let nDur = 0;
+      let n120 = 0;
+      for (const r of rows) {
+        const rn = r?.roundNumber;
+        if (typeof rn === "number" && Number.isFinite(rn) && rn > 0) {
+          nums.push(rn);
+          if (seen.has(rn)) dup2++;
+          else seen.add(rn);
+        }
+        const d = r?.durationSeconds;
+        if (typeof d === "number" && Number.isFinite(d) && d > 0) {
+          nDur++;
+          if (Math.abs(d - 120) < 1e-6) n120++;
+        }
+      }
+      if (dup2 > 0) return false;
+      if (nums.length > 0) {
+        const max2 = Math.max(...nums);
+        if (max2 > 25) return false;
+      }
+      if (rows.length >= 10 && nDur >= Math.floor(rows.length * 0.8) && n120 >= Math.floor(nDur * 0.9)) return false;
+      return true;
+    };
     const inputRows = Array.isArray(rec.filters) && rec.filters.length ? applyFilters(rowsAll, rec.filters, grain) : rowsAll;
     const grouped = groupByKey(inputRows, keyFn);
     let bestKey = null;
@@ -46185,6 +46266,7 @@ ${describeError(err2)}` : message;
     let bestRows = [];
     for (const [k, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
+      if (!isPlausibleGameGroup(g)) continue;
       if (grain === "round" && metricId === "avg_score") {
         const total = g.length;
         let valid = 0;
@@ -46241,15 +46323,18 @@ ${describeError(err2)}` : message;
     }
     if (!bestKey || bestVal === null) return null;
     const metricText = formatMetricValue(semantic, metricId, bestVal);
-    const displayKey = rec.displayKey === "none" ? "none" : rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
+    const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+    const displayKey = hideTs ? "none" : rec.displayKey === "none" ? "none" : rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
     const firstTs = (() => {
       const ts = bestRows.map(getRowTs2).filter((x) => typeof x === "number");
       return ts.length ? Math.min(...ts) : null;
     })();
     const keyText = displayKey === "none" ? "" : displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
     let tieCount = 0;
+    const tieRows = [];
     for (const [, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
+      if (!isPlausibleGameGroup(g)) continue;
       const v = (() => {
         if (grain === "round" && metricId === "avg_score") {
           let sum = 0;
@@ -46276,20 +46361,30 @@ ${describeError(err2)}` : message;
         return fn(g);
       })();
       if (!Number.isFinite(v)) continue;
-      if (v === bestVal) tieCount++;
+      if (v === bestVal) {
+        tieCount++;
+        tieRows.push(...g);
+      }
     }
     const tieSuffix = tieCount > 1 ? ` (${tieCount}x)` : "";
+    const rowsForDrilldown = tieCount > 1 ? tieRows : bestRows;
     if (grain === "session" && metricId === "session_delta_rating") {
-      return { keyText: "", valueText: metricText, rows: bestRows, click: rec.actions?.click };
+      return { keyText: "", valueText: metricText, rows: rowsForDrilldown, click: rec.actions?.click };
     }
     if (groupById === "game_id" && metricId === "rounds_count") {
       if (extreme === "max") {
-        return { keyText, valueText: `${metricText} rounds (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
+        return {
+          keyText: hideTs ? "" : keyText,
+          valueText: hideTs || !keyText ? `${metricText} rounds${tieSuffix}` : `${metricText} rounds (${keyText})${tieSuffix}`,
+          rows: rowsForDrilldown,
+          click: rec.actions?.click
+        };
       }
       const tied = [];
       let tieCount2 = 0;
       for (const [, g] of grouped.entries()) {
         if (!g || g.length === 0) continue;
+        if (!isPlausibleGameGroup(g)) continue;
         const v = fn(g);
         if (!Number.isFinite(v) || v !== bestVal) continue;
         tieCount2++;
@@ -46297,14 +46392,19 @@ ${describeError(err2)}` : message;
       }
       const rows = tied.length ? tied : bestRows;
       return {
-        keyText,
+        keyText: hideTs ? "" : keyText,
         valueText: `${metricText} rounds${tieCount2 > 1 ? ` (${tieCount2}x)` : ""}`,
         rows,
         click: rec.actions?.click
       };
     }
     if (groupById === "game_id" && metricId === "score_spread") {
-      return { keyText, valueText: `${metricText} points (${keyText})${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
+      return {
+        keyText: hideTs ? "" : keyText,
+        valueText: hideTs || !keyText ? `${metricText} points${tieSuffix}` : `${metricText} points (${keyText})${tieSuffix}`,
+        rows: rowsForDrilldown,
+        click: rec.actions?.click
+      };
     }
     if (displayKey === "first_ts_score") {
       let scoreText = "";
@@ -46317,7 +46417,7 @@ ${describeError(err2)}` : message;
       return { keyText, valueText: `${metricText} on ${keyText}${scoreText}${tieSuffix}`, rows: bestRows, click: rec.actions?.click };
     }
     const valueText = `${metricText}${tieSuffix}`;
-    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+    return { keyText, valueText, rows: rowsForDrilldown, click: rec.actions?.click };
   }
   function buildStreak(semantic, grain, rowsAll, rec) {
     const clauses = Array.isArray(rec.streakFilters) ? rec.streakFilters : [];
@@ -46346,8 +46446,9 @@ ${describeError(err2)}` : message;
       const ts = getRowTs2(bestRows[0]);
       return ts !== null ? formatTs(ts) : "";
     })() : "";
-    const valueText = best > 0 ? `${best} rounds in a row${keyText ? ` (${keyText})` : ""}` : "0";
-    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+    const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+    const valueText = best > 0 ? `${best} rounds in a row${!hideTs && keyText ? ` (${keyText})` : ""}` : "0";
+    return { keyText: hideTs ? "" : keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   function buildSameValueStreak(semantic, grain, rowsAll, rec) {
     const dimId = typeof rec.dimension === "string" ? rec.dimension.trim() : "";
@@ -46387,8 +46488,9 @@ ${describeError(err2)}` : message;
     const bestRows = best > 0 && bestStart >= 0 && bestEnd >= bestStart ? sorted.slice(bestStart, bestEnd + 1) : [];
     const ts = bestRows.length ? getRowTs2(bestRows[0]) : null;
     const keyText = ts !== null ? formatTs(ts) : "";
-    const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${keyText ? ` (${keyText})` : ""}`.trim() : "0";
-    return { keyText, valueText, rows: bestRows, click: rec.actions?.click };
+    const hideTs = shouldHideTimestampForRoundRecord(rec, grain);
+    const valueText = best > 0 ? `${best} rounds in ${bestKey ?? ""}${!hideTs && keyText ? ` (${keyText})` : ""}`.trim() : "0";
+    return { keyText: hideTs ? "" : keyText, valueText, rows: bestRows, click: rec.actions?.click };
   }
   async function renderRecordListWidget(semantic, widget, overlay, baseRows) {
     const spec = widget.spec;
@@ -46439,6 +46541,16 @@ ${describeError(err2)}` : message;
               const gIds = s?.gameIds;
               if (!Array.isArray(gIds)) continue;
               for (const id of gIds) if (typeof id === "string" && id) ids.add(id);
+            }
+            const allGames = await getGames({});
+            sourceRows = allGames.filter((g) => typeof g?.gameId === "string" && ids.has(g.gameId));
+          }
+          if (grain === "round" && click.target === "games") {
+            targetGrain = "game";
+            const ids = /* @__PURE__ */ new Set();
+            for (const r of sourceRows) {
+              const gid = typeof r?.gameId === "string" ? r.gameId : "";
+              if (gid) ids.add(gid);
             }
             const allGames = await getGames({});
             sourceRows = allGames.filter((g) => typeof g?.gameId === "string" && ids.has(g.gameId));
