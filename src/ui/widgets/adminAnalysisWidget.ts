@@ -658,30 +658,39 @@ export async function renderAdminAnalysisWidget(
       const saved = savedMetaByKey.get(k);
       const missing = missingByKey.get(k);
       const persistMode = persistStateByKey.get(k) ?? null;
-      const persistBtn = doc.createElement("button");
-      persistBtn.className = "ga-filter-btn";
-      persistBtn.disabled = persistMode !== null;
-      if (!saved) {
-        const kb = sizeHintKbByKey.get(k);
-        const loadedNow = isLoaded(lvl);
-        persistBtn.textContent = persistMode === "saving" ? "Saving…" : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
-        if (!loadedNow) {
-          persistBtn.disabled = true;
-          persistBtn.title = "Load this level first to enable saving.";
-        } else if (persistMode === null) {
-          persistBtn.addEventListener("click", () => void saveLevel(lvl));
-        }
-      } else {
-        if (typeof missing === "number" && missing > 0) {
-          persistBtn.textContent = persistMode === "refreshing" ? "Refreshing…" : `Refresh (${missing})`;
-          if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+
+      const loadedNow = isLoaded(lvl);
+
+      // Only show Save/Refresh/Saved once boundaries are available (loaded) or already saved.
+      // This avoids confusing "Save" buttons before anything was loaded.
+      if (saved || loadedNow) {
+        const persistBtn = doc.createElement("button");
+        persistBtn.className = "ga-filter-btn";
+        persistBtn.disabled = persistMode !== null;
+
+        if (!saved) {
+          const kb = sizeHintKbByKey.get(k);
+          persistBtn.textContent = persistMode === "saving" ? "Saving..." : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+          if (persistMode === null) persistBtn.addEventListener("click", () => void saveLevel(lvl));
         } else {
-          const kb = Math.max(1, Math.round(saved.byteSize / 1024));
-          persistBtn.textContent = `Saved (${kb} KB)`;
-          persistBtn.disabled = true;
+          if (typeof missing === "number" && missing > 0) {
+            persistBtn.textContent = persistMode === "refreshing" ? "Refreshing..." : `Refresh (${missing})`;
+            if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+          } else {
+            const kb = Math.max(1, Math.round(saved.byteSize / 1024));
+            persistBtn.textContent = `Saved (${kb} KB)`;
+            persistBtn.disabled = true;
+          }
         }
+
+        right.appendChild(persistBtn);
+      } else {
+        const hint = doc.createElement("div");
+        hint.className = "ga-muted";
+        hint.style.fontSize = "12px";
+        hint.textContent = "Load to enable saving.";
+        right.appendChild(hint);
       }
-      right.appendChild(persistBtn);
 
       if (saved) {
         const btnDelete = doc.createElement("button");
@@ -695,7 +704,7 @@ export async function renderAdminAnalysisWidget(
         right.appendChild(btnDelete);
       }
 
-      const loaded = isLoaded(lvl);
+      const loaded = loadedNow;
       if (loaded) {
         const btnView = doc.createElement("button");
         btnView.className = "ga-filter-btn";

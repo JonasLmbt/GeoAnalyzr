@@ -6826,7 +6826,7 @@ ${shapes}`.trim();
     style.textContent = `
     .ga-ui-icon {
       position: fixed;
-      left: 16px;
+      right: 16px;
       bottom: 16px;
       z-index: 999999;
       width: 44px;
@@ -6845,7 +6845,7 @@ ${shapes}`.trim();
 
     .ga-ui-panel {
       position: fixed;
-      left: 16px;
+      right: 16px;
       bottom: 68px;
       z-index: 999999;
       width: 360px;
@@ -50347,30 +50347,33 @@ ${describeError(err2)}` : message;
         const saved = savedMetaByKey.get(k);
         const missing = missingByKey.get(k);
         const persistMode = persistStateByKey.get(k) ?? null;
-        const persistBtn = doc.createElement("button");
-        persistBtn.className = "ga-filter-btn";
-        persistBtn.disabled = persistMode !== null;
-        if (!saved) {
-          const kb = sizeHintKbByKey.get(k);
-          const loadedNow = isLoaded(lvl);
-          persistBtn.textContent = persistMode === "saving" ? "Saving\u2026" : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
-          if (!loadedNow) {
-            persistBtn.disabled = true;
-            persistBtn.title = "Load this level first to enable saving.";
-          } else if (persistMode === null) {
-            persistBtn.addEventListener("click", () => void saveLevel(lvl));
-          }
-        } else {
-          if (typeof missing === "number" && missing > 0) {
-            persistBtn.textContent = persistMode === "refreshing" ? "Refreshing\u2026" : `Refresh (${missing})`;
-            if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+        const loadedNow = isLoaded(lvl);
+        if (saved || loadedNow) {
+          const persistBtn = doc.createElement("button");
+          persistBtn.className = "ga-filter-btn";
+          persistBtn.disabled = persistMode !== null;
+          if (!saved) {
+            const kb = sizeHintKbByKey.get(k);
+            persistBtn.textContent = persistMode === "saving" ? "Saving..." : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+            if (persistMode === null) persistBtn.addEventListener("click", () => void saveLevel(lvl));
           } else {
-            const kb = Math.max(1, Math.round(saved.byteSize / 1024));
-            persistBtn.textContent = `Saved (${kb} KB)`;
-            persistBtn.disabled = true;
+            if (typeof missing === "number" && missing > 0) {
+              persistBtn.textContent = persistMode === "refreshing" ? "Refreshing..." : `Refresh (${missing})`;
+              if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+            } else {
+              const kb = Math.max(1, Math.round(saved.byteSize / 1024));
+              persistBtn.textContent = `Saved (${kb} KB)`;
+              persistBtn.disabled = true;
+            }
           }
+          right.appendChild(persistBtn);
+        } else {
+          const hint2 = doc.createElement("div");
+          hint2.className = "ga-muted";
+          hint2.style.fontSize = "12px";
+          hint2.textContent = "Load to enable saving.";
+          right.appendChild(hint2);
         }
-        right.appendChild(persistBtn);
         if (saved) {
           const btnDelete = doc.createElement("button");
           btnDelete.className = "ga-filter-btn";
@@ -50382,7 +50385,7 @@ ${describeError(err2)}` : message;
           if (persistMode === null) btnDelete.addEventListener("click", () => void deleteSaved(lvl));
           right.appendChild(btnDelete);
         }
-        const loaded = isLoaded(lvl);
+        const loaded = loadedNow;
         if (loaded) {
           const btnView = doc.createElement("button");
           btnView.className = "ga-filter-btn";
