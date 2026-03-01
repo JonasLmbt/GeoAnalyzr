@@ -1144,7 +1144,7 @@
                           "metric": "avg_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "min",
-                          "displayKey": "first_ts_score",
+                          "displayKey": "none",
                           "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
                         },
                         {
@@ -1153,7 +1153,7 @@
                           "metric": "avg_guess_duration",
                           "groupBy": "round_id",
                           "extreme": "max",
-                          "displayKey": "first_ts_score",
+                          "displayKey": "none",
                           "actions": { "click": { "type": "drilldown", "target": "rounds", "columnsPreset": "roundMode", "filterFromPoint": true } }
                         },
                         {
@@ -1163,7 +1163,7 @@
                           "groupBy": "round_id",
                           "extreme": "min",
                           "filters": [{ "dimension": "score_bucket", "op": "eq", "value": "5000" }],
-                          "displayKey": "first_ts",
+                          "displayKey": "none",
                           "actions": {
                             "click": {
                               "type": "drilldown",
@@ -1181,7 +1181,7 @@
                           "groupBy": "round_id",
                           "extreme": "max",
                           "filters": [{ "dimension": "is_throw", "op": "eq", "value": "true" }],
-                          "displayKey": "first_ts_score",
+                          "displayKey": "none",
                           "actions": {
                             "click": {
                               "type": "drilldown",

@@ -300,7 +300,7 @@ export interface RecordItemDef {
   // same_value_streak:
   dimension?: string;
   // presentation:
-  displayKey?: "group" | "first_ts" | "first_ts_score";
+  displayKey?: "group" | "first_ts" | "first_ts_score" | "none";
   actions?: Actions;
 }
 

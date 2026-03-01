@@ -672,6 +672,39 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     outRows[i] = out as RoundRow;
   }
   setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
+
+  // Derive repeat-location helpers for drilldowns/dimensions.
+  // These are not persisted (they are cheap to compute once per load and cached in roundsRawCache).
+  try {
+    const counts = new Map<string, number>();
+    setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: outRows.length });
+    for (let i = 0; i < outRows.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      const r: any = outRows[i];
+      const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+      const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+      if (lat === null || lng === null) continue;
+      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      r.trueLocationKey = key;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      if (i > 0 && i % 5000 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+    }
+    setLoadingProgress({ phase: "Indexing repeat locations...", current: outRows.length, total: outRows.length });
+
+    setLoadingProgress({ phase: "Marking repeat locations...", current: 0, total: outRows.length });
+    for (let i = 0; i < outRows.length; i++) {
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+      const r: any = outRows[i];
+      const key = typeof r?.trueLocationKey === "string" ? r.trueLocationKey : "";
+      if (!key) continue;
+      r.trueLocationRepeat = (counts.get(key) ?? 0) > 1;
+      if (i > 0 && i % 5000 === 0) setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+    }
+    setLoadingProgress({ phase: "Marking repeat locations...", current: outRows.length, total: outRows.length });
+  } catch {
+    // ignore - derived helpers only
+  }
+
   roundsRawCache = outRows;
 
   return roundsRawCache;

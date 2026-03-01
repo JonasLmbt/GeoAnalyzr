@@ -209,7 +209,13 @@ function buildGroupExtreme(
   const metricText = formatMetricValue(semantic, metricId, bestVal);
 
   const displayKey =
-    rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
+    rec.displayKey === "none"
+      ? "none"
+      : rec.displayKey === "first_ts_score"
+        ? "first_ts_score"
+        : rec.displayKey === "first_ts"
+          ? "first_ts"
+          : "group";
 
   const firstTs = (() => {
     const ts = bestRows.map(getRowTs).filter((x): x is number => typeof x === "number");
@@ -217,7 +223,9 @@ function buildGroupExtreme(
   })();
 
   const keyText =
-    displayKey === "first_ts" || displayKey === "first_ts_score"
+    displayKey === "none"
+      ? ""
+      : displayKey === "first_ts" || displayKey === "first_ts_score"
       ? (firstTs !== null ? formatTs(firstTs) : bestKey)
       : bestKey;
 

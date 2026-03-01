@@ -16,15 +16,33 @@ function explodeOpponentsFromGames(games: any[]): any[] {
     const mf = String(base?.modeFamily ?? "").toLowerCase();
     const matchups = mf === "teamduels" ? 2 : 1;
 
-    const pushOpp = (name: unknown, country: unknown) => {
-      const n = typeof name === "string" ? name.trim() : "";
-      if (!n) return;
-      const c = typeof country === "string" ? country.trim() : "";
-      out.push({ ...base, opponentName: n, opponentCountry: c || "Unknown", matchups });
+    const pickFirstNonEmpty = (...vals: unknown[]): string => {
+      for (const v of vals) {
+        const s = typeof v === "string" ? v.trim() : "";
+        if (s) return s;
+      }
+      return "";
     };
 
-    pushOpp(base.player_opponent_name ?? base.playerOpponentName, base.player_opponent_country ?? base.playerOpponentCountry);
-    pushOpp(base.player_opponent_mate_name ?? base.playerOpponentMateName, base.player_opponent_mate_country ?? base.playerOpponentMateCountry);
+    const pushOpp = (name: unknown, id: unknown, country: unknown) => {
+      const n = pickFirstNonEmpty(name);
+      const pid = pickFirstNonEmpty(id);
+      const label = n || (pid ? `Unknown (${pid.slice(0, 6)}…)` : "");
+      if (!label) return;
+      const c = pickFirstNonEmpty(country);
+      out.push({ ...base, opponentName: label, opponentCountry: c || "Unknown", matchups });
+    };
+
+    pushOpp(
+      base.player_opponent_name ?? base.playerTwoName ?? base.playerOpponentName,
+      base.player_opponent_id ?? base.playerTwoId ?? base.playerOpponentId,
+      base.player_opponent_country ?? base.playerTwoCountry ?? base.playerOpponentCountry
+    );
+    pushOpp(
+      base.player_opponent_mate_name ?? base.teamTwoPlayerTwoName ?? base.playerOpponentMateName,
+      base.player_opponent_mate_id ?? base.teamTwoPlayerTwoId ?? base.playerOpponentMateId,
+      base.player_opponent_mate_country ?? base.teamTwoPlayerTwoCountry ?? base.playerOpponentMateCountry
+    );
   }
   return out;
 }

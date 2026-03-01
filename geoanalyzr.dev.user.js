@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.33
+// @version      2.2.34
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10617,6 +10617,33 @@ ${shapes}`.trim();
       outRows[i] = out;
     }
     setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
+    try {
+      const counts = /* @__PURE__ */ new Map();
+      setLoadingProgress({ phase: "Indexing repeat locations...", current: 0, total: outRows.length });
+      for (let i = 0; i < outRows.length; i++) {
+        if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+        const r = outRows[i];
+        const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
+        const lng = typeof r?.trueLng === "number" && Number.isFinite(r.trueLng) ? r.trueLng : null;
+        if (lat === null || lng === null) continue;
+        const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+        r.trueLocationKey = key;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        if (i > 0 && i % 5e3 === 0) setLoadingProgress({ phase: "Indexing repeat locations...", current: i, total: outRows.length });
+      }
+      setLoadingProgress({ phase: "Indexing repeat locations...", current: outRows.length, total: outRows.length });
+      setLoadingProgress({ phase: "Marking repeat locations...", current: 0, total: outRows.length });
+      for (let i = 0; i < outRows.length; i++) {
+        if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
+        const r = outRows[i];
+        const key = typeof r?.trueLocationKey === "string" ? r.trueLocationKey : "";
+        if (!key) continue;
+        r.trueLocationRepeat = (counts.get(key) ?? 0) > 1;
+        if (i > 0 && i % 5e3 === 0) setLoadingProgress({ phase: "Marking repeat locations...", current: i, total: outRows.length });
+      }
+      setLoadingProgress({ phase: "Marking repeat locations...", current: outRows.length, total: outRows.length });
+    } catch {
+    }
     roundsRawCache = outRows;
     return roundsRawCache;
   }
@@ -34747,7 +34774,7 @@ ${shapes}`.trim();
                             metric: "avg_guess_duration",
                             groupBy: "round_id",
                             extreme: "min",
-                            displayKey: "first_ts_score",
+                            displayKey: "none",
                             actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
                           },
                           {
@@ -34756,7 +34783,7 @@ ${shapes}`.trim();
                             metric: "avg_guess_duration",
                             groupBy: "round_id",
                             extreme: "max",
-                            displayKey: "first_ts_score",
+                            displayKey: "none",
                             actions: { click: { type: "drilldown", target: "rounds", columnsPreset: "roundMode", filterFromPoint: true } }
                           },
                           {
@@ -34766,7 +34793,7 @@ ${shapes}`.trim();
                             groupBy: "round_id",
                             extreme: "min",
                             filters: [{ dimension: "score_bucket", op: "eq", value: "5000" }],
-                            displayKey: "first_ts",
+                            displayKey: "none",
                             actions: {
                               click: {
                                 type: "drilldown",
@@ -34784,7 +34811,7 @@ ${shapes}`.trim();
                             groupBy: "round_id",
                             extreme: "max",
                             filters: [{ dimension: "is_throw", op: "eq", value: "true" }],
-                            displayKey: "first_ts_score",
+                            displayKey: "none",
                             actions: {
                               click: {
                                 type: "drilldown",
@@ -46214,12 +46241,12 @@ ${describeError(err2)}` : message;
     }
     if (!bestKey || bestVal === null) return null;
     const metricText = formatMetricValue(semantic, metricId, bestVal);
-    const displayKey = rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
+    const displayKey = rec.displayKey === "none" ? "none" : rec.displayKey === "first_ts_score" ? "first_ts_score" : rec.displayKey === "first_ts" ? "first_ts" : "group";
     const firstTs = (() => {
       const ts = bestRows.map(getRowTs2).filter((x) => typeof x === "number");
       return ts.length ? Math.min(...ts) : null;
     })();
-    const keyText = displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
+    const keyText = displayKey === "none" ? "" : displayKey === "first_ts" || displayKey === "first_ts_score" ? firstTs !== null ? formatTs(firstTs) : bestKey : bestKey;
     let tieCount = 0;
     for (const [, g] of grouped.entries()) {
       if (!g || g.length === 0) continue;
@@ -49148,14 +49175,31 @@ ${describeError(err2)}` : message;
       const base = { ...g };
       const mf = String(base?.modeFamily ?? "").toLowerCase();
       const matchups = mf === "teamduels" ? 2 : 1;
-      const pushOpp = (name, country) => {
-        const n = typeof name === "string" ? name.trim() : "";
-        if (!n) return;
-        const c = typeof country === "string" ? country.trim() : "";
-        out.push({ ...base, opponentName: n, opponentCountry: c || "Unknown", matchups });
+      const pickFirstNonEmpty = (...vals) => {
+        for (const v of vals) {
+          const s = typeof v === "string" ? v.trim() : "";
+          if (s) return s;
+        }
+        return "";
       };
-      pushOpp(base.player_opponent_name ?? base.playerOpponentName, base.player_opponent_country ?? base.playerOpponentCountry);
-      pushOpp(base.player_opponent_mate_name ?? base.playerOpponentMateName, base.player_opponent_mate_country ?? base.playerOpponentMateCountry);
+      const pushOpp = (name, id, country) => {
+        const n = pickFirstNonEmpty(name);
+        const pid = pickFirstNonEmpty(id);
+        const label = n || (pid ? `Unknown (${pid.slice(0, 6)}\u2026)` : "");
+        if (!label) return;
+        const c = pickFirstNonEmpty(country);
+        out.push({ ...base, opponentName: label, opponentCountry: c || "Unknown", matchups });
+      };
+      pushOpp(
+        base.player_opponent_name ?? base.playerTwoName ?? base.playerOpponentName,
+        base.player_opponent_id ?? base.playerTwoId ?? base.playerOpponentId,
+        base.player_opponent_country ?? base.playerTwoCountry ?? base.playerOpponentCountry
+      );
+      pushOpp(
+        base.player_opponent_mate_name ?? base.teamTwoPlayerTwoName ?? base.playerOpponentMateName,
+        base.player_opponent_mate_id ?? base.teamTwoPlayerTwoId ?? base.playerOpponentMateId,
+        base.player_opponent_mate_country ?? base.teamTwoPlayerTwoCountry ?? base.playerOpponentMateCountry
+      );
     }
     return out;
   }
