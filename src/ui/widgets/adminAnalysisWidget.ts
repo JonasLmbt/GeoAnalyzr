@@ -6,6 +6,8 @@ import { renderMultiViewWidget } from "./multiViewWidget";
 import { renderBreakdownWidget } from "./breakdownWidget";
 import { renderRegionMetricMapWidget } from "./regionMetricMapWidget";
 import { DrilldownOverlay } from "../drilldownOverlay";
+import { loadGeoJson } from "../../geo/geoJsonFetch";
+import { getGmXmlhttpRequest } from "../../gm";
 
 type AdminLevel = {
   id: string; // e.g. "ADM1"
@@ -89,41 +91,37 @@ type GeoBoundariesMeta = {
   staticDownloadLink?: string;
 };
 
-const GEOBOUNDARIES_SHA_BY_KEY = new Map<string, string>(); // key: `${iso3}:${adm}`
-
 async function fetchGeoBoundariesMeta(iso3: string, adm: string): Promise<GeoBoundariesMeta | null> {
   const url = `https://www.geoboundaries.org/api/current/gbOpen/${encodeURIComponent(iso3)}/${encodeURIComponent(adm)}/`;
+
+  const gm = getGmXmlhttpRequest();
+  if (typeof gm === "function") {
+    return await new Promise<GeoBoundariesMeta | null>((resolve, reject) => {
+      gm({
+        method: "GET",
+        url,
+        headers: { Accept: "application/json" },
+        onload: (res: any) => {
+          const status = typeof res?.status === "number" ? res.status : 0;
+          if (status === 404) return resolve(null);
+          if (status >= 400) return reject(new Error(`GeoBoundaries API error: HTTP ${status}`));
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          try {
+            resolve(JSON.parse(text) as GeoBoundariesMeta);
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error(String(e)));
+          }
+        },
+        onerror: (err: any) => reject(err instanceof Error ? err : new Error(`GM_xmlhttpRequest failed for ${url}`)),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+
   const res = await fetch(url, { credentials: "omit" as any });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GeoBoundaries API error: HTTP ${res.status}`);
   return (await res.json()) as GeoBoundariesMeta;
-}
-
-async function resolveGeoBoundariesShaFromZip(meta: GeoBoundariesMeta, iso3: string, adm: string): Promise<string | null> {
-  const cacheKey = `${iso3}:${adm}`;
-  const cached = GEOBOUNDARIES_SHA_BY_KEY.get(cacheKey);
-  if (cached) return cached;
-  const zip = typeof meta.staticDownloadLink === "string" ? meta.staticDownloadLink : "";
-  if (!zip) return null;
-  const res = await fetch(zip, { method: "HEAD", redirect: "follow", credentials: "omit" as any });
-  // The final URL usually is a media.githubusercontent.com link containing the full SHA.
-  const finalUrl = (res as any)?.url as string | undefined;
-  const u = typeof finalUrl === "string" ? finalUrl : "";
-  const m = u.match(/media\/wmgeolab\/geoBoundaries\/([0-9a-f]{40})\//i);
-  if (!m) return null;
-  const sha = m[1];
-  GEOBOUNDARIES_SHA_BY_KEY.set(cacheKey, sha);
-  return sha;
-}
-
-async function resolveGeoJsonUrl(meta: GeoBoundariesMeta, iso3: string, adm: string): Promise<string> {
-  const raw = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON : "";
-  if (!raw) throw new Error("Missing simplifiedGeometryGeoJSON URL from GeoBoundaries API");
-  if (raw.includes("media.githubusercontent.com")) return raw;
-  // GitHub raw often returns Git LFS pointer text. Use the media URL by resolving the repo SHA via the zip redirect.
-  const sha = await resolveGeoBoundariesShaFromZip(meta, iso3, adm);
-  if (!sha) return raw; // fallback (may still fail)
-  return `https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/${sha}/releaseData/gbOpen/${iso3}/${adm}/geoBoundaries-${iso3}-${adm}_simplified.geojson`;
 }
 
 function pickFeatureKey(geojson: any): string {
@@ -239,25 +237,32 @@ async function listAvailableLevels(iso2: string): Promise<AdminLevel[]> {
 
   const jobs = [1, 2, 3, 4].map(async (n) => {
     const adm = `ADM${n}`;
-    const meta = await fetchGeoBoundariesMeta(iso3, adm);
-    if (!meta) return null;
-    const geojsonUrl = await resolveGeoJsonUrl(meta, iso3, adm);
-    const name =
-      typeof meta.boundaryName === "string" && meta.boundaryName.trim()
-        ? meta.boundaryName.trim()
-        : n === 1
-          ? "Provinces / States"
-          : n === 2
-            ? "Counties / Districts"
-            : `Admin level ${n}`;
-    return {
-      id: adm,
-      label: `${name} (${adm})`,
-      iso2,
-      iso3,
-      geojsonUrl,
-      featureKey: "shapeName"
-    } satisfies AdminLevel;
+    try {
+      const meta = await fetchGeoBoundariesMeta(iso3, adm);
+      if (!meta) return null;
+      const geojsonUrl = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON.trim() : "";
+      if (!geojsonUrl) return null;
+      const name =
+        typeof meta.boundaryName === "string" && meta.boundaryName.trim()
+          ? meta.boundaryName.trim()
+          : n === 1
+            ? "Provinces / States"
+            : n === 2
+              ? "Counties / Districts"
+              : `Admin level ${n}`;
+      return {
+        id: adm,
+        label: `${name} (${adm})`,
+        iso2,
+        iso3,
+        geojsonUrl,
+        featureKey: "shapeName"
+      } satisfies AdminLevel;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      analysisConsole.warn(`GeoBoundaries meta fetch failed for ${iso3} ${adm}: ${msg}`);
+      return null;
+    }
   });
 
   const levels = await Promise.all(jobs);
@@ -271,13 +276,7 @@ async function loadLevel(level: AdminLevel, onPct: (p: number) => void, onStatus
 
   onStatus(`Downloading boundaries (${level.id})...`);
   onPct(10);
-  const res = await fetch(level.geojsonUrl, { credentials: "omit" as any });
-  if (!res.ok) throw new Error(`GeoJSON fetch failed: HTTP ${res.status}`);
-  const txt = await res.text();
-  if (txt.trim().startsWith("version https://git-lfs.github.com/spec")) {
-    throw new Error("GeoJSON fetch returned a Git LFS pointer. Try again or pick another provider.");
-  }
-  const geojson = JSON.parse(txt);
+  const geojson = await loadGeoJson(level.geojsonUrl);
 
   const featureKey = pickFeatureKey(geojson);
   onStatus("Indexing features...");

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.35
+// @version      2.2.36
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -17,6 +17,7 @@
 // @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
+// @connect      www.geoboundaries.org
 // ==/UserScript==
 (() => {
   var __create = Object.create;
@@ -49855,36 +49856,35 @@ ${describeError(err2)}` : message;
     await ensureIsoLookupLoaded();
     return ISO3_CACHE.get(key) ?? null;
   }
-  var GEOBOUNDARIES_SHA_BY_KEY = /* @__PURE__ */ new Map();
   async function fetchGeoBoundariesMeta(iso3, adm) {
     const url = `https://www.geoboundaries.org/api/current/gbOpen/${encodeURIComponent(iso3)}/${encodeURIComponent(adm)}/`;
+    const gm = getGmXmlhttpRequest();
+    if (typeof gm === "function") {
+      return await new Promise((resolve, reject) => {
+        gm({
+          method: "GET",
+          url,
+          headers: { Accept: "application/json" },
+          onload: (res2) => {
+            const status = typeof res2?.status === "number" ? res2.status : 0;
+            if (status === 404) return resolve(null);
+            if (status >= 400) return reject(new Error(`GeoBoundaries API error: HTTP ${status}`));
+            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+            try {
+              resolve(JSON.parse(text));
+            } catch (e) {
+              reject(e instanceof Error ? e : new Error(String(e)));
+            }
+          },
+          onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error(`GM_xmlhttpRequest failed for ${url}`)),
+          ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+        });
+      });
+    }
     const res = await fetch(url, { credentials: "omit" });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`GeoBoundaries API error: HTTP ${res.status}`);
     return await res.json();
-  }
-  async function resolveGeoBoundariesShaFromZip(meta, iso3, adm) {
-    const cacheKey = `${iso3}:${adm}`;
-    const cached = GEOBOUNDARIES_SHA_BY_KEY.get(cacheKey);
-    if (cached) return cached;
-    const zip = typeof meta.staticDownloadLink === "string" ? meta.staticDownloadLink : "";
-    if (!zip) return null;
-    const res = await fetch(zip, { method: "HEAD", redirect: "follow", credentials: "omit" });
-    const finalUrl = res?.url;
-    const u = typeof finalUrl === "string" ? finalUrl : "";
-    const m = u.match(/media\/wmgeolab\/geoBoundaries\/([0-9a-f]{40})\//i);
-    if (!m) return null;
-    const sha = m[1];
-    GEOBOUNDARIES_SHA_BY_KEY.set(cacheKey, sha);
-    return sha;
-  }
-  async function resolveGeoJsonUrl(meta, iso3, adm) {
-    const raw = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON : "";
-    if (!raw) throw new Error("Missing simplifiedGeometryGeoJSON URL from GeoBoundaries API");
-    if (raw.includes("media.githubusercontent.com")) return raw;
-    const sha = await resolveGeoBoundariesShaFromZip(meta, iso3, adm);
-    if (!sha) return raw;
-    return `https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/${sha}/releaseData/gbOpen/${iso3}/${adm}/geoBoundaries-${iso3}-${adm}_simplified.geojson`;
   }
   function pickFeatureKey(geojson) {
     const first = geojson?.features?.[0]?.properties ?? null;
@@ -49976,18 +49976,25 @@ ${describeError(err2)}` : message;
     if (!iso3) return [];
     const jobs = [1, 2, 3, 4].map(async (n) => {
       const adm = `ADM${n}`;
-      const meta = await fetchGeoBoundariesMeta(iso3, adm);
-      if (!meta) return null;
-      const geojsonUrl = await resolveGeoJsonUrl(meta, iso3, adm);
-      const name = typeof meta.boundaryName === "string" && meta.boundaryName.trim() ? meta.boundaryName.trim() : n === 1 ? "Provinces / States" : n === 2 ? "Counties / Districts" : `Admin level ${n}`;
-      return {
-        id: adm,
-        label: `${name} (${adm})`,
-        iso2,
-        iso3,
-        geojsonUrl,
-        featureKey: "shapeName"
-      };
+      try {
+        const meta = await fetchGeoBoundariesMeta(iso3, adm);
+        if (!meta) return null;
+        const geojsonUrl = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON.trim() : "";
+        if (!geojsonUrl) return null;
+        const name = typeof meta.boundaryName === "string" && meta.boundaryName.trim() ? meta.boundaryName.trim() : n === 1 ? "Provinces / States" : n === 2 ? "Counties / Districts" : `Admin level ${n}`;
+        return {
+          id: adm,
+          label: `${name} (${adm})`,
+          iso2,
+          iso3,
+          geojsonUrl,
+          featureKey: "shapeName"
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        analysisConsole.warn(`GeoBoundaries meta fetch failed for ${iso3} ${adm}: ${msg}`);
+        return null;
+      }
     });
     const levels2 = await Promise.all(jobs);
     return levels2.filter(Boolean);
@@ -49998,13 +50005,7 @@ ${describeError(err2)}` : message;
     if (cached) return cached;
     onStatus(`Downloading boundaries (${level.id})...`);
     onPct(10);
-    const res = await fetch(level.geojsonUrl, { credentials: "omit" });
-    if (!res.ok) throw new Error(`GeoJSON fetch failed: HTTP ${res.status}`);
-    const txt = await res.text();
-    if (txt.trim().startsWith("version https://git-lfs.github.com/spec")) {
-      throw new Error("GeoJSON fetch returned a Git LFS pointer. Try again or pick another provider.");
-    }
-    const geojson = JSON.parse(txt);
+    const geojson = await loadGeoJson(level.geojsonUrl);
     const featureKey = pickFeatureKey(geojson);
     onStatus("Indexing features...");
     onPct(25);
