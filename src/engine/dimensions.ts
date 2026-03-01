@@ -19,10 +19,27 @@ import {
 export type GroupKey = string;
 
 function getRowTs(row: any): number | undefined {
-  const a = row?.playedAt;
-  if (typeof a === "number" && Number.isFinite(a)) return a;
-  const b = row?.ts;
-  if (typeof b === "number" && Number.isFinite(b)) return b;
+  const coerce = (v: unknown): number | undefined => {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s) return undefined;
+      // Support numeric timestamps stored as strings in older/odd DB states.
+      const n = Number(s);
+      if (Number.isFinite(n)) return n;
+      return undefined;
+    }
+    if (v instanceof Date) {
+      const n = v.getTime();
+      return Number.isFinite(n) ? n : undefined;
+    }
+    return undefined;
+  };
+
+  const a = coerce(row?.playedAt);
+  if (typeof a === "number") return a;
+  const b = coerce(row?.ts);
+  if (typeof b === "number") return b;
   return undefined;
 }
 

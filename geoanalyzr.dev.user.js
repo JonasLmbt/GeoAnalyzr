@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.2.32
+// @version      2.2.33
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9613,10 +9613,25 @@ ${shapes}`.trim();
 
   // src/engine/dimensions.ts
   function getRowTs(row) {
-    const a = row?.playedAt;
-    if (typeof a === "number" && Number.isFinite(a)) return a;
-    const b = row?.ts;
-    if (typeof b === "number" && Number.isFinite(b)) return b;
+    const coerce = (v) => {
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      if (typeof v === "string") {
+        const s = v.trim();
+        if (!s) return void 0;
+        const n = Number(s);
+        if (Number.isFinite(n)) return n;
+        return void 0;
+      }
+      if (v instanceof Date) {
+        const n = v.getTime();
+        return Number.isFinite(n) ? n : void 0;
+      }
+      return void 0;
+    };
+    const a = coerce(row?.playedAt);
+    if (typeof a === "number") return a;
+    const b = coerce(row?.ts);
+    if (typeof b === "number") return b;
     return void 0;
   }
   function scoreBucketKey(r) {
@@ -10619,8 +10634,29 @@ ${shapes}`.trim();
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
       const toTs2 = applied.date.toTs ?? null;
-      if (fromTs !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt >= fromTs);
-      if (toTs2 !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt <= toTs2);
+      const tsOf = (r) => {
+        const a = r?.playedAt;
+        if (typeof a === "number" && Number.isFinite(a)) return a;
+        if (typeof a === "string") {
+          const n = Number(a.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        const b = r?.ts;
+        if (typeof b === "number" && Number.isFinite(b)) return b;
+        if (typeof b === "string") {
+          const n = Number(b.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      };
+      if (fromTs !== null) rows = rows.filter((r) => {
+        const ts = tsOf(r);
+        return ts !== null && ts >= fromTs;
+      });
+      if (toTs2 !== null) rows = rows.filter((r) => {
+        const ts = tsOf(r);
+        return ts !== null && ts <= toTs2;
+      });
     }
     rows = applyFilters(rows, applied.clauses, "round");
     roundsFilteredCache.set(key, rows);
@@ -10823,8 +10859,29 @@ ${shapes}`.trim();
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
       const toTs2 = applied.date.toTs ?? null;
-      if (fromTs !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt >= fromTs);
-      if (toTs2 !== null) rows = rows.filter((r) => typeof r.playedAt === "number" && r.playedAt <= toTs2);
+      const tsOf = (g) => {
+        const a = g?.playedAt;
+        if (typeof a === "number" && Number.isFinite(a)) return a;
+        if (typeof a === "string") {
+          const n = Number(a.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        const b = g?.ts;
+        if (typeof b === "number" && Number.isFinite(b)) return b;
+        if (typeof b === "string") {
+          const n = Number(b.trim());
+          if (Number.isFinite(n)) return n;
+        }
+        return null;
+      };
+      if (fromTs !== null) rows = rows.filter((g) => {
+        const ts = tsOf(g);
+        return ts !== null && ts >= fromTs;
+      });
+      if (toTs2 !== null) rows = rows.filter((g) => {
+        const ts = tsOf(g);
+        return ts !== null && ts <= toTs2;
+      });
     }
     rows = applyFilters(rows, applied.clauses, "game");
     gamesFilteredCache.set(key, rows);

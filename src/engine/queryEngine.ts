@@ -694,8 +694,31 @@ export async function getRounds(filters: GlobalFilters): Promise<RoundRow[]> {
   if (applied.date) {
     const fromTs = applied.date.fromTs ?? null;
     const toTs = applied.date.toTs ?? null;
-    if (fromTs !== null) rows = rows.filter((r) => typeof (r as any).playedAt === "number" && (r as any).playedAt >= fromTs);
-    if (toTs !== null) rows = rows.filter((r) => typeof (r as any).playedAt === "number" && (r as any).playedAt <= toTs);
+
+    const tsOf = (r: any): number | null => {
+      const a = r?.playedAt;
+      if (typeof a === "number" && Number.isFinite(a)) return a;
+      if (typeof a === "string") {
+        const n = Number(a.trim());
+        if (Number.isFinite(n)) return n;
+      }
+      const b = r?.ts;
+      if (typeof b === "number" && Number.isFinite(b)) return b;
+      if (typeof b === "string") {
+        const n = Number(b.trim());
+        if (Number.isFinite(n)) return n;
+      }
+      return null;
+    };
+
+    if (fromTs !== null) rows = rows.filter((r) => {
+      const ts = tsOf(r);
+      return ts !== null && ts >= fromTs;
+    });
+    if (toTs !== null) rows = rows.filter((r) => {
+      const ts = tsOf(r);
+      return ts !== null && ts <= toTs;
+    });
   }
 
   rows = applyFilters(rows, applied.clauses, "round");
@@ -964,8 +987,31 @@ export async function getGames(filters: GlobalFilters): Promise<GameFactRow[]> {
   if (applied.date) {
     const fromTs = applied.date.fromTs ?? null;
     const toTs = applied.date.toTs ?? null;
-    if (fromTs !== null) rows = rows.filter((r) => typeof (r as any).playedAt === "number" && (r as any).playedAt >= fromTs);
-    if (toTs !== null) rows = rows.filter((r) => typeof (r as any).playedAt === "number" && (r as any).playedAt <= toTs);
+
+    const tsOf = (g: any): number | null => {
+      const a = g?.playedAt;
+      if (typeof a === "number" && Number.isFinite(a)) return a;
+      if (typeof a === "string") {
+        const n = Number(a.trim());
+        if (Number.isFinite(n)) return n;
+      }
+      const b = g?.ts;
+      if (typeof b === "number" && Number.isFinite(b)) return b;
+      if (typeof b === "string") {
+        const n = Number(b.trim());
+        if (Number.isFinite(n)) return n;
+      }
+      return null;
+    };
+
+    if (fromTs !== null) rows = rows.filter((g) => {
+      const ts = tsOf(g);
+      return ts !== null && ts >= fromTs;
+    });
+    if (toTs !== null) rows = rows.filter((g) => {
+      const ts = tsOf(g);
+      return ts !== null && ts <= toTs;
+    });
   }
 
   rows = applyFilters(rows, applied.clauses, "game");
