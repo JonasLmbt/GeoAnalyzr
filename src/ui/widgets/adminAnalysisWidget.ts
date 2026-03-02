@@ -467,6 +467,12 @@ export async function renderAdminAnalysisWidget(
     }
   };
 
+  const fmtUnit = (s: string | null | undefined): string => {
+    const v = typeof s === "string" ? s.trim() : "";
+    if (!v) return "-";
+    return v.length > 32 ? v.slice(0, 29) + "..." : v;
+  };
+
   const openDebug = () => {
     debugOpen = true;
     debugWrap.style.display = "block";
@@ -951,7 +957,8 @@ export async function renderAdminAnalysisWidget(
       appendDebug(
         `${activeKey} round ${i + 1}/${countryRows.length} starting (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`
       );
-      const roundStartMs = nowMs();
+      const roundStartMonoMs = nowMs();
+      const roundStartWallMs = Date.now();
 
       if (!cached) {
         if (hasSaved && savedById && idsByRow) {
@@ -961,6 +968,7 @@ export async function renderAdminAnalysisWidget(
           // the UI will show "Refresh (n)" and the user can opt-in to computing them.
           t = saved?.trueUnit ?? null;
           g = saved?.guessUnit ?? null;
+          if (!t && !g) appendDebug(`${activeKey} round ${i + 1}/${countryRows.length} note: no saved labels (missing -> use Refresh)`);
         } else {
           const lat = Number(r?.trueLat);
           const lng = Number(r?.trueLng);
@@ -982,12 +990,16 @@ export async function renderAdminAnalysisWidget(
           }
         }
         loaded.computed.set(r, { t, g });
+      } else {
+        appendDebug(`${activeKey} round ${i + 1}/${countryRows.length} note: using cached computed labels`);
       }
       derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
 
-      const tookMs = nowMs() - roundStartMs;
+      const tookMonoMs = nowMs() - roundStartMonoMs;
+      const tookWallMs = Date.now() - roundStartWallMs;
+      const tookNote = Math.abs(tookWallMs - tookMonoMs) > 250 ? ` (wall=${tookWallMs}ms)` : "";
       appendDebug(
-        `${activeKey} round ${i + 1}/${countryRows.length} done in ${tookMs.toFixed(1)}ms (true=${t ? "ok" : "-"}, guess=${g ? "ok" : "-"})`
+        `${activeKey} round ${i + 1}/${countryRows.length} done in ${tookMonoMs.toFixed(1)}ms${tookNote} (true=${fmtUnit(t)}, guess=${fmtUnit(g)})`
       );
 
       // Update progress every round so the counter always moves (even if some rounds are slow).
