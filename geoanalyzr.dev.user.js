@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.4-dev
+// @version      2.3.5-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -50116,12 +50116,93 @@ ${describeError(err2)}` : message;
     progress.style.borderRadius = "999px";
     progress.style.background = "rgba(255,255,255,0.10)";
     progress.style.overflow = "hidden";
+    progress.style.cursor = "pointer";
+    progress.title = "Click to open the loading console";
     const progressFill = doc.createElement("div");
     progressFill.style.height = "100%";
     progressFill.style.width = "0%";
     progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
     progress.appendChild(progressFill);
     el2.appendChild(progress);
+    const debugWrap = doc.createElement("div");
+    debugWrap.className = "ga-statlist-box";
+    debugWrap.style.marginTop = "10px";
+    debugWrap.style.display = "none";
+    debugWrap.style.padding = "10px";
+    const debugHead = doc.createElement("div");
+    debugHead.style.display = "flex";
+    debugHead.style.alignItems = "center";
+    debugHead.style.justifyContent = "space-between";
+    debugHead.style.gap = "10px";
+    const debugTitle = doc.createElement("div");
+    debugTitle.style.fontWeight = "600";
+    debugTitle.textContent = "Loading console";
+    const debugActions = doc.createElement("div");
+    debugActions.style.display = "flex";
+    debugActions.style.gap = "8px";
+    const btnCopy = doc.createElement("button");
+    btnCopy.type = "button";
+    btnCopy.className = "ga-filter-btn";
+    btnCopy.textContent = "Copy";
+    const btnClose = doc.createElement("button");
+    btnClose.type = "button";
+    btnClose.className = "ga-filter-btn";
+    btnClose.textContent = "Close";
+    debugActions.appendChild(btnCopy);
+    debugActions.appendChild(btnClose);
+    debugHead.appendChild(debugTitle);
+    debugHead.appendChild(debugActions);
+    debugWrap.appendChild(debugHead);
+    const debugPre = doc.createElement("pre");
+    debugPre.style.margin = "10px 0 0 0";
+    debugPre.style.maxHeight = "220px";
+    debugPre.style.overflow = "auto";
+    debugPre.style.padding = "10px";
+    debugPre.style.borderRadius = "12px";
+    debugPre.style.border = "1px solid rgba(255,255,255,0.15)";
+    debugPre.style.background = "rgba(0,0,0,0.25)";
+    debugPre.style.fontSize = "12px";
+    debugPre.style.lineHeight = "1.35";
+    debugPre.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+    debugWrap.appendChild(debugPre);
+    el2.appendChild(debugWrap);
+    const debugLines = [];
+    const DEBUG_MAX_LINES = 5e3;
+    let debugOpen = false;
+    const fmtTime = (d) => {
+      const pad2 = (n, w) => String(Math.floor(Math.abs(n))).padStart(w, "0");
+      return `${pad2(d.getHours(), 2)}:${pad2(d.getMinutes(), 2)}:${pad2(d.getSeconds(), 2)}.${pad2(d.getMilliseconds(), 3)}`;
+    };
+    const appendDebug = (msg) => {
+      const line = `[${fmtTime(/* @__PURE__ */ new Date())}] ${msg}`;
+      debugLines.push(line);
+      if (debugLines.length > DEBUG_MAX_LINES) debugLines.splice(0, debugLines.length - DEBUG_MAX_LINES);
+      if (debugOpen) {
+        debugPre.appendChild(doc.createTextNode(line + "\n"));
+        debugPre.scrollTop = debugPre.scrollHeight;
+      }
+    };
+    const openDebug = () => {
+      debugOpen = true;
+      debugWrap.style.display = "block";
+      debugPre.textContent = debugLines.join("\n") + (debugLines.length ? "\n" : "");
+      debugPre.scrollTop = debugPre.scrollHeight;
+    };
+    const closeDebug = () => {
+      debugOpen = false;
+      debugWrap.style.display = "none";
+    };
+    progress.addEventListener("click", () => debugOpen ? closeDebug() : openDebug());
+    btnClose.addEventListener("click", () => closeDebug());
+    btnCopy.addEventListener("click", async () => {
+      const text = debugLines.join("\n");
+      try {
+        await navigator?.clipboard?.writeText?.(text);
+        appendDebug("Copied console to clipboard.");
+      } catch {
+        window.prompt?.("Copy console output:", text);
+      }
+    });
     const chartsHost = doc.createElement("div");
     chartsHost.style.display = "flex";
     chartsHost.style.flexDirection = "column";
@@ -50527,6 +50608,12 @@ ${describeError(err2)}` : message;
         const cached = loaded.computed.get(r);
         let t = cached?.t ?? null;
         let g = cached?.g ?? null;
+        const gid = String(r?.gameId ?? r?.game_id ?? "");
+        const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+        appendDebug(
+          `${activeKey} round ${i + 1}/${countryRows.length} starting (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`
+        );
+        const roundStartMs = nowMs();
         if (!cached) {
           if (hasSaved && savedById && idsByRow) {
             const id = idsByRow[i];
@@ -50544,15 +50631,20 @@ ${describeError(err2)}` : message;
               skipped++;
               t = null;
               g = null;
-              const gid = String(r?.gameId ?? r?.game_id ?? "");
-              const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
               const msg = e instanceof Error ? e.message : String(e);
               analysisConsole.warn(`Skipping round for ${activeKey} due to error/budget: ${msg} (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+              appendDebug(
+                `${activeKey} round ${i + 1}/${countryRows.length} SKIPPED: ${msg} (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`
+              );
             }
           }
           loaded.computed.set(r, { t, g });
         }
         derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
+        const tookMs = nowMs() - roundStartMs;
+        appendDebug(
+          `${activeKey} round ${i + 1}/${countryRows.length} done in ${tookMs.toFixed(1)}ms (true=${t ? "ok" : "-"}, guess=${g ? "ok" : "-"})`
+        );
         const pct = 55 + (i + 1) / Math.max(1, countryRows.length) * 35;
         const phase = hasSaved ? `Applying cached labels... (${i + 1}/${countryRows.length})` : `Computing per-round regions... (${i + 1}/${countryRows.length})${skipped ? ` \u2022 skipped ${skipped}` : ""}`;
         setBusy(pct, phase);
