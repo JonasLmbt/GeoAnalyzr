@@ -462,9 +462,35 @@ export async function renderAdminAnalysisWidget(
     debugLines.push(line);
     if (debugLines.length > DEBUG_MAX_LINES) debugLines.splice(0, debugLines.length - DEBUG_MAX_LINES);
     if (debugOpen) {
-      debugPre.appendChild(doc.createTextNode(line + "\n"));
-      debugPre.scrollTop = debugPre.scrollHeight;
+      debugUiQueue.push(line);
     }
+  };
+
+  const debugUiQueue: string[] = [];
+  let debugUiFlushScheduled = false;
+  const flushDebugUi = () => {
+    debugUiFlushScheduled = false;
+    if (!debugOpen || !debugUiQueue.length) return;
+    const chunk = debugUiQueue.splice(0, debugUiQueue.length).join("\n") + "\n";
+    debugPre.appendChild(doc.createTextNode(chunk));
+    debugPre.scrollTop = debugPre.scrollHeight;
+  };
+  const scheduleDebugUiFlush = () => {
+    if (debugUiFlushScheduled) return;
+    debugUiFlushScheduled = true;
+    // Use rAF when possible to avoid setTimeout clamping; fall back otherwise.
+    const raf = (doc.defaultView as any)?.requestAnimationFrame as ((cb: () => void) => void) | undefined;
+    if (typeof raf === "function") raf(flushDebugUi);
+    else setTimeout(flushDebugUi, 0);
+  };
+
+  const yieldForUi = async (): Promise<void> => {
+    // If the document is hidden, yielding can be clamped heavily and slows down processing a lot.
+    // In that case, skip yielding entirely.
+    if ((doc as any).visibilityState === "hidden") return;
+    const raf = (doc.defaultView as any)?.requestAnimationFrame as ((cb: () => void) => void) | undefined;
+    if (typeof raf === "function") await new Promise<void>((r) => raf(() => r()));
+    else await new Promise<void>((r) => setTimeout(r, 0));
   };
 
   const fmtUnit = (s: string | null | undefined): string => {
@@ -945,6 +971,7 @@ export async function renderAdminAnalysisWidget(
     const derived: any[] = [];
     const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
     let skipped = 0;
+    const YIELD_EVERY_ROUNDS = 25;
     let lastYieldAt = nowMs();
     for (let i = 0; i < countryRows.length; i++) {
       const r = countryRows[i];
@@ -1001,6 +1028,7 @@ export async function renderAdminAnalysisWidget(
       appendDebug(
         `${activeKey} round ${i + 1}/${countryRows.length} done in ${tookMonoMs.toFixed(1)}ms${tookNote} (true=${fmtUnit(t)}, guess=${fmtUnit(g)})`
       );
+      if (debugOpen) scheduleDebugUiFlush();
 
       // Update progress every round so the counter always moves (even if some rounds are slow).
       const pct = 55 + ((i + 1) / Math.max(1, countryRows.length)) * 35;
@@ -1010,9 +1038,9 @@ export async function renderAdminAnalysisWidget(
       setBusy(pct, phase);
 
       // Yield regularly to keep the UI responsive.
-      if (nowMs() - lastYieldAt > 16) {
+      if ((i + 1) % YIELD_EVERY_ROUNDS === 0 || nowMs() - lastYieldAt > 250) {
         lastYieldAt = nowMs();
-        await new Promise<void>((res) => setTimeout(res, 0));
+        await yieldForUi();
       }
     }
     setBusy(92, "Rendering charts...");

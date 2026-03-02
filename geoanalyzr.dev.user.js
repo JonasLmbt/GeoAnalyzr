@@ -50178,9 +50178,30 @@ ${describeError(err2)}` : message;
       debugLines.push(line);
       if (debugLines.length > DEBUG_MAX_LINES) debugLines.splice(0, debugLines.length - DEBUG_MAX_LINES);
       if (debugOpen) {
-        debugPre.appendChild(doc.createTextNode(line + "\n"));
-        debugPre.scrollTop = debugPre.scrollHeight;
+        debugUiQueue.push(line);
       }
+    };
+    const debugUiQueue = [];
+    let debugUiFlushScheduled = false;
+    const flushDebugUi = () => {
+      debugUiFlushScheduled = false;
+      if (!debugOpen || !debugUiQueue.length) return;
+      const chunk = debugUiQueue.splice(0, debugUiQueue.length).join("\n") + "\n";
+      debugPre.appendChild(doc.createTextNode(chunk));
+      debugPre.scrollTop = debugPre.scrollHeight;
+    };
+    const scheduleDebugUiFlush = () => {
+      if (debugUiFlushScheduled) return;
+      debugUiFlushScheduled = true;
+      const raf = doc.defaultView?.requestAnimationFrame;
+      if (typeof raf === "function") raf(flushDebugUi);
+      else setTimeout(flushDebugUi, 0);
+    };
+    const yieldForUi = async () => {
+      if (doc.visibilityState === "hidden") return;
+      const raf = doc.defaultView?.requestAnimationFrame;
+      if (typeof raf === "function") await new Promise((r) => raf(() => r()));
+      else await new Promise((r) => setTimeout(r, 0));
     };
     const fmtUnit = (s) => {
       const v = typeof s === "string" ? s.trim() : "";
@@ -50607,6 +50628,7 @@ ${describeError(err2)}` : message;
       const derived = [];
       const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
       let skipped = 0;
+      const YIELD_EVERY_ROUNDS = 25;
       let lastYieldAt = nowMs();
       for (let i = 0; i < countryRows.length; i++) {
         const r = countryRows[i];
@@ -50656,12 +50678,13 @@ ${describeError(err2)}` : message;
         appendDebug(
           `${activeKey} round ${i + 1}/${countryRows.length} done in ${tookMonoMs.toFixed(1)}ms${tookNote} (true=${fmtUnit(t)}, guess=${fmtUnit(g)})`
         );
+        if (debugOpen) scheduleDebugUiFlush();
         const pct = 55 + (i + 1) / Math.max(1, countryRows.length) * 35;
         const phase = hasSaved ? `Applying cached labels... (${i + 1}/${countryRows.length})` : `Computing per-round regions... (${i + 1}/${countryRows.length})${skipped ? ` \u2022 skipped ${skipped}` : ""}`;
         setBusy(pct, phase);
-        if (nowMs() - lastYieldAt > 16) {
+        if ((i + 1) % YIELD_EVERY_ROUNDS === 0 || nowMs() - lastYieldAt > 250) {
           lastYieldAt = nowMs();
-          await new Promise((res) => setTimeout(res, 0));
+          await yieldForUi();
         }
       }
       setBusy(92, "Rendering charts...");
