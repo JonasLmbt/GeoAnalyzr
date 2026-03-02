@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.6-dev
+// @version      2.3.7-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -48108,7 +48108,7 @@ ${describeError(err2)}` : message;
   }
   function colorForValue(base, t) {
     const clamped = Math.max(0, Math.min(1, t));
-    const mixToBlack = lerp(0.18, 0.7, clamped);
+    const mixToBlack = lerp(0.7, 0.18, clamped);
     const a = lerp(0.1, 0.96, clamped);
     const r = Math.round(base.r * (1 - mixToBlack));
     const g = Math.round(base.g * (1 - mixToBlack));
@@ -48410,7 +48410,7 @@ ${describeError(err2)}` : message;
   }
   function colorForValue2(base, t) {
     const clamped = Math.max(0, Math.min(1, t));
-    const mixToBlack = lerp2(0.18, 0.7, clamped);
+    const mixToBlack = lerp2(0.7, 0.18, clamped);
     const a = lerp2(0.1, 0.96, clamped);
     const r = Math.round(base.r * (1 - mixToBlack));
     const g = Math.round(base.g * (1 - mixToBlack));
@@ -50719,6 +50719,23 @@ ${describeError(err2)}` : message;
       line.appendChild(left);
       line.appendChild(right);
       accuracyBox.appendChild(line);
+      const lineWidget = {
+        widgetId: `${widget.widgetId}__${countryIso2}__${active.id}__admin_hit_rate_over_time`,
+        type: "chart",
+        title: "Admin hit rate over time (line)",
+        grain: "round",
+        spec: {
+          type: "line",
+          x: { dimension: "time_day" },
+          y: {
+            measure: "admin_unit_hit_rate",
+            accumulations: ["period", "to_date"],
+            activeAccumulation: "period"
+          }
+        }
+      };
+      const chartEl = await renderChartWidget(semantic, lineWidget, overlay, { round: derived });
+      chartsHost.appendChild(chartEl);
       const measures = [
         "admin_unit_hit_rate",
         "admin_unit_hit_count",

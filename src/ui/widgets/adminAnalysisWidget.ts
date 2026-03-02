@@ -5,6 +5,7 @@ import { analysisConsole } from "../consoleStore";
 import { renderMultiViewWidget } from "./multiViewWidget";
 import { renderBreakdownWidget } from "./breakdownWidget";
 import { renderRegionMetricMapWidget } from "./regionMetricMapWidget";
+import { renderChartWidget } from "./chartWidget";
 import { DrilldownOverlay } from "../drilldownOverlay";
 import { loadGeoJson } from "../../geo/geoJsonFetch";
 import { getGmXmlhttpRequest } from "../../gm";
@@ -1077,6 +1078,25 @@ export async function renderAdminAnalysisWidget(
     line.appendChild(left);
     line.appendChild(right);
     accuracyBox.appendChild(line);
+
+    // Admin hit rate (overall) over time
+    const lineWidget: WidgetDef = {
+      widgetId: `${widget.widgetId}__${countryIso2}__${active.id}__admin_hit_rate_over_time`,
+      type: "chart",
+      title: "Admin hit rate over time (line)",
+      grain: "round",
+      spec: {
+        type: "line",
+        x: { dimension: "time_day" },
+        y: {
+          measure: "admin_unit_hit_rate",
+          accumulations: ["period", "to_date"],
+          activeAccumulation: "period"
+        }
+      }
+    };
+    const chartEl = await renderChartWidget(semantic, lineWidget, overlay, { round: derived });
+    chartsHost.appendChild(chartEl);
 
     const measures = [
       "admin_unit_hit_rate",

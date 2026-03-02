@@ -126,7 +126,8 @@ function parseCssColor(input: string): { r: number; g: number; b: number } | nul
 
 function colorForValue(base: { r: number; g: number; b: number }, t: number): string {
   const clamped = Math.max(0, Math.min(1, t));
-  const mixToBlack = lerp(0.18, 0.70, clamped);
+  // In dark themes, make higher values lighter/brighter (more readable).
+  const mixToBlack = lerp(0.70, 0.18, clamped);
   const a = lerp(0.10, 0.96, clamped);
   const r = Math.round(base.r * (1 - mixToBlack));
   const g = Math.round(base.g * (1 - mixToBlack));
