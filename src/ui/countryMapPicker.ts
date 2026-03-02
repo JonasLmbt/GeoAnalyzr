@@ -266,7 +266,7 @@ export async function renderCountryMapPicker(args: {
       ev.preventDefault();
       const { x, y } = rectPoint((ev as WheelEvent).clientX, (ev as WheelEvent).clientY);
       const dir = (ev as WheelEvent).deltaY > 0 ? 0.9 : 1.1;
-      const nextScale = clamp(vp.scale * dir, 1, 8);
+      const nextScale = clamp(vp.scale * dir, 1, 16);
       zoomAt(x, y, nextScale);
     },
     { passive: false }

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.3
+// @version      2.3.4
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -47933,7 +47933,7 @@ ${describeError(err2)}` : message;
         ev.preventDefault();
         const { x, y } = rectPoint(ev.clientX, ev.clientY);
         const dir = ev.deltaY > 0 ? 0.9 : 1.1;
-        const nextScale = clamp(vp.scale * dir, 1, 8);
+        const nextScale = clamp(vp.scale * dir, 1, 16);
         zoomAt(x, y, nextScale);
       },
       { passive: false }
@@ -48720,6 +48720,7 @@ ${describeError(err2)}` : message;
           });
         });
       }
+      const MAX_SCALE = 48;
       let vp = { scale: 1, tx: 0, ty: 0 };
       if (spec.fitToGeoJson) {
         const b = boundsFromGeoJson(geojson);
@@ -48734,7 +48735,7 @@ ${describeError(err2)}` : message;
           const spanY = Math.max(1, maxY - minY);
           const margin = 0.08;
           const s = Math.min(W * (1 - margin * 2) / spanX, H * (1 - margin * 2) / spanY);
-          const scale = Math.max(1, Math.min(24, s));
+          const scale = Math.max(1, Math.min(MAX_SCALE, s));
           const tx = (W - spanX * scale) / 2 - minX * scale;
           const ty = (H - spanY * scale) / 2 - minY * scale;
           vp = { scale, tx, ty };
@@ -48761,8 +48762,8 @@ ${describeError(err2)}` : message;
       const clamp4 = (v, a, b) => Math.max(a, Math.min(b, v));
       const onZoom = (delta, clientX, clientY) => {
         const p = rectPoint(clientX, clientY);
-        const factor = delta > 0 ? 1.12 : 1 / 1.12;
-        const next = clamp4(vp.scale * factor, 1, 24);
+        const factor = delta > 0 ? 1 / 1.12 : 1.12;
+        const next = clamp4(vp.scale * factor, 1, MAX_SCALE);
         zoomAt(p.x, p.y, next);
       };
       svg.addEventListener(
@@ -49346,8 +49347,9 @@ ${describeError(err2)}` : message;
         const cy = H / 2;
         zoomAt(cx, cy, nextScale);
       };
-      btnPlus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale * 1.25, 1, 20)));
-      btnMinus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale / 1.25, 1, 20)));
+      const MAX_SCALE = 60;
+      btnPlus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale * 1.25, 1, MAX_SCALE)));
+      btnMinus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale / 1.25, 1, MAX_SCALE)));
       let drag = null;
       let suppressClick = false;
       svg.addEventListener("wheel", (e) => {
@@ -49355,7 +49357,7 @@ ${describeError(err2)}` : message;
         const { x, y } = rectPoint(e.clientX, e.clientY);
         const dir = e.deltaY > 0 ? -1 : 1;
         const factor = dir > 0 ? 1.15 : 1 / 1.15;
-        const nextScale = clamp2(vp.scale * factor, 1, 30);
+        const nextScale = clamp2(vp.scale * factor, 1, MAX_SCALE);
         zoomAt(x, y, nextScale);
       }, { passive: false });
       svg.addEventListener("pointerdown", (e) => {
@@ -50116,12 +50118,119 @@ ${describeError(err2)}` : message;
     progress.style.borderRadius = "999px";
     progress.style.background = "rgba(255,255,255,0.10)";
     progress.style.overflow = "hidden";
+    progress.style.cursor = "pointer";
+    progress.title = "Click to open the loading console";
     const progressFill = doc.createElement("div");
     progressFill.style.height = "100%";
     progressFill.style.width = "0%";
     progressFill.style.background = "linear-gradient(90deg, rgba(0,190,255,0.85), rgba(170,255,120,0.85))";
     progress.appendChild(progressFill);
     el2.appendChild(progress);
+    const debugWrap = doc.createElement("div");
+    debugWrap.className = "ga-statlist-box";
+    debugWrap.style.marginTop = "10px";
+    debugWrap.style.display = "none";
+    debugWrap.style.padding = "10px";
+    const debugHead = doc.createElement("div");
+    debugHead.style.display = "flex";
+    debugHead.style.alignItems = "center";
+    debugHead.style.justifyContent = "space-between";
+    debugHead.style.gap = "10px";
+    const debugTitle = doc.createElement("div");
+    debugTitle.style.fontWeight = "600";
+    debugTitle.textContent = "Loading console";
+    const debugActions = doc.createElement("div");
+    debugActions.style.display = "flex";
+    debugActions.style.gap = "8px";
+    const btnCopy = doc.createElement("button");
+    btnCopy.type = "button";
+    btnCopy.className = "ga-filter-btn";
+    btnCopy.textContent = "Copy";
+    const btnClose = doc.createElement("button");
+    btnClose.type = "button";
+    btnClose.className = "ga-filter-btn";
+    btnClose.textContent = "Close";
+    debugActions.appendChild(btnCopy);
+    debugActions.appendChild(btnClose);
+    debugHead.appendChild(debugTitle);
+    debugHead.appendChild(debugActions);
+    debugWrap.appendChild(debugHead);
+    const debugPre = doc.createElement("pre");
+    debugPre.style.margin = "10px 0 0 0";
+    debugPre.style.maxHeight = "220px";
+    debugPre.style.overflow = "auto";
+    debugPre.style.padding = "10px";
+    debugPre.style.borderRadius = "12px";
+    debugPre.style.border = "1px solid rgba(255,255,255,0.15)";
+    debugPre.style.background = "rgba(0,0,0,0.25)";
+    debugPre.style.fontSize = "12px";
+    debugPre.style.lineHeight = "1.35";
+    debugPre.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
+    debugWrap.appendChild(debugPre);
+    el2.appendChild(debugWrap);
+    const debugLines = [];
+    const DEBUG_MAX_LINES = 5e3;
+    let debugOpen = false;
+    const fmtTime = (d) => {
+      const pad2 = (n, w) => String(Math.floor(Math.abs(n))).padStart(w, "0");
+      return `${pad2(d.getHours(), 2)}:${pad2(d.getMinutes(), 2)}:${pad2(d.getSeconds(), 2)}.${pad2(d.getMilliseconds(), 3)}`;
+    };
+    const appendDebug = (msg) => {
+      const line = `[${fmtTime(/* @__PURE__ */ new Date())}] ${msg}`;
+      debugLines.push(line);
+      if (debugLines.length > DEBUG_MAX_LINES) debugLines.splice(0, debugLines.length - DEBUG_MAX_LINES);
+      if (debugOpen) {
+        debugUiQueue.push(line);
+      }
+    };
+    const debugUiQueue = [];
+    let debugUiFlushScheduled = false;
+    const flushDebugUi = () => {
+      debugUiFlushScheduled = false;
+      if (!debugOpen || !debugUiQueue.length) return;
+      const chunk = debugUiQueue.splice(0, debugUiQueue.length).join("\n") + "\n";
+      debugPre.appendChild(doc.createTextNode(chunk));
+      debugPre.scrollTop = debugPre.scrollHeight;
+    };
+    const scheduleDebugUiFlush = () => {
+      if (debugUiFlushScheduled) return;
+      debugUiFlushScheduled = true;
+      const raf = doc.defaultView?.requestAnimationFrame;
+      if (typeof raf === "function") raf(flushDebugUi);
+      else setTimeout(flushDebugUi, 0);
+    };
+    const yieldForUi = async () => {
+      if (doc.visibilityState === "hidden") return;
+      const raf = doc.defaultView?.requestAnimationFrame;
+      if (typeof raf === "function") await new Promise((r) => raf(() => r()));
+      else await new Promise((r) => setTimeout(r, 0));
+    };
+    const fmtUnit = (s) => {
+      const v = typeof s === "string" ? s.trim() : "";
+      if (!v) return "-";
+      return v.length > 32 ? v.slice(0, 29) + "..." : v;
+    };
+    const openDebug = () => {
+      debugOpen = true;
+      debugWrap.style.display = "block";
+      debugPre.textContent = debugLines.join("\n") + (debugLines.length ? "\n" : "");
+      debugPre.scrollTop = debugPre.scrollHeight;
+    };
+    const closeDebug = () => {
+      debugOpen = false;
+      debugWrap.style.display = "none";
+    };
+    progress.addEventListener("click", () => debugOpen ? closeDebug() : openDebug());
+    btnClose.addEventListener("click", () => closeDebug());
+    btnCopy.addEventListener("click", async () => {
+      const text = debugLines.join("\n");
+      try {
+        await navigator?.clipboard?.writeText?.(text);
+        appendDebug("Copied console to clipboard.");
+      } catch {
+        window.prompt?.("Copy console output:", text);
+      }
+    });
     const chartsHost = doc.createElement("div");
     chartsHost.style.display = "flex";
     chartsHost.style.flexDirection = "column";
@@ -50521,18 +50630,27 @@ ${describeError(err2)}` : message;
       const derived = [];
       const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
       let skipped = 0;
+      const YIELD_EVERY_ROUNDS = 25;
       let lastYieldAt = nowMs();
       for (let i = 0; i < countryRows.length; i++) {
         const r = countryRows[i];
         const cached = loaded.computed.get(r);
         let t = cached?.t ?? null;
         let g = cached?.g ?? null;
+        const gid = String(r?.gameId ?? r?.game_id ?? "");
+        const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+        appendDebug(
+          `${activeKey} round ${i + 1}/${countryRows.length} starting (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`
+        );
+        const roundStartMonoMs = nowMs();
+        const roundStartWallMs = Date.now();
         if (!cached) {
           if (hasSaved && savedById && idsByRow) {
             const id = idsByRow[i];
             const saved = id ? savedById.get(id) : void 0;
             t = saved?.trueUnit ?? null;
             g = saved?.guessUnit ?? null;
+            if (!t && !g) appendDebug(`${activeKey} round ${i + 1}/${countryRows.length} note: no saved labels (missing -> use Refresh)`);
           } else {
             const lat = Number(r?.trueLat);
             const lng = Number(r?.trueLng);
@@ -50544,21 +50662,31 @@ ${describeError(err2)}` : message;
               skipped++;
               t = null;
               g = null;
-              const gid = String(r?.gameId ?? r?.game_id ?? "");
-              const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
               const msg = e instanceof Error ? e.message : String(e);
               analysisConsole.warn(`Skipping round for ${activeKey} due to error/budget: ${msg} (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+              appendDebug(
+                `${activeKey} round ${i + 1}/${countryRows.length} SKIPPED: ${msg} (game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`
+              );
             }
           }
           loaded.computed.set(r, { t, g });
+        } else {
+          appendDebug(`${activeKey} round ${i + 1}/${countryRows.length} note: using cached computed labels`);
         }
         derived.push({ ...r, adminTrueUnit: t ?? "", adminGuessUnit: g ?? "" });
+        const tookMonoMs = nowMs() - roundStartMonoMs;
+        const tookWallMs = Date.now() - roundStartWallMs;
+        const tookNote = Math.abs(tookWallMs - tookMonoMs) > 250 ? ` (wall=${tookWallMs}ms)` : "";
+        appendDebug(
+          `${activeKey} round ${i + 1}/${countryRows.length} done in ${tookMonoMs.toFixed(1)}ms${tookNote} (true=${fmtUnit(t)}, guess=${fmtUnit(g)})`
+        );
+        if (debugOpen) scheduleDebugUiFlush();
         const pct = 55 + (i + 1) / Math.max(1, countryRows.length) * 35;
         const phase = hasSaved ? `Applying cached labels... (${i + 1}/${countryRows.length})` : `Computing per-round regions... (${i + 1}/${countryRows.length})${skipped ? ` \u2022 skipped ${skipped}` : ""}`;
         setBusy(pct, phase);
-        if (nowMs() - lastYieldAt > 16) {
+        if ((i + 1) % YIELD_EVERY_ROUNDS === 0 || nowMs() - lastYieldAt > 250) {
           lastYieldAt = nowMs();
-          await new Promise((res) => setTimeout(res, 0));
+          await yieldForUi();
         }
       }
       setBusy(92, "Rendering charts...");

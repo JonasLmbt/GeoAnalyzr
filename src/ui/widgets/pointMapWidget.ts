@@ -688,8 +688,9 @@ export async function renderPointMapWidget(
       zoomAt(cx, cy, nextScale);
     };
 
-    btnPlus.addEventListener("click", () => setScaleCentered(clamp(vp.scale * 1.25, 1, 20)));
-    btnMinus.addEventListener("click", () => setScaleCentered(clamp(vp.scale / 1.25, 1, 20)));
+    const MAX_SCALE = 60;
+    btnPlus.addEventListener("click", () => setScaleCentered(clamp(vp.scale * 1.25, 1, MAX_SCALE)));
+    btnMinus.addEventListener("click", () => setScaleCentered(clamp(vp.scale / 1.25, 1, MAX_SCALE)));
 
     let drag: { id: number; x: number; y: number; tx0: number; ty0: number; moved: boolean } | null = null;
     let suppressClick = false;
@@ -699,7 +700,7 @@ export async function renderPointMapWidget(
       const { x, y } = rectPoint(e.clientX, e.clientY);
       const dir = e.deltaY > 0 ? -1 : 1;
       const factor = dir > 0 ? 1.15 : 1 / 1.15;
-      const nextScale = clamp(vp.scale * factor, 1, 30);
+      const nextScale = clamp(vp.scale * factor, 1, MAX_SCALE);
       zoomAt(x, y, nextScale);
     }, { passive: false } as any);
 

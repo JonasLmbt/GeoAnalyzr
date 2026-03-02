@@ -499,6 +499,7 @@ export async function renderRegionMetricMapWidget(
       });
     }
 
+      const MAX_SCALE = 48;
       let vp: Viewport = { scale: 1, tx: 0, ty: 0 };
       if (spec.fitToGeoJson) {
         const b = boundsFromGeoJson(geojson);
@@ -513,7 +514,7 @@ export async function renderRegionMetricMapWidget(
           const spanY = Math.max(1, maxY - minY);
           const margin = 0.08;
           const s = Math.min((W * (1 - margin * 2)) / spanX, (H * (1 - margin * 2)) / spanY);
-          const scale = Math.max(1, Math.min(24, s));
+          const scale = Math.max(1, Math.min(MAX_SCALE, s));
           const tx = (W - spanX * scale) / 2 - minX * scale;
           const ty = (H - spanY * scale) / 2 - minY * scale;
           vp = { scale, tx, ty };
@@ -544,8 +545,9 @@ export async function renderRegionMetricMapWidget(
 
     const onZoom = (delta: number, clientX: number, clientY: number) => {
       const p = rectPoint(clientX, clientY);
-      const factor = delta > 0 ? 1.12 : 1 / 1.12;
-      const next = clamp(vp.scale * factor, 1, 24);
+      // Browser wheel convention: deltaY > 0 means scroll down => zoom out.
+      const factor = delta > 0 ? 1 / 1.12 : 1.12;
+      const next = clamp(vp.scale * factor, 1, MAX_SCALE);
       zoomAt(p.x, p.y, next);
     };
 

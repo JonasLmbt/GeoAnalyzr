@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.5-dev
+// @version      2.3.6-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -47933,7 +47933,7 @@ ${describeError(err2)}` : message;
         ev.preventDefault();
         const { x, y } = rectPoint(ev.clientX, ev.clientY);
         const dir = ev.deltaY > 0 ? 0.9 : 1.1;
-        const nextScale = clamp(vp.scale * dir, 1, 8);
+        const nextScale = clamp(vp.scale * dir, 1, 16);
         zoomAt(x, y, nextScale);
       },
       { passive: false }
@@ -48720,6 +48720,7 @@ ${describeError(err2)}` : message;
           });
         });
       }
+      const MAX_SCALE = 48;
       let vp = { scale: 1, tx: 0, ty: 0 };
       if (spec.fitToGeoJson) {
         const b = boundsFromGeoJson(geojson);
@@ -48734,7 +48735,7 @@ ${describeError(err2)}` : message;
           const spanY = Math.max(1, maxY - minY);
           const margin = 0.08;
           const s = Math.min(W * (1 - margin * 2) / spanX, H * (1 - margin * 2) / spanY);
-          const scale = Math.max(1, Math.min(24, s));
+          const scale = Math.max(1, Math.min(MAX_SCALE, s));
           const tx = (W - spanX * scale) / 2 - minX * scale;
           const ty = (H - spanY * scale) / 2 - minY * scale;
           vp = { scale, tx, ty };
@@ -48761,8 +48762,8 @@ ${describeError(err2)}` : message;
       const clamp4 = (v, a, b) => Math.max(a, Math.min(b, v));
       const onZoom = (delta, clientX, clientY) => {
         const p = rectPoint(clientX, clientY);
-        const factor = delta > 0 ? 1.12 : 1 / 1.12;
-        const next = clamp4(vp.scale * factor, 1, 24);
+        const factor = delta > 0 ? 1 / 1.12 : 1.12;
+        const next = clamp4(vp.scale * factor, 1, MAX_SCALE);
         zoomAt(p.x, p.y, next);
       };
       svg.addEventListener(
@@ -49346,8 +49347,9 @@ ${describeError(err2)}` : message;
         const cy = H / 2;
         zoomAt(cx, cy, nextScale);
       };
-      btnPlus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale * 1.25, 1, 20)));
-      btnMinus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale / 1.25, 1, 20)));
+      const MAX_SCALE = 60;
+      btnPlus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale * 1.25, 1, MAX_SCALE)));
+      btnMinus.addEventListener("click", () => setScaleCentered(clamp2(vp.scale / 1.25, 1, MAX_SCALE)));
       let drag = null;
       let suppressClick = false;
       svg.addEventListener("wheel", (e) => {
@@ -49355,7 +49357,7 @@ ${describeError(err2)}` : message;
         const { x, y } = rectPoint(e.clientX, e.clientY);
         const dir = e.deltaY > 0 ? -1 : 1;
         const factor = dir > 0 ? 1.15 : 1 / 1.15;
-        const nextScale = clamp2(vp.scale * factor, 1, 30);
+        const nextScale = clamp2(vp.scale * factor, 1, MAX_SCALE);
         zoomAt(x, y, nextScale);
       }, { passive: false });
       svg.addEventListener("pointerdown", (e) => {
