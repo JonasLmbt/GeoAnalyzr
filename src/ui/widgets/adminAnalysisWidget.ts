@@ -219,6 +219,45 @@ function pointInPolygon(lon: number, lat: number, geom: any, deadlineMs?: number
   return false;
 }
 
+function simplifyRingForHitTest(ring: any[], maxPoints: number): any[] {
+  if (!Array.isArray(ring)) return ring;
+  const pts = ring.filter((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
+  if (pts.length <= maxPoints) return pts;
+  const step = Math.max(2, Math.ceil(pts.length / maxPoints));
+  const out: any[] = [];
+  for (let i = 0; i < pts.length; i += step) out.push(pts[i]);
+  // Ensure ring closure.
+  const first = out[0];
+  const last = out[out.length - 1];
+  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) out.push([first[0], first[1]]);
+  return out;
+}
+
+function simplifyGeometryForHitTest(geom: any): any {
+  const type = geom?.type;
+  const coords = geom?.coordinates;
+  if (!type || !coords) return geom;
+  const MAX_POINTS = 2000;
+  if (type === "Polygon") {
+    const rings = Array.isArray(coords) ? coords : [];
+    return {
+      type,
+      coordinates: rings.map((r: any) => simplifyRingForHitTest(r, MAX_POINTS))
+    };
+  }
+  if (type === "MultiPolygon") {
+    const polys = Array.isArray(coords) ? coords : [];
+    return {
+      type,
+      coordinates: polys.map((poly: any) => {
+        const rings = Array.isArray(poly) ? poly : [];
+        return rings.map((r: any) => simplifyRingForHitTest(r, MAX_POINTS));
+      })
+    };
+  }
+  return geom;
+}
+
 function findFeatureName(level: LoadedLevel, lat: number, lng: number, budgetMs?: number): string | null {
   const deadlineMs = typeof budgetMs === "number" && Number.isFinite(budgetMs) && budgetMs > 0 ? nowMs() + budgetMs : undefined;
   const lon = lng;
@@ -314,7 +353,7 @@ async function loadLevel(level: AdminLevel, onPct: (p: number) => void, onStatus
     const name = typeof props?.[featureKey] === "string" ? String(props[featureKey]) : "";
     const bbox = bboxFromGeometry(f?.geometry);
     if (!bbox || !name) continue;
-    feats.push({ name, bbox, geometry: f.geometry });
+    feats.push({ name, bbox, geometry: simplifyGeometryForHitTest(f.geometry) });
     if (i % 200 === 0) await new Promise<void>((r) => setTimeout(r, 0));
   }
 
@@ -547,6 +586,7 @@ export async function renderAdminAnalysisWidget(
   const missingByKey = new Map<string, number>();
   const sizeHintKbByKey = new Map<string, number>();
   const persistStateByKey = new Map<string, "saving" | "refreshing" | "deleting">();
+  const cancelByKey = new Map<string, { cancelled: boolean }>();
 
   const makeRoundCacheId = (k: string, r: any): string | null => {
     const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
@@ -614,10 +654,12 @@ export async function renderAdminAnalysisWidget(
     if (!isLoaded(lvl)) return;
     if (persistStateByKey.has(k)) return;
     persistStateByKey.set(k, "saving");
+    cancelByKey.set(k, { cancelled: false });
     renderLevelsList();
     setBusy(5, `Saving ${lvl.id}...`);
 
     try {
+      const cancel = cancelByKey.get(k);
       const loaded = await loadLevel(
         lvl,
         (p) => setBusy(p, status.textContent || ""),
@@ -647,26 +689,37 @@ export async function renderAdminAnalysisWidget(
       let skipped = 0;
       let lastYieldAt = nowMs();
       for (let i = 0; i < countryRows.length; i++) {
+        if (cancel?.cancelled) throw new Error("Cancelled");
         const r = countryRows[i];
-        const lat = Number(r?.trueLat);
-        const lng = Number(r?.trueLng);
-        const guess = guessLatLngOf(r);
         let t: string | null = null;
         let g: string | null = null;
-        try {
-          t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
-          g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
-        } catch (e) {
-          skipped++;
-          const gid = String(r?.gameId ?? r?.game_id ?? "");
-          const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
-          const msg = e instanceof Error ? e.message : String(e);
-          analysisConsole.warn(`Save: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
-          t = null;
-          g = null;
+
+        const cached = loaded.computed.get(r);
+        if (cached) {
+          t = cached.t ?? null;
+          g = cached.g ?? null;
+        } else {
+          const lat = Number(r?.trueLat);
+          const lng = Number(r?.trueLng);
+          const guess = guessLatLngOf(r);
+          try {
+            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+            g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+          } catch (e) {
+            skipped++;
+            const gid = String(r?.gameId ?? r?.game_id ?? "");
+            const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+            const msg = e instanceof Error ? e.message : String(e);
+            analysisConsole.warn(`Save: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+            t = null;
+            g = null;
+          }
+          loaded.computed.set(r, { t, g });
         }
         const id = makeRoundCacheId(k, r);
-        if (id) {
+        const hasAny = (typeof t === "string" && t.trim()) || (typeof g === "string" && g.trim());
+        // IMPORTANT: Do not persist "skipped" rounds as empty labels; leaving them missing enables Refresh to retry them later.
+        if (id && hasAny) {
           labelRows.push({
             id,
             levelKey: k,
@@ -687,6 +740,7 @@ export async function renderAdminAnalysisWidget(
       }
 
       setBusy(96, "Writing labels...");
+      if (cancel?.cancelled) throw new Error("Cancelled");
       if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows as any);
 
       setBusy(100, "Saved.");
@@ -697,6 +751,7 @@ export async function renderAdminAnalysisWidget(
       setBusy(0, `Error: ${msg}`);
     } finally {
       persistStateByKey.delete(k);
+      cancelByKey.delete(k);
       renderLevelsList();
     }
   };
@@ -705,10 +760,12 @@ export async function renderAdminAnalysisWidget(
     const k = levelKey(lvl);
     if (persistStateByKey.has(k)) return;
     persistStateByKey.set(k, "refreshing");
+    cancelByKey.set(k, { cancelled: false });
     renderLevelsList();
     setBusy(5, `Refreshing ${lvl.id}...`);
 
     try {
+      const cancel = cancelByKey.get(k);
       const loaded = await loadLevel(
         lvl,
         (p) => setBusy(p, status.textContent || ""),
@@ -727,6 +784,7 @@ export async function renderAdminAnalysisWidget(
       let skipped = 0;
       let lastYieldAt = nowMs();
       for (let i = 0; i < missingRows.length; i++) {
+        if (cancel?.cancelled) throw new Error("Cancelled");
         const r = missingRows[i];
         const lat = Number(r?.trueLat);
         const lng = Number(r?.trueLng);
@@ -746,7 +804,8 @@ export async function renderAdminAnalysisWidget(
           g = null;
         }
         const id = makeRoundCacheId(k, r);
-        if (id) {
+        const hasAny = (typeof t === "string" && t.trim()) || (typeof g === "string" && g.trim());
+        if (id && hasAny) {
           labelRows.push({
             id,
             levelKey: k,
@@ -767,6 +826,7 @@ export async function renderAdminAnalysisWidget(
       }
 
       setBusy(97, "Writing labels...");
+      if (cancel?.cancelled) throw new Error("Cancelled");
       if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows as any);
       setBusy(100, "Refreshed.");
       await refreshSavedMeta();
@@ -776,6 +836,7 @@ export async function renderAdminAnalysisWidget(
       setBusy(0, `Error: ${msg}`);
     } finally {
       persistStateByKey.delete(k);
+      cancelByKey.delete(k);
       renderLevelsList();
     }
   };
@@ -846,12 +907,30 @@ export async function renderAdminAnalysisWidget(
 
         if (!saved) {
           const kb = sizeHintKbByKey.get(k);
-          persistBtn.textContent = persistMode === "saving" ? "Saving..." : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
-          if (persistMode === null) persistBtn.addEventListener("click", () => void saveLevel(lvl));
+          if (persistMode === "saving") {
+            persistBtn.textContent = "Saving... (click to cancel)";
+            persistBtn.disabled = false;
+            persistBtn.addEventListener("click", () => {
+              const c = cancelByKey.get(k);
+              if (c) c.cancelled = true;
+            });
+          } else {
+            persistBtn.textContent = typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+            if (persistMode === null) persistBtn.addEventListener("click", () => void saveLevel(lvl));
+          }
         } else {
           if (typeof missing === "number" && missing > 0) {
-            persistBtn.textContent = persistMode === "refreshing" ? "Refreshing..." : `Refresh (${missing})`;
-            if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+            if (persistMode === "refreshing") {
+              persistBtn.textContent = "Refreshing... (click to cancel)";
+              persistBtn.disabled = false;
+              persistBtn.addEventListener("click", () => {
+                const c = cancelByKey.get(k);
+                if (c) c.cancelled = true;
+              });
+            } else {
+              persistBtn.textContent = `Refresh (${missing})`;
+              if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+            }
           } else {
             const kb = Math.max(1, Math.round(saved.byteSize / 1024));
             persistBtn.textContent = `Saved (${kb} KB)`;
@@ -970,7 +1049,7 @@ export async function renderAdminAnalysisWidget(
     }
 
     const derived: any[] = [];
-    const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
+    const perLookupBudgetMs = active.id === "ADM2" ? 220 : active.id === "ADM3" ? 180 : 180;
     let skipped = 0;
     const YIELD_EVERY_ROUNDS = 25;
     let lastYieldAt = nowMs();
@@ -1079,25 +1158,6 @@ export async function renderAdminAnalysisWidget(
     line.appendChild(right);
     accuracyBox.appendChild(line);
 
-    // Admin hit rate (overall) over time
-    const lineWidget: WidgetDef = {
-      widgetId: `${widget.widgetId}__${countryIso2}__${active.id}__admin_hit_rate_over_time`,
-      type: "chart",
-      title: "Admin hit rate over time (line)",
-      grain: "round",
-      spec: {
-        type: "line",
-        x: { dimension: "time_day" },
-        y: {
-          measure: "admin_unit_hit_rate",
-          accumulations: ["period", "to_date"],
-          activeAccumulation: "period"
-        }
-      }
-    };
-    const chartEl = await renderChartWidget(semantic, lineWidget, overlay, { round: derived });
-    chartsHost.appendChild(chartEl);
-
     const measures = [
       "admin_unit_hit_rate",
       "admin_unit_hit_count",
@@ -1181,6 +1241,25 @@ export async function renderAdminAnalysisWidget(
       }
     });
     chartsHost.appendChild(mvEl);
+
+    // Admin hit rate (overall) over time (place under the map/bar chart).
+    const lineWidget: WidgetDef = {
+      widgetId: `${widget.widgetId}__${countryIso2}__${active.id}__admin_hit_rate_over_time`,
+      type: "chart",
+      title: "Admin hit rate over time (line)",
+      grain: "round",
+      spec: {
+        type: "line",
+        x: { dimension: "time_day" },
+        y: {
+          measure: "admin_unit_hit_rate",
+          accumulations: ["period", "to_date"],
+          activeAccumulation: "period"
+        }
+      }
+    };
+    const chartEl = await renderChartWidget(semantic, lineWidget, overlay, { round: derived });
+    chartsHost.appendChild(chartEl);
     setBusy(100, "Done.");
   };
 

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.7-dev
+// @version      2.3.9-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -49995,6 +49995,42 @@ ${describeError(err2)}` : message;
     }
     return false;
   }
+  function simplifyRingForHitTest(ring, maxPoints) {
+    if (!Array.isArray(ring)) return ring;
+    const pts = ring.filter((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
+    if (pts.length <= maxPoints) return pts;
+    const step = Math.max(2, Math.ceil(pts.length / maxPoints));
+    const out = [];
+    for (let i = 0; i < pts.length; i += step) out.push(pts[i]);
+    const first = out[0];
+    const last = out[out.length - 1];
+    if (first && last && (first[0] !== last[0] || first[1] !== last[1])) out.push([first[0], first[1]]);
+    return out;
+  }
+  function simplifyGeometryForHitTest(geom) {
+    const type = geom?.type;
+    const coords = geom?.coordinates;
+    if (!type || !coords) return geom;
+    const MAX_POINTS = 2e3;
+    if (type === "Polygon") {
+      const rings = Array.isArray(coords) ? coords : [];
+      return {
+        type,
+        coordinates: rings.map((r) => simplifyRingForHitTest(r, MAX_POINTS))
+      };
+    }
+    if (type === "MultiPolygon") {
+      const polys = Array.isArray(coords) ? coords : [];
+      return {
+        type,
+        coordinates: polys.map((poly) => {
+          const rings = Array.isArray(poly) ? poly : [];
+          return rings.map((r) => simplifyRingForHitTest(r, MAX_POINTS));
+        })
+      };
+    }
+    return geom;
+  }
   function findFeatureName(level, lat, lng, budgetMs) {
     const deadlineMs = typeof budgetMs === "number" && Number.isFinite(budgetMs) && budgetMs > 0 ? nowMs() + budgetMs : void 0;
     const lon = lng;
@@ -50061,7 +50097,7 @@ ${describeError(err2)}` : message;
       const name = typeof props?.[featureKey] === "string" ? String(props[featureKey]) : "";
       const bbox = bboxFromGeometry(f?.geometry);
       if (!bbox || !name) continue;
-      feats.push({ name, bbox, geometry: f.geometry });
+      feats.push({ name, bbox, geometry: simplifyGeometryForHitTest(f.geometry) });
       if (i % 200 === 0) await new Promise((r) => setTimeout(r, 0));
     }
     const loaded = { level: { ...level, featureKey }, geojson, features: feats, computed: /* @__PURE__ */ new WeakMap() };
@@ -50249,6 +50285,7 @@ ${describeError(err2)}` : message;
     const missingByKey = /* @__PURE__ */ new Map();
     const sizeHintKbByKey = /* @__PURE__ */ new Map();
     const persistStateByKey = /* @__PURE__ */ new Map();
+    const cancelByKey = /* @__PURE__ */ new Map();
     const makeRoundCacheId = (k, r) => {
       const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
       const rn = typeof r?.roundNumber === "number" ? r.roundNumber : typeof r?.round_number === "number" ? r.round_number : null;
@@ -50310,9 +50347,11 @@ ${describeError(err2)}` : message;
       if (!isLoaded(lvl)) return;
       if (persistStateByKey.has(k)) return;
       persistStateByKey.set(k, "saving");
+      cancelByKey.set(k, { cancelled: false });
       renderLevelsList();
       setBusy(5, `Saving ${lvl.id}...`);
       try {
+        const cancel = cancelByKey.get(k);
         const loaded = await loadLevel(
           lvl,
           (p) => setBusy(p, status.textContent || ""),
@@ -50338,26 +50377,35 @@ ${describeError(err2)}` : message;
         let skipped = 0;
         let lastYieldAt = nowMs();
         for (let i = 0; i < countryRows.length; i++) {
+          if (cancel?.cancelled) throw new Error("Cancelled");
           const r = countryRows[i];
-          const lat = Number(r?.trueLat);
-          const lng = Number(r?.trueLng);
-          const guess = guessLatLngOf(r);
           let t = null;
           let g = null;
-          try {
-            t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
-            g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
-          } catch (e) {
-            skipped++;
-            const gid = String(r?.gameId ?? r?.game_id ?? "");
-            const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
-            const msg = e instanceof Error ? e.message : String(e);
-            analysisConsole.warn(`Save: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
-            t = null;
-            g = null;
+          const cached = loaded.computed.get(r);
+          if (cached) {
+            t = cached.t ?? null;
+            g = cached.g ?? null;
+          } else {
+            const lat = Number(r?.trueLat);
+            const lng = Number(r?.trueLng);
+            const guess = guessLatLngOf(r);
+            try {
+              t = Number.isFinite(lat) && Number.isFinite(lng) ? findFeatureName(loaded, lat, lng, perLookupBudgetMs) : null;
+              g = guess ? findFeatureName(loaded, guess.lat, guess.lng, perLookupBudgetMs) : null;
+            } catch (e) {
+              skipped++;
+              const gid = String(r?.gameId ?? r?.game_id ?? "");
+              const rn = Number(r?.roundNumber ?? r?.round_number ?? NaN);
+              const msg = e instanceof Error ? e.message : String(e);
+              analysisConsole.warn(`Save: skipping round due to error/budget: ${msg} (level=${k}, game=${gid || "?"}, round=${Number.isFinite(rn) ? rn : "?"})`);
+              t = null;
+              g = null;
+            }
+            loaded.computed.set(r, { t, g });
           }
           const id = makeRoundCacheId(k, r);
-          if (id) {
+          const hasAny = typeof t === "string" && t.trim() || typeof g === "string" && g.trim();
+          if (id && hasAny) {
             labelRows.push({
               id,
               levelKey: k,
@@ -50376,6 +50424,7 @@ ${describeError(err2)}` : message;
           }
         }
         setBusy(96, "Writing labels...");
+        if (cancel?.cancelled) throw new Error("Cancelled");
         if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows);
         setBusy(100, "Saved.");
         await refreshSavedMeta();
@@ -50385,6 +50434,7 @@ ${describeError(err2)}` : message;
         setBusy(0, `Error: ${msg}`);
       } finally {
         persistStateByKey.delete(k);
+        cancelByKey.delete(k);
         renderLevelsList();
       }
     };
@@ -50392,9 +50442,11 @@ ${describeError(err2)}` : message;
       const k = levelKey(lvl);
       if (persistStateByKey.has(k)) return;
       persistStateByKey.set(k, "refreshing");
+      cancelByKey.set(k, { cancelled: false });
       renderLevelsList();
       setBusy(5, `Refreshing ${lvl.id}...`);
       try {
+        const cancel = cancelByKey.get(k);
         const loaded = await loadLevel(
           lvl,
           (p) => setBusy(p, status.textContent || ""),
@@ -50411,6 +50463,7 @@ ${describeError(err2)}` : message;
         let skipped = 0;
         let lastYieldAt = nowMs();
         for (let i = 0; i < missingRows.length; i++) {
+          if (cancel?.cancelled) throw new Error("Cancelled");
           const r = missingRows[i];
           const lat = Number(r?.trueLat);
           const lng = Number(r?.trueLng);
@@ -50430,7 +50483,8 @@ ${describeError(err2)}` : message;
             g = null;
           }
           const id = makeRoundCacheId(k, r);
-          if (id) {
+          const hasAny = typeof t === "string" && t.trim() || typeof g === "string" && g.trim();
+          if (id && hasAny) {
             labelRows.push({
               id,
               levelKey: k,
@@ -50449,6 +50503,7 @@ ${describeError(err2)}` : message;
           }
         }
         setBusy(97, "Writing labels...");
+        if (cancel?.cancelled) throw new Error("Cancelled");
         if (labelRows.length) await adminCacheDb.labels.bulkPut(labelRows);
         setBusy(100, "Refreshed.");
         await refreshSavedMeta();
@@ -50458,6 +50513,7 @@ ${describeError(err2)}` : message;
         setBusy(0, `Error: ${msg}`);
       } finally {
         persistStateByKey.delete(k);
+        cancelByKey.delete(k);
         renderLevelsList();
       }
     };
@@ -50516,12 +50572,30 @@ ${describeError(err2)}` : message;
           persistBtn.disabled = persistMode !== null;
           if (!saved) {
             const kb = sizeHintKbByKey.get(k);
-            persistBtn.textContent = persistMode === "saving" ? "Saving..." : typeof kb === "number" ? `Save (${kb} KB)` : "Save";
-            if (persistMode === null) persistBtn.addEventListener("click", () => void saveLevel(lvl));
+            if (persistMode === "saving") {
+              persistBtn.textContent = "Saving... (click to cancel)";
+              persistBtn.disabled = false;
+              persistBtn.addEventListener("click", () => {
+                const c = cancelByKey.get(k);
+                if (c) c.cancelled = true;
+              });
+            } else {
+              persistBtn.textContent = typeof kb === "number" ? `Save (${kb} KB)` : "Save";
+              if (persistMode === null) persistBtn.addEventListener("click", () => void saveLevel(lvl));
+            }
           } else {
             if (typeof missing === "number" && missing > 0) {
-              persistBtn.textContent = persistMode === "refreshing" ? "Refreshing..." : `Refresh (${missing})`;
-              if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+              if (persistMode === "refreshing") {
+                persistBtn.textContent = "Refreshing... (click to cancel)";
+                persistBtn.disabled = false;
+                persistBtn.addEventListener("click", () => {
+                  const c = cancelByKey.get(k);
+                  if (c) c.cancelled = true;
+                });
+              } else {
+                persistBtn.textContent = `Refresh (${missing})`;
+                if (persistMode === null) persistBtn.addEventListener("click", () => void refreshSavedLabels(lvl));
+              }
             } else {
               const kb = Math.max(1, Math.round(saved.byteSize / 1024));
               persistBtn.textContent = `Saved (${kb} KB)`;
@@ -50628,7 +50702,7 @@ ${describeError(err2)}` : message;
         setBusy(55, "Computing per-round regions...");
       }
       const derived = [];
-      const perLookupBudgetMs = active.id === "ADM2" ? 200 : active.id === "ADM3" ? 160 : 120;
+      const perLookupBudgetMs = active.id === "ADM2" ? 220 : active.id === "ADM3" ? 180 : 180;
       let skipped = 0;
       const YIELD_EVERY_ROUNDS = 25;
       let lastYieldAt = nowMs();
@@ -50719,23 +50793,6 @@ ${describeError(err2)}` : message;
       line.appendChild(left);
       line.appendChild(right);
       accuracyBox.appendChild(line);
-      const lineWidget = {
-        widgetId: `${widget.widgetId}__${countryIso2}__${active.id}__admin_hit_rate_over_time`,
-        type: "chart",
-        title: "Admin hit rate over time (line)",
-        grain: "round",
-        spec: {
-          type: "line",
-          x: { dimension: "time_day" },
-          y: {
-            measure: "admin_unit_hit_rate",
-            accumulations: ["period", "to_date"],
-            activeAccumulation: "period"
-          }
-        }
-      };
-      const chartEl = await renderChartWidget(semantic, lineWidget, overlay, { round: derived });
-      chartsHost.appendChild(chartEl);
       const measures = [
         "admin_unit_hit_rate",
         "admin_unit_hit_count",
@@ -50816,6 +50873,23 @@ ${describeError(err2)}` : message;
         }
       });
       chartsHost.appendChild(mvEl);
+      const lineWidget = {
+        widgetId: `${widget.widgetId}__${countryIso2}__${active.id}__admin_hit_rate_over_time`,
+        type: "chart",
+        title: "Admin hit rate over time (line)",
+        grain: "round",
+        spec: {
+          type: "line",
+          x: { dimension: "time_day" },
+          y: {
+            measure: "admin_unit_hit_rate",
+            accumulations: ["period", "to_date"],
+            activeAccumulation: "period"
+          }
+        }
+      };
+      const chartEl = await renderChartWidget(semantic, lineWidget, overlay, { round: derived });
+      chartsHost.appendChild(chartEl);
       setBusy(100, "Done.");
     };
     const doLoad = async (lvl, forceReload) => {
