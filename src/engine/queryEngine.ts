@@ -568,6 +568,7 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
   setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
   const progressStep = Math.max(10, Math.floor(rows.length / 120)); // ~1% increments, at least 10 rows
   let nextProgressAt = progressStep;
+  const finalHealthByGame = new Map<string, { maxRound: number; selfHealth?: number; oppHealth?: number }>();
   for (let i = 0; i < rows.length; i++) {
     if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
     if (i >= nextProgressAt) {
@@ -631,6 +632,31 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     // Convenience fields for drilldown rendering (result + teammateName).
     // NOTE: We intentionally avoid loading db.details here (it can be huge due to raw payloads).
     // Fields like map/rated/mate names are persisted onto rounds at detail-fetch time.
+    if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
+      const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
+      if (!hasMate) {
+        const mateNameRaw = pickFirst(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
+        let mateName = asTrimmedString(mateNameRaw);
+        const selfName = asTrimmedString(pickFirst(out, ["player_self_name", "playerOneName"]));
+        if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = undefined;
+        if (mateName) out.teammateName = mateName;
+      }
+    }
+
+    // Capture final health per game to derive result for drilldowns/dimensions without loading details.
+    // In duel/teamduel, the last-round health snapshot is enough to determine win/loss.
+    if (gameId) {
+      const rn = typeof out.roundNumber === "number" && Number.isFinite(out.roundNumber) ? out.roundNumber : -1;
+      const selfH = typeof out.player_self_healthAfter === "number" && Number.isFinite(out.player_self_healthAfter) ? out.player_self_healthAfter : undefined;
+      const oppH =
+        typeof out.player_opponent_healthAfter === "number" && Number.isFinite(out.player_opponent_healthAfter)
+          ? out.player_opponent_healthAfter
+          : undefined;
+      if (rn > 0 && (selfH !== undefined || oppH !== undefined)) {
+        const prev = finalHealthByGame.get(gameId);
+        if (!prev || rn >= prev.maxRound) finalHealthByGame.set(gameId, { maxRound: rn, selfHealth: selfH, oppHealth: oppH });
+      }
+    }
 
     // Best-effort: ensure guessCountry exists for confusion matrix / hit-rate dimensions.
     // Do this locally only (no network), and only if we have a guess coordinate.
@@ -674,6 +700,31 @@ async function getRoundsRaw(): Promise<RoundRow[]> {
     outRows[i] = out as RoundRow;
   }
   setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
+
+  // Attach per-game result onto each round row for drilldowns + `result` dimension.
+  // This is derived from final health snapshots captured during processing above.
+  if (finalHealthByGame.size > 0) {
+    const resultByGame = new Map<string, "Win" | "Loss" | "Tie">();
+    for (const [gid, h] of finalHealthByGame.entries()) {
+      const selfH = h.selfHealth;
+      const oppH = h.oppHealth;
+      if (typeof selfH !== "number" || typeof oppH !== "number") continue;
+      if (!Number.isFinite(selfH) || !Number.isFinite(oppH)) continue;
+      if (selfH > oppH) resultByGame.set(gid, "Win");
+      else if (selfH < oppH) resultByGame.set(gid, "Loss");
+      else resultByGame.set(gid, "Tie");
+    }
+    if (resultByGame.size > 0) {
+      for (let i = 0; i < outRows.length; i++) {
+        const r: any = outRows[i];
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (!gid) continue;
+        if (typeof r.result === "string" && r.result.trim()) continue;
+        const res = resultByGame.get(gid);
+        if (res) r.result = res;
+      }
+    }
+  }
 
   // Detect obviously corrupted games and cache their IDs so we can exclude them from all analytics.
   // Example: "games" with >25 rounds or duplicated round numbers (should never exist).

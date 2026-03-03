@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.9-dev
+// @version      2.3.10-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10550,6 +10550,7 @@ ${shapes}`.trim();
     setLoadingProgress({ phase: "Processing rounds...", current: 0, total: rows.length });
     const progressStep = Math.max(10, Math.floor(rows.length / 120));
     let nextProgressAt = progressStep;
+    const finalHealthByGame = /* @__PURE__ */ new Map();
     for (let i = 0; i < rows.length; i++) {
       if (i > 0 && i % YIELD_EVERY === 0) await yieldToEventLoop();
       if (i >= nextProgressAt) {
@@ -10592,6 +10593,25 @@ ${shapes}`.trim();
       if (typeof out.movementType !== "string" || !out.movementType) {
         out.movementType = normalizeMovementType3(asTrimmedString2(out.gameMode));
       }
+      if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
+        const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
+        if (!hasMate) {
+          const mateNameRaw = pickFirst3(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
+          let mateName = asTrimmedString2(mateNameRaw);
+          const selfName = asTrimmedString2(pickFirst3(out, ["player_self_name", "playerOneName"]));
+          if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
+          if (mateName) out.teammateName = mateName;
+        }
+      }
+      if (gameId) {
+        const rn = typeof out.roundNumber === "number" && Number.isFinite(out.roundNumber) ? out.roundNumber : -1;
+        const selfH = typeof out.player_self_healthAfter === "number" && Number.isFinite(out.player_self_healthAfter) ? out.player_self_healthAfter : void 0;
+        const oppH = typeof out.player_opponent_healthAfter === "number" && Number.isFinite(out.player_opponent_healthAfter) ? out.player_opponent_healthAfter : void 0;
+        if (rn > 0 && (selfH !== void 0 || oppH !== void 0)) {
+          const prev = finalHealthByGame.get(gameId);
+          if (!prev || rn >= prev.maxRound) finalHealthByGame.set(gameId, { maxRound: rn, selfHealth: selfH, oppHealth: oppH });
+        }
+      }
       const existingGuess = typeof out.player_self_guessCountry === "string" ? out.player_self_guessCountry : typeof out.p1_guessCountry === "string" ? out.p1_guessCountry : typeof out.guessCountry === "string" ? out.guessCountry : "";
       if (!existingGuess) {
         const glat = typeof out.player_self_guessLat === "number" ? out.player_self_guessLat : typeof out.p1_guessLat === "number" ? out.p1_guessLat : void 0;
@@ -10628,6 +10648,28 @@ ${shapes}`.trim();
       outRows[i] = out;
     }
     setLoadingProgress({ phase: "Processing rounds...", current: rows.length, total: rows.length });
+    if (finalHealthByGame.size > 0) {
+      const resultByGame = /* @__PURE__ */ new Map();
+      for (const [gid, h] of finalHealthByGame.entries()) {
+        const selfH = h.selfHealth;
+        const oppH = h.oppHealth;
+        if (typeof selfH !== "number" || typeof oppH !== "number") continue;
+        if (!Number.isFinite(selfH) || !Number.isFinite(oppH)) continue;
+        if (selfH > oppH) resultByGame.set(gid, "Win");
+        else if (selfH < oppH) resultByGame.set(gid, "Loss");
+        else resultByGame.set(gid, "Tie");
+      }
+      if (resultByGame.size > 0) {
+        for (let i = 0; i < outRows.length; i++) {
+          const r = outRows[i];
+          const gid = typeof r?.gameId === "string" ? r.gameId : "";
+          if (!gid) continue;
+          if (typeof r.result === "string" && r.result.trim()) continue;
+          const res = resultByGame.get(gid);
+          if (res) r.result = res;
+        }
+      }
+    }
     try {
       const invalid = /* @__PURE__ */ new Set();
       const roundMaskByGame = /* @__PURE__ */ new Map();
