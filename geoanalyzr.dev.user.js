@@ -45873,8 +45873,11 @@ ${describeError(err2)}` : message;
     if (mode === "asc") return "Ascending";
     return "Descending";
   }
-  function accumulationLabel(mode) {
-    return mode === "to_date" ? "To date" : "Per period";
+  function accumulationLabelForContext(mode, dimId, hasSessions) {
+    if (mode === "to_date") return "To date";
+    if (hasSessions && dimId === "time_day") return "Per session";
+    if (dimId.startsWith("session_")) return "Per session";
+    return "Per period";
   }
   function toDayKey(ts) {
     const d = new Date(ts);
@@ -46019,8 +46022,16 @@ ${describeError(err2)}` : message;
     if (finite.length === 0) return { minY: 0, maxY: 1 };
     if (unitFormat === "percent") {
       const clamped = finite.map((v) => Math.max(0, Math.min(1, v)));
-      let min2 = Math.min(...clamped);
-      let max3 = Math.max(...clamped);
+      const sorted = [...clamped].sort((a, b) => a - b);
+      const count0 = sorted.filter((v) => v <= 0).length;
+      const count1 = sorted.filter((v) => v >= 1).length;
+      const canTrim = sorted.length >= 10 && sorted.length - (count0 + count1) >= 6 && count0 + count1 <= 2;
+      const pickQuantile = (p) => {
+        const idx = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p)));
+        return sorted[idx];
+      };
+      let min2 = canTrim ? pickQuantile(0.05) : Math.min(...sorted);
+      let max3 = canTrim ? pickQuantile(0.95) : Math.max(...sorted);
       if (preferZero) min2 = 0;
       let range2 = max3 - min2;
       if (!Number.isFinite(range2) || range2 <= 0) range2 = Math.max(0.01, Math.abs(max3) || 0.01);
@@ -46340,10 +46351,11 @@ ${describeError(err2)}` : message;
       select.style.border = "1px solid var(--ga-control-border)";
       select.style.borderRadius = "8px";
       select.style.padding = "4px 8px";
+      const hasSessionsForMode = dimId === "time_day" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
-        option.textContent = accumulationLabel(mode);
+        option.textContent = accumulationLabelForContext(mode, dimId, hasSessionsForMode);
         if (mode === activeAcc) option.selected = true;
         select.appendChild(option);
       }
@@ -46403,6 +46415,26 @@ ${describeError(err2)}` : message;
         return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
       };
       if (dimId === "time_day") {
+        if (activeAcc === "period") {
+          const sessions = getDatasetForGrain("session");
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
+            const ordered = [...sessions].sort(
+              (a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0)
+            );
+            const sliced = ordered.length > maxPoints2 ? ordered.slice(ordered.length - maxPoints2) : ordered;
+            const out2 = [];
+            for (const s of sliced) {
+              const idx = typeof s?.sessionIndex === "number" ? s.sessionIndex : null;
+              const rounds = Array.isArray(s?.rounds) ? s.rounds : [];
+              if (idx === null) continue;
+              const yRaw = yForRows(rounds);
+              const y = clampForMeasure(semantic, measureId, yRaw);
+              out2.push({ x: String(idx), y, rows: [s] });
+            }
+            return out2;
+          }
+        }
         const tsValues = rows.map(
           (r) => typeof r.playedAt === "number" ? r.playedAt : typeof r.ts === "number" ? r.ts : null
         ).filter((x) => typeof x === "number");
@@ -46613,7 +46645,8 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("font-size", "12");
       xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
       xAxisLabel.setAttribute("opacity", "0.95");
-      xAxisLabel.textContent = dimDef.label;
+      const sessionMode = dimId === "time_day" && activeAcc === "period" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
+      xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
       svg.appendChild(xAxisLabel);
       if (dimId === "time_day" && data.length > 0) {
         const first = data[0].x;
@@ -46625,7 +46658,7 @@ ${describeError(err2)}` : message;
         lx.setAttribute("font-size", "10");
         lx.setAttribute("fill", "var(--ga-axis-text)");
         lx.setAttribute("opacity", "0.95");
-        lx.textContent = first;
+        lx.textContent = sessionMode ? `s${first}` : first;
         svg.appendChild(lx);
         const rx = doc.createElementNS(svg.namespaceURI, "text");
         rx.setAttribute("x", String(PAD_L + innerW - 2));
@@ -46634,7 +46667,7 @@ ${describeError(err2)}` : message;
         rx.setAttribute("font-size", "10");
         rx.setAttribute("fill", "var(--ga-axis-text)");
         rx.setAttribute("opacity", "0.95");
-        rx.textContent = last;
+        rx.textContent = sessionMode ? `s${last}` : last;
         svg.appendChild(rx);
       }
       const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
@@ -46707,10 +46740,12 @@ ${describeError(err2)}` : message;
           dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+          const xLabel = sessionMode ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+          tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
-          const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
+          const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
+          const click = sessionMode ? { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } : normalized;
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -46722,7 +46757,7 @@ ${describeError(err2)}` : message;
               const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
               const filteredRows = applyFilters(rows, click.extraFilters, grain);
               overlay.open(semantic, {
-                title: `${widget.title} - ${p.d.x}`,
+                title: `${widget.title} - ${sessionMode ? `s${p.d.x}` : p.d.x}`,
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,

@@ -99,6 +99,13 @@ function accumulationLabel(mode: "period" | "to_date"): string {
   return mode === "to_date" ? "To date" : "Per period";
 }
 
+function accumulationLabelForContext(mode: "period" | "to_date", dimId: string, hasSessions: boolean): string {
+  if (mode === "to_date") return "To date";
+  if (hasSessions && dimId === "time_day") return "Per session";
+  if (dimId.startsWith("session_")) return "Per session";
+  return "Per period";
+}
+
 function toDayKey(ts: number): string {
   const d = new Date(ts);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -274,8 +281,17 @@ function computeYBounds(opts: {
     // For percent series we still want "fit to data" (otherwise small changes are invisible),
     // but we must never go below 0% or above 100%.
     const clamped = finite.map((v) => Math.max(0, Math.min(1, v)));
-    let min = Math.min(...clamped);
-    let max = Math.max(...clamped);
+    // Robust bounds: if we have only a few extreme points (0% / 100%), don't let them dominate the axis.
+    const sorted = [...clamped].sort((a, b) => a - b);
+    const count0 = sorted.filter((v) => v <= 0).length;
+    const count1 = sorted.filter((v) => v >= 1).length;
+    const canTrim = sorted.length >= 10 && sorted.length - (count0 + count1) >= 6 && (count0 + count1) <= 2;
+    const pickQuantile = (p: number): number => {
+      const idx = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p)));
+      return sorted[idx];
+    };
+    let min = canTrim ? pickQuantile(0.05) : Math.min(...sorted);
+    let max = canTrim ? pickQuantile(0.95) : Math.max(...sorted);
     if (preferZero) min = 0;
 
     let range = max - min;
@@ -675,10 +691,11 @@ export async function renderChartWidget(
     select.style.borderRadius = "8px";
     select.style.padding = "4px 8px";
 
+    const hasSessionsForMode = dimId === "time_day" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
     for (const mode of accModes) {
       const option = doc.createElement("option");
       option.value = mode;
-      option.textContent = accumulationLabel(mode);
+      option.textContent = accumulationLabelForContext(mode, dimId, hasSessionsForMode);
       if (mode === activeAcc) option.selected = true;
       select.appendChild(option);
     }
@@ -754,6 +771,32 @@ export async function renderChartWidget(
 
     // For time_day, fill all days, but clamp the range to the filtered data bounds (so charts start at first datapoint).
     if (dimId === "time_day") {
+      // When sessions are available, interpret "Per period" as "Per session" to avoid empty-day gaps.
+      // This makes percent charts much more readable (no artificial 0% stretches).
+      if (activeAcc === "period") {
+        const sessions = getDatasetForGrain("session") as any[];
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          const maxPoints =
+            typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
+              ? Math.floor(spec.maxPoints)
+              : 50;
+          const ordered = [...sessions].sort(
+            (a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0)
+          );
+          const sliced = ordered.length > maxPoints ? ordered.slice(ordered.length - maxPoints) : ordered;
+          const out: Datum[] = [];
+          for (const s of sliced) {
+            const idx = typeof (s as any)?.sessionIndex === "number" ? (s as any).sessionIndex : null;
+            const rounds = Array.isArray((s as any)?.rounds) ? ((s as any).rounds as any[]) : [];
+            if (idx === null) continue;
+            const yRaw = yForRows(rounds);
+            const y = clampForMeasure(semantic, measureId, yRaw);
+            out.push({ x: String(idx), y, rows: [s] });
+          }
+          return out;
+        }
+      }
+
       const tsValues = rows
         .map((r) =>
           typeof (r as any).playedAt === "number"
@@ -1008,7 +1051,8 @@ export async function renderChartWidget(
     xAxisLabel.setAttribute("font-size", "12");
     xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
     xAxisLabel.setAttribute("opacity", "0.95");
-    xAxisLabel.textContent = dimDef.label;
+    const sessionMode = dimId === "time_day" && activeAcc === "period" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
+    xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
     svg.appendChild(xAxisLabel);
 
     // Minimal x-axis labeling for long time series: show start/end only (always visible).
@@ -1023,7 +1067,7 @@ export async function renderChartWidget(
       lx.setAttribute("font-size", "10");
       lx.setAttribute("fill", "var(--ga-axis-text)");
       lx.setAttribute("opacity", "0.95");
-      lx.textContent = first;
+      lx.textContent = sessionMode ? `s${first}` : first;
       svg.appendChild(lx);
 
       const rx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
@@ -1033,7 +1077,7 @@ export async function renderChartWidget(
       rx.setAttribute("font-size", "10");
       rx.setAttribute("fill", "var(--ga-axis-text)");
       rx.setAttribute("opacity", "0.95");
-      rx.textContent = last;
+      rx.textContent = sessionMode ? `s${last}` : last;
       svg.appendChild(rx);
     }
 
@@ -1111,10 +1155,12 @@ export async function renderChartWidget(
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title") as unknown as SVGTitleElement;
-        tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+        const xLabel = sessionMode ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+        tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
-        const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
+        const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
+        const click = sessionMode ? ({ type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } as any) : normalized;
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
@@ -1127,7 +1173,7 @@ export async function renderChartWidget(
             const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows as any[]);
             const filteredRows = applyFilters(rows, click.extraFilters, grain);
             overlay.open(semantic, {
-              title: `${widget.title} - ${p.d.x}`,
+              title: `${widget.title} - ${sessionMode ? `s${p.d.x}` : p.d.x}`,
               target: click.target,
               columnsPreset: click.columnsPreset,
               rows: filteredRows,
