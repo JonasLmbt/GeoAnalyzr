@@ -248,6 +248,7 @@ export interface PointMapSpec {
   // Decimal rounding used to group points into the same coordinate key. Default: 6.
   keyPrecision?: number;
   // Hard cap to avoid rendering too many SVG circles (performance). Default: 2500.
+  // Set to 0 (or <0) to disable the cap and render all points.
   maxDots?: number;
   // Optional point-source selector UI (switch between items in points[]).
   pointSelect?: {

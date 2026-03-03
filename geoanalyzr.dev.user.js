@@ -36880,7 +36880,7 @@ ${shapes}`.trim();
                           step: 10
                         },
                         mapHeight: 520,
-                        maxDots: 2500,
+                        maxDots: 0,
                         measures: [
                           "rounds_count",
                           "hit_signed",
@@ -38317,6 +38317,43 @@ ${shapes}`.trim();
       font-size:12px;
       max-width: min(360px, 62vw);
     }
+
+    /* Range sliders (e.g. Coordinates score range) */
+    .ga-range-filter input[type="range"] { accent-color: var(--ga-accent2); }
+    .ga-range-filter input[type="range"] { appearance: none; background: transparent; height: 18px; }
+    .ga-range-filter input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      margin-top: -5px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]::-moz-range-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ga-focus-ring); border-radius: 12px; }
     .ga-breakdown { --ga-breakdown-label-w: clamp(120px, 20%, 260px); }
     .ga-breakdown-row { display:flex; gap:8px; align-items:center; justify-content:flex-start; }
     .ga-breakdown-label {
@@ -49145,6 +49182,7 @@ ${describeError(err2)}` : message;
       }
       if (rangeEnabled) {
         const box2 = doc.createElement("div");
+        box2.className = "ga-range-filter";
         box2.style.display = "flex";
         box2.style.flexDirection = "column";
         box2.style.gap = "4px";
@@ -49167,6 +49205,7 @@ ${describeError(err2)}` : message;
         rowTop.appendChild(val);
         const mkSlider = (init) => {
           const input = doc.createElement("input");
+          input.className = "ga-range-slider";
           input.type = "range";
           input.min = String(rangeMinBound);
           input.max = String(rangeMaxBound);
@@ -49430,9 +49469,10 @@ ${describeError(err2)}` : message;
           suppressClick = false;
         }, 0);
       });
-      const maxDots = typeof spec.maxDots === "number" && Number.isFinite(spec.maxDots) ? Math.max(200, Math.round(spec.maxDots)) : 2500;
+      const maxDotsRaw = spec.maxDots;
+      const maxDots = typeof maxDotsRaw === "number" && Number.isFinite(maxDotsRaw) ? Math.round(maxDotsRaw) <= 0 ? null : Math.max(200, Math.round(maxDotsRaw)) : 2500;
       const allGroups = Array.from(grouped.entries()).map(([k, g2]) => ({ k, g: g2, n: g2.pointRows.length })).sort((a, b) => b.n - a.n);
-      const limited = allGroups.slice(0, Math.min(maxDots, allGroups.length));
+      const limited = maxDots === null ? allGroups : allGroups.slice(0, Math.min(maxDots, allGroups.length));
       if (allGroups.length > limited.length) {
         hint.textContent = `Scroll to zoom, drag to pan, click a dot to drill down. Showing top ${limited.length}/${allGroups.length} points (by frequency).`;
       }

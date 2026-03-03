@@ -737,6 +737,43 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       font-size:12px;
       max-width: min(360px, 62vw);
     }
+
+    /* Range sliders (e.g. Coordinates score range) */
+    .ga-range-filter input[type="range"] { accent-color: var(--ga-accent2); }
+    .ga-range-filter input[type="range"] { appearance: none; background: transparent; height: 18px; }
+    .ga-range-filter input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      margin-top: -5px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]::-moz-range-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ga-focus-ring); border-radius: 12px; }
     .ga-breakdown { --ga-breakdown-label-w: clamp(120px, 20%, 260px); }
     .ga-breakdown-row { display:flex; gap:8px; align-items:center; justify-content:flex-start; }
     .ga-breakdown-label {

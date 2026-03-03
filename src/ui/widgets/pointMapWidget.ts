@@ -381,6 +381,7 @@ export async function renderPointMapWidget(
 
     if (rangeEnabled) {
       const box = doc.createElement("div");
+      box.className = "ga-range-filter";
       box.style.display = "flex";
       box.style.flexDirection = "column";
       box.style.gap = "4px";
@@ -409,6 +410,7 @@ export async function renderPointMapWidget(
 
       const mkSlider = (init: number) => {
         const input = doc.createElement("input");
+        input.className = "ga-range-slider";
         input.type = "range";
         input.min = String(rangeMinBound);
         input.max = String(rangeMaxBound);
@@ -731,12 +733,19 @@ export async function renderPointMapWidget(
     });
 
     // Render points (cap to reduce DOM overhead on very large datasets).
-    const maxDots = typeof (spec as any).maxDots === "number" && Number.isFinite((spec as any).maxDots) ? Math.max(200, Math.round((spec as any).maxDots)) : 2500;
+    // `maxDots <= 0` disables the cap (show all points).
+    const maxDotsRaw = (spec as any).maxDots;
+    const maxDots =
+      typeof maxDotsRaw === "number" && Number.isFinite(maxDotsRaw)
+        ? Math.round(maxDotsRaw) <= 0
+          ? null
+          : Math.max(200, Math.round(maxDotsRaw))
+        : 2500;
     const allGroups = Array.from(grouped.entries())
       .map(([k, g2]) => ({ k, g: g2, n: g2.pointRows.length }))
       .sort((a, b) => b.n - a.n);
 
-    const limited = allGroups.slice(0, Math.min(maxDots, allGroups.length));
+    const limited = maxDots === null ? allGroups : allGroups.slice(0, Math.min(maxDots, allGroups.length));
     if (allGroups.length > limited.length) {
       hint.textContent = `Scroll to zoom, drag to pan, click a dot to drill down. Showing top ${limited.length}/${allGroups.length} points (by frequency).`;
     }

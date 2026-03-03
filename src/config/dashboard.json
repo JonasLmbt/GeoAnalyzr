@@ -3098,7 +3098,7 @@
                         "step": 10
                       },
                       "mapHeight": 520,
-                      "maxDots": 2500,
+                      "maxDots": 0,
                       "measures": [
                         "rounds_count",
                         "hit_signed",
