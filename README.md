@@ -36,7 +36,7 @@ For development:
 
 If you need support or want to suggest new analysis ideas / features, join my Discord server:
 
-- https://discord.gg/8RA3VtSC
+- https://discord.gg/ks5gh7MXhd
 
 ## Auto Updates
 
