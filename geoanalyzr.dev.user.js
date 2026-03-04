@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.10-dev
+// @version      2.3.11-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -45873,9 +45873,9 @@ ${describeError(err2)}` : message;
     if (mode === "asc") return "Ascending";
     return "Descending";
   }
-  function accumulationLabelForContext(mode, dimId, hasSessions) {
+  function accumulationLabelForContext(mode, dimId, canSessionize) {
     if (mode === "to_date") return "To date";
-    if (hasSessions && dimId === "time_day") return "Per session";
+    if (canSessionize && dimId === "time_day") return "Per session";
     if (dimId.startsWith("session_")) return "Per session";
     return "Per period";
   }
@@ -46351,11 +46351,12 @@ ${describeError(err2)}` : message;
       select.style.border = "1px solid var(--ga-control-border)";
       select.style.borderRadius = "8px";
       select.style.padding = "4px 8px";
-      const hasSessionsForMode = dimId === "time_day" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
+      const baseForMode = getDatasetForGrain(getActiveGrain());
+      const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : Array.isArray(baseForMode) && baseForMode.some((r) => typeof r?.sessionId === "string" && r.sessionId));
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
-        option.textContent = accumulationLabelForContext(mode, dimId, hasSessionsForMode);
+        option.textContent = accumulationLabelForContext(mode, dimId, canSessionizeForMode);
         if (mode === activeAcc) option.selected = true;
         select.appendChild(option);
       }
@@ -46416,23 +46417,71 @@ ${describeError(err2)}` : message;
       };
       if (dimId === "time_day") {
         if (activeAcc === "period") {
+          const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
+          const bySession = /* @__PURE__ */ new Map();
+          for (const r of rows) {
+            const sid = typeof r?.sessionId === "string" ? r.sessionId : "";
+            if (!sid) continue;
+            const arr = bySession.get(sid) ?? [];
+            arr.push(r);
+            bySession.set(sid, arr);
+          }
           const sessions = getDatasetForGrain("session");
-          if (Array.isArray(sessions) && sessions.length > 0) {
-            const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
-            const ordered = [...sessions].sort(
-              (a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0)
+          const out2 = [];
+          const toIndex = (sid) => {
+            const m = /^s(\d+)$/.exec(sid);
+            if (!m) return null;
+            const n = Number(m[1]);
+            return Number.isFinite(n) ? n : null;
+          };
+          const mkSessionRowFromBucket = (sid, bucketRows) => {
+            const ts = bucketRows.map(
+              (x) => typeof x?.playedAt === "number" ? x.playedAt : typeof x?.ts === "number" ? x.ts : null
+            ).filter((t) => typeof t === "number" && Number.isFinite(t));
+            const sessionStartTs = ts.length ? Math.min(...ts) : 0;
+            const sessionEndTs = ts.length ? Math.max(...ts) : sessionStartTs;
+            const gameIds = Array.from(
+              new Set(
+                bucketRows.map((x) => typeof x?.gameId === "string" ? x.gameId : typeof x?.game_id === "string" ? x.game_id : "").filter((x) => !!x)
+              )
             );
-            const sliced = ordered.length > maxPoints2 ? ordered.slice(ordered.length - maxPoints2) : ordered;
-            const out2 = [];
-            for (const s of sliced) {
-              const idx = typeof s?.sessionIndex === "number" ? s.sessionIndex : null;
-              const rounds = Array.isArray(s?.rounds) ? s.rounds : [];
+            return {
+              sessionId: sid,
+              sessionIndex: toIndex(sid) ?? 0,
+              sessionStartTs,
+              sessionEndTs,
+              ts: sessionStartTs,
+              gamesCount: gameIds.length,
+              roundsCount: bucketRows.length,
+              gameIds,
+              rounds: bucketRows
+            };
+          };
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            const ordered = [...sessions].sort((a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
+            for (const s of ordered) {
+              const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
+              if (!sid) continue;
+              const bucketRows = bySession.get(sid) ?? [];
+              if (bucketRows.length === 0) continue;
+              const idx = typeof s?.sessionIndex === "number" ? s.sessionIndex : toIndex(sid);
               if (idx === null) continue;
-              const yRaw = yForRows(rounds);
+              const yRaw = yForRows(bucketRows);
               const y = clampForMeasure(semantic, measureId, yRaw);
-              out2.push({ x: String(idx), y, rows: [s] });
+              out2.push({ x: String(idx), y, rows: [{ ...s, rounds: bucketRows, roundsCount: bucketRows.length }] });
             }
-            return out2;
+          } else if (bySession.size > 0) {
+            const ordered = Array.from(bySession.entries()).map(([sid, bucketRows]) => ({ sid, bucketRows, idx: toIndex(sid) ?? 0 })).filter((x) => x.idx > 0).sort((a, b) => a.idx - b.idx);
+            for (const { sid, bucketRows, idx } of ordered) {
+              if (bucketRows.length === 0) continue;
+              const yRaw = yForRows(bucketRows);
+              const y = clampForMeasure(semantic, measureId, yRaw);
+              out2.push({ x: String(idx), y, rows: [mkSessionRowFromBucket(sid, bucketRows)] });
+            }
+          }
+          if (out2.length > 0) {
+            const sliced = out2.length > maxPoints2 ? out2.slice(out2.length - maxPoints2) : out2;
+            return sliced;
           }
         }
         const tsValues = rows.map(
@@ -46645,7 +46694,8 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("font-size", "12");
       xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
       xAxisLabel.setAttribute("opacity", "0.95");
-      const sessionMode = dimId === "time_day" && activeAcc === "period" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
+      const canSessionizeForAxis = dimId === "time_day" && activeAcc === "period" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : Array.isArray(getDatasetForGrain(getActiveGrain())) && getDatasetForGrain(getActiveGrain()).some((r) => typeof r?.sessionId === "string" && r.sessionId));
+      const sessionMode = canSessionizeForAxis;
       xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
       svg.appendChild(xAxisLabel);
       if (dimId === "time_day" && data.length > 0) {

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.7
+// @version      2.3.8
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -36880,7 +36880,7 @@ ${shapes}`.trim();
                           step: 10
                         },
                         mapHeight: 520,
-                        maxDots: 2500,
+                        maxDots: 0,
                         measures: [
                           "rounds_count",
                           "hit_signed",
@@ -38317,6 +38317,43 @@ ${shapes}`.trim();
       font-size:12px;
       max-width: min(360px, 62vw);
     }
+
+    /* Range sliders (e.g. Coordinates score range) */
+    .ga-range-filter input[type="range"] { accent-color: var(--ga-accent2); }
+    .ga-range-filter input[type="range"] { appearance: none; background: transparent; height: 18px; }
+    .ga-range-filter input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      margin-top: -5px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]::-moz-range-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ga-focus-ring); border-radius: 12px; }
     .ga-breakdown { --ga-breakdown-label-w: clamp(120px, 20%, 260px); }
     .ga-breakdown-row { display:flex; gap:8px; align-items:center; justify-content:flex-start; }
     .ga-breakdown-label {
@@ -45836,8 +45873,11 @@ ${describeError(err2)}` : message;
     if (mode === "asc") return "Ascending";
     return "Descending";
   }
-  function accumulationLabel(mode) {
-    return mode === "to_date" ? "To date" : "Per period";
+  function accumulationLabelForContext(mode, dimId, canSessionize) {
+    if (mode === "to_date") return "To date";
+    if (canSessionize && dimId === "time_day") return "Per session";
+    if (dimId.startsWith("session_")) return "Per session";
+    return "Per period";
   }
   function toDayKey(ts) {
     const d = new Date(ts);
@@ -45982,8 +46022,16 @@ ${describeError(err2)}` : message;
     if (finite.length === 0) return { minY: 0, maxY: 1 };
     if (unitFormat === "percent") {
       const clamped = finite.map((v) => Math.max(0, Math.min(1, v)));
-      let min2 = Math.min(...clamped);
-      let max3 = Math.max(...clamped);
+      const sorted = [...clamped].sort((a, b) => a - b);
+      const count0 = sorted.filter((v) => v <= 0).length;
+      const count1 = sorted.filter((v) => v >= 1).length;
+      const canTrim = sorted.length >= 10 && sorted.length - (count0 + count1) >= 6 && count0 + count1 <= 2;
+      const pickQuantile = (p) => {
+        const idx = Math.max(0, Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p)));
+        return sorted[idx];
+      };
+      let min2 = canTrim ? pickQuantile(0.05) : Math.min(...sorted);
+      let max3 = canTrim ? pickQuantile(0.95) : Math.max(...sorted);
       if (preferZero) min2 = 0;
       let range2 = max3 - min2;
       if (!Number.isFinite(range2) || range2 <= 0) range2 = Math.max(0.01, Math.abs(max3) || 0.01);
@@ -46303,10 +46351,12 @@ ${describeError(err2)}` : message;
       select.style.border = "1px solid var(--ga-control-border)";
       select.style.borderRadius = "8px";
       select.style.padding = "4px 8px";
+      const baseForMode = getDatasetForGrain(getActiveGrain());
+      const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : Array.isArray(baseForMode) && baseForMode.some((r) => typeof r?.sessionId === "string" && r.sessionId));
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
-        option.textContent = accumulationLabel(mode);
+        option.textContent = accumulationLabelForContext(mode, dimId, canSessionizeForMode);
         if (mode === activeAcc) option.selected = true;
         select.appendChild(option);
       }
@@ -46366,6 +46416,74 @@ ${describeError(err2)}` : message;
         return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
       };
       if (dimId === "time_day") {
+        if (activeAcc === "period") {
+          const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
+          const bySession = /* @__PURE__ */ new Map();
+          for (const r of rows) {
+            const sid = typeof r?.sessionId === "string" ? r.sessionId : "";
+            if (!sid) continue;
+            const arr = bySession.get(sid) ?? [];
+            arr.push(r);
+            bySession.set(sid, arr);
+          }
+          const sessions = getDatasetForGrain("session");
+          const out2 = [];
+          const toIndex = (sid) => {
+            const m = /^s(\d+)$/.exec(sid);
+            if (!m) return null;
+            const n = Number(m[1]);
+            return Number.isFinite(n) ? n : null;
+          };
+          const mkSessionRowFromBucket = (sid, bucketRows) => {
+            const ts = bucketRows.map(
+              (x) => typeof x?.playedAt === "number" ? x.playedAt : typeof x?.ts === "number" ? x.ts : null
+            ).filter((t) => typeof t === "number" && Number.isFinite(t));
+            const sessionStartTs = ts.length ? Math.min(...ts) : 0;
+            const sessionEndTs = ts.length ? Math.max(...ts) : sessionStartTs;
+            const gameIds = Array.from(
+              new Set(
+                bucketRows.map((x) => typeof x?.gameId === "string" ? x.gameId : typeof x?.game_id === "string" ? x.game_id : "").filter((x) => !!x)
+              )
+            );
+            return {
+              sessionId: sid,
+              sessionIndex: toIndex(sid) ?? 0,
+              sessionStartTs,
+              sessionEndTs,
+              ts: sessionStartTs,
+              gamesCount: gameIds.length,
+              roundsCount: bucketRows.length,
+              gameIds,
+              rounds: bucketRows
+            };
+          };
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            const ordered = [...sessions].sort((a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
+            for (const s of ordered) {
+              const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
+              if (!sid) continue;
+              const bucketRows = bySession.get(sid) ?? [];
+              if (bucketRows.length === 0) continue;
+              const idx = typeof s?.sessionIndex === "number" ? s.sessionIndex : toIndex(sid);
+              if (idx === null) continue;
+              const yRaw = yForRows(bucketRows);
+              const y = clampForMeasure(semantic, measureId, yRaw);
+              out2.push({ x: String(idx), y, rows: [{ ...s, rounds: bucketRows, roundsCount: bucketRows.length }] });
+            }
+          } else if (bySession.size > 0) {
+            const ordered = Array.from(bySession.entries()).map(([sid, bucketRows]) => ({ sid, bucketRows, idx: toIndex(sid) ?? 0 })).filter((x) => x.idx > 0).sort((a, b) => a.idx - b.idx);
+            for (const { sid, bucketRows, idx } of ordered) {
+              if (bucketRows.length === 0) continue;
+              const yRaw = yForRows(bucketRows);
+              const y = clampForMeasure(semantic, measureId, yRaw);
+              out2.push({ x: String(idx), y, rows: [mkSessionRowFromBucket(sid, bucketRows)] });
+            }
+          }
+          if (out2.length > 0) {
+            const sliced = out2.length > maxPoints2 ? out2.slice(out2.length - maxPoints2) : out2;
+            return sliced;
+          }
+        }
         const tsValues = rows.map(
           (r) => typeof r.playedAt === "number" ? r.playedAt : typeof r.ts === "number" ? r.ts : null
         ).filter((x) => typeof x === "number");
@@ -46576,7 +46694,9 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("font-size", "12");
       xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
       xAxisLabel.setAttribute("opacity", "0.95");
-      xAxisLabel.textContent = dimDef.label;
+      const canSessionizeForAxis = dimId === "time_day" && activeAcc === "period" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : Array.isArray(getDatasetForGrain(getActiveGrain())) && getDatasetForGrain(getActiveGrain()).some((r) => typeof r?.sessionId === "string" && r.sessionId));
+      const sessionMode = canSessionizeForAxis;
+      xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
       svg.appendChild(xAxisLabel);
       if (dimId === "time_day" && data.length > 0) {
         const first = data[0].x;
@@ -46588,7 +46708,7 @@ ${describeError(err2)}` : message;
         lx.setAttribute("font-size", "10");
         lx.setAttribute("fill", "var(--ga-axis-text)");
         lx.setAttribute("opacity", "0.95");
-        lx.textContent = first;
+        lx.textContent = sessionMode ? `s${first}` : first;
         svg.appendChild(lx);
         const rx = doc.createElementNS(svg.namespaceURI, "text");
         rx.setAttribute("x", String(PAD_L + innerW - 2));
@@ -46597,7 +46717,7 @@ ${describeError(err2)}` : message;
         rx.setAttribute("font-size", "10");
         rx.setAttribute("fill", "var(--ga-axis-text)");
         rx.setAttribute("opacity", "0.95");
-        rx.textContent = last;
+        rx.textContent = sessionMode ? `s${last}` : last;
         svg.appendChild(rx);
       }
       const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
@@ -46670,10 +46790,12 @@ ${describeError(err2)}` : message;
           dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          tooltip.textContent = `${formatDimensionKey(doc, dimId, p.d.x)}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
+          const xLabel = sessionMode ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+          tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
-          const click = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
+          const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
+          const click = sessionMode ? { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } : normalized;
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -46685,7 +46807,7 @@ ${describeError(err2)}` : message;
               const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
               const filteredRows = applyFilters(rows, click.extraFilters, grain);
               overlay.open(semantic, {
-                title: `${widget.title} - ${p.d.x}`,
+                title: `${widget.title} - ${sessionMode ? `s${p.d.x}` : p.d.x}`,
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,
@@ -49145,6 +49267,7 @@ ${describeError(err2)}` : message;
       }
       if (rangeEnabled) {
         const box2 = doc.createElement("div");
+        box2.className = "ga-range-filter";
         box2.style.display = "flex";
         box2.style.flexDirection = "column";
         box2.style.gap = "4px";
@@ -49167,6 +49290,7 @@ ${describeError(err2)}` : message;
         rowTop.appendChild(val);
         const mkSlider = (init) => {
           const input = doc.createElement("input");
+          input.className = "ga-range-slider";
           input.type = "range";
           input.min = String(rangeMinBound);
           input.max = String(rangeMaxBound);
@@ -49430,9 +49554,10 @@ ${describeError(err2)}` : message;
           suppressClick = false;
         }, 0);
       });
-      const maxDots = typeof spec.maxDots === "number" && Number.isFinite(spec.maxDots) ? Math.max(200, Math.round(spec.maxDots)) : 2500;
+      const maxDotsRaw = spec.maxDots;
+      const maxDots = typeof maxDotsRaw === "number" && Number.isFinite(maxDotsRaw) ? Math.round(maxDotsRaw) <= 0 ? null : Math.max(200, Math.round(maxDotsRaw)) : 2500;
       const allGroups = Array.from(grouped.entries()).map(([k, g2]) => ({ k, g: g2, n: g2.pointRows.length })).sort((a, b) => b.n - a.n);
-      const limited = allGroups.slice(0, Math.min(maxDots, allGroups.length));
+      const limited = maxDots === null ? allGroups : allGroups.slice(0, Math.min(maxDots, allGroups.length));
       if (allGroups.length > limited.length) {
         hint.textContent = `Scroll to zoom, drag to pan, click a dot to drill down. Showing top ${limited.length}/${allGroups.length} points (by frequency).`;
       }

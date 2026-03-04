@@ -99,9 +99,9 @@ function accumulationLabel(mode: "period" | "to_date"): string {
   return mode === "to_date" ? "To date" : "Per period";
 }
 
-function accumulationLabelForContext(mode: "period" | "to_date", dimId: string, hasSessions: boolean): string {
+function accumulationLabelForContext(mode: "period" | "to_date", dimId: string, canSessionize: boolean): string {
   if (mode === "to_date") return "To date";
-  if (hasSessions && dimId === "time_day") return "Per session";
+  if (canSessionize && dimId === "time_day") return "Per session";
   if (dimId.startsWith("session_")) return "Per session";
   return "Per period";
 }
@@ -678,27 +678,32 @@ export async function renderChartWidget(
     controlsLeft.appendChild(select);
   }
 
-  if (accModes.length > 1 && spec.type === "line" && dimDef.ordered) {
-    const label = doc.createElement("label");
-    label.style.fontSize = "12px";
-    label.style.opacity = "0.9";
-    label.textContent = "Mode:";
+    if (accModes.length > 1 && spec.type === "line" && dimDef.ordered) {
+      const label = doc.createElement("label");
+      label.style.fontSize = "12px";
+      label.style.opacity = "0.9";
+      label.textContent = "Mode:";
 
-    const select = doc.createElement("select");
-    select.style.background = "var(--ga-control-bg)";
-    select.style.color = "var(--ga-control-text)";
-    select.style.border = "1px solid var(--ga-control-border)";
-    select.style.borderRadius = "8px";
-    select.style.padding = "4px 8px";
+      const select = doc.createElement("select");
+      select.style.background = "var(--ga-control-bg)";
+      select.style.color = "var(--ga-control-text)";
+      select.style.border = "1px solid var(--ga-control-border)";
+      select.style.borderRadius = "8px";
+      select.style.padding = "4px 8px";
 
-    const hasSessionsForMode = dimId === "time_day" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
-    for (const mode of accModes) {
-      const option = doc.createElement("option");
-      option.value = mode;
-      option.textContent = accumulationLabelForContext(mode, dimId, hasSessionsForMode);
-      if (mode === activeAcc) option.selected = true;
-      select.appendChild(option);
-    }
+      const baseForMode = getDatasetForGrain(getActiveGrain());
+      const canSessionizeForMode =
+        dimId === "time_day" &&
+        (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
+          ? true
+          : Array.isArray(baseForMode) && baseForMode.some((r: any) => typeof r?.sessionId === "string" && r.sessionId));
+      for (const mode of accModes) {
+        const option = doc.createElement("option");
+        option.value = mode;
+        option.textContent = accumulationLabelForContext(mode, dimId, canSessionizeForMode);
+        if (mode === activeAcc) option.selected = true;
+        select.appendChild(option);
+      }
 
     select.addEventListener("change", () => {
       const next = select.value as any;
@@ -774,26 +779,91 @@ export async function renderChartWidget(
       // When sessions are available, interpret "Per period" as "Per session" to avoid empty-day gaps.
       // This makes percent charts much more readable (no artificial 0% stretches).
       if (activeAcc === "period") {
+        const maxPoints =
+          typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
+            ? Math.floor(spec.maxPoints)
+            : 50;
+
+        // Prefer provided sessions (richer metadata), but always filter them to the currently selected rows.
+        // This prevents charts from showing artificial 0% sessions that had no relevant rows (e.g. when a section
+        // applies an extra country filter).
+        const bySession = new Map<string, any[]>();
+        for (const r of rows as any[]) {
+          const sid = typeof r?.sessionId === "string" ? r.sessionId : "";
+          if (!sid) continue;
+          const arr = bySession.get(sid) ?? [];
+          arr.push(r);
+          bySession.set(sid, arr);
+        }
+
         const sessions = getDatasetForGrain("session") as any[];
-        if (Array.isArray(sessions) && sessions.length > 0) {
-          const maxPoints =
-            typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
-              ? Math.floor(spec.maxPoints)
-              : 50;
-          const ordered = [...sessions].sort(
-            (a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0)
+        const out: Datum[] = [];
+
+        const toIndex = (sid: string): number | null => {
+          const m = /^s(\d+)$/.exec(sid);
+          if (!m) return null;
+          const n = Number(m[1]);
+          return Number.isFinite(n) ? n : null;
+        };
+
+        const mkSessionRowFromBucket = (sid: string, bucketRows: any[]): any => {
+          const ts = bucketRows
+            .map((x) =>
+              typeof x?.playedAt === "number" ? x.playedAt : typeof x?.ts === "number" ? x.ts : null
+            )
+            .filter((t: any): t is number => typeof t === "number" && Number.isFinite(t));
+          const sessionStartTs = ts.length ? Math.min(...ts) : 0;
+          const sessionEndTs = ts.length ? Math.max(...ts) : sessionStartTs;
+          const gameIds = Array.from(
+            new Set(
+              bucketRows
+                .map((x: any) => (typeof x?.gameId === "string" ? x.gameId : typeof x?.game_id === "string" ? x.game_id : ""))
+                .filter((x: string) => !!x)
+            )
           );
-          const sliced = ordered.length > maxPoints ? ordered.slice(ordered.length - maxPoints) : ordered;
-          const out: Datum[] = [];
-          for (const s of sliced) {
-            const idx = typeof (s as any)?.sessionIndex === "number" ? (s as any).sessionIndex : null;
-            const rounds = Array.isArray((s as any)?.rounds) ? ((s as any).rounds as any[]) : [];
+          return {
+            sessionId: sid,
+            sessionIndex: toIndex(sid) ?? 0,
+            sessionStartTs,
+            sessionEndTs,
+            ts: sessionStartTs,
+            gamesCount: gameIds.length,
+            roundsCount: bucketRows.length,
+            gameIds,
+            rounds: bucketRows
+          };
+        };
+
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          const ordered = [...sessions].sort((a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
+          for (const s of ordered) {
+            const sid = typeof (s as any)?.sessionId === "string" ? (s as any).sessionId : "";
+            if (!sid) continue;
+            const bucketRows = bySession.get(sid) ?? [];
+            if (bucketRows.length === 0) continue;
+            const idx = typeof (s as any)?.sessionIndex === "number" ? (s as any).sessionIndex : toIndex(sid);
             if (idx === null) continue;
-            const yRaw = yForRows(rounds);
+            const yRaw = yForRows(bucketRows);
             const y = clampForMeasure(semantic, measureId, yRaw);
-            out.push({ x: String(idx), y, rows: [s] });
+            out.push({ x: String(idx), y, rows: [{ ...s, rounds: bucketRows, roundsCount: bucketRows.length }] });
           }
-          return out;
+        } else if (bySession.size > 0) {
+          const ordered = Array.from(bySession.entries())
+            .map(([sid, bucketRows]) => ({ sid, bucketRows, idx: toIndex(sid) ?? 0 }))
+            .filter((x) => x.idx > 0)
+            .sort((a, b) => a.idx - b.idx);
+
+          for (const { sid, bucketRows, idx } of ordered) {
+            if (bucketRows.length === 0) continue;
+            const yRaw = yForRows(bucketRows);
+            const y = clampForMeasure(semantic, measureId, yRaw);
+            out.push({ x: String(idx), y, rows: [mkSessionRowFromBucket(sid, bucketRows)] });
+          }
+        }
+
+        if (out.length > 0) {
+          const sliced = out.length > maxPoints ? out.slice(out.length - maxPoints) : out;
+          return sliced;
         }
       }
 
@@ -1051,7 +1121,14 @@ export async function renderChartWidget(
     xAxisLabel.setAttribute("font-size", "12");
     xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
     xAxisLabel.setAttribute("opacity", "0.95");
-    const sessionMode = dimId === "time_day" && activeAcc === "period" && Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0;
+    const canSessionizeForAxis =
+      dimId === "time_day" &&
+      activeAcc === "period" &&
+      (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
+        ? true
+        : Array.isArray(getDatasetForGrain(getActiveGrain())) &&
+          getDatasetForGrain(getActiveGrain()).some((r: any) => typeof r?.sessionId === "string" && r.sessionId));
+    const sessionMode = canSessionizeForAxis;
     xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
     svg.appendChild(xAxisLabel);
 
