@@ -114,12 +114,40 @@ function toDayKey(ts: number): string {
 const SESSION_WARMUP_ROUNDS = 10;
 const DEFAULT_SESSION_GAP_MINUTES = 45;
 
+function coerceTimestampMs(v: any): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const t = Date.parse(v);
+    if (Number.isFinite(t)) return t;
+  }
+  return null;
+}
+
+function extractRowGameId(r: any): string {
+  return typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
+}
+
+function extractRowTsMs(r: any): number | null {
+  return (
+    coerceTimestampMs(r?.playedAt) ??
+    coerceTimestampMs(r?.ts) ??
+    coerceTimestampMs(r?.startTime) ??
+    coerceTimestampMs(r?.timerStartTime) ??
+    null
+  );
+}
+
+function hasAnyGameIds(rows: any[]): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  return rows.some((r) => !!extractRowGameId(r));
+}
+
 function canSessionizeFromRows(rows: any[]): boolean {
   if (!Array.isArray(rows) || rows.length === 0) return false;
   return rows.some((r: any) => {
-    const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
-    const ts = typeof r?.playedAt === "number" ? r.playedAt : typeof r?.ts === "number" ? r.ts : null;
-    return !!gid && typeof ts === "number" && Number.isFinite(ts);
+    const gid = extractRowGameId(r);
+    const ts = extractRowTsMs(r);
+    return !!gid && ts !== null;
   });
 }
 
@@ -714,7 +742,7 @@ export async function renderChartWidget(
       const baseForMode = getDatasetForGrain(getActiveGrain());
       const canSessionizeForMode =
         dimId === "time_day" &&
-        (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : canSessionizeFromRows(baseForMode));
+        (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(baseForMode) : canSessionizeFromRows(baseForMode));
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
@@ -796,7 +824,10 @@ export async function renderChartWidget(
     if (dimId === "time_day") {
       // If we can sessionize, interpret time-day line charts as "per session" (x=Session #) instead of per-day.
       // This avoids empty-day gaps and matches gameplay. "To date" becomes cumulative over sessions.
-      if ((activeAcc === "period" || activeAcc === "to_date") && canSessionizeFromRows(rows)) {
+      const providedSessions = getDatasetForGrain("session") as any[];
+      const canSessionizeWithProvidedSessions =
+        Array.isArray(providedSessions) && providedSessions.length > 0 && hasAnyGameIds(rows as any[]);
+      if ((activeAcc === "period" || activeAcc === "to_date") && (canSessionizeFromRows(rows) || canSessionizeWithProvidedSessions)) {
         const maxPoints =
           typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
             ? Math.floor(spec.maxPoints)
@@ -814,7 +845,7 @@ export async function renderChartWidget(
           bySession.set(sid, arr);
         }
 
-        const sessions = getDatasetForGrain("session") as any[];
+        const sessions = providedSessions;
         const out: Datum[] = [];
 
         const toIndex = (sid: string): number | null => {
@@ -826,16 +857,14 @@ export async function renderChartWidget(
 
         const mkSessionRowFromBucket = (sid: string, bucketRows: any[]): any => {
           const ts = bucketRows
-            .map((x) =>
-              typeof x?.playedAt === "number" ? x.playedAt : typeof x?.ts === "number" ? x.ts : null
-            )
+            .map((x) => extractRowTsMs(x))
             .filter((t: any): t is number => typeof t === "number" && Number.isFinite(t));
           const sessionStartTs = ts.length ? Math.min(...ts) : 0;
           const sessionEndTs = ts.length ? Math.max(...ts) : sessionStartTs;
           const gameIds = Array.from(
             new Set(
               bucketRows
-                .map((x: any) => (typeof x?.gameId === "string" ? x.gameId : typeof x?.game_id === "string" ? x.game_id : ""))
+                .map((x: any) => extractRowGameId(x))
                 .filter((x: string) => !!x)
             )
           );
@@ -861,6 +890,30 @@ export async function renderChartWidget(
                 rounds: Array.isArray(s?.rounds) ? s.rounds : [],
                 roundsCount: typeof s?.roundsCount === "number" ? s.roundsCount : (Array.isArray(s?.rounds) ? s.rounds.length : 0)
               }));
+
+        // Some contexts don't carry `sessionId` on the provided round rows. If we have a session dataset that includes
+        // gameIds, infer the sessionId via gameId so "per session" charts work reliably.
+        if (bySession.size === 0 && Array.isArray(baseSessions) && baseSessions.length > 0) {
+          const gameToSession = new Map<string, string>();
+          for (const s of baseSessions as any[]) {
+            const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
+            if (!sid) continue;
+            const gids = Array.isArray(s?.gameIds) ? (s.gameIds as any[]) : [];
+            for (const gid of gids) {
+              if (typeof gid !== "string" || !gid) continue;
+              if (!gameToSession.has(gid)) gameToSession.set(gid, sid);
+            }
+          }
+          for (const r of rows as any[]) {
+            const gid = extractRowGameId(r);
+            if (!gid) continue;
+            const sid = gameToSession.get(gid) ?? "";
+            if (!sid) continue;
+            const arr = bySession.get(sid) ?? [];
+            arr.push(r);
+            bySession.set(sid, arr);
+          }
+        }
 
         if (Array.isArray(baseSessions) && baseSessions.length > 0) {
           const orderedBase = [...baseSessions].sort((a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
@@ -917,15 +970,9 @@ export async function renderChartWidget(
         }
       }
 
-      const tsValues = rows
-        .map((r) =>
-          typeof (r as any).playedAt === "number"
-            ? (r as any).playedAt
-            : typeof (r as any).ts === "number"
-              ? (r as any).ts
-              : null
-        )
-        .filter((x) => typeof x === "number") as number[];
+        const tsValues = rows
+        .map((r) => extractRowTsMs(r))
+        .filter((x): x is number => typeof x === "number" && Number.isFinite(x));
       const dataMinTs = tsValues.length ? Math.min(...tsValues) : null;
       const dataMaxTs = tsValues.length ? Math.max(...tsValues) : null;
 
@@ -1108,13 +1155,27 @@ export async function renderChartWidget(
     const yVals = ignoreZeroForRating ? yValsRaw.filter((v) => v !== 0) : yValsRaw;
     const hardMin = measureDef.range?.min;
     const hardMax = measureDef.range?.max;
-    const { minY, maxY } = computeYBounds({
+    let { minY, maxY } = computeYBounds({
       unitFormat,
       values: yVals,
       preferZero,
       hardMin: typeof hardMin === "number" && Number.isFinite(hardMin) ? hardMin : undefined,
       hardMax: typeof hardMax === "number" && Number.isFinite(hardMax) ? hardMax : undefined
     });
+
+    // Prevent line charts from drawing/clipping at the exact bounds (dots/line width can look "out of frame").
+    if (spec.type === "line" && Number.isFinite(minY) && Number.isFinite(maxY) && maxY > minY) {
+      const pad = (maxY - minY) * 0.05;
+      minY -= pad;
+      maxY += pad;
+      if (unitFormat === "percent") {
+        minY = Math.max(0, minY);
+        maxY = Math.min(1, maxY);
+      }
+      if (typeof hardMin === "number" && Number.isFinite(hardMin)) minY = Math.max(minY, hardMin);
+      if (typeof hardMax === "number" && Number.isFinite(hardMax)) maxY = Math.min(maxY, hardMax);
+    }
+
     const yRange = Math.max(1e-9, maxY - minY);
 
     const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg") as unknown as SVGSVGElement;
@@ -1175,7 +1236,7 @@ export async function renderChartWidget(
       dimId === "time_day" &&
       (activeAcc === "period" || activeAcc === "to_date") &&
       (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
-        ? true
+        ? hasAnyGameIds(getDatasetForGrain(getActiveGrain()))
         : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
     const sessionMode = canSessionizeForAxis;
     xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
@@ -1185,6 +1246,7 @@ export async function renderChartWidget(
     if (dimId === "time_day" && data.length > 0) {
       const first = data[0].x;
       const last = data[data.length - 1].x;
+      const sessionTick = (x: string): string => (/^\d+$/.test(x) ? `s${x}` : x);
 
       const lx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
       lx.setAttribute("x", String(PAD_L + 2));
@@ -1193,7 +1255,7 @@ export async function renderChartWidget(
       lx.setAttribute("font-size", "10");
       lx.setAttribute("fill", "var(--ga-axis-text)");
       lx.setAttribute("opacity", "0.95");
-      lx.textContent = sessionMode ? `s${first}` : first;
+      lx.textContent = sessionMode ? sessionTick(first) : first;
       svg.appendChild(lx);
 
       const rx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
@@ -1203,7 +1265,7 @@ export async function renderChartWidget(
       rx.setAttribute("font-size", "10");
       rx.setAttribute("fill", "var(--ga-axis-text)");
       rx.setAttribute("opacity", "0.95");
-      rx.textContent = sessionMode ? `s${last}` : last;
+      rx.textContent = sessionMode ? sessionTick(last) : last;
       svg.appendChild(rx);
     }
 
@@ -1285,7 +1347,8 @@ export async function renderChartWidget(
         const isFirstValid = prevValidY === null;
         const isLastValid = i === lastValidIdx;
         const changed = !isFirstValid && prevValidY !== p.yVal;
-        const showDot = isFirstValid || isLastValid || changed;
+        const isClickableSessionPoint = sessionMode && activeAcc === "period";
+        const showDot = isClickableSessionPoint || isFirstValid || isLastValid || changed;
         if (!showDot) {
           prevValidY = p.yVal;
           return;
@@ -1299,12 +1362,15 @@ export async function renderChartWidget(
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title") as unknown as SVGTitleElement;
-        const xLabel = sessionMode ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+        const xLabel = sessionMode && /^\d+$/.test(String(p.d.x)) ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
         tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
         const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
-        const click = sessionMode ? ({ type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } as any) : normalized;
+        const click =
+          sessionMode && activeAcc === "period"
+            ? ({ type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } as any)
+            : normalized;
         if (click?.type === "drilldown") {
           dot.setAttribute("style", "cursor: pointer;");
           dot.addEventListener("click", () => {
@@ -1313,11 +1379,25 @@ export async function renderChartWidget(
             const base = getDatasetForGrain(ddGrain);
             const sourceRows = click.filterFromPoint ? p.d.rows : base;
             // When not filtering from point we already have drilldown-grain rows (base).
-            const sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+            let sourceRowsGrain: Grain = click.filterFromPoint ? sourceGrain : ddGrain;
+            // Some session-mode line charts attach "session rows" to each point (even if the active measure grain is round).
+            // In that case, treat the point rows as session grain so session drilldowns work (clickable points).
+            if (click.filterFromPoint && ddGrain === "session") {
+              const first = Array.isArray(sourceRows) && sourceRows.length > 0 ? (sourceRows[0] as any) : null;
+              if (
+                first &&
+                (typeof first?.sessionId === "string" ||
+                  typeof first?.sessionIndex === "number" ||
+                  Array.isArray(first?.gameIds) ||
+                  Array.isArray(first?.rounds))
+              ) {
+                sourceRowsGrain = "session";
+              }
+            }
             const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows as any[]);
             const filteredRows = applyFilters(rows, click.extraFilters, grain);
             overlay.open(semantic, {
-              title: `${widget.title} - ${sessionMode ? `s${p.d.x}` : p.d.x}`,
+              title: `${widget.title} - ${sessionMode && /^\d+$/.test(String(p.d.x)) ? `s${p.d.x}` : p.d.x}`,
               target: click.target,
               columnsPreset: click.columnsPreset,
               rows: filteredRows,
