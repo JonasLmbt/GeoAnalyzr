@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.8
+// @version      2.3.9
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -8235,6 +8235,12 @@ ${shapes}`.trim();
       if (!r || typeof r !== "object") continue;
       const gid = typeof r.gameId === "string" ? r.gameId : "";
       if (gid !== gameId) continue;
+      const hasStart = typeof r?.startTime === "number" && Number.isFinite(r.startTime);
+      const hasEnd = typeof r?.endTime === "number" && Number.isFinite(r.endTime);
+      const hasDuration = typeof r?.durationSeconds === "number" && Number.isFinite(r.durationSeconds) && r.durationSeconds > 0;
+      const hasAnyGuess = typeof r?.player_self_guessLat === "number" && Number.isFinite(r.player_self_guessLat) || typeof r?.player_self_guessLng === "number" && Number.isFinite(r.player_self_guessLng) || typeof r?.player_opponent_guessLat === "number" && Number.isFinite(r.player_opponent_guessLat) || typeof r?.player_opponent_guessLng === "number" && Number.isFinite(r.player_opponent_guessLng) || typeof r?.player_mate_guessLat === "number" && Number.isFinite(r.player_mate_guessLat) || typeof r?.player_mate_guessLng === "number" && Number.isFinite(r.player_mate_guessLng) || typeof r?.player_opponent_mate_guessLat === "number" && Number.isFinite(r.player_opponent_mate_guessLat) || typeof r?.player_opponent_mate_guessLng === "number" && Number.isFinite(r.player_opponent_mate_guessLng);
+      const hasAnyScore = typeof r?.player_self_score === "number" && Number.isFinite(r.player_self_score) || typeof r?.p1_score === "number" && Number.isFinite(r.p1_score) || typeof r?.score === "number" && Number.isFinite(r.score) || typeof r?.player_opponent_score === "number" && Number.isFinite(r.player_opponent_score) || typeof r?.player_mate_score === "number" && Number.isFinite(r.player_mate_score) || typeof r?.player_opponent_mate_score === "number" && Number.isFinite(r.player_opponent_mate_score);
+      if (!hasStart && !hasEnd && !hasDuration && !hasAnyGuess && !hasAnyScore) continue;
       agg.roundsCount++;
       const mvRaw = r.movementType ?? r.movement_type;
       const mv = normalizeMovementType(mvRaw);
@@ -8762,6 +8768,10 @@ ${shapes}`.trim();
     for (let i = 0; i < rounds.length; i++) {
       const r = rounds[i];
       const rn = asNum(r?.roundNumber) ?? i + 1;
+      const startTs = toTs(r?.startTime);
+      const endTs = toTs(r?.endTime);
+      const hasAnyGuess = guessMaps.some((m) => m.has(rn) && m.get(rn) != null);
+      if (startTs === void 0 && endTs === void 0 && !hasAnyGuess) continue;
       const roundBase = {
         id: roundId(game.gameId, rn),
         gameId: game.gameId,
@@ -8776,11 +8786,11 @@ ${shapes}`.trim();
         trueHeadingDeg: extractTrueHeadingDeg(r),
         damageMultiplier: asNum(r?.damageMultiplier),
         isHealingRound: Boolean(r?.isHealingRound),
-        startTime: toTs(r?.startTime),
-        endTime: toTs(r?.endTime),
+        startTime: startTs,
+        endTime: endTs,
         durationSeconds: (() => {
-          const s = toTs(r?.startTime);
-          const e = toTs(r?.endTime);
+          const s = startTs;
+          const e = endTs;
           return s !== void 0 && e !== void 0 && e >= s ? (e - s) / 1e3 : void 0;
         })(),
         // Avoid storing full raw payloads per round (huge). Persist only the derived fields above.
@@ -10835,6 +10845,12 @@ ${shapes}`.trim();
         const r = rounds[i];
         const gid = typeof r?.gameId === "string" ? r.gameId : "";
         if (!gid || !missingSet.has(gid)) continue;
+        const hasStart = typeof r?.startTime === "number" && Number.isFinite(r.startTime);
+        const hasEnd = typeof r?.endTime === "number" && Number.isFinite(r.endTime);
+        const hasDuration = typeof r?.durationSeconds === "number" && Number.isFinite(r.durationSeconds) && r.durationSeconds > 0;
+        const hasAnyGuess = typeof r?.player_self_guessLat === "number" && Number.isFinite(r.player_self_guessLat) || typeof r?.player_self_guessLng === "number" && Number.isFinite(r.player_self_guessLng) || typeof r?.player_opponent_guessLat === "number" && Number.isFinite(r.player_opponent_guessLat) || typeof r?.player_opponent_guessLng === "number" && Number.isFinite(r.player_opponent_guessLng) || typeof r?.player_mate_guessLat === "number" && Number.isFinite(r.player_mate_guessLat) || typeof r?.player_mate_guessLng === "number" && Number.isFinite(r.player_mate_guessLng) || typeof r?.player_opponent_mate_guessLat === "number" && Number.isFinite(r.player_opponent_mate_guessLat) || typeof r?.player_opponent_mate_guessLng === "number" && Number.isFinite(r.player_opponent_mate_guessLng);
+        const hasAnyScore = typeof r?.player_self_score === "number" && Number.isFinite(r.player_self_score) || typeof r?.p1_score === "number" && Number.isFinite(r.p1_score) || typeof r?.score === "number" && Number.isFinite(r.score) || typeof r?.player_opponent_score === "number" && Number.isFinite(r.player_opponent_score) || typeof r?.player_mate_score === "number" && Number.isFinite(r.player_mate_score) || typeof r?.player_opponent_mate_score === "number" && Number.isFinite(r.player_opponent_mate_score);
+        if (!hasStart && !hasEnd && !hasDuration && !hasAnyGuess && !hasAnyScore) continue;
         let agg = aggByGame.get(gid);
         if (!agg) {
           agg = { gameId: gid, aggVersion: GAME_AGG_VERSION, computedAt: 0, roundsCount: 0, movementType: "unknown" };

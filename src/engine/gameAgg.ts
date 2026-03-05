@@ -28,6 +28,27 @@ export function computeGameAggFromRounds(gameId: string, rounds: (RoundRow | any
     const gid = typeof r.gameId === "string" ? r.gameId : "";
     if (gid !== gameId) continue;
 
+    const hasStart = typeof r?.startTime === "number" && Number.isFinite(r.startTime);
+    const hasEnd = typeof r?.endTime === "number" && Number.isFinite(r.endTime);
+    const hasDuration = typeof r?.durationSeconds === "number" && Number.isFinite(r.durationSeconds) && r.durationSeconds > 0;
+    const hasAnyGuess =
+      (typeof r?.player_self_guessLat === "number" && Number.isFinite(r.player_self_guessLat)) ||
+      (typeof r?.player_self_guessLng === "number" && Number.isFinite(r.player_self_guessLng)) ||
+      (typeof r?.player_opponent_guessLat === "number" && Number.isFinite(r.player_opponent_guessLat)) ||
+      (typeof r?.player_opponent_guessLng === "number" && Number.isFinite(r.player_opponent_guessLng)) ||
+      (typeof r?.player_mate_guessLat === "number" && Number.isFinite(r.player_mate_guessLat)) ||
+      (typeof r?.player_mate_guessLng === "number" && Number.isFinite(r.player_mate_guessLng)) ||
+      (typeof r?.player_opponent_mate_guessLat === "number" && Number.isFinite(r.player_opponent_mate_guessLat)) ||
+      (typeof r?.player_opponent_mate_guessLng === "number" && Number.isFinite(r.player_opponent_mate_guessLng));
+    const hasAnyScore =
+      (typeof r?.player_self_score === "number" && Number.isFinite(r.player_self_score)) ||
+      (typeof r?.p1_score === "number" && Number.isFinite(r.p1_score)) ||
+      (typeof r?.score === "number" && Number.isFinite(r.score)) ||
+      (typeof r?.player_opponent_score === "number" && Number.isFinite(r.player_opponent_score)) ||
+      (typeof r?.player_mate_score === "number" && Number.isFinite(r.player_mate_score)) ||
+      (typeof r?.player_opponent_mate_score === "number" && Number.isFinite(r.player_opponent_mate_score));
+    if (!hasStart && !hasEnd && !hasDuration && !hasAnyGuess && !hasAnyScore) continue;
+
     agg.roundsCount++;
 
     const mvRaw = r.movementType ?? r.movement_type;
@@ -93,4 +114,3 @@ export function computeGameAggFromRounds(gameId: string, rounds: (RoundRow | any
   agg.movementType = movement ?? "unknown";
   return agg;
 }
-

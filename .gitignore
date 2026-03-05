@@ -3,3 +3,4 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+tmp_telephone_area_sources.txt

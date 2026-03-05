@@ -585,6 +585,14 @@ async function normalizeGameAndRounds(
     const r = rounds[i];
     const rn = asNum(r?.roundNumber) ?? i + 1;
 
+    const startTs = toTs(r?.startTime);
+    const endTs = toTs(r?.endTime);
+    const hasAnyGuess = guessMaps.some((m) => m.has(rn) && m.get(rn) != null);
+    // Some endpoints include "future/unplayed" rounds with panorama data but no timestamps/guesses.
+    // These should not be stored as real rounds, otherwise game-level aggregates (avg score, hit rate, etc.)
+    // become incomplete and drilldowns show impossible round counts.
+    if (startTs === undefined && endTs === undefined && !hasAnyGuess) continue;
+
     const roundBase = {
       id: roundId(game.gameId, rn),
       gameId: game.gameId,
@@ -599,11 +607,11 @@ async function normalizeGameAndRounds(
       trueHeadingDeg: extractTrueHeadingDeg(r),
       damageMultiplier: asNum(r?.damageMultiplier),
       isHealingRound: Boolean(r?.isHealingRound),
-      startTime: toTs(r?.startTime),
-      endTime: toTs(r?.endTime),
+      startTime: startTs,
+      endTime: endTs,
       durationSeconds: (() => {
-        const s = toTs(r?.startTime);
-        const e = toTs(r?.endTime);
+        const s = startTs;
+        const e = endTs;
         return s !== undefined && e !== undefined && e >= s ? (e - s) / 1000 : undefined;
       })(),
       // Avoid storing full raw payloads per round (huge). Persist only the derived fields above.
