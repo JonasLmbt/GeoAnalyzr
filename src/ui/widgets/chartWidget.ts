@@ -111,6 +111,8 @@ function toDayKey(ts: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const SESSION_WARMUP_ROUNDS = 10;
+
 function dayKeysBetween(fromTs: number, toTs: number): string[] {
   const out: string[] = [];
   const start = new Date(fromTs);
@@ -776,9 +778,9 @@ export async function renderChartWidget(
 
     // For time_day, fill all days, but clamp the range to the filtered data bounds (so charts start at first datapoint).
     if (dimId === "time_day") {
-      // When sessions are available, interpret "Per period" as "Per session" to avoid empty-day gaps.
-      // This makes percent charts much more readable (no artificial 0% stretches).
-      if (activeAcc === "period") {
+      // If we can sessionize, interpret time-day line charts as "per session" (x=Session #) instead of per-day.
+      // This avoids empty-day gaps and matches gameplay. "To date" becomes cumulative over sessions.
+      if (activeAcc === "period" || activeAcc === "to_date") {
         const maxPoints =
           typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
             ? Math.floor(spec.maxPoints)
@@ -863,6 +865,23 @@ export async function renderChartWidget(
 
         if (out.length > 0) {
           const sliced = out.length > maxPoints ? out.slice(out.length - maxPoints) : out;
+          if (activeAcc === "to_date") {
+            const cum: any[] = [];
+            let cumRounds = 0;
+            const outCum: Datum[] = [];
+            for (const d of sliced) {
+              const s = (d.rows && d.rows[0]) || null;
+              const bucketRounds = Array.isArray((s as any)?.rounds) ? ((s as any).rounds as any[]) : [];
+              if (bucketRounds.length) {
+                cum.push(...bucketRounds);
+                cumRounds += bucketRounds.length;
+              }
+              // Warmup: don't emit until we have enough rounds to avoid initial 0%/100% spikes.
+              if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
+              outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
+            }
+            return outCum;
+          }
           return sliced;
         }
       }
@@ -1123,7 +1142,7 @@ export async function renderChartWidget(
     xAxisLabel.setAttribute("opacity", "0.95");
     const canSessionizeForAxis =
       dimId === "time_day" &&
-      activeAcc === "period" &&
+      (activeAcc === "period" || activeAcc === "to_date") &&
       (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
         ? true
         : Array.isArray(getDatasetForGrain(getActiveGrain())) &&
@@ -1170,6 +1189,24 @@ export async function renderChartWidget(
     svg.appendChild(yAxisLabel);
 
     if (spec.type === "line") {
+      // Clip the line + dots so outliers/NaNs never draw outside the chart area.
+      const clipId = `ga-clip-${Math.random().toString(36).slice(2)}`;
+      const defs = doc.createElementNS(svg.namespaceURI, "defs") as unknown as SVGDefsElement;
+      const clipPath = doc.createElementNS(svg.namespaceURI, "clipPath") as unknown as SVGClipPathElement;
+      clipPath.setAttribute("id", clipId);
+      const clipRect = doc.createElementNS(svg.namespaceURI, "rect") as unknown as SVGRectElement;
+      clipRect.setAttribute("x", String(PAD_L));
+      clipRect.setAttribute("y", String(PAD_T));
+      clipRect.setAttribute("width", String(innerW));
+      clipRect.setAttribute("height", String(innerH));
+      clipPath.appendChild(clipRect);
+      defs.appendChild(clipPath);
+      svg.appendChild(defs);
+
+      const plotG = doc.createElementNS(svg.namespaceURI, "g") as unknown as SVGGElement;
+      plotG.setAttribute("clip-path", `url(#${clipId})`);
+      svg.appendChild(plotG);
+
       const outerPad = Math.min(28, innerW * 0.06);
       const xSpan = Math.max(1, innerW - outerPad * 2);
       const points = data.map((d, i) => {
@@ -1197,7 +1234,7 @@ export async function renderChartWidget(
       path.setAttribute("stroke", colorOverride ?? "var(--ga-graph-color)");
       path.setAttribute("stroke-width", "2.5");
       path.setAttribute("opacity", "0.9");
-      svg.appendChild(path);
+      plotG.appendChild(path);
       if (isAnimationsEnabled(doc)) {
         // Set dash properties once; CSS animates dashoffset on visibility.
         prepareLineAnimation(path);
@@ -1259,7 +1296,7 @@ export async function renderChartWidget(
             });
           });
         }
-        svg.appendChild(dot);
+        plotG.appendChild(dot);
         prevValidY = p.yVal;
       });
       maybeAnimateChartSvg(svg, doc);
