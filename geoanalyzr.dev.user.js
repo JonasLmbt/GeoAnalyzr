@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.13-dev
+// @version      2.3.14-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10376,6 +10376,10 @@ ${shapes}`.trim();
       }
     }
     return sessions;
+  }
+  function buildSessionsFromRoundsForUi(rounds, gapMinutes) {
+    const mins = typeof gapMinutes === "number" && Number.isFinite(gapMinutes) ? Math.max(1, Math.min(360, Math.round(gapMinutes))) : 45;
+    return buildSessionsFromRounds(rounds, mins);
   }
   async function getSessionsRaw(gapMinutes) {
     if (sessionsRawCache) return sessionsRawCache;
@@ -45900,6 +45904,22 @@ ${describeError(err2)}` : message;
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
   var SESSION_WARMUP_ROUNDS = 10;
+  var DEFAULT_SESSION_GAP_MINUTES = 45;
+  function canSessionizeFromRows(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    return rows.some((r) => {
+      const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
+      const ts = typeof r?.playedAt === "number" ? r.playedAt : typeof r?.ts === "number" ? r.ts : null;
+      return !!gid && typeof ts === "number" && Number.isFinite(ts);
+    });
+  }
+  function sessionizeRounds(rows) {
+    try {
+      return buildSessionsFromRoundsForUi(rows, DEFAULT_SESSION_GAP_MINUTES);
+    } catch {
+      return [];
+    }
+  }
   function dayKeysBetween(fromTs, toTs2) {
     const out = [];
     const start = new Date(fromTs);
@@ -46369,7 +46389,7 @@ ${describeError(err2)}` : message;
       select.style.borderRadius = "8px";
       select.style.padding = "4px 8px";
       const baseForMode = getDatasetForGrain(getActiveGrain());
-      const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : Array.isArray(baseForMode) && baseForMode.some((r) => typeof r?.sessionId === "string" && r.sessionId));
+      const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : canSessionizeFromRows(baseForMode));
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
@@ -46433,7 +46453,7 @@ ${describeError(err2)}` : message;
         return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
       };
       if (dimId === "time_day") {
-        if (activeAcc === "period" || activeAcc === "to_date") {
+        if ((activeAcc === "period" || activeAcc === "to_date") && canSessionizeFromRows(rows)) {
           const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
           const bySession = /* @__PURE__ */ new Map();
           for (const r of rows) {
@@ -46474,9 +46494,15 @@ ${describeError(err2)}` : message;
               rounds: bucketRows
             };
           };
-          if (Array.isArray(sessions) && sessions.length > 0) {
-            const ordered = [...sessions].sort((a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
-            for (const s of ordered) {
+          const baseSessions = Array.isArray(sessions) && sessions.length > 0 ? sessions : sessionizeRounds(rows).map((s) => ({
+            ...s,
+            // Ensure the expected fields exist for drilldowns.
+            rounds: Array.isArray(s?.rounds) ? s.rounds : [],
+            roundsCount: typeof s?.roundsCount === "number" ? s.roundsCount : Array.isArray(s?.rounds) ? s.rounds.length : 0
+          }));
+          if (Array.isArray(baseSessions) && baseSessions.length > 0) {
+            const orderedBase = [...baseSessions].sort((a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
+            for (const s of orderedBase) {
               const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
               if (!sid) continue;
               const bucketRows = bySession.get(sid) ?? [];
@@ -46509,7 +46535,12 @@ ${describeError(err2)}` : message;
                   cum.push(...bucketRounds);
                   cumRounds += bucketRounds.length;
                 }
-                if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
+                if (outCum.length === 0) {
+                  if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
+                  const firstN = cum.slice(0, SESSION_WARMUP_ROUNDS);
+                  outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(firstN)), rows: firstN.slice() });
+                  continue;
+                }
                 outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
               }
               return outCum;
@@ -46727,7 +46758,7 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("font-size", "12");
       xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
       xAxisLabel.setAttribute("opacity", "0.95");
-      const canSessionizeForAxis = dimId === "time_day" && (activeAcc === "period" || activeAcc === "to_date") && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : Array.isArray(getDatasetForGrain(getActiveGrain())) && getDatasetForGrain(getActiveGrain()).some((r) => typeof r?.sessionId === "string" && r.sessionId));
+      const canSessionizeForAxis = dimId === "time_day" && (activeAcc === "period" || activeAcc === "to_date") && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
       const sessionMode = canSessionizeForAxis;
       xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
       svg.appendChild(xAxisLabel);

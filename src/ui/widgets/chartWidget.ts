@@ -1,7 +1,7 @@
 import type { SemanticRegistry } from "../../config/semantic.types";
 import type { WidgetDef, ChartSpec } from "../../config/dashboard.types";
 import type { Grain } from "../../config/semantic.types";
-import { getRounds, getGames } from "../../engine/queryEngine";
+import { getRounds, getGames, buildSessionsFromRoundsForUi } from "../../engine/queryEngine";
 import { DIMENSION_EXTRACTORS } from "../../engine/dimensions";
 import { groupByKey } from "../../engine/aggregate";
 import { MEASURES_BY_GRAIN } from "../../engine/measures";
@@ -112,6 +112,24 @@ function toDayKey(ts: number): string {
 }
 
 const SESSION_WARMUP_ROUNDS = 10;
+const DEFAULT_SESSION_GAP_MINUTES = 45;
+
+function canSessionizeFromRows(rows: any[]): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  return rows.some((r: any) => {
+    const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
+    const ts = typeof r?.playedAt === "number" ? r.playedAt : typeof r?.ts === "number" ? r.ts : null;
+    return !!gid && typeof ts === "number" && Number.isFinite(ts);
+  });
+}
+
+function sessionizeRounds(rows: any[]): any[] {
+  try {
+    return buildSessionsFromRoundsForUi(rows as any[], DEFAULT_SESSION_GAP_MINUTES) as any[];
+  } catch {
+    return [];
+  }
+}
 
 function dayKeysBetween(fromTs: number, toTs: number): string[] {
   const out: string[] = [];
@@ -696,9 +714,7 @@ export async function renderChartWidget(
       const baseForMode = getDatasetForGrain(getActiveGrain());
       const canSessionizeForMode =
         dimId === "time_day" &&
-        (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
-          ? true
-          : Array.isArray(baseForMode) && baseForMode.some((r: any) => typeof r?.sessionId === "string" && r.sessionId));
+        (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : canSessionizeFromRows(baseForMode));
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
@@ -780,7 +796,7 @@ export async function renderChartWidget(
     if (dimId === "time_day") {
       // If we can sessionize, interpret time-day line charts as "per session" (x=Session #) instead of per-day.
       // This avoids empty-day gaps and matches gameplay. "To date" becomes cumulative over sessions.
-      if (activeAcc === "period" || activeAcc === "to_date") {
+      if ((activeAcc === "period" || activeAcc === "to_date") && canSessionizeFromRows(rows)) {
         const maxPoints =
           typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
             ? Math.floor(spec.maxPoints)
@@ -836,9 +852,19 @@ export async function renderChartWidget(
           };
         };
 
-        if (Array.isArray(sessions) && sessions.length > 0) {
-          const ordered = [...sessions].sort((a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
-          for (const s of ordered) {
+        const baseSessions =
+          Array.isArray(sessions) && sessions.length > 0
+            ? sessions
+            : sessionizeRounds(rows).map((s: any) => ({
+                ...s,
+                // Ensure the expected fields exist for drilldowns.
+                rounds: Array.isArray(s?.rounds) ? s.rounds : [],
+                roundsCount: typeof s?.roundsCount === "number" ? s.roundsCount : (Array.isArray(s?.rounds) ? s.rounds.length : 0)
+              }));
+
+        if (Array.isArray(baseSessions) && baseSessions.length > 0) {
+          const orderedBase = [...baseSessions].sort((a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
+          for (const s of orderedBase) {
             const sid = typeof (s as any)?.sessionId === "string" ? (s as any).sessionId : "";
             if (!sid) continue;
             const bucketRows = bySession.get(sid) ?? [];
@@ -876,8 +902,13 @@ export async function renderChartWidget(
                 cum.push(...bucketRounds);
                 cumRounds += bucketRounds.length;
               }
-              // Warmup: don't emit until we have enough rounds to avoid initial 0%/100% spikes.
-              if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
+              // Warmup: first point uses the first N rounds only (stable start without 0%/100% spikes).
+              if (outCum.length === 0) {
+                if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
+                const firstN = cum.slice(0, SESSION_WARMUP_ROUNDS);
+                outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(firstN)), rows: firstN.slice() });
+                continue;
+              }
               outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
             }
             return outCum;
@@ -1145,8 +1176,7 @@ export async function renderChartWidget(
       (activeAcc === "period" || activeAcc === "to_date") &&
       (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
         ? true
-        : Array.isArray(getDatasetForGrain(getActiveGrain())) &&
-          getDatasetForGrain(getActiveGrain()).some((r: any) => typeof r?.sessionId === "string" && r.sessionId));
+        : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
     const sessionMode = canSessionizeForAxis;
     xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
     svg.appendChild(xAxisLabel);
