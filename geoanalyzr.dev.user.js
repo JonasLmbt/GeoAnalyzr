@@ -52916,6 +52916,24 @@ ${describe(error)}`;
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
   }
+  async function ensureFetchDataHasRunOnce() {
+    const metaKey = "fetch_data_ran_v1";
+    try {
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      if (typeof doneAt === "number" && Number.isFinite(doneAt) && doneAt > 0) return true;
+    } catch {
+    }
+    try {
+      const [games, rounds, details] = await Promise.all([db.games.count(), db.rounds.count(), db.details.count()]);
+      const hasAny = games > 0 || rounds > 0 || details > 0;
+      if (!hasAny) return false;
+      await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), inferred: true }, updatedAt: Date.now() });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function createThrottledStatus(setStatus) {
     let lastRenderAt = 0;
     let currentShownAt = 0;
@@ -53047,6 +53065,10 @@ ${describe(error)}`;
         });
         const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
         const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
+        try {
+          await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
+        } catch {
+        }
         invalidateRoundsCache();
         status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
         if (norm.updated > 0 || backfilled.updated > 0) {
@@ -53140,6 +53162,27 @@ ${describe(error)}`;
     ui.onOpenAnalysisClick(async () => {
       let semanticStatus = "";
       try {
+        const ok = await ensureFetchDataHasRunOnce();
+        if (!ok) {
+          ui.setStatus("Please run Fetch data first.");
+          try {
+            const [games, rounds] = await Promise.all([db.games.count(), db.rounds.count()]);
+            alert(
+              `GeoAnalyzr has no local data yet (${games} games, ${rounds} rounds).
+
+Please click "Update data" (Fetch data) in the GeoAnalyzr panel first.
+After it finishes, open the dashboard again.`
+            );
+          } catch {
+            alert(
+              `GeoAnalyzr has no local data yet.
+
+Please click "Update data" (Fetch data) in the GeoAnalyzr panel first.
+After it finishes, open the dashboard again.`
+            );
+          }
+          return;
+        }
         ui.setStatus("Opening dashboard...");
         const semanticTab = window.open("about:blank", "_blank");
         if (!semanticTab) {
