@@ -10140,6 +10140,13 @@ ${shapes}`.trim();
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
+  function isInvalidIdbKeyRangeError(e) {
+    const any = e;
+    const name = typeof any?.name === "string" ? any.name : "";
+    const message = typeof any?.message === "string" ? any.message : String(e ?? "");
+    if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
+    return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
+  }
   function normalizeMovementType3(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
@@ -10178,10 +10185,24 @@ ${shapes}`.trim();
     corruptedGameIdsCache = null;
   }
   async function hasAnyTeamDuels() {
-    const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
-    if (byFamily > 0) return true;
-    const byFlag = await db.games.where("isTeamDuels").equals(true).count();
-    return byFlag > 0;
+    try {
+      const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
+      if (byFamily > 0) return true;
+      const byFlag = await db.games.where("isTeamDuels").equals(true).count();
+      return byFlag > 0;
+    } catch (e) {
+      if (!isInvalidIdbKeyRangeError(e)) throw e;
+      try {
+        const games = await db.games.toArray();
+        return games.some((g) => {
+          const mf = typeof g?.modeFamily === "string" ? String(g.modeFamily).toLowerCase() : "";
+          if (mf === "teamduels") return true;
+          return g?.isTeamDuels === true;
+        });
+      } catch {
+        return false;
+      }
+    }
   }
   function buildSessionsFromRounds(rounds, gapMinutes) {
     const byGame = /* @__PURE__ */ new Map();

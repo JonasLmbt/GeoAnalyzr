@@ -12,6 +12,15 @@ async function yieldToEventLoop(): Promise<void> {
   await new Promise<void>((r) => setTimeout(r, 0));
 }
 
+function isInvalidIdbKeyRangeError(e: unknown): boolean {
+  const any = e as any;
+  const name = typeof any?.name === "string" ? any.name : "";
+  const message = typeof any?.message === "string" ? any.message : String(e ?? "");
+  // Firefox/Chromium usually surface this as a DOMException "DataError".
+  if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
+  return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
+}
+
 export type GlobalFilters = {
   global?: {
     spec: GlobalFiltersSpec | undefined;
@@ -64,10 +73,26 @@ export function invalidateRoundsCache(): void {
 }
 
 export async function hasAnyTeamDuels(): Promise<boolean> {
-  const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
-  if (byFamily > 0) return true;
-  const byFlag = await db.games.where("isTeamDuels").equals(true as any).count();
-  return byFlag > 0;
+  try {
+    const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
+    if (byFamily > 0) return true;
+    const byFlag = await db.games.where("isTeamDuels").equals(true as any).count();
+    return byFlag > 0;
+  } catch (e) {
+    // Some users have older/corrupted IndexedDB indexes that crash during key-range creation
+    // (e.g. "IDBKeyRange.bound ... not a valid key"). Fall back to a full scan.
+    if (!isInvalidIdbKeyRangeError(e)) throw e;
+    try {
+      const games = await db.games.toArray();
+      return (games as any[]).some((g) => {
+        const mf = typeof g?.modeFamily === "string" ? String(g.modeFamily).toLowerCase() : "";
+        if (mf === "teamduels") return true;
+        return g?.isTeamDuels === true;
+      });
+    } catch {
+      return false;
+    }
+  }
 }
 
 export type SessionRow = {
