@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.10
+// @version      2.3.11
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10140,6 +10140,13 @@ ${shapes}`.trim();
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
+  function isInvalidIdbKeyRangeError(e) {
+    const any = e;
+    const name = typeof any?.name === "string" ? any.name : "";
+    const message = typeof any?.message === "string" ? any.message : String(e ?? "");
+    if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
+    return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
+  }
   function normalizeMovementType3(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
@@ -10178,10 +10185,24 @@ ${shapes}`.trim();
     corruptedGameIdsCache = null;
   }
   async function hasAnyTeamDuels() {
-    const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
-    if (byFamily > 0) return true;
-    const byFlag = await db.games.where("isTeamDuels").equals(true).count();
-    return byFlag > 0;
+    try {
+      const byFamily = await db.games.where("modeFamily").equals("teamduels").count();
+      if (byFamily > 0) return true;
+      const byFlag = await db.games.where("isTeamDuels").equals(true).count();
+      return byFlag > 0;
+    } catch (e) {
+      if (!isInvalidIdbKeyRangeError(e)) throw e;
+      try {
+        const games = await db.games.toArray();
+        return games.some((g) => {
+          const mf = typeof g?.modeFamily === "string" ? String(g.modeFamily).toLowerCase() : "";
+          if (mf === "teamduels") return true;
+          return g?.isTeamDuels === true;
+        });
+      } catch {
+        return false;
+      }
+    }
   }
   function buildSessionsFromRounds(rounds, gapMinutes) {
     const byGame = /* @__PURE__ */ new Map();
@@ -45905,12 +45926,30 @@ ${describeError(err2)}` : message;
   }
   var SESSION_WARMUP_ROUNDS = 10;
   var DEFAULT_SESSION_GAP_MINUTES = 45;
+  function coerceTimestampMs(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim()) {
+      const t = Date.parse(v);
+      if (Number.isFinite(t)) return t;
+    }
+    return null;
+  }
+  function extractRowGameId(r) {
+    return typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
+  }
+  function extractRowTsMs(r) {
+    return coerceTimestampMs(r?.playedAt) ?? coerceTimestampMs(r?.ts) ?? coerceTimestampMs(r?.startTime) ?? coerceTimestampMs(r?.timerStartTime) ?? null;
+  }
+  function hasAnyGameIds(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    return rows.some((r) => !!extractRowGameId(r));
+  }
   function canSessionizeFromRows(rows) {
     if (!Array.isArray(rows) || rows.length === 0) return false;
     return rows.some((r) => {
-      const gid = typeof r?.gameId === "string" ? r.gameId : typeof r?.game_id === "string" ? r.game_id : "";
-      const ts = typeof r?.playedAt === "number" ? r.playedAt : typeof r?.ts === "number" ? r.ts : null;
-      return !!gid && typeof ts === "number" && Number.isFinite(ts);
+      const gid = extractRowGameId(r);
+      const ts = extractRowTsMs(r);
+      return !!gid && ts !== null;
     });
   }
   function sessionizeRounds(rows) {
@@ -46389,7 +46428,7 @@ ${describeError(err2)}` : message;
       select.style.borderRadius = "8px";
       select.style.padding = "4px 8px";
       const baseForMode = getDatasetForGrain(getActiveGrain());
-      const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : canSessionizeFromRows(baseForMode));
+      const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(baseForMode) : canSessionizeFromRows(baseForMode));
       for (const mode of accModes) {
         const option = doc.createElement("option");
         option.value = mode;
@@ -46453,7 +46492,9 @@ ${describeError(err2)}` : message;
         return denom > 0 ? sumDamage(bucketRows, shareKind) / denom : 0;
       };
       if (dimId === "time_day") {
-        if ((activeAcc === "period" || activeAcc === "to_date") && canSessionizeFromRows(rows)) {
+        const providedSessions = getDatasetForGrain("session");
+        const canSessionizeWithProvidedSessions = Array.isArray(providedSessions) && providedSessions.length > 0 && hasAnyGameIds(rows);
+        if ((activeAcc === "period" || activeAcc === "to_date") && (canSessionizeFromRows(rows) || canSessionizeWithProvidedSessions)) {
           const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
           const bySession = /* @__PURE__ */ new Map();
           for (const r of rows) {
@@ -46463,7 +46504,7 @@ ${describeError(err2)}` : message;
             arr.push(r);
             bySession.set(sid, arr);
           }
-          const sessions = getDatasetForGrain("session");
+          const sessions = providedSessions;
           const out2 = [];
           const toIndex = (sid) => {
             const m = /^s(\d+)$/.exec(sid);
@@ -46472,14 +46513,12 @@ ${describeError(err2)}` : message;
             return Number.isFinite(n) ? n : null;
           };
           const mkSessionRowFromBucket = (sid, bucketRows) => {
-            const ts = bucketRows.map(
-              (x) => typeof x?.playedAt === "number" ? x.playedAt : typeof x?.ts === "number" ? x.ts : null
-            ).filter((t) => typeof t === "number" && Number.isFinite(t));
+            const ts = bucketRows.map((x) => extractRowTsMs(x)).filter((t) => typeof t === "number" && Number.isFinite(t));
             const sessionStartTs = ts.length ? Math.min(...ts) : 0;
             const sessionEndTs = ts.length ? Math.max(...ts) : sessionStartTs;
             const gameIds = Array.from(
               new Set(
-                bucketRows.map((x) => typeof x?.gameId === "string" ? x.gameId : typeof x?.game_id === "string" ? x.game_id : "").filter((x) => !!x)
+                bucketRows.map((x) => extractRowGameId(x)).filter((x) => !!x)
               )
             );
             return {
@@ -46500,6 +46539,27 @@ ${describeError(err2)}` : message;
             rounds: Array.isArray(s?.rounds) ? s.rounds : [],
             roundsCount: typeof s?.roundsCount === "number" ? s.roundsCount : Array.isArray(s?.rounds) ? s.rounds.length : 0
           }));
+          if (bySession.size === 0 && Array.isArray(baseSessions) && baseSessions.length > 0) {
+            const gameToSession = /* @__PURE__ */ new Map();
+            for (const s of baseSessions) {
+              const sid = typeof s?.sessionId === "string" ? s.sessionId : "";
+              if (!sid) continue;
+              const gids = Array.isArray(s?.gameIds) ? s.gameIds : [];
+              for (const gid of gids) {
+                if (typeof gid !== "string" || !gid) continue;
+                if (!gameToSession.has(gid)) gameToSession.set(gid, sid);
+              }
+            }
+            for (const r of rows) {
+              const gid = extractRowGameId(r);
+              if (!gid) continue;
+              const sid = gameToSession.get(gid) ?? "";
+              if (!sid) continue;
+              const arr = bySession.get(sid) ?? [];
+              arr.push(r);
+              bySession.set(sid, arr);
+            }
+          }
           if (Array.isArray(baseSessions) && baseSessions.length > 0) {
             const orderedBase = [...baseSessions].sort((a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
             for (const s of orderedBase) {
@@ -46548,9 +46608,7 @@ ${describeError(err2)}` : message;
             return sliced;
           }
         }
-        const tsValues = rows.map(
-          (r) => typeof r.playedAt === "number" ? r.playedAt : typeof r.ts === "number" ? r.ts : null
-        ).filter((x) => typeof x === "number");
+        const tsValues = rows.map((r) => extractRowTsMs(r)).filter((x) => typeof x === "number" && Number.isFinite(x));
         const dataMinTs = tsValues.length ? Math.min(...tsValues) : null;
         const dataMaxTs = tsValues.length ? Math.max(...tsValues) : null;
         let fromTs = context?.dateRange?.fromTs ?? null;
@@ -46702,13 +46760,24 @@ ${describeError(err2)}` : message;
       const yVals = ignoreZeroForRating ? yValsRaw.filter((v) => v !== 0) : yValsRaw;
       const hardMin = measureDef.range?.min;
       const hardMax = measureDef.range?.max;
-      const { minY, maxY } = computeYBounds({
+      let { minY, maxY } = computeYBounds({
         unitFormat,
         values: yVals,
         preferZero,
         hardMin: typeof hardMin === "number" && Number.isFinite(hardMin) ? hardMin : void 0,
         hardMax: typeof hardMax === "number" && Number.isFinite(hardMax) ? hardMax : void 0
       });
+      if (spec.type === "line" && Number.isFinite(minY) && Number.isFinite(maxY) && maxY > minY) {
+        const pad2 = (maxY - minY) * 0.05;
+        minY -= pad2;
+        maxY += pad2;
+        if (unitFormat === "percent") {
+          minY = Math.max(0, minY);
+          maxY = Math.min(1, maxY);
+        }
+        if (typeof hardMin === "number" && Number.isFinite(hardMin)) minY = Math.max(minY, hardMin);
+        if (typeof hardMax === "number" && Number.isFinite(hardMax)) maxY = Math.min(maxY, hardMax);
+      }
       const yRange = Math.max(1e-9, maxY - minY);
       const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.classList.add("ga-chart-svg");
@@ -46758,13 +46827,14 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("font-size", "12");
       xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
       xAxisLabel.setAttribute("opacity", "0.95");
-      const canSessionizeForAxis = dimId === "time_day" && (activeAcc === "period" || activeAcc === "to_date") && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? true : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
+      const canSessionizeForAxis = dimId === "time_day" && (activeAcc === "period" || activeAcc === "to_date") && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(getDatasetForGrain(getActiveGrain())) : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
       const sessionMode = canSessionizeForAxis;
       xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
       svg.appendChild(xAxisLabel);
       if (dimId === "time_day" && data.length > 0) {
         const first = data[0].x;
         const last = data[data.length - 1].x;
+        const sessionTick = (x) => /^\d+$/.test(x) ? `s${x}` : x;
         const lx = doc.createElementNS(svg.namespaceURI, "text");
         lx.setAttribute("x", String(PAD_L + 2));
         lx.setAttribute("y", String(PAD_T + innerH + 18));
@@ -46772,7 +46842,7 @@ ${describeError(err2)}` : message;
         lx.setAttribute("font-size", "10");
         lx.setAttribute("fill", "var(--ga-axis-text)");
         lx.setAttribute("opacity", "0.95");
-        lx.textContent = sessionMode ? `s${first}` : first;
+        lx.textContent = sessionMode ? sessionTick(first) : first;
         svg.appendChild(lx);
         const rx = doc.createElementNS(svg.namespaceURI, "text");
         rx.setAttribute("x", String(PAD_L + innerW - 2));
@@ -46781,7 +46851,7 @@ ${describeError(err2)}` : message;
         rx.setAttribute("font-size", "10");
         rx.setAttribute("fill", "var(--ga-axis-text)");
         rx.setAttribute("opacity", "0.95");
-        rx.textContent = sessionMode ? `s${last}` : last;
+        rx.textContent = sessionMode ? sessionTick(last) : last;
         svg.appendChild(rx);
       }
       const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
@@ -46855,7 +46925,8 @@ ${describeError(err2)}` : message;
           const isFirstValid = prevValidY === null;
           const isLastValid = i === lastValidIdx;
           const changed = !isFirstValid && prevValidY !== p.yVal;
-          const showDot = isFirstValid || isLastValid || changed;
+          const isClickableSessionPoint = sessionMode && activeAcc === "period";
+          const showDot = isClickableSessionPoint || isFirstValid || isLastValid || changed;
           if (!showDot) {
             prevValidY = p.yVal;
             return;
@@ -46869,12 +46940,12 @@ ${describeError(err2)}` : message;
           dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          const xLabel = sessionMode ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+          const xLabel = sessionMode && /^\d+$/.test(String(p.d.x)) ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
           tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
           const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
-          const click = sessionMode ? { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } : normalized;
+          const click = sessionMode && activeAcc === "period" ? { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } : normalized;
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -46882,11 +46953,17 @@ ${describeError(err2)}` : message;
               const ddGrain = drilldownGrainForTarget(click.target);
               const base = getDatasetForGrain(ddGrain);
               const sourceRows = click.filterFromPoint ? p.d.rows : base;
-              const sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+              let sourceRowsGrain = click.filterFromPoint ? sourceGrain : ddGrain;
+              if (click.filterFromPoint && ddGrain === "session") {
+                const first = Array.isArray(sourceRows) && sourceRows.length > 0 ? sourceRows[0] : null;
+                if (first && (typeof first?.sessionId === "string" || typeof first?.sessionIndex === "number" || Array.isArray(first?.gameIds) || Array.isArray(first?.rounds))) {
+                  sourceRowsGrain = "session";
+                }
+              }
               const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
               const filteredRows = applyFilters(rows, click.extraFilters, grain);
               overlay.open(semantic, {
-                title: `${widget.title} - ${sessionMode ? `s${p.d.x}` : p.d.x}`,
+                title: `${widget.title} - ${sessionMode && /^\d+$/.test(String(p.d.x)) ? `s${p.d.x}` : p.d.x}`,
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,
