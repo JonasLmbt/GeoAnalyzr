@@ -926,6 +926,9 @@ export async function renderChartWidget(
           }
         }
 
+        type SessionPoint = { idx: number; sessionRow: any; measureRows: any[] };
+        const points: SessionPoint[] = [];
+
         if (Array.isArray(baseSessions) && baseSessions.length > 0) {
           const orderedBase = [...baseSessions].sort((a: any, b: any) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
           for (const s of orderedBase) {
@@ -935,34 +938,28 @@ export async function renderChartWidget(
             if (bucketRows.length === 0) continue;
             const idx = typeof (s as any)?.sessionIndex === "number" ? (s as any).sessionIndex : toIndex(sid);
             if (idx === null) continue;
+
             const ts = bucketRows
               .map((x) => extractRowTsMs(x))
               .filter((t: any): t is number => typeof t === "number" && Number.isFinite(t));
             const sessionStartTs = ts.length ? Math.min(...ts) : 0;
-            const xKey = String(idx);
-            const yRaw = yForRows(bucketRows);
-            const y = clampForMeasure(semantic, measureId, yRaw);
+
             const bucketLooksLikeRounds = bucketRows.length > 0 && typeof (bucketRows[0] as any)?.roundNumber === "number";
-            out.push({
-              x: xKey,
-              y,
-              rows: [
-                {
-                  ...s,
-                  sessionIndex: idx,
-                  sessionStartTs,
-                  // For round-based charts, drill down into the filtered subset; otherwise keep original session metadata.
-                  rounds: bucketLooksLikeRounds ? bucketRows : Array.isArray((s as any)?.rounds) ? (s as any).rounds : [],
-                  roundsCount: bucketLooksLikeRounds
-                    ? bucketRows.length
-                    : typeof (s as any)?.roundsCount === "number"
-                      ? (s as any).roundsCount
-                      : Array.isArray((s as any)?.rounds)
-                        ? (s as any).rounds.length
-                        : 0
-                }
-              ]
-            });
+            const sessionRow = {
+              ...s,
+              sessionIndex: idx,
+              sessionStartTs,
+              // For round-based charts, drill down into the filtered subset; otherwise keep original session metadata.
+              rounds: bucketLooksLikeRounds ? bucketRows : Array.isArray((s as any)?.rounds) ? (s as any).rounds : [],
+              roundsCount: bucketLooksLikeRounds
+                ? bucketRows.length
+                : typeof (s as any)?.roundsCount === "number"
+                  ? (s as any).roundsCount
+                  : Array.isArray((s as any)?.rounds)
+                    ? (s as any).rounds.length
+                    : 0
+            };
+            points.push({ idx, sessionRow, measureRows: bucketRows });
           }
         } else if (bySession.size > 0) {
           const ordered = Array.from(bySession.entries())
@@ -972,15 +969,28 @@ export async function renderChartWidget(
 
           for (const { sid, bucketRows, idx } of ordered) {
             if (bucketRows.length === 0) continue;
-            const yRaw = yForRows(bucketRows);
-            const y = clampForMeasure(semantic, measureId, yRaw);
             const s = mkSessionRowFromBucket(sid, bucketRows);
-            out.push({ x: String(idx), y, rows: [{ ...s, sessionIndex: idx }] });
+            points.push({ idx, sessionRow: { ...s, sessionIndex: idx }, measureRows: bucketRows });
           }
         }
 
-        if (out.length > 0) {
-          return out.length > maxPoints ? out.slice(out.length - maxPoints) : out;
+        if (points.length > 0) {
+          // If there are too many sessions to render, compress them into sequential buckets
+          // starting from session #1 (instead of dropping early sessions).
+          const bucketSize = points.length > maxPoints ? Math.ceil(points.length / maxPoints) : 1;
+          const out: Datum[] = [];
+          for (let i = 0; i < points.length; i += bucketSize) {
+            const slice = points.slice(i, i + bucketSize);
+            if (slice.length === 0) continue;
+            const idxMin = slice[0].idx;
+            const idxMax = slice[slice.length - 1].idx;
+            const x = idxMin === idxMax ? String(idxMin) : `${idxMin}..${idxMax}`;
+            const measureRows = slice.flatMap((p) => p.measureRows);
+            const sessionRows = slice.map((p) => p.sessionRow);
+            const yRaw = yForRows(measureRows);
+            out.push({ x, y: clampForMeasure(semantic, measureId, yRaw), rows: sessionRows });
+          }
+          return out;
         }
       }
 
@@ -1377,13 +1387,13 @@ export async function renderChartWidget(
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title") as unknown as SVGTitleElement;
         const dateLabel = formatDimensionKey(doc, dimId, p.d.x);
-        const sessionMeta = sessionMode && Array.isArray(p.d.rows) && p.d.rows.length > 0 ? (p.d.rows[0] as any) : null;
-        const sessionIdx = typeof sessionMeta?.sessionIndex === "number" && Number.isFinite(sessionMeta.sessionIndex) ? sessionMeta.sessionIndex : null;
-        const sessionDate =
-          typeof sessionMeta?.sessionStartTs === "number" && Number.isFinite(sessionMeta.sessionStartTs)
-            ? toDayKey(sessionMeta.sessionStartTs)
-            : "";
-        const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx}${sessionDate ? ` (${sessionDate})` : ""}` : dateLabel;
+        const sessionRows = sessionMode && Array.isArray(p.d.rows) ? (p.d.rows as any[]) : [];
+        const sessionIdxs = sessionRows
+          .map((x) => (typeof x?.sessionIndex === "number" && Number.isFinite(x.sessionIndex) ? x.sessionIndex : null))
+          .filter((x: any): x is number => typeof x === "number");
+        const idxMin = sessionIdxs.length ? Math.min(...sessionIdxs) : null;
+        const idxMax = sessionIdxs.length ? Math.max(...sessionIdxs) : null;
+        const xLabel = sessionMode && idxMin !== null ? (idxMax !== null && idxMax !== idxMin ? `s${idxMin}..s${idxMax}` : `s${idxMin}`) : dateLabel;
         tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
@@ -1417,8 +1427,9 @@ export async function renderChartWidget(
             }
             const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows as any[]);
             const filteredRows = applyFilters(rows, click.extraFilters, grain);
+            const titleLabel = sessionMode && idxMin !== null ? (idxMax !== null && idxMax !== idxMin ? `s${idxMin}..s${idxMax}` : `s${idxMin}`) : p.d.x;
             overlay.open(semantic, {
-              title: `${widget.title} - ${sessionMode && sessionIdx !== null ? `s${sessionIdx}` : p.d.x}`,
+              title: `${widget.title} - ${titleLabel}`,
               target: click.target,
               columnsPreset: click.columnsPreset,
               rows: filteredRows,

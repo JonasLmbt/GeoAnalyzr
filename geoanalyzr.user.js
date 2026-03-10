@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.14
+// @version      2.3.15
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -46533,6 +46533,7 @@ ${describeError(err2)}` : message;
               bySession.set(sid, arr);
             }
           }
+          const points = [];
           if (Array.isArray(baseSessions) && baseSessions.length > 0) {
             const orderedBase = [...baseSessions].sort((a, b) => Number(a?.sessionIndex ?? 0) - Number(b?.sessionIndex ?? 0));
             for (const s of orderedBase) {
@@ -46544,37 +46545,40 @@ ${describeError(err2)}` : message;
               if (idx === null) continue;
               const ts = bucketRows.map((x) => extractRowTsMs(x)).filter((t) => typeof t === "number" && Number.isFinite(t));
               const sessionStartTs = ts.length ? Math.min(...ts) : 0;
-              const xKey = String(idx);
-              const yRaw = yForRows(bucketRows);
-              const y = clampForMeasure(semantic, measureId, yRaw);
               const bucketLooksLikeRounds = bucketRows.length > 0 && typeof bucketRows[0]?.roundNumber === "number";
-              out2.push({
-                x: xKey,
-                y,
-                rows: [
-                  {
-                    ...s,
-                    sessionIndex: idx,
-                    sessionStartTs,
-                    // For round-based charts, drill down into the filtered subset; otherwise keep original session metadata.
-                    rounds: bucketLooksLikeRounds ? bucketRows : Array.isArray(s?.rounds) ? s.rounds : [],
-                    roundsCount: bucketLooksLikeRounds ? bucketRows.length : typeof s?.roundsCount === "number" ? s.roundsCount : Array.isArray(s?.rounds) ? s.rounds.length : 0
-                  }
-                ]
-              });
+              const sessionRow = {
+                ...s,
+                sessionIndex: idx,
+                sessionStartTs,
+                // For round-based charts, drill down into the filtered subset; otherwise keep original session metadata.
+                rounds: bucketLooksLikeRounds ? bucketRows : Array.isArray(s?.rounds) ? s.rounds : [],
+                roundsCount: bucketLooksLikeRounds ? bucketRows.length : typeof s?.roundsCount === "number" ? s.roundsCount : Array.isArray(s?.rounds) ? s.rounds.length : 0
+              };
+              points.push({ idx, sessionRow, measureRows: bucketRows });
             }
           } else if (bySession.size > 0) {
             const ordered = Array.from(bySession.entries()).map(([sid, bucketRows]) => ({ sid, bucketRows, idx: toIndex(sid) ?? 0 })).filter((x) => x.idx > 0).sort((a, b) => a.idx - b.idx);
             for (const { sid, bucketRows, idx } of ordered) {
               if (bucketRows.length === 0) continue;
-              const yRaw = yForRows(bucketRows);
-              const y = clampForMeasure(semantic, measureId, yRaw);
               const s = mkSessionRowFromBucket(sid, bucketRows);
-              out2.push({ x: String(idx), y, rows: [{ ...s, sessionIndex: idx }] });
+              points.push({ idx, sessionRow: { ...s, sessionIndex: idx }, measureRows: bucketRows });
             }
           }
-          if (out2.length > 0) {
-            return out2.length > maxPoints2 ? out2.slice(out2.length - maxPoints2) : out2;
+          if (points.length > 0) {
+            const bucketSize = points.length > maxPoints2 ? Math.ceil(points.length / maxPoints2) : 1;
+            const out3 = [];
+            for (let i = 0; i < points.length; i += bucketSize) {
+              const slice = points.slice(i, i + bucketSize);
+              if (slice.length === 0) continue;
+              const idxMin = slice[0].idx;
+              const idxMax = slice[slice.length - 1].idx;
+              const x = idxMin === idxMax ? String(idxMin) : `${idxMin}..${idxMax}`;
+              const measureRows = slice.flatMap((p) => p.measureRows);
+              const sessionRows = slice.map((p) => p.sessionRow);
+              const yRaw = yForRows(measureRows);
+              out3.push({ x, y: clampForMeasure(semantic, measureId, yRaw), rows: sessionRows });
+            }
+            return out3;
           }
         }
         const tsValues = rows.map((r) => extractRowTsMs(r)).filter((x) => typeof x === "number" && Number.isFinite(x));
@@ -46910,10 +46914,11 @@ ${describeError(err2)}` : message;
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
           const dateLabel = formatDimensionKey(doc, dimId, p.d.x);
-          const sessionMeta = sessionMode && Array.isArray(p.d.rows) && p.d.rows.length > 0 ? p.d.rows[0] : null;
-          const sessionIdx = typeof sessionMeta?.sessionIndex === "number" && Number.isFinite(sessionMeta.sessionIndex) ? sessionMeta.sessionIndex : null;
-          const sessionDate = typeof sessionMeta?.sessionStartTs === "number" && Number.isFinite(sessionMeta.sessionStartTs) ? toDayKey(sessionMeta.sessionStartTs) : "";
-          const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx}${sessionDate ? ` (${sessionDate})` : ""}` : dateLabel;
+          const sessionRows = sessionMode && Array.isArray(p.d.rows) ? p.d.rows : [];
+          const sessionIdxs = sessionRows.map((x) => typeof x?.sessionIndex === "number" && Number.isFinite(x.sessionIndex) ? x.sessionIndex : null).filter((x) => typeof x === "number");
+          const idxMin = sessionIdxs.length ? Math.min(...sessionIdxs) : null;
+          const idxMax = sessionIdxs.length ? Math.max(...sessionIdxs) : null;
+          const xLabel = sessionMode && idxMin !== null ? idxMax !== null && idxMax !== idxMin ? `s${idxMin}..s${idxMax}` : `s${idxMin}` : dateLabel;
           tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
@@ -46935,8 +46940,9 @@ ${describeError(err2)}` : message;
               }
               const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
               const filteredRows = applyFilters(rows, click.extraFilters, grain);
+              const titleLabel = sessionMode && idxMin !== null ? idxMax !== null && idxMax !== idxMin ? `s${idxMin}..s${idxMax}` : `s${idxMin}` : p.d.x;
               overlay.open(semantic, {
-                title: `${widget.title} - ${sessionMode && sessionIdx !== null ? `s${sessionIdx}` : p.d.x}`,
+                title: `${widget.title} - ${titleLabel}`,
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,
