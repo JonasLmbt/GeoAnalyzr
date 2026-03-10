@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.14-dev
+// @version      2.3.15-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -17,6 +17,7 @@
 // @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
+// @connect      api-bdc.io
 // @connect      www.geoboundaries.org
 // ==/UserScript==
 (() => {
@@ -7197,6 +7198,20 @@ ${shapes}`.trim();
   }
 
   // src/http.ts
+  function parseRawHeaders(raw) {
+    const out = {};
+    if (typeof raw !== "string" || !raw.trim()) return out;
+    for (const line of raw.split(/\r?\n/)) {
+      const idx = line.indexOf(":");
+      if (idx <= 0) continue;
+      const k = line.slice(0, idx).trim().toLowerCase();
+      const v = line.slice(idx + 1).trim();
+      if (!k) continue;
+      if (out[k]) out[k] = `${out[k]}, ${v}`;
+      else out[k] = v;
+    }
+    return out;
+  }
   function gmRequest(url, opts) {
     return new Promise((resolve, reject) => {
       const gm = getGmXmlhttpRequest();
@@ -7211,9 +7226,11 @@ ${shapes}`.trim();
         headers,
         onload: (res) => {
           const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
           resolve({
             status: Number(res?.status) || 0,
             text,
+            headers: parseRawHeaders(rawHeaders),
             json: () => JSON.parse(text)
           });
         },
@@ -7227,11 +7244,64 @@ ${shapes}`.trim();
   async function httpGetJson(url, opts) {
     if (opts?.forceGm && hasGmXmlhttpRequest()) {
       const res2 = await gmRequest(url, { headers: opts?.headers });
-      return { status: res2.status, data: res2.json() };
+      try {
+        return { status: res2.status, data: res2.json(), headers: res2.headers, text: res2.text };
+      } catch {
+        return { status: res2.status, data: null, headers: res2.headers, text: res2.text };
+      }
     }
     const res = await fetch(url, { credentials: "include", headers: opts?.headers });
-    const data = await res.json();
-    return { status: res.status, data };
+    const headers = {};
+    try {
+      res.headers.forEach((v, k) => {
+        headers[String(k).toLowerCase()] = String(v);
+      });
+    } catch {
+    }
+    const text = await res.text();
+    try {
+      return { status: res.status, data: JSON.parse(text), headers, text };
+    } catch {
+      return { status: res.status, data: null, headers, text };
+    }
+  }
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  function retryDelayMs(attempt, baseMs, maxMs) {
+    const exp = Math.min(maxMs, Math.floor(baseMs * Math.pow(2, attempt)));
+    const jitter = Math.floor(Math.random() * 250);
+    return Math.min(maxMs, exp + jitter);
+  }
+  function parseRetryAfterMs(h) {
+    const ra = h["retry-after"];
+    if (!ra) return null;
+    const n = Number(ra);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n * 1e3);
+    const t = Date.parse(ra);
+    if (Number.isFinite(t)) {
+      const ms = t - Date.now();
+      return ms > 0 ? ms : 0;
+    }
+    return null;
+  }
+  async function httpGetJsonWithRetry(url, opts) {
+    const retries = typeof opts?.retries === "number" && Number.isFinite(opts.retries) ? Math.max(0, Math.floor(opts.retries)) : 4;
+    const baseDelayMs = typeof opts?.baseDelayMs === "number" && Number.isFinite(opts.baseDelayMs) ? Math.max(50, Math.floor(opts.baseDelayMs)) : 400;
+    const maxDelayMs = typeof opts?.maxDelayMs === "number" && Number.isFinite(opts.maxDelayMs) ? Math.max(baseDelayMs, Math.floor(opts.maxDelayMs)) : 8e3;
+    let last = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const res = await httpGetJson(url, { forceGm: opts?.forceGm, headers: opts?.headers });
+      last = res;
+      const status = res.status;
+      const shouldRetry = status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 504 || status === 0;
+      if (!shouldRetry) return res;
+      if (attempt >= retries) return res;
+      const ra = status === 429 ? parseRetryAfterMs(res.headers) : null;
+      const waitMs = ra !== null ? Math.min(maxDelayMs, Math.max(0, ra)) : retryDelayMs(attempt, baseDelayMs, maxDelayMs);
+      await sleep(waitMs);
+    }
+    return last ?? { status: 0, data: null, headers: {} };
   }
 
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
@@ -8050,7 +8120,7 @@ ${shapes}`.trim();
     return { lat, lng };
   }
   async function reverseGeocodeCountry(lat, lng) {
-    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`;
+    const url = `https://api-bdc.io/data/reverse-geocode-client?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`;
     try {
       const res = await httpGetJson(url, { forceGm: true });
       if (res.status < 200 || res.status >= 300) return void 0;
@@ -8326,7 +8396,7 @@ ${shapes}`.trim();
     if (profileCache.has(key)) return profileCache.get(key);
     try {
       const url = `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(key)}`;
-      const res = await httpGetJson(url);
+      const res = await httpGetJsonWithRetry(url, { retries: 3, baseDelayMs: 400, maxDelayMs: 6e3 });
       if (res.status < 200 || res.status >= 300) {
         profileCache.set(key, {});
         return profileCache.get(key);
@@ -8411,7 +8481,7 @@ ${shapes}`.trim();
     const failures = [];
     for (const endpoint of endpoints) {
       try {
-        const res = await httpGetJson(endpoint);
+        const res = await httpGetJsonWithRetry(endpoint, { retries: 6, baseDelayMs: 600, maxDelayMs: 2e4 });
         if (res.status < 200 || res.status >= 300) {
           failures.push(`${endpoint} -> HTTP ${res.status}`);
           continue;
@@ -9013,7 +9083,7 @@ ${shapes}`.trim();
   async function fetchFeedPage(paginationToken) {
     const base = "https://www.geoguessr.com/api/v4/feed/private";
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-    const res = await httpGetJson(url);
+    const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3 });
     if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
     return res.data;
   }

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.12
+// @version      2.3.13
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -17,6 +17,7 @@
 // @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
+// @connect      api-bdc.io
 // @connect      www.geoboundaries.org
 // ==/UserScript==
 (() => {
@@ -7197,6 +7198,20 @@ ${shapes}`.trim();
   }
 
   // src/http.ts
+  function parseRawHeaders(raw) {
+    const out = {};
+    if (typeof raw !== "string" || !raw.trim()) return out;
+    for (const line of raw.split(/\r?\n/)) {
+      const idx = line.indexOf(":");
+      if (idx <= 0) continue;
+      const k = line.slice(0, idx).trim().toLowerCase();
+      const v = line.slice(idx + 1).trim();
+      if (!k) continue;
+      if (out[k]) out[k] = `${out[k]}, ${v}`;
+      else out[k] = v;
+    }
+    return out;
+  }
   function gmRequest(url, opts) {
     return new Promise((resolve, reject) => {
       const gm = getGmXmlhttpRequest();
@@ -7211,9 +7226,11 @@ ${shapes}`.trim();
         headers,
         onload: (res) => {
           const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
           resolve({
             status: Number(res?.status) || 0,
             text,
+            headers: parseRawHeaders(rawHeaders),
             json: () => JSON.parse(text)
           });
         },
@@ -7227,11 +7244,64 @@ ${shapes}`.trim();
   async function httpGetJson(url, opts) {
     if (opts?.forceGm && hasGmXmlhttpRequest()) {
       const res2 = await gmRequest(url, { headers: opts?.headers });
-      return { status: res2.status, data: res2.json() };
+      try {
+        return { status: res2.status, data: res2.json(), headers: res2.headers, text: res2.text };
+      } catch {
+        return { status: res2.status, data: null, headers: res2.headers, text: res2.text };
+      }
     }
     const res = await fetch(url, { credentials: "include", headers: opts?.headers });
-    const data = await res.json();
-    return { status: res.status, data };
+    const headers = {};
+    try {
+      res.headers.forEach((v, k) => {
+        headers[String(k).toLowerCase()] = String(v);
+      });
+    } catch {
+    }
+    const text = await res.text();
+    try {
+      return { status: res.status, data: JSON.parse(text), headers, text };
+    } catch {
+      return { status: res.status, data: null, headers, text };
+    }
+  }
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  function retryDelayMs(attempt, baseMs, maxMs) {
+    const exp = Math.min(maxMs, Math.floor(baseMs * Math.pow(2, attempt)));
+    const jitter = Math.floor(Math.random() * 250);
+    return Math.min(maxMs, exp + jitter);
+  }
+  function parseRetryAfterMs(h) {
+    const ra = h["retry-after"];
+    if (!ra) return null;
+    const n = Number(ra);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n * 1e3);
+    const t = Date.parse(ra);
+    if (Number.isFinite(t)) {
+      const ms = t - Date.now();
+      return ms > 0 ? ms : 0;
+    }
+    return null;
+  }
+  async function httpGetJsonWithRetry(url, opts) {
+    const retries = typeof opts?.retries === "number" && Number.isFinite(opts.retries) ? Math.max(0, Math.floor(opts.retries)) : 4;
+    const baseDelayMs = typeof opts?.baseDelayMs === "number" && Number.isFinite(opts.baseDelayMs) ? Math.max(50, Math.floor(opts.baseDelayMs)) : 400;
+    const maxDelayMs = typeof opts?.maxDelayMs === "number" && Number.isFinite(opts.maxDelayMs) ? Math.max(baseDelayMs, Math.floor(opts.maxDelayMs)) : 8e3;
+    let last = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const res = await httpGetJson(url, { forceGm: opts?.forceGm, headers: opts?.headers });
+      last = res;
+      const status = res.status;
+      const shouldRetry = status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 504 || status === 0;
+      if (!shouldRetry) return res;
+      if (attempt >= retries) return res;
+      const ra = status === 429 ? parseRetryAfterMs(res.headers) : null;
+      const waitMs = ra !== null ? Math.min(maxDelayMs, Math.max(0, ra)) : retryDelayMs(attempt, baseDelayMs, maxDelayMs);
+      await sleep(waitMs);
+    }
+    return last ?? { status: 0, data: null, headers: {} };
   }
 
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
@@ -8050,7 +8120,7 @@ ${shapes}`.trim();
     return { lat, lng };
   }
   async function reverseGeocodeCountry(lat, lng) {
-    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`;
+    const url = `https://api-bdc.io/data/reverse-geocode-client?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`;
     try {
       const res = await httpGetJson(url, { forceGm: true });
       if (res.status < 200 || res.status >= 300) return void 0;
@@ -8326,7 +8396,7 @@ ${shapes}`.trim();
     if (profileCache.has(key)) return profileCache.get(key);
     try {
       const url = `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(key)}`;
-      const res = await httpGetJson(url);
+      const res = await httpGetJsonWithRetry(url, { retries: 3, baseDelayMs: 400, maxDelayMs: 6e3 });
       if (res.status < 200 || res.status >= 300) {
         profileCache.set(key, {});
         return profileCache.get(key);
@@ -8411,7 +8481,7 @@ ${shapes}`.trim();
     const failures = [];
     for (const endpoint of endpoints) {
       try {
-        const res = await httpGetJson(endpoint);
+        const res = await httpGetJsonWithRetry(endpoint, { retries: 6, baseDelayMs: 600, maxDelayMs: 2e4 });
         if (res.status < 200 || res.status >= 300) {
           failures.push(`${endpoint} -> HTTP ${res.status}`);
           continue;
@@ -9013,7 +9083,7 @@ ${shapes}`.trim();
   async function fetchFeedPage(paginationToken) {
     const base = "https://www.geoguessr.com/api/v4/feed/private";
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-    const res = await httpGetJson(url);
+    const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3 });
     if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
     return res.data;
   }
@@ -45806,17 +45876,18 @@ ${describeError(err2)}` : message;
     if (mode === "asc") return "Ascending";
     return "Descending";
   }
-  function accumulationLabelForContext(mode, dimId, canSessionize) {
+  function accumulationLabel(mode) {
     if (mode === "to_date") return "To date";
-    if (canSessionize && dimId === "time_day") return "Per session";
-    if (dimId.startsWith("session_")) return "Per session";
+    if (mode === "session") return "Per session";
     return "Per period";
+  }
+  function accumulationLabelForContext(mode, _dimId, _canSessionize) {
+    return accumulationLabel(mode);
   }
   function toDayKey(ts) {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
-  var SESSION_WARMUP_ROUNDS = 10;
   var DEFAULT_SESSION_GAP_MINUTES = 45;
   function coerceTimestampMs(v) {
     if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -46260,6 +46331,7 @@ ${describeError(err2)}` : message;
     }
     if (accModes.length === 0 && spec.type === "line" && dimDef.ordered) {
       accModes.push("period", "to_date");
+      if (dimId === "time_day") accModes.push("session");
     }
     let activeAcc = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
     if (!accModes.includes(activeAcc)) accModes.unshift(activeAcc);
@@ -46321,7 +46393,9 @@ ${describeError(err2)}` : message;
       select.style.padding = "4px 8px";
       const baseForMode = getDatasetForGrain(getActiveGrain());
       const canSessionizeForMode = dimId === "time_day" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(baseForMode) : canSessionizeFromRows(baseForMode));
-      for (const mode of accModes) {
+      const visibleAccModes = accModes.filter((m) => m !== "session" || canSessionizeForMode);
+      if (!visibleAccModes.includes(activeAcc)) activeAcc = visibleAccModes[0] ?? "period";
+      for (const mode of visibleAccModes) {
         const option = doc.createElement("option");
         option.value = mode;
         option.textContent = accumulationLabelForContext(mode, dimId, canSessionizeForMode);
@@ -46330,7 +46404,7 @@ ${describeError(err2)}` : message;
       }
       select.addEventListener("change", () => {
         const next = select.value;
-        if (!accModes.includes(next)) return;
+        if (!visibleAccModes.includes(next)) return;
         activeAcc = next;
         render();
       });
@@ -46386,7 +46460,7 @@ ${describeError(err2)}` : message;
       if (dimId === "time_day") {
         const providedSessions = getDatasetForGrain("session");
         const canSessionizeWithProvidedSessions = Array.isArray(providedSessions) && providedSessions.length > 0 && hasAnyGameIds(rows);
-        if ((activeAcc === "period" || activeAcc === "to_date") && (canSessionizeFromRows(rows) || canSessionizeWithProvidedSessions)) {
+        if (activeAcc === "session" && (canSessionizeFromRows(rows) || canSessionizeWithProvidedSessions)) {
           const maxPoints2 = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1 ? Math.floor(spec.maxPoints) : 50;
           const bySession = /* @__PURE__ */ new Map();
           for (const r of rows) {
@@ -46461,9 +46535,26 @@ ${describeError(err2)}` : message;
               if (bucketRows.length === 0) continue;
               const idx = typeof s?.sessionIndex === "number" ? s.sessionIndex : toIndex(sid);
               if (idx === null) continue;
+              const ts = bucketRows.map((x) => extractRowTsMs(x)).filter((t) => typeof t === "number" && Number.isFinite(t));
+              const sessionStartTs = ts.length ? Math.min(...ts) : 0;
+              const xKey = sessionStartTs ? toDayKey(sessionStartTs) : String(idx);
               const yRaw = yForRows(bucketRows);
               const y = clampForMeasure(semantic, measureId, yRaw);
-              out2.push({ x: String(idx), y, rows: [{ ...s, rounds: bucketRows, roundsCount: bucketRows.length }] });
+              const bucketLooksLikeRounds = bucketRows.length > 0 && typeof bucketRows[0]?.roundNumber === "number";
+              out2.push({
+                x: xKey,
+                y,
+                rows: [
+                  {
+                    ...s,
+                    sessionIndex: idx,
+                    sessionStartTs,
+                    // For round-based charts, drill down into the filtered subset; otherwise keep original session metadata.
+                    rounds: bucketLooksLikeRounds ? bucketRows : Array.isArray(s?.rounds) ? s.rounds : [],
+                    roundsCount: bucketLooksLikeRounds ? bucketRows.length : typeof s?.roundsCount === "number" ? s.roundsCount : Array.isArray(s?.rounds) ? s.rounds.length : 0
+                  }
+                ]
+              });
             }
           } else if (bySession.size > 0) {
             const ordered = Array.from(bySession.entries()).map(([sid, bucketRows]) => ({ sid, bucketRows, idx: toIndex(sid) ?? 0 })).filter((x) => x.idx > 0).sort((a, b) => a.idx - b.idx);
@@ -46471,33 +46562,13 @@ ${describeError(err2)}` : message;
               if (bucketRows.length === 0) continue;
               const yRaw = yForRows(bucketRows);
               const y = clampForMeasure(semantic, measureId, yRaw);
-              out2.push({ x: String(idx), y, rows: [mkSessionRowFromBucket(sid, bucketRows)] });
+              const s = mkSessionRowFromBucket(sid, bucketRows);
+              const xKey = typeof s?.sessionStartTs === "number" && Number.isFinite(s.sessionStartTs) ? toDayKey(s.sessionStartTs) : String(idx);
+              out2.push({ x: xKey, y, rows: [{ ...s, sessionIndex: idx }] });
             }
           }
           if (out2.length > 0) {
-            const sliced = out2.length > maxPoints2 ? out2.slice(out2.length - maxPoints2) : out2;
-            if (activeAcc === "to_date") {
-              const cum = [];
-              let cumRounds = 0;
-              const outCum = [];
-              for (const d of sliced) {
-                const s = d.rows && d.rows[0] || null;
-                const bucketRounds = Array.isArray(s?.rounds) ? s.rounds : [];
-                if (bucketRounds.length) {
-                  cum.push(...bucketRounds);
-                  cumRounds += bucketRounds.length;
-                }
-                if (outCum.length === 0) {
-                  if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
-                  const firstN = cum.slice(0, SESSION_WARMUP_ROUNDS);
-                  outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(firstN)), rows: firstN.slice() });
-                  continue;
-                }
-                outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
-              }
-              return outCum;
-            }
-            return sliced;
+            return out2.length > maxPoints2 ? out2.slice(out2.length - maxPoints2) : out2;
           }
         }
         const tsValues = rows.map((r) => extractRowTsMs(r)).filter((x) => typeof x === "number" && Number.isFinite(x));
@@ -46719,14 +46790,13 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("font-size", "12");
       xAxisLabel.setAttribute("fill", "var(--ga-axis-text)");
       xAxisLabel.setAttribute("opacity", "0.95");
-      const canSessionizeForAxis = dimId === "time_day" && (activeAcc === "period" || activeAcc === "to_date") && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(getDatasetForGrain(getActiveGrain())) : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
+      const canSessionizeForAxis = dimId === "time_day" && activeAcc === "session" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(getDatasetForGrain(getActiveGrain())) : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
       const sessionMode = canSessionizeForAxis;
-      xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
+      xAxisLabel.textContent = dimDef.label;
       svg.appendChild(xAxisLabel);
       if (dimId === "time_day" && data.length > 0) {
         const first = data[0].x;
         const last = data[data.length - 1].x;
-        const sessionTick = (x) => /^\d+$/.test(x) ? `s${x}` : x;
         const lx = doc.createElementNS(svg.namespaceURI, "text");
         lx.setAttribute("x", String(PAD_L + 2));
         lx.setAttribute("y", String(PAD_T + innerH + 18));
@@ -46734,7 +46804,7 @@ ${describeError(err2)}` : message;
         lx.setAttribute("font-size", "10");
         lx.setAttribute("fill", "var(--ga-axis-text)");
         lx.setAttribute("opacity", "0.95");
-        lx.textContent = sessionMode ? sessionTick(first) : first;
+        lx.textContent = first;
         svg.appendChild(lx);
         const rx = doc.createElementNS(svg.namespaceURI, "text");
         rx.setAttribute("x", String(PAD_L + innerW - 2));
@@ -46743,7 +46813,7 @@ ${describeError(err2)}` : message;
         rx.setAttribute("font-size", "10");
         rx.setAttribute("fill", "var(--ga-axis-text)");
         rx.setAttribute("opacity", "0.95");
-        rx.textContent = sessionMode ? sessionTick(last) : last;
+        rx.textContent = last;
         svg.appendChild(rx);
       }
       const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
@@ -46817,7 +46887,7 @@ ${describeError(err2)}` : message;
           const isFirstValid = prevValidY === null;
           const isLastValid = i === lastValidIdx;
           const changed = !isFirstValid && prevValidY !== p.yVal;
-          const isClickableSessionPoint = sessionMode && activeAcc === "period";
+          const isClickableSessionPoint = sessionMode && activeAcc === "session";
           const showDot = isClickableSessionPoint || isFirstValid || isLastValid || changed;
           if (!showDot) {
             prevValidY = p.yVal;
@@ -46832,12 +46902,15 @@ ${describeError(err2)}` : message;
           dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
           dot.setAttribute("opacity", "0.95");
           const tooltip = doc.createElementNS(svg.namespaceURI, "title");
-          const xLabel = sessionMode && /^\d+$/.test(String(p.d.x)) ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+          const dateLabel = formatDimensionKey(doc, dimId, p.d.x);
+          const sessionMeta = sessionMode && Array.isArray(p.d.rows) && p.d.rows.length > 0 ? p.d.rows[0] : null;
+          const sessionIdx = typeof sessionMeta?.sessionIndex === "number" && Number.isFinite(sessionMeta.sessionIndex) ? sessionMeta.sessionIndex : null;
+          const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx} (${dateLabel})` : dateLabel;
           tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);
           const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
-          const click = sessionMode && activeAcc === "period" ? { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } : normalized;
+          const click = sessionMode && activeAcc === "session" ? { type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } : normalized;
           if (click?.type === "drilldown") {
             dot.setAttribute("style", "cursor: pointer;");
             dot.addEventListener("click", () => {
@@ -46855,7 +46928,7 @@ ${describeError(err2)}` : message;
               const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows);
               const filteredRows = applyFilters(rows, click.extraFilters, grain);
               overlay.open(semantic, {
-                title: `${widget.title} - ${sessionMode && /^\d+$/.test(String(p.d.x)) ? `s${p.d.x}` : p.d.x}`,
+                title: `${widget.title} - ${sessionMode && sessionIdx !== null ? `s${sessionIdx}` : p.d.x}`,
                 target: click.target,
                 columnsPreset: click.columnsPreset,
                 rows: filteredRows,

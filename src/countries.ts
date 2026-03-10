@@ -38,7 +38,7 @@ function normalizeLatLng(lat?: number, lng?: number): { lat?: number; lng?: numb
 
 async function reverseGeocodeCountry(lat: number, lng: number): Promise<string | undefined> {
   const url =
-    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(String(lat))}` +
+    `https://api-bdc.io/data/reverse-geocode-client?latitude=${encodeURIComponent(String(lat))}` +
     `&longitude=${encodeURIComponent(String(lng))}&localityLanguage=en`;
 
   try {

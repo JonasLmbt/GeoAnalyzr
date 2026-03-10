@@ -1,5 +1,5 @@
 import { db, FeedGameRow, ModeFamily } from "./db";
-import { httpGetJson } from "./http";
+import { httpGetJsonWithRetry } from "./http";
 import { fetchDetailsForGames } from "./details";
 
 function etaLabel(ms: number): string {
@@ -129,7 +129,7 @@ function extractGameMode(ev: any, entry: any): string | undefined {
 async function fetchFeedPage(paginationToken?: string): Promise<any> {
   const base = "https://www.geoguessr.com/api/v4/feed/private";
   const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-  const res = await httpGetJson(url);
+  const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15000 });
   if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
   return res.data;
 }

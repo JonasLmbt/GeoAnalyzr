@@ -3,7 +3,7 @@ const esbuild = require("esbuild");
 const outFile = process.argv[2] || "geoanalyzr.user.js";
 const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 
-const version = isDev ? "2.3.14-dev" : "2.3.12";
+const version = isDev ? "2.3.15-dev" : "2.3.13";
 
 const banner = `// ==UserScript==
 // @name         ${isDev ? "GeoAnalyzr (Dev)" : "GeoAnalyzr"}
@@ -24,6 +24,7 @@ const banner = `// ==UserScript==
 // @connect      objects.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      api.bigdatacloud.net
+// @connect      api-bdc.io
 // @connect      www.geoboundaries.org
 // ==/UserScript==`;
 

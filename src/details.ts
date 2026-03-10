@@ -9,7 +9,7 @@ import {
   RoundRowDuel,
   RoundRowTeamDuel
 } from "./db";
-import { httpGetJson } from "./http";
+import { httpGetJsonWithRetry } from "./http";
 import { resolveCountryCodeByLatLng } from "./countries";
 import { computeGameAggFromRounds } from "./engine/gameAgg";
 
@@ -191,7 +191,7 @@ async function getProfile(playerId?: string): Promise<{ nick?: string; countryCo
   if (profileCache.has(key)) return profileCache.get(key);
   try {
     const url = `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(key)}`;
-    const res = await httpGetJson(url);
+    const res = await httpGetJsonWithRetry(url, { retries: 3, baseDelayMs: 400, maxDelayMs: 6000 });
     if (res.status < 200 || res.status >= 300) {
       profileCache.set(key, {});
       return profileCache.get(key);
@@ -283,7 +283,7 @@ async function fetchDetailJson(game: FeedGameRow): Promise<{ data: any; endpoint
 
   for (const endpoint of endpoints) {
     try {
-      const res = await httpGetJson(endpoint);
+      const res = await httpGetJsonWithRetry(endpoint, { retries: 6, baseDelayMs: 600, maxDelayMs: 20000 });
       if (res.status < 200 || res.status >= 300) {
         failures.push(`${endpoint} -> HTTP ${res.status}`);
         continue;
