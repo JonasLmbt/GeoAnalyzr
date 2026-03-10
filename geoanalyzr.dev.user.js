@@ -53028,6 +53028,22 @@ ${describe(error)}`;
         status.flushNow("Update started...");
         const resolved = await getResolvedNcfaToken();
         const ncfa = resolved.token;
+        try {
+          status.push("Checking login/session...");
+          const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private", { ncfa: void 0, forceGm: false });
+          if (probe.status === 401 || probe.status === 403) {
+            status.flushNow("Error: Not authenticated. Please log in on geoguessr.com first.");
+            alert(
+              `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).
+
+Please make sure you're logged in on geoguessr.com, then try again.
+
+If this persists in your setup, you can still use the optional NCFA token in Settings.`
+            );
+            return;
+          }
+        } catch {
+        }
         const res = await updateData({
           onStatus: (m) => status.push(m),
           maxPages: 5e3,
