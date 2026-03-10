@@ -1,5 +1,17 @@
-import { db } from "./db";
-import { httpGetJson } from "./http";
+// Legacy (disabled): NCFA token support
+//
+// GeoAnalyzr previously supported an `_ncfa` cookie/token override to fetch
+// private feed endpoints via GM requests. This was removed because it caused
+// fragility and user confusion. If we ever want to restore it, the original
+// implementation is kept below for quick reference.
+//
+// NOTE: This module is intentionally NOT imported anywhere.
+
+export {};
+
+/*
+import { db } from "../db";
+import { httpGetJson } from "../http";
 
 const AUTH_META_KEY = "auth";
 
@@ -65,8 +77,9 @@ export async function validateNcfaToken(token?: string): Promise<NcfaValidationR
   if (basic) return basic;
 
   try {
+    // This used to pass `ncfa` through our HTTP layer.
+    // It needs to be reintroduced there as well if we ever restore NCFA.
     const res = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private", {
-      ncfa: clean,
       forceGm: true
     });
     if (res.status >= 200 && res.status < 300) {
@@ -90,3 +103,5 @@ export async function validateNcfaToken(token?: string): Promise<NcfaValidationR
     };
   }
 }
+*/
+

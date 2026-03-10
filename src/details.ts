@@ -185,13 +185,13 @@ async function getOwnPlayerId(): Promise<string | undefined> {
   return undefined;
 }
 
-async function getProfile(playerId?: string, ncfa?: string): Promise<{ nick?: string; countryCode?: string; countryName?: string } | undefined> {
+async function getProfile(playerId?: string): Promise<{ nick?: string; countryCode?: string; countryName?: string } | undefined> {
   if (typeof playerId !== "string" || !playerId.trim()) return undefined;
   const key = playerId.trim();
   if (profileCache.has(key)) return profileCache.get(key);
   try {
     const url = `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(key)}`;
-    const res = await httpGetJson(url, { ncfa });
+    const res = await httpGetJson(url);
     if (res.status < 200 || res.status >= 300) {
       profileCache.set(key, {});
       return profileCache.get(key);
@@ -276,14 +276,14 @@ function extractRatingChange(player: any): { before?: number; after?: number } {
   return {};
 }
 
-async function fetchDetailJson(game: FeedGameRow, ncfa?: string): Promise<{ data: any; endpoint: string }> {
+async function fetchDetailJson(game: FeedGameRow): Promise<{ data: any; endpoint: string }> {
   const family = classifyFamily(game);
   const endpoints = buildDetailCandidates(game.gameId, family);
   const failures: string[] = [];
 
   for (const endpoint of endpoints) {
     try {
-      const res = await httpGetJson(endpoint, { ncfa });
+      const res = await httpGetJson(endpoint);
       if (res.status < 200 || res.status >= 300) {
         failures.push(`${endpoint} -> HTTP ${res.status}`);
         continue;
@@ -381,7 +381,6 @@ async function normalizeGameAndRounds(
   gameData: any,
   endpoint: string,
   ownPlayerId?: string,
-  ncfa?: string,
   existingByRoundNumber?: Map<number, any>
 ): Promise<{ detail: GameRow; rounds: RoundRow[] }> {
   const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
@@ -453,7 +452,7 @@ async function normalizeGameAndRounds(
   const profiles = new Map<string, { nick?: string; countryCode?: string; countryName?: string }>();
   await Promise.all(
     uniqueIds.map(async (id) => {
-      const p = await getProfile(id, ncfa);
+      const p = await getProfile(id);
       if (p) profiles.set(id, p);
     })
   );
@@ -694,7 +693,6 @@ export async function fetchMissingDuelsDetails(opts: {
   concurrency?: number;
   retryErrors?: boolean;
   verifyCompleteness?: boolean;
-  ncfa?: string;
 }) {
   const limitGames = opts.limitGames;
   const recent = typeof limitGames === "number"
@@ -707,7 +705,6 @@ export async function fetchMissingDuelsDetails(opts: {
     concurrency: opts.concurrency,
     retryErrors: opts.retryErrors,
     verifyCompleteness: opts.verifyCompleteness,
-    ncfa: opts.ncfa,
     reason: "missing-details-scan"
   });
 }
@@ -718,7 +715,6 @@ export async function fetchDetailsForGames(opts: {
   concurrency?: number;
   retryErrors?: boolean;
   verifyCompleteness?: boolean;
-  ncfa?: string;
   reason?: string;
 }): Promise<{ queued: number; ok: number; fail: number; skipped: number }> {
   const concurrency = opts.concurrency ?? 4;
@@ -860,9 +856,9 @@ export async function fetchDetailsForGames(opts: {
       if (!game) return;
 
       try {
-        const { data, endpoint } = await fetchDetailJson(game, opts.ncfa);
+        const { data, endpoint } = await fetchDetailJson(game);
         const prev = existingByGameAndRound.get(game.gameId);
-        const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, opts.ncfa, prev);
+        const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, prev);
 
         const agg = computeGameAggFromRounds(game.gameId, normalized.rounds as any[]);
 

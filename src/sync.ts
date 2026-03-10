@@ -126,10 +126,10 @@ function extractGameMode(ev: any, entry: any): string | undefined {
   );
 }
 
-async function fetchFeedPage(paginationToken?: string, ncfa?: string): Promise<any> {
+async function fetchFeedPage(paginationToken?: string): Promise<any> {
   const base = "https://www.geoguessr.com/api/v4/feed/private";
   const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-  const res = await httpGetJson(url, { ncfa });
+  const res = await httpGetJson(url);
   if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
   return res.data;
 }
@@ -138,7 +138,6 @@ export async function syncFeed(opts: {
   onStatus: (msg: string) => void;
   maxPages?: number;
   delayMs?: number;
-  ncfa?: string;
 }): Promise<{ inserted: number; total: number }> {
   const maxPages = opts.maxPages ?? 5000;
   const delayMs = opts.delayMs ?? 150;
@@ -192,7 +191,7 @@ export async function syncFeed(opts: {
   for (let page = 1; page <= maxPages; page++) {
     pagesFetched = page;
     opts.onStatus(`Feed page ${page}...`);
-    const data = await fetchFeedPage(paginationToken, opts.ncfa);
+    const data = await fetchFeedPage(paginationToken);
     const entries = Array.isArray(data?.entries) ? data.entries : [];
     entriesSeen += entries.length;
     if (entries.length === 0) {
@@ -389,7 +388,6 @@ export async function updateData(opts: {
   verifyCompleteness?: boolean;
   retryErrors?: boolean;
   enrichLimit?: number;
-  ncfa?: string;
 }): Promise<{
   feedPages: number;
   feedUpserted: number;
@@ -435,7 +433,7 @@ export async function updateData(opts: {
     feedPages = page + 1;
     opts.onStatus(`Fetching feed page ${page}...`);
 
-    const data = await fetchFeedPage(paginationToken, opts.ncfa);
+    const data = await fetchFeedPage(paginationToken);
     const entries = Array.isArray(data?.entries) ? data.entries : [];
     if (entries.length === 0) {
       opts.onStatus(`Feed page ${page} empty. Stopping.`);
@@ -496,7 +494,7 @@ export async function updateData(opts: {
             if (seenTokensProbe.has(token)) break;
             seenTokensProbe.add(token);
 
-            const d = await fetchFeedPage(token, opts.ncfa);
+            const d = await fetchFeedPage(token);
             const ents = Array.isArray(d?.entries) ? d.entries : [];
             if (ents.length === 0) break;
 
@@ -563,7 +561,6 @@ export async function updateData(opts: {
         concurrency: detailConcurrency,
         verifyCompleteness,
         retryErrors,
-        ncfa: opts.ncfa,
         reason: `feed-page-${page}`
       });
       detailsQueued += res.queued;
@@ -651,7 +648,6 @@ export async function updateData(opts: {
         concurrency: detailConcurrency,
         verifyCompleteness: false,
         retryErrors,
-        ncfa: opts.ncfa,
         reason: "enrich-missing-fields"
       });
       enrichedQueued = res.queued;

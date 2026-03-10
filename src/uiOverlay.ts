@@ -16,17 +16,8 @@ export type UIOverlay = {
   onUpdateClick: (handler: () => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
   onExportClick: (handler: () => void | Promise<void>) => void;
-  onTokenClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
   onDiscordClick: (handler: () => void | Promise<void>) => void;
-
-  openNcfaManager: (args: {
-    initialToken: string;
-    helpText: string;
-    repoUrl: string;
-    onSave: (token: string) => Promise<{ saved: boolean; token: string; message: string }>;
-    onAutoDetect: () => Promise<{ detected: boolean; token?: string; source: string; message: string }>;
-  }) => void;
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] {
@@ -236,7 +227,6 @@ export function createUIOverlay(): UIOverlay {
   const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
   const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
   const discordBtn = mkBtn("Join Discord", "rgba(121,80,229,0.30)");
-  const tokenBtn = mkBtn("Set NCFA Token", "rgba(95,95,30,0.35)");
   const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
   const resetBtn = mkBtn("Reset Database", "rgba(160,35,35,0.35)");
 
@@ -249,7 +239,6 @@ export function createUIOverlay(): UIOverlay {
   panel.appendChild(updateBtn);
   panel.appendChild(analysisBtn);
   panel.appendChild(discordBtn);
-  panel.appendChild(tokenBtn);
   panel.appendChild(exportBtn);
   panel.appendChild(resetBtn);
   panel.appendChild(counts);
@@ -268,113 +257,14 @@ export function createUIOverlay(): UIOverlay {
   let updateHandler: (() => void | Promise<void>) | null = null;
   let resetHandler: (() => void | Promise<void>) | null = null;
   let exportHandler: (() => void | Promise<void>) | null = null;
-  let tokenHandler: (() => void | Promise<void>) | null = null;
   let openAnalysisHandler: (() => void | Promise<void>) | null = null;
   let discordHandler: (() => void | Promise<void>) | null = null;
 
   updateBtn.addEventListener("click", () => void updateHandler?.());
-  tokenBtn.addEventListener("click", () => void tokenHandler?.());
   exportBtn.addEventListener("click", () => void exportHandler?.());
   resetBtn.addEventListener("click", () => void resetHandler?.());
   analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
   discordBtn.addEventListener("click", () => void discordHandler?.());
-
-  const openNcfaManager = (args: Parameters<UIOverlay["openNcfaManager"]>[0]) => {
-    const overlay = el("div");
-    overlay.className = "ga-ui-modal";
-
-    const modal = el("div");
-    modal.className = "ga-ui-modal-card";
-    overlay.appendChild(modal);
-
-    const head = el("div");
-    head.className = "ga-ui-modal-head";
-    const ht = el("div");
-    ht.className = "ga-ui-modal-head-title";
-    ht.textContent = "NCFA token";
-    const x = el("button");
-    x.className = "ga-ui-modal-x";
-    x.type = "button";
-    x.textContent = "x";
-    head.appendChild(ht);
-    head.appendChild(x);
-
-    const input = el("input") as HTMLInputElement;
-    input.className = "ga-ui-modal-input";
-    input.type = "text";
-    input.placeholder = "_ncfa value";
-    input.value = args.initialToken || "";
-
-    const help = el("div");
-    help.className = "ga-ui-modal-help";
-    help.textContent = "Set manually or use auto-detect.";
-
-    const actions = el("div");
-    actions.className = "ga-ui-modal-actions";
-
-    const mkSmallBtn = (label: string, bg: string, onClick: () => void) => {
-      const b = el("button");
-      b.className = "ga-ui-btn";
-      b.type = "button";
-      b.textContent = label;
-      b.style.marginTop = "0";
-      b.style.background = bg;
-      b.addEventListener("click", onClick);
-      return b;
-    };
-
-    const saveBtn = mkSmallBtn("Save Manually", "rgba(95,95,30,0.45)", async () => {
-      saveBtn.disabled = true;
-      try {
-        const res = await args.onSave(input.value);
-        input.value = res.token || "";
-        help.textContent = res.message;
-      } catch (e) {
-        help.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
-
-    const autoBtn = mkSmallBtn("Auto-Detect", "rgba(35,95,160,0.45)", async () => {
-      autoBtn.disabled = true;
-      try {
-        const res = await args.onAutoDetect();
-        if (res.token) input.value = res.token;
-        help.textContent = res.message;
-      } catch (e) {
-        help.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
-      } finally {
-        autoBtn.disabled = false;
-      }
-    });
-
-    const helpBtn = mkSmallBtn("Show Instructions", "rgba(40,120,50,0.45)", () => {
-      window.open(args.repoUrl, "_blank");
-    });
-
-    const closeRedBtn = mkSmallBtn("Close", "rgba(160,35,35,0.55)", () => {
-      close();
-    });
-
-    actions.appendChild(saveBtn);
-    actions.appendChild(autoBtn);
-    actions.appendChild(helpBtn);
-    actions.appendChild(closeRedBtn);
-
-    modal.appendChild(head);
-    modal.appendChild(input);
-    modal.appendChild(actions);
-    modal.appendChild(help);
-
-    const close = () => overlay.remove();
-    x.addEventListener("click", close);
-    overlay.addEventListener("click", (ev) => {
-      if (ev.target === overlay) close();
-    });
-
-    (document.body ?? document.documentElement).appendChild(overlay);
-  };
 
   return {
     setVisible(visible) {
@@ -396,15 +286,11 @@ export function createUIOverlay(): UIOverlay {
     onExportClick(fn) {
       exportHandler = fn;
     },
-    onTokenClick(fn) {
-      tokenHandler = fn;
-    },
     onOpenAnalysisClick(fn) {
       openAnalysisHandler = fn;
     },
     onDiscordClick(fn) {
       discordHandler = fn;
     },
-    openNcfaManager
   };
 }

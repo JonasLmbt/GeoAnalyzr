@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.11
+// @version      2.3.12
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -7011,7 +7011,6 @@ ${shapes}`.trim();
     const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
     const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
     const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
-    const tokenBtn = mkBtn2("Set NCFA Token", "rgba(95,95,30,0.35)");
     const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
     const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
     const counts = el("div");
@@ -7022,7 +7021,6 @@ ${shapes}`.trim();
     panel.appendChild(updateBtn);
     panel.appendChild(analysisBtn);
     panel.appendChild(discordBtn);
-    panel.appendChild(tokenBtn);
     panel.appendChild(exportBtn);
     panel.appendChild(resetBtn);
     panel.appendChild(counts);
@@ -7038,97 +7036,13 @@ ${shapes}`.trim();
     let updateHandler = null;
     let resetHandler = null;
     let exportHandler = null;
-    let tokenHandler = null;
     let openAnalysisHandler = null;
     let discordHandler = null;
     updateBtn.addEventListener("click", () => void updateHandler?.());
-    tokenBtn.addEventListener("click", () => void tokenHandler?.());
     exportBtn.addEventListener("click", () => void exportHandler?.());
     resetBtn.addEventListener("click", () => void resetHandler?.());
     analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
     discordBtn.addEventListener("click", () => void discordHandler?.());
-    const openNcfaManager = (args) => {
-      const overlay = el("div");
-      overlay.className = "ga-ui-modal";
-      const modal = el("div");
-      modal.className = "ga-ui-modal-card";
-      overlay.appendChild(modal);
-      const head = el("div");
-      head.className = "ga-ui-modal-head";
-      const ht = el("div");
-      ht.className = "ga-ui-modal-head-title";
-      ht.textContent = "NCFA token";
-      const x = el("button");
-      x.className = "ga-ui-modal-x";
-      x.type = "button";
-      x.textContent = "x";
-      head.appendChild(ht);
-      head.appendChild(x);
-      const input = el("input");
-      input.className = "ga-ui-modal-input";
-      input.type = "text";
-      input.placeholder = "_ncfa value";
-      input.value = args.initialToken || "";
-      const help = el("div");
-      help.className = "ga-ui-modal-help";
-      help.textContent = "Set manually or use auto-detect.";
-      const actions = el("div");
-      actions.className = "ga-ui-modal-actions";
-      const mkSmallBtn = (label, bg, onClick) => {
-        const b = el("button");
-        b.className = "ga-ui-btn";
-        b.type = "button";
-        b.textContent = label;
-        b.style.marginTop = "0";
-        b.style.background = bg;
-        b.addEventListener("click", onClick);
-        return b;
-      };
-      const saveBtn = mkSmallBtn("Save Manually", "rgba(95,95,30,0.45)", async () => {
-        saveBtn.disabled = true;
-        try {
-          const res = await args.onSave(input.value);
-          input.value = res.token || "";
-          help.textContent = res.message;
-        } catch (e) {
-          help.textContent = `Save failed: ${e instanceof Error ? e.message : String(e)}`;
-        } finally {
-          saveBtn.disabled = false;
-        }
-      });
-      const autoBtn = mkSmallBtn("Auto-Detect", "rgba(35,95,160,0.45)", async () => {
-        autoBtn.disabled = true;
-        try {
-          const res = await args.onAutoDetect();
-          if (res.token) input.value = res.token;
-          help.textContent = res.message;
-        } catch (e) {
-          help.textContent = `Auto-detect failed: ${e instanceof Error ? e.message : String(e)}`;
-        } finally {
-          autoBtn.disabled = false;
-        }
-      });
-      const helpBtn = mkSmallBtn("Show Instructions", "rgba(40,120,50,0.45)", () => {
-        window.open(args.repoUrl, "_blank");
-      });
-      const closeRedBtn = mkSmallBtn("Close", "rgba(160,35,35,0.55)", () => {
-        close();
-      });
-      actions.appendChild(saveBtn);
-      actions.appendChild(autoBtn);
-      actions.appendChild(helpBtn);
-      actions.appendChild(closeRedBtn);
-      modal.appendChild(head);
-      modal.appendChild(input);
-      modal.appendChild(actions);
-      modal.appendChild(help);
-      const close = () => overlay.remove();
-      x.addEventListener("click", close);
-      overlay.addEventListener("click", (ev) => {
-        if (ev.target === overlay) close();
-      });
-      (document.body ?? document.documentElement).appendChild(overlay);
-    };
     return {
       setVisible(visible) {
         iconBtn.style.display = visible ? "flex" : "none";
@@ -7149,16 +7063,12 @@ ${shapes}`.trim();
       onExportClick(fn) {
         exportHandler = fn;
       },
-      onTokenClick(fn) {
-        tokenHandler = fn;
-      },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;
       },
       onDiscordClick(fn) {
         discordHandler = fn;
-      },
-      openNcfaManager
+      }
     };
   }
 
@@ -7287,19 +7197,6 @@ ${shapes}`.trim();
   }
 
   // src/http.ts
-  function readNcfaFromDocumentCookie() {
-    if (typeof document === "undefined") return void 0;
-    const raw = typeof document.cookie === "string" ? document.cookie : "";
-    if (!raw) return void 0;
-    const parts = raw.split(";");
-    for (const part of parts) {
-      const [k, ...rest] = part.trim().split("=");
-      if (k !== "_ncfa") continue;
-      const value = rest.join("=").trim();
-      if (value) return value;
-    }
-    return void 0;
-  }
   function gmRequest(url, opts) {
     return new Promise((resolve, reject) => {
       const gm = getGmXmlhttpRequest();
@@ -7308,8 +7205,6 @@ ${shapes}`.trim();
         Accept: "application/json",
         ...opts?.headers || {}
       };
-      const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
-      if (ncfa) headers.Cookie = `_ncfa=${ncfa}`;
       gm({
         method: "GET",
         url,
@@ -7330,9 +7225,8 @@ ${shapes}`.trim();
     });
   }
   async function httpGetJson(url, opts) {
-    const ncfa = opts?.ncfa || readNcfaFromDocumentCookie();
-    if ((opts?.forceGm || ncfa) && hasGmXmlhttpRequest()) {
-      const res2 = await gmRequest(url, { ncfa, headers: opts?.headers });
+    if (opts?.forceGm && hasGmXmlhttpRequest()) {
+      const res2 = await gmRequest(url, { headers: opts?.headers });
       return { status: res2.status, data: res2.json() };
     }
     const res = await fetch(url, { credentials: "include", headers: opts?.headers });
@@ -8426,13 +8320,13 @@ ${shapes}`.trim();
     cachedOwnPlayerId = null;
     return void 0;
   }
-  async function getProfile(playerId, ncfa) {
+  async function getProfile(playerId) {
     if (typeof playerId !== "string" || !playerId.trim()) return void 0;
     const key = playerId.trim();
     if (profileCache.has(key)) return profileCache.get(key);
     try {
       const url = `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(key)}`;
-      const res = await httpGetJson(url, { ncfa });
+      const res = await httpGetJson(url);
       if (res.status < 200 || res.status >= 300) {
         profileCache.set(key, {});
         return profileCache.get(key);
@@ -8511,13 +8405,13 @@ ${shapes}`.trim();
     }
     return {};
   }
-  async function fetchDetailJson(game, ncfa) {
+  async function fetchDetailJson(game) {
     const family = classifyFamily(game);
     const endpoints = buildDetailCandidates(game.gameId, family);
     const failures = [];
     for (const endpoint of endpoints) {
       try {
-        const res = await httpGetJson(endpoint, { ncfa });
+        const res = await httpGetJson(endpoint);
         if (res.status < 200 || res.status >= 300) {
           failures.push(`${endpoint} -> HTTP ${res.status}`);
           continue;
@@ -8598,7 +8492,7 @@ ${shapes}`.trim();
     if (!nums.length) return void 0;
     return nums.reduce((a, b) => a + b, 0) / nums.length;
   }
-  async function normalizeGameAndRounds(game, gameData, endpoint, ownPlayerId, ncfa, existingByRoundNumber) {
+  async function normalizeGameAndRounds(game, gameData, endpoint, ownPlayerId, existingByRoundNumber) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
     const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
     const startTime = toTs(rounds[0]?.startTime);
@@ -8655,7 +8549,7 @@ ${shapes}`.trim();
     const profiles = /* @__PURE__ */ new Map();
     await Promise.all(
       uniqueIds.map(async (id) => {
-        const p = await getProfile(id, ncfa);
+        const p = await getProfile(id);
         if (p) profiles.set(id, p);
       })
     );
@@ -8974,9 +8868,9 @@ ${shapes}`.trim();
         const game = queue.shift();
         if (!game) return;
         try {
-          const { data, endpoint } = await fetchDetailJson(game, opts.ncfa);
+          const { data, endpoint } = await fetchDetailJson(game);
           const prev = existingByGameAndRound.get(game.gameId);
-          const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, opts.ncfa, prev);
+          const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, prev);
           const agg = computeGameAggFromRounds(game.gameId, normalized.rounds);
           await db.transaction("rw", db.details, db.rounds, db.gameAgg, async () => {
             await db.details.put(normalized.detail);
@@ -9116,10 +9010,10 @@ ${shapes}`.trim();
       ]) ?? pickFirst2(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
     );
   }
-  async function fetchFeedPage(paginationToken, ncfa) {
+  async function fetchFeedPage(paginationToken) {
     const base = "https://www.geoguessr.com/api/v4/feed/private";
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-    const res = await httpGetJson(url, { ncfa });
+    const res = await httpGetJson(url);
     if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
     return res.data;
   }
@@ -9150,7 +9044,7 @@ ${shapes}`.trim();
     for (let page = 0; page < maxPages; page++) {
       feedPages = page + 1;
       opts.onStatus(`Fetching feed page ${page}...`);
-      const data = await fetchFeedPage(paginationToken, opts.ncfa);
+      const data = await fetchFeedPage(paginationToken);
       const entries2 = Array.isArray(data?.entries) ? data.entries : [];
       if (entries2.length === 0) {
         opts.onStatus(`Feed page ${page} empty. Stopping.`);
@@ -9201,7 +9095,7 @@ ${shapes}`.trim();
             while (token && pages < maxPages) {
               if (seenTokensProbe.has(token)) break;
               seenTokensProbe.add(token);
-              const d = await fetchFeedPage(token, opts.ncfa);
+              const d = await fetchFeedPage(token);
               const ents = Array.isArray(d?.entries) ? d.entries : [];
               if (ents.length === 0) break;
               const rows = [];
@@ -9258,7 +9152,6 @@ ${shapes}`.trim();
           concurrency: detailConcurrency,
           verifyCompleteness,
           retryErrors,
-          ncfa: opts.ncfa,
           reason: `feed-page-${page}`
         });
         detailsQueued += res.queued;
@@ -9331,7 +9224,6 @@ ${shapes}`.trim();
           concurrency: detailConcurrency,
           verifyCompleteness: false,
           retryErrors,
-          ncfa: opts.ncfa,
           reason: "enrich-missing-fields"
         });
         enrichedQueued = res.queued;
@@ -52827,94 +52719,27 @@ ${describe(error)}`;
     }
   }
 
-  // src/auth.ts
-  var AUTH_META_KEY = "auth";
-  function readNcfaFromDocumentCookie2() {
-    if (typeof document === "undefined") return void 0;
-    const raw = typeof document.cookie === "string" ? document.cookie : "";
-    if (!raw) return void 0;
-    const parts = raw.split(";");
-    for (const part of parts) {
-      const [k, ...rest] = part.trim().split("=");
-      if (k !== "_ncfa") continue;
-      const value = rest.join("=").trim();
-      if (value) return value;
-    }
-    return void 0;
-  }
-  async function getNcfaToken() {
-    const row = await db.meta.get(AUTH_META_KEY);
-    const token = row?.value?.ncfa;
-    return typeof token === "string" && token.trim() ? token.trim() : void 0;
-  }
-  async function getResolvedNcfaToken() {
-    const stored = await getNcfaToken();
-    if (stored) return { token: stored, source: "stored" };
-    const cookie = readNcfaFromDocumentCookie2();
-    if (cookie) return { token: cookie, source: "cookie" };
-    return { source: "none" };
-  }
-  async function setNcfaToken(token) {
-    const clean = typeof token === "string" ? token.trim() : "";
-    if (!clean) {
-      await db.meta.delete(AUTH_META_KEY);
-      return;
-    }
-    await db.meta.put({
-      key: AUTH_META_KEY,
-      value: { ncfa: clean },
-      updatedAt: Date.now()
-    });
-  }
-  function basicNcfaFormatCheck(token) {
-    const clean = token.trim();
-    if (!clean) return { ok: false, reason: "Token is empty.", source: "format" };
-    if (clean.length < 20) return { ok: false, reason: "Token looks too short.", source: "format" };
-    if (/\s/.test(clean)) return { ok: false, reason: "Token must not contain whitespace.", source: "format" };
-    return void 0;
-  }
-  async function validateNcfaToken(token) {
-    const clean = typeof token === "string" ? token.trim() : "";
-    const basic = basicNcfaFormatCheck(clean);
-    if (basic) return basic;
-    try {
-      const res = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private", {
-        ncfa: clean,
-        forceGm: true
-      });
-      if (res.status >= 200 && res.status < 300) {
-        const hasEntries = Array.isArray(res.data?.entries);
-        return hasEntries ? { ok: true, status: res.status, reason: "Token accepted by private feed endpoint.", source: "api" } : { ok: true, status: res.status, reason: "Token accepted (response shape unexpected).", source: "api" };
-      }
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: res.status, reason: "Token rejected (unauthorized).", source: "api" };
-      }
-      if (res.status === 429) {
-        return { ok: false, status: res.status, reason: "Rate-limited while validating token. Try again shortly.", source: "api" };
-      }
-      return { ok: false, status: res.status, reason: `Validation failed with HTTP ${res.status}.`, source: "api" };
-    } catch (e) {
-      return {
-        ok: false,
-        reason: `Validation request failed: ${e instanceof Error ? e.message : String(e)}`,
-        source: "network"
-      };
-    }
-  }
-
-  // src/app/session.ts
-  async function hasAuthenticatedSession() {
-    try {
-      const res = await fetch("https://www.geoguessr.com/api/v4/feed/private", { credentials: "include" });
-      return res.status >= 200 && res.status < 300;
-    } catch {
-      return false;
-    }
-  }
-
   // src/app/uiActions.ts
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
+  }
+  async function ensureFetchDataHasRunOnce() {
+    const metaKey = "fetch_data_ran_v1";
+    try {
+      const meta = await db.meta.get(metaKey);
+      const doneAt = meta?.value?.doneAt;
+      if (typeof doneAt === "number" && Number.isFinite(doneAt) && doneAt > 0) return true;
+    } catch {
+    }
+    try {
+      const [games, rounds, details] = await Promise.all([db.games.count(), db.rounds.count(), db.details.count()]);
+      const hasAny = games > 0 || rounds > 0 || details > 0;
+      if (!hasAny) return false;
+      await db.meta.put({ key: metaKey, value: { doneAt: Date.now(), inferred: true }, updatedAt: Date.now() });
+      return true;
+    } catch {
+      return false;
+    }
   }
   function createThrottledStatus(setStatus) {
     let lastRenderAt = 0;
@@ -53008,32 +52833,21 @@ ${describe(error)}`;
       const status = createThrottledStatus(ui.setStatus);
       try {
         status.flushNow("Update started...");
-        let resolved = await getResolvedNcfaToken();
-        let ncfa = resolved.token;
-        if (!ncfa) {
-          const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
-          if (wantsSet) {
-            const entered = prompt("Paste _ncfa token here.", "");
-            if (entered !== null) {
-              const clean = entered.trim();
-              if (clean) {
-                const check = await validateNcfaToken(clean);
-                if (check.ok) {
-                  await setNcfaToken(clean);
-                  resolved = await getResolvedNcfaToken();
-                  ncfa = resolved.token;
-                  status.flushNow(`NCFA token saved and validated (HTTP ${check.status ?? "ok"}). Continuing update...`);
-                } else {
-                  status.flushNow(`NCFA token not saved: ${check.reason} Continuing without NCFA...`);
-                }
-              } else {
-                await setNcfaToken("");
-                status.flushNow("No token saved. Continuing without NCFA...");
-              }
-            }
+        try {
+          status.push("Checking login/session...");
+          const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private");
+          if (probe.status === 401 || probe.status === 403) {
+            status.flushNow("Error: Not authenticated. Please log in on geoguessr.com first.");
+            alert(
+              `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).
+
+Please make sure you're logged in on geoguessr.com, then try again.
+
+If this persists in your setup, please report it in the Discord.`
+            );
+            return;
           }
-        } else if (resolved.source === "cookie") {
-          status.flushNow("Using NCFA token from browser cookie. Continuing update...");
+        } catch {
         }
         const res = await updateData({
           onStatus: (m) => status.push(m),
@@ -53042,11 +52856,14 @@ ${describe(error)}`;
           detailConcurrency: 4,
           retryErrors: true,
           verifyCompleteness: true,
-          enrichLimit: 2e3,
-          ncfa
+          enrichLimit: 2e3
         });
         const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
         const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
+        try {
+          await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
+        } catch {
+        }
         invalidateRoundsCache();
         status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
         if (norm.updated > 0 || backfilled.updated > 0) {
@@ -53085,61 +52902,30 @@ ${describe(error)}`;
         console.error(e);
       }
     });
-    ui.onTokenClick(async () => {
-      const existing = await getNcfaToken();
-      ui.openNcfaManager({
-        initialToken: existing || "",
-        helpText: "",
-        repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
-        onSave: async (token) => {
-          const clean = token.trim();
-          if (!clean) {
-            await setNcfaToken("");
-            const message2 = "NCFA token removed.";
-            ui.setStatus(message2);
-            return { saved: false, token: "", message: message2 };
-          }
-          const check = await validateNcfaToken(clean);
-          if (!check.ok) {
-            const message2 = `Token validation failed: ${check.reason}`;
-            ui.setStatus(message2);
-            return { saved: false, token: clean, message: message2 };
-          }
-          await setNcfaToken(clean);
-          const now = await getNcfaToken();
-          const message = `NCFA token saved and validated (HTTP ${check.status ?? "ok"}).`;
-          ui.setStatus(message);
-          return { saved: !!now, token: now, message };
-        },
-        onAutoDetect: async () => {
-          const resolved = await getResolvedNcfaToken();
-          if (resolved.token) {
-            const check = await validateNcfaToken(resolved.token);
-            if (check.ok) {
-              await setNcfaToken(resolved.token);
-              const message3 = `Auto-detect successful (${resolved.source}). Token validated and saved.`;
-              ui.setStatus(message3);
-              return { detected: true, token: resolved.token, source: resolved.source, message: message3 };
-            }
-            const message2 = `Auto-detected token failed validation (${resolved.source}): ${check.reason}`;
-            ui.setStatus(message2);
-            return { detected: false, token: resolved.token, source: resolved.source, message: message2 };
-          }
-          const sessionOk = await hasAuthenticatedSession();
-          if (sessionOk) {
-            const message2 = "No readable _ncfa token found. Session auth works, likely because _ncfa is HttpOnly. You can keep manual token if needed for cross-domain endpoints.";
-            ui.setStatus(message2);
-            return { detected: true, source: "session", message: message2 };
-          }
-          const message = "Auto-detect failed: no stored token, no readable cookie, and no authenticated session detected.";
-          ui.setStatus(message);
-          return { detected: false, source: "none", message };
-        }
-      });
-    });
     ui.onOpenAnalysisClick(async () => {
       let semanticStatus = "";
       try {
+        const ok = await ensureFetchDataHasRunOnce();
+        if (!ok) {
+          ui.setStatus("Please run Fetch data first.");
+          try {
+            const [games, rounds] = await Promise.all([db.games.count(), db.rounds.count()]);
+            alert(
+              `GeoAnalyzr has no local data yet (${games} games, ${rounds} rounds).
+
+Please click "Update data" (Fetch data) in the GeoAnalyzr panel first.
+After it finishes, open the dashboard again.`
+            );
+          } catch {
+            alert(
+              `GeoAnalyzr has no local data yet.
+
+Please click "Update data" (Fetch data) in the GeoAnalyzr panel first.
+After it finishes, open the dashboard again.`
+            );
+          }
+          return;
+        }
         ui.setStatus("Opening dashboard...");
         const semanticTab = window.open("about:blank", "_blank");
         if (!semanticTab) {

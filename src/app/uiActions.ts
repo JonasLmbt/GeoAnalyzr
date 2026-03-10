@@ -5,8 +5,6 @@ import { backfillGuessCountries } from "../migrations/backfillGuessCountries";
 import { invalidateRoundsCache } from "../engine/queryEngine";
 import { exportExcel } from "../export";
 import { initAnalysisWindow } from "../ui";
-import { getNcfaToken, getResolvedNcfaToken, setNcfaToken, validateNcfaToken } from "../auth";
-import { hasAuthenticatedSession } from "./session";
 import { httpGetJson } from "../http";
 
 type DashboardFilter = {
@@ -30,16 +28,8 @@ type UI = {
   onUpdateClick: (handler: () => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
   onExportClick: (handler: () => void | Promise<void>) => void;
-  onTokenClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
   onDiscordClick: (handler: () => void | Promise<void>) => void;
-  openNcfaManager: (args: {
-    initialToken: string;
-    helpText: string;
-    repoUrl: string;
-    onSave: (token: string) => Promise<{ saved: boolean; token: string; message: string }>;
-    onAutoDetect: () => Promise<{ detected: boolean; token?: string; source: string; message: string }>;
-  }) => void;
 };
 
 function errorText(e: unknown): string {
@@ -185,20 +175,18 @@ export function registerUiActions(ui: UI): void {
     const status = createThrottledStatus(ui.setStatus);
     try {
       status.flushNow("Update started...");
-      const resolved = await getResolvedNcfaToken();
-      const ncfa = resolved.token;
 
       // Verify we can fetch with the current browser session (no manual _ncfa paste required).
       // If the user is logged out, show a clear hint instead of failing deep inside the sync loop.
       try {
         status.push("Checking login/session...");
-        const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private", { ncfa: undefined, forceGm: false });
+        const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private");
         if (probe.status === 401 || probe.status === 403) {
           status.flushNow("Error: Not authenticated. Please log in on geoguessr.com first.");
           alert(
             `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).\n\n` +
               `Please make sure you're logged in on geoguessr.com, then try again.\n\n` +
-              `If this persists in your setup, you can still use the optional NCFA token in Settings.`
+              `If this persists in your setup, please report it in the Discord.`
           );
           return;
         }
@@ -213,8 +201,7 @@ export function registerUiActions(ui: UI): void {
         detailConcurrency: 4,
         retryErrors: true,
         verifyCompleteness: true,
-        enrichLimit: 2000,
-        ncfa
+        enrichLimit: 2000
       });
       const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
       const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
@@ -262,60 +249,6 @@ export function registerUiActions(ui: UI): void {
       ui.setStatus("Error: " + errorText(e));
       console.error(e);
     }
-  });
-
-  ui.onTokenClick(async () => {
-    const existing = await getNcfaToken();
-    ui.openNcfaManager({
-      initialToken: existing || "",
-      helpText: "",
-      repoUrl: "https://github.com/JonasLmbt/GeoAnalyzr#getting-your-_ncfa-cookie",
-      onSave: async (token) => {
-        const clean = token.trim();
-        if (!clean) {
-          await setNcfaToken("");
-          const message = "NCFA token removed.";
-          ui.setStatus(message);
-          return { saved: false, token: "", message };
-        }
-        const check = await validateNcfaToken(clean);
-        if (!check.ok) {
-          const message = `Token validation failed: ${check.reason}`;
-          ui.setStatus(message);
-          return { saved: false, token: clean, message };
-        }
-        await setNcfaToken(clean);
-        const now = await getNcfaToken();
-        const message = `NCFA token saved and validated (HTTP ${check.status ?? "ok"}).`;
-        ui.setStatus(message);
-        return { saved: !!now, token: now, message };
-      },
-      onAutoDetect: async () => {
-        const resolved = await getResolvedNcfaToken();
-        if (resolved.token) {
-          const check = await validateNcfaToken(resolved.token);
-          if (check.ok) {
-            await setNcfaToken(resolved.token);
-            const message = `Auto-detect successful (${resolved.source}). Token validated and saved.`;
-            ui.setStatus(message);
-            return { detected: true, token: resolved.token, source: resolved.source, message };
-          }
-          const message = `Auto-detected token failed validation (${resolved.source}): ${check.reason}`;
-          ui.setStatus(message);
-          return { detected: false, token: resolved.token, source: resolved.source, message };
-        }
-        const sessionOk = await hasAuthenticatedSession();
-        if (sessionOk) {
-          const message =
-            "No readable _ncfa token found. Session auth works, likely because _ncfa is HttpOnly. You can keep manual token if needed for cross-domain endpoints.";
-          ui.setStatus(message);
-          return { detected: true, source: "session", message };
-        }
-        const message = "Auto-detect failed: no stored token, no readable cookie, and no authenticated session detected.";
-        ui.setStatus(message);
-        return { detected: false, source: "none", message };
-      }
-    });
   });
 
   ui.onOpenAnalysisClick(async () => {
