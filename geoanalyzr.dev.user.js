@@ -53026,33 +53026,8 @@ ${describe(error)}`;
       const status = createThrottledStatus(ui.setStatus);
       try {
         status.flushNow("Update started...");
-        let resolved = await getResolvedNcfaToken();
-        let ncfa = resolved.token;
-        if (!ncfa) {
-          const wantsSet = confirm("No NCFA token found. Set it now for more complete fetching?");
-          if (wantsSet) {
-            const entered = prompt("Paste _ncfa token here.", "");
-            if (entered !== null) {
-              const clean = entered.trim();
-              if (clean) {
-                const check = await validateNcfaToken(clean);
-                if (check.ok) {
-                  await setNcfaToken(clean);
-                  resolved = await getResolvedNcfaToken();
-                  ncfa = resolved.token;
-                  status.flushNow(`NCFA token saved and validated (HTTP ${check.status ?? "ok"}). Continuing update...`);
-                } else {
-                  status.flushNow(`NCFA token not saved: ${check.reason} Continuing without NCFA...`);
-                }
-              } else {
-                await setNcfaToken("");
-                status.flushNow("No token saved. Continuing without NCFA...");
-              }
-            }
-          }
-        } else if (resolved.source === "cookie") {
-          status.flushNow("Using NCFA token from browser cookie. Continuing update...");
-        }
+        const resolved = await getResolvedNcfaToken();
+        const ncfa = resolved.token;
         const res = await updateData({
           onStatus: (m) => status.push(m),
           maxPages: 5e3,
