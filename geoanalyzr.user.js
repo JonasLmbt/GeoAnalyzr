@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.13
+// @version      2.3.14
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -32806,7 +32806,8 @@ ${shapes}`.trim();
         unit: "count",
         grain: "game",
         allowedCharts: ["bar", "line"],
-        formulaId: "count_games"
+        formulaId: "count_games",
+        range: { min: 0 }
       },
       rounds_share: {
         label: "Share",
@@ -34497,7 +34498,8 @@ ${shapes}`.trim();
                           activeMeasure: "games_count",
                           accumulations: [
                             "period",
-                            "to_date"
+                            "to_date",
+                            "session"
                           ],
                           activeAccumulation: "to_date"
                         },
@@ -46030,8 +46032,13 @@ ${describeError(err2)}` : message;
   function clampForMeasure(semantic, measureId, value) {
     const measure = semantic.measures[measureId];
     const unit = measure ? semantic.units[measure.unit] : void 0;
-    if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
-    return value;
+    let v = value;
+    if (unit?.format === "percent") v = Math.max(0, Math.min(1, v));
+    const min = measure?.range?.min;
+    const max2 = measure?.range?.max;
+    if (typeof min === "number" && Number.isFinite(min)) v = Math.max(min, v);
+    if (typeof max2 === "number" && Number.isFinite(max2)) v = Math.min(max2, v);
+    return v;
   }
   function mergeDrilldownDefaults(base, defs) {
     if (!base) return base;
@@ -46537,7 +46544,7 @@ ${describeError(err2)}` : message;
               if (idx === null) continue;
               const ts = bucketRows.map((x) => extractRowTsMs(x)).filter((t) => typeof t === "number" && Number.isFinite(t));
               const sessionStartTs = ts.length ? Math.min(...ts) : 0;
-              const xKey = sessionStartTs ? toDayKey(sessionStartTs) : String(idx);
+              const xKey = String(idx);
               const yRaw = yForRows(bucketRows);
               const y = clampForMeasure(semantic, measureId, yRaw);
               const bucketLooksLikeRounds = bucketRows.length > 0 && typeof bucketRows[0]?.roundNumber === "number";
@@ -46563,8 +46570,7 @@ ${describeError(err2)}` : message;
               const yRaw = yForRows(bucketRows);
               const y = clampForMeasure(semantic, measureId, yRaw);
               const s = mkSessionRowFromBucket(sid, bucketRows);
-              const xKey = typeof s?.sessionStartTs === "number" && Number.isFinite(s.sessionStartTs) ? toDayKey(s.sessionStartTs) : String(idx);
-              out2.push({ x: xKey, y, rows: [{ ...s, sessionIndex: idx }] });
+              out2.push({ x: String(idx), y, rows: [{ ...s, sessionIndex: idx }] });
             }
           }
           if (out2.length > 0) {
@@ -46792,11 +46798,12 @@ ${describeError(err2)}` : message;
       xAxisLabel.setAttribute("opacity", "0.95");
       const canSessionizeForAxis = dimId === "time_day" && activeAcc === "session" && (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(getDatasetForGrain(getActiveGrain())) : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
       const sessionMode = canSessionizeForAxis;
-      xAxisLabel.textContent = dimDef.label;
+      xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
       svg.appendChild(xAxisLabel);
       if (dimId === "time_day" && data.length > 0) {
         const first = data[0].x;
         const last = data[data.length - 1].x;
+        const sessionTick = (x) => /^\d+$/.test(x) ? `s${x}` : x;
         const lx = doc.createElementNS(svg.namespaceURI, "text");
         lx.setAttribute("x", String(PAD_L + 2));
         lx.setAttribute("y", String(PAD_T + innerH + 18));
@@ -46804,7 +46811,7 @@ ${describeError(err2)}` : message;
         lx.setAttribute("font-size", "10");
         lx.setAttribute("fill", "var(--ga-axis-text)");
         lx.setAttribute("opacity", "0.95");
-        lx.textContent = first;
+        lx.textContent = sessionMode ? sessionTick(first) : first;
         svg.appendChild(lx);
         const rx = doc.createElementNS(svg.namespaceURI, "text");
         rx.setAttribute("x", String(PAD_L + innerW - 2));
@@ -46813,7 +46820,7 @@ ${describeError(err2)}` : message;
         rx.setAttribute("font-size", "10");
         rx.setAttribute("fill", "var(--ga-axis-text)");
         rx.setAttribute("opacity", "0.95");
-        rx.textContent = last;
+        rx.textContent = sessionMode ? sessionTick(last) : last;
         svg.appendChild(rx);
       }
       const yAxisLabel = doc.createElementNS(svg.namespaceURI, "text");
@@ -46905,7 +46912,8 @@ ${describeError(err2)}` : message;
           const dateLabel = formatDimensionKey(doc, dimId, p.d.x);
           const sessionMeta = sessionMode && Array.isArray(p.d.rows) && p.d.rows.length > 0 ? p.d.rows[0] : null;
           const sessionIdx = typeof sessionMeta?.sessionIndex === "number" && Number.isFinite(sessionMeta.sessionIndex) ? sessionMeta.sessionIndex : null;
-          const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx} (${dateLabel})` : dateLabel;
+          const sessionDate = typeof sessionMeta?.sessionStartTs === "number" && Number.isFinite(sessionMeta.sessionStartTs) ? toDayKey(sessionMeta.sessionStartTs) : "";
+          const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx}${sessionDate ? ` (${sessionDate})` : ""}` : dateLabel;
           tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
           dot.appendChild(tooltip);
           const clickBase = mergeDrilldownDefaults(spec.actions?.click, semantic.measures[activeMeasure]?.drilldown);

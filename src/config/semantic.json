@@ -419,7 +419,8 @@
       "unit": "count",
       "grain": "game",
       "allowedCharts": ["bar", "line"],
-      "formulaId": "count_games"
+      "formulaId": "count_games",
+      "range": { "min": 0 }
     },
     "rounds_share": {
       "label": "Share",

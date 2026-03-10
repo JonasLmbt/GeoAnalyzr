@@ -284,8 +284,13 @@ function formatMeasureValue(doc: Document, semantic: SemanticRegistry, measureId
 function clampForMeasure(semantic: SemanticRegistry, measureId: string, value: number): number {
   const measure = semantic.measures[measureId];
   const unit = measure ? semantic.units[measure.unit] : undefined;
-  if (unit?.format === "percent") return Math.max(0, Math.min(1, value));
-  return value;
+  let v = value;
+  if (unit?.format === "percent") v = Math.max(0, Math.min(1, v));
+  const min = measure?.range?.min;
+  const max = measure?.range?.max;
+  if (typeof min === "number" && Number.isFinite(min)) v = Math.max(min, v);
+  if (typeof max === "number" && Number.isFinite(max)) v = Math.min(max, v);
+  return v;
 }
 
 function mergeDrilldownDefaults<T extends { extraFilters?: any[]; filterFromPoint?: boolean }>(
@@ -934,7 +939,7 @@ export async function renderChartWidget(
               .map((x) => extractRowTsMs(x))
               .filter((t: any): t is number => typeof t === "number" && Number.isFinite(t));
             const sessionStartTs = ts.length ? Math.min(...ts) : 0;
-            const xKey = sessionStartTs ? toDayKey(sessionStartTs) : String(idx);
+            const xKey = String(idx);
             const yRaw = yForRows(bucketRows);
             const y = clampForMeasure(semantic, measureId, yRaw);
             const bucketLooksLikeRounds = bucketRows.length > 0 && typeof (bucketRows[0] as any)?.roundNumber === "number";
@@ -970,8 +975,7 @@ export async function renderChartWidget(
             const yRaw = yForRows(bucketRows);
             const y = clampForMeasure(semantic, measureId, yRaw);
             const s = mkSessionRowFromBucket(sid, bucketRows);
-            const xKey = typeof s?.sessionStartTs === "number" && Number.isFinite(s.sessionStartTs) ? toDayKey(s.sessionStartTs) : String(idx);
-            out.push({ x: xKey, y, rows: [{ ...s, sessionIndex: idx }] });
+            out.push({ x: String(idx), y, rows: [{ ...s, sessionIndex: idx }] });
           }
         }
 
@@ -1249,13 +1253,14 @@ export async function renderChartWidget(
         ? hasAnyGameIds(getDatasetForGrain(getActiveGrain()))
         : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
     const sessionMode = canSessionizeForAxis;
-    xAxisLabel.textContent = dimDef.label;
+    xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
     svg.appendChild(xAxisLabel);
 
     // Minimal x-axis labeling for long time series: show start/end only (always visible).
     if (dimId === "time_day" && data.length > 0) {
       const first = data[0].x;
       const last = data[data.length - 1].x;
+      const sessionTick = (x: string): string => (/^\d+$/.test(x) ? `s${x}` : x);
 
       const lx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
       lx.setAttribute("x", String(PAD_L + 2));
@@ -1264,7 +1269,7 @@ export async function renderChartWidget(
       lx.setAttribute("font-size", "10");
       lx.setAttribute("fill", "var(--ga-axis-text)");
       lx.setAttribute("opacity", "0.95");
-      lx.textContent = first;
+      lx.textContent = sessionMode ? sessionTick(first) : first;
       svg.appendChild(lx);
 
       const rx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
@@ -1274,7 +1279,7 @@ export async function renderChartWidget(
       rx.setAttribute("font-size", "10");
       rx.setAttribute("fill", "var(--ga-axis-text)");
       rx.setAttribute("opacity", "0.95");
-      rx.textContent = last;
+      rx.textContent = sessionMode ? sessionTick(last) : last;
       svg.appendChild(rx);
     }
 
@@ -1374,7 +1379,11 @@ export async function renderChartWidget(
         const dateLabel = formatDimensionKey(doc, dimId, p.d.x);
         const sessionMeta = sessionMode && Array.isArray(p.d.rows) && p.d.rows.length > 0 ? (p.d.rows[0] as any) : null;
         const sessionIdx = typeof sessionMeta?.sessionIndex === "number" && Number.isFinite(sessionMeta.sessionIndex) ? sessionMeta.sessionIndex : null;
-        const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx} (${dateLabel})` : dateLabel;
+        const sessionDate =
+          typeof sessionMeta?.sessionStartTs === "number" && Number.isFinite(sessionMeta.sessionStartTs)
+            ? toDayKey(sessionMeta.sessionStartTs)
+            : "";
+        const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx}${sessionDate ? ` (${sessionDate})` : ""}` : dateLabel;
         tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);

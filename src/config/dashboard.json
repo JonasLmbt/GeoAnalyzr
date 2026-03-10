@@ -712,7 +712,8 @@
                         "activeMeasure": "games_count",
                         "accumulations": [
                           "period",
-                          "to_date"
+                          "to_date",
+                          "session"
                         ],
                         "activeAccumulation": "to_date"
                       },

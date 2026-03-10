@@ -3,7 +3,7 @@ const esbuild = require("esbuild");
 const outFile = process.argv[2] || "geoanalyzr.user.js";
 const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 
-const version = isDev ? "2.3.15-dev" : "2.3.13";
+const version = isDev ? "2.3.16-dev" : "2.3.14";
 
 const banner = `// ==UserScript==
 // @name         ${isDev ? "GeoAnalyzr (Dev)" : "GeoAnalyzr"}
