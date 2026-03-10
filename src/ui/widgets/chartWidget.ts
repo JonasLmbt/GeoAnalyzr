@@ -95,15 +95,16 @@ function sortLabel(mode: "chronological" | "asc" | "desc"): string {
   return "Descending";
 }
 
-function accumulationLabel(mode: "period" | "to_date"): string {
-  return mode === "to_date" ? "To date" : "Per period";
+type AccumulationMode = "period" | "to_date" | "session";
+
+function accumulationLabel(mode: AccumulationMode): string {
+  if (mode === "to_date") return "To date";
+  if (mode === "session") return "Per session";
+  return "Per period";
 }
 
-function accumulationLabelForContext(mode: "period" | "to_date", dimId: string, canSessionize: boolean): string {
-  if (mode === "to_date") return "To date";
-  if (canSessionize && dimId === "time_day") return "Per session";
-  if (dimId.startsWith("session_")) return "Per session";
-  return "Per period";
+function accumulationLabelForContext(mode: AccumulationMode, _dimId: string, _canSessionize: boolean): string {
+  return accumulationLabel(mode);
 }
 
 function toDayKey(ts: number): string {
@@ -657,7 +658,7 @@ export async function renderChartWidget(
     ? (spec.y.activeMeasure as string)
     : measureIds[0];
 
-  const accModes: Array<"period" | "to_date"> = [];
+  const accModes: AccumulationMode[] = [];
   const singleAcc = spec.y.accumulation;
   if (singleAcc) accModes.push(singleAcc);
   if (Array.isArray(spec.y.accumulations)) {
@@ -669,8 +670,10 @@ export async function renderChartWidget(
   // Default: for ordered x-axes in line charts, offer both accumulation modes.
   if (accModes.length === 0 && spec.type === "line" && dimDef.ordered) {
     accModes.push("period", "to_date");
+    // For time-series charts, also allow a per-session view (still plotted on a time x-axis).
+    if (dimId === "time_day") accModes.push("session");
   }
-  let activeAcc: "period" | "to_date" = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
+  let activeAcc: AccumulationMode = spec.y.activeAccumulation ?? spec.y.accumulation ?? accModes[0] ?? "period";
   if (!accModes.includes(activeAcc)) accModes.unshift(activeAcc);
 
   let currentSvg: SVGSVGElement | null = null;
@@ -743,7 +746,11 @@ export async function renderChartWidget(
       const canSessionizeForMode =
         dimId === "time_day" &&
         (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0 ? hasAnyGameIds(baseForMode) : canSessionizeFromRows(baseForMode));
-      for (const mode of accModes) {
+
+      const visibleAccModes = accModes.filter((m) => m !== "session" || canSessionizeForMode);
+      if (!visibleAccModes.includes(activeAcc)) activeAcc = visibleAccModes[0] ?? "period";
+
+      for (const mode of visibleAccModes) {
         const option = doc.createElement("option");
         option.value = mode;
         option.textContent = accumulationLabelForContext(mode, dimId, canSessionizeForMode);
@@ -753,7 +760,7 @@ export async function renderChartWidget(
 
     select.addEventListener("change", () => {
       const next = select.value as any;
-      if (!accModes.includes(next)) return;
+      if (!visibleAccModes.includes(next)) return;
       activeAcc = next;
       render();
     });
@@ -822,12 +829,11 @@ export async function renderChartWidget(
 
     // For time_day, fill all days, but clamp the range to the filtered data bounds (so charts start at first datapoint).
     if (dimId === "time_day") {
-      // If we can sessionize, interpret time-day line charts as "per session" (x=Session #) instead of per-day.
-      // This avoids empty-day gaps and matches gameplay. "To date" becomes cumulative over sessions.
+      // Optional per-session view for time-series charts (still plotted on a time x-axis).
       const providedSessions = getDatasetForGrain("session") as any[];
       const canSessionizeWithProvidedSessions =
         Array.isArray(providedSessions) && providedSessions.length > 0 && hasAnyGameIds(rows as any[]);
-      if ((activeAcc === "period" || activeAcc === "to_date") && (canSessionizeFromRows(rows) || canSessionizeWithProvidedSessions)) {
+      if (activeAcc === "session" && (canSessionizeFromRows(rows) || canSessionizeWithProvidedSessions)) {
         const maxPoints =
           typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) && spec.maxPoints > 1
             ? Math.floor(spec.maxPoints)
@@ -924,9 +930,34 @@ export async function renderChartWidget(
             if (bucketRows.length === 0) continue;
             const idx = typeof (s as any)?.sessionIndex === "number" ? (s as any).sessionIndex : toIndex(sid);
             if (idx === null) continue;
+            const ts = bucketRows
+              .map((x) => extractRowTsMs(x))
+              .filter((t: any): t is number => typeof t === "number" && Number.isFinite(t));
+            const sessionStartTs = ts.length ? Math.min(...ts) : 0;
+            const xKey = sessionStartTs ? toDayKey(sessionStartTs) : String(idx);
             const yRaw = yForRows(bucketRows);
             const y = clampForMeasure(semantic, measureId, yRaw);
-            out.push({ x: String(idx), y, rows: [{ ...s, rounds: bucketRows, roundsCount: bucketRows.length }] });
+            const bucketLooksLikeRounds = bucketRows.length > 0 && typeof (bucketRows[0] as any)?.roundNumber === "number";
+            out.push({
+              x: xKey,
+              y,
+              rows: [
+                {
+                  ...s,
+                  sessionIndex: idx,
+                  sessionStartTs,
+                  // For round-based charts, drill down into the filtered subset; otherwise keep original session metadata.
+                  rounds: bucketLooksLikeRounds ? bucketRows : Array.isArray((s as any)?.rounds) ? (s as any).rounds : [],
+                  roundsCount: bucketLooksLikeRounds
+                    ? bucketRows.length
+                    : typeof (s as any)?.roundsCount === "number"
+                      ? (s as any).roundsCount
+                      : Array.isArray((s as any)?.rounds)
+                        ? (s as any).rounds.length
+                        : 0
+                }
+              ]
+            });
           }
         } else if (bySession.size > 0) {
           const ordered = Array.from(bySession.entries())
@@ -938,35 +969,14 @@ export async function renderChartWidget(
             if (bucketRows.length === 0) continue;
             const yRaw = yForRows(bucketRows);
             const y = clampForMeasure(semantic, measureId, yRaw);
-            out.push({ x: String(idx), y, rows: [mkSessionRowFromBucket(sid, bucketRows)] });
+            const s = mkSessionRowFromBucket(sid, bucketRows);
+            const xKey = typeof s?.sessionStartTs === "number" && Number.isFinite(s.sessionStartTs) ? toDayKey(s.sessionStartTs) : String(idx);
+            out.push({ x: xKey, y, rows: [{ ...s, sessionIndex: idx }] });
           }
         }
 
         if (out.length > 0) {
-          const sliced = out.length > maxPoints ? out.slice(out.length - maxPoints) : out;
-          if (activeAcc === "to_date") {
-            const cum: any[] = [];
-            let cumRounds = 0;
-            const outCum: Datum[] = [];
-            for (const d of sliced) {
-              const s = (d.rows && d.rows[0]) || null;
-              const bucketRounds = Array.isArray((s as any)?.rounds) ? ((s as any).rounds as any[]) : [];
-              if (bucketRounds.length) {
-                cum.push(...bucketRounds);
-                cumRounds += bucketRounds.length;
-              }
-              // Warmup: first point uses the first N rounds only (stable start without 0%/100% spikes).
-              if (outCum.length === 0) {
-                if (cumRounds < SESSION_WARMUP_ROUNDS) continue;
-                const firstN = cum.slice(0, SESSION_WARMUP_ROUNDS);
-                outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(firstN)), rows: firstN.slice() });
-                continue;
-              }
-              outCum.push({ x: d.x, y: clampForMeasure(semantic, measureId, yForRows(cum)), rows: cum.slice() });
-            }
-            return outCum;
-          }
-          return sliced;
+          return out.length > maxPoints ? out.slice(out.length - maxPoints) : out;
         }
       }
 
@@ -1234,19 +1244,18 @@ export async function renderChartWidget(
     xAxisLabel.setAttribute("opacity", "0.95");
     const canSessionizeForAxis =
       dimId === "time_day" &&
-      (activeAcc === "period" || activeAcc === "to_date") &&
+      activeAcc === "session" &&
       (Array.isArray(datasets?.session) && (datasets?.session?.length ?? 0) > 0
         ? hasAnyGameIds(getDatasetForGrain(getActiveGrain()))
         : canSessionizeFromRows(getDatasetForGrain(getActiveGrain())));
     const sessionMode = canSessionizeForAxis;
-    xAxisLabel.textContent = sessionMode ? "Session #" : dimDef.label;
+    xAxisLabel.textContent = dimDef.label;
     svg.appendChild(xAxisLabel);
 
     // Minimal x-axis labeling for long time series: show start/end only (always visible).
     if (dimId === "time_day" && data.length > 0) {
       const first = data[0].x;
       const last = data[data.length - 1].x;
-      const sessionTick = (x: string): string => (/^\d+$/.test(x) ? `s${x}` : x);
 
       const lx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
       lx.setAttribute("x", String(PAD_L + 2));
@@ -1255,7 +1264,7 @@ export async function renderChartWidget(
       lx.setAttribute("font-size", "10");
       lx.setAttribute("fill", "var(--ga-axis-text)");
       lx.setAttribute("opacity", "0.95");
-      lx.textContent = sessionMode ? sessionTick(first) : first;
+      lx.textContent = first;
       svg.appendChild(lx);
 
       const rx = doc.createElementNS(svg.namespaceURI, "text") as unknown as SVGTextElement;
@@ -1265,7 +1274,7 @@ export async function renderChartWidget(
       rx.setAttribute("font-size", "10");
       rx.setAttribute("fill", "var(--ga-axis-text)");
       rx.setAttribute("opacity", "0.95");
-      rx.textContent = sessionMode ? sessionTick(last) : last;
+      rx.textContent = last;
       svg.appendChild(rx);
     }
 
@@ -1347,7 +1356,7 @@ export async function renderChartWidget(
         const isFirstValid = prevValidY === null;
         const isLastValid = i === lastValidIdx;
         const changed = !isFirstValid && prevValidY !== p.yVal;
-        const isClickableSessionPoint = sessionMode && activeAcc === "period";
+        const isClickableSessionPoint = sessionMode && activeAcc === "session";
         const showDot = isClickableSessionPoint || isFirstValid || isLastValid || changed;
         if (!showDot) {
           prevValidY = p.yVal;
@@ -1362,13 +1371,16 @@ export async function renderChartWidget(
         dot.setAttribute("fill", colorOverride ?? "var(--ga-graph-color)");
         dot.setAttribute("opacity", "0.95");
         const tooltip = doc.createElementNS(svg.namespaceURI, "title") as unknown as SVGTitleElement;
-        const xLabel = sessionMode && /^\d+$/.test(String(p.d.x)) ? `Session #${p.d.x}` : formatDimensionKey(doc, dimId, p.d.x);
+        const dateLabel = formatDimensionKey(doc, dimId, p.d.x);
+        const sessionMeta = sessionMode && Array.isArray(p.d.rows) && p.d.rows.length > 0 ? (p.d.rows[0] as any) : null;
+        const sessionIdx = typeof sessionMeta?.sessionIndex === "number" && Number.isFinite(sessionMeta.sessionIndex) ? sessionMeta.sessionIndex : null;
+        const xLabel = sessionMode && sessionIdx !== null ? `s${sessionIdx} (${dateLabel})` : dateLabel;
         tooltip.textContent = `${xLabel}: ${formatMeasureValue(doc, semantic, activeMeasure, clampForMeasure(semantic, activeMeasure, p.d.y))}`;
         dot.appendChild(tooltip);
         const clickBase = mergeDrilldownDefaults(spec.actions?.click as any, semantic.measures[activeMeasure]?.drilldown as any);
         const normalized = normalizeClickForActiveMeasure(semantic, activeMeasure, clickBase);
         const click =
-          sessionMode && activeAcc === "period"
+          sessionMode && activeAcc === "session"
             ? ({ type: "drilldown", target: "sessions", columnsPreset: "sessionMode", filterFromPoint: true } as any)
             : normalized;
         if (click?.type === "drilldown") {
@@ -1397,7 +1409,7 @@ export async function renderChartWidget(
             const { grain, rows } = materializeRowsForDrilldown(click.target, sourceRowsGrain, sourceRows as any[]);
             const filteredRows = applyFilters(rows, click.extraFilters, grain);
             overlay.open(semantic, {
-              title: `${widget.title} - ${sessionMode && /^\d+$/.test(String(p.d.x)) ? `s${p.d.x}` : p.d.x}`,
+              title: `${widget.title} - ${sessionMode && sessionIdx !== null ? `s${sessionIdx}` : p.d.x}`,
               target: click.target,
               columnsPreset: click.columnsPreset,
               rows: filteredRows,

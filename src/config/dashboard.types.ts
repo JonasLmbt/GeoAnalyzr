@@ -141,9 +141,9 @@ export interface ChartSpec {
     measures?: string[];
     activeMeasure?: string;
     // For ordered time axes (e.g. time_day), allow switching between per-period values and cumulative "to date".
-    accumulation?: "period" | "to_date";
-    accumulations?: Array<"period" | "to_date">;
-    activeAccumulation?: "period" | "to_date";
+    accumulation?: "period" | "to_date" | "session";
+    accumulations?: Array<"period" | "to_date" | "session">;
+    activeAccumulation?: "period" | "to_date" | "session";
   };
   series?: {
     dimension: string;
