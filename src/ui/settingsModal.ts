@@ -12,6 +12,12 @@ import {
   normalizeTheme,
   type SemanticDashboardSettings
 } from "./settingsStore";
+import {
+  buildPortableDump,
+  parsePortableDumpBytes,
+  replaceDatabaseFromPortableDump,
+  serializePortableDump
+} from "../portableDump";
 
 type SettingsModalOptions = {
   doc: Document;
@@ -57,11 +63,46 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const downloadBytes = (filename: string, bytes: Uint8Array, mime: string): void => {
+    const blob = new Blob([bytes], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = doc.createElement("a");
+    a.href = url;
+    a.download = filename;
+    (doc.body ?? doc.documentElement).appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const readJsonFromFileInput = async (input: HTMLInputElement): Promise<any> => {
     const file = input.files?.[0] ?? null;
     if (!file) return null;
     const text = await file.text();
     return JSON.parse(text);
+  };
+
+  const readBytesFromFileInput = async (input: HTMLInputElement): Promise<Uint8Array | null> => {
+    const file = input.files?.[0] ?? null;
+    if (!file) return null;
+    const buf = await file.arrayBuffer();
+    return new Uint8Array(buf);
+  };
+
+  const formatBytes = (n: number): string => {
+    if (!Number.isFinite(n) || n <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    let v = n;
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  };
+
+  const makeStamp = (): string => {
+    return new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
   };
 
   const settingsModal = doc.createElement("div");
@@ -122,6 +163,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const standardsTab = doc.createElement("button");
     standardsTab.className = "ga-settings-tab";
     standardsTab.textContent = "Standards";
+    const dataTab = doc.createElement("button");
+    dataTab.className = "ga-settings-tab";
+    dataTab.textContent = "Data";
     const templateTab = doc.createElement("button");
     templateTab.className = "ga-settings-tab";
     templateTab.textContent = "Template";
@@ -143,6 +187,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     tabs.appendChild(globalFiltersTab);
     tabs.appendChild(drilldownsTab);
     tabs.appendChild(consoleTab);
+    tabs.appendChild(dataTab);
     tabs.appendChild(templateTab);
 
     const settings = getSettings();
@@ -255,6 +300,96 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     standardsNote.textContent =
       "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views. Country format affects country labels (confusion matrix stays ISO2).";
     standardsPane.appendChild(standardsNote);
+
+    const dataPane = doc.createElement("div");
+    dataPane.className = "ga-settings-pane";
+
+    const dataNote = doc.createElement("div");
+    dataNote.className = "ga-settings-note";
+    dataNote.textContent =
+      "Export/import your complete local dataset for moving to another browser or sharing with others. Compact exports omit raw payloads and re-derivable fields (e.g. guess countries). Imported data replaces your current local DB.";
+    dataPane.appendChild(dataNote);
+
+    const dataGrid = doc.createElement("div");
+    dataGrid.className = "ga-settings-grid";
+
+    const compactField = doc.createElement("div");
+    compactField.className = "ga-settings-field";
+    const compactLabel = doc.createElement("label");
+    compactLabel.textContent = "Export mode";
+    const compactSelect = doc.createElement("select");
+    compactSelect.innerHTML = `
+      <option value="compact">Compact (recommended)</option>
+      <option value="full">Full (includes derived fields)</option>
+    `;
+    compactSelect.value = "compact";
+    compactField.appendChild(compactLabel);
+    compactField.appendChild(compactSelect);
+
+    const aggField = doc.createElement("div");
+    aggField.className = "ga-settings-field";
+    const aggLabel = doc.createElement("label");
+    aggLabel.textContent = "Include aggregates";
+    const aggSelect = doc.createElement("select");
+    aggSelect.innerHTML = `<option value="yes">Yes (faster load)</option><option value="no">No (smaller)</option>`;
+    aggSelect.value = "yes";
+    aggField.appendChild(aggLabel);
+    aggField.appendChild(aggSelect);
+
+    const metaField = doc.createElement("div");
+    metaField.className = "ga-settings-field";
+    const metaLabel = doc.createElement("label");
+    metaLabel.textContent = "Include metadata";
+    const metaSelect = doc.createElement("select");
+    metaSelect.innerHTML = `<option value="yes">Yes</option><option value="no">No</option>`;
+    metaSelect.value = "yes";
+    metaField.appendChild(metaLabel);
+    metaField.appendChild(metaSelect);
+
+    const gzipField = doc.createElement("div");
+    gzipField.className = "ga-settings-field";
+    const gzipLabel = doc.createElement("label");
+    gzipLabel.textContent = "Compression";
+    const gzipSelect = doc.createElement("select");
+    gzipSelect.innerHTML = `<option value="gzip">GZip (.json.gz)</option><option value="plain">Plain JSON (.json)</option>`;
+    gzipSelect.value = "gzip";
+    gzipField.appendChild(gzipLabel);
+    gzipField.appendChild(gzipSelect);
+
+    dataGrid.appendChild(compactField);
+    dataGrid.appendChild(aggField);
+    dataGrid.appendChild(metaField);
+    dataGrid.appendChild(gzipField);
+    dataPane.appendChild(dataGrid);
+
+    const dataActions = doc.createElement("div");
+    dataActions.className = "ga-settings-actions";
+
+    const exportBtn = doc.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.className = "ga-filter-btn";
+    exportBtn.textContent = "Export data";
+    exportBtn.title = "Export your complete local dataset as a portable dump";
+
+    const importBtn = doc.createElement("button");
+    importBtn.type = "button";
+    importBtn.className = "ga-filter-btn";
+    importBtn.textContent = "Import data";
+    importBtn.title = "Import a portable dump (replaces your local DB)";
+
+    const importInput = doc.createElement("input");
+    importInput.type = "file";
+    importInput.accept = "application/json,.json,application/gzip,.gz,.json.gz";
+    importInput.style.display = "none";
+
+    const dataStatus = doc.createElement("div");
+    dataStatus.className = "ga-settings-status";
+
+    dataActions.appendChild(exportBtn);
+    dataActions.appendChild(importBtn);
+    dataActions.appendChild(importInput);
+    dataPane.appendChild(dataActions);
+    dataPane.appendChild(dataStatus);
 
     const templatePane = doc.createElement("div");
     templatePane.className = "ga-settings-pane";
@@ -509,6 +644,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     panes.appendChild(globalFiltersPane);
     panes.appendChild(drilldownsPane);
     panes.appendChild(consolePane);
+    panes.appendChild(dataPane);
     panes.appendChild(templatePane);
 
     const renderLayout = (mode: "section_layout" | "global_filters" | "drilldowns", host: HTMLDivElement, status: HTMLDivElement) => {
@@ -687,9 +823,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     let renderedGlobalFilters = false;
     let renderedDrilldowns = false;
 
-    const setActiveTab = (idx: 0 | 1 | 2 | 3 | 4 | 5 | 6) => {
-      const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, consoleTab, templateTab];
-      const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, consolePane, templatePane];
+    const setActiveTab = (idx: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7) => {
+      const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, consoleTab, dataTab, templateTab];
+      const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, consolePane, dataPane, templatePane];
       tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
       tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
       if (idx === 2 && !renderedSectionLayout) {
@@ -712,7 +848,8 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     globalFiltersTab.addEventListener("click", () => setActiveTab(3));
     drilldownsTab.addEventListener("click", () => setActiveTab(4));
     consoleTab.addEventListener("click", () => setActiveTab(5));
-    templateTab.addEventListener("click", () => setActiveTab(6));
+    dataTab.addEventListener("click", () => setActiveTab(6));
+    templateTab.addEventListener("click", () => setActiveTab(7));
 
     const persistSettings = async () => {
       const next: SemanticDashboardSettings = {
@@ -769,6 +906,82 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         templateStatus.classList.add("error");
       }
     };
+
+    exportBtn.addEventListener("click", async () => {
+      exportBtn.disabled = true;
+      importBtn.disabled = true;
+      dataStatus.textContent = "Building portable dump...";
+      dataStatus.className = "ga-settings-status";
+
+      try {
+        const compact = compactSelect.value === "compact";
+        const includeAggregates = aggSelect.value === "yes";
+        const includeMeta = metaSelect.value === "yes";
+        const useGzip = gzipSelect.value === "gzip";
+
+        const dump = await buildPortableDump({ compact, includeAggregates, includeMeta });
+        const { bytes, mime, ext } = await serializePortableDump(dump, { gzip: useGzip });
+        const filename = `geoanalyzr-data-${makeStamp()}.${ext}`;
+        downloadBytes(filename, bytes, mime);
+
+        const gamesCount = dump.data.games.length;
+        const roundsCount = dump.data.rounds.length;
+        const detailsCount = dump.data.details.length;
+        dataStatus.textContent = `Exported ${gamesCount} games, ${roundsCount} rounds, ${detailsCount} details (${formatBytes(bytes.length)}).`;
+        dataStatus.classList.add("ok");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        dataStatus.textContent = `Export failed: ${msg}`;
+        dataStatus.classList.add("error");
+      } finally {
+        exportBtn.disabled = false;
+        importBtn.disabled = false;
+      }
+    });
+
+    importBtn.addEventListener("click", () => {
+      importInput.value = "";
+      importInput.click();
+    });
+
+    importInput.addEventListener("change", async () => {
+      dataStatus.textContent = "";
+      dataStatus.className = "ga-settings-status";
+
+      const bytes = await readBytesFromFileInput(importInput);
+      if (!bytes) return;
+
+      exportBtn.disabled = true;
+      importBtn.disabled = true;
+      dataStatus.textContent = "Reading dump...";
+
+      try {
+        const dump = await parsePortableDumpBytes(bytes);
+        const gamesCount = dump.data.games?.length ?? 0;
+        const roundsCount = dump.data.rounds?.length ?? 0;
+        const detailsCount = dump.data.details?.length ?? 0;
+
+        const ok = targetWindow.confirm(
+          `Import this dataset and replace your local GeoAnalyzr DB?\n\nGames: ${gamesCount}\nRounds: ${roundsCount}\nDetails: ${detailsCount}\n\nThis cannot be undone.`
+        );
+        if (!ok) {
+          dataStatus.textContent = "Import canceled.";
+          return;
+        }
+
+        dataStatus.textContent = "Importing (replacing local DB)...";
+        await replaceDatabaseFromPortableDump(dump);
+        dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
+        dataStatus.classList.add("ok");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        dataStatus.textContent = `Import failed: ${msg}`;
+        dataStatus.classList.add("error");
+      } finally {
+        exportBtn.disabled = false;
+        importBtn.disabled = false;
+      }
+    });
 
     const downloadTextFile = (filename: string, text: string) => {
       const blob = new Blob([text], { type: "application/json;charset=utf-8" });

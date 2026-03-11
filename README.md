@@ -50,6 +50,7 @@ Tampermonkey can therefore detect and install updates automatically.
 - GeoAnalyzr does **not** use an external database and does not send analysis data to custom servers.
 - Data is stored locally in your browser (IndexedDB).
 - You can remove local data at any time using `Reset Database`.
+- You can export/import your dataset via `Settings → Data` (useful for moving browsers or sharing stats).
 
 ## Development
 
