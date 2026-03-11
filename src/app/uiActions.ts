@@ -1,4 +1,4 @@
-import { db } from "../db";
+import { db, isViewerMode, MAIN_DB_NAME, getActiveDbName } from "../db";
 import { updateData } from "../sync";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
 import { backfillGuessCountries } from "../migrations/backfillGuessCountries";
@@ -172,6 +172,16 @@ export async function refreshUI(ui: UI): Promise<void> {
 
 export function registerUiActions(ui: UI): void {
   ui.onUpdateClick(async () => {
+    if (isViewerMode()) {
+      const name = getActiveDbName();
+      ui.setStatus("Viewer mode: updates are disabled.");
+      alert(
+        `GeoAnalyzr is currently in Viewer mode (${name}).\n\n` +
+          `Fetching/updating data is disabled to avoid mixing datasets.\n\n` +
+          `Go to Settings → Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
+      );
+      return;
+    }
     const status = createThrottledStatus(ui.setStatus);
     try {
       status.flushNow("Update started...");

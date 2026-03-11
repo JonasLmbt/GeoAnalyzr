@@ -1,5 +1,34 @@
 import Dexie, { Table } from "dexie";
 
+export const MAIN_DB_NAME = "gg_analyzer_db";
+const ACTIVE_DB_STORAGE_KEY = "geoanalyzr_active_db_v1";
+
+function readActiveDbNameFromStorage(): string {
+  try {
+    const raw = globalThis?.localStorage?.getItem(ACTIVE_DB_STORAGE_KEY) ?? "";
+    const name = typeof raw === "string" ? raw.trim() : "";
+    return name || MAIN_DB_NAME;
+  } catch {
+    return MAIN_DB_NAME;
+  }
+}
+
+function writeActiveDbNameToStorage(name: string): void {
+  try {
+    globalThis?.localStorage?.setItem(ACTIVE_DB_STORAGE_KEY, name);
+  } catch {
+    // ignore
+  }
+}
+
+export function getActiveDbName(): string {
+  return readActiveDbNameFromStorage();
+}
+
+export function isViewerMode(): boolean {
+  return getActiveDbName() !== MAIN_DB_NAME;
+}
+
 export type GameType = "duels" | "classic" | "other";
 export type ModeFamily = "duels" | "teamduels" | "standard" | "streak" | "other";
 
@@ -332,8 +361,8 @@ export class GGDB extends Dexie {
   gameAgg!: Table<GameAggRow, string>;
   meta!: Table<MetaRow, string>;
 
-  constructor() {
-    super("gg_analyzer_db");
+  constructor(name: string = MAIN_DB_NAME) {
+    super(name);
 
     // v1 (old)
     this.version(1).stores({
@@ -413,4 +442,17 @@ export class GGDB extends Dexie {
   }
 }
 
-export const db = new GGDB();
+export let db = new GGDB(readActiveDbNameFromStorage());
+
+export async function switchActiveDb(name: string): Promise<void> {
+  const next = (typeof name === "string" ? name.trim() : "") || MAIN_DB_NAME;
+  if (next === db.name) return;
+  try {
+    db.close();
+  } catch {
+    // ignore
+  }
+  writeActiveDbNameToStorage(next);
+  db = new GGDB(next);
+  await db.open();
+}

@@ -2,6 +2,7 @@ import { db } from "../db";
 import { httpGetJson } from "../http";
 
 let cachedPlayerName: string | null | undefined;
+let cachedPlayerId: string | null | undefined;
 
 function asTrimmedString(v: unknown): string | undefined {
   const s = typeof v === "string" ? v.trim() : "";
@@ -90,6 +91,64 @@ async function guessPlayerNameFromDb(): Promise<string | undefined> {
     console.warn("Failed to guess player name from DB", e);
   }
   return undefined;
+}
+
+async function fetchPlayerIdFromApi(): Promise<string | undefined> {
+  const idCandidates = [
+    "https://www.geoguessr.com/api/v3/profiles",
+    "https://www.geoguessr.com/api/v4/profiles",
+    "https://www.geoguessr.com/api/v3/users/me"
+  ];
+
+  for (const url of idCandidates) {
+    try {
+      const res = await httpGetJson(url);
+      if (res.status < 200 || res.status >= 300) continue;
+      const id = pickFirst(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+      const playerId = asTrimmedString(id);
+      if (playerId) return playerId;
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+}
+
+async function guessPlayerIdFromDb(): Promise<string | undefined> {
+  try {
+    const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+    for (const d of latest as any[]) {
+      const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
+      if (candidate) return candidate;
+    }
+  } catch (e) {
+    try {
+      const all = await db.details.toArray();
+      const sorted = (all as any[]).slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+      for (const d of sorted.slice(0, 25)) {
+        const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
+        if (candidate) return candidate;
+      }
+    } catch {
+      // ignore
+    }
+    console.warn("Failed to guess player id from DB", e);
+  }
+  return undefined;
+}
+
+export async function getCurrentPlayerId(): Promise<string | undefined> {
+  if (cachedPlayerId !== undefined) return cachedPlayerId || undefined;
+
+  const fromApi = await fetchPlayerIdFromApi();
+  if (fromApi) {
+    cachedPlayerId = fromApi;
+    return fromApi;
+  }
+
+  const fromDb = await guessPlayerIdFromDb();
+  cachedPlayerId = fromDb ?? null;
+  return fromDb;
 }
 
 export async function getCurrentPlayerName(): Promise<string | undefined> {

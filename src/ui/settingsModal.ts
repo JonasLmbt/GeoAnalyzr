@@ -12,11 +12,15 @@ import {
   normalizeTheme,
   type SemanticDashboardSettings
 } from "./settingsStore";
+import { MAIN_DB_NAME, getActiveDbName, switchActiveDb } from "../db";
+import { invalidateRoundsCache } from "../engine/queryEngine";
+import { getCurrentPlayerId } from "../app/playerIdentity";
 import {
   buildPortableDump,
   parsePortableDumpBytes,
   replaceDatabaseFromPortableDump,
-  serializePortableDump
+  serializePortableDump,
+  importPortableDumpIntoNewDb
 } from "../portableDump";
 
 type SettingsModalOptions = {
@@ -103,6 +107,12 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
 
   const makeStamp = (): string => {
     return new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+  };
+
+  const normalizeDbNamePart = (value: string): string => {
+    const raw = typeof value === "string" ? value : "";
+    const cleaned = raw.trim().replace(/[^A-Za-z0-9_\-]/g, "_");
+    return cleaned.slice(0, 48) || "unknown";
   };
 
   const settingsModal = doc.createElement("div");
@@ -310,6 +320,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       "Export/import your complete local dataset for moving to another browser or sharing with others. Compact exports omit raw payloads and re-derivable fields (e.g. guess countries). Imported data replaces your current local DB.";
     dataPane.appendChild(dataNote);
 
+    const dataActive = doc.createElement("div");
+    dataActive.className = "ga-settings-note";
+    const updateActiveDbLabel = () => {
+      const active = getActiveDbName();
+      dataActive.textContent = active === MAIN_DB_NAME ? "Active dataset: Your data" : `Active dataset: Viewer (${active})`;
+    };
+    updateActiveDbLabel();
+    dataPane.appendChild(dataActive);
+
     const dataGrid = doc.createElement("div");
     dataGrid.className = "ga-settings-grid";
 
@@ -385,8 +404,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const dataStatus = doc.createElement("div");
     dataStatus.className = "ga-settings-status";
 
+    const switchMineBtn = doc.createElement("button");
+    switchMineBtn.type = "button";
+    switchMineBtn.className = "ga-filter-btn";
+    switchMineBtn.textContent = "Switch to my data";
+    switchMineBtn.title = "Switch back to your main dataset (gg_analyzer_db)";
+
     dataActions.appendChild(exportBtn);
     dataActions.appendChild(importBtn);
+    dataActions.appendChild(switchMineBtn);
     dataActions.appendChild(importInput);
     dataPane.appendChild(dataActions);
     dataPane.appendChild(dataStatus);
@@ -944,6 +970,26 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       importInput.click();
     });
 
+    switchMineBtn.addEventListener("click", () => {
+      void (async () => {
+        try {
+          switchMineBtn.disabled = true;
+          dataStatus.textContent = "";
+          await switchActiveDb(MAIN_DB_NAME);
+          invalidateRoundsCache();
+          updateActiveDbLabel();
+          dataStatus.textContent = "Switched to your dataset. Re-open the analysis window to reload.";
+          dataStatus.className = "ga-settings-status ok";
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          dataStatus.textContent = `Failed to switch dataset: ${msg}`;
+          dataStatus.className = "ga-settings-status error";
+        } finally {
+          switchMineBtn.disabled = false;
+        }
+      })();
+    });
+
     importInput.addEventListener("change", async () => {
       dataStatus.textContent = "";
       dataStatus.className = "ga-settings-status";
@@ -953,6 +999,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
 
       exportBtn.disabled = true;
       importBtn.disabled = true;
+      switchMineBtn.disabled = true;
       dataStatus.textContent = "Reading dump...";
 
       try {
@@ -960,18 +1007,69 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         const gamesCount = dump.data.games?.length ?? 0;
         const roundsCount = dump.data.rounds?.length ?? 0;
         const detailsCount = dump.data.details?.length ?? 0;
+        const dumpOwnerId = typeof dump.owner?.playerId === "string" ? dump.owner.playerId.trim() : "";
+        const dumpOwnerName = typeof dump.owner?.playerName === "string" ? dump.owner.playerName.trim() : "";
 
-        const ok = targetWindow.confirm(
-          `Import this dataset and replace your local GeoAnalyzr DB?\n\nGames: ${gamesCount}\nRounds: ${roundsCount}\nDetails: ${detailsCount}\n\nThis cannot be undone.`
+        const currentPlayerId = (await getCurrentPlayerId()) ?? "";
+        const isOwnerMatch = dumpOwnerId && currentPlayerId && dumpOwnerId === currentPlayerId;
+
+        if (isOwnerMatch) {
+          if (getActiveDbName() !== MAIN_DB_NAME) {
+            dataStatus.textContent = "You are in Viewer mode. Switch to your dataset first to replace it.";
+            dataStatus.classList.add("error");
+            return;
+          }
+
+          const ok = targetWindow.confirm(
+            `This dump matches the currently logged-in player.\n\n` +
+              `Replace your local GeoAnalyzr DB with this dataset?\n\n` +
+              `Games: ${gamesCount}\nRounds: ${roundsCount}\nDetails: ${detailsCount}\n\n` +
+              `This cannot be undone.`
+          );
+          if (!ok) {
+            dataStatus.textContent = "Import canceled.";
+            return;
+          }
+
+          dataStatus.textContent = "Importing (replacing your local DB)...";
+          await replaceDatabaseFromPortableDump(dump);
+          invalidateRoundsCache();
+          updateActiveDbLabel();
+          dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
+          dataStatus.classList.add("ok");
+          return;
+        }
+
+        const ownerLabel = dumpOwnerName
+          ? `${dumpOwnerName}${dumpOwnerId ? ` (${dumpOwnerId.slice(0, 8)}…)` : ""}`
+          : dumpOwnerId
+            ? `${dumpOwnerId.slice(0, 8)}…`
+            : "unknown player";
+
+        const okViewer = targetWindow.confirm(
+          `This dump does NOT match the currently logged-in player.\n\n` +
+            `It will be imported as a separate Viewer dataset for: ${ownerLabel}.\n` +
+            `Your own dataset will NOT be overwritten.\n\n` +
+            `Games: ${gamesCount}\nRounds: ${roundsCount}\nDetails: ${detailsCount}\n\n` +
+            `Import now and switch to Viewer mode?`
         );
-        if (!ok) {
+        if (!okViewer) {
           dataStatus.textContent = "Import canceled.";
           return;
         }
 
-        dataStatus.textContent = "Importing (replacing local DB)...";
-        await replaceDatabaseFromPortableDump(dump);
-        dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
+        const viewerKey = normalizeDbNamePart(dumpOwnerId || dumpOwnerName || `viewer_${Date.now()}`);
+        const viewerDbName = `gg_analyzer_db_view_${viewerKey}`;
+
+        dataStatus.textContent = "Importing as Viewer dataset...";
+        await importPortableDumpIntoNewDb(viewerDbName, dump);
+
+        dataStatus.textContent = "Switching to Viewer dataset...";
+        await switchActiveDb(viewerDbName);
+        invalidateRoundsCache();
+        updateActiveDbLabel();
+
+        dataStatus.textContent = "Viewer dataset imported and activated. Close and re-open the analysis window to load it.";
         dataStatus.classList.add("ok");
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -980,6 +1078,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       } finally {
         exportBtn.disabled = false;
         importBtn.disabled = false;
+        switchMineBtn.disabled = false;
       }
     });
 

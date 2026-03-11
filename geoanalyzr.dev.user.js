@@ -7096,14 +7096,37 @@ ${shapes}`.trim();
   var import_wrapper_default = Dexie;
 
   // src/db.ts
+  var MAIN_DB_NAME = "gg_analyzer_db";
+  var ACTIVE_DB_STORAGE_KEY = "geoanalyzr_active_db_v1";
+  function readActiveDbNameFromStorage() {
+    try {
+      const raw = globalThis?.localStorage?.getItem(ACTIVE_DB_STORAGE_KEY) ?? "";
+      const name = typeof raw === "string" ? raw.trim() : "";
+      return name || MAIN_DB_NAME;
+    } catch {
+      return MAIN_DB_NAME;
+    }
+  }
+  function writeActiveDbNameToStorage(name) {
+    try {
+      globalThis?.localStorage?.setItem(ACTIVE_DB_STORAGE_KEY, name);
+    } catch {
+    }
+  }
+  function getActiveDbName() {
+    return readActiveDbNameFromStorage();
+  }
+  function isViewerMode() {
+    return getActiveDbName() !== MAIN_DB_NAME;
+  }
   var GGDB = class extends import_wrapper_default {
     games;
     rounds;
     details;
     gameAgg;
     meta;
-    constructor() {
-      super("gg_analyzer_db");
+    constructor(name = MAIN_DB_NAME) {
+      super(name);
       this.version(1).stores({
         games: "gameId, playedAt, type, mode",
         rounds: "id, gameId, roundNumber",
@@ -7172,7 +7195,18 @@ ${shapes}`.trim();
       });
     }
   };
-  var db = new GGDB();
+  var db = new GGDB(readActiveDbNameFromStorage());
+  async function switchActiveDb(name) {
+    const next = (typeof name === "string" ? name.trim() : "") || MAIN_DB_NAME;
+    if (next === db.name) return;
+    try {
+      db.close();
+    } catch {
+    }
+    writeActiveDbNameToStorage(next);
+    db = new GGDB(next);
+    await db.open();
+  }
 
   // src/gm.ts
   function getGlobalGmXmlhttpRequest() {
@@ -41647,6 +41681,140 @@ ${describeError(err2)}` : message;
     }
   };
 
+  // src/app/playerIdentity.ts
+  var cachedPlayerName;
+  var cachedPlayerId;
+  function asTrimmedString3(v) {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : void 0;
+  }
+  function pickFirst5(obj, paths) {
+    for (const path of paths) {
+      if (!obj || typeof obj !== "object") continue;
+      const parts = path.split(".");
+      let cur = obj;
+      let ok = true;
+      for (const p of parts) {
+        if (!cur || typeof cur !== "object" || !(p in cur)) {
+          ok = false;
+          break;
+        }
+        cur = cur[p];
+      }
+      if (!ok) continue;
+      if (cur !== void 0 && cur !== null) return cur;
+    }
+    return void 0;
+  }
+  async function fetchPlayerNameFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    let playerId;
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        playerId = asTrimmedString3(id);
+        if (playerId) break;
+      } catch {
+      }
+    }
+    if (!playerId) return void 0;
+    try {
+      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+      if (res.status < 200 || res.status >= 300) return void 0;
+      return asTrimmedString3(res.data?.nick);
+    } catch {
+      return void 0;
+    }
+  }
+  async function guessPlayerNameFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
+        if (candidate) return candidate;
+      }
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player name from DB", e);
+    }
+    return void 0;
+  }
+  async function fetchPlayerIdFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        const playerId = asTrimmedString3(id);
+        if (playerId) return playerId;
+      } catch {
+      }
+    }
+    return void 0;
+  }
+  async function guessPlayerIdFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString3(d?.player_self_id) ?? asTrimmedString3(d?.playerOneId) ?? asTrimmedString3(d?.playerId);
+        if (candidate) return candidate;
+      }
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString3(d?.player_self_id) ?? asTrimmedString3(d?.playerOneId) ?? asTrimmedString3(d?.playerId);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player id from DB", e);
+    }
+    return void 0;
+  }
+  async function getCurrentPlayerId() {
+    if (cachedPlayerId !== void 0) return cachedPlayerId || void 0;
+    const fromApi = await fetchPlayerIdFromApi();
+    if (fromApi) {
+      cachedPlayerId = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerIdFromDb();
+    cachedPlayerId = fromDb ?? null;
+    return fromDb;
+  }
+  async function getCurrentPlayerName() {
+    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
+    const fromApi = await fetchPlayerNameFromApi();
+    if (fromApi) {
+      cachedPlayerName = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerNameFromDb();
+    cachedPlayerName = fromDb ?? null;
+    return fromDb;
+  }
+
   // node_modules/fflate/esm/browser.js
   var ch2 = {};
   var wk = (function(c, id, msg, transfer, cb) {
@@ -42663,7 +42831,7 @@ ${describeError(err2)}` : message;
   }
 
   // src/portableDump.ts
-  var DB_NAME = "gg_analyzer_db";
+  var DB_NAME = MAIN_DB_NAME;
   var DB_SCHEMA_VERSION = 5;
   var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set([
     "raw",
@@ -42702,6 +42870,7 @@ ${describeError(err2)}` : message;
     return chunks;
   }
   async function buildPortableDump(opts) {
+    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
     const [games, rounds, details, gameAgg, meta] = await Promise.all([
       db.games.toArray(),
       db.rounds.toArray(),
@@ -42714,6 +42883,7 @@ ${describeError(err2)}` : message;
       formatVersion: 1,
       createdAt: Date.now(),
       appVersion: getUserscriptVersion(),
+      owner: { playerId: ownerId, playerName: ownerName },
       dbName: DB_NAME,
       dbSchemaVersion: DB_SCHEMA_VERSION,
       options: {
@@ -42777,13 +42947,43 @@ ${describeError(err2)}` : message;
     const fetchRanKey = "fetch_data_ran_v1";
     const hasFetchRan = meta.some((m) => m?.key === fetchRanKey);
     const metaWithFetchRan = hasFetchRan ? meta : meta.concat([{ key: fetchRanKey, value: { doneAt: Date.now(), inferred: true }, updatedAt: Date.now() }]);
-    await db.transaction("rw", db.games, db.rounds, db.details, db.gameAgg, db.meta, async () => {
-      for (const chunk of chunkArray(games, 2e3)) await db.games.bulkPut(chunk);
-      for (const chunk of chunkArray(rounds, 2e3)) await db.rounds.bulkPut(chunk);
-      for (const chunk of chunkArray(details, 2e3)) await db.details.bulkPut(chunk);
-      for (const chunk of chunkArray(gameAgg, 2e3)) await db.gameAgg.bulkPut(chunk);
-      for (const chunk of chunkArray(metaWithFetchRan, 2e3)) await db.meta.bulkPut(chunk);
+    await importPortableDumpIntoDb(db, dump, { clearFirst: false, forceMeta: metaWithFetchRan });
+  }
+  async function importPortableDumpIntoDb(targetDb, dump, opts) {
+    const games = dump.data.games ?? [];
+    const rounds = dump.data.rounds ?? [];
+    const details = dump.data.details ?? [];
+    const gameAgg = dump.data.gameAgg ?? [];
+    const meta = opts.forceMeta ?? (dump.data.meta ?? []);
+    await targetDb.transaction("rw", targetDb.games, targetDb.rounds, targetDb.details, targetDb.gameAgg, targetDb.meta, async () => {
+      if (opts.clearFirst) {
+        await Promise.all([
+          targetDb.games.clear(),
+          targetDb.rounds.clear(),
+          targetDb.details.clear(),
+          targetDb.gameAgg.clear(),
+          targetDb.meta.clear()
+        ]);
+      }
+      for (const chunk of chunkArray(games, 2e3)) await targetDb.games.bulkPut(chunk);
+      for (const chunk of chunkArray(rounds, 2e3)) await targetDb.rounds.bulkPut(chunk);
+      for (const chunk of chunkArray(details, 2e3)) await targetDb.details.bulkPut(chunk);
+      for (const chunk of chunkArray(gameAgg, 2e3)) await targetDb.gameAgg.bulkPut(chunk);
+      for (const chunk of chunkArray(meta, 2e3)) await targetDb.meta.bulkPut(chunk);
     });
+  }
+  async function importPortableDumpIntoNewDb(name, dump) {
+    const dbName = (typeof name === "string" ? name.trim() : "") || `geoanalyzr_view_${Date.now()}`;
+    const target = new GGDB(dbName);
+    await target.open();
+    try {
+      await importPortableDumpIntoDb(target, dump, { clearFirst: true });
+    } finally {
+      try {
+        target.close();
+      } catch {
+      }
+    }
   }
 
   // src/ui/settingsModal.ts
@@ -42851,6 +43051,11 @@ ${describeError(err2)}` : message;
     };
     const makeStamp = () => {
       return (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+    };
+    const normalizeDbNamePart = (value) => {
+      const raw = typeof value === "string" ? value : "";
+      const cleaned = raw.trim().replace(/[^A-Za-z0-9_\-]/g, "_");
+      return cleaned.slice(0, 48) || "unknown";
     };
     const settingsModal = doc.createElement("div");
     settingsModal.className = "ga-settings-modal";
@@ -43030,6 +43235,14 @@ ${describeError(err2)}` : message;
       dataNote.className = "ga-settings-note";
       dataNote.textContent = "Export/import your complete local dataset for moving to another browser or sharing with others. Compact exports omit raw payloads and re-derivable fields (e.g. guess countries). Imported data replaces your current local DB.";
       dataPane.appendChild(dataNote);
+      const dataActive = doc.createElement("div");
+      dataActive.className = "ga-settings-note";
+      const updateActiveDbLabel = () => {
+        const active = getActiveDbName();
+        dataActive.textContent = active === MAIN_DB_NAME ? "Active dataset: Your data" : `Active dataset: Viewer (${active})`;
+      };
+      updateActiveDbLabel();
+      dataPane.appendChild(dataActive);
       const dataGrid = doc.createElement("div");
       dataGrid.className = "ga-settings-grid";
       const compactField = doc.createElement("div");
@@ -43094,8 +43307,14 @@ ${describeError(err2)}` : message;
       importInput.style.display = "none";
       const dataStatus = doc.createElement("div");
       dataStatus.className = "ga-settings-status";
+      const switchMineBtn = doc.createElement("button");
+      switchMineBtn.type = "button";
+      switchMineBtn.className = "ga-filter-btn";
+      switchMineBtn.textContent = "Switch to my data";
+      switchMineBtn.title = "Switch back to your main dataset (gg_analyzer_db)";
       dataActions.appendChild(exportBtn);
       dataActions.appendChild(importBtn);
+      dataActions.appendChild(switchMineBtn);
       dataActions.appendChild(importInput);
       dataPane.appendChild(dataActions);
       dataPane.appendChild(dataStatus);
@@ -43603,6 +43822,25 @@ ${describeError(err2)}` : message;
         importInput.value = "";
         importInput.click();
       });
+      switchMineBtn.addEventListener("click", () => {
+        void (async () => {
+          try {
+            switchMineBtn.disabled = true;
+            dataStatus.textContent = "";
+            await switchActiveDb(MAIN_DB_NAME);
+            invalidateRoundsCache();
+            updateActiveDbLabel();
+            dataStatus.textContent = "Switched to your dataset. Re-open the analysis window to reload.";
+            dataStatus.className = "ga-settings-status ok";
+          } catch (err2) {
+            const msg = err2 instanceof Error ? err2.message : String(err2);
+            dataStatus.textContent = `Failed to switch dataset: ${msg}`;
+            dataStatus.className = "ga-settings-status error";
+          } finally {
+            switchMineBtn.disabled = false;
+          }
+        })();
+      });
       importInput.addEventListener("change", async () => {
         dataStatus.textContent = "";
         dataStatus.className = "ga-settings-status";
@@ -43610,28 +43848,72 @@ ${describeError(err2)}` : message;
         if (!bytes) return;
         exportBtn.disabled = true;
         importBtn.disabled = true;
+        switchMineBtn.disabled = true;
         dataStatus.textContent = "Reading dump...";
         try {
           const dump = await parsePortableDumpBytes(bytes);
           const gamesCount = dump.data.games?.length ?? 0;
           const roundsCount = dump.data.rounds?.length ?? 0;
           const detailsCount = dump.data.details?.length ?? 0;
-          const ok = targetWindow.confirm(
-            `Import this dataset and replace your local GeoAnalyzr DB?
+          const dumpOwnerId = typeof dump.owner?.playerId === "string" ? dump.owner.playerId.trim() : "";
+          const dumpOwnerName = typeof dump.owner?.playerName === "string" ? dump.owner.playerName.trim() : "";
+          const currentPlayerId = await getCurrentPlayerId() ?? "";
+          const isOwnerMatch = dumpOwnerId && currentPlayerId && dumpOwnerId === currentPlayerId;
+          if (isOwnerMatch) {
+            if (getActiveDbName() !== MAIN_DB_NAME) {
+              dataStatus.textContent = "You are in Viewer mode. Switch to your dataset first to replace it.";
+              dataStatus.classList.add("error");
+              return;
+            }
+            const ok = targetWindow.confirm(
+              `This dump matches the currently logged-in player.
+
+Replace your local GeoAnalyzr DB with this dataset?
 
 Games: ${gamesCount}
 Rounds: ${roundsCount}
 Details: ${detailsCount}
 
 This cannot be undone.`
+            );
+            if (!ok) {
+              dataStatus.textContent = "Import canceled.";
+              return;
+            }
+            dataStatus.textContent = "Importing (replacing your local DB)...";
+            await replaceDatabaseFromPortableDump(dump);
+            invalidateRoundsCache();
+            updateActiveDbLabel();
+            dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
+            dataStatus.classList.add("ok");
+            return;
+          }
+          const ownerLabel = dumpOwnerName ? `${dumpOwnerName}${dumpOwnerId ? ` (${dumpOwnerId.slice(0, 8)}\u2026)` : ""}` : dumpOwnerId ? `${dumpOwnerId.slice(0, 8)}\u2026` : "unknown player";
+          const okViewer = targetWindow.confirm(
+            `This dump does NOT match the currently logged-in player.
+
+It will be imported as a separate Viewer dataset for: ${ownerLabel}.
+Your own dataset will NOT be overwritten.
+
+Games: ${gamesCount}
+Rounds: ${roundsCount}
+Details: ${detailsCount}
+
+Import now and switch to Viewer mode?`
           );
-          if (!ok) {
+          if (!okViewer) {
             dataStatus.textContent = "Import canceled.";
             return;
           }
-          dataStatus.textContent = "Importing (replacing local DB)...";
-          await replaceDatabaseFromPortableDump(dump);
-          dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
+          const viewerKey = normalizeDbNamePart(dumpOwnerId || dumpOwnerName || `viewer_${Date.now()}`);
+          const viewerDbName = `gg_analyzer_db_view_${viewerKey}`;
+          dataStatus.textContent = "Importing as Viewer dataset...";
+          await importPortableDumpIntoNewDb(viewerDbName, dump);
+          dataStatus.textContent = "Switching to Viewer dataset...";
+          await switchActiveDb(viewerDbName);
+          invalidateRoundsCache();
+          updateActiveDbLabel();
+          dataStatus.textContent = "Viewer dataset imported and activated. Close and re-open the analysis window to load it.";
           dataStatus.classList.add("ok");
         } catch (err2) {
           const msg = err2 instanceof Error ? err2.message : String(err2);
@@ -43640,6 +43922,7 @@ This cannot be undone.`
         } finally {
           exportBtn.disabled = false;
           importBtn.disabled = false;
+          switchMineBtn.disabled = false;
         }
       });
       const downloadTextFile = (filename, text) => {
@@ -53261,89 +53544,6 @@ This cannot be undone.`
     await renderNow();
   }
 
-  // src/app/playerIdentity.ts
-  var cachedPlayerName;
-  function asTrimmedString3(v) {
-    const s = typeof v === "string" ? v.trim() : "";
-    return s ? s : void 0;
-  }
-  function pickFirst5(obj, paths) {
-    for (const path of paths) {
-      if (!obj || typeof obj !== "object") continue;
-      const parts = path.split(".");
-      let cur = obj;
-      let ok = true;
-      for (const p of parts) {
-        if (!cur || typeof cur !== "object" || !(p in cur)) {
-          ok = false;
-          break;
-        }
-        cur = cur[p];
-      }
-      if (!ok) continue;
-      if (cur !== void 0 && cur !== null) return cur;
-    }
-    return void 0;
-  }
-  async function fetchPlayerNameFromApi() {
-    const idCandidates = [
-      "https://www.geoguessr.com/api/v3/profiles",
-      "https://www.geoguessr.com/api/v4/profiles",
-      "https://www.geoguessr.com/api/v3/users/me"
-    ];
-    let playerId;
-    for (const url of idCandidates) {
-      try {
-        const res = await httpGetJson(url);
-        if (res.status < 200 || res.status >= 300) continue;
-        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
-        playerId = asTrimmedString3(id);
-        if (playerId) break;
-      } catch {
-      }
-    }
-    if (!playerId) return void 0;
-    try {
-      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
-      if (res.status < 200 || res.status >= 300) return void 0;
-      return asTrimmedString3(res.data?.nick);
-    } catch {
-      return void 0;
-    }
-  }
-  async function guessPlayerNameFromDb() {
-    try {
-      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-      for (const d of latest) {
-        const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
-        if (candidate) return candidate;
-      }
-    } catch (e) {
-      try {
-        const all = await db.details.toArray();
-        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-        for (const d of sorted.slice(0, 25)) {
-          const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
-          if (candidate) return candidate;
-        }
-      } catch {
-      }
-      console.warn("Failed to guess player name from DB", e);
-    }
-    return void 0;
-  }
-  async function getCurrentPlayerName() {
-    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
-    const fromApi = await fetchPlayerNameFromApi();
-    if (fromApi) {
-      cachedPlayerName = fromApi;
-      return fromApi;
-    }
-    const fromDb = await guessPlayerNameFromDb();
-    cachedPlayerName = fromDb ?? null;
-    return fromDb;
-  }
-
   // src/ui.ts
   function cloneTemplate2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
@@ -53780,6 +53980,18 @@ ${describe(error)}`;
   }
   function registerUiActions(ui) {
     ui.onUpdateClick(async () => {
+      if (isViewerMode()) {
+        const name = getActiveDbName();
+        ui.setStatus("Viewer mode: updates are disabled.");
+        alert(
+          `GeoAnalyzr is currently in Viewer mode (${name}).
+
+Fetching/updating data is disabled to avoid mixing datasets.
+
+Go to Settings \u2192 Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
+        );
+        return;
+      }
       const status = createThrottledStatus(ui.setStatus);
       try {
         status.flushNow("Update started...");

@@ -1,5 +1,6 @@
 import { gunzip, gzip, strFromU8, strToU8 } from "fflate";
-import { db, type FeedGameRow, type GameAggRow, type GameRow, type MetaRow, type RoundRow } from "./db";
+import { GGDB, MAIN_DB_NAME, db, type FeedGameRow, type GameAggRow, type GameRow, type MetaRow, type RoundRow } from "./db";
+import { getCurrentPlayerId, getCurrentPlayerName } from "./app/playerIdentity";
 
 export type PortableDumpFormat = "geoanalyzr-portable";
 
@@ -8,6 +9,10 @@ export type PortableDumpV1 = {
   formatVersion: 1;
   createdAt: number;
   appVersion?: string;
+  owner?: {
+    playerId?: string;
+    playerName?: string;
+  };
   dbName: string;
   dbSchemaVersion: number;
   options: {
@@ -34,7 +39,7 @@ type SerializeOptions = {
   gzip: boolean;
 };
 
-const DB_NAME = "gg_analyzer_db";
+const DB_NAME = MAIN_DB_NAME;
 const DB_SCHEMA_VERSION = 5;
 
 const COMPACT_DROP_KEYS = new Set<string>([
@@ -78,6 +83,7 @@ function chunkArray<T>(arr: T[], chunkSize: number): T[][] {
 }
 
 export async function buildPortableDump(opts: ExportOptions): Promise<PortableDumpV1> {
+  const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
   const [games, rounds, details, gameAgg, meta] = await Promise.all([
     db.games.toArray(),
     db.rounds.toArray(),
@@ -91,6 +97,7 @@ export async function buildPortableDump(opts: ExportOptions): Promise<PortableDu
     formatVersion: 1,
     createdAt: Date.now(),
     appVersion: getUserscriptVersion(),
+    owner: { playerId: ownerId, playerName: ownerName },
     dbName: DB_NAME,
     dbSchemaVersion: DB_SCHEMA_VERSION,
     options: {
@@ -171,13 +178,50 @@ export async function replaceDatabaseFromPortableDump(dump: PortableDumpV1): Pro
     ? meta
     : meta.concat([{ key: fetchRanKey, value: { doneAt: Date.now(), inferred: true }, updatedAt: Date.now() } as MetaRow]);
 
-  await db.transaction("rw", db.games, db.rounds, db.details, db.gameAgg, db.meta, async () => {
-    // Insert in chunks to keep transactions responsive on large datasets.
-    for (const chunk of chunkArray(games, 2000)) await db.games.bulkPut(chunk);
-    for (const chunk of chunkArray(rounds, 2000)) await db.rounds.bulkPut(chunk);
-    for (const chunk of chunkArray(details, 2000)) await db.details.bulkPut(chunk);
-    for (const chunk of chunkArray(gameAgg, 2000)) await db.gameAgg.bulkPut(chunk);
-    for (const chunk of chunkArray(metaWithFetchRan, 2000)) await db.meta.bulkPut(chunk);
+  await importPortableDumpIntoDb(db, dump, { clearFirst: false, forceMeta: metaWithFetchRan });
+}
+
+export async function importPortableDumpIntoDb(
+  targetDb: GGDB,
+  dump: PortableDumpV1,
+  opts: { clearFirst: boolean; forceMeta?: MetaRow[] }
+): Promise<void> {
+  const games = dump.data.games ?? [];
+  const rounds = dump.data.rounds ?? [];
+  const details = dump.data.details ?? [];
+  const gameAgg = dump.data.gameAgg ?? [];
+  const meta = opts.forceMeta ?? (dump.data.meta ?? []);
+
+  await targetDb.transaction("rw", targetDb.games, targetDb.rounds, targetDb.details, targetDb.gameAgg, targetDb.meta, async () => {
+    if (opts.clearFirst) {
+      await Promise.all([
+        targetDb.games.clear(),
+        targetDb.rounds.clear(),
+        targetDb.details.clear(),
+        targetDb.gameAgg.clear(),
+        targetDb.meta.clear()
+      ]);
+    }
+
+    for (const chunk of chunkArray(games, 2000)) await targetDb.games.bulkPut(chunk);
+    for (const chunk of chunkArray(rounds, 2000)) await targetDb.rounds.bulkPut(chunk);
+    for (const chunk of chunkArray(details, 2000)) await targetDb.details.bulkPut(chunk);
+    for (const chunk of chunkArray(gameAgg, 2000)) await targetDb.gameAgg.bulkPut(chunk);
+    for (const chunk of chunkArray(meta, 2000)) await targetDb.meta.bulkPut(chunk);
   });
 }
 
+export async function importPortableDumpIntoNewDb(name: string, dump: PortableDumpV1): Promise<void> {
+  const dbName = (typeof name === "string" ? name.trim() : "") || `geoanalyzr_view_${Date.now()}`;
+  const target = new GGDB(dbName);
+  await target.open();
+  try {
+    await importPortableDumpIntoDb(target, dump, { clearFirst: true });
+  } finally {
+    try {
+      target.close();
+    } catch {
+      // ignore
+    }
+  }
+}
