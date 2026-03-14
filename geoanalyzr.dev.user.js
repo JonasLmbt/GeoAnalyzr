@@ -8490,12 +8490,71 @@ ${shapes}`.trim();
     });
   }
   async function runServerSyncOnce(settings) {
+    return runServerSyncOnceWithOptions(settings, {});
+  }
+  async function runServerSyncOnceWithOptions(settings, opts = {}) {
     const endpointUrl = (settings.endpointUrl || "").trim();
     if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
     const token = (settings.token || "").trim();
     if (!token) throw new Error("Missing sync token.");
-    const cursorFrom = await getLastServerSyncCursor();
-    const delta = await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
+    const forceFull = opts.forceFull === true;
+    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+    const delta = forceFull ? await (async () => {
+      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
+        db.games.toArray(),
+        db.rounds.toArray(),
+        db.details.toArray(),
+        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
+      ]);
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesAll) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsAll) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+      const games = settings.compact ? gamesAll.map(compactRecord) : gamesAll;
+      const rounds = settings.compact ? roundsAll.map(compactRecord) : roundsAll;
+      const details = settings.compact ? detailsAll.map(compactRecord) : detailsAll;
+      const gameAgg = settings.compact ? gameAggAll.map(compactRecord) : gameAggAll;
+      const tables = {
+        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+      };
+      const cursorToCandidates = [];
+      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
+      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
+      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
+      const envelope = {
+        schema: "geoanalyzr-sync",
+        schemaVersion: 1,
+        createdAt: Date.now(),
+        appVersion: getUserscriptVersion(),
+        owner: { playerId: ownerId, playerName: ownerName },
+        cursor: { from: 0, to: cursorTo },
+        options: { compact: settings.compact, includeAggregates: settings.includeAggregates, forceFull: true },
+        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+        tables
+      };
+      const json = JSON.stringify(envelope);
+      const bytesGzip = await gzipJson(json);
+      return {
+        cursorFrom: 0,
+        cursorTo,
+        counts: envelope.counts,
+        json,
+        bytesJson: json.length,
+        bytesGzip
+      };
+    })() : await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
     const headers = {
       "Content-Type": "application/json",
       "Content-Encoding": "gzip",
@@ -8770,9 +8829,10 @@ ${shapes}`.trim();
     let discordHandler = null;
     updateBtn.addEventListener("click", () => void updateHandler?.());
     if (syncBtn) {
-      syncBtn.addEventListener("click", async () => {
+      syncBtn.addEventListener("click", async (ev) => {
         syncBtn.disabled = true;
-        status.textContent = "Syncing...";
+        const forceFull = !!(ev && ev.shiftKey);
+        status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
         try {
           let settings = loadServerSyncSettings();
           if (!settings.token) {
@@ -8812,9 +8872,9 @@ ${shapes}`.trim();
                 cleanup();
                 reject(new Error("Link timeout"));
               }, 2 * 60 * 1e3);
-              const onMsg = (ev) => {
-                if (ev.origin !== linkOrigin) return;
-                const d = ev.data;
+              const onMsg = (ev2) => {
+                if (ev2.origin !== linkOrigin) return;
+                const d = ev2.data;
                 if (!d || d.type !== "geoanalyzr_sync_token") return;
                 const t = typeof d.token === "string" ? d.token.trim() : "";
                 const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
@@ -8836,9 +8896,10 @@ ${shapes}`.trim();
             saveServerSyncSettings({ token });
             settings = loadServerSyncSettings();
           }
-          const res = await runServerSyncOnce(settings);
+          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
           const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-          status.textContent = res.ok ? `Synced \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+          const modeLabel = forceFull ? "Synced full" : "Synced";
+          status.textContent = res.ok ? `${modeLabel} \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
         } catch (e) {
           status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
         } finally {

@@ -339,13 +339,86 @@ function gmPostBytes(
 }
 
 export async function runServerSyncOnce(settings: ServerSyncSettings): Promise<ServerSyncStatus> {
+  return runServerSyncOnceWithOptions(settings, {});
+}
+
+export async function runServerSyncOnceWithOptions(
+  settings: ServerSyncSettings,
+  opts: { forceFull?: boolean } = {}
+): Promise<ServerSyncStatus> {
   const endpointUrl = (settings.endpointUrl || "").trim();
   if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
   const token = (settings.token || "").trim();
   if (!token) throw new Error("Missing sync token.");
 
-  const cursorFrom = await getLastServerSyncCursor();
-  const delta = await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
+  const forceFull = opts.forceFull === true;
+  const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+
+  const delta = forceFull
+    ? await (async () => {
+        const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+        const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
+          db.games.toArray(),
+          db.rounds.toArray(),
+          db.details.toArray(),
+          settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([] as GameAggRow[])
+        ]);
+
+        // Backfill missing round.playedAt from game.playedAt for the full snapshot too.
+        const gamePlayedAt = new Map<string, number>();
+        for (const g of gamesAll) {
+          if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+        }
+        for (const r of roundsAll as any[]) {
+          if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+          const gid = typeof r?.gameId === "string" ? r.gameId : "";
+          const ts = gid ? gamePlayedAt.get(gid) : undefined;
+          if (typeof ts === "number") (r as any).playedAt = ts;
+        }
+
+        const games = settings.compact ? gamesAll.map(compactRecord) : gamesAll;
+        const rounds = settings.compact ? (roundsAll as any[]).map(compactRecord) : roundsAll;
+        const details = settings.compact ? (detailsAll as any[]).map(compactRecord) : detailsAll;
+        const gameAgg = settings.compact ? (gameAggAll as any[]).map(compactRecord) : gameAggAll;
+
+        const tables: Record<string, ColumnarTable> = {
+          games: toColumnar(games as any, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+          rounds: toColumnar(rounds as any, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+          details: toColumnar(details as any, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+          ...(settings.includeAggregates ? { gameAgg: toColumnar(gameAgg as any, ["gameId", "computedAt", "aggVersion"]) } : {})
+        };
+
+        const cursorToCandidates: number[] = [];
+        for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+        for (const r of roundsAll as any[]) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
+        for (const d of detailsAll as any[]) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+        for (const a of gameAggAll as any[]) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
+        const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
+
+        const envelope = {
+          schema: "geoanalyzr-sync",
+          schemaVersion: 1,
+          createdAt: Date.now(),
+          appVersion: getUserscriptVersion(),
+          owner: { playerId: ownerId, playerName: ownerName },
+          cursor: { from: 0, to: cursorTo },
+          options: { compact: settings.compact, includeAggregates: settings.includeAggregates, forceFull: true },
+          counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+          tables
+        };
+
+        const json = JSON.stringify(envelope);
+        const bytesGzip = await gzipJson(json);
+        return {
+          cursorFrom: 0,
+          cursorTo,
+          counts: envelope.counts,
+          json,
+          bytesJson: json.length,
+          bytesGzip
+        };
+      })()
+    : await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

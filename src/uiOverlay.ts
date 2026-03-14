@@ -1,5 +1,5 @@
 import { logoSvgMarkup } from "./ui/logo";
-import { loadServerSyncSettings, runServerSyncOnce, saveServerSyncSettings } from "./serverSync";
+import { loadServerSyncSettings, runServerSyncOnceWithOptions, saveServerSyncSettings } from "./serverSync";
 import { getGmXmlhttpRequest } from "./gm";
 
 type Counts = {
@@ -285,9 +285,10 @@ export function createUIOverlay(): UIOverlay {
 
   updateBtn.addEventListener("click", () => void updateHandler?.());
   if (syncBtn) {
-    syncBtn.addEventListener("click", async () => {
+    syncBtn.addEventListener("click", async (ev) => {
       syncBtn.disabled = true;
-      status.textContent = "Syncing...";
+      const forceFull = !!(ev && (ev as any).shiftKey);
+      status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
       try {
         let settings = loadServerSyncSettings();
         if (!settings.token) {
@@ -360,9 +361,10 @@ export function createUIOverlay(): UIOverlay {
           saveServerSyncSettings({ token });
           settings = loadServerSyncSettings();
         }
-        const res = await runServerSyncOnce(settings);
+        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
         const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-        status.textContent = res.ok ? `Synced · rows ${rowsTotal} · ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+        const modeLabel = forceFull ? "Synced full" : "Synced";
+        status.textContent = res.ok ? `${modeLabel} · rows ${rowsTotal} · ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
       } catch (e: any) {
         status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
       } finally {
