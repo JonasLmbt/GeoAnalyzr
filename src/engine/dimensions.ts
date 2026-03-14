@@ -18,6 +18,18 @@ import {
 
 export type GroupKey = string;
 
+function normalizeMovementType(raw: unknown): GroupKey | null {
+  const v = typeof raw === "string" ? raw.trim() : "";
+  if (!v) return null;
+  const k = v.toLowerCase();
+  if (k === "unknown") return "unknown";
+  if (k === "mixed") return "mixed";
+  if (k.includes("nmpz")) return "nmpz";
+  if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
+  if (k.includes("moving")) return "moving";
+  return v;
+}
+
 function getRowTs(row: any): number | undefined {
   const coerce = (v: unknown): number | undefined => {
     if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -97,8 +109,7 @@ export function isTrueLocationRepeatKey(r: RoundRow): GroupKey | null {
 }
 
 export function movementTypeKey(r: RoundRow): GroupKey | null {
-  const v = getMovementType(r);
-  return typeof v === "string" && v.length ? v : null;
+  return normalizeMovementType(getMovementType(r));
 }
 
 export function isHitKey(r: RoundRow): GroupKey | null {
@@ -283,13 +294,15 @@ function gameModeKeyAny(row: any): GroupKey | null {
 }
 
 function modeFamilyKeyAny(row: any): GroupKey | null {
-  const v = asTrimmedString(row?.modeFamily ?? row?.mode_family);
-  if (!v) return null;
+  const raw = asTrimmedString(row?.modeFamily ?? row?.mode_family);
+  if (!raw) return null;
+  const v = raw.toLowerCase();
   if (v === "duels") return "Duel";
   if (v === "teamduels") return "Team Duel";
   if (v === "standard") return "Standard";
   if (v === "streak") return "Streak";
-  return v;
+  if (v === "other") return "Other";
+  return raw;
 }
 
 function resultKeyAny(row: any): GroupKey | null {
@@ -352,12 +365,7 @@ function teammateKeyAny(row: any): GroupKey | null {
 
 function movementTypeKeyAny(row: any): GroupKey | null {
   const v = asTrimmedString(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
-  if (!v) return null;
-  const k = v.toLowerCase();
-  if (k.includes("nmpz")) return "nmpz";
-  if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
-  if (k.includes("moving")) return "moving";
-  return v;
+  return normalizeMovementType(v);
 }
 
 export function guessCountryKey(r: RoundRow): GroupKey | null {
@@ -440,12 +448,8 @@ export const DIMENSION_EXTRACTORS: Record<Grain, Record<string, (row: any) => Gr
         return v ? v : null;
       },
       mode_family: (r: any) => {
-        const v = typeof (r as any)?.modeFamily === "string" ? String((r as any).modeFamily).trim().toLowerCase() : "";
-        if (!v) return null;
-        if (v === "duels") return "Duel";
-      if (v === "teamduels") return "Team Duel";
-      return v;
-    },
+        return modeFamilyKeyAny(r);
+      },
     team_closer_winner: (r: any) => winnerLabelForCompare(r, getDistanceKm(r as any), getMateDistanceKm(r as any), "min"),
     team_higher_score_winner: (r: any) => winnerLabelForCompare(r, getSelfScore(r as any), getMateScore(r as any), "max"),
     team_fewer_throw_winner: (r: any) => {

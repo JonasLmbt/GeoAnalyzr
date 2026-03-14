@@ -3,7 +3,16 @@ const esbuild = require("esbuild");
 const outFile = process.argv[2] || "geoanalyzr.user.js";
 const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 
-const version = isDev ? "2.3.17-dev" : "2.3.15";
+const version = isDev ? "2.3.20-dev" : "2.3.15";
+
+const devExtraGrants = isDev
+  ? `// @grant        GM_getValue
+// @grant        GM_setValue`
+  : "";
+
+const devExtraConnect = isDev
+  ? `// @connect      sync.geoanalyzr.lmbt.app`
+  : "";
 
 const banner = `// ==UserScript==
 // @name         ${isDev ? "GeoAnalyzr (Dev)" : "GeoAnalyzr"}
@@ -16,8 +25,10 @@ const banner = `// ==UserScript==
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
+${devExtraGrants}
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
+${devExtraConnect}
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      media.githubusercontent.com

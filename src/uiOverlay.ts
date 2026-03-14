@@ -1,4 +1,5 @@
 import { logoSvgMarkup } from "./ui/logo";
+import { loadServerSyncSettings, runServerSyncOnce } from "./serverSync";
 
 type Counts = {
   games: number;
@@ -176,6 +177,25 @@ function cssOnce(): void {
 }
 
 export function createUIOverlay(): UIOverlay {
+  const isDevBuild = (): boolean => {
+    const info = (globalThis as any)?.GM_info;
+    const ns = String(info?.script?.namespace || "");
+    const name = String(info?.script?.name || "");
+    return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
+  };
+
+  const formatBytes = (n: number): string => {
+    if (!Number.isFinite(n) || n <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    let v = n;
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i++;
+    }
+    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  };
+
   const mount = () => {
     cssOnce();
     if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
@@ -225,6 +245,7 @@ export function createUIOverlay(): UIOverlay {
   };
 
   const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
+  const syncBtn = isDevBuild() ? mkBtn("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
   const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
   const discordBtn = mkBtn("Join Discord", "rgba(121,80,229,0.30)");
   const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
@@ -237,6 +258,7 @@ export function createUIOverlay(): UIOverlay {
   panel.appendChild(header);
   panel.appendChild(status);
   panel.appendChild(updateBtn);
+  if (syncBtn) panel.appendChild(syncBtn);
   panel.appendChild(analysisBtn);
   panel.appendChild(discordBtn);
   panel.appendChild(exportBtn);
@@ -261,6 +283,26 @@ export function createUIOverlay(): UIOverlay {
   let discordHandler: (() => void | Promise<void>) | null = null;
 
   updateBtn.addEventListener("click", () => void updateHandler?.());
+  if (syncBtn) {
+    syncBtn.addEventListener("click", async () => {
+      syncBtn.disabled = true;
+      status.textContent = "Syncing...";
+      try {
+        const settings = loadServerSyncSettings();
+        if (!settings.token) {
+          status.textContent = "Missing sync token (Settings → Data).";
+          return;
+        }
+        const res = await runServerSyncOnce(settings);
+        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+        status.textContent = res.ok ? `Synced · rows ${rowsTotal} · ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+      } catch (e: any) {
+        status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+      } finally {
+        syncBtn.disabled = false;
+      }
+    });
+  }
   exportBtn.addEventListener("click", () => void exportHandler?.());
   resetBtn.addEventListener("click", () => void resetHandler?.());
   analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());

@@ -717,6 +717,7 @@ export class DrilldownOverlay {
 
     const span = this.doc.createElement("span");
     span.textContent = text;
+    if (key === "gameId" || key === "sessionId") span.classList.add("ga-dd-id");
 
     if (col.colored) {
       if (key === "result") {

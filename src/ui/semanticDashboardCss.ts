@@ -822,7 +822,7 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       top:6%;
       left:50%;
       transform:translateX(-50%);
-      width:min(1100px, 92vw);
+      width:min(1260px, 96vw);
       max-height:88vh;
       overflow:auto;
       background:var(--ga-surface);
@@ -882,6 +882,10 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       color: var(--ga-link);
       text-decoration: underline;
       text-underline-offset: 2px;
+    }
+    .ga-dd-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-wrap: anywhere;
     }
     .ga-dd-pos { color: var(--ga-good); font-variant-numeric: tabular-nums; }
     .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }

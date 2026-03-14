@@ -2,15 +2,18 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.17-dev
+// @version      2.3.20-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
+// @connect      sync.geoanalyzr.lmbt.app
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      media.githubusercontent.com
@@ -6815,262 +6818,1019 @@ ${shapes}`.trim();
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
   }
 
-  // src/uiOverlay.ts
-  function el(tag) {
-    return document.createElement(tag);
+  // node_modules/fflate/esm/browser.js
+  var ch2 = {};
+  var wk = (function(c, id, msg, transfer, cb) {
+    var w = new Worker(ch2[id] || (ch2[id] = URL.createObjectURL(new Blob([
+      c + ';addEventListener("error",function(e){e=e.error;postMessage({$e$:[e.message,e.code,e.stack]})})'
+    ], { type: "text/javascript" }))));
+    w.onmessage = function(e) {
+      var d = e.data, ed = d.$e$;
+      if (ed) {
+        var err2 = new Error(ed[0]);
+        err2["code"] = ed[1];
+        err2.stack = ed[2];
+        cb(err2, null);
+      } else
+        cb(null, d);
+    };
+    w.postMessage(msg, transfer);
+    return w;
+  });
+  var u8 = Uint8Array;
+  var u16 = Uint16Array;
+  var i32 = Int32Array;
+  var fleb = new u8([
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    5,
+    5,
+    5,
+    5,
+    0,
+    /* unused */
+    0,
+    0,
+    /* impossible */
+    0
+  ]);
+  var fdeb = new u8([
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    2,
+    2,
+    3,
+    3,
+    4,
+    4,
+    5,
+    5,
+    6,
+    6,
+    7,
+    7,
+    8,
+    8,
+    9,
+    9,
+    10,
+    10,
+    11,
+    11,
+    12,
+    12,
+    13,
+    13,
+    /* unused */
+    0,
+    0
+  ]);
+  var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
+  var freb = function(eb, start) {
+    var b = new u16(31);
+    for (var i = 0; i < 31; ++i) {
+      b[i] = start += 1 << eb[i - 1];
+    }
+    var r = new i32(b[30]);
+    for (var i = 1; i < 30; ++i) {
+      for (var j = b[i]; j < b[i + 1]; ++j) {
+        r[j] = j - b[i] << 5 | i;
+      }
+    }
+    return { b, r };
+  };
+  var _a = freb(fleb, 2);
+  var fl = _a.b;
+  var revfl = _a.r;
+  fl[28] = 258, revfl[258] = 28;
+  var _b = freb(fdeb, 0);
+  var fd = _b.b;
+  var revfd = _b.r;
+  var rev = new u16(32768);
+  for (i = 0; i < 32768; ++i) {
+    x = (i & 43690) >> 1 | (i & 21845) << 1;
+    x = (x & 52428) >> 2 | (x & 13107) << 2;
+    x = (x & 61680) >> 4 | (x & 3855) << 4;
+    rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
   }
-  function cssOnce() {
-    const id = "geoanalyzr-ui-overlay-css";
-    if (document.getElementById(id)) return;
-    const style = document.createElement("style");
-    style.id = id;
-    style.textContent = `
-    .ga-ui-icon {
-      position: fixed;
-      left: 16px;
-      bottom: 16px;
-      z-index: 999999;
-      width: 44px;
-      height: 44px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(20,20,20,0.95);
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  var x;
+  var i;
+  var hMap = (function(cd, mb, r) {
+    var s = cd.length;
+    var i = 0;
+    var l = new u16(mb);
+    for (; i < s; ++i) {
+      if (cd[i])
+        ++l[cd[i] - 1];
     }
-    .ga-ui-icon:active { transform: translateY(1px); }
-
-    .ga-ui-panel {
-      position: fixed;
-      left: 16px;
-      bottom: 68px;
-      z-index: 999999;
-      width: 360px;
-      max-width: calc(100vw - 32px);
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(20,20,20,0.92);
-      color: white;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-      padding: 10px;
-      display: none;
+    var le = new u16(mb);
+    for (i = 1; i < mb; ++i) {
+      le[i] = le[i - 1] + l[i - 1] << 1;
     }
-
-    .ga-ui-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+    var co;
+    if (r) {
+      co = new u16(1 << mb);
+      var rvb = 15 - mb;
+      for (i = 0; i < s; ++i) {
+        if (cd[i]) {
+          var sv = i << 4 | cd[i];
+          var r_1 = mb - cd[i];
+          var v = le[cd[i] - 1]++ << r_1;
+          for (var m = v | (1 << r_1) - 1; v <= m; ++v) {
+            co[rev[v] >> rvb] = sv;
+          }
+        }
+      }
+    } else {
+      co = new u16(s);
+      for (i = 0; i < s; ++i) {
+        if (cd[i]) {
+          co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
+        }
+      }
     }
-    .ga-ui-title {
-      font-weight: 700;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    return co;
+  });
+  var flt = new u8(288);
+  for (i = 0; i < 144; ++i)
+    flt[i] = 8;
+  var i;
+  for (i = 144; i < 256; ++i)
+    flt[i] = 9;
+  var i;
+  for (i = 256; i < 280; ++i)
+    flt[i] = 7;
+  var i;
+  for (i = 280; i < 288; ++i)
+    flt[i] = 8;
+  var i;
+  var fdt = new u8(32);
+  for (i = 0; i < 32; ++i)
+    fdt[i] = 5;
+  var i;
+  var flm = /* @__PURE__ */ hMap(flt, 9, 0);
+  var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
+  var fdm = /* @__PURE__ */ hMap(fdt, 5, 0);
+  var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
+  var max = function(a) {
+    var m = a[0];
+    for (var i = 1; i < a.length; ++i) {
+      if (a[i] > m)
+        m = a[i];
     }
-    .ga-ui-title svg { display: block; filter: drop-shadow(0 0 10px rgba(0,162,254,0.35)); }
-    .ga-ui-icon svg { display: block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
-    .ga-ui-close {
-      border: none;
-      background: transparent;
-      color: white;
-      cursor: pointer;
-      font-size: 18px;
-      line-height: 1;
-      padding: 2px 6px;
-    }
-
-    .ga-ui-status {
-      font-size: 12px;
-      opacity: 0.95;
-      white-space: pre-wrap;
-      margin-bottom: 10px;
-    }
-
-    .ga-ui-btn {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.25);
-      color: white;
-      cursor: pointer;
-      font-weight: 600;
-      margin-top: 8px;
-    }
-    .ga-ui-btn:active { transform: translateY(1px); }
-    .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
-
-    .ga-ui-counts {
-      margin-top: 10px;
-      font-size: 12px;
-      opacity: 0.92;
-      white-space: normal;
-    }
-
-    .ga-ui-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 1000000;
-      background: rgba(0,0,0,0.62);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .ga-ui-modal-card {
-      width: 520px;
-      max-width: calc(100vw - 32px);
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(20,20,20,0.94);
-      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
-      color: white;
-      padding: 12px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
-    .ga-ui-modal-head {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom: 10px;
-    }
-    .ga-ui-modal-head-title { font-weight: 700; }
-    .ga-ui-modal-x { border:0; background: transparent; color: white; cursor:pointer; font-size: 18px; line-height: 1; }
-    .ga-ui-modal-input {
-      width: 100%;
-      box-sizing: border-box;
-      background: rgba(0,0,0,0.25);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.20);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-    }
-    .ga-ui-modal-help {
-      margin-top: 8px;
-      font-size: 12px;
-      opacity: 0.90;
-      white-space: pre-wrap;
-    }
-    .ga-ui-modal-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 12px;
-    }
-  `;
-    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
-  }
-  function createUIOverlay() {
-    const mount = () => {
-      cssOnce();
-      if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
-      if (!document.documentElement.contains(panel)) document.documentElement.appendChild(panel);
-    };
-    const iconBtn = el("button");
-    iconBtn.className = "ga-ui-icon";
-    iconBtn.title = "GeoAnalyzr";
-    iconBtn.type = "button";
-    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "light", decorative: true });
-    const panel = el("div");
-    panel.className = "ga-ui-panel";
-    const header = el("div");
-    header.className = "ga-ui-head";
-    const title = el("div");
-    title.className = "ga-ui-title";
-    const titleLogo = el("span");
-    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "light", decorative: true });
-    const titleText = el("span");
-    titleText.textContent = "GeoAnalyzr";
-    title.appendChild(titleLogo);
-    title.appendChild(titleText);
-    const closeBtn = el("button");
-    closeBtn.className = "ga-ui-close";
-    closeBtn.type = "button";
-    closeBtn.textContent = "x";
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    const status = el("div");
-    status.className = "ga-ui-status";
-    status.textContent = "Ready.";
-    const mkBtn2 = (label, bg) => {
-      const b = el("button");
-      b.className = "ga-ui-btn";
-      b.type = "button";
-      b.textContent = label;
-      b.style.background = bg;
-      return b;
-    };
-    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
-    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
-    const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
-    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
-    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
-    const counts = el("div");
-    counts.className = "ga-ui-counts";
-    counts.textContent = "Data: 0 games, 0 rounds.";
-    panel.appendChild(header);
-    panel.appendChild(status);
-    panel.appendChild(updateBtn);
-    panel.appendChild(analysisBtn);
-    panel.appendChild(discordBtn);
-    panel.appendChild(exportBtn);
-    panel.appendChild(resetBtn);
-    panel.appendChild(counts);
-    let open = false;
-    const setOpen = (next) => {
-      open = next;
-      panel.style.display = open ? "block" : "none";
-    };
-    iconBtn.addEventListener("click", () => setOpen(!open));
-    closeBtn.addEventListener("click", () => setOpen(false));
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
-    else mount();
-    let updateHandler = null;
-    let resetHandler = null;
-    let exportHandler = null;
-    let openAnalysisHandler = null;
-    let discordHandler = null;
-    updateBtn.addEventListener("click", () => void updateHandler?.());
-    exportBtn.addEventListener("click", () => void exportHandler?.());
-    resetBtn.addEventListener("click", () => void resetHandler?.());
-    analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
-    discordBtn.addEventListener("click", () => void discordHandler?.());
-    return {
-      setVisible(visible) {
-        iconBtn.style.display = visible ? "flex" : "none";
-        if (!visible) panel.style.display = "none";
-      },
-      setStatus(msg) {
-        status.textContent = msg;
-      },
-      setCounts(value) {
-        counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
-      },
-      onUpdateClick(fn) {
-        updateHandler = fn;
-      },
-      onResetClick(fn) {
-        resetHandler = fn;
-      },
-      onExportClick(fn) {
-        exportHandler = fn;
-      },
-      onOpenAnalysisClick(fn) {
-        openAnalysisHandler = fn;
-      },
-      onDiscordClick(fn) {
-        discordHandler = fn;
+    return m;
+  };
+  var bits = function(d, p, m) {
+    var o = p / 8 | 0;
+    return (d[o] | d[o + 1] << 8) >> (p & 7) & m;
+  };
+  var bits16 = function(d, p) {
+    var o = p / 8 | 0;
+    return (d[o] | d[o + 1] << 8 | d[o + 2] << 16) >> (p & 7);
+  };
+  var shft = function(p) {
+    return (p + 7) / 8 | 0;
+  };
+  var slc = function(v, s, e) {
+    if (s == null || s < 0)
+      s = 0;
+    if (e == null || e > v.length)
+      e = v.length;
+    return new u8(v.subarray(s, e));
+  };
+  var ec = [
+    "unexpected EOF",
+    "invalid block type",
+    "invalid length/literal",
+    "invalid distance",
+    "stream finished",
+    "no stream handler",
+    ,
+    "no callback",
+    "invalid UTF-8 data",
+    "extra field too long",
+    "date not in range 1980-2099",
+    "filename too long",
+    "stream finishing",
+    "invalid zip data"
+    // determined by unknown compression method
+  ];
+  var err = function(ind, msg, nt) {
+    var e = new Error(msg || ec[ind]);
+    e.code = ind;
+    if (Error.captureStackTrace)
+      Error.captureStackTrace(e, err);
+    if (!nt)
+      throw e;
+    return e;
+  };
+  var inflt = function(dat, st, buf, dict) {
+    var sl = dat.length, dl = dict ? dict.length : 0;
+    if (!sl || st.f && !st.l)
+      return buf || new u8(0);
+    var noBuf = !buf;
+    var resize = noBuf || st.i != 2;
+    var noSt = st.i;
+    if (noBuf)
+      buf = new u8(sl * 3);
+    var cbuf = function(l2) {
+      var bl = buf.length;
+      if (l2 > bl) {
+        var nbuf = new u8(Math.max(bl * 2, l2));
+        nbuf.set(buf);
+        buf = nbuf;
       }
     };
+    var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
+    var tbts = sl * 8;
+    do {
+      if (!lm) {
+        final = bits(dat, pos, 1);
+        var type = bits(dat, pos + 1, 3);
+        pos += 3;
+        if (!type) {
+          var s = shft(pos) + 4, l = dat[s - 4] | dat[s - 3] << 8, t = s + l;
+          if (t > sl) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + l);
+          buf.set(dat.subarray(s, t), bt);
+          st.b = bt += l, st.p = pos = t * 8, st.f = final;
+          continue;
+        } else if (type == 1)
+          lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
+        else if (type == 2) {
+          var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
+          var tl = hLit + bits(dat, pos + 5, 31) + 1;
+          pos += 14;
+          var ldt = new u8(tl);
+          var clt = new u8(19);
+          for (var i = 0; i < hcLen; ++i) {
+            clt[clim[i]] = bits(dat, pos + i * 3, 7);
+          }
+          pos += hcLen * 3;
+          var clb = max(clt), clbmsk = (1 << clb) - 1;
+          var clm = hMap(clt, clb, 1);
+          for (var i = 0; i < tl; ) {
+            var r = clm[bits(dat, pos, clbmsk)];
+            pos += r & 15;
+            var s = r >> 4;
+            if (s < 16) {
+              ldt[i++] = s;
+            } else {
+              var c = 0, n = 0;
+              if (s == 16)
+                n = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
+              else if (s == 17)
+                n = 3 + bits(dat, pos, 7), pos += 3;
+              else if (s == 18)
+                n = 11 + bits(dat, pos, 127), pos += 7;
+              while (n--)
+                ldt[i++] = c;
+            }
+          }
+          var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
+          lbt = max(lt);
+          dbt = max(dt);
+          lm = hMap(lt, lbt, 1);
+          dm = hMap(dt, dbt, 1);
+        } else
+          err(1);
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+      }
+      if (resize)
+        cbuf(bt + 131072);
+      var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
+      var lpos = pos;
+      for (; ; lpos = pos) {
+        var c = lm[bits16(dat, pos) & lms], sym = c >> 4;
+        pos += c & 15;
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (!c)
+          err(2);
+        if (sym < 256)
+          buf[bt++] = sym;
+        else if (sym == 256) {
+          lpos = pos, lm = null;
+          break;
+        } else {
+          var add2 = sym - 254;
+          if (sym > 264) {
+            var i = sym - 257, b = fleb[i];
+            add2 = bits(dat, pos, (1 << b) - 1) + fl[i];
+            pos += b;
+          }
+          var d = dm[bits16(dat, pos) & dms], dsym = d >> 4;
+          if (!d)
+            err(3);
+          pos += d & 15;
+          var dt = fd[dsym];
+          if (dsym > 3) {
+            var b = fdeb[dsym];
+            dt += bits16(dat, pos) & (1 << b) - 1, pos += b;
+          }
+          if (pos > tbts) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + 131072);
+          var end = bt + add2;
+          if (bt < dt) {
+            var shift = dl - dt, dend = Math.min(dt, end);
+            if (shift + bt < 0)
+              err(3);
+            for (; bt < dend; ++bt)
+              buf[bt] = dict[shift + bt];
+          }
+          for (; bt < end; ++bt)
+            buf[bt] = buf[bt - dt];
+        }
+      }
+      st.l = lm, st.p = lpos, st.b = bt, st.f = final;
+      if (lm)
+        final = 1, st.m = lbt, st.d = dm, st.n = dbt;
+    } while (!final);
+    return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
+  };
+  var wbits = function(d, p, v) {
+    v <<= p & 7;
+    var o = p / 8 | 0;
+    d[o] |= v;
+    d[o + 1] |= v >> 8;
+  };
+  var wbits16 = function(d, p, v) {
+    v <<= p & 7;
+    var o = p / 8 | 0;
+    d[o] |= v;
+    d[o + 1] |= v >> 8;
+    d[o + 2] |= v >> 16;
+  };
+  var hTree = function(d, mb) {
+    var t = [];
+    for (var i = 0; i < d.length; ++i) {
+      if (d[i])
+        t.push({ s: i, f: d[i] });
+    }
+    var s = t.length;
+    var t2 = t.slice();
+    if (!s)
+      return { t: et, l: 0 };
+    if (s == 1) {
+      var v = new u8(t[0].s + 1);
+      v[t[0].s] = 1;
+      return { t: v, l: 1 };
+    }
+    t.sort(function(a, b) {
+      return a.f - b.f;
+    });
+    t.push({ s: -1, f: 25001 });
+    var l = t[0], r = t[1], i0 = 0, i1 = 1, i2 = 2;
+    t[0] = { s: -1, f: l.f + r.f, l, r };
+    while (i1 != s - 1) {
+      l = t[t[i0].f < t[i2].f ? i0++ : i2++];
+      r = t[i0 != i1 && t[i0].f < t[i2].f ? i0++ : i2++];
+      t[i1++] = { s: -1, f: l.f + r.f, l, r };
+    }
+    var maxSym = t2[0].s;
+    for (var i = 1; i < s; ++i) {
+      if (t2[i].s > maxSym)
+        maxSym = t2[i].s;
+    }
+    var tr = new u16(maxSym + 1);
+    var mbt = ln(t[i1 - 1], tr, 0);
+    if (mbt > mb) {
+      var i = 0, dt = 0;
+      var lft = mbt - mb, cst = 1 << lft;
+      t2.sort(function(a, b) {
+        return tr[b.s] - tr[a.s] || a.f - b.f;
+      });
+      for (; i < s; ++i) {
+        var i2_1 = t2[i].s;
+        if (tr[i2_1] > mb) {
+          dt += cst - (1 << mbt - tr[i2_1]);
+          tr[i2_1] = mb;
+        } else
+          break;
+      }
+      dt >>= lft;
+      while (dt > 0) {
+        var i2_2 = t2[i].s;
+        if (tr[i2_2] < mb)
+          dt -= 1 << mb - tr[i2_2]++ - 1;
+        else
+          ++i;
+      }
+      for (; i >= 0 && dt; --i) {
+        var i2_3 = t2[i].s;
+        if (tr[i2_3] == mb) {
+          --tr[i2_3];
+          ++dt;
+        }
+      }
+      mbt = mb;
+    }
+    return { t: new u8(tr), l: mbt };
+  };
+  var ln = function(n, l, d) {
+    return n.s == -1 ? Math.max(ln(n.l, l, d + 1), ln(n.r, l, d + 1)) : l[n.s] = d;
+  };
+  var lc = function(c) {
+    var s = c.length;
+    while (s && !c[--s])
+      ;
+    var cl = new u16(++s);
+    var cli = 0, cln = c[0], cls = 1;
+    var w = function(v) {
+      cl[cli++] = v;
+    };
+    for (var i = 1; i <= s; ++i) {
+      if (c[i] == cln && i != s)
+        ++cls;
+      else {
+        if (!cln && cls > 2) {
+          for (; cls > 138; cls -= 138)
+            w(32754);
+          if (cls > 2) {
+            w(cls > 10 ? cls - 11 << 5 | 28690 : cls - 3 << 5 | 12305);
+            cls = 0;
+          }
+        } else if (cls > 3) {
+          w(cln), --cls;
+          for (; cls > 6; cls -= 6)
+            w(8304);
+          if (cls > 2)
+            w(cls - 3 << 5 | 8208), cls = 0;
+        }
+        while (cls--)
+          w(cln);
+        cls = 1;
+        cln = c[i];
+      }
+    }
+    return { c: cl.subarray(0, cli), n: s };
+  };
+  var clen = function(cf, cl) {
+    var l = 0;
+    for (var i = 0; i < cl.length; ++i)
+      l += cf[i] * cl[i];
+    return l;
+  };
+  var wfblk = function(out, pos, dat) {
+    var s = dat.length;
+    var o = shft(pos + 2);
+    out[o] = s & 255;
+    out[o + 1] = s >> 8;
+    out[o + 2] = out[o] ^ 255;
+    out[o + 3] = out[o + 1] ^ 255;
+    for (var i = 0; i < s; ++i)
+      out[o + i + 4] = dat[i];
+    return (o + 4 + s) * 8;
+  };
+  var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
+    wbits(out, p++, final);
+    ++lf[256];
+    var _a2 = hTree(lf, 15), dlt = _a2.t, mlb = _a2.l;
+    var _b2 = hTree(df, 15), ddt = _b2.t, mdb = _b2.l;
+    var _c = lc(dlt), lclt = _c.c, nlc = _c.n;
+    var _d = lc(ddt), lcdt = _d.c, ndc = _d.n;
+    var lcfreq = new u16(19);
+    for (var i = 0; i < lclt.length; ++i)
+      ++lcfreq[lclt[i] & 31];
+    for (var i = 0; i < lcdt.length; ++i)
+      ++lcfreq[lcdt[i] & 31];
+    var _e = hTree(lcfreq, 7), lct = _e.t, mlcb = _e.l;
+    var nlcc = 19;
+    for (; nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc)
+      ;
+    var flen = bl + 5 << 3;
+    var ftlen = clen(lf, flt) + clen(df, fdt) + eb;
+    var dtlen = clen(lf, dlt) + clen(df, ddt) + eb + 14 + 3 * nlcc + clen(lcfreq, lct) + 2 * lcfreq[16] + 3 * lcfreq[17] + 7 * lcfreq[18];
+    if (bs >= 0 && flen <= ftlen && flen <= dtlen)
+      return wfblk(out, p, dat.subarray(bs, bs + bl));
+    var lm, ll, dm, dl;
+    wbits(out, p, 1 + (dtlen < ftlen)), p += 2;
+    if (dtlen < ftlen) {
+      lm = hMap(dlt, mlb, 0), ll = dlt, dm = hMap(ddt, mdb, 0), dl = ddt;
+      var llm = hMap(lct, mlcb, 0);
+      wbits(out, p, nlc - 257);
+      wbits(out, p + 5, ndc - 1);
+      wbits(out, p + 10, nlcc - 4);
+      p += 14;
+      for (var i = 0; i < nlcc; ++i)
+        wbits(out, p + 3 * i, lct[clim[i]]);
+      p += 3 * nlcc;
+      var lcts = [lclt, lcdt];
+      for (var it = 0; it < 2; ++it) {
+        var clct = lcts[it];
+        for (var i = 0; i < clct.length; ++i) {
+          var len = clct[i] & 31;
+          wbits(out, p, llm[len]), p += lct[len];
+          if (len > 15)
+            wbits(out, p, clct[i] >> 5 & 127), p += clct[i] >> 12;
+        }
+      }
+    } else {
+      lm = flm, ll = flt, dm = fdm, dl = fdt;
+    }
+    for (var i = 0; i < li; ++i) {
+      var sym = syms[i];
+      if (sym > 255) {
+        var len = sym >> 18 & 31;
+        wbits16(out, p, lm[len + 257]), p += ll[len + 257];
+        if (len > 7)
+          wbits(out, p, sym >> 23 & 31), p += fleb[len];
+        var dst = sym & 31;
+        wbits16(out, p, dm[dst]), p += dl[dst];
+        if (dst > 3)
+          wbits16(out, p, sym >> 5 & 8191), p += fdeb[dst];
+      } else {
+        wbits16(out, p, lm[sym]), p += ll[sym];
+      }
+    }
+    wbits16(out, p, lm[256]);
+    return p + ll[256];
+  };
+  var deo = /* @__PURE__ */ new i32([65540, 131080, 131088, 131104, 262176, 1048704, 1048832, 2114560, 2117632]);
+  var et = /* @__PURE__ */ new u8(0);
+  var dflt = function(dat, lvl, plvl, pre, post, st) {
+    var s = st.z || dat.length;
+    var o = new u8(pre + s + 5 * (1 + Math.ceil(s / 7e3)) + post);
+    var w = o.subarray(pre, o.length - post);
+    var lst = st.l;
+    var pos = (st.r || 0) & 7;
+    if (lvl) {
+      if (pos)
+        w[0] = st.r >> 3;
+      var opt = deo[lvl - 1];
+      var n = opt >> 13, c = opt & 8191;
+      var msk_1 = (1 << plvl) - 1;
+      var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
+      var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
+      var hsh = function(i2) {
+        return (dat[i2] ^ dat[i2 + 1] << bs1_1 ^ dat[i2 + 2] << bs2_1) & msk_1;
+      };
+      var syms = new i32(25e3);
+      var lf = new u16(288), df = new u16(32);
+      var lc_1 = 0, eb = 0, i = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
+      for (; i + 2 < s; ++i) {
+        var hv = hsh(i);
+        var imod = i & 32767, pimod = head[hv];
+        prev[imod] = pimod;
+        head[hv] = imod;
+        if (wi <= i) {
+          var rem = s - i;
+          if ((lc_1 > 7e3 || li > 24576) && (rem > 423 || !lst)) {
+            pos = wblk(dat, w, 0, syms, lf, df, eb, li, bs, i - bs, pos);
+            li = lc_1 = eb = 0, bs = i;
+            for (var j = 0; j < 286; ++j)
+              lf[j] = 0;
+            for (var j = 0; j < 30; ++j)
+              df[j] = 0;
+          }
+          var l = 2, d = 0, ch_1 = c, dif = imod - pimod & 32767;
+          if (rem > 2 && hv == hsh(i - dif)) {
+            var maxn = Math.min(n, rem) - 1;
+            var maxd = Math.min(32767, i);
+            var ml = Math.min(258, rem);
+            while (dif <= maxd && --ch_1 && imod != pimod) {
+              if (dat[i + l] == dat[i + l - dif]) {
+                var nl = 0;
+                for (; nl < ml && dat[i + nl] == dat[i + nl - dif]; ++nl)
+                  ;
+                if (nl > l) {
+                  l = nl, d = dif;
+                  if (nl > maxn)
+                    break;
+                  var mmd = Math.min(dif, nl - 2);
+                  var md = 0;
+                  for (var j = 0; j < mmd; ++j) {
+                    var ti = i - dif + j & 32767;
+                    var pti = prev[ti];
+                    var cd = ti - pti & 32767;
+                    if (cd > md)
+                      md = cd, pimod = ti;
+                  }
+                }
+              }
+              imod = pimod, pimod = prev[imod];
+              dif += imod - pimod & 32767;
+            }
+          }
+          if (d) {
+            syms[li++] = 268435456 | revfl[l] << 18 | revfd[d];
+            var lin = revfl[l] & 31, din = revfd[d] & 31;
+            eb += fleb[lin] + fdeb[din];
+            ++lf[257 + lin];
+            ++df[din];
+            wi = i + l;
+            ++lc_1;
+          } else {
+            syms[li++] = dat[i];
+            ++lf[dat[i]];
+          }
+        }
+      }
+      for (i = Math.max(i, wi); i < s; ++i) {
+        syms[li++] = dat[i];
+        ++lf[dat[i]];
+      }
+      pos = wblk(dat, w, lst, syms, lf, df, eb, li, bs, i - bs, pos);
+      if (!lst) {
+        st.r = pos & 7 | w[pos / 8 | 0] << 3;
+        pos -= 7;
+        st.h = head, st.p = prev, st.i = i, st.w = wi;
+      }
+    } else {
+      for (var i = st.w || 0; i < s + lst; i += 65535) {
+        var e = i + 65535;
+        if (e >= s) {
+          w[pos / 8 | 0] = lst;
+          e = s;
+        }
+        pos = wfblk(w, pos + 1, dat.subarray(i, e));
+      }
+      st.i = s;
+    }
+    return slc(o, 0, pre + shft(pos) + post);
+  };
+  var crct = /* @__PURE__ */ (function() {
+    var t = new Int32Array(256);
+    for (var i = 0; i < 256; ++i) {
+      var c = i, k = 9;
+      while (--k)
+        c = (c & 1 && -306674912) ^ c >>> 1;
+      t[i] = c;
+    }
+    return t;
+  })();
+  var crc = function() {
+    var c = -1;
+    return {
+      p: function(d) {
+        var cr = c;
+        for (var i = 0; i < d.length; ++i)
+          cr = crct[cr & 255 ^ d[i]] ^ cr >>> 8;
+        c = cr;
+      },
+      d: function() {
+        return ~c;
+      }
+    };
+  };
+  var dopt = function(dat, opt, pre, post, st) {
+    if (!st) {
+      st = { l: 1 };
+      if (opt.dictionary) {
+        var dict = opt.dictionary.subarray(-32768);
+        var newDat = new u8(dict.length + dat.length);
+        newDat.set(dict);
+        newDat.set(dat, dict.length);
+        dat = newDat;
+        st.w = dict.length;
+      }
+    }
+    return dflt(dat, opt.level == null ? 6 : opt.level, opt.mem == null ? st.l ? Math.ceil(Math.max(8, Math.min(13, Math.log(dat.length))) * 1.5) : 20 : 12 + opt.mem, pre, post, st);
+  };
+  var mrg = function(a, b) {
+    var o = {};
+    for (var k in a)
+      o[k] = a[k];
+    for (var k in b)
+      o[k] = b[k];
+    return o;
+  };
+  var wcln = function(fn, fnStr, td2) {
+    var dt = fn();
+    var st = fn.toString();
+    var ks = st.slice(st.indexOf("[") + 1, st.lastIndexOf("]")).replace(/\s+/g, "").split(",");
+    for (var i = 0; i < dt.length; ++i) {
+      var v = dt[i], k = ks[i];
+      if (typeof v == "function") {
+        fnStr += ";" + k + "=";
+        var st_1 = v.toString();
+        if (v.prototype) {
+          if (st_1.indexOf("[native code]") != -1) {
+            var spInd = st_1.indexOf(" ", 8) + 1;
+            fnStr += st_1.slice(spInd, st_1.indexOf("(", spInd));
+          } else {
+            fnStr += st_1;
+            for (var t in v.prototype)
+              fnStr += ";" + k + ".prototype." + t + "=" + v.prototype[t].toString();
+          }
+        } else
+          fnStr += st_1;
+      } else
+        td2[k] = v;
+    }
+    return fnStr;
+  };
+  var ch = [];
+  var cbfs = function(v) {
+    var tl = [];
+    for (var k in v) {
+      if (v[k].buffer) {
+        tl.push((v[k] = new v[k].constructor(v[k])).buffer);
+      }
+    }
+    return tl;
+  };
+  var wrkr = function(fns, init, id, cb) {
+    if (!ch[id]) {
+      var fnStr = "", td_1 = {}, m = fns.length - 1;
+      for (var i = 0; i < m; ++i)
+        fnStr = wcln(fns[i], fnStr, td_1);
+      ch[id] = { c: wcln(fns[m], fnStr, td_1), e: td_1 };
+    }
+    var td2 = mrg({}, ch[id].e);
+    return wk(ch[id].c + ";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage=" + init.toString() + "}", id, td2, cbfs(td2), cb);
+  };
+  var bInflt = function() {
+    return [u8, u16, i32, fleb, fdeb, clim, fl, fd, flrm, fdrm, rev, ec, hMap, max, bits, bits16, shft, slc, err, inflt, inflateSync, pbf, gopt];
+  };
+  var bDflt = function() {
+    return [u8, u16, i32, fleb, fdeb, clim, revfl, revfd, flm, flt, fdm, fdt, rev, deo, et, hMap, wbits, wbits16, hTree, ln, lc, clen, wfblk, wblk, shft, slc, dflt, dopt, deflateSync, pbf];
+  };
+  var gze = function() {
+    return [gzh, gzhl, wbytes, crc, crct];
+  };
+  var guze = function() {
+    return [gzs, gzl];
+  };
+  var pbf = function(msg) {
+    return postMessage(msg, [msg.buffer]);
+  };
+  var gopt = function(o) {
+    return o && {
+      out: o.size && new u8(o.size),
+      dictionary: o.dictionary
+    };
+  };
+  var cbify = function(dat, opts, fns, init, id, cb) {
+    var w = wrkr(fns, init, id, function(err2, dat2) {
+      w.terminate();
+      cb(err2, dat2);
+    });
+    w.postMessage([dat, opts], opts.consume ? [dat.buffer] : []);
+    return function() {
+      w.terminate();
+    };
+  };
+  var b2 = function(d, b) {
+    return d[b] | d[b + 1] << 8;
+  };
+  var b4 = function(d, b) {
+    return (d[b] | d[b + 1] << 8 | d[b + 2] << 16 | d[b + 3] << 24) >>> 0;
+  };
+  var b8 = function(d, b) {
+    return b4(d, b) + b4(d, b + 4) * 4294967296;
+  };
+  var wbytes = function(d, b, v) {
+    for (; v; ++b)
+      d[b] = v, v >>>= 8;
+  };
+  var gzh = function(c, o) {
+    var fn = o.filename;
+    c[0] = 31, c[1] = 139, c[2] = 8, c[8] = o.level < 2 ? 4 : o.level == 9 ? 2 : 0, c[9] = 3;
+    if (o.mtime != 0)
+      wbytes(c, 4, Math.floor(new Date(o.mtime || Date.now()) / 1e3));
+    if (fn) {
+      c[3] = 8;
+      for (var i = 0; i <= fn.length; ++i)
+        c[i + 10] = fn.charCodeAt(i);
+    }
+  };
+  var gzs = function(d) {
+    if (d[0] != 31 || d[1] != 139 || d[2] != 8)
+      err(6, "invalid gzip data");
+    var flg = d[3];
+    var st = 10;
+    if (flg & 4)
+      st += (d[10] | d[11] << 8) + 2;
+    for (var zs = (flg >> 3 & 1) + (flg >> 4 & 1); zs > 0; zs -= !d[st++])
+      ;
+    return st + (flg & 2);
+  };
+  var gzl = function(d) {
+    var l = d.length;
+    return (d[l - 4] | d[l - 3] << 8 | d[l - 2] << 16 | d[l - 1] << 24) >>> 0;
+  };
+  var gzhl = function(o) {
+    return 10 + (o.filename ? o.filename.length + 1 : 0);
+  };
+  function deflateSync(data, opts) {
+    return dopt(data, opts || {}, 0, 0);
+  }
+  function inflateSync(data, opts) {
+    return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
+  }
+  function gzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bDflt,
+      gze,
+      function() {
+        return [gzipSync];
+      }
+    ], function(ev) {
+      return pbf(gzipSync(ev.data[0], ev.data[1]));
+    }, 2, cb);
+  }
+  function gzipSync(data, opts) {
+    if (!opts)
+      opts = {};
+    var c = crc(), l = data.length;
+    c.p(data);
+    var d = dopt(data, opts, gzhl(opts), 8), s = d.length;
+    return gzh(d, opts), wbytes(d, s - 8, c.d()), wbytes(d, s - 4, l), d;
+  }
+  function gunzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bInflt,
+      guze,
+      function() {
+        return [gunzipSync];
+      }
+    ], function(ev) {
+      return pbf(gunzipSync(ev.data[0], ev.data[1]));
+    }, 3, cb);
+  }
+  function gunzipSync(data, opts) {
+    var st = gzs(data);
+    if (st + 8 > data.length)
+      err(6, "invalid gzip data");
+    return inflt(data.subarray(st, -8), { i: 2 }, opts && opts.out || new u8(gzl(data)), opts && opts.dictionary);
+  }
+  var te = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder();
+  var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
+  var tds = 0;
+  try {
+    td.decode(et, { stream: true });
+    tds = 1;
+  } catch (e) {
+  }
+  var dutf8 = function(d) {
+    for (var r = "", i = 0; ; ) {
+      var c = d[i++];
+      var eb = (c > 127) + (c > 223) + (c > 239);
+      if (i + eb > d.length)
+        return { s: r, r: slc(d, i - 1) };
+      if (!eb)
+        r += String.fromCharCode(c);
+      else if (eb == 3) {
+        c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
+      } else if (eb & 1)
+        r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
+      else
+        r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
+    }
+  };
+  function strToU8(str, latin1) {
+    if (latin1) {
+      var ar_1 = new u8(str.length);
+      for (var i = 0; i < str.length; ++i)
+        ar_1[i] = str.charCodeAt(i);
+      return ar_1;
+    }
+    if (te)
+      return te.encode(str);
+    var l = str.length;
+    var ar = new u8(str.length + (str.length >> 1));
+    var ai = 0;
+    var w = function(v) {
+      ar[ai++] = v;
+    };
+    for (var i = 0; i < l; ++i) {
+      if (ai + 5 > ar.length) {
+        var n = new u8(ai + 8 + (l - i << 1));
+        n.set(ar);
+        ar = n;
+      }
+      var c = str.charCodeAt(i);
+      if (c < 128 || latin1)
+        w(c);
+      else if (c < 2048)
+        w(192 | c >> 6), w(128 | c & 63);
+      else if (c > 55295 && c < 57344)
+        c = 65536 + (c & 1023 << 10) | str.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
+      else
+        w(224 | c >> 12), w(128 | c >> 6 & 63), w(128 | c & 63);
+    }
+    return slc(ar, 0, ai);
+  }
+  function strFromU8(dat, latin1) {
+    if (latin1) {
+      var r = "";
+      for (var i = 0; i < dat.length; i += 16384)
+        r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
+      return r;
+    } else if (td) {
+      return td.decode(dat);
+    } else {
+      var _a2 = dutf8(dat), s = _a2.s, r = _a2.r;
+      if (r.length)
+        err(8);
+      return s;
+    }
+  }
+  var slzh = function(d, b) {
+    return b + 30 + b2(d, b + 26) + b2(d, b + 28);
+  };
+  var zh = function(d, b, z) {
+    var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
+    var _a2 = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
+    return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
+  };
+  var z64e = function(d, b) {
+    for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
+      ;
+    return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
+  };
+  function unzipSync(data, opts) {
+    var files = {};
+    var e = data.length - 22;
+    for (; b4(data, e) != 101010256; --e) {
+      if (!e || data.length - e > 65558)
+        err(13);
+    }
+    ;
+    var c = b2(data, e + 8);
+    if (!c)
+      return {};
+    var o = b4(data, e + 16);
+    var z = o == 4294967295 || c == 65535;
+    if (z) {
+      var ze = b4(data, e - 12);
+      z = b4(data, ze) == 101075792;
+      if (z) {
+        c = b4(data, ze + 32);
+        o = b4(data, ze + 48);
+      }
+    }
+    var fltr = opts && opts.filter;
+    for (var i = 0; i < c; ++i) {
+      var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
+      o = no;
+      if (!fltr || fltr({
+        name: fn,
+        size: sc,
+        originalSize: su,
+        compression: c_2
+      })) {
+        if (!c_2)
+          files[fn] = slc(data, b, b + sc);
+        else if (c_2 == 8)
+          files[fn] = inflateSync(data.subarray(b, b + sc), { out: new u8(su) });
+        else
+          err(14, "unknown compression type " + c_2);
+      }
+    }
+    return files;
   }
 
   // node_modules/dexie/import-wrapper.mjs
@@ -7336,6 +8096,711 @@ ${shapes}`.trim();
       await sleep(waitMs);
     }
     return last ?? { status: 0, data: null, headers: {} };
+  }
+
+  // src/app/playerIdentity.ts
+  var cachedPlayerName;
+  var cachedPlayerId;
+  function asTrimmedString(v) {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : void 0;
+  }
+  function pickFirst(obj, paths) {
+    for (const path of paths) {
+      if (!obj || typeof obj !== "object") continue;
+      const parts = path.split(".");
+      let cur = obj;
+      let ok = true;
+      for (const p of parts) {
+        if (!cur || typeof cur !== "object" || !(p in cur)) {
+          ok = false;
+          break;
+        }
+        cur = cur[p];
+      }
+      if (!ok) continue;
+      if (cur !== void 0 && cur !== null) return cur;
+    }
+    return void 0;
+  }
+  async function fetchPlayerNameFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    let playerId;
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        playerId = asTrimmedString(id);
+        if (playerId) break;
+      } catch {
+      }
+    }
+    if (!playerId) return void 0;
+    try {
+      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+      if (res.status < 200 || res.status >= 300) return void 0;
+      return asTrimmedString(res.data?.nick);
+    } catch {
+      return void 0;
+    }
+  }
+  async function guessPlayerNameFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString(d?.player_self_name) ?? asTrimmedString(d?.playerOneName) ?? asTrimmedString(d?.playerOneNick) ?? asTrimmedString(d?.playerOneNickname);
+        if (candidate) return candidate;
+      }
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString(d?.player_self_name) ?? asTrimmedString(d?.playerOneName) ?? asTrimmedString(d?.playerOneNick) ?? asTrimmedString(d?.playerOneNickname);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player name from DB", e);
+    }
+    return void 0;
+  }
+  async function fetchPlayerIdFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        const playerId = asTrimmedString(id);
+        if (playerId) return playerId;
+      } catch {
+      }
+    }
+    return void 0;
+  }
+  async function guessPlayerIdFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
+        if (candidate) return candidate;
+      }
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player id from DB", e);
+    }
+    return void 0;
+  }
+  async function getCurrentPlayerId() {
+    if (cachedPlayerId !== void 0) return cachedPlayerId || void 0;
+    const fromApi = await fetchPlayerIdFromApi();
+    if (fromApi) {
+      cachedPlayerId = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerIdFromDb();
+    cachedPlayerId = fromDb ?? null;
+    return fromDb;
+  }
+  async function getCurrentPlayerName() {
+    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
+    const fromApi = await fetchPlayerNameFromApi();
+    if (fromApi) {
+      cachedPlayerName = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerNameFromDb();
+    cachedPlayerName = fromDb ?? null;
+    return fromDb;
+  }
+
+  // src/serverSync.ts
+  var SYNC_META_KEY = "server_sync_v1";
+  var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
+  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
+  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set([
+    "raw",
+    "trueLocationKey",
+    "trueLocationRepeat",
+    "trueState",
+    "trueDistrict",
+    "trueUsState",
+    "trueCaProvince",
+    "trueIdProvince",
+    "trueIdKabupaten",
+    "truePhProvince",
+    "trueVnProvince"
+  ]);
+  function compactRecord(row) {
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (value === void 0) continue;
+      if (COMPACT_DROP_KEYS.has(key)) continue;
+      if (key.endsWith("_guessCountry")) continue;
+      out[key] = value;
+    }
+    return out;
+  }
+  function unionOrderedKeys(rows, prefer) {
+    const set = /* @__PURE__ */ new Set();
+    for (const key of prefer) set.add(key);
+    for (const row of rows) {
+      for (const key of Object.keys(row)) set.add(key);
+    }
+    const preferSet = new Set(prefer);
+    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
+    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
+  }
+  function toColumnar(rows, prefer) {
+    if (rows.length === 0) return { cols: [], rows: [] };
+    const cols = unionOrderedKeys(rows, prefer);
+    const outRows = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const arr = new Array(cols.length);
+      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
+      outRows[i] = arr;
+    }
+    return { cols, rows: outRows };
+  }
+  function getUserscriptVersion() {
+    const anyGlobal = globalThis;
+    const info = anyGlobal?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function readGmValue(key) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
+    } catch {
+    }
+    try {
+      if (typeof GM_getValue === "function") return GM_getValue(key);
+    } catch {
+    }
+    try {
+      return globalThis?.localStorage?.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  function writeGmValue(key, value) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      if (typeof GM_setValue === "function") return GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      globalThis?.localStorage?.setItem(key, value);
+    } catch {
+    }
+  }
+  function loadServerSyncSettings() {
+    const endpointUrlRaw = readGmValue(`${GM_VALUE_PREFIX}endpoint_url`);
+    const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
+    const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
+    const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
+    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
+    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : true;
+    const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
+    return {
+      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
+      token,
+      compact,
+      includeAggregates
+    };
+  }
+  function saveServerSyncSettings(next) {
+    if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
+    if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
+    if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
+    if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
+  }
+  async function getLastServerSyncCursor() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    const cursor = meta?.value?.cursorTo;
+    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
+  }
+  async function setLastServerSyncCursor(status) {
+    await db.meta.put({
+      key: SYNC_META_KEY,
+      value: {
+        cursorFrom: status.cursorFrom,
+        cursorTo: status.cursorTo,
+        lastSyncAt: Date.now(),
+        lastStatus: status.status,
+        lastOk: status.ok,
+        lastBytesJson: status.bytesJson,
+        lastBytesGzip: status.bytesGzip,
+        lastCounts: status.counts
+      },
+      updatedAt: Date.now()
+    });
+  }
+  async function gzipJson(json) {
+    return await new Promise((resolve, reject) => {
+      gzip(strToU8(json), { level: 6 }, (err2, out) => {
+        if (err2) reject(err2);
+        else resolve(out);
+      });
+    });
+  }
+  async function buildDelta(since, opts) {
+    const cursorFrom = Math.max(0, Math.floor(since || 0));
+    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
+      db.games.where("playedAt").above(cursorFrom).toArray(),
+      db.rounds.where("playedAt").above(cursorFrom).toArray(),
+      db.details.where("fetchedAt").above(cursorFrom).toArray(),
+      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
+    ]);
+    const gameIds = gamesByTime.map((g) => g.gameId);
+    const [roundsByGame, detailsByGame] = await Promise.all([
+      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
+      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
+    ]);
+    const roundsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const r of roundsByGame) byId.set(r.id, r);
+      for (const r of roundsByTime) byId.set(r.id, r);
+      return Array.from(byId.values());
+    })();
+    const detailsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const d of detailsByGame) byId.set(d.gameId, d);
+      for (const d of detailsByTime) byId.set(d.gameId, d);
+      return Array.from(byId.values());
+    })();
+    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
+    const rounds = opts.compact ? roundsMerged.map(compactRecord) : roundsMerged;
+    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
+    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
+    const cursorToCandidates = [];
+    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
+    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
+    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
+    const tables = {
+      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+    };
+    const envelope = {
+      schema: "geoanalyzr-sync",
+      schemaVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion(),
+      owner: { playerId: ownerId, playerName: ownerName },
+      cursor: { from: cursorFrom, to: cursorTo },
+      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
+      counts: {
+        games: gamesByTime.length,
+        rounds: roundsMerged.length,
+        details: detailsMerged.length,
+        gameAgg: gameAggByTime.length
+      },
+      tables
+    };
+    const json = JSON.stringify(envelope);
+    const bytesGzip = await gzipJson(json);
+    return {
+      cursorFrom,
+      cursorTo,
+      counts: envelope.counts,
+      json,
+      bytesJson: json.length,
+      bytesGzip
+    };
+  }
+  function gmPostBytes(url, body, opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "POST",
+        url,
+        headers: opts.headers,
+        data: body,
+        responseType: "text",
+        timeout: opts.timeoutMs ?? 45e3,
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+          const headers = {};
+          for (const line of rawHeaders.split(/\r?\n/)) {
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            const k = line.slice(0, idx).trim().toLowerCase();
+            const v = line.slice(idx + 1).trim();
+            if (!k) continue;
+            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
+            else headers[k] = v;
+          }
+          resolve({ status, text, headers });
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function runServerSyncOnce(settings) {
+    const endpointUrl = (settings.endpointUrl || "").trim();
+    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+    const token = (settings.token || "").trim();
+    if (!token) throw new Error("Missing sync token.");
+    const cursorFrom = await getLastServerSyncCursor();
+    const delta = await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
+    const headers = {
+      "Content-Type": "application/json",
+      "Content-Encoding": "gzip",
+      Authorization: `Bearer ${token}`,
+      "X-GA-Cursor-From": String(delta.cursorFrom),
+      "X-GA-Cursor-To": String(delta.cursorTo),
+      "X-GA-Schema-Version": "1",
+      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
+    };
+    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
+    const ok = res.status >= 200 && res.status < 300;
+    const status = {
+      ok,
+      status: res.status,
+      responseText: res.text,
+      cursorFrom: delta.cursorFrom,
+      cursorTo: delta.cursorTo,
+      counts: delta.counts,
+      bytesJson: delta.bytesJson,
+      bytesGzip: delta.bytesGzip.length
+    };
+    await setLastServerSyncCursor(status);
+    return status;
+  }
+  async function getLastServerSyncMeta() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    return meta?.value ?? null;
+  }
+
+  // src/uiOverlay.ts
+  function el(tag) {
+    return document.createElement(tag);
+  }
+  function cssOnce() {
+    const id = "geoanalyzr-ui-overlay-css";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+    .ga-ui-icon {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 999999;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,20,0.95);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    }
+    .ga-ui-icon:active { transform: translateY(1px); }
+
+    .ga-ui-panel {
+      position: fixed;
+      left: 16px;
+      bottom: 68px;
+      z-index: 999999;
+      width: 360px;
+      max-width: calc(100vw - 32px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(20,20,20,0.92);
+      color: white;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      padding: 10px;
+      display: none;
+    }
+
+    .ga-ui-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .ga-ui-title {
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ga-ui-title svg { display: block; filter: drop-shadow(0 0 10px rgba(0,162,254,0.35)); }
+    .ga-ui-icon svg { display: block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
+    .ga-ui-close {
+      border: none;
+      background: transparent;
+      color: white;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 2px 6px;
+    }
+
+    .ga-ui-status {
+      font-size: 12px;
+      opacity: 0.95;
+      white-space: pre-wrap;
+      margin-bottom: 10px;
+    }
+
+    .ga-ui-btn {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .ga-ui-btn:active { transform: translateY(1px); }
+    .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    .ga-ui-counts {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.92;
+      white-space: normal;
+    }
+
+    .ga-ui-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000000;
+      background: rgba(0,0,0,0.62);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .ga-ui-modal-card {
+      width: 520px;
+      max-width: calc(100vw - 32px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(20,20,20,0.94);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+      color: white;
+      padding: 12px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .ga-ui-modal-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 10px;
+    }
+    .ga-ui-modal-head-title { font-weight: 700; }
+    .ga-ui-modal-x { border:0; background: transparent; color: white; cursor:pointer; font-size: 18px; line-height: 1; }
+    .ga-ui-modal-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(0,0,0,0.25);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.20);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+    .ga-ui-modal-help {
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.90;
+      white-space: pre-wrap;
+    }
+    .ga-ui-modal-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+  `;
+    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
+  }
+  function createUIOverlay() {
+    const isDevBuild = () => {
+      const info = globalThis?.GM_info;
+      const ns = String(info?.script?.namespace || "");
+      const name = String(info?.script?.name || "");
+      return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
+    };
+    const formatBytes = (n) => {
+      if (!Number.isFinite(n) || n <= 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      let v = n;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    };
+    const mount = () => {
+      cssOnce();
+      if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
+      if (!document.documentElement.contains(panel)) document.documentElement.appendChild(panel);
+    };
+    const iconBtn = el("button");
+    iconBtn.className = "ga-ui-icon";
+    iconBtn.title = "GeoAnalyzr";
+    iconBtn.type = "button";
+    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "light", decorative: true });
+    const panel = el("div");
+    panel.className = "ga-ui-panel";
+    const header = el("div");
+    header.className = "ga-ui-head";
+    const title = el("div");
+    title.className = "ga-ui-title";
+    const titleLogo = el("span");
+    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "light", decorative: true });
+    const titleText = el("span");
+    titleText.textContent = "GeoAnalyzr";
+    title.appendChild(titleLogo);
+    title.appendChild(titleText);
+    const closeBtn = el("button");
+    closeBtn.className = "ga-ui-close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "x";
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    const status = el("div");
+    status.className = "ga-ui-status";
+    status.textContent = "Ready.";
+    const mkBtn2 = (label, bg) => {
+      const b = el("button");
+      b.className = "ga-ui-btn";
+      b.type = "button";
+      b.textContent = label;
+      b.style.background = bg;
+      return b;
+    };
+    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
+    const syncBtn = isDevBuild() ? mkBtn2("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
+    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
+    const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
+    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
+    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
+    const counts = el("div");
+    counts.className = "ga-ui-counts";
+    counts.textContent = "Data: 0 games, 0 rounds.";
+    panel.appendChild(header);
+    panel.appendChild(status);
+    panel.appendChild(updateBtn);
+    if (syncBtn) panel.appendChild(syncBtn);
+    panel.appendChild(analysisBtn);
+    panel.appendChild(discordBtn);
+    panel.appendChild(exportBtn);
+    panel.appendChild(resetBtn);
+    panel.appendChild(counts);
+    let open = false;
+    const setOpen = (next) => {
+      open = next;
+      panel.style.display = open ? "block" : "none";
+    };
+    iconBtn.addEventListener("click", () => setOpen(!open));
+    closeBtn.addEventListener("click", () => setOpen(false));
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+    else mount();
+    let updateHandler = null;
+    let resetHandler = null;
+    let exportHandler = null;
+    let openAnalysisHandler = null;
+    let discordHandler = null;
+    updateBtn.addEventListener("click", () => void updateHandler?.());
+    if (syncBtn) {
+      syncBtn.addEventListener("click", async () => {
+        syncBtn.disabled = true;
+        status.textContent = "Syncing...";
+        try {
+          const settings = loadServerSyncSettings();
+          if (!settings.token) {
+            status.textContent = "Missing sync token (Settings \u2192 Data).";
+            return;
+          }
+          const res = await runServerSyncOnce(settings);
+          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+          status.textContent = res.ok ? `Synced \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+        } catch (e) {
+          status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        } finally {
+          syncBtn.disabled = false;
+        }
+      });
+    }
+    exportBtn.addEventListener("click", () => void exportHandler?.());
+    resetBtn.addEventListener("click", () => void resetHandler?.());
+    analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
+    discordBtn.addEventListener("click", () => void discordHandler?.());
+    return {
+      setVisible(visible) {
+        iconBtn.style.display = visible ? "flex" : "none";
+        if (!visible) panel.style.display = "none";
+      },
+      setStatus(msg) {
+        status.textContent = msg;
+      },
+      setCounts(value) {
+        counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
+      },
+      onUpdateClick(fn) {
+        updateHandler = fn;
+      },
+      onResetClick(fn) {
+        resetHandler = fn;
+      },
+      onExportClick(fn) {
+        exportHandler = fn;
+      },
+      onOpenAnalysisClick(fn) {
+        openAnalysisHandler = fn;
+      },
+      onDiscordClick(fn) {
+        discordHandler = fn;
+      }
+    };
   }
 
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
@@ -8319,7 +9784,7 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst(obj, paths) {
+  function pickFirst2(obj, paths) {
     for (const p of paths) {
       const v = getByPath(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -8334,7 +9799,7 @@ ${shapes}`.trim();
   }
   function extractGuessLatLng(guess) {
     const lat = asNum(
-      pickFirst(guess, [
+      pickFirst2(guess, [
         "lat",
         "latitude",
         "location.lat",
@@ -8343,7 +9808,7 @@ ${shapes}`.trim();
       ])
     );
     const lng = asNum(
-      pickFirst(guess, [
+      pickFirst2(guess, [
         "lng",
         "lon",
         "longitude",
@@ -8358,7 +9823,7 @@ ${shapes}`.trim();
   }
   function extractGuessCountryCode(guess) {
     return normalizeIso22(
-      pickFirst(guess, [
+      pickFirst2(guess, [
         "countryCode",
         "country_code",
         "country"
@@ -8413,7 +9878,7 @@ ${shapes}`.trim();
         const res = await fetch(url, { credentials: "include" });
         if (!res.ok) continue;
         const data = await res.json();
-        const id = pickFirst(data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        const id = pickFirst2(data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
         if (typeof id === "string" && id.trim()) {
           cachedOwnPlayerId = id.trim();
           return cachedOwnPlayerId;
@@ -8604,9 +10069,9 @@ ${shapes}`.trim();
     const winningTeamId = String(gameData?.result?.winningTeamId || "");
     const damageMultiplierRounds = rounds.filter((r) => (asNum(r?.damageMultiplier) || 1) > 1).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
     const healingRounds = rounds.filter((r) => Boolean(r?.isHealingRound)).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
-    const mapName = pickFirst(gameData, ["options.map.name"]);
-    const mapSlug = pickFirst(gameData, ["options.map.slug"]);
-    const isRated = asBool(pickFirst(gameData, ["options.isRated"]));
+    const mapName = pickFirst2(gameData, ["options.map.name"]);
+    const mapSlug = pickFirst2(gameData, ["options.map.slug"]);
+    const isRated = asBool(pickFirst2(gameData, ["options.isRated"]));
     const missingFields = [];
     if (typeof mapSlug !== "string" || !mapSlug.trim()) missingFields.push("mapSlug");
     if (typeof mapName !== "string" || !mapName.trim()) missingFields.push("mapName");
@@ -9025,7 +10490,7 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst2(obj, paths) {
+  function pickFirst3(obj, paths) {
     for (const p of paths) {
       const v = getByPath2(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -9060,7 +10525,7 @@ ${shapes}`.trim();
   function classifyModeFamilyFromEvent(ev, gameMode) {
     const byMode = classifyModeFamily(gameMode);
     if (byMode !== "other") return byMode;
-    const hintRaw = pickFirst2(ev, [
+    const hintRaw = pickFirst3(ev, [
       "type",
       "__typename",
       "payload.type",
@@ -9099,19 +10564,19 @@ ${shapes}`.trim();
     return { source: "none" };
   }
   function extractEventTimeMs(ev, entry) {
-    const timeCandidate = pickFirst2(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
+    const timeCandidate = pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
     const parsed = typeof timeCandidate === "string" ? Date.parse(timeCandidate) : NaN;
     return Number.isFinite(parsed) ? parsed : Date.now();
   }
   function extractGameMode(ev, entry) {
     return normalizeGameMode(
-      pickFirst2(ev, [
+      pickFirst3(ev, [
         "payload.gameMode",
         "payload.competitiveGameMode",
         "gameMode",
         "competitiveGameMode",
         "mode"
-      ]) ?? pickFirst2(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
+      ]) ?? pickFirst3(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
     );
   }
   async function fetchFeedPage(paginationToken) {
@@ -9619,6 +11084,17 @@ ${shapes}`.trim();
   }
 
   // src/engine/dimensions.ts
+  function normalizeMovementType3(raw) {
+    const v = typeof raw === "string" ? raw.trim() : "";
+    if (!v) return null;
+    const k = v.toLowerCase();
+    if (k === "unknown") return "unknown";
+    if (k === "mixed") return "mixed";
+    if (k.includes("nmpz")) return "nmpz";
+    if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
+    if (k.includes("moving")) return "moving";
+    return v;
+  }
   function getRowTs(row) {
     const coerce = (v) => {
       if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -9686,8 +11162,7 @@ ${shapes}`.trim();
     return null;
   }
   function movementTypeKey(r) {
-    const v = getMovementType(r);
-    return typeof v === "string" && v.length ? v : null;
+    return normalizeMovementType3(getMovementType(r));
   }
   function isHitKey(r) {
     const truth = getTrueCountry(r);
@@ -9805,25 +11280,27 @@ ${shapes}`.trim();
     if (typeof ts !== "number") return null;
     return String(new Date(ts).getHours()).padStart(2, "0");
   }
-  function asTrimmedString(v) {
+  function asTrimmedString2(v) {
     const s = typeof v === "string" ? v.trim() : "";
     return s ? s : void 0;
   }
   function gameModeKeyAny(row) {
-    const v = asTrimmedString(row?.gameModeSimple ?? row?.gameMode ?? row?.mode ?? row?.game_mode);
+    const v = asTrimmedString2(row?.gameModeSimple ?? row?.gameMode ?? row?.mode ?? row?.game_mode);
     return v ? v : null;
   }
   function modeFamilyKeyAny(row) {
-    const v = asTrimmedString(row?.modeFamily ?? row?.mode_family);
-    if (!v) return null;
+    const raw = asTrimmedString2(row?.modeFamily ?? row?.mode_family);
+    if (!raw) return null;
+    const v = raw.toLowerCase();
     if (v === "duels") return "Duel";
     if (v === "teamduels") return "Team Duel";
     if (v === "standard") return "Standard";
     if (v === "streak") return "Streak";
-    return v;
+    if (v === "other") return "Other";
+    return raw;
   }
   function resultKeyAny(row) {
-    const r = asTrimmedString(row?.result);
+    const r = asTrimmedString2(row?.result);
     if (r) return r;
     const v = typeof row?.player_self_victory === "boolean" ? row.player_self_victory : typeof row?.teamOneVictory === "boolean" ? row.teamOneVictory : typeof row?.playerOneVictory === "boolean" ? row.playerOneVictory : void 0;
     if (typeof v === "boolean") return v ? "Win" : "Loss";
@@ -9835,17 +11312,17 @@ ${shapes}`.trim();
     return null;
   }
   function mapSlugKeyAny(row) {
-    const direct = asTrimmedString(row?.mapSlug ?? row?.map_slug);
+    const direct = asTrimmedString2(row?.mapSlug ?? row?.map_slug);
     if (direct) return direct;
     const raw = row?.raw;
-    const v = asTrimmedString(raw?.options?.map?.slug ?? raw?.mapSlug ?? raw?.map?.slug);
+    const v = asTrimmedString2(raw?.options?.map?.slug ?? raw?.mapSlug ?? raw?.map?.slug);
     return v ? v : null;
   }
   function mapNameKeyAny(row) {
-    const direct = asTrimmedString(row?.mapName ?? row?.map_name);
+    const direct = asTrimmedString2(row?.mapName ?? row?.map_name);
     if (direct) return direct;
     const raw = row?.raw;
-    const v = asTrimmedString(raw?.options?.map?.name ?? raw?.mapName ?? raw?.map?.name);
+    const v = asTrimmedString2(raw?.options?.map?.name ?? raw?.mapName ?? raw?.map?.name);
     return v ? v : null;
   }
   function isRatedKeyAny(row) {
@@ -9862,17 +11339,12 @@ ${shapes}`.trim();
     return "Unknown";
   }
   function teammateKeyAny(row) {
-    const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
+    const v = asTrimmedString2(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
     return v ? v : null;
   }
   function movementTypeKeyAny(row) {
-    const v = asTrimmedString(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
-    if (!v) return null;
-    const k = v.toLowerCase();
-    if (k.includes("nmpz")) return "nmpz";
-    if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
-    if (k.includes("moving")) return "moving";
-    return v;
+    const v = asTrimmedString2(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
+    return normalizeMovementType3(v);
   }
   function guessCountryKey(r) {
     const guess = getGuessCountrySelf(r);
@@ -9946,11 +11418,7 @@ ${shapes}`.trim();
         return v ? v : null;
       },
       mode_family: (r) => {
-        const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
-        if (!v) return null;
-        if (v === "duels") return "Duel";
-        if (v === "teamduels") return "Team Duel";
-        return v;
+        return modeFamilyKeyAny(r);
       },
       team_closer_winner: (r) => winnerLabelForCompare(r, getDistanceKm(r), getMateDistanceKm(r), "min"),
       team_higher_score_winner: (r) => winnerLabelForCompare(r, getSelfScore(r), getMateScore(r), "max"),
@@ -10143,7 +11611,7 @@ ${shapes}`.trim();
     if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
     return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
   }
-  function normalizeMovementType3(raw) {
+  function normalizeMovementType4(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
     if (!s) return "unknown";
@@ -10152,11 +11620,11 @@ ${shapes}`.trim();
     if (s.includes("moving")) return "moving";
     return "unknown";
   }
-  function asTrimmedString2(v) {
+  function asTrimmedString3(v) {
     const s = typeof v === "string" ? v.trim() : "";
     return s ? s : void 0;
   }
-  function pickFirst3(obj, keys2) {
+  function pickFirst4(obj, keys2) {
     for (const k of keys2) {
       if (!obj) continue;
       const v = obj[k];
@@ -10307,11 +11775,11 @@ ${shapes}`.trim();
     return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
   }
   function extractGameRatings(g) {
-    const mfRaw = asTrimmedString2(g?.modeFamily ?? g?.mode_family) ?? "";
+    const mfRaw = asTrimmedString3(g?.modeFamily ?? g?.mode_family) ?? "";
     const mf = mfRaw.toLowerCase();
     const isTeam = g?.isTeamDuels === true || mf === "teamduels" || mf.includes("team") && mf.includes("duel");
     const pickNum = (keys2) => {
-      const v = pickFirst3(g, keys2);
+      const v = pickFirst4(g, keys2);
       return typeof v === "number" && Number.isFinite(v) ? v : void 0;
     };
     if (isTeam) {
@@ -10544,15 +12012,15 @@ ${shapes}`.trim();
             if (!d) continue;
             let changed = false;
             if (typeof r.player_mate_name !== "string" || !String(r.player_mate_name).trim()) {
-              const n = asTrimmedString2(d?.player_mate_name);
+              const n = asTrimmedString3(d?.player_mate_name);
               if (n) {
                 r.player_mate_name = n;
                 changed = true;
               }
             }
             if (typeof r.movementType !== "string" || !String(r.movementType).trim() || String(r.movementType).toLowerCase() === "unknown") {
-              const raw = asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode);
-              const norm = normalizeMovementType3(raw);
+              const raw = asTrimmedString3(d?.gameModeSimple) ?? asTrimmedString3(d?.gameMode);
+              const norm = normalizeMovementType4(raw);
               if (norm !== "unknown") {
                 r.movementType = norm;
                 changed = true;
@@ -10614,22 +12082,22 @@ ${shapes}`.trim();
         }
       }
       if (typeof out.modeFamily !== "string" || !out.modeFamily) {
-        const mf = asTrimmedString2(out.modeFamily);
+        const mf = asTrimmedString3(out.modeFamily);
         if (mf) out.modeFamily = mf;
       }
       if (typeof out.gameMode !== "string" || !out.gameMode) {
-        const gm = asTrimmedString2(out.gameMode);
+        const gm = asTrimmedString3(out.gameMode);
         if (gm) out.gameMode = gm;
       }
       if (typeof out.movementType !== "string" || !out.movementType) {
-        out.movementType = normalizeMovementType3(asTrimmedString2(out.gameMode));
+        out.movementType = normalizeMovementType4(asTrimmedString3(out.gameMode));
       }
       if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
         if (!hasMate) {
-          const mateNameRaw = pickFirst3(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
-          let mateName = asTrimmedString2(mateNameRaw);
-          const selfName = asTrimmedString2(pickFirst3(out, ["player_self_name", "playerOneName"]));
+          const mateNameRaw = pickFirst4(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
+          let mateName = asTrimmedString3(mateNameRaw);
+          const selfName = asTrimmedString3(pickFirst4(out, ["player_self_name", "playerOneName"]));
           if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
@@ -10879,7 +12347,7 @@ ${shapes}`.trim();
         }
         agg.roundsCount++;
         const mvRaw = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
-        const mv = normalizeMovementType3(mvRaw);
+        const mv = normalizeMovementType4(mvRaw);
         const curMv = agg.movementType;
         if (mv && mv !== "unknown") {
           if (!curMv || curMv === "unknown") agg.movementType = mv;
@@ -10953,8 +12421,8 @@ ${shapes}`.trim();
         if (fromAgg && fromAgg !== "unknown") out.movementType = fromAgg;
       }
       if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
-        const raw = asTrimmedString2(out.gameModeSimple) ?? asTrimmedString2(out.gameMode) ?? asTrimmedString2(out.mode) ?? asTrimmedString2(out.gameType);
-        const norm = normalizeMovementType3(raw);
+        const raw = asTrimmedString3(out.gameModeSimple) ?? asTrimmedString3(out.gameMode) ?? asTrimmedString3(out.mode) ?? asTrimmedString3(out.gameType);
+        const norm = normalizeMovementType4(raw);
         if (norm !== "unknown") out.movementType = norm;
       }
       const scoreSum = agg?.scoreSum;
@@ -10982,22 +12450,22 @@ ${shapes}`.trim();
       if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
         if (!hasMate) {
-          const selfId = asTrimmedString2(out.player_self_id ?? out.player_self_playerId);
-          const selfName = asTrimmedString2(out.player_self_name) ?? asTrimmedString2(out.playerOneName);
-          const t1id = asTrimmedString2(out.teamOnePlayerOneId);
-          const t2id = asTrimmedString2(out.teamOnePlayerTwoId);
-          const t1name = asTrimmedString2(out.teamOnePlayerOneName);
-          const t2name = asTrimmedString2(out.teamOnePlayerTwoName);
-          const u1id = asTrimmedString2(out.teamTwoPlayerOneId);
-          const u2id = asTrimmedString2(out.teamTwoPlayerTwoId);
-          const u1name = asTrimmedString2(out.teamTwoPlayerOneName);
-          const u2name = asTrimmedString2(out.teamTwoPlayerTwoName);
+          const selfId = asTrimmedString3(out.player_self_id ?? out.player_self_playerId);
+          const selfName = asTrimmedString3(out.player_self_name) ?? asTrimmedString3(out.playerOneName);
+          const t1id = asTrimmedString3(out.teamOnePlayerOneId);
+          const t2id = asTrimmedString3(out.teamOnePlayerTwoId);
+          const t1name = asTrimmedString3(out.teamOnePlayerOneName);
+          const t2name = asTrimmedString3(out.teamOnePlayerTwoName);
+          const u1id = asTrimmedString3(out.teamTwoPlayerOneId);
+          const u2id = asTrimmedString3(out.teamTwoPlayerTwoId);
+          const u1name = asTrimmedString3(out.teamTwoPlayerOneName);
+          const u2name = asTrimmedString3(out.teamTwoPlayerTwoName);
           let mateName;
           if (selfId && selfId === t1id) mateName = t2name;
           else if (selfId && selfId === t2id) mateName = t1name;
           else if (selfId && selfId === u1id) mateName = u2name;
           else if (selfId && selfId === u2id) mateName = u1name;
-          else mateName = asTrimmedString2(pickFirst3(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+          else mateName = asTrimmedString3(pickFirst4(out, ["player_mate_name", "teamOnePlayerTwoName"]));
           if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
@@ -31621,7 +33089,7 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst4(obj, paths) {
+  function pickFirst5(obj, paths) {
     for (const p of paths) {
       const v = getByPath3(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -31740,10 +33208,10 @@ ${shapes}`.trim();
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst4(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            mapName: pickFirst4(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
-            points: pickFirst4(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst4(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst5(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            mapName: pickFirst5(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
+            points: pickFirst5(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst5(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -31752,9 +33220,9 @@ ${shapes}`.trim();
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst4(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            points: pickFirst4(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst4(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst5(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            points: pickFirst5(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst5(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -33992,11 +35460,7 @@ ${shapes}`.trim();
               {
                 key: "gameId",
                 label: "Game",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 8
-                }
+                sortable: true
               },
               {
                 key: "guess_maps",
@@ -34121,11 +35585,7 @@ ${shapes}`.trim();
               {
                 key: "gameId",
                 label: "Game",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 8
-                }
+                sortable: true
               }
             ]
           },
@@ -34199,11 +35659,7 @@ ${shapes}`.trim();
               {
                 key: "gameId",
                 label: "Game",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 8
-                }
+                sortable: true
               }
             ]
           },
@@ -38441,7 +39897,7 @@ ${shapes}`.trim();
       top:6%;
       left:50%;
       transform:translateX(-50%);
-      width:min(1100px, 92vw);
+      width:min(1260px, 96vw);
       max-height:88vh;
       overflow:auto;
       background:var(--ga-surface);
@@ -38501,6 +39957,10 @@ ${shapes}`.trim();
       color: var(--ga-link);
       text-decoration: underline;
       text-underline-offset: 2px;
+    }
+    .ga-dd-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-wrap: anywhere;
     }
     .ga-dd-pos { color: var(--ga-good); font-variant-numeric: tabular-nums; }
     .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }
@@ -41681,1159 +43141,10 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // src/app/playerIdentity.ts
-  var cachedPlayerName;
-  var cachedPlayerId;
-  function asTrimmedString3(v) {
-    const s = typeof v === "string" ? v.trim() : "";
-    return s ? s : void 0;
-  }
-  function pickFirst5(obj, paths) {
-    for (const path of paths) {
-      if (!obj || typeof obj !== "object") continue;
-      const parts = path.split(".");
-      let cur = obj;
-      let ok = true;
-      for (const p of parts) {
-        if (!cur || typeof cur !== "object" || !(p in cur)) {
-          ok = false;
-          break;
-        }
-        cur = cur[p];
-      }
-      if (!ok) continue;
-      if (cur !== void 0 && cur !== null) return cur;
-    }
-    return void 0;
-  }
-  async function fetchPlayerNameFromApi() {
-    const idCandidates = [
-      "https://www.geoguessr.com/api/v3/profiles",
-      "https://www.geoguessr.com/api/v4/profiles",
-      "https://www.geoguessr.com/api/v3/users/me"
-    ];
-    let playerId;
-    for (const url of idCandidates) {
-      try {
-        const res = await httpGetJson(url);
-        if (res.status < 200 || res.status >= 300) continue;
-        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
-        playerId = asTrimmedString3(id);
-        if (playerId) break;
-      } catch {
-      }
-    }
-    if (!playerId) return void 0;
-    try {
-      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
-      if (res.status < 200 || res.status >= 300) return void 0;
-      return asTrimmedString3(res.data?.nick);
-    } catch {
-      return void 0;
-    }
-  }
-  async function guessPlayerNameFromDb() {
-    try {
-      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-      for (const d of latest) {
-        const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
-        if (candidate) return candidate;
-      }
-    } catch (e) {
-      try {
-        const all = await db.details.toArray();
-        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-        for (const d of sorted.slice(0, 25)) {
-          const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
-          if (candidate) return candidate;
-        }
-      } catch {
-      }
-      console.warn("Failed to guess player name from DB", e);
-    }
-    return void 0;
-  }
-  async function fetchPlayerIdFromApi() {
-    const idCandidates = [
-      "https://www.geoguessr.com/api/v3/profiles",
-      "https://www.geoguessr.com/api/v4/profiles",
-      "https://www.geoguessr.com/api/v3/users/me"
-    ];
-    for (const url of idCandidates) {
-      try {
-        const res = await httpGetJson(url);
-        if (res.status < 200 || res.status >= 300) continue;
-        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
-        const playerId = asTrimmedString3(id);
-        if (playerId) return playerId;
-      } catch {
-      }
-    }
-    return void 0;
-  }
-  async function guessPlayerIdFromDb() {
-    try {
-      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-      for (const d of latest) {
-        const candidate = asTrimmedString3(d?.player_self_id) ?? asTrimmedString3(d?.playerOneId) ?? asTrimmedString3(d?.playerId);
-        if (candidate) return candidate;
-      }
-    } catch (e) {
-      try {
-        const all = await db.details.toArray();
-        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-        for (const d of sorted.slice(0, 25)) {
-          const candidate = asTrimmedString3(d?.player_self_id) ?? asTrimmedString3(d?.playerOneId) ?? asTrimmedString3(d?.playerId);
-          if (candidate) return candidate;
-        }
-      } catch {
-      }
-      console.warn("Failed to guess player id from DB", e);
-    }
-    return void 0;
-  }
-  async function getCurrentPlayerId() {
-    if (cachedPlayerId !== void 0) return cachedPlayerId || void 0;
-    const fromApi = await fetchPlayerIdFromApi();
-    if (fromApi) {
-      cachedPlayerId = fromApi;
-      return fromApi;
-    }
-    const fromDb = await guessPlayerIdFromDb();
-    cachedPlayerId = fromDb ?? null;
-    return fromDb;
-  }
-  async function getCurrentPlayerName() {
-    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
-    const fromApi = await fetchPlayerNameFromApi();
-    if (fromApi) {
-      cachedPlayerName = fromApi;
-      return fromApi;
-    }
-    const fromDb = await guessPlayerNameFromDb();
-    cachedPlayerName = fromDb ?? null;
-    return fromDb;
-  }
-
-  // node_modules/fflate/esm/browser.js
-  var ch2 = {};
-  var wk = (function(c, id, msg, transfer, cb) {
-    var w = new Worker(ch2[id] || (ch2[id] = URL.createObjectURL(new Blob([
-      c + ';addEventListener("error",function(e){e=e.error;postMessage({$e$:[e.message,e.code,e.stack]})})'
-    ], { type: "text/javascript" }))));
-    w.onmessage = function(e) {
-      var d = e.data, ed = d.$e$;
-      if (ed) {
-        var err2 = new Error(ed[0]);
-        err2["code"] = ed[1];
-        err2.stack = ed[2];
-        cb(err2, null);
-      } else
-        cb(null, d);
-    };
-    w.postMessage(msg, transfer);
-    return w;
-  });
-  var u8 = Uint8Array;
-  var u16 = Uint16Array;
-  var i32 = Int32Array;
-  var fleb = new u8([
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    1,
-    1,
-    1,
-    2,
-    2,
-    2,
-    2,
-    3,
-    3,
-    3,
-    3,
-    4,
-    4,
-    4,
-    4,
-    5,
-    5,
-    5,
-    5,
-    0,
-    /* unused */
-    0,
-    0,
-    /* impossible */
-    0
-  ]);
-  var fdeb = new u8([
-    0,
-    0,
-    0,
-    0,
-    1,
-    1,
-    2,
-    2,
-    3,
-    3,
-    4,
-    4,
-    5,
-    5,
-    6,
-    6,
-    7,
-    7,
-    8,
-    8,
-    9,
-    9,
-    10,
-    10,
-    11,
-    11,
-    12,
-    12,
-    13,
-    13,
-    /* unused */
-    0,
-    0
-  ]);
-  var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
-  var freb = function(eb, start) {
-    var b = new u16(31);
-    for (var i = 0; i < 31; ++i) {
-      b[i] = start += 1 << eb[i - 1];
-    }
-    var r = new i32(b[30]);
-    for (var i = 1; i < 30; ++i) {
-      for (var j = b[i]; j < b[i + 1]; ++j) {
-        r[j] = j - b[i] << 5 | i;
-      }
-    }
-    return { b, r };
-  };
-  var _a = freb(fleb, 2);
-  var fl = _a.b;
-  var revfl = _a.r;
-  fl[28] = 258, revfl[258] = 28;
-  var _b = freb(fdeb, 0);
-  var fd = _b.b;
-  var revfd = _b.r;
-  var rev = new u16(32768);
-  for (i = 0; i < 32768; ++i) {
-    x = (i & 43690) >> 1 | (i & 21845) << 1;
-    x = (x & 52428) >> 2 | (x & 13107) << 2;
-    x = (x & 61680) >> 4 | (x & 3855) << 4;
-    rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
-  }
-  var x;
-  var i;
-  var hMap = (function(cd, mb, r) {
-    var s = cd.length;
-    var i = 0;
-    var l = new u16(mb);
-    for (; i < s; ++i) {
-      if (cd[i])
-        ++l[cd[i] - 1];
-    }
-    var le = new u16(mb);
-    for (i = 1; i < mb; ++i) {
-      le[i] = le[i - 1] + l[i - 1] << 1;
-    }
-    var co;
-    if (r) {
-      co = new u16(1 << mb);
-      var rvb = 15 - mb;
-      for (i = 0; i < s; ++i) {
-        if (cd[i]) {
-          var sv = i << 4 | cd[i];
-          var r_1 = mb - cd[i];
-          var v = le[cd[i] - 1]++ << r_1;
-          for (var m = v | (1 << r_1) - 1; v <= m; ++v) {
-            co[rev[v] >> rvb] = sv;
-          }
-        }
-      }
-    } else {
-      co = new u16(s);
-      for (i = 0; i < s; ++i) {
-        if (cd[i]) {
-          co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
-        }
-      }
-    }
-    return co;
-  });
-  var flt = new u8(288);
-  for (i = 0; i < 144; ++i)
-    flt[i] = 8;
-  var i;
-  for (i = 144; i < 256; ++i)
-    flt[i] = 9;
-  var i;
-  for (i = 256; i < 280; ++i)
-    flt[i] = 7;
-  var i;
-  for (i = 280; i < 288; ++i)
-    flt[i] = 8;
-  var i;
-  var fdt = new u8(32);
-  for (i = 0; i < 32; ++i)
-    fdt[i] = 5;
-  var i;
-  var flm = /* @__PURE__ */ hMap(flt, 9, 0);
-  var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
-  var fdm = /* @__PURE__ */ hMap(fdt, 5, 0);
-  var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
-  var max = function(a) {
-    var m = a[0];
-    for (var i = 1; i < a.length; ++i) {
-      if (a[i] > m)
-        m = a[i];
-    }
-    return m;
-  };
-  var bits = function(d, p, m) {
-    var o = p / 8 | 0;
-    return (d[o] | d[o + 1] << 8) >> (p & 7) & m;
-  };
-  var bits16 = function(d, p) {
-    var o = p / 8 | 0;
-    return (d[o] | d[o + 1] << 8 | d[o + 2] << 16) >> (p & 7);
-  };
-  var shft = function(p) {
-    return (p + 7) / 8 | 0;
-  };
-  var slc = function(v, s, e) {
-    if (s == null || s < 0)
-      s = 0;
-    if (e == null || e > v.length)
-      e = v.length;
-    return new u8(v.subarray(s, e));
-  };
-  var ec = [
-    "unexpected EOF",
-    "invalid block type",
-    "invalid length/literal",
-    "invalid distance",
-    "stream finished",
-    "no stream handler",
-    ,
-    "no callback",
-    "invalid UTF-8 data",
-    "extra field too long",
-    "date not in range 1980-2099",
-    "filename too long",
-    "stream finishing",
-    "invalid zip data"
-    // determined by unknown compression method
-  ];
-  var err = function(ind, msg, nt) {
-    var e = new Error(msg || ec[ind]);
-    e.code = ind;
-    if (Error.captureStackTrace)
-      Error.captureStackTrace(e, err);
-    if (!nt)
-      throw e;
-    return e;
-  };
-  var inflt = function(dat, st, buf, dict) {
-    var sl = dat.length, dl = dict ? dict.length : 0;
-    if (!sl || st.f && !st.l)
-      return buf || new u8(0);
-    var noBuf = !buf;
-    var resize = noBuf || st.i != 2;
-    var noSt = st.i;
-    if (noBuf)
-      buf = new u8(sl * 3);
-    var cbuf = function(l2) {
-      var bl = buf.length;
-      if (l2 > bl) {
-        var nbuf = new u8(Math.max(bl * 2, l2));
-        nbuf.set(buf);
-        buf = nbuf;
-      }
-    };
-    var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
-    var tbts = sl * 8;
-    do {
-      if (!lm) {
-        final = bits(dat, pos, 1);
-        var type = bits(dat, pos + 1, 3);
-        pos += 3;
-        if (!type) {
-          var s = shft(pos) + 4, l = dat[s - 4] | dat[s - 3] << 8, t = s + l;
-          if (t > sl) {
-            if (noSt)
-              err(0);
-            break;
-          }
-          if (resize)
-            cbuf(bt + l);
-          buf.set(dat.subarray(s, t), bt);
-          st.b = bt += l, st.p = pos = t * 8, st.f = final;
-          continue;
-        } else if (type == 1)
-          lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
-        else if (type == 2) {
-          var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
-          var tl = hLit + bits(dat, pos + 5, 31) + 1;
-          pos += 14;
-          var ldt = new u8(tl);
-          var clt = new u8(19);
-          for (var i = 0; i < hcLen; ++i) {
-            clt[clim[i]] = bits(dat, pos + i * 3, 7);
-          }
-          pos += hcLen * 3;
-          var clb = max(clt), clbmsk = (1 << clb) - 1;
-          var clm = hMap(clt, clb, 1);
-          for (var i = 0; i < tl; ) {
-            var r = clm[bits(dat, pos, clbmsk)];
-            pos += r & 15;
-            var s = r >> 4;
-            if (s < 16) {
-              ldt[i++] = s;
-            } else {
-              var c = 0, n = 0;
-              if (s == 16)
-                n = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
-              else if (s == 17)
-                n = 3 + bits(dat, pos, 7), pos += 3;
-              else if (s == 18)
-                n = 11 + bits(dat, pos, 127), pos += 7;
-              while (n--)
-                ldt[i++] = c;
-            }
-          }
-          var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
-          lbt = max(lt);
-          dbt = max(dt);
-          lm = hMap(lt, lbt, 1);
-          dm = hMap(dt, dbt, 1);
-        } else
-          err(1);
-        if (pos > tbts) {
-          if (noSt)
-            err(0);
-          break;
-        }
-      }
-      if (resize)
-        cbuf(bt + 131072);
-      var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
-      var lpos = pos;
-      for (; ; lpos = pos) {
-        var c = lm[bits16(dat, pos) & lms], sym = c >> 4;
-        pos += c & 15;
-        if (pos > tbts) {
-          if (noSt)
-            err(0);
-          break;
-        }
-        if (!c)
-          err(2);
-        if (sym < 256)
-          buf[bt++] = sym;
-        else if (sym == 256) {
-          lpos = pos, lm = null;
-          break;
-        } else {
-          var add2 = sym - 254;
-          if (sym > 264) {
-            var i = sym - 257, b = fleb[i];
-            add2 = bits(dat, pos, (1 << b) - 1) + fl[i];
-            pos += b;
-          }
-          var d = dm[bits16(dat, pos) & dms], dsym = d >> 4;
-          if (!d)
-            err(3);
-          pos += d & 15;
-          var dt = fd[dsym];
-          if (dsym > 3) {
-            var b = fdeb[dsym];
-            dt += bits16(dat, pos) & (1 << b) - 1, pos += b;
-          }
-          if (pos > tbts) {
-            if (noSt)
-              err(0);
-            break;
-          }
-          if (resize)
-            cbuf(bt + 131072);
-          var end = bt + add2;
-          if (bt < dt) {
-            var shift = dl - dt, dend = Math.min(dt, end);
-            if (shift + bt < 0)
-              err(3);
-            for (; bt < dend; ++bt)
-              buf[bt] = dict[shift + bt];
-          }
-          for (; bt < end; ++bt)
-            buf[bt] = buf[bt - dt];
-        }
-      }
-      st.l = lm, st.p = lpos, st.b = bt, st.f = final;
-      if (lm)
-        final = 1, st.m = lbt, st.d = dm, st.n = dbt;
-    } while (!final);
-    return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
-  };
-  var wbits = function(d, p, v) {
-    v <<= p & 7;
-    var o = p / 8 | 0;
-    d[o] |= v;
-    d[o + 1] |= v >> 8;
-  };
-  var wbits16 = function(d, p, v) {
-    v <<= p & 7;
-    var o = p / 8 | 0;
-    d[o] |= v;
-    d[o + 1] |= v >> 8;
-    d[o + 2] |= v >> 16;
-  };
-  var hTree = function(d, mb) {
-    var t = [];
-    for (var i = 0; i < d.length; ++i) {
-      if (d[i])
-        t.push({ s: i, f: d[i] });
-    }
-    var s = t.length;
-    var t2 = t.slice();
-    if (!s)
-      return { t: et, l: 0 };
-    if (s == 1) {
-      var v = new u8(t[0].s + 1);
-      v[t[0].s] = 1;
-      return { t: v, l: 1 };
-    }
-    t.sort(function(a, b) {
-      return a.f - b.f;
-    });
-    t.push({ s: -1, f: 25001 });
-    var l = t[0], r = t[1], i0 = 0, i1 = 1, i2 = 2;
-    t[0] = { s: -1, f: l.f + r.f, l, r };
-    while (i1 != s - 1) {
-      l = t[t[i0].f < t[i2].f ? i0++ : i2++];
-      r = t[i0 != i1 && t[i0].f < t[i2].f ? i0++ : i2++];
-      t[i1++] = { s: -1, f: l.f + r.f, l, r };
-    }
-    var maxSym = t2[0].s;
-    for (var i = 1; i < s; ++i) {
-      if (t2[i].s > maxSym)
-        maxSym = t2[i].s;
-    }
-    var tr = new u16(maxSym + 1);
-    var mbt = ln(t[i1 - 1], tr, 0);
-    if (mbt > mb) {
-      var i = 0, dt = 0;
-      var lft = mbt - mb, cst = 1 << lft;
-      t2.sort(function(a, b) {
-        return tr[b.s] - tr[a.s] || a.f - b.f;
-      });
-      for (; i < s; ++i) {
-        var i2_1 = t2[i].s;
-        if (tr[i2_1] > mb) {
-          dt += cst - (1 << mbt - tr[i2_1]);
-          tr[i2_1] = mb;
-        } else
-          break;
-      }
-      dt >>= lft;
-      while (dt > 0) {
-        var i2_2 = t2[i].s;
-        if (tr[i2_2] < mb)
-          dt -= 1 << mb - tr[i2_2]++ - 1;
-        else
-          ++i;
-      }
-      for (; i >= 0 && dt; --i) {
-        var i2_3 = t2[i].s;
-        if (tr[i2_3] == mb) {
-          --tr[i2_3];
-          ++dt;
-        }
-      }
-      mbt = mb;
-    }
-    return { t: new u8(tr), l: mbt };
-  };
-  var ln = function(n, l, d) {
-    return n.s == -1 ? Math.max(ln(n.l, l, d + 1), ln(n.r, l, d + 1)) : l[n.s] = d;
-  };
-  var lc = function(c) {
-    var s = c.length;
-    while (s && !c[--s])
-      ;
-    var cl = new u16(++s);
-    var cli = 0, cln = c[0], cls = 1;
-    var w = function(v) {
-      cl[cli++] = v;
-    };
-    for (var i = 1; i <= s; ++i) {
-      if (c[i] == cln && i != s)
-        ++cls;
-      else {
-        if (!cln && cls > 2) {
-          for (; cls > 138; cls -= 138)
-            w(32754);
-          if (cls > 2) {
-            w(cls > 10 ? cls - 11 << 5 | 28690 : cls - 3 << 5 | 12305);
-            cls = 0;
-          }
-        } else if (cls > 3) {
-          w(cln), --cls;
-          for (; cls > 6; cls -= 6)
-            w(8304);
-          if (cls > 2)
-            w(cls - 3 << 5 | 8208), cls = 0;
-        }
-        while (cls--)
-          w(cln);
-        cls = 1;
-        cln = c[i];
-      }
-    }
-    return { c: cl.subarray(0, cli), n: s };
-  };
-  var clen = function(cf, cl) {
-    var l = 0;
-    for (var i = 0; i < cl.length; ++i)
-      l += cf[i] * cl[i];
-    return l;
-  };
-  var wfblk = function(out, pos, dat) {
-    var s = dat.length;
-    var o = shft(pos + 2);
-    out[o] = s & 255;
-    out[o + 1] = s >> 8;
-    out[o + 2] = out[o] ^ 255;
-    out[o + 3] = out[o + 1] ^ 255;
-    for (var i = 0; i < s; ++i)
-      out[o + i + 4] = dat[i];
-    return (o + 4 + s) * 8;
-  };
-  var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
-    wbits(out, p++, final);
-    ++lf[256];
-    var _a2 = hTree(lf, 15), dlt = _a2.t, mlb = _a2.l;
-    var _b2 = hTree(df, 15), ddt = _b2.t, mdb = _b2.l;
-    var _c = lc(dlt), lclt = _c.c, nlc = _c.n;
-    var _d = lc(ddt), lcdt = _d.c, ndc = _d.n;
-    var lcfreq = new u16(19);
-    for (var i = 0; i < lclt.length; ++i)
-      ++lcfreq[lclt[i] & 31];
-    for (var i = 0; i < lcdt.length; ++i)
-      ++lcfreq[lcdt[i] & 31];
-    var _e = hTree(lcfreq, 7), lct = _e.t, mlcb = _e.l;
-    var nlcc = 19;
-    for (; nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc)
-      ;
-    var flen = bl + 5 << 3;
-    var ftlen = clen(lf, flt) + clen(df, fdt) + eb;
-    var dtlen = clen(lf, dlt) + clen(df, ddt) + eb + 14 + 3 * nlcc + clen(lcfreq, lct) + 2 * lcfreq[16] + 3 * lcfreq[17] + 7 * lcfreq[18];
-    if (bs >= 0 && flen <= ftlen && flen <= dtlen)
-      return wfblk(out, p, dat.subarray(bs, bs + bl));
-    var lm, ll, dm, dl;
-    wbits(out, p, 1 + (dtlen < ftlen)), p += 2;
-    if (dtlen < ftlen) {
-      lm = hMap(dlt, mlb, 0), ll = dlt, dm = hMap(ddt, mdb, 0), dl = ddt;
-      var llm = hMap(lct, mlcb, 0);
-      wbits(out, p, nlc - 257);
-      wbits(out, p + 5, ndc - 1);
-      wbits(out, p + 10, nlcc - 4);
-      p += 14;
-      for (var i = 0; i < nlcc; ++i)
-        wbits(out, p + 3 * i, lct[clim[i]]);
-      p += 3 * nlcc;
-      var lcts = [lclt, lcdt];
-      for (var it = 0; it < 2; ++it) {
-        var clct = lcts[it];
-        for (var i = 0; i < clct.length; ++i) {
-          var len = clct[i] & 31;
-          wbits(out, p, llm[len]), p += lct[len];
-          if (len > 15)
-            wbits(out, p, clct[i] >> 5 & 127), p += clct[i] >> 12;
-        }
-      }
-    } else {
-      lm = flm, ll = flt, dm = fdm, dl = fdt;
-    }
-    for (var i = 0; i < li; ++i) {
-      var sym = syms[i];
-      if (sym > 255) {
-        var len = sym >> 18 & 31;
-        wbits16(out, p, lm[len + 257]), p += ll[len + 257];
-        if (len > 7)
-          wbits(out, p, sym >> 23 & 31), p += fleb[len];
-        var dst = sym & 31;
-        wbits16(out, p, dm[dst]), p += dl[dst];
-        if (dst > 3)
-          wbits16(out, p, sym >> 5 & 8191), p += fdeb[dst];
-      } else {
-        wbits16(out, p, lm[sym]), p += ll[sym];
-      }
-    }
-    wbits16(out, p, lm[256]);
-    return p + ll[256];
-  };
-  var deo = /* @__PURE__ */ new i32([65540, 131080, 131088, 131104, 262176, 1048704, 1048832, 2114560, 2117632]);
-  var et = /* @__PURE__ */ new u8(0);
-  var dflt = function(dat, lvl, plvl, pre, post, st) {
-    var s = st.z || dat.length;
-    var o = new u8(pre + s + 5 * (1 + Math.ceil(s / 7e3)) + post);
-    var w = o.subarray(pre, o.length - post);
-    var lst = st.l;
-    var pos = (st.r || 0) & 7;
-    if (lvl) {
-      if (pos)
-        w[0] = st.r >> 3;
-      var opt = deo[lvl - 1];
-      var n = opt >> 13, c = opt & 8191;
-      var msk_1 = (1 << plvl) - 1;
-      var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
-      var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
-      var hsh = function(i2) {
-        return (dat[i2] ^ dat[i2 + 1] << bs1_1 ^ dat[i2 + 2] << bs2_1) & msk_1;
-      };
-      var syms = new i32(25e3);
-      var lf = new u16(288), df = new u16(32);
-      var lc_1 = 0, eb = 0, i = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
-      for (; i + 2 < s; ++i) {
-        var hv = hsh(i);
-        var imod = i & 32767, pimod = head[hv];
-        prev[imod] = pimod;
-        head[hv] = imod;
-        if (wi <= i) {
-          var rem = s - i;
-          if ((lc_1 > 7e3 || li > 24576) && (rem > 423 || !lst)) {
-            pos = wblk(dat, w, 0, syms, lf, df, eb, li, bs, i - bs, pos);
-            li = lc_1 = eb = 0, bs = i;
-            for (var j = 0; j < 286; ++j)
-              lf[j] = 0;
-            for (var j = 0; j < 30; ++j)
-              df[j] = 0;
-          }
-          var l = 2, d = 0, ch_1 = c, dif = imod - pimod & 32767;
-          if (rem > 2 && hv == hsh(i - dif)) {
-            var maxn = Math.min(n, rem) - 1;
-            var maxd = Math.min(32767, i);
-            var ml = Math.min(258, rem);
-            while (dif <= maxd && --ch_1 && imod != pimod) {
-              if (dat[i + l] == dat[i + l - dif]) {
-                var nl = 0;
-                for (; nl < ml && dat[i + nl] == dat[i + nl - dif]; ++nl)
-                  ;
-                if (nl > l) {
-                  l = nl, d = dif;
-                  if (nl > maxn)
-                    break;
-                  var mmd = Math.min(dif, nl - 2);
-                  var md = 0;
-                  for (var j = 0; j < mmd; ++j) {
-                    var ti = i - dif + j & 32767;
-                    var pti = prev[ti];
-                    var cd = ti - pti & 32767;
-                    if (cd > md)
-                      md = cd, pimod = ti;
-                  }
-                }
-              }
-              imod = pimod, pimod = prev[imod];
-              dif += imod - pimod & 32767;
-            }
-          }
-          if (d) {
-            syms[li++] = 268435456 | revfl[l] << 18 | revfd[d];
-            var lin = revfl[l] & 31, din = revfd[d] & 31;
-            eb += fleb[lin] + fdeb[din];
-            ++lf[257 + lin];
-            ++df[din];
-            wi = i + l;
-            ++lc_1;
-          } else {
-            syms[li++] = dat[i];
-            ++lf[dat[i]];
-          }
-        }
-      }
-      for (i = Math.max(i, wi); i < s; ++i) {
-        syms[li++] = dat[i];
-        ++lf[dat[i]];
-      }
-      pos = wblk(dat, w, lst, syms, lf, df, eb, li, bs, i - bs, pos);
-      if (!lst) {
-        st.r = pos & 7 | w[pos / 8 | 0] << 3;
-        pos -= 7;
-        st.h = head, st.p = prev, st.i = i, st.w = wi;
-      }
-    } else {
-      for (var i = st.w || 0; i < s + lst; i += 65535) {
-        var e = i + 65535;
-        if (e >= s) {
-          w[pos / 8 | 0] = lst;
-          e = s;
-        }
-        pos = wfblk(w, pos + 1, dat.subarray(i, e));
-      }
-      st.i = s;
-    }
-    return slc(o, 0, pre + shft(pos) + post);
-  };
-  var crct = /* @__PURE__ */ (function() {
-    var t = new Int32Array(256);
-    for (var i = 0; i < 256; ++i) {
-      var c = i, k = 9;
-      while (--k)
-        c = (c & 1 && -306674912) ^ c >>> 1;
-      t[i] = c;
-    }
-    return t;
-  })();
-  var crc = function() {
-    var c = -1;
-    return {
-      p: function(d) {
-        var cr = c;
-        for (var i = 0; i < d.length; ++i)
-          cr = crct[cr & 255 ^ d[i]] ^ cr >>> 8;
-        c = cr;
-      },
-      d: function() {
-        return ~c;
-      }
-    };
-  };
-  var dopt = function(dat, opt, pre, post, st) {
-    if (!st) {
-      st = { l: 1 };
-      if (opt.dictionary) {
-        var dict = opt.dictionary.subarray(-32768);
-        var newDat = new u8(dict.length + dat.length);
-        newDat.set(dict);
-        newDat.set(dat, dict.length);
-        dat = newDat;
-        st.w = dict.length;
-      }
-    }
-    return dflt(dat, opt.level == null ? 6 : opt.level, opt.mem == null ? st.l ? Math.ceil(Math.max(8, Math.min(13, Math.log(dat.length))) * 1.5) : 20 : 12 + opt.mem, pre, post, st);
-  };
-  var mrg = function(a, b) {
-    var o = {};
-    for (var k in a)
-      o[k] = a[k];
-    for (var k in b)
-      o[k] = b[k];
-    return o;
-  };
-  var wcln = function(fn, fnStr, td2) {
-    var dt = fn();
-    var st = fn.toString();
-    var ks = st.slice(st.indexOf("[") + 1, st.lastIndexOf("]")).replace(/\s+/g, "").split(",");
-    for (var i = 0; i < dt.length; ++i) {
-      var v = dt[i], k = ks[i];
-      if (typeof v == "function") {
-        fnStr += ";" + k + "=";
-        var st_1 = v.toString();
-        if (v.prototype) {
-          if (st_1.indexOf("[native code]") != -1) {
-            var spInd = st_1.indexOf(" ", 8) + 1;
-            fnStr += st_1.slice(spInd, st_1.indexOf("(", spInd));
-          } else {
-            fnStr += st_1;
-            for (var t in v.prototype)
-              fnStr += ";" + k + ".prototype." + t + "=" + v.prototype[t].toString();
-          }
-        } else
-          fnStr += st_1;
-      } else
-        td2[k] = v;
-    }
-    return fnStr;
-  };
-  var ch = [];
-  var cbfs = function(v) {
-    var tl = [];
-    for (var k in v) {
-      if (v[k].buffer) {
-        tl.push((v[k] = new v[k].constructor(v[k])).buffer);
-      }
-    }
-    return tl;
-  };
-  var wrkr = function(fns, init, id, cb) {
-    if (!ch[id]) {
-      var fnStr = "", td_1 = {}, m = fns.length - 1;
-      for (var i = 0; i < m; ++i)
-        fnStr = wcln(fns[i], fnStr, td_1);
-      ch[id] = { c: wcln(fns[m], fnStr, td_1), e: td_1 };
-    }
-    var td2 = mrg({}, ch[id].e);
-    return wk(ch[id].c + ";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage=" + init.toString() + "}", id, td2, cbfs(td2), cb);
-  };
-  var bInflt = function() {
-    return [u8, u16, i32, fleb, fdeb, clim, fl, fd, flrm, fdrm, rev, ec, hMap, max, bits, bits16, shft, slc, err, inflt, inflateSync, pbf, gopt];
-  };
-  var bDflt = function() {
-    return [u8, u16, i32, fleb, fdeb, clim, revfl, revfd, flm, flt, fdm, fdt, rev, deo, et, hMap, wbits, wbits16, hTree, ln, lc, clen, wfblk, wblk, shft, slc, dflt, dopt, deflateSync, pbf];
-  };
-  var gze = function() {
-    return [gzh, gzhl, wbytes, crc, crct];
-  };
-  var guze = function() {
-    return [gzs, gzl];
-  };
-  var pbf = function(msg) {
-    return postMessage(msg, [msg.buffer]);
-  };
-  var gopt = function(o) {
-    return o && {
-      out: o.size && new u8(o.size),
-      dictionary: o.dictionary
-    };
-  };
-  var cbify = function(dat, opts, fns, init, id, cb) {
-    var w = wrkr(fns, init, id, function(err2, dat2) {
-      w.terminate();
-      cb(err2, dat2);
-    });
-    w.postMessage([dat, opts], opts.consume ? [dat.buffer] : []);
-    return function() {
-      w.terminate();
-    };
-  };
-  var b2 = function(d, b) {
-    return d[b] | d[b + 1] << 8;
-  };
-  var b4 = function(d, b) {
-    return (d[b] | d[b + 1] << 8 | d[b + 2] << 16 | d[b + 3] << 24) >>> 0;
-  };
-  var b8 = function(d, b) {
-    return b4(d, b) + b4(d, b + 4) * 4294967296;
-  };
-  var wbytes = function(d, b, v) {
-    for (; v; ++b)
-      d[b] = v, v >>>= 8;
-  };
-  var gzh = function(c, o) {
-    var fn = o.filename;
-    c[0] = 31, c[1] = 139, c[2] = 8, c[8] = o.level < 2 ? 4 : o.level == 9 ? 2 : 0, c[9] = 3;
-    if (o.mtime != 0)
-      wbytes(c, 4, Math.floor(new Date(o.mtime || Date.now()) / 1e3));
-    if (fn) {
-      c[3] = 8;
-      for (var i = 0; i <= fn.length; ++i)
-        c[i + 10] = fn.charCodeAt(i);
-    }
-  };
-  var gzs = function(d) {
-    if (d[0] != 31 || d[1] != 139 || d[2] != 8)
-      err(6, "invalid gzip data");
-    var flg = d[3];
-    var st = 10;
-    if (flg & 4)
-      st += (d[10] | d[11] << 8) + 2;
-    for (var zs = (flg >> 3 & 1) + (flg >> 4 & 1); zs > 0; zs -= !d[st++])
-      ;
-    return st + (flg & 2);
-  };
-  var gzl = function(d) {
-    var l = d.length;
-    return (d[l - 4] | d[l - 3] << 8 | d[l - 2] << 16 | d[l - 1] << 24) >>> 0;
-  };
-  var gzhl = function(o) {
-    return 10 + (o.filename ? o.filename.length + 1 : 0);
-  };
-  function deflateSync(data, opts) {
-    return dopt(data, opts || {}, 0, 0);
-  }
-  function inflateSync(data, opts) {
-    return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
-  }
-  function gzip(data, opts, cb) {
-    if (!cb)
-      cb = opts, opts = {};
-    if (typeof cb != "function")
-      err(7);
-    return cbify(data, opts, [
-      bDflt,
-      gze,
-      function() {
-        return [gzipSync];
-      }
-    ], function(ev) {
-      return pbf(gzipSync(ev.data[0], ev.data[1]));
-    }, 2, cb);
-  }
-  function gzipSync(data, opts) {
-    if (!opts)
-      opts = {};
-    var c = crc(), l = data.length;
-    c.p(data);
-    var d = dopt(data, opts, gzhl(opts), 8), s = d.length;
-    return gzh(d, opts), wbytes(d, s - 8, c.d()), wbytes(d, s - 4, l), d;
-  }
-  function gunzip(data, opts, cb) {
-    if (!cb)
-      cb = opts, opts = {};
-    if (typeof cb != "function")
-      err(7);
-    return cbify(data, opts, [
-      bInflt,
-      guze,
-      function() {
-        return [gunzipSync];
-      }
-    ], function(ev) {
-      return pbf(gunzipSync(ev.data[0], ev.data[1]));
-    }, 3, cb);
-  }
-  function gunzipSync(data, opts) {
-    var st = gzs(data);
-    if (st + 8 > data.length)
-      err(6, "invalid gzip data");
-    return inflt(data.subarray(st, -8), { i: 2 }, opts && opts.out || new u8(gzl(data)), opts && opts.dictionary);
-  }
-  var te = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder();
-  var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
-  var tds = 0;
-  try {
-    td.decode(et, { stream: true });
-    tds = 1;
-  } catch (e) {
-  }
-  var dutf8 = function(d) {
-    for (var r = "", i = 0; ; ) {
-      var c = d[i++];
-      var eb = (c > 127) + (c > 223) + (c > 239);
-      if (i + eb > d.length)
-        return { s: r, r: slc(d, i - 1) };
-      if (!eb)
-        r += String.fromCharCode(c);
-      else if (eb == 3) {
-        c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
-      } else if (eb & 1)
-        r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
-      else
-        r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
-    }
-  };
-  function strToU8(str, latin1) {
-    if (latin1) {
-      var ar_1 = new u8(str.length);
-      for (var i = 0; i < str.length; ++i)
-        ar_1[i] = str.charCodeAt(i);
-      return ar_1;
-    }
-    if (te)
-      return te.encode(str);
-    var l = str.length;
-    var ar = new u8(str.length + (str.length >> 1));
-    var ai = 0;
-    var w = function(v) {
-      ar[ai++] = v;
-    };
-    for (var i = 0; i < l; ++i) {
-      if (ai + 5 > ar.length) {
-        var n = new u8(ai + 8 + (l - i << 1));
-        n.set(ar);
-        ar = n;
-      }
-      var c = str.charCodeAt(i);
-      if (c < 128 || latin1)
-        w(c);
-      else if (c < 2048)
-        w(192 | c >> 6), w(128 | c & 63);
-      else if (c > 55295 && c < 57344)
-        c = 65536 + (c & 1023 << 10) | str.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
-      else
-        w(224 | c >> 12), w(128 | c >> 6 & 63), w(128 | c & 63);
-    }
-    return slc(ar, 0, ai);
-  }
-  function strFromU8(dat, latin1) {
-    if (latin1) {
-      var r = "";
-      for (var i = 0; i < dat.length; i += 16384)
-        r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
-      return r;
-    } else if (td) {
-      return td.decode(dat);
-    } else {
-      var _a2 = dutf8(dat), s = _a2.s, r = _a2.r;
-      if (r.length)
-        err(8);
-      return s;
-    }
-  }
-  var slzh = function(d, b) {
-    return b + 30 + b2(d, b + 26) + b2(d, b + 28);
-  };
-  var zh = function(d, b, z) {
-    var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
-    var _a2 = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
-    return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
-  };
-  var z64e = function(d, b) {
-    for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
-      ;
-    return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
-  };
-  function unzipSync(data, opts) {
-    var files = {};
-    var e = data.length - 22;
-    for (; b4(data, e) != 101010256; --e) {
-      if (!e || data.length - e > 65558)
-        err(13);
-    }
-    ;
-    var c = b2(data, e + 8);
-    if (!c)
-      return {};
-    var o = b4(data, e + 16);
-    var z = o == 4294967295 || c == 65535;
-    if (z) {
-      var ze = b4(data, e - 12);
-      z = b4(data, ze) == 101075792;
-      if (z) {
-        c = b4(data, ze + 32);
-        o = b4(data, ze + 48);
-      }
-    }
-    var fltr = opts && opts.filter;
-    for (var i = 0; i < c; ++i) {
-      var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
-      o = no;
-      if (!fltr || fltr({
-        name: fn,
-        size: sc,
-        originalSize: su,
-        compression: c_2
-      })) {
-        if (!c_2)
-          files[fn] = slc(data, b, b + sc);
-        else if (c_2 == 8)
-          files[fn] = inflateSync(data.subarray(b, b + sc), { out: new u8(su) });
-        else
-          err(14, "unknown compression type " + c_2);
-      }
-    }
-    return files;
-  }
-
   // src/portableDump.ts
   var DB_NAME = MAIN_DB_NAME;
   var DB_SCHEMA_VERSION = 5;
-  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set([
+  var COMPACT_DROP_KEYS2 = /* @__PURE__ */ new Set([
     "raw",
     "trueLocationKey",
     "trueLocationRepeat",
@@ -42846,17 +43157,17 @@ ${describeError(err2)}` : message;
     "truePhProvince",
     "trueVnProvince"
   ]);
-  function compactRecord(row) {
+  function compactRecord2(row) {
     const out = {};
     for (const [key, value] of Object.entries(row)) {
       if (value === void 0) continue;
-      if (COMPACT_DROP_KEYS.has(key)) continue;
+      if (COMPACT_DROP_KEYS2.has(key)) continue;
       if (key.endsWith("_guessCountry")) continue;
       out[key] = value;
     }
     return out;
   }
-  function getUserscriptVersion() {
+  function getUserscriptVersion2() {
     const anyGlobal = globalThis;
     const info = anyGlobal?.GM_info;
     const v = info?.script?.version;
@@ -42882,7 +43193,7 @@ ${describeError(err2)}` : message;
       format: "geoanalyzr-portable",
       formatVersion: 1,
       createdAt: Date.now(),
-      appVersion: getUserscriptVersion(),
+      appVersion: getUserscriptVersion2(),
       owner: { playerId: ownerId, playerName: ownerName },
       dbName: DB_NAME,
       dbSchemaVersion: DB_SCHEMA_VERSION,
@@ -42892,11 +43203,11 @@ ${describeError(err2)}` : message;
         includeMeta: opts.includeMeta
       },
       data: {
-        games: opts.compact ? games.map(compactRecord) : games,
-        rounds: opts.compact ? rounds.map(compactRecord) : rounds,
-        details: opts.compact ? details.map(compactRecord) : details,
-        ...opts.includeAggregates ? { gameAgg: opts.compact ? gameAgg.map(compactRecord) : gameAgg } : {},
-        ...opts.includeMeta ? { meta: opts.compact ? meta.map(compactRecord) : meta } : {}
+        games: opts.compact ? games.map(compactRecord2) : games,
+        rounds: opts.compact ? rounds.map(compactRecord2) : rounds,
+        details: opts.compact ? details.map(compactRecord2) : details,
+        ...opts.includeAggregates ? { gameAgg: opts.compact ? gameAgg.map(compactRecord2) : gameAgg } : {},
+        ...opts.includeMeta ? { meta: opts.compact ? meta.map(compactRecord2) : meta } : {}
       }
     };
     return dump;
@@ -43318,6 +43629,137 @@ ${describeError(err2)}` : message;
       dataActions.appendChild(importInput);
       dataPane.appendChild(dataActions);
       dataPane.appendChild(dataStatus);
+      const syncNote = doc.createElement("div");
+      syncNote.className = "ga-settings-note";
+      syncNote.textContent = "Server sync uploads a compact delta of your local dataset to your server. This does not change your local data. Keep your sync token private.";
+      dataPane.appendChild(syncNote);
+      const syncGrid = doc.createElement("div");
+      syncGrid.className = "ga-settings-grid";
+      const syncEndpointField = doc.createElement("div");
+      syncEndpointField.className = "ga-settings-field";
+      const syncEndpointLabel = doc.createElement("label");
+      syncEndpointLabel.textContent = "Sync endpoint";
+      const syncEndpointInput = doc.createElement("input");
+      syncEndpointInput.type = "text";
+      syncEndpointInput.placeholder = "https://sync.geoanalyzr.lmbt.app/api/sync";
+      syncEndpointField.appendChild(syncEndpointLabel);
+      syncEndpointField.appendChild(syncEndpointInput);
+      const syncTokenField = doc.createElement("div");
+      syncTokenField.className = "ga-settings-field";
+      const syncTokenLabel = doc.createElement("label");
+      syncTokenLabel.textContent = "Sync token";
+      const syncTokenInput = doc.createElement("input");
+      syncTokenInput.type = "password";
+      syncTokenInput.placeholder = "Bearer token";
+      syncTokenField.appendChild(syncTokenLabel);
+      syncTokenField.appendChild(syncTokenInput);
+      const syncCompactField = doc.createElement("div");
+      syncCompactField.className = "ga-settings-field";
+      const syncCompactLabel = doc.createElement("label");
+      syncCompactLabel.textContent = "Payload mode";
+      const syncCompactSelect = doc.createElement("select");
+      syncCompactSelect.innerHTML = `<option value="compact">Compact (recommended)</option><option value="full">Full</option>`;
+      syncCompactField.appendChild(syncCompactLabel);
+      syncCompactField.appendChild(syncCompactSelect);
+      const syncAggField = doc.createElement("div");
+      syncAggField.className = "ga-settings-field";
+      const syncAggLabel = doc.createElement("label");
+      syncAggLabel.textContent = "Include aggregates";
+      const syncAggSelect = doc.createElement("select");
+      syncAggSelect.innerHTML = `<option value="no">No (smaller)</option><option value="yes">Yes</option>`;
+      syncAggField.appendChild(syncAggLabel);
+      syncAggField.appendChild(syncAggSelect);
+      syncGrid.appendChild(syncEndpointField);
+      syncGrid.appendChild(syncTokenField);
+      syncGrid.appendChild(syncCompactField);
+      syncGrid.appendChild(syncAggField);
+      dataPane.appendChild(syncGrid);
+      const syncActions = doc.createElement("div");
+      syncActions.className = "ga-settings-actions";
+      const syncNowBtn = doc.createElement("button");
+      syncNowBtn.type = "button";
+      syncNowBtn.className = "ga-filter-btn";
+      syncNowBtn.textContent = "Sync now";
+      syncNowBtn.title = "Upload a compact delta to your server";
+      syncActions.appendChild(syncNowBtn);
+      dataPane.appendChild(syncActions);
+      const syncStatus = doc.createElement("div");
+      syncStatus.className = "ga-settings-status";
+      dataPane.appendChild(syncStatus);
+      const syncSettings = loadServerSyncSettings();
+      syncEndpointInput.value = syncSettings.endpointUrl;
+      syncTokenInput.value = syncSettings.token;
+      syncCompactSelect.value = syncSettings.compact ? "compact" : "full";
+      syncAggSelect.value = syncSettings.includeAggregates ? "yes" : "no";
+      const refreshSyncMeta = async () => {
+        const meta = await getLastServerSyncMeta();
+        const cursor = await getLastServerSyncCursor();
+        const lastAt = typeof meta?.lastSyncAt === "number" ? new Date(meta.lastSyncAt).toLocaleString() : null;
+        const lastOk = typeof meta?.lastOk === "boolean" ? meta.lastOk : null;
+        const lastStatusCode = typeof meta?.lastStatus === "number" ? meta.lastStatus : null;
+        const lastCounts = meta?.lastCounts;
+        const lastBytesGzip = typeof meta?.lastBytesGzip === "number" ? meta.lastBytesGzip : null;
+        const parts = [];
+        parts.push(`Cursor: ${cursor}`);
+        if (lastAt) parts.push(`Last sync: ${lastAt}${lastStatusCode ? ` (HTTP ${lastStatusCode})` : ""}${lastOk === true ? "" : lastOk === false ? " (failed)" : ""}`);
+        if (lastCounts && typeof lastCounts === "object") {
+          const g = Number(lastCounts.games) || 0;
+          const r = Number(lastCounts.rounds) || 0;
+          const d = Number(lastCounts.details) || 0;
+          const a = Number(lastCounts.gameAgg) || 0;
+          parts.push(`Last counts: games=${g}, rounds=${r}, details=${d}, agg=${a}`);
+        }
+        if (typeof lastBytesGzip === "number") parts.push(`Last upload size: ${formatBytes(lastBytesGzip)}`);
+        syncStatus.textContent = parts.join(" \xB7 ");
+      };
+      void refreshSyncMeta();
+      const persistSyncSettings = () => {
+        saveServerSyncSettings({
+          endpointUrl: syncEndpointInput.value.trim(),
+          token: syncTokenInput.value.trim(),
+          compact: syncCompactSelect.value === "compact",
+          includeAggregates: syncAggSelect.value === "yes"
+        });
+      };
+      syncEndpointInput.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncTokenInput.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncCompactSelect.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncAggSelect.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncNowBtn.addEventListener("click", async () => {
+        syncNowBtn.disabled = true;
+        exportBtn.disabled = true;
+        importBtn.disabled = true;
+        switchMineBtn.disabled = true;
+        syncStatus.textContent = "Syncing...";
+        try {
+          persistSyncSettings();
+          const latest = loadServerSyncSettings();
+          const res = await runServerSyncOnce(latest);
+          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+          const msg = `OK (HTTP ${res.status}) \xB7 cursor ${res.cursorFrom} \u2192 ${res.cursorTo} \xB7 rows ${rowsTotal} \xB7 payload ${formatBytes(res.bytesGzip)} (gz)`;
+          syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) \xB7 ${res.responseText || "no response"}`;
+        } catch (e) {
+          syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        } finally {
+          syncNowBtn.disabled = false;
+          exportBtn.disabled = false;
+          importBtn.disabled = false;
+          switchMineBtn.disabled = false;
+          void refreshSyncMeta();
+        }
+      });
       const templatePane = doc.createElement("div");
       templatePane.className = "ga-settings-pane";
       const templateWarn = doc.createElement("div");
@@ -44576,6 +45018,7 @@ Import now and switch to Viewer mode?`
       }
       const span = this.doc.createElement("span");
       span.textContent = text;
+      if (key === "gameId" || key === "sessionId") span.classList.add("ga-dd-id");
       if (col.colored) {
         if (key === "result") {
           const s = (typeof raw === "string" ? raw : String(raw ?? "")).trim().toLowerCase();
@@ -48712,6 +49155,7 @@ Import now and switch to Viewer mode?`
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
     if (!keyFn) return null;
     const isPlausibleGameGroup = (rows) => {
+      if (grain !== "round") return true;
       if (groupById !== "game_id") return true;
       if (!Array.isArray(rows) || rows.length === 0) return false;
       if (rows.length < 2) return false;

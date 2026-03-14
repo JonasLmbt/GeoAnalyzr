@@ -145,6 +145,9 @@ function buildGroupExtreme(
   if (!keyFn) return null;
 
   const isPlausibleGameGroup = (rows: any[]): boolean => {
+    // This heuristic is only meaningful when we group *round* rows by `game_id`.
+    // For game-grain records each group is usually a single row and should be considered valid.
+    if (grain !== "round") return true;
     if (groupById !== "game_id") return true;
     if (!Array.isArray(rows) || rows.length === 0) return false;
     // A "game" with <2 rounds is invalid (even 1 round shouldn't exist for Duels/Team Duels).

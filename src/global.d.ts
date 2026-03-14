@@ -20,3 +20,10 @@ declare const GM:
       xmlHttpRequest?: typeof GM_xmlhttpRequest;
     };
 
+declare const GM_getValue:
+  | undefined
+  | ((key: string, defaultValue?: any) => any);
+
+declare const GM_setValue:
+  | undefined
+  | ((key: string, value: any) => void);

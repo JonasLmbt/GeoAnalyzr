@@ -22,6 +22,13 @@ import {
   serializePortableDump,
   importPortableDumpIntoNewDb
 } from "../portableDump";
+import {
+  getLastServerSyncCursor,
+  getLastServerSyncMeta,
+  loadServerSyncSettings,
+  runServerSyncOnce,
+  saveServerSyncSettings
+} from "../serverSync";
 
 type SettingsModalOptions = {
   doc: Document;
@@ -416,6 +423,159 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     dataActions.appendChild(importInput);
     dataPane.appendChild(dataActions);
     dataPane.appendChild(dataStatus);
+
+    const syncNote = doc.createElement("div");
+    syncNote.className = "ga-settings-note";
+    syncNote.textContent =
+      "Server sync uploads a compact delta of your local dataset to your server. This does not change your local data. Keep your sync token private.";
+    dataPane.appendChild(syncNote);
+
+    const syncGrid = doc.createElement("div");
+    syncGrid.className = "ga-settings-grid";
+
+    const syncEndpointField = doc.createElement("div");
+    syncEndpointField.className = "ga-settings-field";
+    const syncEndpointLabel = doc.createElement("label");
+    syncEndpointLabel.textContent = "Sync endpoint";
+    const syncEndpointInput = doc.createElement("input");
+    syncEndpointInput.type = "text";
+    syncEndpointInput.placeholder = "https://sync.geoanalyzr.lmbt.app/api/sync";
+    syncEndpointField.appendChild(syncEndpointLabel);
+    syncEndpointField.appendChild(syncEndpointInput);
+
+    const syncTokenField = doc.createElement("div");
+    syncTokenField.className = "ga-settings-field";
+    const syncTokenLabel = doc.createElement("label");
+    syncTokenLabel.textContent = "Sync token";
+    const syncTokenInput = doc.createElement("input");
+    syncTokenInput.type = "password";
+    syncTokenInput.placeholder = "Bearer token";
+    syncTokenField.appendChild(syncTokenLabel);
+    syncTokenField.appendChild(syncTokenInput);
+
+    const syncCompactField = doc.createElement("div");
+    syncCompactField.className = "ga-settings-field";
+    const syncCompactLabel = doc.createElement("label");
+    syncCompactLabel.textContent = "Payload mode";
+    const syncCompactSelect = doc.createElement("select");
+    syncCompactSelect.innerHTML = `<option value="compact">Compact (recommended)</option><option value="full">Full</option>`;
+    syncCompactField.appendChild(syncCompactLabel);
+    syncCompactField.appendChild(syncCompactSelect);
+
+    const syncAggField = doc.createElement("div");
+    syncAggField.className = "ga-settings-field";
+    const syncAggLabel = doc.createElement("label");
+    syncAggLabel.textContent = "Include aggregates";
+    const syncAggSelect = doc.createElement("select");
+    syncAggSelect.innerHTML = `<option value="no">No (smaller)</option><option value="yes">Yes</option>`;
+    syncAggField.appendChild(syncAggLabel);
+    syncAggField.appendChild(syncAggSelect);
+
+    syncGrid.appendChild(syncEndpointField);
+    syncGrid.appendChild(syncTokenField);
+    syncGrid.appendChild(syncCompactField);
+    syncGrid.appendChild(syncAggField);
+    dataPane.appendChild(syncGrid);
+
+    const syncActions = doc.createElement("div");
+    syncActions.className = "ga-settings-actions";
+    const syncNowBtn = doc.createElement("button");
+    syncNowBtn.type = "button";
+    syncNowBtn.className = "ga-filter-btn";
+    syncNowBtn.textContent = "Sync now";
+    syncNowBtn.title = "Upload a compact delta to your server";
+    syncActions.appendChild(syncNowBtn);
+    dataPane.appendChild(syncActions);
+
+    const syncStatus = doc.createElement("div");
+    syncStatus.className = "ga-settings-status";
+    dataPane.appendChild(syncStatus);
+
+    const syncSettings = loadServerSyncSettings();
+    syncEndpointInput.value = syncSettings.endpointUrl;
+    syncTokenInput.value = syncSettings.token;
+    syncCompactSelect.value = syncSettings.compact ? "compact" : "full";
+    syncAggSelect.value = syncSettings.includeAggregates ? "yes" : "no";
+
+    const refreshSyncMeta = async () => {
+      const meta = await getLastServerSyncMeta();
+      const cursor = await getLastServerSyncCursor();
+      const lastAt = typeof meta?.lastSyncAt === "number" ? new Date(meta.lastSyncAt).toLocaleString() : null;
+      const lastOk = typeof meta?.lastOk === "boolean" ? meta.lastOk : null;
+      const lastStatusCode = typeof meta?.lastStatus === "number" ? meta.lastStatus : null;
+      const lastCounts = meta?.lastCounts;
+      const lastBytesGzip = typeof meta?.lastBytesGzip === "number" ? meta.lastBytesGzip : null;
+
+      const parts: string[] = [];
+      parts.push(`Cursor: ${cursor}`);
+      if (lastAt) parts.push(`Last sync: ${lastAt}${lastStatusCode ? ` (HTTP ${lastStatusCode})` : ""}${lastOk === true ? "" : lastOk === false ? " (failed)" : ""}`);
+      if (lastCounts && typeof lastCounts === "object") {
+        const g = Number((lastCounts as any).games) || 0;
+        const r = Number((lastCounts as any).rounds) || 0;
+        const d = Number((lastCounts as any).details) || 0;
+        const a = Number((lastCounts as any).gameAgg) || 0;
+        parts.push(`Last counts: games=${g}, rounds=${r}, details=${d}, agg=${a}`);
+      }
+      if (typeof lastBytesGzip === "number") parts.push(`Last upload size: ${formatBytes(lastBytesGzip)}`);
+
+      syncStatus.textContent = parts.join(" · ");
+    };
+
+    void refreshSyncMeta();
+
+    const persistSyncSettings = () => {
+      saveServerSyncSettings({
+        endpointUrl: syncEndpointInput.value.trim(),
+        token: syncTokenInput.value.trim(),
+        compact: syncCompactSelect.value === "compact",
+        includeAggregates: syncAggSelect.value === "yes"
+      });
+    };
+
+    syncEndpointInput.addEventListener("change", () => {
+      persistSyncSettings();
+      void refreshSyncMeta();
+    });
+    syncTokenInput.addEventListener("change", () => {
+      persistSyncSettings();
+      void refreshSyncMeta();
+    });
+    syncCompactSelect.addEventListener("change", () => {
+      persistSyncSettings();
+      void refreshSyncMeta();
+    });
+    syncAggSelect.addEventListener("change", () => {
+      persistSyncSettings();
+      void refreshSyncMeta();
+    });
+
+    syncNowBtn.addEventListener("click", async () => {
+      syncNowBtn.disabled = true;
+      exportBtn.disabled = true;
+      importBtn.disabled = true;
+      switchMineBtn.disabled = true;
+      syncStatus.textContent = "Syncing...";
+      try {
+        persistSyncSettings();
+        const latest = loadServerSyncSettings();
+        const res = await runServerSyncOnce(latest);
+        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+        const msg =
+          `OK (HTTP ${res.status}) · ` +
+          `cursor ${res.cursorFrom} → ${res.cursorTo} · ` +
+          `rows ${rowsTotal} · ` +
+          `payload ${formatBytes(res.bytesGzip)} (gz)`;
+        syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) · ${res.responseText || "no response"}`;
+      } catch (e: any) {
+        syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+      } finally {
+        syncNowBtn.disabled = false;
+        exportBtn.disabled = false;
+        importBtn.disabled = false;
+        switchMineBtn.disabled = false;
+        void refreshSyncMeta();
+      }
+    });
 
     const templatePane = doc.createElement("div");
     templatePane.className = "ga-settings-pane";

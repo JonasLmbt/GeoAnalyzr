@@ -172,11 +172,7 @@
             {
               "key": "gameId",
               "label": "Game",
-              "sortable": true,
-              "display": {
-                "truncate": true,
-                "truncateHead": 8
-              }
+              "sortable": true
             },
             {
               "key": "guess_maps",
@@ -301,11 +297,7 @@
             {
               "key": "gameId",
               "label": "Game",
-              "sortable": true,
-              "display": {
-                "truncate": true,
-                "truncateHead": 8
-              }
+              "sortable": true
             }
           ]
         },
@@ -379,11 +371,7 @@
             {
               "key": "gameId",
               "label": "Game",
-              "sortable": true,
-              "display": {
-                "truncate": true,
-                "truncateHead": 8
-              }
+              "sortable": true
             }
           ]
         },
