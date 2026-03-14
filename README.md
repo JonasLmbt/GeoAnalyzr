@@ -25,26 +25,21 @@ GeoAnalyzr is available in three variants:
 ### 1) Local (recommended)
 
 1. Open this file in your browser:
-   - Local: `https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js`
+   - [Local](https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js)
 2. Tampermonkey will show the install dialog.
 3. Click install.
 
 ### 2) Sync-only (minimal)
 
 1. Open this file in your browser:
-   - Sync-only: `https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js`
+   - [Sync-only](https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js)
 2. Install it in Tampermonkey.
 3. Open GeoGuessr and click the small GeoAnalyzr icon (bottom-left). It runs **Fetch + Sync**.
-
-Notes:
-- No overlay UI, no charts, no analysis window — just syncing.
-- If you are not linked yet, it opens a linking tab (Discord login required once).
-- It also auto-syncs occasionally in the background (rate-limited).
 
 ### 3) Dev (testing)
 
 1. Open:
-   - Dev: `https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js`
+   - [Dev](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js)
 2. Install it in Tampermonkey.
 
 ## Usage
@@ -60,7 +55,7 @@ Notes:
 
 If you need support or want to suggest new analysis ideas / features, join my Discord server:
 
-- `https://discord.gg/ks5gh7MXhd`
+- https://discord.gg/ks5gh7MXhd
 
 ## Auto Updates
 
