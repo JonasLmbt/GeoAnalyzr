@@ -8755,10 +8755,19 @@ ${shapes}`.trim();
         syncBtn.disabled = true;
         status.textContent = "Syncing...";
         try {
-          const settings = loadServerSyncSettings();
+          let settings = loadServerSyncSettings();
           if (!settings.token) {
-            status.textContent = "Missing sync token (Settings \u2192 Data).";
-            return;
+            status.textContent = "Missing sync token. Waiting for input...";
+            const token = String(prompt("GeoAnalyzr Sync (Dev)\n\nPaste your sync token (will be saved locally):", "") || "").trim();
+            if (!token) {
+              status.textContent = "Sync canceled (no token).";
+              return;
+            }
+            const endpoint = String(
+              prompt("GeoAnalyzr Sync (Dev)\n\nSync endpoint URL:", settings.endpointUrl || "https://sync.geoanalyzr.lmbt.app/api/sync") || ""
+            ).trim();
+            saveServerSyncSettings({ token, endpointUrl: endpoint || settings.endpointUrl });
+            settings = loadServerSyncSettings();
           }
           const res = await runServerSyncOnce(settings);
           const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
