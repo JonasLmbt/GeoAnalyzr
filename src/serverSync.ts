@@ -241,7 +241,13 @@ async function buildDelta(since: number, opts: { compact: boolean; includeAggreg
   }
 
   const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
-  const rounds = opts.compact ? roundsMerged.map(compactRecord) : roundsMerged;
+  // rounds.playedAt is redundant (it mirrors game.playedAt). Server can backfill by gameId.
+  const roundsPayloadBase = roundsMerged.map((r: any) => {
+    const out = { ...(r as any) };
+    delete out.playedAt;
+    return out;
+  });
+  const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
   const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
   const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
 
@@ -254,7 +260,7 @@ async function buildDelta(since: number, opts: { compact: boolean; includeAggreg
 
   const tables: Record<string, ColumnarTable> = {
     games: toColumnar(games as any, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-    rounds: toColumnar(rounds as any, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+    rounds: toColumnar(rounds as any, ["id", "gameId", "roundNumber", "movementType"]),
     details: toColumnar(details as any, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
     ...(opts.includeAggregates ? { gameAgg: toColumnar(gameAgg as any, ["gameId", "computedAt", "aggVersion"]) } : {})
   };
@@ -370,13 +376,19 @@ export async function runServerSyncOnceWithOptions(
         }
 
         const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
-        const rounds = effectiveCompact ? (roundsAll as any[]).map(compactRecord) : roundsAll;
+        // rounds.playedAt is redundant (it mirrors game.playedAt). Server can backfill by gameId.
+        const roundsNoPlayedAt = (roundsAll as any[]).map((r: any) => {
+          const out = { ...(r as any) };
+          delete out.playedAt;
+          return out;
+        });
+        const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
         const details = effectiveCompact ? (detailsAll as any[]).map(compactRecord) : detailsAll;
         const gameAgg = effectiveCompact ? (gameAggAll as any[]).map(compactRecord) : gameAggAll;
 
         const tables: Record<string, ColumnarTable> = {
           games: toColumnar(games as any, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-          rounds: toColumnar(rounds as any, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+          rounds: toColumnar(rounds as any, ["id", "gameId", "roundNumber", "movementType"]),
           details: toColumnar(details as any, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
           ...(settings.includeAggregates ? { gameAgg: toColumnar(gameAgg as any, ["gameId", "computedAt", "aggVersion"]) } : {})
         };
