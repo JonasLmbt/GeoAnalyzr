@@ -31,26 +31,15 @@ const GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
 
 const DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
 
-const COMPACT_DROP_KEYS = new Set<string>([
-  "raw",
-  "trueLocationKey",
-  "trueLocationRepeat",
-  "trueState",
-  "trueDistrict",
-  "trueUsState",
-  "trueCaProvince",
-  "trueIdProvince",
-  "trueIdKabupaten",
-  "truePhProvince",
-  "trueVnProvince"
-]);
+// Compact mode is optional. It should NEVER drop core analytical fields (like guess countries).
+// Keep it conservative: only drop the huge raw payloads.
+const COMPACT_DROP_KEYS = new Set<string>(["raw"]);
 
 function compactRecord<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
     if (value === undefined) continue;
     if (COMPACT_DROP_KEYS.has(key)) continue;
-    if (key.endsWith("_guessCountry")) continue;
     out[key] = value;
   }
   return out as T;
@@ -136,7 +125,7 @@ export function loadServerSyncSettings(): ServerSyncSettings {
   const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
   const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
   const compact =
-    typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : true;
+    typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
   const includeAggregates =
     typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
 
@@ -354,6 +343,10 @@ export async function runServerSyncOnceWithOptions(
   const forceFull = opts.forceFull === true;
   const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
 
+  // For forced full snapshots we always prefer full-fidelity payloads. This avoids
+  // "missing fields" surprises on the server/website.
+  const effectiveCompact = forceFull ? false : settings.compact;
+
   const delta = forceFull
     ? await (async () => {
         const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
@@ -376,10 +369,10 @@ export async function runServerSyncOnceWithOptions(
           if (typeof ts === "number") (r as any).playedAt = ts;
         }
 
-        const games = settings.compact ? gamesAll.map(compactRecord) : gamesAll;
-        const rounds = settings.compact ? (roundsAll as any[]).map(compactRecord) : roundsAll;
-        const details = settings.compact ? (detailsAll as any[]).map(compactRecord) : detailsAll;
-        const gameAgg = settings.compact ? (gameAggAll as any[]).map(compactRecord) : gameAggAll;
+        const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
+        const rounds = effectiveCompact ? (roundsAll as any[]).map(compactRecord) : roundsAll;
+        const details = effectiveCompact ? (detailsAll as any[]).map(compactRecord) : detailsAll;
+        const gameAgg = effectiveCompact ? (gameAggAll as any[]).map(compactRecord) : gameAggAll;
 
         const tables: Record<string, ColumnarTable> = {
           games: toColumnar(games as any, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
@@ -402,7 +395,7 @@ export async function runServerSyncOnceWithOptions(
           appVersion: getUserscriptVersion(),
           owner: { playerId: ownerId, playerName: ownerName },
           cursor: { from: 0, to: cursorTo },
-          options: { compact: settings.compact, includeAggregates: settings.includeAggregates, forceFull: true },
+          options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
           counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
           tables
         };
@@ -418,7 +411,7 @@ export async function runServerSyncOnceWithOptions(
           bytesGzip
         };
       })()
-    : await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
+    : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
