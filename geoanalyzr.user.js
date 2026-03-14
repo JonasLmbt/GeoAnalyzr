@@ -1,16 +1,18 @@
 // ==UserScript==
-// @name         GeoAnalyzr
+// @name         GeoAnalyzr (Local)
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.15
+// @version      2.3.21
 // @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
+
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
+
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      media.githubusercontent.com
@@ -3779,8 +3781,8 @@
         function verifyInstalledSchema(db2, tmpTrans) {
           var installedSchema = buildGlobalSchema(db2, db2.idbdb, tmpTrans);
           var diff = getSchemaDiff(installedSchema, db2._dbSchema);
-          return !(diff.add.length || diff.change.some(function(ch) {
-            return ch.add.length || ch.change.length;
+          return !(diff.add.length || diff.change.some(function(ch3) {
+            return ch3.add.length || ch3.change.length;
           }));
         }
         function adjustToExistingIndexNames(db2, schema, idbtrans) {
@@ -6815,6 +6817,1769 @@ ${shapes}`.trim();
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
   }
 
+  // node_modules/fflate/esm/browser.js
+  var ch2 = {};
+  var wk = (function(c, id, msg, transfer, cb) {
+    var w = new Worker(ch2[id] || (ch2[id] = URL.createObjectURL(new Blob([
+      c + ';addEventListener("error",function(e){e=e.error;postMessage({$e$:[e.message,e.code,e.stack]})})'
+    ], { type: "text/javascript" }))));
+    w.onmessage = function(e) {
+      var d = e.data, ed = d.$e$;
+      if (ed) {
+        var err2 = new Error(ed[0]);
+        err2["code"] = ed[1];
+        err2.stack = ed[2];
+        cb(err2, null);
+      } else
+        cb(null, d);
+    };
+    w.postMessage(msg, transfer);
+    return w;
+  });
+  var u8 = Uint8Array;
+  var u16 = Uint16Array;
+  var i32 = Int32Array;
+  var fleb = new u8([
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    5,
+    5,
+    5,
+    5,
+    0,
+    /* unused */
+    0,
+    0,
+    /* impossible */
+    0
+  ]);
+  var fdeb = new u8([
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    2,
+    2,
+    3,
+    3,
+    4,
+    4,
+    5,
+    5,
+    6,
+    6,
+    7,
+    7,
+    8,
+    8,
+    9,
+    9,
+    10,
+    10,
+    11,
+    11,
+    12,
+    12,
+    13,
+    13,
+    /* unused */
+    0,
+    0
+  ]);
+  var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
+  var freb = function(eb, start) {
+    var b = new u16(31);
+    for (var i = 0; i < 31; ++i) {
+      b[i] = start += 1 << eb[i - 1];
+    }
+    var r = new i32(b[30]);
+    for (var i = 1; i < 30; ++i) {
+      for (var j = b[i]; j < b[i + 1]; ++j) {
+        r[j] = j - b[i] << 5 | i;
+      }
+    }
+    return { b, r };
+  };
+  var _a = freb(fleb, 2);
+  var fl = _a.b;
+  var revfl = _a.r;
+  fl[28] = 258, revfl[258] = 28;
+  var _b = freb(fdeb, 0);
+  var fd = _b.b;
+  var revfd = _b.r;
+  var rev = new u16(32768);
+  for (i = 0; i < 32768; ++i) {
+    x = (i & 43690) >> 1 | (i & 21845) << 1;
+    x = (x & 52428) >> 2 | (x & 13107) << 2;
+    x = (x & 61680) >> 4 | (x & 3855) << 4;
+    rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
+  }
+  var x;
+  var i;
+  var hMap = (function(cd, mb, r) {
+    var s = cd.length;
+    var i = 0;
+    var l = new u16(mb);
+    for (; i < s; ++i) {
+      if (cd[i])
+        ++l[cd[i] - 1];
+    }
+    var le = new u16(mb);
+    for (i = 1; i < mb; ++i) {
+      le[i] = le[i - 1] + l[i - 1] << 1;
+    }
+    var co;
+    if (r) {
+      co = new u16(1 << mb);
+      var rvb = 15 - mb;
+      for (i = 0; i < s; ++i) {
+        if (cd[i]) {
+          var sv = i << 4 | cd[i];
+          var r_1 = mb - cd[i];
+          var v = le[cd[i] - 1]++ << r_1;
+          for (var m = v | (1 << r_1) - 1; v <= m; ++v) {
+            co[rev[v] >> rvb] = sv;
+          }
+        }
+      }
+    } else {
+      co = new u16(s);
+      for (i = 0; i < s; ++i) {
+        if (cd[i]) {
+          co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
+        }
+      }
+    }
+    return co;
+  });
+  var flt = new u8(288);
+  for (i = 0; i < 144; ++i)
+    flt[i] = 8;
+  var i;
+  for (i = 144; i < 256; ++i)
+    flt[i] = 9;
+  var i;
+  for (i = 256; i < 280; ++i)
+    flt[i] = 7;
+  var i;
+  for (i = 280; i < 288; ++i)
+    flt[i] = 8;
+  var i;
+  var fdt = new u8(32);
+  for (i = 0; i < 32; ++i)
+    fdt[i] = 5;
+  var i;
+  var flm = /* @__PURE__ */ hMap(flt, 9, 0);
+  var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
+  var fdm = /* @__PURE__ */ hMap(fdt, 5, 0);
+  var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
+  var max = function(a) {
+    var m = a[0];
+    for (var i = 1; i < a.length; ++i) {
+      if (a[i] > m)
+        m = a[i];
+    }
+    return m;
+  };
+  var bits = function(d, p, m) {
+    var o = p / 8 | 0;
+    return (d[o] | d[o + 1] << 8) >> (p & 7) & m;
+  };
+  var bits16 = function(d, p) {
+    var o = p / 8 | 0;
+    return (d[o] | d[o + 1] << 8 | d[o + 2] << 16) >> (p & 7);
+  };
+  var shft = function(p) {
+    return (p + 7) / 8 | 0;
+  };
+  var slc = function(v, s, e) {
+    if (s == null || s < 0)
+      s = 0;
+    if (e == null || e > v.length)
+      e = v.length;
+    return new u8(v.subarray(s, e));
+  };
+  var ec = [
+    "unexpected EOF",
+    "invalid block type",
+    "invalid length/literal",
+    "invalid distance",
+    "stream finished",
+    "no stream handler",
+    ,
+    "no callback",
+    "invalid UTF-8 data",
+    "extra field too long",
+    "date not in range 1980-2099",
+    "filename too long",
+    "stream finishing",
+    "invalid zip data"
+    // determined by unknown compression method
+  ];
+  var err = function(ind, msg, nt) {
+    var e = new Error(msg || ec[ind]);
+    e.code = ind;
+    if (Error.captureStackTrace)
+      Error.captureStackTrace(e, err);
+    if (!nt)
+      throw e;
+    return e;
+  };
+  var inflt = function(dat, st, buf, dict) {
+    var sl = dat.length, dl = dict ? dict.length : 0;
+    if (!sl || st.f && !st.l)
+      return buf || new u8(0);
+    var noBuf = !buf;
+    var resize = noBuf || st.i != 2;
+    var noSt = st.i;
+    if (noBuf)
+      buf = new u8(sl * 3);
+    var cbuf = function(l2) {
+      var bl = buf.length;
+      if (l2 > bl) {
+        var nbuf = new u8(Math.max(bl * 2, l2));
+        nbuf.set(buf);
+        buf = nbuf;
+      }
+    };
+    var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
+    var tbts = sl * 8;
+    do {
+      if (!lm) {
+        final = bits(dat, pos, 1);
+        var type = bits(dat, pos + 1, 3);
+        pos += 3;
+        if (!type) {
+          var s = shft(pos) + 4, l = dat[s - 4] | dat[s - 3] << 8, t = s + l;
+          if (t > sl) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + l);
+          buf.set(dat.subarray(s, t), bt);
+          st.b = bt += l, st.p = pos = t * 8, st.f = final;
+          continue;
+        } else if (type == 1)
+          lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
+        else if (type == 2) {
+          var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
+          var tl = hLit + bits(dat, pos + 5, 31) + 1;
+          pos += 14;
+          var ldt = new u8(tl);
+          var clt = new u8(19);
+          for (var i = 0; i < hcLen; ++i) {
+            clt[clim[i]] = bits(dat, pos + i * 3, 7);
+          }
+          pos += hcLen * 3;
+          var clb = max(clt), clbmsk = (1 << clb) - 1;
+          var clm = hMap(clt, clb, 1);
+          for (var i = 0; i < tl; ) {
+            var r = clm[bits(dat, pos, clbmsk)];
+            pos += r & 15;
+            var s = r >> 4;
+            if (s < 16) {
+              ldt[i++] = s;
+            } else {
+              var c = 0, n = 0;
+              if (s == 16)
+                n = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
+              else if (s == 17)
+                n = 3 + bits(dat, pos, 7), pos += 3;
+              else if (s == 18)
+                n = 11 + bits(dat, pos, 127), pos += 7;
+              while (n--)
+                ldt[i++] = c;
+            }
+          }
+          var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
+          lbt = max(lt);
+          dbt = max(dt);
+          lm = hMap(lt, lbt, 1);
+          dm = hMap(dt, dbt, 1);
+        } else
+          err(1);
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+      }
+      if (resize)
+        cbuf(bt + 131072);
+      var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
+      var lpos = pos;
+      for (; ; lpos = pos) {
+        var c = lm[bits16(dat, pos) & lms], sym = c >> 4;
+        pos += c & 15;
+        if (pos > tbts) {
+          if (noSt)
+            err(0);
+          break;
+        }
+        if (!c)
+          err(2);
+        if (sym < 256)
+          buf[bt++] = sym;
+        else if (sym == 256) {
+          lpos = pos, lm = null;
+          break;
+        } else {
+          var add2 = sym - 254;
+          if (sym > 264) {
+            var i = sym - 257, b = fleb[i];
+            add2 = bits(dat, pos, (1 << b) - 1) + fl[i];
+            pos += b;
+          }
+          var d = dm[bits16(dat, pos) & dms], dsym = d >> 4;
+          if (!d)
+            err(3);
+          pos += d & 15;
+          var dt = fd[dsym];
+          if (dsym > 3) {
+            var b = fdeb[dsym];
+            dt += bits16(dat, pos) & (1 << b) - 1, pos += b;
+          }
+          if (pos > tbts) {
+            if (noSt)
+              err(0);
+            break;
+          }
+          if (resize)
+            cbuf(bt + 131072);
+          var end = bt + add2;
+          if (bt < dt) {
+            var shift = dl - dt, dend = Math.min(dt, end);
+            if (shift + bt < 0)
+              err(3);
+            for (; bt < dend; ++bt)
+              buf[bt] = dict[shift + bt];
+          }
+          for (; bt < end; ++bt)
+            buf[bt] = buf[bt - dt];
+        }
+      }
+      st.l = lm, st.p = lpos, st.b = bt, st.f = final;
+      if (lm)
+        final = 1, st.m = lbt, st.d = dm, st.n = dbt;
+    } while (!final);
+    return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
+  };
+  var wbits = function(d, p, v) {
+    v <<= p & 7;
+    var o = p / 8 | 0;
+    d[o] |= v;
+    d[o + 1] |= v >> 8;
+  };
+  var wbits16 = function(d, p, v) {
+    v <<= p & 7;
+    var o = p / 8 | 0;
+    d[o] |= v;
+    d[o + 1] |= v >> 8;
+    d[o + 2] |= v >> 16;
+  };
+  var hTree = function(d, mb) {
+    var t = [];
+    for (var i = 0; i < d.length; ++i) {
+      if (d[i])
+        t.push({ s: i, f: d[i] });
+    }
+    var s = t.length;
+    var t2 = t.slice();
+    if (!s)
+      return { t: et, l: 0 };
+    if (s == 1) {
+      var v = new u8(t[0].s + 1);
+      v[t[0].s] = 1;
+      return { t: v, l: 1 };
+    }
+    t.sort(function(a, b) {
+      return a.f - b.f;
+    });
+    t.push({ s: -1, f: 25001 });
+    var l = t[0], r = t[1], i0 = 0, i1 = 1, i2 = 2;
+    t[0] = { s: -1, f: l.f + r.f, l, r };
+    while (i1 != s - 1) {
+      l = t[t[i0].f < t[i2].f ? i0++ : i2++];
+      r = t[i0 != i1 && t[i0].f < t[i2].f ? i0++ : i2++];
+      t[i1++] = { s: -1, f: l.f + r.f, l, r };
+    }
+    var maxSym = t2[0].s;
+    for (var i = 1; i < s; ++i) {
+      if (t2[i].s > maxSym)
+        maxSym = t2[i].s;
+    }
+    var tr = new u16(maxSym + 1);
+    var mbt = ln(t[i1 - 1], tr, 0);
+    if (mbt > mb) {
+      var i = 0, dt = 0;
+      var lft = mbt - mb, cst = 1 << lft;
+      t2.sort(function(a, b) {
+        return tr[b.s] - tr[a.s] || a.f - b.f;
+      });
+      for (; i < s; ++i) {
+        var i2_1 = t2[i].s;
+        if (tr[i2_1] > mb) {
+          dt += cst - (1 << mbt - tr[i2_1]);
+          tr[i2_1] = mb;
+        } else
+          break;
+      }
+      dt >>= lft;
+      while (dt > 0) {
+        var i2_2 = t2[i].s;
+        if (tr[i2_2] < mb)
+          dt -= 1 << mb - tr[i2_2]++ - 1;
+        else
+          ++i;
+      }
+      for (; i >= 0 && dt; --i) {
+        var i2_3 = t2[i].s;
+        if (tr[i2_3] == mb) {
+          --tr[i2_3];
+          ++dt;
+        }
+      }
+      mbt = mb;
+    }
+    return { t: new u8(tr), l: mbt };
+  };
+  var ln = function(n, l, d) {
+    return n.s == -1 ? Math.max(ln(n.l, l, d + 1), ln(n.r, l, d + 1)) : l[n.s] = d;
+  };
+  var lc = function(c) {
+    var s = c.length;
+    while (s && !c[--s])
+      ;
+    var cl = new u16(++s);
+    var cli = 0, cln = c[0], cls = 1;
+    var w = function(v) {
+      cl[cli++] = v;
+    };
+    for (var i = 1; i <= s; ++i) {
+      if (c[i] == cln && i != s)
+        ++cls;
+      else {
+        if (!cln && cls > 2) {
+          for (; cls > 138; cls -= 138)
+            w(32754);
+          if (cls > 2) {
+            w(cls > 10 ? cls - 11 << 5 | 28690 : cls - 3 << 5 | 12305);
+            cls = 0;
+          }
+        } else if (cls > 3) {
+          w(cln), --cls;
+          for (; cls > 6; cls -= 6)
+            w(8304);
+          if (cls > 2)
+            w(cls - 3 << 5 | 8208), cls = 0;
+        }
+        while (cls--)
+          w(cln);
+        cls = 1;
+        cln = c[i];
+      }
+    }
+    return { c: cl.subarray(0, cli), n: s };
+  };
+  var clen = function(cf, cl) {
+    var l = 0;
+    for (var i = 0; i < cl.length; ++i)
+      l += cf[i] * cl[i];
+    return l;
+  };
+  var wfblk = function(out, pos, dat) {
+    var s = dat.length;
+    var o = shft(pos + 2);
+    out[o] = s & 255;
+    out[o + 1] = s >> 8;
+    out[o + 2] = out[o] ^ 255;
+    out[o + 3] = out[o + 1] ^ 255;
+    for (var i = 0; i < s; ++i)
+      out[o + i + 4] = dat[i];
+    return (o + 4 + s) * 8;
+  };
+  var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
+    wbits(out, p++, final);
+    ++lf[256];
+    var _a2 = hTree(lf, 15), dlt = _a2.t, mlb = _a2.l;
+    var _b2 = hTree(df, 15), ddt = _b2.t, mdb = _b2.l;
+    var _c = lc(dlt), lclt = _c.c, nlc = _c.n;
+    var _d = lc(ddt), lcdt = _d.c, ndc = _d.n;
+    var lcfreq = new u16(19);
+    for (var i = 0; i < lclt.length; ++i)
+      ++lcfreq[lclt[i] & 31];
+    for (var i = 0; i < lcdt.length; ++i)
+      ++lcfreq[lcdt[i] & 31];
+    var _e = hTree(lcfreq, 7), lct = _e.t, mlcb = _e.l;
+    var nlcc = 19;
+    for (; nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc)
+      ;
+    var flen = bl + 5 << 3;
+    var ftlen = clen(lf, flt) + clen(df, fdt) + eb;
+    var dtlen = clen(lf, dlt) + clen(df, ddt) + eb + 14 + 3 * nlcc + clen(lcfreq, lct) + 2 * lcfreq[16] + 3 * lcfreq[17] + 7 * lcfreq[18];
+    if (bs >= 0 && flen <= ftlen && flen <= dtlen)
+      return wfblk(out, p, dat.subarray(bs, bs + bl));
+    var lm, ll, dm, dl;
+    wbits(out, p, 1 + (dtlen < ftlen)), p += 2;
+    if (dtlen < ftlen) {
+      lm = hMap(dlt, mlb, 0), ll = dlt, dm = hMap(ddt, mdb, 0), dl = ddt;
+      var llm = hMap(lct, mlcb, 0);
+      wbits(out, p, nlc - 257);
+      wbits(out, p + 5, ndc - 1);
+      wbits(out, p + 10, nlcc - 4);
+      p += 14;
+      for (var i = 0; i < nlcc; ++i)
+        wbits(out, p + 3 * i, lct[clim[i]]);
+      p += 3 * nlcc;
+      var lcts = [lclt, lcdt];
+      for (var it = 0; it < 2; ++it) {
+        var clct = lcts[it];
+        for (var i = 0; i < clct.length; ++i) {
+          var len = clct[i] & 31;
+          wbits(out, p, llm[len]), p += lct[len];
+          if (len > 15)
+            wbits(out, p, clct[i] >> 5 & 127), p += clct[i] >> 12;
+        }
+      }
+    } else {
+      lm = flm, ll = flt, dm = fdm, dl = fdt;
+    }
+    for (var i = 0; i < li; ++i) {
+      var sym = syms[i];
+      if (sym > 255) {
+        var len = sym >> 18 & 31;
+        wbits16(out, p, lm[len + 257]), p += ll[len + 257];
+        if (len > 7)
+          wbits(out, p, sym >> 23 & 31), p += fleb[len];
+        var dst = sym & 31;
+        wbits16(out, p, dm[dst]), p += dl[dst];
+        if (dst > 3)
+          wbits16(out, p, sym >> 5 & 8191), p += fdeb[dst];
+      } else {
+        wbits16(out, p, lm[sym]), p += ll[sym];
+      }
+    }
+    wbits16(out, p, lm[256]);
+    return p + ll[256];
+  };
+  var deo = /* @__PURE__ */ new i32([65540, 131080, 131088, 131104, 262176, 1048704, 1048832, 2114560, 2117632]);
+  var et = /* @__PURE__ */ new u8(0);
+  var dflt = function(dat, lvl, plvl, pre, post, st) {
+    var s = st.z || dat.length;
+    var o = new u8(pre + s + 5 * (1 + Math.ceil(s / 7e3)) + post);
+    var w = o.subarray(pre, o.length - post);
+    var lst = st.l;
+    var pos = (st.r || 0) & 7;
+    if (lvl) {
+      if (pos)
+        w[0] = st.r >> 3;
+      var opt = deo[lvl - 1];
+      var n = opt >> 13, c = opt & 8191;
+      var msk_1 = (1 << plvl) - 1;
+      var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
+      var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
+      var hsh = function(i2) {
+        return (dat[i2] ^ dat[i2 + 1] << bs1_1 ^ dat[i2 + 2] << bs2_1) & msk_1;
+      };
+      var syms = new i32(25e3);
+      var lf = new u16(288), df = new u16(32);
+      var lc_1 = 0, eb = 0, i = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
+      for (; i + 2 < s; ++i) {
+        var hv = hsh(i);
+        var imod = i & 32767, pimod = head[hv];
+        prev[imod] = pimod;
+        head[hv] = imod;
+        if (wi <= i) {
+          var rem = s - i;
+          if ((lc_1 > 7e3 || li > 24576) && (rem > 423 || !lst)) {
+            pos = wblk(dat, w, 0, syms, lf, df, eb, li, bs, i - bs, pos);
+            li = lc_1 = eb = 0, bs = i;
+            for (var j = 0; j < 286; ++j)
+              lf[j] = 0;
+            for (var j = 0; j < 30; ++j)
+              df[j] = 0;
+          }
+          var l = 2, d = 0, ch_1 = c, dif = imod - pimod & 32767;
+          if (rem > 2 && hv == hsh(i - dif)) {
+            var maxn = Math.min(n, rem) - 1;
+            var maxd = Math.min(32767, i);
+            var ml = Math.min(258, rem);
+            while (dif <= maxd && --ch_1 && imod != pimod) {
+              if (dat[i + l] == dat[i + l - dif]) {
+                var nl = 0;
+                for (; nl < ml && dat[i + nl] == dat[i + nl - dif]; ++nl)
+                  ;
+                if (nl > l) {
+                  l = nl, d = dif;
+                  if (nl > maxn)
+                    break;
+                  var mmd = Math.min(dif, nl - 2);
+                  var md = 0;
+                  for (var j = 0; j < mmd; ++j) {
+                    var ti = i - dif + j & 32767;
+                    var pti = prev[ti];
+                    var cd = ti - pti & 32767;
+                    if (cd > md)
+                      md = cd, pimod = ti;
+                  }
+                }
+              }
+              imod = pimod, pimod = prev[imod];
+              dif += imod - pimod & 32767;
+            }
+          }
+          if (d) {
+            syms[li++] = 268435456 | revfl[l] << 18 | revfd[d];
+            var lin = revfl[l] & 31, din = revfd[d] & 31;
+            eb += fleb[lin] + fdeb[din];
+            ++lf[257 + lin];
+            ++df[din];
+            wi = i + l;
+            ++lc_1;
+          } else {
+            syms[li++] = dat[i];
+            ++lf[dat[i]];
+          }
+        }
+      }
+      for (i = Math.max(i, wi); i < s; ++i) {
+        syms[li++] = dat[i];
+        ++lf[dat[i]];
+      }
+      pos = wblk(dat, w, lst, syms, lf, df, eb, li, bs, i - bs, pos);
+      if (!lst) {
+        st.r = pos & 7 | w[pos / 8 | 0] << 3;
+        pos -= 7;
+        st.h = head, st.p = prev, st.i = i, st.w = wi;
+      }
+    } else {
+      for (var i = st.w || 0; i < s + lst; i += 65535) {
+        var e = i + 65535;
+        if (e >= s) {
+          w[pos / 8 | 0] = lst;
+          e = s;
+        }
+        pos = wfblk(w, pos + 1, dat.subarray(i, e));
+      }
+      st.i = s;
+    }
+    return slc(o, 0, pre + shft(pos) + post);
+  };
+  var crct = /* @__PURE__ */ (function() {
+    var t = new Int32Array(256);
+    for (var i = 0; i < 256; ++i) {
+      var c = i, k = 9;
+      while (--k)
+        c = (c & 1 && -306674912) ^ c >>> 1;
+      t[i] = c;
+    }
+    return t;
+  })();
+  var crc = function() {
+    var c = -1;
+    return {
+      p: function(d) {
+        var cr = c;
+        for (var i = 0; i < d.length; ++i)
+          cr = crct[cr & 255 ^ d[i]] ^ cr >>> 8;
+        c = cr;
+      },
+      d: function() {
+        return ~c;
+      }
+    };
+  };
+  var dopt = function(dat, opt, pre, post, st) {
+    if (!st) {
+      st = { l: 1 };
+      if (opt.dictionary) {
+        var dict = opt.dictionary.subarray(-32768);
+        var newDat = new u8(dict.length + dat.length);
+        newDat.set(dict);
+        newDat.set(dat, dict.length);
+        dat = newDat;
+        st.w = dict.length;
+      }
+    }
+    return dflt(dat, opt.level == null ? 6 : opt.level, opt.mem == null ? st.l ? Math.ceil(Math.max(8, Math.min(13, Math.log(dat.length))) * 1.5) : 20 : 12 + opt.mem, pre, post, st);
+  };
+  var mrg = function(a, b) {
+    var o = {};
+    for (var k in a)
+      o[k] = a[k];
+    for (var k in b)
+      o[k] = b[k];
+    return o;
+  };
+  var wcln = function(fn, fnStr, td2) {
+    var dt = fn();
+    var st = fn.toString();
+    var ks = st.slice(st.indexOf("[") + 1, st.lastIndexOf("]")).replace(/\s+/g, "").split(",");
+    for (var i = 0; i < dt.length; ++i) {
+      var v = dt[i], k = ks[i];
+      if (typeof v == "function") {
+        fnStr += ";" + k + "=";
+        var st_1 = v.toString();
+        if (v.prototype) {
+          if (st_1.indexOf("[native code]") != -1) {
+            var spInd = st_1.indexOf(" ", 8) + 1;
+            fnStr += st_1.slice(spInd, st_1.indexOf("(", spInd));
+          } else {
+            fnStr += st_1;
+            for (var t in v.prototype)
+              fnStr += ";" + k + ".prototype." + t + "=" + v.prototype[t].toString();
+          }
+        } else
+          fnStr += st_1;
+      } else
+        td2[k] = v;
+    }
+    return fnStr;
+  };
+  var ch = [];
+  var cbfs = function(v) {
+    var tl = [];
+    for (var k in v) {
+      if (v[k].buffer) {
+        tl.push((v[k] = new v[k].constructor(v[k])).buffer);
+      }
+    }
+    return tl;
+  };
+  var wrkr = function(fns, init, id, cb) {
+    if (!ch[id]) {
+      var fnStr = "", td_1 = {}, m = fns.length - 1;
+      for (var i = 0; i < m; ++i)
+        fnStr = wcln(fns[i], fnStr, td_1);
+      ch[id] = { c: wcln(fns[m], fnStr, td_1), e: td_1 };
+    }
+    var td2 = mrg({}, ch[id].e);
+    return wk(ch[id].c + ";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage=" + init.toString() + "}", id, td2, cbfs(td2), cb);
+  };
+  var bInflt = function() {
+    return [u8, u16, i32, fleb, fdeb, clim, fl, fd, flrm, fdrm, rev, ec, hMap, max, bits, bits16, shft, slc, err, inflt, inflateSync, pbf, gopt];
+  };
+  var bDflt = function() {
+    return [u8, u16, i32, fleb, fdeb, clim, revfl, revfd, flm, flt, fdm, fdt, rev, deo, et, hMap, wbits, wbits16, hTree, ln, lc, clen, wfblk, wblk, shft, slc, dflt, dopt, deflateSync, pbf];
+  };
+  var gze = function() {
+    return [gzh, gzhl, wbytes, crc, crct];
+  };
+  var guze = function() {
+    return [gzs, gzl];
+  };
+  var pbf = function(msg) {
+    return postMessage(msg, [msg.buffer]);
+  };
+  var gopt = function(o) {
+    return o && {
+      out: o.size && new u8(o.size),
+      dictionary: o.dictionary
+    };
+  };
+  var cbify = function(dat, opts, fns, init, id, cb) {
+    var w = wrkr(fns, init, id, function(err2, dat2) {
+      w.terminate();
+      cb(err2, dat2);
+    });
+    w.postMessage([dat, opts], opts.consume ? [dat.buffer] : []);
+    return function() {
+      w.terminate();
+    };
+  };
+  var b2 = function(d, b) {
+    return d[b] | d[b + 1] << 8;
+  };
+  var b4 = function(d, b) {
+    return (d[b] | d[b + 1] << 8 | d[b + 2] << 16 | d[b + 3] << 24) >>> 0;
+  };
+  var b8 = function(d, b) {
+    return b4(d, b) + b4(d, b + 4) * 4294967296;
+  };
+  var wbytes = function(d, b, v) {
+    for (; v; ++b)
+      d[b] = v, v >>>= 8;
+  };
+  var gzh = function(c, o) {
+    var fn = o.filename;
+    c[0] = 31, c[1] = 139, c[2] = 8, c[8] = o.level < 2 ? 4 : o.level == 9 ? 2 : 0, c[9] = 3;
+    if (o.mtime != 0)
+      wbytes(c, 4, Math.floor(new Date(o.mtime || Date.now()) / 1e3));
+    if (fn) {
+      c[3] = 8;
+      for (var i = 0; i <= fn.length; ++i)
+        c[i + 10] = fn.charCodeAt(i);
+    }
+  };
+  var gzs = function(d) {
+    if (d[0] != 31 || d[1] != 139 || d[2] != 8)
+      err(6, "invalid gzip data");
+    var flg = d[3];
+    var st = 10;
+    if (flg & 4)
+      st += (d[10] | d[11] << 8) + 2;
+    for (var zs = (flg >> 3 & 1) + (flg >> 4 & 1); zs > 0; zs -= !d[st++])
+      ;
+    return st + (flg & 2);
+  };
+  var gzl = function(d) {
+    var l = d.length;
+    return (d[l - 4] | d[l - 3] << 8 | d[l - 2] << 16 | d[l - 1] << 24) >>> 0;
+  };
+  var gzhl = function(o) {
+    return 10 + (o.filename ? o.filename.length + 1 : 0);
+  };
+  function deflateSync(data, opts) {
+    return dopt(data, opts || {}, 0, 0);
+  }
+  function inflateSync(data, opts) {
+    return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
+  }
+  function gzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bDflt,
+      gze,
+      function() {
+        return [gzipSync];
+      }
+    ], function(ev) {
+      return pbf(gzipSync(ev.data[0], ev.data[1]));
+    }, 2, cb);
+  }
+  function gzipSync(data, opts) {
+    if (!opts)
+      opts = {};
+    var c = crc(), l = data.length;
+    c.p(data);
+    var d = dopt(data, opts, gzhl(opts), 8), s = d.length;
+    return gzh(d, opts), wbytes(d, s - 8, c.d()), wbytes(d, s - 4, l), d;
+  }
+  function gunzip(data, opts, cb) {
+    if (!cb)
+      cb = opts, opts = {};
+    if (typeof cb != "function")
+      err(7);
+    return cbify(data, opts, [
+      bInflt,
+      guze,
+      function() {
+        return [gunzipSync];
+      }
+    ], function(ev) {
+      return pbf(gunzipSync(ev.data[0], ev.data[1]));
+    }, 3, cb);
+  }
+  function gunzipSync(data, opts) {
+    var st = gzs(data);
+    if (st + 8 > data.length)
+      err(6, "invalid gzip data");
+    return inflt(data.subarray(st, -8), { i: 2 }, opts && opts.out || new u8(gzl(data)), opts && opts.dictionary);
+  }
+  var te = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder();
+  var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
+  var tds = 0;
+  try {
+    td.decode(et, { stream: true });
+    tds = 1;
+  } catch (e) {
+  }
+  var dutf8 = function(d) {
+    for (var r = "", i = 0; ; ) {
+      var c = d[i++];
+      var eb = (c > 127) + (c > 223) + (c > 239);
+      if (i + eb > d.length)
+        return { s: r, r: slc(d, i - 1) };
+      if (!eb)
+        r += String.fromCharCode(c);
+      else if (eb == 3) {
+        c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
+      } else if (eb & 1)
+        r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
+      else
+        r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
+    }
+  };
+  function strToU8(str, latin1) {
+    if (latin1) {
+      var ar_1 = new u8(str.length);
+      for (var i = 0; i < str.length; ++i)
+        ar_1[i] = str.charCodeAt(i);
+      return ar_1;
+    }
+    if (te)
+      return te.encode(str);
+    var l = str.length;
+    var ar = new u8(str.length + (str.length >> 1));
+    var ai = 0;
+    var w = function(v) {
+      ar[ai++] = v;
+    };
+    for (var i = 0; i < l; ++i) {
+      if (ai + 5 > ar.length) {
+        var n = new u8(ai + 8 + (l - i << 1));
+        n.set(ar);
+        ar = n;
+      }
+      var c = str.charCodeAt(i);
+      if (c < 128 || latin1)
+        w(c);
+      else if (c < 2048)
+        w(192 | c >> 6), w(128 | c & 63);
+      else if (c > 55295 && c < 57344)
+        c = 65536 + (c & 1023 << 10) | str.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
+      else
+        w(224 | c >> 12), w(128 | c >> 6 & 63), w(128 | c & 63);
+    }
+    return slc(ar, 0, ai);
+  }
+  function strFromU8(dat, latin1) {
+    if (latin1) {
+      var r = "";
+      for (var i = 0; i < dat.length; i += 16384)
+        r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
+      return r;
+    } else if (td) {
+      return td.decode(dat);
+    } else {
+      var _a2 = dutf8(dat), s = _a2.s, r = _a2.r;
+      if (r.length)
+        err(8);
+      return s;
+    }
+  }
+  var slzh = function(d, b) {
+    return b + 30 + b2(d, b + 26) + b2(d, b + 28);
+  };
+  var zh = function(d, b, z) {
+    var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
+    var _a2 = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
+    return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
+  };
+  var z64e = function(d, b) {
+    for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
+      ;
+    return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
+  };
+  function unzipSync(data, opts) {
+    var files = {};
+    var e = data.length - 22;
+    for (; b4(data, e) != 101010256; --e) {
+      if (!e || data.length - e > 65558)
+        err(13);
+    }
+    ;
+    var c = b2(data, e + 8);
+    if (!c)
+      return {};
+    var o = b4(data, e + 16);
+    var z = o == 4294967295 || c == 65535;
+    if (z) {
+      var ze = b4(data, e - 12);
+      z = b4(data, ze) == 101075792;
+      if (z) {
+        c = b4(data, ze + 32);
+        o = b4(data, ze + 48);
+      }
+    }
+    var fltr = opts && opts.filter;
+    for (var i = 0; i < c; ++i) {
+      var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
+      o = no;
+      if (!fltr || fltr({
+        name: fn,
+        size: sc,
+        originalSize: su,
+        compression: c_2
+      })) {
+        if (!c_2)
+          files[fn] = slc(data, b, b + sc);
+        else if (c_2 == 8)
+          files[fn] = inflateSync(data.subarray(b, b + sc), { out: new u8(su) });
+        else
+          err(14, "unknown compression type " + c_2);
+      }
+    }
+    return files;
+  }
+
+  // node_modules/dexie/import-wrapper.mjs
+  var import_dexie = __toESM(require_dexie(), 1);
+  var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
+  var Dexie = globalThis[DexieSymbol] || (globalThis[DexieSymbol] = import_dexie.default);
+  if (import_dexie.default.semVer !== Dexie.semVer) {
+    throw new Error(`Two different versions of Dexie loaded in the same app: ${import_dexie.default.semVer} and ${Dexie.semVer}`);
+  }
+  var {
+    liveQuery,
+    mergeRanges,
+    rangesOverlap,
+    RangeSet,
+    cmp,
+    Entity,
+    PropModification,
+    replacePrefix,
+    add,
+    remove,
+    DexieYProvider
+  } = Dexie;
+  var import_wrapper_default = Dexie;
+
+  // src/db.ts
+  var MAIN_DB_NAME = "gg_analyzer_db";
+  var ACTIVE_DB_STORAGE_KEY = "geoanalyzr_active_db_v1";
+  function readActiveDbNameFromStorage() {
+    try {
+      const raw = globalThis?.localStorage?.getItem(ACTIVE_DB_STORAGE_KEY) ?? "";
+      const name = typeof raw === "string" ? raw.trim() : "";
+      return name || MAIN_DB_NAME;
+    } catch {
+      return MAIN_DB_NAME;
+    }
+  }
+  function writeActiveDbNameToStorage(name) {
+    try {
+      globalThis?.localStorage?.setItem(ACTIVE_DB_STORAGE_KEY, name);
+    } catch {
+    }
+  }
+  function getActiveDbName() {
+    return readActiveDbNameFromStorage();
+  }
+  function isViewerMode() {
+    return getActiveDbName() !== MAIN_DB_NAME;
+  }
+  var GGDB = class extends import_wrapper_default {
+    games;
+    rounds;
+    details;
+    gameAgg;
+    meta;
+    constructor(name = MAIN_DB_NAME) {
+      super(name);
+      this.version(1).stores({
+        games: "gameId, playedAt, type, mode",
+        rounds: "id, gameId, roundNumber",
+        meta: "key, updatedAt"
+      });
+      this.version(2).stores({
+        games: "gameId, playedAt, type, mode",
+        rounds: "id, gameId, roundNumber",
+        details: "gameId, status, fetchedAt",
+        meta: "key, updatedAt"
+      });
+      this.version(3).stores({
+        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+        rounds: "id, gameId, roundNumber, [gameId+roundNumber]",
+        details: "gameId, status, fetchedAt, modeFamily, isTeamDuels",
+        meta: "key, updatedAt"
+      });
+      this.version(4).stores({
+        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+        rounds: [
+          "id",
+          "gameId",
+          "roundNumber",
+          "[gameId+roundNumber]",
+          "playedAt",
+          "trueCountry",
+          "movementType",
+          "player_self_score"
+        ].join(", "),
+        details: [
+          "gameId",
+          "status",
+          "fetchedAt",
+          "modeFamily",
+          "isTeamDuels",
+          "player_self_id",
+          "player_mate_id",
+          "player_opponent_country"
+        ].join(", "),
+        meta: "key, updatedAt"
+      });
+      this.version(5).stores({
+        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
+        rounds: [
+          "id",
+          "gameId",
+          "roundNumber",
+          "[gameId+roundNumber]",
+          "playedAt",
+          "trueCountry",
+          "movementType",
+          "player_self_score"
+        ].join(", "),
+        details: [
+          "gameId",
+          "status",
+          "fetchedAt",
+          "modeFamily",
+          "isTeamDuels",
+          "player_self_id",
+          "player_mate_id",
+          "player_opponent_country"
+        ].join(", "),
+        gameAgg: "gameId, computedAt, aggVersion",
+        meta: "key, updatedAt"
+      });
+    }
+  };
+  var db = new GGDB(readActiveDbNameFromStorage());
+  async function switchActiveDb(name) {
+    const next = (typeof name === "string" ? name.trim() : "") || MAIN_DB_NAME;
+    if (next === db.name) return;
+    try {
+      db.close();
+    } catch {
+    }
+    writeActiveDbNameToStorage(next);
+    db = new GGDB(next);
+    await db.open();
+  }
+
+  // src/gm.ts
+  function getGlobalGmXmlhttpRequest() {
+    const g = globalThis;
+    return g?.GM_xmlhttpRequest ?? g?.GM?.xmlHttpRequest;
+  }
+  function getSandboxGmXmlhttpRequest() {
+    try {
+      return typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  function getGmXmlhttpRequest() {
+    const fromGlobal = getGlobalGmXmlhttpRequest();
+    if (typeof fromGlobal === "function") return fromGlobal;
+    const fromSandbox = getSandboxGmXmlhttpRequest();
+    if (typeof fromSandbox === "function") return fromSandbox;
+    return void 0;
+  }
+  function hasGmXmlhttpRequest() {
+    return typeof getGmXmlhttpRequest() === "function";
+  }
+
+  // src/http.ts
+  function parseRawHeaders(raw) {
+    const out = {};
+    if (typeof raw !== "string" || !raw.trim()) return out;
+    for (const line of raw.split(/\r?\n/)) {
+      const idx = line.indexOf(":");
+      if (idx <= 0) continue;
+      const k = line.slice(0, idx).trim().toLowerCase();
+      const v = line.slice(idx + 1).trim();
+      if (!k) continue;
+      if (out[k]) out[k] = `${out[k]}, ${v}`;
+      else out[k] = v;
+    }
+    return out;
+  }
+  function gmRequest(url, opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      const headers = {
+        Accept: "application/json",
+        ...opts?.headers || {}
+      };
+      gm({
+        method: "GET",
+        url,
+        headers,
+        onload: (res) => {
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+          resolve({
+            status: Number(res?.status) || 0,
+            text,
+            headers: parseRawHeaders(rawHeaders),
+            json: () => JSON.parse(text)
+          });
+        },
+        onerror: (err2) => {
+          reject(err2);
+        },
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function httpGetJson(url, opts) {
+    if (opts?.forceGm && hasGmXmlhttpRequest()) {
+      const res2 = await gmRequest(url, { headers: opts?.headers });
+      try {
+        return { status: res2.status, data: res2.json(), headers: res2.headers, text: res2.text };
+      } catch {
+        return { status: res2.status, data: null, headers: res2.headers, text: res2.text };
+      }
+    }
+    const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+    const headers = {};
+    try {
+      res.headers.forEach((v, k) => {
+        headers[String(k).toLowerCase()] = String(v);
+      });
+    } catch {
+    }
+    const text = await res.text();
+    try {
+      return { status: res.status, data: JSON.parse(text), headers, text };
+    } catch {
+      return { status: res.status, data: null, headers, text };
+    }
+  }
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  function retryDelayMs(attempt, baseMs, maxMs) {
+    const exp = Math.min(maxMs, Math.floor(baseMs * Math.pow(2, attempt)));
+    const jitter = Math.floor(Math.random() * 250);
+    return Math.min(maxMs, exp + jitter);
+  }
+  function parseRetryAfterMs(h) {
+    const ra = h["retry-after"];
+    if (!ra) return null;
+    const n = Number(ra);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n * 1e3);
+    const t = Date.parse(ra);
+    if (Number.isFinite(t)) {
+      const ms = t - Date.now();
+      return ms > 0 ? ms : 0;
+    }
+    return null;
+  }
+  async function httpGetJsonWithRetry(url, opts) {
+    const retries = typeof opts?.retries === "number" && Number.isFinite(opts.retries) ? Math.max(0, Math.floor(opts.retries)) : 4;
+    const baseDelayMs = typeof opts?.baseDelayMs === "number" && Number.isFinite(opts.baseDelayMs) ? Math.max(50, Math.floor(opts.baseDelayMs)) : 400;
+    const maxDelayMs = typeof opts?.maxDelayMs === "number" && Number.isFinite(opts.maxDelayMs) ? Math.max(baseDelayMs, Math.floor(opts.maxDelayMs)) : 8e3;
+    let last = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const res = await httpGetJson(url, { forceGm: opts?.forceGm, headers: opts?.headers });
+      last = res;
+      const status = res.status;
+      const shouldRetry = status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 504 || status === 0;
+      if (!shouldRetry) return res;
+      if (attempt >= retries) return res;
+      const ra = status === 429 ? parseRetryAfterMs(res.headers) : null;
+      const waitMs = ra !== null ? Math.min(maxDelayMs, Math.max(0, ra)) : retryDelayMs(attempt, baseDelayMs, maxDelayMs);
+      await sleep(waitMs);
+    }
+    return last ?? { status: 0, data: null, headers: {} };
+  }
+
+  // src/app/playerIdentity.ts
+  var cachedPlayerName;
+  var cachedPlayerId;
+  function asTrimmedString(v) {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : void 0;
+  }
+  function pickFirst(obj, paths) {
+    for (const path of paths) {
+      if (!obj || typeof obj !== "object") continue;
+      const parts = path.split(".");
+      let cur = obj;
+      let ok = true;
+      for (const p of parts) {
+        if (!cur || typeof cur !== "object" || !(p in cur)) {
+          ok = false;
+          break;
+        }
+        cur = cur[p];
+      }
+      if (!ok) continue;
+      if (cur !== void 0 && cur !== null) return cur;
+    }
+    return void 0;
+  }
+  async function fetchPlayerNameFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    let playerId;
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        playerId = asTrimmedString(id);
+        if (playerId) break;
+      } catch {
+      }
+    }
+    if (!playerId) return void 0;
+    try {
+      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+      if (res.status < 200 || res.status >= 300) return void 0;
+      return asTrimmedString(res.data?.nick);
+    } catch {
+      return void 0;
+    }
+  }
+  async function guessPlayerNameFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString(d?.player_self_name) ?? asTrimmedString(d?.playerOneName) ?? asTrimmedString(d?.playerOneNick) ?? asTrimmedString(d?.playerOneNickname);
+        if (candidate) return candidate;
+      }
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString(d?.player_self_name) ?? asTrimmedString(d?.playerOneName) ?? asTrimmedString(d?.playerOneNick) ?? asTrimmedString(d?.playerOneNickname);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player name from DB", e);
+    }
+    return void 0;
+  }
+  async function fetchPlayerIdFromApi() {
+    const idCandidates = [
+      "https://www.geoguessr.com/api/v3/profiles",
+      "https://www.geoguessr.com/api/v4/profiles",
+      "https://www.geoguessr.com/api/v3/users/me"
+    ];
+    for (const url of idCandidates) {
+      try {
+        const res = await httpGetJson(url);
+        if (res.status < 200 || res.status >= 300) continue;
+        const id = pickFirst(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        const playerId = asTrimmedString(id);
+        if (playerId) return playerId;
+      } catch {
+      }
+    }
+    return void 0;
+  }
+  async function guessPlayerIdFromDb() {
+    try {
+      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
+      for (const d of latest) {
+        const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
+        if (candidate) return candidate;
+      }
+    } catch (e) {
+      try {
+        const all = await db.details.toArray();
+        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
+        for (const d of sorted.slice(0, 25)) {
+          const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
+          if (candidate) return candidate;
+        }
+      } catch {
+      }
+      console.warn("Failed to guess player id from DB", e);
+    }
+    return void 0;
+  }
+  async function getCurrentPlayerId() {
+    if (cachedPlayerId !== void 0) return cachedPlayerId || void 0;
+    const fromApi = await fetchPlayerIdFromApi();
+    if (fromApi) {
+      cachedPlayerId = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerIdFromDb();
+    cachedPlayerId = fromDb ?? null;
+    return fromDb;
+  }
+  async function getCurrentPlayerName() {
+    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
+    const fromApi = await fetchPlayerNameFromApi();
+    if (fromApi) {
+      cachedPlayerName = fromApi;
+      return fromApi;
+    }
+    const fromDb = await guessPlayerNameFromDb();
+    cachedPlayerName = fromDb ?? null;
+    return fromDb;
+  }
+
+  // src/serverSync.ts
+  var SYNC_META_KEY = "server_sync_v1";
+  var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
+  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
+  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
+  function compactRecord(row) {
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (value === void 0) continue;
+      if (COMPACT_DROP_KEYS.has(key)) continue;
+      out[key] = value;
+    }
+    return out;
+  }
+  function unionOrderedKeys(rows, prefer) {
+    const set = /* @__PURE__ */ new Set();
+    for (const key of prefer) set.add(key);
+    for (const row of rows) {
+      for (const key of Object.keys(row)) set.add(key);
+    }
+    const preferSet = new Set(prefer);
+    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
+    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
+  }
+  function toColumnar(rows, prefer) {
+    if (rows.length === 0) return { cols: [], rows: [] };
+    const cols = unionOrderedKeys(rows, prefer);
+    const outRows = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const arr = new Array(cols.length);
+      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
+      outRows[i] = arr;
+    }
+    return { cols, rows: outRows };
+  }
+  function getUserscriptVersion() {
+    const anyGlobal = globalThis;
+    const info = anyGlobal?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function readGmValue(key) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
+    } catch {
+    }
+    try {
+      if (typeof GM_getValue === "function") return GM_getValue(key);
+    } catch {
+    }
+    try {
+      return globalThis?.localStorage?.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  function writeGmValue(key, value) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      if (typeof GM_setValue === "function") return GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      globalThis?.localStorage?.setItem(key, value);
+    } catch {
+    }
+  }
+  function loadServerSyncSettings() {
+    const endpointUrlRaw = readGmValue(`${GM_VALUE_PREFIX}endpoint_url`);
+    const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
+    const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
+    const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
+    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
+    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
+    const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
+    return {
+      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
+      token,
+      compact,
+      includeAggregates
+    };
+  }
+  function saveServerSyncSettings(next) {
+    if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
+    if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
+    if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
+    if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
+  }
+  async function getLastServerSyncCursor() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    const cursor = meta?.value?.cursorTo;
+    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
+  }
+  async function setLastServerSyncCursor(status) {
+    await db.meta.put({
+      key: SYNC_META_KEY,
+      value: {
+        cursorFrom: status.cursorFrom,
+        cursorTo: status.cursorTo,
+        lastSyncAt: Date.now(),
+        lastStatus: status.status,
+        lastOk: status.ok,
+        lastBytesJson: status.bytesJson,
+        lastBytesGzip: status.bytesGzip,
+        lastCounts: status.counts
+      },
+      updatedAt: Date.now()
+    });
+  }
+  async function gzipJson(json) {
+    return await new Promise((resolve, reject) => {
+      gzip(strToU8(json), { level: 6 }, (err2, out) => {
+        if (err2) reject(err2);
+        else resolve(out);
+      });
+    });
+  }
+  async function buildDelta(since, opts) {
+    const cursorFrom = Math.max(0, Math.floor(since || 0));
+    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
+      db.games.where("playedAt").above(cursorFrom).toArray(),
+      db.rounds.where("playedAt").above(cursorFrom).toArray(),
+      db.details.where("fetchedAt").above(cursorFrom).toArray(),
+      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
+    ]);
+    const gameIds = gamesByTime.map((g) => g.gameId);
+    const [roundsByGame, detailsByGame] = await Promise.all([
+      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
+      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
+    ]);
+    const roundsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const r of roundsByGame) byId.set(r.id, r);
+      for (const r of roundsByTime) byId.set(r.id, r);
+      return Array.from(byId.values());
+    })();
+    const detailsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const d of detailsByGame) byId.set(d.gameId, d);
+      for (const d of detailsByTime) byId.set(d.gameId, d);
+      return Array.from(byId.values());
+    })();
+    const roundsNeedingTsGameIds = Array.from(
+      new Set(
+        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
+      )
+    );
+    if (roundsNeedingTsGameIds.length > 0) {
+      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesForBackfill) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsMerged) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+    }
+    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
+    const roundsPayloadBase = roundsMerged.map((r) => {
+      const out = { ...r };
+      delete out.playedAt;
+      return out;
+    });
+    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
+    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
+    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
+    const cursorToCandidates = [];
+    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
+    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
+    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
+    const tables = {
+      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
+      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+    };
+    const envelope = {
+      schema: "geoanalyzr-sync",
+      schemaVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion(),
+      owner: { playerId: ownerId, playerName: ownerName },
+      cursor: { from: cursorFrom, to: cursorTo },
+      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
+      counts: {
+        games: gamesByTime.length,
+        rounds: roundsMerged.length,
+        details: detailsMerged.length,
+        gameAgg: gameAggByTime.length
+      },
+      tables
+    };
+    const json = JSON.stringify(envelope);
+    const bytesGzip = await gzipJson(json);
+    return {
+      cursorFrom,
+      cursorTo,
+      counts: envelope.counts,
+      json,
+      bytesJson: json.length,
+      bytesGzip
+    };
+  }
+  function gmPostBytes(url, body, opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "POST",
+        url,
+        headers: opts.headers,
+        data: body,
+        responseType: "text",
+        timeout: opts.timeoutMs ?? 45e3,
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+          const headers = {};
+          for (const line of rawHeaders.split(/\r?\n/)) {
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            const k = line.slice(0, idx).trim().toLowerCase();
+            const v = line.slice(idx + 1).trim();
+            if (!k) continue;
+            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
+            else headers[k] = v;
+          }
+          resolve({ status, text, headers });
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function runServerSyncOnce(settings) {
+    return runServerSyncOnceWithOptions(settings, {});
+  }
+  async function runServerSyncOnceWithOptions(settings, opts = {}) {
+    const endpointUrl = (settings.endpointUrl || "").trim();
+    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+    const token = (settings.token || "").trim();
+    if (!token) throw new Error("Missing sync token.");
+    const forceFull = opts.forceFull === true;
+    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+    const effectiveCompact = false;
+    const delta = forceFull ? await (async () => {
+      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
+        db.games.toArray(),
+        db.rounds.toArray(),
+        db.details.toArray(),
+        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
+      ]);
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesAll) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsAll) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
+      const roundsNoPlayedAt = roundsAll.map((r) => {
+        const out = { ...r };
+        delete out.playedAt;
+        return out;
+      });
+      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
+      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
+      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
+      const tables = {
+        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
+        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+      };
+      const cursorToCandidates = [];
+      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
+      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
+      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
+      const envelope = {
+        schema: "geoanalyzr-sync",
+        schemaVersion: 1,
+        createdAt: Date.now(),
+        appVersion: getUserscriptVersion(),
+        owner: { playerId: ownerId, playerName: ownerName },
+        cursor: { from: 0, to: cursorTo },
+        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
+        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+        tables
+      };
+      const json = JSON.stringify(envelope);
+      const bytesGzip = await gzipJson(json);
+      return {
+        cursorFrom: 0,
+        cursorTo,
+        counts: envelope.counts,
+        json,
+        bytesJson: json.length,
+        bytesGzip
+      };
+    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
+    const headers = {
+      "Content-Type": "application/json",
+      "Content-Encoding": "gzip",
+      Authorization: `Bearer ${token}`,
+      "X-GA-Cursor-From": String(delta.cursorFrom),
+      "X-GA-Cursor-To": String(delta.cursorTo),
+      "X-GA-Schema-Version": "1",
+      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
+    };
+    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
+    const ok = res.status >= 200 && res.status < 300;
+    const status = {
+      ok,
+      status: res.status,
+      responseText: res.text,
+      cursorFrom: delta.cursorFrom,
+      cursorTo: delta.cursorTo,
+      counts: delta.counts,
+      bytesJson: delta.bytesJson,
+      bytesGzip: delta.bytesGzip.length
+    };
+    await setLastServerSyncCursor(status);
+    return status;
+  }
+  async function getLastServerSyncMeta() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    return meta?.value ?? null;
+  }
+
   // src/uiOverlay.ts
   function el(tag) {
     return document.createElement(tag);
@@ -6970,6 +8735,23 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
+    const isDevBuild = () => {
+      const info = globalThis?.GM_info;
+      const ns = String(info?.script?.namespace || "");
+      const name = String(info?.script?.name || "");
+      return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
+    };
+    const formatBytes = (n) => {
+      if (!Number.isFinite(n) || n <= 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      let v = n;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    };
     const mount = () => {
       cssOnce();
       if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
@@ -7010,6 +8792,7 @@ ${shapes}`.trim();
       return b;
     };
     const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
+    const syncBtn = isDevBuild() ? mkBtn2("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
     const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
     const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
     const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
@@ -7020,6 +8803,7 @@ ${shapes}`.trim();
     panel.appendChild(header);
     panel.appendChild(status);
     panel.appendChild(updateBtn);
+    if (syncBtn) panel.appendChild(syncBtn);
     panel.appendChild(analysisBtn);
     panel.appendChild(discordBtn);
     panel.appendChild(exportBtn);
@@ -7040,6 +8824,85 @@ ${shapes}`.trim();
     let openAnalysisHandler = null;
     let discordHandler = null;
     updateBtn.addEventListener("click", () => void updateHandler?.());
+    if (syncBtn) {
+      syncBtn.addEventListener("click", async (ev) => {
+        syncBtn.disabled = true;
+        const forceFull = !!(ev && ev.shiftKey);
+        status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+        try {
+          let settings = loadServerSyncSettings();
+          if (!settings.token) {
+            const gm = getGmXmlhttpRequest();
+            if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+            status.textContent = "Linking device...";
+            const linkOrigin = "https://geoanalyzr.lmbt.app";
+            const pairStartUrl = `${linkOrigin}/pair/start`;
+            const pair = await new Promise((resolve, reject) => {
+              gm({
+                method: "GET",
+                url: pairStartUrl,
+                headers: { Accept: "application/json" },
+                onload: (res2) => {
+                  const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+                  try {
+                    const parsed = JSON.parse(text);
+                    if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                      return reject(new Error("Pairing failed (invalid response)."));
+                    }
+                    resolve({ linkUrl: String(parsed.linkUrl) });
+                  } catch {
+                    reject(new Error("Pairing failed (invalid JSON)."));
+                  }
+                },
+                onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
+                ontimeout: () => reject(new Error("Pairing timeout"))
+              });
+            });
+            const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+            if (!linkWin) {
+              status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+              return;
+            }
+            const token = await new Promise((resolve, reject) => {
+              const timeout = window.setTimeout(() => {
+                cleanup();
+                reject(new Error("Link timeout"));
+              }, 2 * 60 * 1e3);
+              const onMsg = (ev2) => {
+                if (ev2.origin !== linkOrigin) return;
+                const d = ev2.data;
+                if (!d || d.type !== "geoanalyzr_sync_token") return;
+                const t = typeof d.token === "string" ? d.token.trim() : "";
+                const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+                if (!t) return;
+                cleanup();
+                if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+                resolve(t);
+              };
+              const cleanup = () => {
+                window.clearTimeout(timeout);
+                window.removeEventListener("message", onMsg);
+                try {
+                  linkWin.close();
+                } catch {
+                }
+              };
+              window.addEventListener("message", onMsg);
+            });
+            saveServerSyncSettings({ token });
+            settings = loadServerSyncSettings();
+          }
+          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+          const modeLabel = forceFull ? "Synced full" : "Synced";
+          status.textContent = res.ok ? `${modeLabel} \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+        } catch (e) {
+          status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        } finally {
+          syncBtn.disabled = false;
+        }
+      });
+    }
     exportBtn.addEventListener("click", () => void exportHandler?.());
     resetBtn.addEventListener("click", () => void resetHandler?.());
     analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
@@ -7071,237 +8934,6 @@ ${shapes}`.trim();
         discordHandler = fn;
       }
     };
-  }
-
-  // node_modules/dexie/import-wrapper.mjs
-  var import_dexie = __toESM(require_dexie(), 1);
-  var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
-  var Dexie = globalThis[DexieSymbol] || (globalThis[DexieSymbol] = import_dexie.default);
-  if (import_dexie.default.semVer !== Dexie.semVer) {
-    throw new Error(`Two different versions of Dexie loaded in the same app: ${import_dexie.default.semVer} and ${Dexie.semVer}`);
-  }
-  var {
-    liveQuery,
-    mergeRanges,
-    rangesOverlap,
-    RangeSet,
-    cmp,
-    Entity,
-    PropModification,
-    replacePrefix,
-    add,
-    remove,
-    DexieYProvider
-  } = Dexie;
-  var import_wrapper_default = Dexie;
-
-  // src/db.ts
-  var GGDB = class extends import_wrapper_default {
-    games;
-    rounds;
-    details;
-    gameAgg;
-    meta;
-    constructor() {
-      super("gg_analyzer_db");
-      this.version(1).stores({
-        games: "gameId, playedAt, type, mode",
-        rounds: "id, gameId, roundNumber",
-        meta: "key, updatedAt"
-      });
-      this.version(2).stores({
-        games: "gameId, playedAt, type, mode",
-        rounds: "id, gameId, roundNumber",
-        details: "gameId, status, fetchedAt",
-        meta: "key, updatedAt"
-      });
-      this.version(3).stores({
-        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
-        rounds: "id, gameId, roundNumber, [gameId+roundNumber]",
-        details: "gameId, status, fetchedAt, modeFamily, isTeamDuels",
-        meta: "key, updatedAt"
-      });
-      this.version(4).stores({
-        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
-        rounds: [
-          "id",
-          "gameId",
-          "roundNumber",
-          "[gameId+roundNumber]",
-          "playedAt",
-          "trueCountry",
-          "movementType",
-          "player_self_score"
-        ].join(", "),
-        details: [
-          "gameId",
-          "status",
-          "fetchedAt",
-          "modeFamily",
-          "isTeamDuels",
-          "player_self_id",
-          "player_mate_id",
-          "player_opponent_country"
-        ].join(", "),
-        meta: "key, updatedAt"
-      });
-      this.version(5).stores({
-        games: "gameId, playedAt, type, mode, gameMode, modeFamily, isTeamDuels",
-        rounds: [
-          "id",
-          "gameId",
-          "roundNumber",
-          "[gameId+roundNumber]",
-          "playedAt",
-          "trueCountry",
-          "movementType",
-          "player_self_score"
-        ].join(", "),
-        details: [
-          "gameId",
-          "status",
-          "fetchedAt",
-          "modeFamily",
-          "isTeamDuels",
-          "player_self_id",
-          "player_mate_id",
-          "player_opponent_country"
-        ].join(", "),
-        gameAgg: "gameId, computedAt, aggVersion",
-        meta: "key, updatedAt"
-      });
-    }
-  };
-  var db = new GGDB();
-
-  // src/gm.ts
-  function getGlobalGmXmlhttpRequest() {
-    const g = globalThis;
-    return g?.GM_xmlhttpRequest ?? g?.GM?.xmlHttpRequest;
-  }
-  function getSandboxGmXmlhttpRequest() {
-    try {
-      return typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : void 0;
-    } catch {
-      return void 0;
-    }
-  }
-  function getGmXmlhttpRequest() {
-    const fromGlobal = getGlobalGmXmlhttpRequest();
-    if (typeof fromGlobal === "function") return fromGlobal;
-    const fromSandbox = getSandboxGmXmlhttpRequest();
-    if (typeof fromSandbox === "function") return fromSandbox;
-    return void 0;
-  }
-  function hasGmXmlhttpRequest() {
-    return typeof getGmXmlhttpRequest() === "function";
-  }
-
-  // src/http.ts
-  function parseRawHeaders(raw) {
-    const out = {};
-    if (typeof raw !== "string" || !raw.trim()) return out;
-    for (const line of raw.split(/\r?\n/)) {
-      const idx = line.indexOf(":");
-      if (idx <= 0) continue;
-      const k = line.slice(0, idx).trim().toLowerCase();
-      const v = line.slice(idx + 1).trim();
-      if (!k) continue;
-      if (out[k]) out[k] = `${out[k]}, ${v}`;
-      else out[k] = v;
-    }
-    return out;
-  }
-  function gmRequest(url, opts) {
-    return new Promise((resolve, reject) => {
-      const gm = getGmXmlhttpRequest();
-      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
-      const headers = {
-        Accept: "application/json",
-        ...opts?.headers || {}
-      };
-      gm({
-        method: "GET",
-        url,
-        headers,
-        onload: (res) => {
-          const text = typeof res?.responseText === "string" ? res.responseText : "";
-          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
-          resolve({
-            status: Number(res?.status) || 0,
-            text,
-            headers: parseRawHeaders(rawHeaders),
-            json: () => JSON.parse(text)
-          });
-        },
-        onerror: (err2) => {
-          reject(err2);
-        },
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function httpGetJson(url, opts) {
-    if (opts?.forceGm && hasGmXmlhttpRequest()) {
-      const res2 = await gmRequest(url, { headers: opts?.headers });
-      try {
-        return { status: res2.status, data: res2.json(), headers: res2.headers, text: res2.text };
-      } catch {
-        return { status: res2.status, data: null, headers: res2.headers, text: res2.text };
-      }
-    }
-    const res = await fetch(url, { credentials: "include", headers: opts?.headers });
-    const headers = {};
-    try {
-      res.headers.forEach((v, k) => {
-        headers[String(k).toLowerCase()] = String(v);
-      });
-    } catch {
-    }
-    const text = await res.text();
-    try {
-      return { status: res.status, data: JSON.parse(text), headers, text };
-    } catch {
-      return { status: res.status, data: null, headers, text };
-    }
-  }
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-  function retryDelayMs(attempt, baseMs, maxMs) {
-    const exp = Math.min(maxMs, Math.floor(baseMs * Math.pow(2, attempt)));
-    const jitter = Math.floor(Math.random() * 250);
-    return Math.min(maxMs, exp + jitter);
-  }
-  function parseRetryAfterMs(h) {
-    const ra = h["retry-after"];
-    if (!ra) return null;
-    const n = Number(ra);
-    if (Number.isFinite(n) && n >= 0) return Math.floor(n * 1e3);
-    const t = Date.parse(ra);
-    if (Number.isFinite(t)) {
-      const ms = t - Date.now();
-      return ms > 0 ? ms : 0;
-    }
-    return null;
-  }
-  async function httpGetJsonWithRetry(url, opts) {
-    const retries = typeof opts?.retries === "number" && Number.isFinite(opts.retries) ? Math.max(0, Math.floor(opts.retries)) : 4;
-    const baseDelayMs = typeof opts?.baseDelayMs === "number" && Number.isFinite(opts.baseDelayMs) ? Math.max(50, Math.floor(opts.baseDelayMs)) : 400;
-    const maxDelayMs = typeof opts?.maxDelayMs === "number" && Number.isFinite(opts.maxDelayMs) ? Math.max(baseDelayMs, Math.floor(opts.maxDelayMs)) : 8e3;
-    let last = null;
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      const res = await httpGetJson(url, { forceGm: opts?.forceGm, headers: opts?.headers });
-      last = res;
-      const status = res.status;
-      const shouldRetry = status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 504 || status === 0;
-      if (!shouldRetry) return res;
-      if (attempt >= retries) return res;
-      const ra = status === 429 ? parseRetryAfterMs(res.headers) : null;
-      const waitMs = ra !== null ? Math.min(maxDelayMs, Math.max(0, ra)) : retryDelayMs(attempt, baseDelayMs, maxDelayMs);
-      await sleep(waitMs);
-    }
-    return last ?? { status: 0, data: null, headers: {} };
   }
 
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
@@ -8285,7 +9917,7 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst(obj, paths) {
+  function pickFirst2(obj, paths) {
     for (const p of paths) {
       const v = getByPath(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -8300,7 +9932,7 @@ ${shapes}`.trim();
   }
   function extractGuessLatLng(guess) {
     const lat = asNum(
-      pickFirst(guess, [
+      pickFirst2(guess, [
         "lat",
         "latitude",
         "location.lat",
@@ -8309,7 +9941,7 @@ ${shapes}`.trim();
       ])
     );
     const lng = asNum(
-      pickFirst(guess, [
+      pickFirst2(guess, [
         "lng",
         "lon",
         "longitude",
@@ -8324,7 +9956,7 @@ ${shapes}`.trim();
   }
   function extractGuessCountryCode(guess) {
     return normalizeIso22(
-      pickFirst(guess, [
+      pickFirst2(guess, [
         "countryCode",
         "country_code",
         "country"
@@ -8379,7 +10011,7 @@ ${shapes}`.trim();
         const res = await fetch(url, { credentials: "include" });
         if (!res.ok) continue;
         const data = await res.json();
-        const id = pickFirst(data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
+        const id = pickFirst2(data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
         if (typeof id === "string" && id.trim()) {
           cachedOwnPlayerId = id.trim();
           return cachedOwnPlayerId;
@@ -8570,9 +10202,9 @@ ${shapes}`.trim();
     const winningTeamId = String(gameData?.result?.winningTeamId || "");
     const damageMultiplierRounds = rounds.filter((r) => (asNum(r?.damageMultiplier) || 1) > 1).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
     const healingRounds = rounds.filter((r) => Boolean(r?.isHealingRound)).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
-    const mapName = pickFirst(gameData, ["options.map.name"]);
-    const mapSlug = pickFirst(gameData, ["options.map.slug"]);
-    const isRated = asBool(pickFirst(gameData, ["options.isRated"]));
+    const mapName = pickFirst2(gameData, ["options.map.name"]);
+    const mapSlug = pickFirst2(gameData, ["options.map.slug"]);
+    const isRated = asBool(pickFirst2(gameData, ["options.isRated"]));
     const missingFields = [];
     if (typeof mapSlug !== "string" || !mapSlug.trim()) missingFields.push("mapSlug");
     if (typeof mapName !== "string" || !mapName.trim()) missingFields.push("mapName");
@@ -8991,7 +10623,7 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst2(obj, paths) {
+  function pickFirst3(obj, paths) {
     for (const p of paths) {
       const v = getByPath2(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -9026,7 +10658,7 @@ ${shapes}`.trim();
   function classifyModeFamilyFromEvent(ev, gameMode) {
     const byMode = classifyModeFamily(gameMode);
     if (byMode !== "other") return byMode;
-    const hintRaw = pickFirst2(ev, [
+    const hintRaw = pickFirst3(ev, [
       "type",
       "__typename",
       "payload.type",
@@ -9065,19 +10697,19 @@ ${shapes}`.trim();
     return { source: "none" };
   }
   function extractEventTimeMs(ev, entry) {
-    const timeCandidate = pickFirst2(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
+    const timeCandidate = pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
     const parsed = typeof timeCandidate === "string" ? Date.parse(timeCandidate) : NaN;
     return Number.isFinite(parsed) ? parsed : Date.now();
   }
   function extractGameMode(ev, entry) {
     return normalizeGameMode(
-      pickFirst2(ev, [
+      pickFirst3(ev, [
         "payload.gameMode",
         "payload.competitiveGameMode",
         "gameMode",
         "competitiveGameMode",
         "mode"
-      ]) ?? pickFirst2(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
+      ]) ?? pickFirst3(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
     );
   }
   async function fetchFeedPage(paginationToken) {
@@ -9585,6 +11217,17 @@ ${shapes}`.trim();
   }
 
   // src/engine/dimensions.ts
+  function normalizeMovementType3(raw) {
+    const v = typeof raw === "string" ? raw.trim() : "";
+    if (!v) return null;
+    const k = v.toLowerCase();
+    if (k === "unknown") return "unknown";
+    if (k === "mixed") return "mixed";
+    if (k.includes("nmpz")) return "nmpz";
+    if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
+    if (k.includes("moving")) return "moving";
+    return v;
+  }
   function getRowTs(row) {
     const coerce = (v) => {
       if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -9652,8 +11295,7 @@ ${shapes}`.trim();
     return null;
   }
   function movementTypeKey(r) {
-    const v = getMovementType(r);
-    return typeof v === "string" && v.length ? v : null;
+    return normalizeMovementType3(getMovementType(r));
   }
   function isHitKey(r) {
     const truth = getTrueCountry(r);
@@ -9771,25 +11413,27 @@ ${shapes}`.trim();
     if (typeof ts !== "number") return null;
     return String(new Date(ts).getHours()).padStart(2, "0");
   }
-  function asTrimmedString(v) {
+  function asTrimmedString2(v) {
     const s = typeof v === "string" ? v.trim() : "";
     return s ? s : void 0;
   }
   function gameModeKeyAny(row) {
-    const v = asTrimmedString(row?.gameModeSimple ?? row?.gameMode ?? row?.mode ?? row?.game_mode);
+    const v = asTrimmedString2(row?.gameModeSimple ?? row?.gameMode ?? row?.mode ?? row?.game_mode);
     return v ? v : null;
   }
   function modeFamilyKeyAny(row) {
-    const v = asTrimmedString(row?.modeFamily ?? row?.mode_family);
-    if (!v) return null;
+    const raw = asTrimmedString2(row?.modeFamily ?? row?.mode_family);
+    if (!raw) return null;
+    const v = raw.toLowerCase();
     if (v === "duels") return "Duel";
     if (v === "teamduels") return "Team Duel";
     if (v === "standard") return "Standard";
     if (v === "streak") return "Streak";
-    return v;
+    if (v === "other") return "Other";
+    return raw;
   }
   function resultKeyAny(row) {
-    const r = asTrimmedString(row?.result);
+    const r = asTrimmedString2(row?.result);
     if (r) return r;
     const v = typeof row?.player_self_victory === "boolean" ? row.player_self_victory : typeof row?.teamOneVictory === "boolean" ? row.teamOneVictory : typeof row?.playerOneVictory === "boolean" ? row.playerOneVictory : void 0;
     if (typeof v === "boolean") return v ? "Win" : "Loss";
@@ -9801,17 +11445,17 @@ ${shapes}`.trim();
     return null;
   }
   function mapSlugKeyAny(row) {
-    const direct = asTrimmedString(row?.mapSlug ?? row?.map_slug);
+    const direct = asTrimmedString2(row?.mapSlug ?? row?.map_slug);
     if (direct) return direct;
     const raw = row?.raw;
-    const v = asTrimmedString(raw?.options?.map?.slug ?? raw?.mapSlug ?? raw?.map?.slug);
+    const v = asTrimmedString2(raw?.options?.map?.slug ?? raw?.mapSlug ?? raw?.map?.slug);
     return v ? v : null;
   }
   function mapNameKeyAny(row) {
-    const direct = asTrimmedString(row?.mapName ?? row?.map_name);
+    const direct = asTrimmedString2(row?.mapName ?? row?.map_name);
     if (direct) return direct;
     const raw = row?.raw;
-    const v = asTrimmedString(raw?.options?.map?.name ?? raw?.mapName ?? raw?.map?.name);
+    const v = asTrimmedString2(raw?.options?.map?.name ?? raw?.mapName ?? raw?.map?.name);
     return v ? v : null;
   }
   function isRatedKeyAny(row) {
@@ -9828,17 +11472,12 @@ ${shapes}`.trim();
     return "Unknown";
   }
   function teammateKeyAny(row) {
-    const v = asTrimmedString(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
+    const v = asTrimmedString2(row?.teammateName ?? row?.teammate_name ?? row?.player_mate_name);
     return v ? v : null;
   }
   function movementTypeKeyAny(row) {
-    const v = asTrimmedString(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
-    if (!v) return null;
-    const k = v.toLowerCase();
-    if (k.includes("nmpz")) return "nmpz";
-    if (k.includes("no move") || k.includes("no_move") || k.includes("nomove") || k.includes("no moving")) return "no_move";
-    if (k.includes("moving")) return "moving";
-    return v;
+    const v = asTrimmedString2(row?.movementType ?? row?.movement_type ?? row?.gameModeSimple ?? row?.gameMode);
+    return normalizeMovementType3(v);
   }
   function guessCountryKey(r) {
     const guess = getGuessCountrySelf(r);
@@ -9912,11 +11551,7 @@ ${shapes}`.trim();
         return v ? v : null;
       },
       mode_family: (r) => {
-        const v = typeof r?.modeFamily === "string" ? String(r.modeFamily).trim().toLowerCase() : "";
-        if (!v) return null;
-        if (v === "duels") return "Duel";
-        if (v === "teamduels") return "Team Duel";
-        return v;
+        return modeFamilyKeyAny(r);
       },
       team_closer_winner: (r) => winnerLabelForCompare(r, getDistanceKm(r), getMateDistanceKm(r), "min"),
       team_higher_score_winner: (r) => winnerLabelForCompare(r, getSelfScore(r), getMateScore(r), "max"),
@@ -10109,7 +11744,7 @@ ${shapes}`.trim();
     if (name === "DataError" && message.toLowerCase().includes("idbkeyrange")) return true;
     return message.includes("IDBKeyRange") && message.toLowerCase().includes("valid key");
   }
-  function normalizeMovementType3(raw) {
+  function normalizeMovementType4(raw) {
     if (typeof raw !== "string") return "unknown";
     const s = raw.trim().toLowerCase();
     if (!s) return "unknown";
@@ -10118,11 +11753,11 @@ ${shapes}`.trim();
     if (s.includes("moving")) return "moving";
     return "unknown";
   }
-  function asTrimmedString2(v) {
+  function asTrimmedString3(v) {
     const s = typeof v === "string" ? v.trim() : "";
     return s ? s : void 0;
   }
-  function pickFirst3(obj, keys2) {
+  function pickFirst4(obj, keys2) {
     for (const k of keys2) {
       if (!obj) continue;
       const v = obj[k];
@@ -10273,11 +11908,11 @@ ${shapes}`.trim();
     return typeof ts === "number" && Number.isFinite(ts) ? ts : null;
   }
   function extractGameRatings(g) {
-    const mfRaw = asTrimmedString2(g?.modeFamily ?? g?.mode_family) ?? "";
+    const mfRaw = asTrimmedString3(g?.modeFamily ?? g?.mode_family) ?? "";
     const mf = mfRaw.toLowerCase();
     const isTeam = g?.isTeamDuels === true || mf === "teamduels" || mf.includes("team") && mf.includes("duel");
     const pickNum = (keys2) => {
-      const v = pickFirst3(g, keys2);
+      const v = pickFirst4(g, keys2);
       return typeof v === "number" && Number.isFinite(v) ? v : void 0;
     };
     if (isTeam) {
@@ -10510,15 +12145,15 @@ ${shapes}`.trim();
             if (!d) continue;
             let changed = false;
             if (typeof r.player_mate_name !== "string" || !String(r.player_mate_name).trim()) {
-              const n = asTrimmedString2(d?.player_mate_name);
+              const n = asTrimmedString3(d?.player_mate_name);
               if (n) {
                 r.player_mate_name = n;
                 changed = true;
               }
             }
             if (typeof r.movementType !== "string" || !String(r.movementType).trim() || String(r.movementType).toLowerCase() === "unknown") {
-              const raw = asTrimmedString2(d?.gameModeSimple) ?? asTrimmedString2(d?.gameMode);
-              const norm = normalizeMovementType3(raw);
+              const raw = asTrimmedString3(d?.gameModeSimple) ?? asTrimmedString3(d?.gameMode);
+              const norm = normalizeMovementType4(raw);
               if (norm !== "unknown") {
                 r.movementType = norm;
                 changed = true;
@@ -10580,22 +12215,22 @@ ${shapes}`.trim();
         }
       }
       if (typeof out.modeFamily !== "string" || !out.modeFamily) {
-        const mf = asTrimmedString2(out.modeFamily);
+        const mf = asTrimmedString3(out.modeFamily);
         if (mf) out.modeFamily = mf;
       }
       if (typeof out.gameMode !== "string" || !out.gameMode) {
-        const gm = asTrimmedString2(out.gameMode);
+        const gm = asTrimmedString3(out.gameMode);
         if (gm) out.gameMode = gm;
       }
       if (typeof out.movementType !== "string" || !out.movementType) {
-        out.movementType = normalizeMovementType3(asTrimmedString2(out.gameMode));
+        out.movementType = normalizeMovementType4(asTrimmedString3(out.gameMode));
       }
       if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
         if (!hasMate) {
-          const mateNameRaw = pickFirst3(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
-          let mateName = asTrimmedString2(mateNameRaw);
-          const selfName = asTrimmedString2(pickFirst3(out, ["player_self_name", "playerOneName"]));
+          const mateNameRaw = pickFirst4(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
+          let mateName = asTrimmedString3(mateNameRaw);
+          const selfName = asTrimmedString3(pickFirst4(out, ["player_self_name", "playerOneName"]));
           if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
@@ -10845,7 +12480,7 @@ ${shapes}`.trim();
         }
         agg.roundsCount++;
         const mvRaw = typeof r?.movementType === "string" ? r.movementType : typeof r?.movement_type === "string" ? r.movement_type : "";
-        const mv = normalizeMovementType3(mvRaw);
+        const mv = normalizeMovementType4(mvRaw);
         const curMv = agg.movementType;
         if (mv && mv !== "unknown") {
           if (!curMv || curMv === "unknown") agg.movementType = mv;
@@ -10919,8 +12554,8 @@ ${shapes}`.trim();
         if (fromAgg && fromAgg !== "unknown") out.movementType = fromAgg;
       }
       if (typeof out.movementType !== "string" || !out.movementType || String(out.movementType).toLowerCase() === "unknown") {
-        const raw = asTrimmedString2(out.gameModeSimple) ?? asTrimmedString2(out.gameMode) ?? asTrimmedString2(out.mode) ?? asTrimmedString2(out.gameType);
-        const norm = normalizeMovementType3(raw);
+        const raw = asTrimmedString3(out.gameModeSimple) ?? asTrimmedString3(out.gameMode) ?? asTrimmedString3(out.mode) ?? asTrimmedString3(out.gameType);
+        const norm = normalizeMovementType4(raw);
         if (norm !== "unknown") out.movementType = norm;
       }
       const scoreSum = agg?.scoreSum;
@@ -10948,22 +12583,22 @@ ${shapes}`.trim();
       if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
         if (!hasMate) {
-          const selfId = asTrimmedString2(out.player_self_id ?? out.player_self_playerId);
-          const selfName = asTrimmedString2(out.player_self_name) ?? asTrimmedString2(out.playerOneName);
-          const t1id = asTrimmedString2(out.teamOnePlayerOneId);
-          const t2id = asTrimmedString2(out.teamOnePlayerTwoId);
-          const t1name = asTrimmedString2(out.teamOnePlayerOneName);
-          const t2name = asTrimmedString2(out.teamOnePlayerTwoName);
-          const u1id = asTrimmedString2(out.teamTwoPlayerOneId);
-          const u2id = asTrimmedString2(out.teamTwoPlayerTwoId);
-          const u1name = asTrimmedString2(out.teamTwoPlayerOneName);
-          const u2name = asTrimmedString2(out.teamTwoPlayerTwoName);
+          const selfId = asTrimmedString3(out.player_self_id ?? out.player_self_playerId);
+          const selfName = asTrimmedString3(out.player_self_name) ?? asTrimmedString3(out.playerOneName);
+          const t1id = asTrimmedString3(out.teamOnePlayerOneId);
+          const t2id = asTrimmedString3(out.teamOnePlayerTwoId);
+          const t1name = asTrimmedString3(out.teamOnePlayerOneName);
+          const t2name = asTrimmedString3(out.teamOnePlayerTwoName);
+          const u1id = asTrimmedString3(out.teamTwoPlayerOneId);
+          const u2id = asTrimmedString3(out.teamTwoPlayerTwoId);
+          const u1name = asTrimmedString3(out.teamTwoPlayerOneName);
+          const u2name = asTrimmedString3(out.teamTwoPlayerTwoName);
           let mateName;
           if (selfId && selfId === t1id) mateName = t2name;
           else if (selfId && selfId === t2id) mateName = t1name;
           else if (selfId && selfId === u1id) mateName = u2name;
           else if (selfId && selfId === u2id) mateName = u1name;
-          else mateName = asTrimmedString2(pickFirst3(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+          else mateName = asTrimmedString3(pickFirst4(out, ["player_mate_name", "teamOnePlayerTwoName"]));
           if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
@@ -31587,7 +33222,7 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst4(obj, paths) {
+  function pickFirst5(obj, paths) {
     for (const p of paths) {
       const v = getByPath3(obj, p);
       if (v !== void 0 && v !== null) return v;
@@ -31706,10 +33341,10 @@ ${shapes}`.trim();
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst4(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            mapName: pickFirst4(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
-            points: pickFirst4(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst4(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst5(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            mapName: pickFirst5(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
+            points: pickFirst5(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst5(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -31718,9 +33353,9 @@ ${shapes}`.trim();
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst4(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            points: pickFirst4(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst4(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst5(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            points: pickFirst5(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst5(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -33958,11 +35593,7 @@ ${shapes}`.trim();
               {
                 key: "gameId",
                 label: "Game",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 8
-                }
+                sortable: true
               },
               {
                 key: "guess_maps",
@@ -34087,11 +35718,7 @@ ${shapes}`.trim();
               {
                 key: "gameId",
                 label: "Game",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 8
-                }
+                sortable: true
               }
             ]
           },
@@ -34165,11 +35792,7 @@ ${shapes}`.trim();
               {
                 key: "gameId",
                 label: "Game",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 8
-                }
+                sortable: true
               }
             ]
           },
@@ -38407,7 +40030,7 @@ ${shapes}`.trim();
       top:6%;
       left:50%;
       transform:translateX(-50%);
-      width:min(1100px, 92vw);
+      width:min(1260px, 96vw);
       max-height:88vh;
       overflow:auto;
       background:var(--ga-surface);
@@ -38467,6 +40090,10 @@ ${shapes}`.trim();
       color: var(--ga-link);
       text-decoration: underline;
       text-underline-offset: 2px;
+    }
+    .ga-dd-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-wrap: anywhere;
     }
     .ga-dd-pos { color: var(--ga-good); font-variant-numeric: tabular-nums; }
     .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }
@@ -40819,10 +42446,10 @@ ${shapes}`.trim();
       const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
       const cardsBox = doc.createElement("div");
       cardsBox.className = "ga-le-box";
-      const ch = doc.createElement("div");
-      ch.className = "ga-le-box-head";
-      ch.textContent = "Cards";
-      cardsBox.appendChild(ch);
+      const ch3 = doc.createElement("div");
+      ch3.className = "ga-le-box-head";
+      ch3.textContent = "Cards";
+      cardsBox.appendChild(ch3);
       const patchCard = (cardIdx, partial) => {
         const next = cloneJson2(draft);
         const sec = next.dashboard.sections[active.idx];
@@ -41647,6 +43274,162 @@ ${describeError(err2)}` : message;
     }
   };
 
+  // src/portableDump.ts
+  var DB_NAME = MAIN_DB_NAME;
+  var DB_SCHEMA_VERSION = 5;
+  var COMPACT_DROP_KEYS2 = /* @__PURE__ */ new Set([
+    "raw",
+    "trueLocationKey",
+    "trueLocationRepeat",
+    "trueState",
+    "trueDistrict",
+    "trueUsState",
+    "trueCaProvince",
+    "trueIdProvince",
+    "trueIdKabupaten",
+    "truePhProvince",
+    "trueVnProvince"
+  ]);
+  function compactRecord2(row) {
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (value === void 0) continue;
+      if (COMPACT_DROP_KEYS2.has(key)) continue;
+      if (key.endsWith("_guessCountry")) continue;
+      out[key] = value;
+    }
+    return out;
+  }
+  function getUserscriptVersion2() {
+    const anyGlobal = globalThis;
+    const info = anyGlobal?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function chunkArray(arr, chunkSize) {
+    if (arr.length === 0) return [];
+    const size = Math.max(1, chunkSize | 0);
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+    return chunks;
+  }
+  async function buildPortableDump(opts) {
+    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const [games, rounds, details, gameAgg, meta] = await Promise.all([
+      db.games.toArray(),
+      db.rounds.toArray(),
+      db.details.toArray(),
+      opts.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([]),
+      opts.includeMeta ? db.meta.toArray() : Promise.resolve([])
+    ]);
+    const dump = {
+      format: "geoanalyzr-portable",
+      formatVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion2(),
+      owner: { playerId: ownerId, playerName: ownerName },
+      dbName: DB_NAME,
+      dbSchemaVersion: DB_SCHEMA_VERSION,
+      options: {
+        compact: opts.compact,
+        includeAggregates: opts.includeAggregates,
+        includeMeta: opts.includeMeta
+      },
+      data: {
+        games: opts.compact ? games.map(compactRecord2) : games,
+        rounds: opts.compact ? rounds.map(compactRecord2) : rounds,
+        details: opts.compact ? details.map(compactRecord2) : details,
+        ...opts.includeAggregates ? { gameAgg: opts.compact ? gameAgg.map(compactRecord2) : gameAgg } : {},
+        ...opts.includeMeta ? { meta: opts.compact ? meta.map(compactRecord2) : meta } : {}
+      }
+    };
+    return dump;
+  }
+  async function serializePortableDump(dump, opts) {
+    const json = JSON.stringify(dump);
+    if (!opts.gzip) {
+      return { bytes: strToU8(json), mime: "application/json", ext: "json" };
+    }
+    const bytes = await new Promise((resolve, reject) => {
+      gzip(strToU8(json), { level: 6 }, (err2, out) => {
+        if (err2) reject(err2);
+        else resolve(out);
+      });
+    });
+    return { bytes, mime: "application/gzip", ext: "json.gz" };
+  }
+  async function parsePortableDumpBytes(bytes) {
+    const isGzip = bytes.length >= 2 && bytes[0] === 31 && bytes[1] === 139;
+    const raw = isGzip ? await new Promise((resolve, reject) => {
+      gunzip(bytes, (err2, out) => {
+        if (err2) reject(err2);
+        else resolve(out);
+      });
+    }) : bytes;
+    const text = strFromU8(raw);
+    const parsed = JSON.parse(text);
+    if (!parsed || parsed.format !== "geoanalyzr-portable" || parsed.formatVersion !== 1) {
+      throw new Error("Unsupported dump file (expected GeoAnalyzr portable dump v1).");
+    }
+    return parsed;
+  }
+  async function replaceDatabaseFromPortableDump(dump) {
+    if (dump.format !== "geoanalyzr-portable" || dump.formatVersion !== 1) {
+      throw new Error("Unsupported dump file.");
+    }
+    try {
+      db.close();
+    } catch {
+    }
+    await db.delete();
+    await db.open();
+    const games = dump.data.games ?? [];
+    const rounds = dump.data.rounds ?? [];
+    const details = dump.data.details ?? [];
+    const gameAgg = dump.data.gameAgg ?? [];
+    const meta = dump.data.meta ?? [];
+    const fetchRanKey = "fetch_data_ran_v1";
+    const hasFetchRan = meta.some((m) => m?.key === fetchRanKey);
+    const metaWithFetchRan = hasFetchRan ? meta : meta.concat([{ key: fetchRanKey, value: { doneAt: Date.now(), inferred: true }, updatedAt: Date.now() }]);
+    await importPortableDumpIntoDb(db, dump, { clearFirst: false, forceMeta: metaWithFetchRan });
+  }
+  async function importPortableDumpIntoDb(targetDb, dump, opts) {
+    const games = dump.data.games ?? [];
+    const rounds = dump.data.rounds ?? [];
+    const details = dump.data.details ?? [];
+    const gameAgg = dump.data.gameAgg ?? [];
+    const meta = opts.forceMeta ?? (dump.data.meta ?? []);
+    await targetDb.transaction("rw", targetDb.games, targetDb.rounds, targetDb.details, targetDb.gameAgg, targetDb.meta, async () => {
+      if (opts.clearFirst) {
+        await Promise.all([
+          targetDb.games.clear(),
+          targetDb.rounds.clear(),
+          targetDb.details.clear(),
+          targetDb.gameAgg.clear(),
+          targetDb.meta.clear()
+        ]);
+      }
+      for (const chunk of chunkArray(games, 2e3)) await targetDb.games.bulkPut(chunk);
+      for (const chunk of chunkArray(rounds, 2e3)) await targetDb.rounds.bulkPut(chunk);
+      for (const chunk of chunkArray(details, 2e3)) await targetDb.details.bulkPut(chunk);
+      for (const chunk of chunkArray(gameAgg, 2e3)) await targetDb.gameAgg.bulkPut(chunk);
+      for (const chunk of chunkArray(meta, 2e3)) await targetDb.meta.bulkPut(chunk);
+    });
+  }
+  async function importPortableDumpIntoNewDb(name, dump) {
+    const dbName = (typeof name === "string" ? name.trim() : "") || `geoanalyzr_view_${Date.now()}`;
+    const target = new GGDB(dbName);
+    await target.open();
+    try {
+      await importPortableDumpIntoDb(target, dump, { clearFirst: true });
+    } finally {
+      try {
+        target.close();
+      } catch {
+      }
+    }
+  }
+
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
@@ -41676,11 +43459,47 @@ ${describeError(err2)}` : message;
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1e3);
     };
+    const downloadBytes = (filename, bytes, mime) => {
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = doc.createElement("a");
+      a.href = url;
+      a.download = filename;
+      (doc.body ?? doc.documentElement).appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1e3);
+    };
     const readJsonFromFileInput = async (input) => {
       const file = input.files?.[0] ?? null;
       if (!file) return null;
       const text = await file.text();
       return JSON.parse(text);
+    };
+    const readBytesFromFileInput = async (input) => {
+      const file = input.files?.[0] ?? null;
+      if (!file) return null;
+      const buf = await file.arrayBuffer();
+      return new Uint8Array(buf);
+    };
+    const formatBytes = (n) => {
+      if (!Number.isFinite(n) || n <= 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      let v = n;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    };
+    const makeStamp = () => {
+      return (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
+    };
+    const normalizeDbNamePart = (value) => {
+      const raw = typeof value === "string" ? value : "";
+      const cleaned = raw.trim().replace(/[^A-Za-z0-9_\-]/g, "_");
+      return cleaned.slice(0, 48) || "unknown";
     };
     const settingsModal = doc.createElement("div");
     settingsModal.className = "ga-settings-modal";
@@ -41731,6 +43550,9 @@ ${describeError(err2)}` : message;
       const standardsTab = doc.createElement("button");
       standardsTab.className = "ga-settings-tab";
       standardsTab.textContent = "Standards";
+      const dataTab = doc.createElement("button");
+      dataTab.className = "ga-settings-tab";
+      dataTab.textContent = "Data";
       const templateTab = doc.createElement("button");
       templateTab.className = "ga-settings-tab";
       templateTab.textContent = "Template";
@@ -41752,6 +43574,7 @@ ${describeError(err2)}` : message;
       tabs.appendChild(globalFiltersTab);
       tabs.appendChild(drilldownsTab);
       tabs.appendChild(consoleTab);
+      tabs.appendChild(dataTab);
       tabs.appendChild(templateTab);
       const settings = getSettings();
       let dashboard = getDashboard();
@@ -41850,6 +43673,226 @@ ${describeError(err2)}` : message;
       standardsNote.className = "ga-settings-note";
       standardsNote.textContent = "Date format is applied in drilldowns. Session gap is stored as a standard value for session-based views. Country format affects country labels (confusion matrix stays ISO2).";
       standardsPane.appendChild(standardsNote);
+      const dataPane = doc.createElement("div");
+      dataPane.className = "ga-settings-pane";
+      const dataNote = doc.createElement("div");
+      dataNote.className = "ga-settings-note";
+      dataNote.textContent = "Export/import your complete local dataset for moving to another browser or sharing with others. Compact exports omit raw payloads and re-derivable fields (e.g. guess countries). Imported data replaces your current local DB.";
+      dataPane.appendChild(dataNote);
+      const dataActive = doc.createElement("div");
+      dataActive.className = "ga-settings-note";
+      const updateActiveDbLabel = () => {
+        const active = getActiveDbName();
+        dataActive.textContent = active === MAIN_DB_NAME ? "Active dataset: Your data" : `Active dataset: Viewer (${active})`;
+      };
+      updateActiveDbLabel();
+      dataPane.appendChild(dataActive);
+      const dataGrid = doc.createElement("div");
+      dataGrid.className = "ga-settings-grid";
+      const compactField = doc.createElement("div");
+      compactField.className = "ga-settings-field";
+      const compactLabel = doc.createElement("label");
+      compactLabel.textContent = "Export mode";
+      const compactSelect = doc.createElement("select");
+      compactSelect.innerHTML = `
+      <option value="compact">Compact (recommended)</option>
+      <option value="full">Full (includes derived fields)</option>
+    `;
+      compactSelect.value = "compact";
+      compactField.appendChild(compactLabel);
+      compactField.appendChild(compactSelect);
+      const aggField = doc.createElement("div");
+      aggField.className = "ga-settings-field";
+      const aggLabel = doc.createElement("label");
+      aggLabel.textContent = "Include aggregates";
+      const aggSelect = doc.createElement("select");
+      aggSelect.innerHTML = `<option value="yes">Yes (faster load)</option><option value="no">No (smaller)</option>`;
+      aggSelect.value = "yes";
+      aggField.appendChild(aggLabel);
+      aggField.appendChild(aggSelect);
+      const metaField = doc.createElement("div");
+      metaField.className = "ga-settings-field";
+      const metaLabel = doc.createElement("label");
+      metaLabel.textContent = "Include metadata";
+      const metaSelect = doc.createElement("select");
+      metaSelect.innerHTML = `<option value="yes">Yes</option><option value="no">No</option>`;
+      metaSelect.value = "yes";
+      metaField.appendChild(metaLabel);
+      metaField.appendChild(metaSelect);
+      const gzipField = doc.createElement("div");
+      gzipField.className = "ga-settings-field";
+      const gzipLabel = doc.createElement("label");
+      gzipLabel.textContent = "Compression";
+      const gzipSelect = doc.createElement("select");
+      gzipSelect.innerHTML = `<option value="gzip">GZip (.json.gz)</option><option value="plain">Plain JSON (.json)</option>`;
+      gzipSelect.value = "gzip";
+      gzipField.appendChild(gzipLabel);
+      gzipField.appendChild(gzipSelect);
+      dataGrid.appendChild(compactField);
+      dataGrid.appendChild(aggField);
+      dataGrid.appendChild(metaField);
+      dataGrid.appendChild(gzipField);
+      dataPane.appendChild(dataGrid);
+      const dataActions = doc.createElement("div");
+      dataActions.className = "ga-settings-actions";
+      const exportBtn = doc.createElement("button");
+      exportBtn.type = "button";
+      exportBtn.className = "ga-filter-btn";
+      exportBtn.textContent = "Export data";
+      exportBtn.title = "Export your complete local dataset as a portable dump";
+      const importBtn = doc.createElement("button");
+      importBtn.type = "button";
+      importBtn.className = "ga-filter-btn";
+      importBtn.textContent = "Import data";
+      importBtn.title = "Import a portable dump (replaces your local DB)";
+      const importInput = doc.createElement("input");
+      importInput.type = "file";
+      importInput.accept = "application/json,.json,application/gzip,.gz,.json.gz";
+      importInput.style.display = "none";
+      const dataStatus = doc.createElement("div");
+      dataStatus.className = "ga-settings-status";
+      const switchMineBtn = doc.createElement("button");
+      switchMineBtn.type = "button";
+      switchMineBtn.className = "ga-filter-btn";
+      switchMineBtn.textContent = "Switch to my data";
+      switchMineBtn.title = "Switch back to your main dataset (gg_analyzer_db)";
+      dataActions.appendChild(exportBtn);
+      dataActions.appendChild(importBtn);
+      dataActions.appendChild(switchMineBtn);
+      dataActions.appendChild(importInput);
+      dataPane.appendChild(dataActions);
+      dataPane.appendChild(dataStatus);
+      const syncNote = doc.createElement("div");
+      syncNote.className = "ga-settings-note";
+      syncNote.textContent = "Server sync uploads a compact delta of your local dataset to your server. This does not change your local data. Keep your sync token private.";
+      dataPane.appendChild(syncNote);
+      const syncGrid = doc.createElement("div");
+      syncGrid.className = "ga-settings-grid";
+      const syncEndpointField = doc.createElement("div");
+      syncEndpointField.className = "ga-settings-field";
+      const syncEndpointLabel = doc.createElement("label");
+      syncEndpointLabel.textContent = "Sync endpoint";
+      const syncEndpointInput = doc.createElement("input");
+      syncEndpointInput.type = "text";
+      syncEndpointInput.placeholder = "https://sync.geoanalyzr.lmbt.app/api/sync";
+      syncEndpointField.appendChild(syncEndpointLabel);
+      syncEndpointField.appendChild(syncEndpointInput);
+      const syncTokenField = doc.createElement("div");
+      syncTokenField.className = "ga-settings-field";
+      const syncTokenLabel = doc.createElement("label");
+      syncTokenLabel.textContent = "Sync token";
+      const syncTokenInput = doc.createElement("input");
+      syncTokenInput.type = "password";
+      syncTokenInput.placeholder = "Bearer token";
+      syncTokenField.appendChild(syncTokenLabel);
+      syncTokenField.appendChild(syncTokenInput);
+      const syncCompactField = doc.createElement("div");
+      syncCompactField.className = "ga-settings-field";
+      const syncCompactLabel = doc.createElement("label");
+      syncCompactLabel.textContent = "Payload mode";
+      const syncCompactSelect = doc.createElement("select");
+      syncCompactSelect.innerHTML = `<option value="compact">Compact (recommended)</option><option value="full">Full</option>`;
+      syncCompactField.appendChild(syncCompactLabel);
+      syncCompactField.appendChild(syncCompactSelect);
+      const syncAggField = doc.createElement("div");
+      syncAggField.className = "ga-settings-field";
+      const syncAggLabel = doc.createElement("label");
+      syncAggLabel.textContent = "Include aggregates";
+      const syncAggSelect = doc.createElement("select");
+      syncAggSelect.innerHTML = `<option value="no">No (smaller)</option><option value="yes">Yes</option>`;
+      syncAggField.appendChild(syncAggLabel);
+      syncAggField.appendChild(syncAggSelect);
+      syncGrid.appendChild(syncEndpointField);
+      syncGrid.appendChild(syncTokenField);
+      syncGrid.appendChild(syncCompactField);
+      syncGrid.appendChild(syncAggField);
+      dataPane.appendChild(syncGrid);
+      const syncActions = doc.createElement("div");
+      syncActions.className = "ga-settings-actions";
+      const syncNowBtn = doc.createElement("button");
+      syncNowBtn.type = "button";
+      syncNowBtn.className = "ga-filter-btn";
+      syncNowBtn.textContent = "Sync now";
+      syncNowBtn.title = "Upload a compact delta to your server";
+      syncActions.appendChild(syncNowBtn);
+      dataPane.appendChild(syncActions);
+      const syncStatus = doc.createElement("div");
+      syncStatus.className = "ga-settings-status";
+      dataPane.appendChild(syncStatus);
+      const syncSettings = loadServerSyncSettings();
+      syncEndpointInput.value = syncSettings.endpointUrl;
+      syncTokenInput.value = syncSettings.token;
+      syncCompactSelect.value = syncSettings.compact ? "compact" : "full";
+      syncAggSelect.value = syncSettings.includeAggregates ? "yes" : "no";
+      const refreshSyncMeta = async () => {
+        const meta = await getLastServerSyncMeta();
+        const cursor = await getLastServerSyncCursor();
+        const lastAt = typeof meta?.lastSyncAt === "number" ? new Date(meta.lastSyncAt).toLocaleString() : null;
+        const lastOk = typeof meta?.lastOk === "boolean" ? meta.lastOk : null;
+        const lastStatusCode = typeof meta?.lastStatus === "number" ? meta.lastStatus : null;
+        const lastCounts = meta?.lastCounts;
+        const lastBytesGzip = typeof meta?.lastBytesGzip === "number" ? meta.lastBytesGzip : null;
+        const parts = [];
+        parts.push(`Cursor: ${cursor}`);
+        if (lastAt) parts.push(`Last sync: ${lastAt}${lastStatusCode ? ` (HTTP ${lastStatusCode})` : ""}${lastOk === true ? "" : lastOk === false ? " (failed)" : ""}`);
+        if (lastCounts && typeof lastCounts === "object") {
+          const g = Number(lastCounts.games) || 0;
+          const r = Number(lastCounts.rounds) || 0;
+          const d = Number(lastCounts.details) || 0;
+          const a = Number(lastCounts.gameAgg) || 0;
+          parts.push(`Last counts: games=${g}, rounds=${r}, details=${d}, agg=${a}`);
+        }
+        if (typeof lastBytesGzip === "number") parts.push(`Last upload size: ${formatBytes(lastBytesGzip)}`);
+        syncStatus.textContent = parts.join(" \xB7 ");
+      };
+      void refreshSyncMeta();
+      const persistSyncSettings = () => {
+        saveServerSyncSettings({
+          endpointUrl: syncEndpointInput.value.trim(),
+          token: syncTokenInput.value.trim(),
+          compact: syncCompactSelect.value === "compact",
+          includeAggregates: syncAggSelect.value === "yes"
+        });
+      };
+      syncEndpointInput.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncTokenInput.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncCompactSelect.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncAggSelect.addEventListener("change", () => {
+        persistSyncSettings();
+        void refreshSyncMeta();
+      });
+      syncNowBtn.addEventListener("click", async () => {
+        syncNowBtn.disabled = true;
+        exportBtn.disabled = true;
+        importBtn.disabled = true;
+        switchMineBtn.disabled = true;
+        syncStatus.textContent = "Syncing...";
+        try {
+          persistSyncSettings();
+          const latest = loadServerSyncSettings();
+          const res = await runServerSyncOnce(latest);
+          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+          const msg = `OK (HTTP ${res.status}) \xB7 cursor ${res.cursorFrom} \u2192 ${res.cursorTo} \xB7 rows ${rowsTotal} \xB7 payload ${formatBytes(res.bytesGzip)} (gz)`;
+          syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) \xB7 ${res.responseText || "no response"}`;
+        } catch (e) {
+          syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        } finally {
+          syncNowBtn.disabled = false;
+          exportBtn.disabled = false;
+          importBtn.disabled = false;
+          switchMineBtn.disabled = false;
+          void refreshSyncMeta();
+        }
+      });
       const templatePane = doc.createElement("div");
       templatePane.className = "ga-settings-pane";
       const templateWarn = doc.createElement("div");
@@ -42070,6 +44113,7 @@ ${describeError(err2)}` : message;
       panes.appendChild(globalFiltersPane);
       panes.appendChild(drilldownsPane);
       panes.appendChild(consolePane);
+      panes.appendChild(dataPane);
       panes.appendChild(templatePane);
       const renderLayout = (mode, host, status) => {
         host.innerHTML = "";
@@ -42243,8 +44287,8 @@ ${describeError(err2)}` : message;
       let renderedGlobalFilters = false;
       let renderedDrilldowns = false;
       const setActiveTab = (idx) => {
-        const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, consoleTab, templateTab];
-        const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, consolePane, templatePane];
+        const tabButtons = [appearanceTab, standardsTab, sectionLayoutTab, globalFiltersTab, drilldownsTab, consoleTab, dataTab, templateTab];
+        const tabPanes = [appearancePane, standardsPane, sectionLayoutPane, globalFiltersPane, drilldownsPane, consolePane, dataPane, templatePane];
         tabButtons.forEach((t, i) => t.classList.toggle("active", i === idx));
         tabPanes.forEach((p, i) => p.classList.toggle("active", i === idx));
         if (idx === 2 && !renderedSectionLayout) {
@@ -42266,7 +44310,8 @@ ${describeError(err2)}` : message;
       globalFiltersTab.addEventListener("click", () => setActiveTab(3));
       drilldownsTab.addEventListener("click", () => setActiveTab(4));
       consoleTab.addEventListener("click", () => setActiveTab(5));
-      templateTab.addEventListener("click", () => setActiveTab(6));
+      dataTab.addEventListener("click", () => setActiveTab(6));
+      templateTab.addEventListener("click", () => setActiveTab(7));
       const persistSettings = async () => {
         const next = {
           appearance: {
@@ -42320,6 +44365,141 @@ ${describeError(err2)}` : message;
           templateStatus.classList.add("error");
         }
       };
+      exportBtn.addEventListener("click", async () => {
+        exportBtn.disabled = true;
+        importBtn.disabled = true;
+        dataStatus.textContent = "Building portable dump...";
+        dataStatus.className = "ga-settings-status";
+        try {
+          const compact = compactSelect.value === "compact";
+          const includeAggregates = aggSelect.value === "yes";
+          const includeMeta = metaSelect.value === "yes";
+          const useGzip = gzipSelect.value === "gzip";
+          const dump = await buildPortableDump({ compact, includeAggregates, includeMeta });
+          const { bytes, mime, ext } = await serializePortableDump(dump, { gzip: useGzip });
+          const filename = `geoanalyzr-data-${makeStamp()}.${ext}`;
+          downloadBytes(filename, bytes, mime);
+          const gamesCount = dump.data.games.length;
+          const roundsCount = dump.data.rounds.length;
+          const detailsCount = dump.data.details.length;
+          dataStatus.textContent = `Exported ${gamesCount} games, ${roundsCount} rounds, ${detailsCount} details (${formatBytes(bytes.length)}).`;
+          dataStatus.classList.add("ok");
+        } catch (err2) {
+          const msg = err2 instanceof Error ? err2.message : String(err2);
+          dataStatus.textContent = `Export failed: ${msg}`;
+          dataStatus.classList.add("error");
+        } finally {
+          exportBtn.disabled = false;
+          importBtn.disabled = false;
+        }
+      });
+      importBtn.addEventListener("click", () => {
+        importInput.value = "";
+        importInput.click();
+      });
+      switchMineBtn.addEventListener("click", () => {
+        void (async () => {
+          try {
+            switchMineBtn.disabled = true;
+            dataStatus.textContent = "";
+            await switchActiveDb(MAIN_DB_NAME);
+            invalidateRoundsCache();
+            updateActiveDbLabel();
+            dataStatus.textContent = "Switched to your dataset. Re-open the analysis window to reload.";
+            dataStatus.className = "ga-settings-status ok";
+          } catch (err2) {
+            const msg = err2 instanceof Error ? err2.message : String(err2);
+            dataStatus.textContent = `Failed to switch dataset: ${msg}`;
+            dataStatus.className = "ga-settings-status error";
+          } finally {
+            switchMineBtn.disabled = false;
+          }
+        })();
+      });
+      importInput.addEventListener("change", async () => {
+        dataStatus.textContent = "";
+        dataStatus.className = "ga-settings-status";
+        const bytes = await readBytesFromFileInput(importInput);
+        if (!bytes) return;
+        exportBtn.disabled = true;
+        importBtn.disabled = true;
+        switchMineBtn.disabled = true;
+        dataStatus.textContent = "Reading dump...";
+        try {
+          const dump = await parsePortableDumpBytes(bytes);
+          const gamesCount = dump.data.games?.length ?? 0;
+          const roundsCount = dump.data.rounds?.length ?? 0;
+          const detailsCount = dump.data.details?.length ?? 0;
+          const dumpOwnerId = typeof dump.owner?.playerId === "string" ? dump.owner.playerId.trim() : "";
+          const dumpOwnerName = typeof dump.owner?.playerName === "string" ? dump.owner.playerName.trim() : "";
+          const currentPlayerId = await getCurrentPlayerId() ?? "";
+          const isOwnerMatch = dumpOwnerId && currentPlayerId && dumpOwnerId === currentPlayerId;
+          if (isOwnerMatch) {
+            if (getActiveDbName() !== MAIN_DB_NAME) {
+              dataStatus.textContent = "You are in Viewer mode. Switch to your dataset first to replace it.";
+              dataStatus.classList.add("error");
+              return;
+            }
+            const ok = targetWindow.confirm(
+              `This dump matches the currently logged-in player.
+
+Replace your local GeoAnalyzr DB with this dataset?
+
+Games: ${gamesCount}
+Rounds: ${roundsCount}
+Details: ${detailsCount}
+
+This cannot be undone.`
+            );
+            if (!ok) {
+              dataStatus.textContent = "Import canceled.";
+              return;
+            }
+            dataStatus.textContent = "Importing (replacing your local DB)...";
+            await replaceDatabaseFromPortableDump(dump);
+            invalidateRoundsCache();
+            updateActiveDbLabel();
+            dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
+            dataStatus.classList.add("ok");
+            return;
+          }
+          const ownerLabel = dumpOwnerName ? `${dumpOwnerName}${dumpOwnerId ? ` (${dumpOwnerId.slice(0, 8)}\u2026)` : ""}` : dumpOwnerId ? `${dumpOwnerId.slice(0, 8)}\u2026` : "unknown player";
+          const okViewer = targetWindow.confirm(
+            `This dump does NOT match the currently logged-in player.
+
+It will be imported as a separate Viewer dataset for: ${ownerLabel}.
+Your own dataset will NOT be overwritten.
+
+Games: ${gamesCount}
+Rounds: ${roundsCount}
+Details: ${detailsCount}
+
+Import now and switch to Viewer mode?`
+          );
+          if (!okViewer) {
+            dataStatus.textContent = "Import canceled.";
+            return;
+          }
+          const viewerKey = normalizeDbNamePart(dumpOwnerId || dumpOwnerName || `viewer_${Date.now()}`);
+          const viewerDbName = `gg_analyzer_db_view_${viewerKey}`;
+          dataStatus.textContent = "Importing as Viewer dataset...";
+          await importPortableDumpIntoNewDb(viewerDbName, dump);
+          dataStatus.textContent = "Switching to Viewer dataset...";
+          await switchActiveDb(viewerDbName);
+          invalidateRoundsCache();
+          updateActiveDbLabel();
+          dataStatus.textContent = "Viewer dataset imported and activated. Close and re-open the analysis window to load it.";
+          dataStatus.classList.add("ok");
+        } catch (err2) {
+          const msg = err2 instanceof Error ? err2.message : String(err2);
+          dataStatus.textContent = `Import failed: ${msg}`;
+          dataStatus.classList.add("error");
+        } finally {
+          exportBtn.disabled = false;
+          importBtn.disabled = false;
+          switchMineBtn.disabled = false;
+        }
+      });
       const downloadTextFile = (filename, text) => {
         const blob = new Blob([text], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -42971,6 +45151,7 @@ ${describeError(err2)}` : message;
       }
       const span = this.doc.createElement("span");
       span.textContent = text;
+      if (key === "gameId" || key === "sessionId") span.classList.add("ga-dd-id");
       if (col.colored) {
         if (key === "result") {
           const s = (typeof raw === "string" ? raw : String(raw ?? "")).trim().toLowerCase();
@@ -44010,465 +46191,6 @@ ${describeError(err2)}` : message;
     game: GAME_MEASURES_BY_FORMULA_ID,
     session: SESSION_MEASURES_BY_FORMULA_ID
   };
-
-  // node_modules/fflate/esm/browser.js
-  var u8 = Uint8Array;
-  var u16 = Uint16Array;
-  var i32 = Int32Array;
-  var fleb = new u8([
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    1,
-    1,
-    1,
-    2,
-    2,
-    2,
-    2,
-    3,
-    3,
-    3,
-    3,
-    4,
-    4,
-    4,
-    4,
-    5,
-    5,
-    5,
-    5,
-    0,
-    /* unused */
-    0,
-    0,
-    /* impossible */
-    0
-  ]);
-  var fdeb = new u8([
-    0,
-    0,
-    0,
-    0,
-    1,
-    1,
-    2,
-    2,
-    3,
-    3,
-    4,
-    4,
-    5,
-    5,
-    6,
-    6,
-    7,
-    7,
-    8,
-    8,
-    9,
-    9,
-    10,
-    10,
-    11,
-    11,
-    12,
-    12,
-    13,
-    13,
-    /* unused */
-    0,
-    0
-  ]);
-  var clim = new u8([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]);
-  var freb = function(eb, start) {
-    var b = new u16(31);
-    for (var i = 0; i < 31; ++i) {
-      b[i] = start += 1 << eb[i - 1];
-    }
-    var r = new i32(b[30]);
-    for (var i = 1; i < 30; ++i) {
-      for (var j = b[i]; j < b[i + 1]; ++j) {
-        r[j] = j - b[i] << 5 | i;
-      }
-    }
-    return { b, r };
-  };
-  var _a = freb(fleb, 2);
-  var fl = _a.b;
-  var revfl = _a.r;
-  fl[28] = 258, revfl[258] = 28;
-  var _b = freb(fdeb, 0);
-  var fd = _b.b;
-  var revfd = _b.r;
-  var rev = new u16(32768);
-  for (i = 0; i < 32768; ++i) {
-    x = (i & 43690) >> 1 | (i & 21845) << 1;
-    x = (x & 52428) >> 2 | (x & 13107) << 2;
-    x = (x & 61680) >> 4 | (x & 3855) << 4;
-    rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
-  }
-  var x;
-  var i;
-  var hMap = (function(cd, mb, r) {
-    var s = cd.length;
-    var i = 0;
-    var l = new u16(mb);
-    for (; i < s; ++i) {
-      if (cd[i])
-        ++l[cd[i] - 1];
-    }
-    var le = new u16(mb);
-    for (i = 1; i < mb; ++i) {
-      le[i] = le[i - 1] + l[i - 1] << 1;
-    }
-    var co;
-    if (r) {
-      co = new u16(1 << mb);
-      var rvb = 15 - mb;
-      for (i = 0; i < s; ++i) {
-        if (cd[i]) {
-          var sv = i << 4 | cd[i];
-          var r_1 = mb - cd[i];
-          var v = le[cd[i] - 1]++ << r_1;
-          for (var m = v | (1 << r_1) - 1; v <= m; ++v) {
-            co[rev[v] >> rvb] = sv;
-          }
-        }
-      }
-    } else {
-      co = new u16(s);
-      for (i = 0; i < s; ++i) {
-        if (cd[i]) {
-          co[i] = rev[le[cd[i] - 1]++] >> 15 - cd[i];
-        }
-      }
-    }
-    return co;
-  });
-  var flt = new u8(288);
-  for (i = 0; i < 144; ++i)
-    flt[i] = 8;
-  var i;
-  for (i = 144; i < 256; ++i)
-    flt[i] = 9;
-  var i;
-  for (i = 256; i < 280; ++i)
-    flt[i] = 7;
-  var i;
-  for (i = 280; i < 288; ++i)
-    flt[i] = 8;
-  var i;
-  var fdt = new u8(32);
-  for (i = 0; i < 32; ++i)
-    fdt[i] = 5;
-  var i;
-  var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
-  var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
-  var max = function(a) {
-    var m = a[0];
-    for (var i = 1; i < a.length; ++i) {
-      if (a[i] > m)
-        m = a[i];
-    }
-    return m;
-  };
-  var bits = function(d, p, m) {
-    var o = p / 8 | 0;
-    return (d[o] | d[o + 1] << 8) >> (p & 7) & m;
-  };
-  var bits16 = function(d, p) {
-    var o = p / 8 | 0;
-    return (d[o] | d[o + 1] << 8 | d[o + 2] << 16) >> (p & 7);
-  };
-  var shft = function(p) {
-    return (p + 7) / 8 | 0;
-  };
-  var slc = function(v, s, e) {
-    if (s == null || s < 0)
-      s = 0;
-    if (e == null || e > v.length)
-      e = v.length;
-    return new u8(v.subarray(s, e));
-  };
-  var ec = [
-    "unexpected EOF",
-    "invalid block type",
-    "invalid length/literal",
-    "invalid distance",
-    "stream finished",
-    "no stream handler",
-    ,
-    "no callback",
-    "invalid UTF-8 data",
-    "extra field too long",
-    "date not in range 1980-2099",
-    "filename too long",
-    "stream finishing",
-    "invalid zip data"
-    // determined by unknown compression method
-  ];
-  var err = function(ind, msg, nt) {
-    var e = new Error(msg || ec[ind]);
-    e.code = ind;
-    if (Error.captureStackTrace)
-      Error.captureStackTrace(e, err);
-    if (!nt)
-      throw e;
-    return e;
-  };
-  var inflt = function(dat, st, buf, dict) {
-    var sl = dat.length, dl = dict ? dict.length : 0;
-    if (!sl || st.f && !st.l)
-      return buf || new u8(0);
-    var noBuf = !buf;
-    var resize = noBuf || st.i != 2;
-    var noSt = st.i;
-    if (noBuf)
-      buf = new u8(sl * 3);
-    var cbuf = function(l2) {
-      var bl = buf.length;
-      if (l2 > bl) {
-        var nbuf = new u8(Math.max(bl * 2, l2));
-        nbuf.set(buf);
-        buf = nbuf;
-      }
-    };
-    var final = st.f || 0, pos = st.p || 0, bt = st.b || 0, lm = st.l, dm = st.d, lbt = st.m, dbt = st.n;
-    var tbts = sl * 8;
-    do {
-      if (!lm) {
-        final = bits(dat, pos, 1);
-        var type = bits(dat, pos + 1, 3);
-        pos += 3;
-        if (!type) {
-          var s = shft(pos) + 4, l = dat[s - 4] | dat[s - 3] << 8, t = s + l;
-          if (t > sl) {
-            if (noSt)
-              err(0);
-            break;
-          }
-          if (resize)
-            cbuf(bt + l);
-          buf.set(dat.subarray(s, t), bt);
-          st.b = bt += l, st.p = pos = t * 8, st.f = final;
-          continue;
-        } else if (type == 1)
-          lm = flrm, dm = fdrm, lbt = 9, dbt = 5;
-        else if (type == 2) {
-          var hLit = bits(dat, pos, 31) + 257, hcLen = bits(dat, pos + 10, 15) + 4;
-          var tl = hLit + bits(dat, pos + 5, 31) + 1;
-          pos += 14;
-          var ldt = new u8(tl);
-          var clt = new u8(19);
-          for (var i = 0; i < hcLen; ++i) {
-            clt[clim[i]] = bits(dat, pos + i * 3, 7);
-          }
-          pos += hcLen * 3;
-          var clb = max(clt), clbmsk = (1 << clb) - 1;
-          var clm = hMap(clt, clb, 1);
-          for (var i = 0; i < tl; ) {
-            var r = clm[bits(dat, pos, clbmsk)];
-            pos += r & 15;
-            var s = r >> 4;
-            if (s < 16) {
-              ldt[i++] = s;
-            } else {
-              var c = 0, n = 0;
-              if (s == 16)
-                n = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
-              else if (s == 17)
-                n = 3 + bits(dat, pos, 7), pos += 3;
-              else if (s == 18)
-                n = 11 + bits(dat, pos, 127), pos += 7;
-              while (n--)
-                ldt[i++] = c;
-            }
-          }
-          var lt = ldt.subarray(0, hLit), dt = ldt.subarray(hLit);
-          lbt = max(lt);
-          dbt = max(dt);
-          lm = hMap(lt, lbt, 1);
-          dm = hMap(dt, dbt, 1);
-        } else
-          err(1);
-        if (pos > tbts) {
-          if (noSt)
-            err(0);
-          break;
-        }
-      }
-      if (resize)
-        cbuf(bt + 131072);
-      var lms = (1 << lbt) - 1, dms = (1 << dbt) - 1;
-      var lpos = pos;
-      for (; ; lpos = pos) {
-        var c = lm[bits16(dat, pos) & lms], sym = c >> 4;
-        pos += c & 15;
-        if (pos > tbts) {
-          if (noSt)
-            err(0);
-          break;
-        }
-        if (!c)
-          err(2);
-        if (sym < 256)
-          buf[bt++] = sym;
-        else if (sym == 256) {
-          lpos = pos, lm = null;
-          break;
-        } else {
-          var add2 = sym - 254;
-          if (sym > 264) {
-            var i = sym - 257, b = fleb[i];
-            add2 = bits(dat, pos, (1 << b) - 1) + fl[i];
-            pos += b;
-          }
-          var d = dm[bits16(dat, pos) & dms], dsym = d >> 4;
-          if (!d)
-            err(3);
-          pos += d & 15;
-          var dt = fd[dsym];
-          if (dsym > 3) {
-            var b = fdeb[dsym];
-            dt += bits16(dat, pos) & (1 << b) - 1, pos += b;
-          }
-          if (pos > tbts) {
-            if (noSt)
-              err(0);
-            break;
-          }
-          if (resize)
-            cbuf(bt + 131072);
-          var end = bt + add2;
-          if (bt < dt) {
-            var shift = dl - dt, dend = Math.min(dt, end);
-            if (shift + bt < 0)
-              err(3);
-            for (; bt < dend; ++bt)
-              buf[bt] = dict[shift + bt];
-          }
-          for (; bt < end; ++bt)
-            buf[bt] = buf[bt - dt];
-        }
-      }
-      st.l = lm, st.p = lpos, st.b = bt, st.f = final;
-      if (lm)
-        final = 1, st.m = lbt, st.d = dm, st.n = dbt;
-    } while (!final);
-    return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
-  };
-  var et = /* @__PURE__ */ new u8(0);
-  var b2 = function(d, b) {
-    return d[b] | d[b + 1] << 8;
-  };
-  var b4 = function(d, b) {
-    return (d[b] | d[b + 1] << 8 | d[b + 2] << 16 | d[b + 3] << 24) >>> 0;
-  };
-  var b8 = function(d, b) {
-    return b4(d, b) + b4(d, b + 4) * 4294967296;
-  };
-  function inflateSync(data, opts) {
-    return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
-  }
-  var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
-  var tds = 0;
-  try {
-    td.decode(et, { stream: true });
-    tds = 1;
-  } catch (e) {
-  }
-  var dutf8 = function(d) {
-    for (var r = "", i = 0; ; ) {
-      var c = d[i++];
-      var eb = (c > 127) + (c > 223) + (c > 239);
-      if (i + eb > d.length)
-        return { s: r, r: slc(d, i - 1) };
-      if (!eb)
-        r += String.fromCharCode(c);
-      else if (eb == 3) {
-        c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
-      } else if (eb & 1)
-        r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
-      else
-        r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
-    }
-  };
-  function strFromU8(dat, latin1) {
-    if (latin1) {
-      var r = "";
-      for (var i = 0; i < dat.length; i += 16384)
-        r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
-      return r;
-    } else if (td) {
-      return td.decode(dat);
-    } else {
-      var _a2 = dutf8(dat), s = _a2.s, r = _a2.r;
-      if (r.length)
-        err(8);
-      return s;
-    }
-  }
-  var slzh = function(d, b) {
-    return b + 30 + b2(d, b + 26) + b2(d, b + 28);
-  };
-  var zh = function(d, b, z) {
-    var fnl = b2(d, b + 28), fn = strFromU8(d.subarray(b + 46, b + 46 + fnl), !(b2(d, b + 8) & 2048)), es = b + 46 + fnl, bs = b4(d, b + 20);
-    var _a2 = z && bs == 4294967295 ? z64e(d, es) : [bs, b4(d, b + 24), b4(d, b + 42)], sc = _a2[0], su = _a2[1], off = _a2[2];
-    return [b2(d, b + 10), sc, su, fn, es + b2(d, b + 30) + b2(d, b + 32), off];
-  };
-  var z64e = function(d, b) {
-    for (; b2(d, b) != 1; b += 4 + b2(d, b + 2))
-      ;
-    return [b8(d, b + 12), b8(d, b + 4), b8(d, b + 20)];
-  };
-  function unzipSync(data, opts) {
-    var files = {};
-    var e = data.length - 22;
-    for (; b4(data, e) != 101010256; --e) {
-      if (!e || data.length - e > 65558)
-        err(13);
-    }
-    ;
-    var c = b2(data, e + 8);
-    if (!c)
-      return {};
-    var o = b4(data, e + 16);
-    var z = o == 4294967295 || c == 65535;
-    if (z) {
-      var ze = b4(data, e - 12);
-      z = b4(data, ze) == 101075792;
-      if (z) {
-        c = b4(data, ze + 32);
-        o = b4(data, ze + 48);
-      }
-    }
-    var fltr = opts && opts.filter;
-    for (var i = 0; i < c; ++i) {
-      var _a2 = zh(data, o, z), c_2 = _a2[0], sc = _a2[1], su = _a2[2], fn = _a2[3], no = _a2[4], off = _a2[5], b = slzh(data, off);
-      o = no;
-      if (!fltr || fltr({
-        name: fn,
-        size: sc,
-        originalSize: su,
-        compression: c_2
-      })) {
-        if (!c_2)
-          files[fn] = slc(data, b, b + sc);
-        else if (c_2 == 8)
-          files[fn] = inflateSync(data.subarray(b, b + sc), { out: new u8(su) });
-        else
-          err(14, "unknown compression type " + c_2);
-      }
-    }
-    return files;
-  }
 
   // src/geo/geoJsonFetch.ts
   function canonicalizeUrl(url) {
@@ -47566,6 +49288,7 @@ ${describeError(err2)}` : message;
     const keyFn = DIMENSION_EXTRACTORS[grain]?.[groupById];
     if (!keyFn) return null;
     const isPlausibleGameGroup = (rows) => {
+      if (grain !== "round") return true;
       if (groupById !== "game_id") return true;
       if (!Array.isArray(rows) || rows.length === 0) return false;
       if (rows.length < 2) return false;
@@ -52398,89 +54121,6 @@ ${describeError(err2)}` : message;
     await renderNow();
   }
 
-  // src/app/playerIdentity.ts
-  var cachedPlayerName;
-  function asTrimmedString3(v) {
-    const s = typeof v === "string" ? v.trim() : "";
-    return s ? s : void 0;
-  }
-  function pickFirst5(obj, paths) {
-    for (const path of paths) {
-      if (!obj || typeof obj !== "object") continue;
-      const parts = path.split(".");
-      let cur = obj;
-      let ok = true;
-      for (const p of parts) {
-        if (!cur || typeof cur !== "object" || !(p in cur)) {
-          ok = false;
-          break;
-        }
-        cur = cur[p];
-      }
-      if (!ok) continue;
-      if (cur !== void 0 && cur !== null) return cur;
-    }
-    return void 0;
-  }
-  async function fetchPlayerNameFromApi() {
-    const idCandidates = [
-      "https://www.geoguessr.com/api/v3/profiles",
-      "https://www.geoguessr.com/api/v4/profiles",
-      "https://www.geoguessr.com/api/v3/users/me"
-    ];
-    let playerId;
-    for (const url of idCandidates) {
-      try {
-        const res = await httpGetJson(url);
-        if (res.status < 200 || res.status >= 300) continue;
-        const id = pickFirst5(res.data, ["user.id", "id", "player.id", "playerId", "user.userId"]);
-        playerId = asTrimmedString3(id);
-        if (playerId) break;
-      } catch {
-      }
-    }
-    if (!playerId) return void 0;
-    try {
-      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
-      if (res.status < 200 || res.status >= 300) return void 0;
-      return asTrimmedString3(res.data?.nick);
-    } catch {
-      return void 0;
-    }
-  }
-  async function guessPlayerNameFromDb() {
-    try {
-      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-      for (const d of latest) {
-        const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
-        if (candidate) return candidate;
-      }
-    } catch (e) {
-      try {
-        const all = await db.details.toArray();
-        const sorted = all.slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-        for (const d of sorted.slice(0, 25)) {
-          const candidate = asTrimmedString3(d?.player_self_name) ?? asTrimmedString3(d?.playerOneName) ?? asTrimmedString3(d?.playerOneNick) ?? asTrimmedString3(d?.playerOneNickname);
-          if (candidate) return candidate;
-        }
-      } catch {
-      }
-      console.warn("Failed to guess player name from DB", e);
-    }
-    return void 0;
-  }
-  async function getCurrentPlayerName() {
-    if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
-    const fromApi = await fetchPlayerNameFromApi();
-    if (fromApi) {
-      cachedPlayerName = fromApi;
-      return fromApi;
-    }
-    const fromDb = await guessPlayerNameFromDb();
-    cachedPlayerName = fromDb ?? null;
-    return fromDb;
-  }
-
   // src/ui.ts
   function cloneTemplate2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
@@ -52917,6 +54557,18 @@ ${describe(error)}`;
   }
   function registerUiActions(ui) {
     ui.onUpdateClick(async () => {
+      if (isViewerMode()) {
+        const name = getActiveDbName();
+        ui.setStatus("Viewer mode: updates are disabled.");
+        alert(
+          `GeoAnalyzr is currently in Viewer mode (${name}).
+
+Fetching/updating data is disabled to avoid mixing datasets.
+
+Go to Settings \u2192 Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
+        );
+        return;
+      }
       const status = createThrottledStatus(ui.setStatus);
       try {
         status.flushNow("Update started...");

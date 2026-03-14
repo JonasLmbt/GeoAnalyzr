@@ -1,6 +1,6 @@
 # GeoAnalyzr
 
-GeoAnalyzr is a Tampermonkey userscript for analyzing your GeoGuessr games.  
+GeoAnalyzr is a Tampermonkey userscript for analyzing your GeoGuessr games.
 It syncs your feed, fetches missing round details, and provides analysis plus Excel export.
 
 ## Requirements
@@ -14,19 +14,44 @@ For development:
 - npm
 - Git
 
-## Installation (User)
+## Installation
+
+GeoAnalyzr is available in three variants:
+
+1) **Local (recommended)** — full dashboard + analysis stored locally in your browser  
+2) **Sync-only** — minimal: only a small button to *Fetch + Sync* to the GeoAnalyzr website  
+3) **Dev** — testing build that tracks `master`
+
+### 1) Local (recommended)
 
 1. Open this file in your browser:
-   - Stable (recommended): <https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js>
-   - Dev (tracks `master`, for testing): <https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js>
+   - Local: `https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js`
 2. Tampermonkey will show the install dialog.
 3. Click install.
+
+### 2) Sync-only (minimal)
+
+1. Open this file in your browser:
+   - Sync-only: `https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js`
+2. Install it in Tampermonkey.
+3. Open GeoGuessr and click the small GeoAnalyzr icon (bottom-left). It runs **Fetch + Sync**.
+
+Notes:
+- No overlay UI, no charts, no analysis window — just syncing.
+- If you are not linked yet, it opens a linking tab (Discord login required once).
+- It also auto-syncs occasionally in the background (rate-limited).
+
+### 3) Dev (testing)
+
+1. Open:
+   - Dev: `https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js`
+2. Install it in Tampermonkey.
 
 ## Usage
 
 1. Open GeoGuessr and log in.
 2. Click the GeoAnalyzr icon in the bottom-left corner to open the panel.
-3. Run `Fetch Data` to sync new games and fetch missing details.
+3. Run **Fetch Data** to sync new games and fetch missing details.
 4. Open analysis or export to Excel.
 
 ![GeoAnalyzr panel entry point](images/geoanalyzr.png)
@@ -35,11 +60,11 @@ For development:
 
 If you need support or want to suggest new analysis ideas / features, join my Discord server:
 
-- https://discord.gg/ks5gh7MXhd
+- `https://discord.gg/ks5gh7MXhd`
 
 ## Auto Updates
 
-The script already includes:
+The scripts include:
 - `@updateURL`
 - `@downloadURL`
 
@@ -47,10 +72,18 @@ Tampermonkey can therefore detect and install updates automatically.
 
 ## Security and Privacy
 
-- GeoAnalyzr does **not** use an external database and does not send analysis data to custom servers.
-- Data is stored locally in your browser (IndexedDB).
-- You can remove local data at any time using `Reset Database`.
-- You can export/import your dataset via `Settings → Data` (useful for moving browsers or sharing stats).
+### Local (recommended)
+
+- The Local script stores data locally in your browser (IndexedDB).
+- It does **not** sync your dataset to the GeoAnalyzr website.
+- You can remove local data at any time using **Reset Database**.
+- You can export/import your dataset via **Settings → Data** (useful for moving browsers).
+
+### Sync-only / Dev (opt-in sync)
+
+- These variants can sync data to the GeoAnalyzr server, but only after your device is linked (Discord OAuth).
+- A per-device sync token is stored locally in your browser and sent as `Authorization: Bearer …` over HTTPS.
+- You can re-link at any time to issue a new token.
 
 ## Development
 
@@ -71,7 +104,10 @@ npm run build:dev
 # Release build (geoanalyzr.user.js)
 npm run build:release
 
-# Build both
+# Sync-only build (geoanalyzr.sync.user.js)
+npm run build:sync
+
+# Build all
 npm run build
 ```
 
@@ -85,3 +121,4 @@ npm run watch
 
 - [GeoInsights by Safwan Sipai](https://github.com/SafwanSipai/geo-insight)
 - [GeoGuessr API guide](https://efisha.com/2022/04/18/geoguessr-api-endpoints/)
+

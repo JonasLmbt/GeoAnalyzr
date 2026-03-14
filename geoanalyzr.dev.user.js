@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.3.20-dev
+// @version      2.3.21-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -8237,25 +8237,12 @@ ${shapes}`.trim();
   var SYNC_META_KEY = "server_sync_v1";
   var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
   var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
-  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set([
-    "raw",
-    "trueLocationKey",
-    "trueLocationRepeat",
-    "trueState",
-    "trueDistrict",
-    "trueUsState",
-    "trueCaProvince",
-    "trueIdProvince",
-    "trueIdKabupaten",
-    "truePhProvince",
-    "trueVnProvince"
-  ]);
+  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
   function compactRecord(row) {
     const out = {};
     for (const [key, value] of Object.entries(row)) {
       if (value === void 0) continue;
       if (COMPACT_DROP_KEYS.has(key)) continue;
-      if (key.endsWith("_guessCountry")) continue;
       out[key] = value;
     }
     return out;
@@ -8326,7 +8313,7 @@ ${shapes}`.trim();
     const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
     const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
     const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
-    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : true;
+    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
     const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
     return {
       endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
@@ -8415,7 +8402,12 @@ ${shapes}`.trim();
       }
     }
     const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
-    const rounds = opts.compact ? roundsMerged.map(compactRecord) : roundsMerged;
+    const roundsPayloadBase = roundsMerged.map((r) => {
+      const out = { ...r };
+      delete out.playedAt;
+      return out;
+    });
+    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
     const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
     const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
     const cursorToCandidates = [];
@@ -8426,7 +8418,7 @@ ${shapes}`.trim();
     const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
     const tables = {
       games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
       details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
       ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
     };
@@ -8499,6 +8491,7 @@ ${shapes}`.trim();
     if (!token) throw new Error("Missing sync token.");
     const forceFull = opts.forceFull === true;
     const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+    const effectiveCompact = false;
     const delta = forceFull ? await (async () => {
       const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
       const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
@@ -8517,13 +8510,18 @@ ${shapes}`.trim();
         const ts = gid ? gamePlayedAt.get(gid) : void 0;
         if (typeof ts === "number") r.playedAt = ts;
       }
-      const games = settings.compact ? gamesAll.map(compactRecord) : gamesAll;
-      const rounds = settings.compact ? roundsAll.map(compactRecord) : roundsAll;
-      const details = settings.compact ? detailsAll.map(compactRecord) : detailsAll;
-      const gameAgg = settings.compact ? gameAggAll.map(compactRecord) : gameAggAll;
+      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
+      const roundsNoPlayedAt = roundsAll.map((r) => {
+        const out = { ...r };
+        delete out.playedAt;
+        return out;
+      });
+      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
+      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
+      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
       const tables = {
         games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "playedAt", "movementType"]),
+        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
         details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
         ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
       };
@@ -8540,7 +8538,7 @@ ${shapes}`.trim();
         appVersion: getUserscriptVersion(),
         owner: { playerId: ownerId, playerName: ownerName },
         cursor: { from: 0, to: cursorTo },
-        options: { compact: settings.compact, includeAggregates: settings.includeAggregates, forceFull: true },
+        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
         counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
         tables
       };
@@ -8554,7 +8552,7 @@ ${shapes}`.trim();
         bytesJson: json.length,
         bytesGzip
       };
-    })() : await buildDelta(cursorFrom, { compact: settings.compact, includeAggregates: settings.includeAggregates });
+    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
     const headers = {
       "Content-Type": "application/json",
       "Content-Encoding": "gzip",
