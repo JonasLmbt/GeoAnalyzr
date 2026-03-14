@@ -227,6 +227,30 @@ async function buildDelta(since: number, opts: { compact: boolean; includeAggreg
     return Array.from(byId.values());
   })();
 
+  // Ensure `round.playedAt` is present: if missing, use game.playedAt for the same gameId.
+  // This keeps server-side storage/query fast without having to reconstruct timestamps later.
+  const roundsNeedingTsGameIds = Array.from(
+    new Set(
+      roundsMerged
+        .filter((r: any) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0))
+        .map((r: any) => (typeof r?.gameId === "string" ? r.gameId : ""))
+        .filter(Boolean)
+    )
+  );
+  if (roundsNeedingTsGameIds.length > 0) {
+    const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
+    const gamePlayedAt = new Map<string, number>();
+    for (const g of gamesForBackfill) {
+      if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+    }
+    for (const r of roundsMerged as any[]) {
+      if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      const ts = gid ? gamePlayedAt.get(gid) : undefined;
+      if (typeof ts === "number") (r as any).playedAt = ts;
+    }
+  }
+
   const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
   const rounds = opts.compact ? roundsMerged.map(compactRecord) : roundsMerged;
   const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
@@ -355,4 +379,3 @@ export async function getLastServerSyncMeta(): Promise<any | null> {
   const meta = await db.meta.get(SYNC_META_KEY);
   return meta?.value ?? null;
 }
-

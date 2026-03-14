@@ -8396,6 +8396,24 @@ ${shapes}`.trim();
       for (const d of detailsByTime) byId.set(d.gameId, d);
       return Array.from(byId.values());
     })();
+    const roundsNeedingTsGameIds = Array.from(
+      new Set(
+        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
+      )
+    );
+    if (roundsNeedingTsGameIds.length > 0) {
+      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesForBackfill) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsMerged) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+    }
     const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
     const rounds = opts.compact ? roundsMerged.map(compactRecord) : roundsMerged;
     const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
