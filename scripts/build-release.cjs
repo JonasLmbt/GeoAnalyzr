@@ -11,7 +11,8 @@ const devExtraGrants = isDev
   : "";
 
 const devExtraConnect = isDev
-  ? `// @connect      sync.geoanalyzr.lmbt.app`
+  ? `// @connect      sync.geoanalyzr.lmbt.app
+// @connect      geoanalyzr.lmbt.app`
   : "";
 
 const banner = `// ==UserScript==

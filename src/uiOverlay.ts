@@ -1,5 +1,6 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnce, saveServerSyncSettings } from "./serverSync";
+import { getGmXmlhttpRequest } from "./gm";
 
 type Counts = {
   games: number;
@@ -290,16 +291,73 @@ export function createUIOverlay(): UIOverlay {
       try {
         let settings = loadServerSyncSettings();
         if (!settings.token) {
-          status.textContent = "Missing sync token. Waiting for input...";
-          const token = String(prompt("GeoAnalyzr Sync (Dev)\n\nPaste your sync token (will be saved locally):", "") || "").trim();
-          if (!token) {
-            status.textContent = "Sync canceled (no token).";
+          const gm = getGmXmlhttpRequest();
+          if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+
+          status.textContent = "Linking device...";
+          const linkOrigin = "https://geoanalyzr.lmbt.app";
+          const pairStartUrl = `${linkOrigin}/pair/start`;
+
+          const pair = await new Promise<{ linkUrl: string }>((resolve, reject) => {
+            gm({
+              method: "GET",
+              url: pairStartUrl,
+              headers: { Accept: "application/json" },
+              onload: (res: any) => {
+                const text = typeof res?.responseText === "string" ? res.responseText : "";
+                try {
+                  const parsed = JSON.parse(text);
+                  if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                    return reject(new Error("Pairing failed (invalid response)."));
+                  }
+                  resolve({ linkUrl: String(parsed.linkUrl) });
+                } catch {
+                  reject(new Error("Pairing failed (invalid JSON)."));
+                }
+              },
+              onerror: (err: any) => reject(err instanceof Error ? err : new Error("Pairing failed")),
+              ontimeout: () => reject(new Error("Pairing timeout"))
+            });
+          });
+
+          const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+          if (!linkWin) {
+            status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
             return;
           }
-          const endpoint = String(
-            prompt("GeoAnalyzr Sync (Dev)\n\nSync endpoint URL:", settings.endpointUrl || "https://sync.geoanalyzr.lmbt.app/api/sync") || ""
-          ).trim();
-          saveServerSyncSettings({ token, endpointUrl: endpoint || settings.endpointUrl });
+
+          const token = await new Promise<string>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              cleanup();
+              reject(new Error("Link timeout"));
+            }, 2 * 60 * 1000);
+
+            const onMsg = (ev: MessageEvent) => {
+              if (ev.origin !== linkOrigin) return;
+              const d: any = ev.data;
+              if (!d || d.type !== "geoanalyzr_sync_token") return;
+              const t = typeof d.token === "string" ? d.token.trim() : "";
+              const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+              if (!t) return;
+              cleanup();
+              if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+              resolve(t);
+            };
+
+            const cleanup = () => {
+              window.clearTimeout(timeout);
+              window.removeEventListener("message", onMsg as any);
+              try {
+                linkWin.close();
+              } catch {
+                // ignore
+              }
+            };
+
+            window.addEventListener("message", onMsg as any);
+          });
+
+          saveServerSyncSettings({ token });
           settings = loadServerSyncSettings();
         }
         const res = await runServerSyncOnce(settings);
