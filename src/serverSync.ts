@@ -343,9 +343,9 @@ export async function runServerSyncOnceWithOptions(
   const forceFull = opts.forceFull === true;
   const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
 
-  // For forced full snapshots we always prefer full-fidelity payloads. This avoids
-  // "missing fields" surprises on the server/website.
-  const effectiveCompact = forceFull ? false : settings.compact;
+  // Full-fidelity sync: keep payload complete so the server/website can reproduce
+  // the old semantic dashboard without missing fields.
+  const effectiveCompact = false;
 
   const delta = forceFull
     ? await (async () => {
