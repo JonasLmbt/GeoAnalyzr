@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Local)
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.3.21
+// @version      2.3.22
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -7582,26 +7582,14 @@ ${shapes}`.trim();
     var td2 = mrg({}, ch[id].e);
     return wk(ch[id].c + ";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage=" + init.toString() + "}", id, td2, cbfs(td2), cb);
   };
-  var bInflt = function() {
-    return [u8, u16, i32, fleb, fdeb, clim, fl, fd, flrm, fdrm, rev, ec, hMap, max, bits, bits16, shft, slc, err, inflt, inflateSync, pbf, gopt];
-  };
   var bDflt = function() {
     return [u8, u16, i32, fleb, fdeb, clim, revfl, revfd, flm, flt, fdm, fdt, rev, deo, et, hMap, wbits, wbits16, hTree, ln, lc, clen, wfblk, wblk, shft, slc, dflt, dopt, deflateSync, pbf];
   };
   var gze = function() {
     return [gzh, gzhl, wbytes, crc, crct];
   };
-  var guze = function() {
-    return [gzs, gzl];
-  };
   var pbf = function(msg) {
     return postMessage(msg, [msg.buffer]);
-  };
-  var gopt = function(o) {
-    return o && {
-      out: o.size && new u8(o.size),
-      dictionary: o.dictionary
-    };
   };
   var cbify = function(dat, opts, fns, init, id, cb) {
     var w = wrkr(fns, init, id, function(err2, dat2) {
@@ -7637,21 +7625,6 @@ ${shapes}`.trim();
         c[i + 10] = fn.charCodeAt(i);
     }
   };
-  var gzs = function(d) {
-    if (d[0] != 31 || d[1] != 139 || d[2] != 8)
-      err(6, "invalid gzip data");
-    var flg = d[3];
-    var st = 10;
-    if (flg & 4)
-      st += (d[10] | d[11] << 8) + 2;
-    for (var zs = (flg >> 3 & 1) + (flg >> 4 & 1); zs > 0; zs -= !d[st++])
-      ;
-    return st + (flg & 2);
-  };
-  var gzl = function(d) {
-    var l = d.length;
-    return (d[l - 4] | d[l - 3] << 8 | d[l - 2] << 16 | d[l - 1] << 24) >>> 0;
-  };
   var gzhl = function(o) {
     return 10 + (o.filename ? o.filename.length + 1 : 0);
   };
@@ -7683,27 +7656,6 @@ ${shapes}`.trim();
     c.p(data);
     var d = dopt(data, opts, gzhl(opts), 8), s = d.length;
     return gzh(d, opts), wbytes(d, s - 8, c.d()), wbytes(d, s - 4, l), d;
-  }
-  function gunzip(data, opts, cb) {
-    if (!cb)
-      cb = opts, opts = {};
-    if (typeof cb != "function")
-      err(7);
-    return cbify(data, opts, [
-      bInflt,
-      guze,
-      function() {
-        return [gunzipSync];
-      }
-    ], function(ev) {
-      return pbf(gunzipSync(ev.data[0], ev.data[1]));
-    }, 3, cb);
-  }
-  function gunzipSync(data, opts) {
-    var st = gzs(data);
-    if (st + 8 > data.length)
-      err(6, "invalid gzip data");
-    return inflt(data.subarray(st, -8), { i: 2 }, opts && opts.out || new u8(gzl(data)), opts && opts.dictionary);
   }
   var te = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder();
   var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
@@ -7866,12 +7818,6 @@ ${shapes}`.trim();
       return MAIN_DB_NAME;
     }
   }
-  function writeActiveDbNameToStorage(name) {
-    try {
-      globalThis?.localStorage?.setItem(ACTIVE_DB_STORAGE_KEY, name);
-    } catch {
-    }
-  }
   function getActiveDbName() {
     return readActiveDbNameFromStorage();
   }
@@ -7955,17 +7901,6 @@ ${shapes}`.trim();
     }
   };
   var db = new GGDB(readActiveDbNameFromStorage());
-  async function switchActiveDb(name) {
-    const next = (typeof name === "string" ? name.trim() : "") || MAIN_DB_NAME;
-    if (next === db.name) return;
-    try {
-      db.close();
-    } catch {
-    }
-    writeActiveDbNameToStorage(next);
-    db = new GGDB(next);
-    await db.open();
-  }
 
   // src/gm.ts
   function getGlobalGmXmlhttpRequest() {
@@ -10501,7 +10436,7 @@ ${shapes}`.trim();
       return b;
     };
     const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
-    const syncBtn = isDevBuild() ? mkBtn2("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
+    const syncBtn = mkBtn2("Sync", "rgba(0,162,254,0.18)");
     const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
     const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
     const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
@@ -10512,7 +10447,7 @@ ${shapes}`.trim();
     panel.appendChild(header);
     panel.appendChild(status);
     panel.appendChild(updateBtn);
-    if (syncBtn) panel.appendChild(syncBtn);
+    panel.appendChild(syncBtn);
     panel.appendChild(analysisBtn);
     panel.appendChild(discordBtn);
     panel.appendChild(exportBtn);
@@ -10533,85 +10468,83 @@ ${shapes}`.trim();
     let openAnalysisHandler = null;
     let discordHandler = null;
     updateBtn.addEventListener("click", () => void updateHandler?.());
-    if (syncBtn) {
-      syncBtn.addEventListener("click", async (ev) => {
-        syncBtn.disabled = true;
-        const forceFull = !!(ev && ev.shiftKey);
-        status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
-        try {
-          let settings = loadServerSyncSettings();
-          if (!settings.token) {
-            const gm = getGmXmlhttpRequest();
-            if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
-            status.textContent = "Linking device...";
-            const linkOrigin = "https://geoanalyzr.lmbt.app";
-            const pairStartUrl = `${linkOrigin}/pair/start`;
-            const pair = await new Promise((resolve, reject) => {
-              gm({
-                method: "GET",
-                url: pairStartUrl,
-                headers: { Accept: "application/json" },
-                onload: (res2) => {
-                  const text = typeof res2?.responseText === "string" ? res2.responseText : "";
-                  try {
-                    const parsed = JSON.parse(text);
-                    if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                      return reject(new Error("Pairing failed (invalid response)."));
-                    }
-                    resolve({ linkUrl: String(parsed.linkUrl) });
-                  } catch {
-                    reject(new Error("Pairing failed (invalid JSON)."));
-                  }
-                },
-                onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
-                ontimeout: () => reject(new Error("Pairing timeout"))
-              });
-            });
-            const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-            if (!linkWin) {
-              status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
-              return;
-            }
-            const token = await new Promise((resolve, reject) => {
-              const timeout = window.setTimeout(() => {
-                cleanup();
-                reject(new Error("Link timeout"));
-              }, 2 * 60 * 1e3);
-              const onMsg = (ev2) => {
-                if (ev2.origin !== linkOrigin) return;
-                const d = ev2.data;
-                if (!d || d.type !== "geoanalyzr_sync_token") return;
-                const t = typeof d.token === "string" ? d.token.trim() : "";
-                const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-                if (!t) return;
-                cleanup();
-                if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-                resolve(t);
-              };
-              const cleanup = () => {
-                window.clearTimeout(timeout);
-                window.removeEventListener("message", onMsg);
+    syncBtn.addEventListener("click", async (ev) => {
+      syncBtn.disabled = true;
+      const forceFull = !!(ev && ev.shiftKey);
+      status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+      try {
+        let settings = loadServerSyncSettings();
+        if (!settings.token) {
+          const gm = getGmXmlhttpRequest();
+          if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+          status.textContent = "Linking device...";
+          const linkOrigin = "https://geoanalyzr.lmbt.app";
+          const pairStartUrl = `${linkOrigin}/pair/start`;
+          const pair = await new Promise((resolve, reject) => {
+            gm({
+              method: "GET",
+              url: pairStartUrl,
+              headers: { Accept: "application/json" },
+              onload: (res2) => {
+                const text = typeof res2?.responseText === "string" ? res2.responseText : "";
                 try {
-                  linkWin.close();
+                  const parsed = JSON.parse(text);
+                  if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                    return reject(new Error("Pairing failed (invalid response)."));
+                  }
+                  resolve({ linkUrl: String(parsed.linkUrl) });
                 } catch {
+                  reject(new Error("Pairing failed (invalid JSON)."));
                 }
-              };
-              window.addEventListener("message", onMsg);
+              },
+              onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
+              ontimeout: () => reject(new Error("Pairing timeout"))
             });
-            saveServerSyncSettings({ token });
-            settings = loadServerSyncSettings();
+          });
+          const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+          if (!linkWin) {
+            status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+            return;
           }
-          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-          const modeLabel = forceFull ? "Synced full" : "Synced";
-          status.textContent = res.ok ? `${modeLabel} \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
-        } catch (e) {
-          status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
-        } finally {
-          syncBtn.disabled = false;
+          const token = await new Promise((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              cleanup();
+              reject(new Error("Link timeout"));
+            }, 2 * 60 * 1e3);
+            const onMsg = (ev2) => {
+              if (ev2.origin !== linkOrigin) return;
+              const d = ev2.data;
+              if (!d || d.type !== "geoanalyzr_sync_token") return;
+              const t = typeof d.token === "string" ? d.token.trim() : "";
+              const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+              if (!t) return;
+              cleanup();
+              if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+              resolve(t);
+            };
+            const cleanup = () => {
+              window.clearTimeout(timeout);
+              window.removeEventListener("message", onMsg);
+              try {
+                linkWin.close();
+              } catch {
+              }
+            };
+            window.addEventListener("message", onMsg);
+          });
+          saveServerSyncSettings({ token });
+          settings = loadServerSyncSettings();
         }
-      });
-    }
+        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+        const modeLabel = forceFull ? "Synced full" : "Synced";
+        status.textContent = res.ok ? `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+      } catch (e) {
+        status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+      } finally {
+        syncBtn.disabled = false;
+      }
+    });
     exportBtn.addEventListener("click", () => void exportHandler?.());
     resetBtn.addEventListener("click", () => void resetHandler?.());
     analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
@@ -43313,162 +43246,6 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // src/portableDump.ts
-  var DB_NAME = MAIN_DB_NAME;
-  var DB_SCHEMA_VERSION = 5;
-  var COMPACT_DROP_KEYS2 = /* @__PURE__ */ new Set([
-    "raw",
-    "trueLocationKey",
-    "trueLocationRepeat",
-    "trueState",
-    "trueDistrict",
-    "trueUsState",
-    "trueCaProvince",
-    "trueIdProvince",
-    "trueIdKabupaten",
-    "truePhProvince",
-    "trueVnProvince"
-  ]);
-  function compactRecord2(row) {
-    const out = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (value === void 0) continue;
-      if (COMPACT_DROP_KEYS2.has(key)) continue;
-      if (key.endsWith("_guessCountry")) continue;
-      out[key] = value;
-    }
-    return out;
-  }
-  function getUserscriptVersion2() {
-    const anyGlobal = globalThis;
-    const info = anyGlobal?.GM_info;
-    const v = info?.script?.version;
-    return typeof v === "string" ? v : void 0;
-  }
-  function chunkArray(arr, chunkSize) {
-    if (arr.length === 0) return [];
-    const size = Math.max(1, chunkSize | 0);
-    const chunks = [];
-    for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
-    return chunks;
-  }
-  async function buildPortableDump(opts) {
-    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-    const [games, rounds, details, gameAgg, meta] = await Promise.all([
-      db.games.toArray(),
-      db.rounds.toArray(),
-      db.details.toArray(),
-      opts.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([]),
-      opts.includeMeta ? db.meta.toArray() : Promise.resolve([])
-    ]);
-    const dump = {
-      format: "geoanalyzr-portable",
-      formatVersion: 1,
-      createdAt: Date.now(),
-      appVersion: getUserscriptVersion2(),
-      owner: { playerId: ownerId, playerName: ownerName },
-      dbName: DB_NAME,
-      dbSchemaVersion: DB_SCHEMA_VERSION,
-      options: {
-        compact: opts.compact,
-        includeAggregates: opts.includeAggregates,
-        includeMeta: opts.includeMeta
-      },
-      data: {
-        games: opts.compact ? games.map(compactRecord2) : games,
-        rounds: opts.compact ? rounds.map(compactRecord2) : rounds,
-        details: opts.compact ? details.map(compactRecord2) : details,
-        ...opts.includeAggregates ? { gameAgg: opts.compact ? gameAgg.map(compactRecord2) : gameAgg } : {},
-        ...opts.includeMeta ? { meta: opts.compact ? meta.map(compactRecord2) : meta } : {}
-      }
-    };
-    return dump;
-  }
-  async function serializePortableDump(dump, opts) {
-    const json = JSON.stringify(dump);
-    if (!opts.gzip) {
-      return { bytes: strToU8(json), mime: "application/json", ext: "json" };
-    }
-    const bytes = await new Promise((resolve, reject) => {
-      gzip(strToU8(json), { level: 6 }, (err2, out) => {
-        if (err2) reject(err2);
-        else resolve(out);
-      });
-    });
-    return { bytes, mime: "application/gzip", ext: "json.gz" };
-  }
-  async function parsePortableDumpBytes(bytes) {
-    const isGzip = bytes.length >= 2 && bytes[0] === 31 && bytes[1] === 139;
-    const raw = isGzip ? await new Promise((resolve, reject) => {
-      gunzip(bytes, (err2, out) => {
-        if (err2) reject(err2);
-        else resolve(out);
-      });
-    }) : bytes;
-    const text = strFromU8(raw);
-    const parsed = JSON.parse(text);
-    if (!parsed || parsed.format !== "geoanalyzr-portable" || parsed.formatVersion !== 1) {
-      throw new Error("Unsupported dump file (expected GeoAnalyzr portable dump v1).");
-    }
-    return parsed;
-  }
-  async function replaceDatabaseFromPortableDump(dump) {
-    if (dump.format !== "geoanalyzr-portable" || dump.formatVersion !== 1) {
-      throw new Error("Unsupported dump file.");
-    }
-    try {
-      db.close();
-    } catch {
-    }
-    await db.delete();
-    await db.open();
-    const games = dump.data.games ?? [];
-    const rounds = dump.data.rounds ?? [];
-    const details = dump.data.details ?? [];
-    const gameAgg = dump.data.gameAgg ?? [];
-    const meta = dump.data.meta ?? [];
-    const fetchRanKey = "fetch_data_ran_v1";
-    const hasFetchRan = meta.some((m) => m?.key === fetchRanKey);
-    const metaWithFetchRan = hasFetchRan ? meta : meta.concat([{ key: fetchRanKey, value: { doneAt: Date.now(), inferred: true }, updatedAt: Date.now() }]);
-    await importPortableDumpIntoDb(db, dump, { clearFirst: false, forceMeta: metaWithFetchRan });
-  }
-  async function importPortableDumpIntoDb(targetDb, dump, opts) {
-    const games = dump.data.games ?? [];
-    const rounds = dump.data.rounds ?? [];
-    const details = dump.data.details ?? [];
-    const gameAgg = dump.data.gameAgg ?? [];
-    const meta = opts.forceMeta ?? (dump.data.meta ?? []);
-    await targetDb.transaction("rw", targetDb.games, targetDb.rounds, targetDb.details, targetDb.gameAgg, targetDb.meta, async () => {
-      if (opts.clearFirst) {
-        await Promise.all([
-          targetDb.games.clear(),
-          targetDb.rounds.clear(),
-          targetDb.details.clear(),
-          targetDb.gameAgg.clear(),
-          targetDb.meta.clear()
-        ]);
-      }
-      for (const chunk of chunkArray(games, 2e3)) await targetDb.games.bulkPut(chunk);
-      for (const chunk of chunkArray(rounds, 2e3)) await targetDb.rounds.bulkPut(chunk);
-      for (const chunk of chunkArray(details, 2e3)) await targetDb.details.bulkPut(chunk);
-      for (const chunk of chunkArray(gameAgg, 2e3)) await targetDb.gameAgg.bulkPut(chunk);
-      for (const chunk of chunkArray(meta, 2e3)) await targetDb.meta.bulkPut(chunk);
-    });
-  }
-  async function importPortableDumpIntoNewDb(name, dump) {
-    const dbName = (typeof name === "string" ? name.trim() : "") || `geoanalyzr_view_${Date.now()}`;
-    const target = new GGDB(dbName);
-    await target.open();
-    try {
-      await importPortableDumpIntoDb(target, dump, { clearFirst: true });
-    } finally {
-      try {
-        target.close();
-      } catch {
-      }
-    }
-  }
-
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
@@ -43498,28 +43275,11 @@ ${describeError(err2)}` : message;
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1e3);
     };
-    const downloadBytes = (filename, bytes, mime) => {
-      const blob = new Blob([bytes], { type: mime });
-      const url = URL.createObjectURL(blob);
-      const a = doc.createElement("a");
-      a.href = url;
-      a.download = filename;
-      (doc.body ?? doc.documentElement).appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1e3);
-    };
     const readJsonFromFileInput = async (input) => {
       const file = input.files?.[0] ?? null;
       if (!file) return null;
       const text = await file.text();
       return JSON.parse(text);
-    };
-    const readBytesFromFileInput = async (input) => {
-      const file = input.files?.[0] ?? null;
-      if (!file) return null;
-      const buf = await file.arrayBuffer();
-      return new Uint8Array(buf);
     };
     const formatBytes = (n) => {
       if (!Number.isFinite(n) || n <= 0) return "0 B";
@@ -43531,14 +43291,6 @@ ${describeError(err2)}` : message;
         i++;
       }
       return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-    };
-    const makeStamp = () => {
-      return (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
-    };
-    const normalizeDbNamePart = (value) => {
-      const raw = typeof value === "string" ? value : "";
-      const cleaned = raw.trim().replace(/[^A-Za-z0-9_\-]/g, "_");
-      return cleaned.slice(0, 48) || "unknown";
     };
     const settingsModal = doc.createElement("div");
     settingsModal.className = "ga-settings-modal";
@@ -43714,93 +43466,6 @@ ${describeError(err2)}` : message;
       standardsPane.appendChild(standardsNote);
       const dataPane = doc.createElement("div");
       dataPane.className = "ga-settings-pane";
-      const dataNote = doc.createElement("div");
-      dataNote.className = "ga-settings-note";
-      dataNote.textContent = "Export/import your complete local dataset for moving to another browser or sharing with others. Compact exports omit raw payloads and re-derivable fields (e.g. guess countries). Imported data replaces your current local DB.";
-      dataPane.appendChild(dataNote);
-      const dataActive = doc.createElement("div");
-      dataActive.className = "ga-settings-note";
-      const updateActiveDbLabel = () => {
-        const active = getActiveDbName();
-        dataActive.textContent = active === MAIN_DB_NAME ? "Active dataset: Your data" : `Active dataset: Viewer (${active})`;
-      };
-      updateActiveDbLabel();
-      dataPane.appendChild(dataActive);
-      const dataGrid = doc.createElement("div");
-      dataGrid.className = "ga-settings-grid";
-      const compactField = doc.createElement("div");
-      compactField.className = "ga-settings-field";
-      const compactLabel = doc.createElement("label");
-      compactLabel.textContent = "Export mode";
-      const compactSelect = doc.createElement("select");
-      compactSelect.innerHTML = `
-      <option value="compact">Compact (recommended)</option>
-      <option value="full">Full (includes derived fields)</option>
-    `;
-      compactSelect.value = "compact";
-      compactField.appendChild(compactLabel);
-      compactField.appendChild(compactSelect);
-      const aggField = doc.createElement("div");
-      aggField.className = "ga-settings-field";
-      const aggLabel = doc.createElement("label");
-      aggLabel.textContent = "Include aggregates";
-      const aggSelect = doc.createElement("select");
-      aggSelect.innerHTML = `<option value="yes">Yes (faster load)</option><option value="no">No (smaller)</option>`;
-      aggSelect.value = "yes";
-      aggField.appendChild(aggLabel);
-      aggField.appendChild(aggSelect);
-      const metaField = doc.createElement("div");
-      metaField.className = "ga-settings-field";
-      const metaLabel = doc.createElement("label");
-      metaLabel.textContent = "Include metadata";
-      const metaSelect = doc.createElement("select");
-      metaSelect.innerHTML = `<option value="yes">Yes</option><option value="no">No</option>`;
-      metaSelect.value = "yes";
-      metaField.appendChild(metaLabel);
-      metaField.appendChild(metaSelect);
-      const gzipField = doc.createElement("div");
-      gzipField.className = "ga-settings-field";
-      const gzipLabel = doc.createElement("label");
-      gzipLabel.textContent = "Compression";
-      const gzipSelect = doc.createElement("select");
-      gzipSelect.innerHTML = `<option value="gzip">GZip (.json.gz)</option><option value="plain">Plain JSON (.json)</option>`;
-      gzipSelect.value = "gzip";
-      gzipField.appendChild(gzipLabel);
-      gzipField.appendChild(gzipSelect);
-      dataGrid.appendChild(compactField);
-      dataGrid.appendChild(aggField);
-      dataGrid.appendChild(metaField);
-      dataGrid.appendChild(gzipField);
-      dataPane.appendChild(dataGrid);
-      const dataActions = doc.createElement("div");
-      dataActions.className = "ga-settings-actions";
-      const exportBtn = doc.createElement("button");
-      exportBtn.type = "button";
-      exportBtn.className = "ga-filter-btn";
-      exportBtn.textContent = "Export data";
-      exportBtn.title = "Export your complete local dataset as a portable dump";
-      const importBtn = doc.createElement("button");
-      importBtn.type = "button";
-      importBtn.className = "ga-filter-btn";
-      importBtn.textContent = "Import data";
-      importBtn.title = "Import a portable dump (replaces your local DB)";
-      const importInput = doc.createElement("input");
-      importInput.type = "file";
-      importInput.accept = "application/json,.json,application/gzip,.gz,.json.gz";
-      importInput.style.display = "none";
-      const dataStatus = doc.createElement("div");
-      dataStatus.className = "ga-settings-status";
-      const switchMineBtn = doc.createElement("button");
-      switchMineBtn.type = "button";
-      switchMineBtn.className = "ga-filter-btn";
-      switchMineBtn.textContent = "Switch to my data";
-      switchMineBtn.title = "Switch back to your main dataset (gg_analyzer_db)";
-      dataActions.appendChild(exportBtn);
-      dataActions.appendChild(importBtn);
-      dataActions.appendChild(switchMineBtn);
-      dataActions.appendChild(importInput);
-      dataPane.appendChild(dataActions);
-      dataPane.appendChild(dataStatus);
       const syncNote = doc.createElement("div");
       syncNote.className = "ga-settings-note";
       syncNote.textContent = "Server sync uploads a compact delta of your local dataset to your server. This does not change your local data. Keep your sync token private.";
@@ -43911,24 +43576,18 @@ ${describeError(err2)}` : message;
       });
       syncNowBtn.addEventListener("click", async () => {
         syncNowBtn.disabled = true;
-        exportBtn.disabled = true;
-        importBtn.disabled = true;
-        switchMineBtn.disabled = true;
         syncStatus.textContent = "Syncing...";
         try {
           persistSyncSettings();
           const latest = loadServerSyncSettings();
           const res = await runServerSyncOnce(latest);
           const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-          const msg = `OK (HTTP ${res.status}) \xB7 cursor ${res.cursorFrom} \u2192 ${res.cursorTo} \xB7 rows ${rowsTotal} \xB7 payload ${formatBytes(res.bytesGzip)} (gz)`;
-          syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) \xB7 ${res.responseText || "no response"}`;
+          const msg = `OK (HTTP ${res.status}) - cursor ${res.cursorFrom} -> ${res.cursorTo} - rows ${rowsTotal} - payload ${formatBytes(res.bytesGzip)} (gz)`;
+          syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
         } catch (e) {
           syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
         } finally {
           syncNowBtn.disabled = false;
-          exportBtn.disabled = false;
-          importBtn.disabled = false;
-          switchMineBtn.disabled = false;
           void refreshSyncMeta();
         }
       });
@@ -44404,141 +44063,6 @@ ${describeError(err2)}` : message;
           templateStatus.classList.add("error");
         }
       };
-      exportBtn.addEventListener("click", async () => {
-        exportBtn.disabled = true;
-        importBtn.disabled = true;
-        dataStatus.textContent = "Building portable dump...";
-        dataStatus.className = "ga-settings-status";
-        try {
-          const compact = compactSelect.value === "compact";
-          const includeAggregates = aggSelect.value === "yes";
-          const includeMeta = metaSelect.value === "yes";
-          const useGzip = gzipSelect.value === "gzip";
-          const dump = await buildPortableDump({ compact, includeAggregates, includeMeta });
-          const { bytes, mime, ext } = await serializePortableDump(dump, { gzip: useGzip });
-          const filename = `geoanalyzr-data-${makeStamp()}.${ext}`;
-          downloadBytes(filename, bytes, mime);
-          const gamesCount = dump.data.games.length;
-          const roundsCount = dump.data.rounds.length;
-          const detailsCount = dump.data.details.length;
-          dataStatus.textContent = `Exported ${gamesCount} games, ${roundsCount} rounds, ${detailsCount} details (${formatBytes(bytes.length)}).`;
-          dataStatus.classList.add("ok");
-        } catch (err2) {
-          const msg = err2 instanceof Error ? err2.message : String(err2);
-          dataStatus.textContent = `Export failed: ${msg}`;
-          dataStatus.classList.add("error");
-        } finally {
-          exportBtn.disabled = false;
-          importBtn.disabled = false;
-        }
-      });
-      importBtn.addEventListener("click", () => {
-        importInput.value = "";
-        importInput.click();
-      });
-      switchMineBtn.addEventListener("click", () => {
-        void (async () => {
-          try {
-            switchMineBtn.disabled = true;
-            dataStatus.textContent = "";
-            await switchActiveDb(MAIN_DB_NAME);
-            invalidateRoundsCache();
-            updateActiveDbLabel();
-            dataStatus.textContent = "Switched to your dataset. Re-open the analysis window to reload.";
-            dataStatus.className = "ga-settings-status ok";
-          } catch (err2) {
-            const msg = err2 instanceof Error ? err2.message : String(err2);
-            dataStatus.textContent = `Failed to switch dataset: ${msg}`;
-            dataStatus.className = "ga-settings-status error";
-          } finally {
-            switchMineBtn.disabled = false;
-          }
-        })();
-      });
-      importInput.addEventListener("change", async () => {
-        dataStatus.textContent = "";
-        dataStatus.className = "ga-settings-status";
-        const bytes = await readBytesFromFileInput(importInput);
-        if (!bytes) return;
-        exportBtn.disabled = true;
-        importBtn.disabled = true;
-        switchMineBtn.disabled = true;
-        dataStatus.textContent = "Reading dump...";
-        try {
-          const dump = await parsePortableDumpBytes(bytes);
-          const gamesCount = dump.data.games?.length ?? 0;
-          const roundsCount = dump.data.rounds?.length ?? 0;
-          const detailsCount = dump.data.details?.length ?? 0;
-          const dumpOwnerId = typeof dump.owner?.playerId === "string" ? dump.owner.playerId.trim() : "";
-          const dumpOwnerName = typeof dump.owner?.playerName === "string" ? dump.owner.playerName.trim() : "";
-          const currentPlayerId = await getCurrentPlayerId() ?? "";
-          const isOwnerMatch = dumpOwnerId && currentPlayerId && dumpOwnerId === currentPlayerId;
-          if (isOwnerMatch) {
-            if (getActiveDbName() !== MAIN_DB_NAME) {
-              dataStatus.textContent = "You are in Viewer mode. Switch to your dataset first to replace it.";
-              dataStatus.classList.add("error");
-              return;
-            }
-            const ok = targetWindow.confirm(
-              `This dump matches the currently logged-in player.
-
-Replace your local GeoAnalyzr DB with this dataset?
-
-Games: ${gamesCount}
-Rounds: ${roundsCount}
-Details: ${detailsCount}
-
-This cannot be undone.`
-            );
-            if (!ok) {
-              dataStatus.textContent = "Import canceled.";
-              return;
-            }
-            dataStatus.textContent = "Importing (replacing your local DB)...";
-            await replaceDatabaseFromPortableDump(dump);
-            invalidateRoundsCache();
-            updateActiveDbLabel();
-            dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
-            dataStatus.classList.add("ok");
-            return;
-          }
-          const ownerLabel = dumpOwnerName ? `${dumpOwnerName}${dumpOwnerId ? ` (${dumpOwnerId.slice(0, 8)}\u2026)` : ""}` : dumpOwnerId ? `${dumpOwnerId.slice(0, 8)}\u2026` : "unknown player";
-          const okViewer = targetWindow.confirm(
-            `This dump does NOT match the currently logged-in player.
-
-It will be imported as a separate Viewer dataset for: ${ownerLabel}.
-Your own dataset will NOT be overwritten.
-
-Games: ${gamesCount}
-Rounds: ${roundsCount}
-Details: ${detailsCount}
-
-Import now and switch to Viewer mode?`
-          );
-          if (!okViewer) {
-            dataStatus.textContent = "Import canceled.";
-            return;
-          }
-          const viewerKey = normalizeDbNamePart(dumpOwnerId || dumpOwnerName || `viewer_${Date.now()}`);
-          const viewerDbName = `gg_analyzer_db_view_${viewerKey}`;
-          dataStatus.textContent = "Importing as Viewer dataset...";
-          await importPortableDumpIntoNewDb(viewerDbName, dump);
-          dataStatus.textContent = "Switching to Viewer dataset...";
-          await switchActiveDb(viewerDbName);
-          invalidateRoundsCache();
-          updateActiveDbLabel();
-          dataStatus.textContent = "Viewer dataset imported and activated. Close and re-open the analysis window to load it.";
-          dataStatus.classList.add("ok");
-        } catch (err2) {
-          const msg = err2 instanceof Error ? err2.message : String(err2);
-          dataStatus.textContent = `Import failed: ${msg}`;
-          dataStatus.classList.add("error");
-        } finally {
-          exportBtn.disabled = false;
-          importBtn.disabled = false;
-          switchMineBtn.disabled = false;
-        }
-      });
       const downloadTextFile = (filename, text) => {
         const blob = new Blob([text], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);

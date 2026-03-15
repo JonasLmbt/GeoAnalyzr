@@ -20,14 +20,14 @@ function cssOnce(): void {
       width: 44px;
       height: 44px;
       border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.25);
+      border: 1px solid rgba(0,162,254,0.45);
       background: rgba(20,20,20,0.95);
       color: white;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+      box-shadow: 0 10px 26px rgba(0,162,254,0.12), 0 6px 20px rgba(0,0,0,0.32);
       transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
       overflow: hidden;
     }
@@ -38,12 +38,12 @@ function cssOnce(): void {
       width: 22px;
       height: 22px;
       border-radius: 999px;
-      border: 2px solid rgba(58,232,189,0.22);
-      border-top-color: rgba(58,232,189,0.92);
+      border: 2px solid rgba(0,162,254,0.22);
+      border-top-color: rgba(0,162,254,0.92);
       animation: ga-spin 850ms linear infinite;
     }
 
-    .ga-sync-mini[data-state="working"] { border-color: rgba(58,232,189,0.55); box-shadow: 0 8px 26px rgba(58,232,189,0.18); }
+    .ga-sync-mini[data-state="working"] { border-color: rgba(0,162,254,0.75); box-shadow: 0 12px 32px rgba(0,162,254,0.18); }
     .ga-sync-mini[data-state="ok"] { border-color: rgba(58,232,189,0.70); box-shadow: 0 8px 26px rgba(58,232,189,0.14); }
     .ga-sync-mini[data-state="error"] { border-color: rgba(255,107,107,0.70); box-shadow: 0 8px 26px rgba(255,107,107,0.16); }
     .ga-sync-mini[data-state="needs_link"] { border-color: rgba(254,205,25,0.75); box-shadow: 0 8px 26px rgba(254,205,25,0.12); }

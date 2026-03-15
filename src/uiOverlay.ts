@@ -246,7 +246,7 @@ export function createUIOverlay(): UIOverlay {
   };
 
   const updateBtn = mkBtn("Fetch Data", "rgba(255,255,255,0.10)");
-  const syncBtn = isDevBuild() ? mkBtn("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
+  const syncBtn = mkBtn("Sync", "rgba(0,162,254,0.18)");
   const analysisBtn = mkBtn("Open Analysis Window", "rgba(35,95,160,0.28)");
   const discordBtn = mkBtn("Join Discord", "rgba(121,80,229,0.30)");
   const exportBtn = mkBtn("Export Excel", "rgba(40,120,50,0.35)");
@@ -259,7 +259,7 @@ export function createUIOverlay(): UIOverlay {
   panel.appendChild(header);
   panel.appendChild(status);
   panel.appendChild(updateBtn);
-  if (syncBtn) panel.appendChild(syncBtn);
+  panel.appendChild(syncBtn);
   panel.appendChild(analysisBtn);
   panel.appendChild(discordBtn);
   panel.appendChild(exportBtn);
@@ -284,94 +284,92 @@ export function createUIOverlay(): UIOverlay {
   let discordHandler: (() => void | Promise<void>) | null = null;
 
   updateBtn.addEventListener("click", () => void updateHandler?.());
-  if (syncBtn) {
-    syncBtn.addEventListener("click", async (ev) => {
-      syncBtn.disabled = true;
-      const forceFull = !!(ev && (ev as any).shiftKey);
-      status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
-      try {
-        let settings = loadServerSyncSettings();
-        if (!settings.token) {
-          const gm = getGmXmlhttpRequest();
-          if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+  syncBtn.addEventListener("click", async (ev) => {
+    syncBtn.disabled = true;
+    const forceFull = !!(ev && (ev as any).shiftKey);
+    status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+    try {
+      let settings = loadServerSyncSettings();
+      if (!settings.token) {
+        const gm = getGmXmlhttpRequest();
+        if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
 
-          status.textContent = "Linking device...";
-          const linkOrigin = "https://geoanalyzr.lmbt.app";
-          const pairStartUrl = `${linkOrigin}/pair/start`;
+        status.textContent = "Linking device...";
+        const linkOrigin = "https://geoanalyzr.lmbt.app";
+        const pairStartUrl = `${linkOrigin}/pair/start`;
 
-          const pair = await new Promise<{ linkUrl: string }>((resolve, reject) => {
-            gm({
-              method: "GET",
-              url: pairStartUrl,
-              headers: { Accept: "application/json" },
-              onload: (res: any) => {
-                const text = typeof res?.responseText === "string" ? res.responseText : "";
-                try {
-                  const parsed = JSON.parse(text);
-                  if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                    return reject(new Error("Pairing failed (invalid response)."));
-                  }
-                  resolve({ linkUrl: String(parsed.linkUrl) });
-                } catch {
-                  reject(new Error("Pairing failed (invalid JSON)."));
-                }
-              },
-              onerror: (err: any) => reject(err instanceof Error ? err : new Error("Pairing failed")),
-              ontimeout: () => reject(new Error("Pairing timeout"))
-            });
-          });
-
-          const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-          if (!linkWin) {
-            status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
-            return;
-          }
-
-          const token = await new Promise<string>((resolve, reject) => {
-            const timeout = window.setTimeout(() => {
-              cleanup();
-              reject(new Error("Link timeout"));
-            }, 2 * 60 * 1000);
-
-            const onMsg = (ev: MessageEvent) => {
-              if (ev.origin !== linkOrigin) return;
-              const d: any = ev.data;
-              if (!d || d.type !== "geoanalyzr_sync_token") return;
-              const t = typeof d.token === "string" ? d.token.trim() : "";
-              const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-              if (!t) return;
-              cleanup();
-              if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-              resolve(t);
-            };
-
-            const cleanup = () => {
-              window.clearTimeout(timeout);
-              window.removeEventListener("message", onMsg as any);
+        const pair = await new Promise<{ linkUrl: string }>((resolve, reject) => {
+          gm({
+            method: "GET",
+            url: pairStartUrl,
+            headers: { Accept: "application/json" },
+            onload: (res: any) => {
+              const text = typeof res?.responseText === "string" ? res.responseText : "";
               try {
-                linkWin.close();
+                const parsed = JSON.parse(text);
+                if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                  return reject(new Error("Pairing failed (invalid response)."));
+                }
+                resolve({ linkUrl: String(parsed.linkUrl) });
               } catch {
-                // ignore
+                reject(new Error("Pairing failed (invalid JSON)."));
               }
-            };
-
-            window.addEventListener("message", onMsg as any);
+            },
+            onerror: (err: any) => reject(err instanceof Error ? err : new Error("Pairing failed")),
+            ontimeout: () => reject(new Error("Pairing timeout"))
           });
+        });
 
-          saveServerSyncSettings({ token });
-          settings = loadServerSyncSettings();
+        const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+        if (!linkWin) {
+          status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+          return;
         }
-        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-        const modeLabel = forceFull ? "Synced full" : "Synced";
-        status.textContent = res.ok ? `${modeLabel} · rows ${rowsTotal} · ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
-      } catch (e: any) {
-        status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
-      } finally {
-        syncBtn.disabled = false;
+
+        const token = await new Promise<string>((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error("Link timeout"));
+          }, 2 * 60 * 1000);
+
+          const onMsg = (ev2: MessageEvent) => {
+            if (ev2.origin !== linkOrigin) return;
+            const d: any = ev2.data;
+            if (!d || d.type !== "geoanalyzr_sync_token") return;
+            const t = typeof d.token === "string" ? d.token.trim() : "";
+            const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+            if (!t) return;
+            cleanup();
+            if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+            resolve(t);
+          };
+
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMsg as any);
+            try {
+              linkWin.close();
+            } catch {
+              // ignore
+            }
+          };
+
+          window.addEventListener("message", onMsg as any);
+        });
+
+        saveServerSyncSettings({ token });
+        settings = loadServerSyncSettings();
       }
-    });
-  }
+      const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+      const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+      const modeLabel = forceFull ? "Synced full" : "Synced";
+      status.textContent = res.ok ? `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+    } catch (e: any) {
+      status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+    } finally {
+      syncBtn.disabled = false;
+    }
+  });
   exportBtn.addEventListener("click", () => void exportHandler?.());
   resetBtn.addEventListener("click", () => void resetHandler?.());
   analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());

@@ -12,16 +12,6 @@ import {
   normalizeTheme,
   type SemanticDashboardSettings
 } from "./settingsStore";
-import { MAIN_DB_NAME, getActiveDbName, switchActiveDb } from "../db";
-import { invalidateRoundsCache } from "../engine/queryEngine";
-import { getCurrentPlayerId } from "../app/playerIdentity";
-import {
-  buildPortableDump,
-  parsePortableDumpBytes,
-  replaceDatabaseFromPortableDump,
-  serializePortableDump,
-  importPortableDumpIntoNewDb
-} from "../portableDump";
 import {
   getLastServerSyncCursor,
   getLastServerSyncMeta,
@@ -74,30 +64,11 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const downloadBytes = (filename: string, bytes: Uint8Array, mime: string): void => {
-    const blob = new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = doc.createElement("a");
-    a.href = url;
-    a.download = filename;
-    (doc.body ?? doc.documentElement).appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
-
   const readJsonFromFileInput = async (input: HTMLInputElement): Promise<any> => {
     const file = input.files?.[0] ?? null;
     if (!file) return null;
     const text = await file.text();
     return JSON.parse(text);
-  };
-
-  const readBytesFromFileInput = async (input: HTMLInputElement): Promise<Uint8Array | null> => {
-    const file = input.files?.[0] ?? null;
-    if (!file) return null;
-    const buf = await file.arrayBuffer();
-    return new Uint8Array(buf);
   };
 
   const formatBytes = (n: number): string => {
@@ -110,16 +81,6 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       i++;
     }
     return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-  };
-
-  const makeStamp = (): string => {
-    return new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").slice(0, 19);
-  };
-
-  const normalizeDbNamePart = (value: string): string => {
-    const raw = typeof value === "string" ? value : "";
-    const cleaned = raw.trim().replace(/[^A-Za-z0-9_\-]/g, "_");
-    return cleaned.slice(0, 48) || "unknown";
   };
 
   const settingsModal = doc.createElement("div");
@@ -321,109 +282,6 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     const dataPane = doc.createElement("div");
     dataPane.className = "ga-settings-pane";
 
-    const dataNote = doc.createElement("div");
-    dataNote.className = "ga-settings-note";
-    dataNote.textContent =
-      "Export/import your complete local dataset for moving to another browser or sharing with others. Compact exports omit raw payloads and re-derivable fields (e.g. guess countries). Imported data replaces your current local DB.";
-    dataPane.appendChild(dataNote);
-
-    const dataActive = doc.createElement("div");
-    dataActive.className = "ga-settings-note";
-    const updateActiveDbLabel = () => {
-      const active = getActiveDbName();
-      dataActive.textContent = active === MAIN_DB_NAME ? "Active dataset: Your data" : `Active dataset: Viewer (${active})`;
-    };
-    updateActiveDbLabel();
-    dataPane.appendChild(dataActive);
-
-    const dataGrid = doc.createElement("div");
-    dataGrid.className = "ga-settings-grid";
-
-    const compactField = doc.createElement("div");
-    compactField.className = "ga-settings-field";
-    const compactLabel = doc.createElement("label");
-    compactLabel.textContent = "Export mode";
-    const compactSelect = doc.createElement("select");
-    compactSelect.innerHTML = `
-      <option value="compact">Compact (recommended)</option>
-      <option value="full">Full (includes derived fields)</option>
-    `;
-    compactSelect.value = "compact";
-    compactField.appendChild(compactLabel);
-    compactField.appendChild(compactSelect);
-
-    const aggField = doc.createElement("div");
-    aggField.className = "ga-settings-field";
-    const aggLabel = doc.createElement("label");
-    aggLabel.textContent = "Include aggregates";
-    const aggSelect = doc.createElement("select");
-    aggSelect.innerHTML = `<option value="yes">Yes (faster load)</option><option value="no">No (smaller)</option>`;
-    aggSelect.value = "yes";
-    aggField.appendChild(aggLabel);
-    aggField.appendChild(aggSelect);
-
-    const metaField = doc.createElement("div");
-    metaField.className = "ga-settings-field";
-    const metaLabel = doc.createElement("label");
-    metaLabel.textContent = "Include metadata";
-    const metaSelect = doc.createElement("select");
-    metaSelect.innerHTML = `<option value="yes">Yes</option><option value="no">No</option>`;
-    metaSelect.value = "yes";
-    metaField.appendChild(metaLabel);
-    metaField.appendChild(metaSelect);
-
-    const gzipField = doc.createElement("div");
-    gzipField.className = "ga-settings-field";
-    const gzipLabel = doc.createElement("label");
-    gzipLabel.textContent = "Compression";
-    const gzipSelect = doc.createElement("select");
-    gzipSelect.innerHTML = `<option value="gzip">GZip (.json.gz)</option><option value="plain">Plain JSON (.json)</option>`;
-    gzipSelect.value = "gzip";
-    gzipField.appendChild(gzipLabel);
-    gzipField.appendChild(gzipSelect);
-
-    dataGrid.appendChild(compactField);
-    dataGrid.appendChild(aggField);
-    dataGrid.appendChild(metaField);
-    dataGrid.appendChild(gzipField);
-    dataPane.appendChild(dataGrid);
-
-    const dataActions = doc.createElement("div");
-    dataActions.className = "ga-settings-actions";
-
-    const exportBtn = doc.createElement("button");
-    exportBtn.type = "button";
-    exportBtn.className = "ga-filter-btn";
-    exportBtn.textContent = "Export data";
-    exportBtn.title = "Export your complete local dataset as a portable dump";
-
-    const importBtn = doc.createElement("button");
-    importBtn.type = "button";
-    importBtn.className = "ga-filter-btn";
-    importBtn.textContent = "Import data";
-    importBtn.title = "Import a portable dump (replaces your local DB)";
-
-    const importInput = doc.createElement("input");
-    importInput.type = "file";
-    importInput.accept = "application/json,.json,application/gzip,.gz,.json.gz";
-    importInput.style.display = "none";
-
-    const dataStatus = doc.createElement("div");
-    dataStatus.className = "ga-settings-status";
-
-    const switchMineBtn = doc.createElement("button");
-    switchMineBtn.type = "button";
-    switchMineBtn.className = "ga-filter-btn";
-    switchMineBtn.textContent = "Switch to my data";
-    switchMineBtn.title = "Switch back to your main dataset (gg_analyzer_db)";
-
-    dataActions.appendChild(exportBtn);
-    dataActions.appendChild(importBtn);
-    dataActions.appendChild(switchMineBtn);
-    dataActions.appendChild(importInput);
-    dataPane.appendChild(dataActions);
-    dataPane.appendChild(dataStatus);
-
     const syncNote = doc.createElement("div");
     syncNote.className = "ga-settings-note";
     syncNote.textContent =
@@ -551,9 +409,6 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
 
     syncNowBtn.addEventListener("click", async () => {
       syncNowBtn.disabled = true;
-      exportBtn.disabled = true;
-      importBtn.disabled = true;
-      switchMineBtn.disabled = true;
       syncStatus.textContent = "Syncing...";
       try {
         persistSyncSettings();
@@ -561,18 +416,15 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         const res = await runServerSyncOnce(latest);
         const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
         const msg =
-          `OK (HTTP ${res.status}) · ` +
-          `cursor ${res.cursorFrom} → ${res.cursorTo} · ` +
-          `rows ${rowsTotal} · ` +
+          `OK (HTTP ${res.status}) - ` +
+          `cursor ${res.cursorFrom} -> ${res.cursorTo} - ` +
+          `rows ${rowsTotal} - ` +
           `payload ${formatBytes(res.bytesGzip)} (gz)`;
-        syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) · ${res.responseText || "no response"}`;
+        syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
       } catch (e: any) {
         syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
       } finally {
         syncNowBtn.disabled = false;
-        exportBtn.disabled = false;
-        importBtn.disabled = false;
-        switchMineBtn.disabled = false;
         void refreshSyncMeta();
       }
     });
@@ -1092,155 +944,6 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         templateStatus.classList.add("error");
       }
     };
-
-    exportBtn.addEventListener("click", async () => {
-      exportBtn.disabled = true;
-      importBtn.disabled = true;
-      dataStatus.textContent = "Building portable dump...";
-      dataStatus.className = "ga-settings-status";
-
-      try {
-        const compact = compactSelect.value === "compact";
-        const includeAggregates = aggSelect.value === "yes";
-        const includeMeta = metaSelect.value === "yes";
-        const useGzip = gzipSelect.value === "gzip";
-
-        const dump = await buildPortableDump({ compact, includeAggregates, includeMeta });
-        const { bytes, mime, ext } = await serializePortableDump(dump, { gzip: useGzip });
-        const filename = `geoanalyzr-data-${makeStamp()}.${ext}`;
-        downloadBytes(filename, bytes, mime);
-
-        const gamesCount = dump.data.games.length;
-        const roundsCount = dump.data.rounds.length;
-        const detailsCount = dump.data.details.length;
-        dataStatus.textContent = `Exported ${gamesCount} games, ${roundsCount} rounds, ${detailsCount} details (${formatBytes(bytes.length)}).`;
-        dataStatus.classList.add("ok");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        dataStatus.textContent = `Export failed: ${msg}`;
-        dataStatus.classList.add("error");
-      } finally {
-        exportBtn.disabled = false;
-        importBtn.disabled = false;
-      }
-    });
-
-    importBtn.addEventListener("click", () => {
-      importInput.value = "";
-      importInput.click();
-    });
-
-    switchMineBtn.addEventListener("click", () => {
-      void (async () => {
-        try {
-          switchMineBtn.disabled = true;
-          dataStatus.textContent = "";
-          await switchActiveDb(MAIN_DB_NAME);
-          invalidateRoundsCache();
-          updateActiveDbLabel();
-          dataStatus.textContent = "Switched to your dataset. Re-open the analysis window to reload.";
-          dataStatus.className = "ga-settings-status ok";
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          dataStatus.textContent = `Failed to switch dataset: ${msg}`;
-          dataStatus.className = "ga-settings-status error";
-        } finally {
-          switchMineBtn.disabled = false;
-        }
-      })();
-    });
-
-    importInput.addEventListener("change", async () => {
-      dataStatus.textContent = "";
-      dataStatus.className = "ga-settings-status";
-
-      const bytes = await readBytesFromFileInput(importInput);
-      if (!bytes) return;
-
-      exportBtn.disabled = true;
-      importBtn.disabled = true;
-      switchMineBtn.disabled = true;
-      dataStatus.textContent = "Reading dump...";
-
-      try {
-        const dump = await parsePortableDumpBytes(bytes);
-        const gamesCount = dump.data.games?.length ?? 0;
-        const roundsCount = dump.data.rounds?.length ?? 0;
-        const detailsCount = dump.data.details?.length ?? 0;
-        const dumpOwnerId = typeof dump.owner?.playerId === "string" ? dump.owner.playerId.trim() : "";
-        const dumpOwnerName = typeof dump.owner?.playerName === "string" ? dump.owner.playerName.trim() : "";
-
-        const currentPlayerId = (await getCurrentPlayerId()) ?? "";
-        const isOwnerMatch = dumpOwnerId && currentPlayerId && dumpOwnerId === currentPlayerId;
-
-        if (isOwnerMatch) {
-          if (getActiveDbName() !== MAIN_DB_NAME) {
-            dataStatus.textContent = "You are in Viewer mode. Switch to your dataset first to replace it.";
-            dataStatus.classList.add("error");
-            return;
-          }
-
-          const ok = targetWindow.confirm(
-            `This dump matches the currently logged-in player.\n\n` +
-              `Replace your local GeoAnalyzr DB with this dataset?\n\n` +
-              `Games: ${gamesCount}\nRounds: ${roundsCount}\nDetails: ${detailsCount}\n\n` +
-              `This cannot be undone.`
-          );
-          if (!ok) {
-            dataStatus.textContent = "Import canceled.";
-            return;
-          }
-
-          dataStatus.textContent = "Importing (replacing your local DB)...";
-          await replaceDatabaseFromPortableDump(dump);
-          invalidateRoundsCache();
-          updateActiveDbLabel();
-          dataStatus.textContent = "Import complete. Close and re-open the analysis window to load the new dataset.";
-          dataStatus.classList.add("ok");
-          return;
-        }
-
-        const ownerLabel = dumpOwnerName
-          ? `${dumpOwnerName}${dumpOwnerId ? ` (${dumpOwnerId.slice(0, 8)}…)` : ""}`
-          : dumpOwnerId
-            ? `${dumpOwnerId.slice(0, 8)}…`
-            : "unknown player";
-
-        const okViewer = targetWindow.confirm(
-          `This dump does NOT match the currently logged-in player.\n\n` +
-            `It will be imported as a separate Viewer dataset for: ${ownerLabel}.\n` +
-            `Your own dataset will NOT be overwritten.\n\n` +
-            `Games: ${gamesCount}\nRounds: ${roundsCount}\nDetails: ${detailsCount}\n\n` +
-            `Import now and switch to Viewer mode?`
-        );
-        if (!okViewer) {
-          dataStatus.textContent = "Import canceled.";
-          return;
-        }
-
-        const viewerKey = normalizeDbNamePart(dumpOwnerId || dumpOwnerName || `viewer_${Date.now()}`);
-        const viewerDbName = `gg_analyzer_db_view_${viewerKey}`;
-
-        dataStatus.textContent = "Importing as Viewer dataset...";
-        await importPortableDumpIntoNewDb(viewerDbName, dump);
-
-        dataStatus.textContent = "Switching to Viewer dataset...";
-        await switchActiveDb(viewerDbName);
-        invalidateRoundsCache();
-        updateActiveDbLabel();
-
-        dataStatus.textContent = "Viewer dataset imported and activated. Close and re-open the analysis window to load it.";
-        dataStatus.classList.add("ok");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        dataStatus.textContent = `Import failed: ${msg}`;
-        dataStatus.classList.add("error");
-      } finally {
-        exportBtn.disabled = false;
-        importBtn.disabled = false;
-        switchMineBtn.disabled = false;
-      }
-    });
 
     const downloadTextFile = (filename: string, text: string) => {
       const blob = new Blob([text], { type: "application/json;charset=utf-8" });

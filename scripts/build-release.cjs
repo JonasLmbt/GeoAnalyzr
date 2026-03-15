@@ -5,7 +5,7 @@ const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 const isSyncOnly = /(^|[\\/])geoanalyzr\.sync\.user\.js$/i.test(outFile);
 const isLocal = !isDev && !isSyncOnly;
 
-const version = isDev ? "2.3.21-dev" : "2.3.21";
+const version = isDev ? "2.3.22-dev" : "2.3.22";
 
 // GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,
 // which breaks installation/auto-updates. Raw GitHub URLs are always backed by the repo contents.
