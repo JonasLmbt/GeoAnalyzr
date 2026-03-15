@@ -29,16 +29,27 @@ function cssOnce(): void {
       justify-content: center;
       box-shadow: 0 6px 20px rgba(0,0,0,0.35);
       transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+      overflow: hidden;
     }
     .ga-sync-mini:active { transform: translateY(1px); }
     .ga-sync-mini svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
+    .ga-sync-mini .ga-sync-spinner {
+      display: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 2px solid rgba(58,232,189,0.22);
+      border-top-color: rgba(58,232,189,0.92);
+      animation: ga-spin 850ms linear infinite;
+    }
 
     .ga-sync-mini[data-state="working"] { border-color: rgba(58,232,189,0.55); box-shadow: 0 8px 26px rgba(58,232,189,0.18); }
     .ga-sync-mini[data-state="ok"] { border-color: rgba(58,232,189,0.70); box-shadow: 0 8px 26px rgba(58,232,189,0.14); }
     .ga-sync-mini[data-state="error"] { border-color: rgba(255,107,107,0.70); box-shadow: 0 8px 26px rgba(255,107,107,0.16); }
     .ga-sync-mini[data-state="needs_link"] { border-color: rgba(254,205,25,0.75); box-shadow: 0 8px 26px rgba(254,205,25,0.12); }
 
-    .ga-sync-mini[data-state="working"] svg { animation: ga-spin 900ms linear infinite; transform-origin: 50% 50%; }
+    .ga-sync-mini[data-state="working"] svg { display:none; }
+    .ga-sync-mini[data-state="working"] .ga-sync-spinner { display:block; }
     @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     .ga-sync-toast {
@@ -87,6 +98,10 @@ export function createSyncMiniButton(opts: {
   btn.title = "GeoAnalyzr Sync";
   btn.setAttribute("data-state", "idle");
   btn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-sync-mini", variant: "light", decorative: true });
+  const spinner = el("div");
+  spinner.className = "ga-sync-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  btn.appendChild(spinner);
   btn.addEventListener("click", (ev) => void opts.onClick(ev));
 
   const toast = el("div");

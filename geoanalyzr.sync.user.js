@@ -9981,16 +9981,27 @@ ${shapes}`.trim();
       justify-content: center;
       box-shadow: 0 6px 20px rgba(0,0,0,0.35);
       transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+      overflow: hidden;
     }
     .ga-sync-mini:active { transform: translateY(1px); }
     .ga-sync-mini svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
+    .ga-sync-mini .ga-sync-spinner {
+      display: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 2px solid rgba(58,232,189,0.22);
+      border-top-color: rgba(58,232,189,0.92);
+      animation: ga-spin 850ms linear infinite;
+    }
 
     .ga-sync-mini[data-state="working"] { border-color: rgba(58,232,189,0.55); box-shadow: 0 8px 26px rgba(58,232,189,0.18); }
     .ga-sync-mini[data-state="ok"] { border-color: rgba(58,232,189,0.70); box-shadow: 0 8px 26px rgba(58,232,189,0.14); }
     .ga-sync-mini[data-state="error"] { border-color: rgba(255,107,107,0.70); box-shadow: 0 8px 26px rgba(255,107,107,0.16); }
     .ga-sync-mini[data-state="needs_link"] { border-color: rgba(254,205,25,0.75); box-shadow: 0 8px 26px rgba(254,205,25,0.12); }
 
-    .ga-sync-mini[data-state="working"] svg { animation: ga-spin 900ms linear infinite; transform-origin: 50% 50%; }
+    .ga-sync-mini[data-state="working"] svg { display:none; }
+    .ga-sync-mini[data-state="working"] .ga-sync-spinner { display:block; }
     @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
     .ga-sync-toast {
@@ -10031,6 +10042,10 @@ ${shapes}`.trim();
     btn.title = "GeoAnalyzr Sync";
     btn.setAttribute("data-state", "idle");
     btn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-sync-mini", variant: "light", decorative: true });
+    const spinner = el("div");
+    spinner.className = "ga-sync-spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    btn.appendChild(spinner);
     btn.addEventListener("click", (ev) => void opts.onClick(ev));
     const toast = el("div");
     toast.className = "ga-sync-toast";
@@ -10545,14 +10560,18 @@ ${shapes}`.trim();
   }
   function buildHintFromMessage(message) {
     const m = typeof message === "string" ? message : "";
-    if (/missing sync token/i.test(m)) return "Klicke auf den Button, um dein Ger\xE4t via Discord zu verkn\xFCpfen.";
+    if (/popup blocked/i.test(m)) return "Your browser blocked the linking tab. Allow popups for geoguessr.com and try again.";
+    if (/missing sync token/i.test(m)) return "Click the button to link your device (Discord), then try again.";
     const http = m.match(/HTTP\\s+(\\d{3})/i);
     const status = http ? Number(http[1]) : NaN;
-    if (status === 401 || status === 403) return "Token ung\xFCltig/abgelaufen. Klicke zum Neu-Verkn\xFCpfen und versuche es erneut.";
-    if (status === 413) return "Zu viele Daten auf einmal. Versuche es sp\xE4ter erneut (oder Shift+Klick f\xFCr Full Sync).";
-    if (status >= 500 && status < 600) return "Serverfehler. In ein paar Minuten erneut versuchen.";
-    if (/timeout/i.test(m)) return "Timeout. Pr\xFCfe Verbindung/Adblocker und versuche es erneut.";
-    return "Hover \xFCber den Button zeigt den letzten Status. Wenn es bleibt: neu laden, erneut klicken, ggf. neu verkn\xFCpfen.";
+    if (status === 401 || status === 403) return "Token invalid/expired. Click to re-link your device, then retry.";
+    if (status === 413) return "Too much data at once. Retry later (or Shift+Click for a full sync if needed).";
+    if (status >= 500 && status < 600) return "Server error. Try again in a few minutes.";
+    if (/link timeout/i.test(m)) return "Linking timed out. Keep the linking tab open and try again.";
+    if (/timeout/i.test(m)) return "Request timed out. Check your connection/ad blockers and retry.";
+    if (/gm_xmlhttprequest is not available/i.test(m))
+      return "Your userscript manager is missing required permissions. Reinstall the script and ensure GM_xmlhttpRequest is granted.";
+    return "Hover the button to see the last status. If it persists: reload, click again, and consider re-linking the device.";
   }
   async function runOnce(ui2, opts) {
     if (running) return running;

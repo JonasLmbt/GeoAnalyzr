@@ -11,14 +11,21 @@ function setTransientState(ui: ReturnType<typeof createSyncMiniButton>, state: "
 
 function buildHintFromMessage(message: string): string | undefined {
   const m = typeof message === "string" ? message : "";
-  if (/missing sync token/i.test(m)) return "Klicke auf den Button, um dein Gerät via Discord zu verknüpfen.";
+  if (/popup blocked/i.test(m)) return "Your browser blocked the linking tab. Allow popups for geoguessr.com and try again.";
+  if (/missing sync token/i.test(m)) return "Click the button to link your device (Discord), then try again.";
+
   const http = m.match(/HTTP\\s+(\\d{3})/i);
   const status = http ? Number(http[1]) : NaN;
-  if (status === 401 || status === 403) return "Token ungültig/abgelaufen. Klicke zum Neu-Verknüpfen und versuche es erneut.";
-  if (status === 413) return "Zu viele Daten auf einmal. Versuche es später erneut (oder Shift+Klick für Full Sync).";
-  if (status >= 500 && status < 600) return "Serverfehler. In ein paar Minuten erneut versuchen.";
-  if (/timeout/i.test(m)) return "Timeout. Prüfe Verbindung/Adblocker und versuche es erneut.";
-  return "Hover über den Button zeigt den letzten Status. Wenn es bleibt: neu laden, erneut klicken, ggf. neu verknüpfen.";
+  if (status === 401 || status === 403) return "Token invalid/expired. Click to re-link your device, then retry.";
+  if (status === 413) return "Too much data at once. Retry later (or Shift+Click for a full sync if needed).";
+  if (status >= 500 && status < 600) return "Server error. Try again in a few minutes.";
+
+  if (/link timeout/i.test(m)) return "Linking timed out. Keep the linking tab open and try again.";
+  if (/timeout/i.test(m)) return "Request timed out. Check your connection/ad blockers and retry.";
+  if (/gm_xmlhttprequest is not available/i.test(m))
+    return "Your userscript manager is missing required permissions. Reinstall the script and ensure GM_xmlhttpRequest is granted.";
+
+  return "Hover the button to see the last status. If it persists: reload, click again, and consider re-linking the device.";
 }
 
 async function runOnce(
