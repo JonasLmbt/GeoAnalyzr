@@ -7,6 +7,10 @@ const isLocal = !isDev && !isSyncOnly;
 
 const version = isDev ? "2.3.21-dev" : "2.3.21";
 
+// GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,
+// which breaks installation/auto-updates. Raw GitHub URLs are always backed by the repo contents.
+const rawBase = "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master";
+
 const syncExtraGrants = isDev || isSyncOnly
   ? `// @grant        GM_getValue
 // @grant        GM_setValue`
@@ -22,8 +26,8 @@ const banner = `// ==UserScript==
 // @namespace    ${isDev ? "geoanalyzr-dev" : isSyncOnly ? "geoanalyzr-sync" : "geoanalyzr"}
 // @author       JonasLmbt
 // @version      ${version}
-// @updateURL    ${isDev ? "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js" : isSyncOnly ? "https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js" : "https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js"}
-// @downloadURL  ${isDev ? "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js" : isSyncOnly ? "https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js" : "https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js"}
+// @updateURL    ${isDev ? `${rawBase}/geoanalyzr.dev.user.js` : isSyncOnly ? `${rawBase}/geoanalyzr.sync.user.js` : `${rawBase}/geoanalyzr.user.js`}
+// @downloadURL  ${isDev ? `${rawBase}/geoanalyzr.dev.user.js` : isSyncOnly ? `${rawBase}/geoanalyzr.sync.user.js` : `${rawBase}/geoanalyzr.user.js`}
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download

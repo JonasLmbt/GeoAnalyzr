@@ -3,8 +3,8 @@
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
 // @version      2.3.21
-// @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js
-// @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js
+// @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
+// @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
@@ -7565,6 +7565,11 @@
         method: "GET",
         url,
         headers,
+        responseType: "text",
+        timeout: 45e3,
+        // Cross-origin endpoints (e.g. game-server.geoguessr.com) often require GeoGuessr session cookies.
+        // Tampermonkey supports `withCredentials` to include them.
+        withCredentials: true,
         onload: (res) => {
           const text = typeof res?.responseText === "string" ? res.responseText : "";
           const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
@@ -7576,34 +7581,54 @@
           });
         },
         onerror: (err2) => {
-          reject(err2);
+          reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed"));
         },
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
+  function isCrossOriginUrl(url) {
+    try {
+      if (typeof location === "undefined" || typeof location.origin !== "string" || !location.origin) return false;
+      const u = new URL(url, location.href);
+      return u.origin !== location.origin;
+    } catch {
+      return false;
+    }
+  }
   async function httpGetJson(url, opts) {
-    if (opts?.forceGm && hasGmXmlhttpRequest()) {
-      const res2 = await gmRequest(url, { headers: opts?.headers });
+    const gmAvailable = hasGmXmlhttpRequest();
+    const preferGm = opts?.forceGm === true && gmAvailable || gmAvailable && opts?.preferGm !== false && isCrossOriginUrl(url);
+    const readGm = async () => {
+      const res = await gmRequest(url, { headers: opts?.headers });
       try {
-        return { status: res2.status, data: res2.json(), headers: res2.headers, text: res2.text };
+        return { status: res.status, data: res.json(), headers: res.headers, text: res.text };
       } catch {
-        return { status: res2.status, data: null, headers: res2.headers, text: res2.text };
+        return { status: res.status, data: null, headers: res.headers, text: res.text };
       }
-    }
-    const res = await fetch(url, { credentials: "include", headers: opts?.headers });
-    const headers = {};
+    };
+    const readFetch = async () => {
+      const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+      const headers = {};
+      try {
+        res.headers.forEach((v, k) => {
+          headers[String(k).toLowerCase()] = String(v);
+        });
+      } catch {
+      }
+      const text = await res.text();
+      try {
+        return { status: res.status, data: JSON.parse(text), headers, text };
+      } catch {
+        return { status: res.status, data: null, headers, text };
+      }
+    };
+    if (preferGm) return readGm();
     try {
-      res.headers.forEach((v, k) => {
-        headers[String(k).toLowerCase()] = String(v);
-      });
-    } catch {
-    }
-    const text = await res.text();
-    try {
-      return { status: res.status, data: JSON.parse(text), headers, text };
-    } catch {
-      return { status: res.status, data: null, headers, text };
+      return await readFetch();
+    } catch (e) {
+      if (gmAvailable) return readGm();
+      throw e;
     }
   }
   function sleep(ms) {
@@ -9967,6 +9992,34 @@ ${shapes}`.trim();
 
     .ga-sync-mini[data-state="working"] svg { animation: ga-spin 900ms linear infinite; transform-origin: 50% 50%; }
     @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .ga-sync-toast {
+      position: fixed;
+      left: 16px;
+      bottom: 68px;
+      z-index: 999999;
+      max-width: min(360px, calc(100vw - 32px));
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(20,20,20,0.97);
+      color: rgba(255,255,255,0.92);
+      font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+      white-space: pre-wrap;
+      opacity: 0;
+      transform: translateY(6px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+    .ga-sync-toast[data-open="1"] {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .ga-sync-toast[data-kind="success"] { border-color: rgba(58,232,189,0.35); }
+    .ga-sync-toast[data-kind="error"] { border-color: rgba(255,107,107,0.45); }
+    .ga-sync-toast[data-kind="warn"] { border-color: rgba(254,205,25,0.45); }
   `;
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
@@ -9979,8 +10032,29 @@ ${shapes}`.trim();
     btn.setAttribute("data-state", "idle");
     btn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-sync-mini", variant: "light", decorative: true });
     btn.addEventListener("click", (ev) => void opts.onClick(ev));
+    const toast = el("div");
+    toast.className = "ga-sync-toast";
+    toast.setAttribute("data-open", "0");
+    toast.setAttribute("data-kind", "warn");
+    toast.addEventListener("click", () => {
+      toast.setAttribute("data-open", "0");
+    });
+    let toastTimer = null;
+    const showToast = (msg, kind = "warn") => {
+      const text = typeof msg === "string" ? msg.trim() : "";
+      if (!text) return;
+      if (toastTimer !== null) window.clearTimeout(toastTimer);
+      toast.textContent = text;
+      toast.setAttribute("data-kind", kind);
+      toast.setAttribute("data-open", "1");
+      toastTimer = window.setTimeout(() => {
+        toast.setAttribute("data-open", "0");
+        toastTimer = null;
+      }, kind === "error" ? 12e3 : 8e3);
+    };
     const mount = () => {
       if (!document.documentElement.contains(btn)) document.documentElement.appendChild(btn);
+      if (!document.documentElement.contains(toast)) document.documentElement.appendChild(toast);
     };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
     else mount();
@@ -9990,7 +10064,8 @@ ${shapes}`.trim();
       },
       setTitle(title) {
         btn.title = title;
-      }
+      },
+      showToast
     };
   }
 
@@ -10415,7 +10490,7 @@ ${shapes}`.trim();
   }
   var AUTO_KEY = "geoanalyzr_sync_only_last_auto_ms";
   async function runFetchAndSync(opts) {
-    opts.setStatus("Fetching feed + details\u2026");
+    opts.setStatus("Fetching feed + details...");
     await updateData({
       onStatus: (m) => opts.setStatus(m),
       maxPages: 5e3,
@@ -10428,18 +10503,30 @@ ${shapes}`.trim();
     let settings = loadServerSyncSettings();
     if (!settings.token) {
       if (!opts.ensureLinked) {
-        return { ok: false, message: "Missing sync token. Click to link device." };
+        return { ok: false, message: "Missing sync token. Click to link device.", hint: "Click the button to link your device (Discord), then try again." };
       }
-      opts.setStatus("Linking device\u2026");
+      opts.setStatus("Linking device...");
       await linkDeviceViaDiscord();
       settings = loadServerSyncSettings();
     }
-    if (!settings.token) return { ok: false, message: "Missing sync token. Link failed." };
-    opts.setStatus(opts.forceFull ? "Syncing full snapshot\u2026" : "Syncing\u2026");
+    if (!settings.token) return { ok: false, message: "Missing sync token. Link failed.", hint: "Try linking again. If it keeps failing, disable popup blockers and retry." };
+    opts.setStatus(opts.forceFull ? "Syncing full snapshot..." : "Syncing...");
     const res = await runServerSyncOnceWithOptions(settings, { forceFull: opts.forceFull });
     const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
     const modeLabel = opts.forceFull ? "Synced full" : "Synced";
-    return res.ok ? { ok: true, message: `${modeLabel} \xB7 rows ${rowsTotal} \xB7 ${Math.round(res.bytesGzip / 1024)} KB` } : { ok: false, message: `Sync failed (HTTP ${res.status})` };
+    return res.ok ? { ok: true, message: `${modeLabel} - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB` } : (() => {
+      const base = `Sync failed (HTTP ${res.status})`;
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, message: base, hint: "Token invalid/expired. Click to re-link your device, then retry." };
+      }
+      if (res.status === 413) {
+        return { ok: false, message: base, hint: "Payload too large. Retry later; if it persists, re-link and try a full sync (Shift+Click)." };
+      }
+      if (res.status >= 500) {
+        return { ok: false, message: base, hint: "Server error. Retry in a few minutes." };
+      }
+      return { ok: false, message: base };
+    })();
   }
   function shouldAutoRun(nowMs, minIntervalMs) {
     const last = readLocalNumber(AUTO_KEY);
@@ -10456,6 +10543,17 @@ ${shapes}`.trim();
     ui2.setState(state);
     window.setTimeout(() => ui2.setState("idle"), 2500);
   }
+  function buildHintFromMessage(message) {
+    const m = typeof message === "string" ? message : "";
+    if (/missing sync token/i.test(m)) return "Klicke auf den Button, um dein Ger\xE4t via Discord zu verkn\xFCpfen.";
+    const http = m.match(/HTTP\\s+(\\d{3})/i);
+    const status = http ? Number(http[1]) : NaN;
+    if (status === 401 || status === 403) return "Token ung\xFCltig/abgelaufen. Klicke zum Neu-Verkn\xFCpfen und versuche es erneut.";
+    if (status === 413) return "Zu viele Daten auf einmal. Versuche es sp\xE4ter erneut (oder Shift+Klick f\xFCr Full Sync).";
+    if (status >= 500 && status < 600) return "Serverfehler. In ein paar Minuten erneut versuchen.";
+    if (/timeout/i.test(m)) return "Timeout. Pr\xFCfe Verbindung/Adblocker und versuche es erneut.";
+    return "Hover \xFCber den Button zeigt den letzten Status. Wenn es bleibt: neu laden, erneut klicken, ggf. neu verkn\xFCpfen.";
+  }
   async function runOnce(ui2, opts) {
     if (running) return running;
     running = (async () => {
@@ -10464,17 +10562,28 @@ ${shapes}`.trim();
         const res = await runFetchAndSync({
           forceFull: opts.forceFull,
           ensureLinked: opts.ensureLinked,
-          setStatus: (m) => ui2.setTitle(`GeoAnalyzr Sync \xB7 ${m}`)
+          setStatus: (m) => ui2.setTitle(`GeoAnalyzr Sync - ${m}`)
         });
-        ui2.setTitle(`GeoAnalyzr Sync \xB7 ${res.message}`);
+        ui2.setTitle(`GeoAnalyzr Sync - ${res.message}`);
         if (res.ok) setTransientState(ui2, "ok");
         else {
           const tokenMissing = /missing sync token/i.test(res.message);
           ui2.setState(tokenMissing ? "needs_link" : "error");
+          if (opts.showHints) {
+            const hint = res?.hint ?? buildHintFromMessage(res.message);
+            ui2.showToast(hint ? `${res.message}
+${hint}` : res.message, tokenMissing ? "warn" : "error");
+          }
         }
       } catch (e) {
-        ui2.setTitle(`GeoAnalyzr Sync \xB7 ${e instanceof Error ? e.message : String(e || "Failed")}`);
+        const msg = e instanceof Error ? e.message : String(e || "Failed");
+        ui2.setTitle(`GeoAnalyzr Sync - ${msg}`);
         ui2.setState("error");
+        if (opts.showHints) {
+          const hint = buildHintFromMessage(msg);
+          ui2.showToast(hint ? `${msg}
+${hint}` : msg, "error");
+        }
       } finally {
         running = null;
       }
@@ -10486,7 +10595,7 @@ ${shapes}`.trim();
       const forceFull = !!(ev && ev.shiftKey);
       const settings = loadServerSyncSettings();
       const ensureLinked = !settings.token;
-      await runOnce(ui, { forceFull, ensureLinked });
+      await runOnce(ui, { forceFull, ensureLinked, showHints: true });
     }
   });
   window.setTimeout(() => {
@@ -10494,14 +10603,14 @@ ${shapes}`.trim();
       const settings = loadServerSyncSettings();
       if (!settings.token) {
         ui.setState("needs_link");
-        ui.setTitle("GeoAnalyzr Sync \xB7 Click to link device");
+        ui.setTitle("GeoAnalyzr Sync - Click to link device");
         return;
       }
       const now = Date.now();
       const intervalMs = 12 * 60 * 60 * 1e3;
       if (!shouldAutoRun(now, intervalMs)) return;
       markAutoRun(now);
-      void runOnce(ui, { forceFull: false, ensureLinked: false });
+      void runOnce(ui, { forceFull: false, ensureLinked: false, showHints: false });
     } catch {
     }
   }, 12e3);

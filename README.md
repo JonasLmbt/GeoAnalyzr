@@ -25,14 +25,14 @@ GeoAnalyzr is available in three variants:
 ### 1) Local (recommended)
 
 1. Open this file in your browser:
-   - [Local](https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js)
+   - [Local](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js)
 2. Tampermonkey will show the install dialog.
 3. Click install.
 
 ### 2) Sync-only (minimal)
 
 1. Open this file in your browser:
-   - [Sync-only](https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.sync.user.js)
+   - [Sync-only](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js)
 2. Install it in Tampermonkey.
 3. Open GeoGuessr and click the small GeoAnalyzr icon (bottom-left). It runs **Fetch + Sync**.
 
@@ -116,4 +116,3 @@ npm run watch
 
 - [GeoInsights by Safwan Sipai](https://github.com/SafwanSipai/geo-insight)
 - [GeoGuessr API guide](https://efisha.com/2022/04/18/geoguessr-api-endpoints/)
-

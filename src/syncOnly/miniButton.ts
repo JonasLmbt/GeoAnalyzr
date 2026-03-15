@@ -40,6 +40,34 @@ function cssOnce(): void {
 
     .ga-sync-mini[data-state="working"] svg { animation: ga-spin 900ms linear infinite; transform-origin: 50% 50%; }
     @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .ga-sync-toast {
+      position: fixed;
+      left: 16px;
+      bottom: 68px;
+      z-index: 999999;
+      max-width: min(360px, calc(100vw - 32px));
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(20,20,20,0.97);
+      color: rgba(255,255,255,0.92);
+      font: 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.45);
+      white-space: pre-wrap;
+      opacity: 0;
+      transform: translateY(6px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+    .ga-sync-toast[data-open="1"] {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .ga-sync-toast[data-kind="success"] { border-color: rgba(58,232,189,0.35); }
+    .ga-sync-toast[data-kind="error"] { border-color: rgba(255,107,107,0.45); }
+    .ga-sync-toast[data-kind="warn"] { border-color: rgba(254,205,25,0.45); }
   `;
   (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
 }
@@ -49,6 +77,7 @@ export function createSyncMiniButton(opts: {
 }): {
   setState: (state: MiniButtonState) => void;
   setTitle: (title: string) => void;
+  showToast: (msg: string, kind?: "success" | "error" | "warn") => void;
 } {
   cssOnce();
 
@@ -60,8 +89,30 @@ export function createSyncMiniButton(opts: {
   btn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-sync-mini", variant: "light", decorative: true });
   btn.addEventListener("click", (ev) => void opts.onClick(ev));
 
+  const toast = el("div");
+  toast.className = "ga-sync-toast";
+  toast.setAttribute("data-open", "0");
+  toast.setAttribute("data-kind", "warn");
+  toast.addEventListener("click", () => {
+    toast.setAttribute("data-open", "0");
+  });
+  let toastTimer: number | null = null;
+  const showToast = (msg: string, kind: "success" | "error" | "warn" = "warn") => {
+    const text = typeof msg === "string" ? msg.trim() : "";
+    if (!text) return;
+    if (toastTimer !== null) window.clearTimeout(toastTimer);
+    toast.textContent = text;
+    toast.setAttribute("data-kind", kind);
+    toast.setAttribute("data-open", "1");
+    toastTimer = window.setTimeout(() => {
+      toast.setAttribute("data-open", "0");
+      toastTimer = null;
+    }, kind === "error" ? 12000 : 8000);
+  };
+
   const mount = () => {
     if (!document.documentElement.contains(btn)) document.documentElement.appendChild(btn);
+    if (!document.documentElement.contains(toast)) document.documentElement.appendChild(toast);
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
   else mount();
@@ -72,7 +123,7 @@ export function createSyncMiniButton(opts: {
     },
     setTitle(title) {
       btn.title = title;
-    }
+    },
+    showToast
   };
 }
-

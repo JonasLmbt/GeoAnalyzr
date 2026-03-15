@@ -34,6 +34,11 @@ function gmRequest(url: string, opts?: { headers?: Record<string, string> }): Pr
       method: "GET",
       url,
       headers,
+      responseType: "text",
+      timeout: 45000,
+      // Cross-origin endpoints (e.g. game-server.geoguessr.com) often require GeoGuessr session cookies.
+      // Tampermonkey supports `withCredentials` to include them.
+      withCredentials: true,
       onload: (res: any) => {
         const text = typeof res?.responseText === "string" ? res.responseText : "";
         const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
@@ -45,40 +50,66 @@ function gmRequest(url: string, opts?: { headers?: Record<string, string> }): Pr
         });
       },
       onerror: (err: any) => {
-        reject(err);
+        reject(err instanceof Error ? err : new Error("GM_xmlhttpRequest failed"));
       },
       ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
     });
   });
 }
 
+function isCrossOriginUrl(url: string): boolean {
+  try {
+    if (typeof location === "undefined" || typeof location.origin !== "string" || !location.origin) return false;
+    const u = new URL(url, location.href);
+    return u.origin !== location.origin;
+  } catch {
+    return false;
+  }
+}
+
 export async function httpGetJson(
   url: string,
-  opts?: { forceGm?: boolean; headers?: Record<string, string> }
+  opts?: { forceGm?: boolean; preferGm?: boolean; headers?: Record<string, string> }
 ): Promise<{ status: number; data: any; headers: Record<string, string>; text?: string }> {
-  if (opts?.forceGm && hasGmXmlhttpRequest()) {
+  const gmAvailable = hasGmXmlhttpRequest();
+  const preferGm =
+    (opts?.forceGm === true && gmAvailable) || (gmAvailable && opts?.preferGm !== false && isCrossOriginUrl(url));
+
+  const readGm = async () => {
     const res = await gmRequest(url, { headers: opts?.headers });
     try {
       return { status: res.status, data: res.json(), headers: res.headers, text: res.text };
     } catch {
       return { status: res.status, data: null, headers: res.headers, text: res.text };
     }
-  }
+  };
 
-  const res = await fetch(url, { credentials: "include", headers: opts?.headers });
-  const headers: Record<string, string> = {};
+  const readFetch = async () => {
+    const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+    const headers: Record<string, string> = {};
+    try {
+      res.headers.forEach((v, k) => {
+        headers[String(k).toLowerCase()] = String(v);
+      });
+    } catch {
+      // ignore
+    }
+    const text = await res.text();
+    try {
+      return { status: res.status, data: JSON.parse(text), headers, text };
+    } catch {
+      return { status: res.status, data: null, headers, text };
+    }
+  };
+
+  if (preferGm) return readGm();
+
   try {
-    res.headers.forEach((v, k) => {
-      headers[String(k).toLowerCase()] = String(v);
-    });
-  } catch {
-    // ignore
-  }
-  const text = await res.text();
-  try {
-    return { status: res.status, data: JSON.parse(text), headers, text };
-  } catch {
-    return { status: res.status, data: null, headers, text };
+    return await readFetch();
+  } catch (e) {
+    // Most common in userscripts: fetch throws on CORS-rejected cross-origin endpoints.
+    if (gmAvailable) return readGm();
+    throw e;
   }
 }
 

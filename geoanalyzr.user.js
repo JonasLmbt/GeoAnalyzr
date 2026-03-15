@@ -3,8 +3,8 @@
 // @namespace    geoanalyzr
 // @author       JonasLmbt
 // @version      2.3.21
-// @updateURL    https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
-// @downloadURL  https://github.com/JonasLmbt/GeoAnalyzr/releases/latest/download/geoanalyzr.user.js
+// @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
+// @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
@@ -8017,6 +8017,11 @@ ${shapes}`.trim();
         method: "GET",
         url,
         headers,
+        responseType: "text",
+        timeout: 45e3,
+        // Cross-origin endpoints (e.g. game-server.geoguessr.com) often require GeoGuessr session cookies.
+        // Tampermonkey supports `withCredentials` to include them.
+        withCredentials: true,
         onload: (res) => {
           const text = typeof res?.responseText === "string" ? res.responseText : "";
           const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
@@ -8028,34 +8033,54 @@ ${shapes}`.trim();
           });
         },
         onerror: (err2) => {
-          reject(err2);
+          reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed"));
         },
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
   }
+  function isCrossOriginUrl(url) {
+    try {
+      if (typeof location === "undefined" || typeof location.origin !== "string" || !location.origin) return false;
+      const u = new URL(url, location.href);
+      return u.origin !== location.origin;
+    } catch {
+      return false;
+    }
+  }
   async function httpGetJson(url, opts) {
-    if (opts?.forceGm && hasGmXmlhttpRequest()) {
-      const res2 = await gmRequest(url, { headers: opts?.headers });
+    const gmAvailable = hasGmXmlhttpRequest();
+    const preferGm = opts?.forceGm === true && gmAvailable || gmAvailable && opts?.preferGm !== false && isCrossOriginUrl(url);
+    const readGm = async () => {
+      const res = await gmRequest(url, { headers: opts?.headers });
       try {
-        return { status: res2.status, data: res2.json(), headers: res2.headers, text: res2.text };
+        return { status: res.status, data: res.json(), headers: res.headers, text: res.text };
       } catch {
-        return { status: res2.status, data: null, headers: res2.headers, text: res2.text };
+        return { status: res.status, data: null, headers: res.headers, text: res.text };
       }
-    }
-    const res = await fetch(url, { credentials: "include", headers: opts?.headers });
-    const headers = {};
+    };
+    const readFetch = async () => {
+      const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+      const headers = {};
+      try {
+        res.headers.forEach((v, k) => {
+          headers[String(k).toLowerCase()] = String(v);
+        });
+      } catch {
+      }
+      const text = await res.text();
+      try {
+        return { status: res.status, data: JSON.parse(text), headers, text };
+      } catch {
+        return { status: res.status, data: null, headers, text };
+      }
+    };
+    if (preferGm) return readGm();
     try {
-      res.headers.forEach((v, k) => {
-        headers[String(k).toLowerCase()] = String(v);
-      });
-    } catch {
-    }
-    const text = await res.text();
-    try {
-      return { status: res.status, data: JSON.parse(text), headers, text };
-    } catch {
-      return { status: res.status, data: null, headers, text };
+      return await readFetch();
+    } catch (e) {
+      if (gmAvailable) return readGm();
+      throw e;
     }
   }
   function sleep(ms) {
@@ -8229,711 +8254,6 @@ ${shapes}`.trim();
     const fromDb = await guessPlayerNameFromDb();
     cachedPlayerName = fromDb ?? null;
     return fromDb;
-  }
-
-  // src/serverSync.ts
-  var SYNC_META_KEY = "server_sync_v1";
-  var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
-  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
-  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
-  function compactRecord(row) {
-    const out = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (value === void 0) continue;
-      if (COMPACT_DROP_KEYS.has(key)) continue;
-      out[key] = value;
-    }
-    return out;
-  }
-  function unionOrderedKeys(rows, prefer) {
-    const set = /* @__PURE__ */ new Set();
-    for (const key of prefer) set.add(key);
-    for (const row of rows) {
-      for (const key of Object.keys(row)) set.add(key);
-    }
-    const preferSet = new Set(prefer);
-    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
-    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
-  }
-  function toColumnar(rows, prefer) {
-    if (rows.length === 0) return { cols: [], rows: [] };
-    const cols = unionOrderedKeys(rows, prefer);
-    const outRows = new Array(rows.length);
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      const arr = new Array(cols.length);
-      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
-      outRows[i] = arr;
-    }
-    return { cols, rows: outRows };
-  }
-  function getUserscriptVersion() {
-    const anyGlobal = globalThis;
-    const info = anyGlobal?.GM_info;
-    const v = info?.script?.version;
-    return typeof v === "string" ? v : void 0;
-  }
-  function readGmValue(key) {
-    const g = globalThis;
-    try {
-      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
-    } catch {
-    }
-    try {
-      if (typeof GM_getValue === "function") return GM_getValue(key);
-    } catch {
-    }
-    try {
-      return globalThis?.localStorage?.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-  function writeGmValue(key, value) {
-    const g = globalThis;
-    try {
-      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
-    } catch {
-    }
-    try {
-      if (typeof GM_setValue === "function") return GM_setValue(key, value);
-    } catch {
-    }
-    try {
-      globalThis?.localStorage?.setItem(key, value);
-    } catch {
-    }
-  }
-  function loadServerSyncSettings() {
-    const endpointUrlRaw = readGmValue(`${GM_VALUE_PREFIX}endpoint_url`);
-    const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
-    const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
-    const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
-    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
-    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
-    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
-    const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
-    return {
-      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
-      token,
-      compact,
-      includeAggregates
-    };
-  }
-  function saveServerSyncSettings(next) {
-    if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
-    if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
-    if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
-    if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
-  }
-  async function getLastServerSyncCursor() {
-    const meta = await db.meta.get(SYNC_META_KEY);
-    const cursor = meta?.value?.cursorTo;
-    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
-  }
-  async function setLastServerSyncCursor(status) {
-    await db.meta.put({
-      key: SYNC_META_KEY,
-      value: {
-        cursorFrom: status.cursorFrom,
-        cursorTo: status.cursorTo,
-        lastSyncAt: Date.now(),
-        lastStatus: status.status,
-        lastOk: status.ok,
-        lastBytesJson: status.bytesJson,
-        lastBytesGzip: status.bytesGzip,
-        lastCounts: status.counts
-      },
-      updatedAt: Date.now()
-    });
-  }
-  async function gzipJson(json) {
-    return await new Promise((resolve, reject) => {
-      gzip(strToU8(json), { level: 6 }, (err2, out) => {
-        if (err2) reject(err2);
-        else resolve(out);
-      });
-    });
-  }
-  async function buildDelta(since, opts) {
-    const cursorFrom = Math.max(0, Math.floor(since || 0));
-    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
-      db.games.where("playedAt").above(cursorFrom).toArray(),
-      db.rounds.where("playedAt").above(cursorFrom).toArray(),
-      db.details.where("fetchedAt").above(cursorFrom).toArray(),
-      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
-    ]);
-    const gameIds = gamesByTime.map((g) => g.gameId);
-    const [roundsByGame, detailsByGame] = await Promise.all([
-      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
-      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
-    ]);
-    const roundsMerged = (() => {
-      const byId = /* @__PURE__ */ new Map();
-      for (const r of roundsByGame) byId.set(r.id, r);
-      for (const r of roundsByTime) byId.set(r.id, r);
-      return Array.from(byId.values());
-    })();
-    const detailsMerged = (() => {
-      const byId = /* @__PURE__ */ new Map();
-      for (const d of detailsByGame) byId.set(d.gameId, d);
-      for (const d of detailsByTime) byId.set(d.gameId, d);
-      return Array.from(byId.values());
-    })();
-    const roundsNeedingTsGameIds = Array.from(
-      new Set(
-        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
-      )
-    );
-    if (roundsNeedingTsGameIds.length > 0) {
-      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
-      const gamePlayedAt = /* @__PURE__ */ new Map();
-      for (const g of gamesForBackfill) {
-        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
-      }
-      for (const r of roundsMerged) {
-        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        const ts = gid ? gamePlayedAt.get(gid) : void 0;
-        if (typeof ts === "number") r.playedAt = ts;
-      }
-    }
-    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
-    const roundsPayloadBase = roundsMerged.map((r) => {
-      const out = { ...r };
-      delete out.playedAt;
-      return out;
-    });
-    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
-    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
-    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
-    const cursorToCandidates = [];
-    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
-    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
-    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
-    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
-    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
-    const tables = {
-      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
-      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
-      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
-    };
-    const envelope = {
-      schema: "geoanalyzr-sync",
-      schemaVersion: 1,
-      createdAt: Date.now(),
-      appVersion: getUserscriptVersion(),
-      owner: { playerId: ownerId, playerName: ownerName },
-      cursor: { from: cursorFrom, to: cursorTo },
-      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
-      counts: {
-        games: gamesByTime.length,
-        rounds: roundsMerged.length,
-        details: detailsMerged.length,
-        gameAgg: gameAggByTime.length
-      },
-      tables
-    };
-    const json = JSON.stringify(envelope);
-    const bytesGzip = await gzipJson(json);
-    return {
-      cursorFrom,
-      cursorTo,
-      counts: envelope.counts,
-      json,
-      bytesJson: json.length,
-      bytesGzip
-    };
-  }
-  function gmPostBytes(url, body, opts) {
-    return new Promise((resolve, reject) => {
-      const gm = getGmXmlhttpRequest();
-      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
-      gm({
-        method: "POST",
-        url,
-        headers: opts.headers,
-        data: body,
-        responseType: "text",
-        timeout: opts.timeoutMs ?? 45e3,
-        onload: (res) => {
-          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
-          const text = typeof res?.responseText === "string" ? res.responseText : "";
-          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
-          const headers = {};
-          for (const line of rawHeaders.split(/\r?\n/)) {
-            const idx = line.indexOf(":");
-            if (idx <= 0) continue;
-            const k = line.slice(0, idx).trim().toLowerCase();
-            const v = line.slice(idx + 1).trim();
-            if (!k) continue;
-            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
-            else headers[k] = v;
-          }
-          resolve({ status, text, headers });
-        },
-        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function runServerSyncOnce(settings) {
-    return runServerSyncOnceWithOptions(settings, {});
-  }
-  async function runServerSyncOnceWithOptions(settings, opts = {}) {
-    const endpointUrl = (settings.endpointUrl || "").trim();
-    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
-    const token = (settings.token || "").trim();
-    if (!token) throw new Error("Missing sync token.");
-    const forceFull = opts.forceFull === true;
-    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
-    const effectiveCompact = false;
-    const delta = forceFull ? await (async () => {
-      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
-        db.games.toArray(),
-        db.rounds.toArray(),
-        db.details.toArray(),
-        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
-      ]);
-      const gamePlayedAt = /* @__PURE__ */ new Map();
-      for (const g of gamesAll) {
-        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
-      }
-      for (const r of roundsAll) {
-        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        const ts = gid ? gamePlayedAt.get(gid) : void 0;
-        if (typeof ts === "number") r.playedAt = ts;
-      }
-      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
-      const roundsNoPlayedAt = roundsAll.map((r) => {
-        const out = { ...r };
-        delete out.playedAt;
-        return out;
-      });
-      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
-      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
-      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
-      const tables = {
-        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
-        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
-        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
-      };
-      const cursorToCandidates = [];
-      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
-      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
-      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
-      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
-      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
-      const envelope = {
-        schema: "geoanalyzr-sync",
-        schemaVersion: 1,
-        createdAt: Date.now(),
-        appVersion: getUserscriptVersion(),
-        owner: { playerId: ownerId, playerName: ownerName },
-        cursor: { from: 0, to: cursorTo },
-        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
-        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
-        tables
-      };
-      const json = JSON.stringify(envelope);
-      const bytesGzip = await gzipJson(json);
-      return {
-        cursorFrom: 0,
-        cursorTo,
-        counts: envelope.counts,
-        json,
-        bytesJson: json.length,
-        bytesGzip
-      };
-    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
-    const headers = {
-      "Content-Type": "application/json",
-      "Content-Encoding": "gzip",
-      Authorization: `Bearer ${token}`,
-      "X-GA-Cursor-From": String(delta.cursorFrom),
-      "X-GA-Cursor-To": String(delta.cursorTo),
-      "X-GA-Schema-Version": "1",
-      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
-    };
-    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
-    const ok = res.status >= 200 && res.status < 300;
-    const status = {
-      ok,
-      status: res.status,
-      responseText: res.text,
-      cursorFrom: delta.cursorFrom,
-      cursorTo: delta.cursorTo,
-      counts: delta.counts,
-      bytesJson: delta.bytesJson,
-      bytesGzip: delta.bytesGzip.length
-    };
-    await setLastServerSyncCursor(status);
-    return status;
-  }
-  async function getLastServerSyncMeta() {
-    const meta = await db.meta.get(SYNC_META_KEY);
-    return meta?.value ?? null;
-  }
-
-  // src/uiOverlay.ts
-  function el(tag) {
-    return document.createElement(tag);
-  }
-  function cssOnce() {
-    const id = "geoanalyzr-ui-overlay-css";
-    if (document.getElementById(id)) return;
-    const style = document.createElement("style");
-    style.id = id;
-    style.textContent = `
-    .ga-ui-icon {
-      position: fixed;
-      left: 16px;
-      bottom: 16px;
-      z-index: 999999;
-      width: 44px;
-      height: 44px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(20,20,20,0.95);
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-    }
-    .ga-ui-icon:active { transform: translateY(1px); }
-
-    .ga-ui-panel {
-      position: fixed;
-      left: 16px;
-      bottom: 68px;
-      z-index: 999999;
-      width: 360px;
-      max-width: calc(100vw - 32px);
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.2);
-      background: rgba(20,20,20,0.92);
-      color: white;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-      padding: 10px;
-      display: none;
-    }
-
-    .ga-ui-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .ga-ui-title {
-      font-weight: 700;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .ga-ui-title svg { display: block; filter: drop-shadow(0 0 10px rgba(0,162,254,0.35)); }
-    .ga-ui-icon svg { display: block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
-    .ga-ui-close {
-      border: none;
-      background: transparent;
-      color: white;
-      cursor: pointer;
-      font-size: 18px;
-      line-height: 1;
-      padding: 2px 6px;
-    }
-
-    .ga-ui-status {
-      font-size: 12px;
-      opacity: 0.95;
-      white-space: pre-wrap;
-      margin-bottom: 10px;
-    }
-
-    .ga-ui-btn {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.25);
-      color: white;
-      cursor: pointer;
-      font-weight: 600;
-      margin-top: 8px;
-    }
-    .ga-ui-btn:active { transform: translateY(1px); }
-    .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
-
-    .ga-ui-counts {
-      margin-top: 10px;
-      font-size: 12px;
-      opacity: 0.92;
-      white-space: normal;
-    }
-
-    .ga-ui-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 1000000;
-      background: rgba(0,0,0,0.62);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .ga-ui-modal-card {
-      width: 520px;
-      max-width: calc(100vw - 32px);
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(20,20,20,0.94);
-      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
-      color: white;
-      padding: 12px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
-    .ga-ui-modal-head {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom: 10px;
-    }
-    .ga-ui-modal-head-title { font-weight: 700; }
-    .ga-ui-modal-x { border:0; background: transparent; color: white; cursor:pointer; font-size: 18px; line-height: 1; }
-    .ga-ui-modal-input {
-      width: 100%;
-      box-sizing: border-box;
-      background: rgba(0,0,0,0.25);
-      color: white;
-      border: 1px solid rgba(255,255,255,0.20);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-    }
-    .ga-ui-modal-help {
-      margin-top: 8px;
-      font-size: 12px;
-      opacity: 0.90;
-      white-space: pre-wrap;
-    }
-    .ga-ui-modal-actions {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 12px;
-    }
-  `;
-    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
-  }
-  function createUIOverlay() {
-    const isDevBuild = () => {
-      const info = globalThis?.GM_info;
-      const ns = String(info?.script?.namespace || "");
-      const name = String(info?.script?.name || "");
-      return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
-    };
-    const formatBytes = (n) => {
-      if (!Number.isFinite(n) || n <= 0) return "0 B";
-      const units = ["B", "KB", "MB", "GB"];
-      let v = n;
-      let i = 0;
-      while (v >= 1024 && i < units.length - 1) {
-        v /= 1024;
-        i++;
-      }
-      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-    };
-    const mount = () => {
-      cssOnce();
-      if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
-      if (!document.documentElement.contains(panel)) document.documentElement.appendChild(panel);
-    };
-    const iconBtn = el("button");
-    iconBtn.className = "ga-ui-icon";
-    iconBtn.title = "GeoAnalyzr";
-    iconBtn.type = "button";
-    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "light", decorative: true });
-    const panel = el("div");
-    panel.className = "ga-ui-panel";
-    const header = el("div");
-    header.className = "ga-ui-head";
-    const title = el("div");
-    title.className = "ga-ui-title";
-    const titleLogo = el("span");
-    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "light", decorative: true });
-    const titleText = el("span");
-    titleText.textContent = "GeoAnalyzr";
-    title.appendChild(titleLogo);
-    title.appendChild(titleText);
-    const closeBtn = el("button");
-    closeBtn.className = "ga-ui-close";
-    closeBtn.type = "button";
-    closeBtn.textContent = "x";
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-    const status = el("div");
-    status.className = "ga-ui-status";
-    status.textContent = "Ready.";
-    const mkBtn2 = (label, bg) => {
-      const b = el("button");
-      b.className = "ga-ui-btn";
-      b.type = "button";
-      b.textContent = label;
-      b.style.background = bg;
-      return b;
-    };
-    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
-    const syncBtn = isDevBuild() ? mkBtn2("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
-    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
-    const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
-    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
-    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
-    const counts = el("div");
-    counts.className = "ga-ui-counts";
-    counts.textContent = "Data: 0 games, 0 rounds.";
-    panel.appendChild(header);
-    panel.appendChild(status);
-    panel.appendChild(updateBtn);
-    if (syncBtn) panel.appendChild(syncBtn);
-    panel.appendChild(analysisBtn);
-    panel.appendChild(discordBtn);
-    panel.appendChild(exportBtn);
-    panel.appendChild(resetBtn);
-    panel.appendChild(counts);
-    let open = false;
-    const setOpen = (next) => {
-      open = next;
-      panel.style.display = open ? "block" : "none";
-    };
-    iconBtn.addEventListener("click", () => setOpen(!open));
-    closeBtn.addEventListener("click", () => setOpen(false));
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
-    else mount();
-    let updateHandler = null;
-    let resetHandler = null;
-    let exportHandler = null;
-    let openAnalysisHandler = null;
-    let discordHandler = null;
-    updateBtn.addEventListener("click", () => void updateHandler?.());
-    if (syncBtn) {
-      syncBtn.addEventListener("click", async (ev) => {
-        syncBtn.disabled = true;
-        const forceFull = !!(ev && ev.shiftKey);
-        status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
-        try {
-          let settings = loadServerSyncSettings();
-          if (!settings.token) {
-            const gm = getGmXmlhttpRequest();
-            if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
-            status.textContent = "Linking device...";
-            const linkOrigin = "https://geoanalyzr.lmbt.app";
-            const pairStartUrl = `${linkOrigin}/pair/start`;
-            const pair = await new Promise((resolve, reject) => {
-              gm({
-                method: "GET",
-                url: pairStartUrl,
-                headers: { Accept: "application/json" },
-                onload: (res2) => {
-                  const text = typeof res2?.responseText === "string" ? res2.responseText : "";
-                  try {
-                    const parsed = JSON.parse(text);
-                    if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                      return reject(new Error("Pairing failed (invalid response)."));
-                    }
-                    resolve({ linkUrl: String(parsed.linkUrl) });
-                  } catch {
-                    reject(new Error("Pairing failed (invalid JSON)."));
-                  }
-                },
-                onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
-                ontimeout: () => reject(new Error("Pairing timeout"))
-              });
-            });
-            const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-            if (!linkWin) {
-              status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
-              return;
-            }
-            const token = await new Promise((resolve, reject) => {
-              const timeout = window.setTimeout(() => {
-                cleanup();
-                reject(new Error("Link timeout"));
-              }, 2 * 60 * 1e3);
-              const onMsg = (ev2) => {
-                if (ev2.origin !== linkOrigin) return;
-                const d = ev2.data;
-                if (!d || d.type !== "geoanalyzr_sync_token") return;
-                const t = typeof d.token === "string" ? d.token.trim() : "";
-                const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-                if (!t) return;
-                cleanup();
-                if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-                resolve(t);
-              };
-              const cleanup = () => {
-                window.clearTimeout(timeout);
-                window.removeEventListener("message", onMsg);
-                try {
-                  linkWin.close();
-                } catch {
-                }
-              };
-              window.addEventListener("message", onMsg);
-            });
-            saveServerSyncSettings({ token });
-            settings = loadServerSyncSettings();
-          }
-          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-          const modeLabel = forceFull ? "Synced full" : "Synced";
-          status.textContent = res.ok ? `${modeLabel} \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
-        } catch (e) {
-          status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
-        } finally {
-          syncBtn.disabled = false;
-        }
-      });
-    }
-    exportBtn.addEventListener("click", () => void exportHandler?.());
-    resetBtn.addEventListener("click", () => void resetHandler?.());
-    analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
-    discordBtn.addEventListener("click", () => void discordHandler?.());
-    return {
-      setVisible(visible) {
-        iconBtn.style.display = visible ? "flex" : "none";
-        if (!visible) panel.style.display = "none";
-      },
-      setStatus(msg) {
-        status.textContent = msg;
-      },
-      setCounts(value) {
-        counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
-      },
-      onUpdateClick(fn) {
-        updateHandler = fn;
-      },
-      onResetClick(fn) {
-        resetHandler = fn;
-      },
-      onExportClick(fn) {
-        exportHandler = fn;
-      },
-      onOpenAnalysisClick(fn) {
-        openAnalysisHandler = fn;
-      },
-      onDiscordClick(fn) {
-        discordHandler = fn;
-      }
-    };
   }
 
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
@@ -10604,6 +9924,725 @@ ${shapes}`.trim();
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
     opts.onStatus(`Details done. ok=${ok}, fail=${fail}, skipped=${skipped}${reason}`);
     return { queued: total, ok, fail, skipped };
+  }
+
+  // src/serverSync.ts
+  var SYNC_META_KEY = "server_sync_v1";
+  var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
+  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
+  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
+  function compactRecord(row) {
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (value === void 0) continue;
+      if (COMPACT_DROP_KEYS.has(key)) continue;
+      out[key] = value;
+    }
+    return out;
+  }
+  function unionOrderedKeys(rows, prefer) {
+    const set = /* @__PURE__ */ new Set();
+    for (const key of prefer) set.add(key);
+    for (const row of rows) {
+      for (const key of Object.keys(row)) set.add(key);
+    }
+    const preferSet = new Set(prefer);
+    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
+    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
+  }
+  function toColumnar(rows, prefer) {
+    if (rows.length === 0) return { cols: [], rows: [] };
+    const cols = unionOrderedKeys(rows, prefer);
+    const outRows = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const arr = new Array(cols.length);
+      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
+      outRows[i] = arr;
+    }
+    return { cols, rows: outRows };
+  }
+  function getUserscriptVersion() {
+    const anyGlobal = globalThis;
+    const info = anyGlobal?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function readGmValue(key) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
+    } catch {
+    }
+    try {
+      if (typeof GM_getValue === "function") return GM_getValue(key);
+    } catch {
+    }
+    try {
+      return globalThis?.localStorage?.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  function writeGmValue(key, value) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      if (typeof GM_setValue === "function") return GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      globalThis?.localStorage?.setItem(key, value);
+    } catch {
+    }
+  }
+  function loadServerSyncSettings() {
+    const endpointUrlRaw = readGmValue(`${GM_VALUE_PREFIX}endpoint_url`);
+    const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
+    const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
+    const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
+    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
+    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
+    const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
+    return {
+      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
+      token,
+      compact,
+      includeAggregates
+    };
+  }
+  function saveServerSyncSettings(next) {
+    if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
+    if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
+    if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
+    if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
+  }
+  async function getLastServerSyncCursor() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    const cursor = meta?.value?.cursorTo;
+    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
+  }
+  async function setLastServerSyncCursor(status) {
+    await db.meta.put({
+      key: SYNC_META_KEY,
+      value: {
+        cursorFrom: status.cursorFrom,
+        cursorTo: status.cursorTo,
+        lastSyncAt: Date.now(),
+        lastStatus: status.status,
+        lastOk: status.ok,
+        lastBytesJson: status.bytesJson,
+        lastBytesGzip: status.bytesGzip,
+        lastCounts: status.counts
+      },
+      updatedAt: Date.now()
+    });
+  }
+  async function gzipJson(json) {
+    return await new Promise((resolve, reject) => {
+      gzip(strToU8(json), { level: 6 }, (err2, out) => {
+        if (err2) reject(err2);
+        else resolve(out);
+      });
+    });
+  }
+  async function ensureSyncDetailCoverage(forceFull) {
+    const games = forceFull ? await db.games.toArray() : await db.games.orderBy("playedAt").reverse().limit(500).toArray();
+    if (!games.length) return;
+    await fetchDetailsForGames({
+      games,
+      concurrency: 4,
+      retryErrors: true,
+      verifyCompleteness: true,
+      reason: forceFull ? "pre-sync-full" : "pre-sync",
+      onStatus: () => {
+      }
+    });
+  }
+  async function buildDelta(since, opts) {
+    const cursorFrom = Math.max(0, Math.floor(since || 0));
+    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
+      db.games.where("playedAt").above(cursorFrom).toArray(),
+      db.rounds.where("playedAt").above(cursorFrom).toArray(),
+      db.details.where("fetchedAt").above(cursorFrom).toArray(),
+      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
+    ]);
+    const gameIds = gamesByTime.map((g) => g.gameId);
+    const [roundsByGame, detailsByGame] = await Promise.all([
+      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
+      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
+    ]);
+    const roundsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const r of roundsByGame) byId.set(r.id, r);
+      for (const r of roundsByTime) byId.set(r.id, r);
+      return Array.from(byId.values());
+    })();
+    const detailsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const d of detailsByGame) byId.set(d.gameId, d);
+      for (const d of detailsByTime) byId.set(d.gameId, d);
+      return Array.from(byId.values());
+    })();
+    const roundsNeedingTsGameIds = Array.from(
+      new Set(
+        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
+      )
+    );
+    if (roundsNeedingTsGameIds.length > 0) {
+      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesForBackfill) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsMerged) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+    }
+    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
+    const roundsPayloadBase = roundsMerged.map((r) => {
+      const out = { ...r };
+      delete out.playedAt;
+      return out;
+    });
+    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
+    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
+    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
+    const cursorToCandidates = [];
+    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
+    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
+    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
+    const tables = {
+      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
+      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+    };
+    const envelope = {
+      schema: "geoanalyzr-sync",
+      schemaVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion(),
+      owner: { playerId: ownerId, playerName: ownerName },
+      cursor: { from: cursorFrom, to: cursorTo },
+      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
+      counts: {
+        games: gamesByTime.length,
+        rounds: roundsMerged.length,
+        details: detailsMerged.length,
+        gameAgg: gameAggByTime.length
+      },
+      tables
+    };
+    const json = JSON.stringify(envelope);
+    const bytesGzip = await gzipJson(json);
+    return {
+      cursorFrom,
+      cursorTo,
+      counts: envelope.counts,
+      json,
+      bytesJson: json.length,
+      bytesGzip
+    };
+  }
+  function gmPostBytes(url, body, opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "POST",
+        url,
+        headers: opts.headers,
+        data: body,
+        responseType: "text",
+        timeout: opts.timeoutMs ?? 45e3,
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+          const headers = {};
+          for (const line of rawHeaders.split(/\r?\n/)) {
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            const k = line.slice(0, idx).trim().toLowerCase();
+            const v = line.slice(idx + 1).trim();
+            if (!k) continue;
+            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
+            else headers[k] = v;
+          }
+          resolve({ status, text, headers });
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function runServerSyncOnce(settings) {
+    return runServerSyncOnceWithOptions(settings, {});
+  }
+  async function runServerSyncOnceWithOptions(settings, opts = {}) {
+    const endpointUrl = (settings.endpointUrl || "").trim();
+    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+    const token = (settings.token || "").trim();
+    if (!token) throw new Error("Missing sync token.");
+    const forceFull = opts.forceFull === true;
+    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+    await ensureSyncDetailCoverage(forceFull);
+    const effectiveCompact = settings.compact === true;
+    const delta = forceFull ? await (async () => {
+      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
+        db.games.toArray(),
+        db.rounds.toArray(),
+        db.details.toArray(),
+        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
+      ]);
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesAll) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsAll) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
+      const roundsNoPlayedAt = roundsAll.map((r) => {
+        const out = { ...r };
+        delete out.playedAt;
+        return out;
+      });
+      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
+      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
+      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
+      const tables = {
+        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
+        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+      };
+      const cursorToCandidates = [];
+      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
+      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
+      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
+      const envelope = {
+        schema: "geoanalyzr-sync",
+        schemaVersion: 1,
+        createdAt: Date.now(),
+        appVersion: getUserscriptVersion(),
+        owner: { playerId: ownerId, playerName: ownerName },
+        cursor: { from: 0, to: cursorTo },
+        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
+        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+        tables
+      };
+      const json = JSON.stringify(envelope);
+      const bytesGzip = await gzipJson(json);
+      return {
+        cursorFrom: 0,
+        cursorTo,
+        counts: envelope.counts,
+        json,
+        bytesJson: json.length,
+        bytesGzip
+      };
+    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
+    const headers = {
+      "Content-Type": "application/json",
+      "Content-Encoding": "gzip",
+      Authorization: `Bearer ${token}`,
+      "X-GA-Cursor-From": String(delta.cursorFrom),
+      "X-GA-Cursor-To": String(delta.cursorTo),
+      "X-GA-Schema-Version": "1",
+      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
+    };
+    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
+    const ok = res.status >= 200 && res.status < 300;
+    const status = {
+      ok,
+      status: res.status,
+      responseText: res.text,
+      cursorFrom: delta.cursorFrom,
+      cursorTo: delta.cursorTo,
+      counts: delta.counts,
+      bytesJson: delta.bytesJson,
+      bytesGzip: delta.bytesGzip.length
+    };
+    await setLastServerSyncCursor(status);
+    return status;
+  }
+  async function getLastServerSyncMeta() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    return meta?.value ?? null;
+  }
+
+  // src/uiOverlay.ts
+  function el(tag) {
+    return document.createElement(tag);
+  }
+  function cssOnce() {
+    const id = "geoanalyzr-ui-overlay-css";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+    .ga-ui-icon {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 999999;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,20,0.95);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    }
+    .ga-ui-icon:active { transform: translateY(1px); }
+
+    .ga-ui-panel {
+      position: fixed;
+      left: 16px;
+      bottom: 68px;
+      z-index: 999999;
+      width: 360px;
+      max-width: calc(100vw - 32px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(20,20,20,0.92);
+      color: white;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      padding: 10px;
+      display: none;
+    }
+
+    .ga-ui-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .ga-ui-title {
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ga-ui-title svg { display: block; filter: drop-shadow(0 0 10px rgba(0,162,254,0.35)); }
+    .ga-ui-icon svg { display: block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
+    .ga-ui-close {
+      border: none;
+      background: transparent;
+      color: white;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 2px 6px;
+    }
+
+    .ga-ui-status {
+      font-size: 12px;
+      opacity: 0.95;
+      white-space: pre-wrap;
+      margin-bottom: 10px;
+    }
+
+    .ga-ui-btn {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    .ga-ui-btn:active { transform: translateY(1px); }
+    .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    .ga-ui-counts {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.92;
+      white-space: normal;
+    }
+
+    .ga-ui-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1000000;
+      background: rgba(0,0,0,0.62);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .ga-ui-modal-card {
+      width: 520px;
+      max-width: calc(100vw - 32px);
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(20,20,20,0.94);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+      color: white;
+      padding: 12px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .ga-ui-modal-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom: 10px;
+    }
+    .ga-ui-modal-head-title { font-weight: 700; }
+    .ga-ui-modal-x { border:0; background: transparent; color: white; cursor:pointer; font-size: 18px; line-height: 1; }
+    .ga-ui-modal-input {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(0,0,0,0.25);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.20);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+    .ga-ui-modal-help {
+      margin-top: 8px;
+      font-size: 12px;
+      opacity: 0.90;
+      white-space: pre-wrap;
+    }
+    .ga-ui-modal-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+  `;
+    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
+  }
+  function createUIOverlay() {
+    const isDevBuild = () => {
+      const info = globalThis?.GM_info;
+      const ns = String(info?.script?.namespace || "");
+      const name = String(info?.script?.name || "");
+      return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
+    };
+    const formatBytes = (n) => {
+      if (!Number.isFinite(n) || n <= 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      let v = n;
+      let i = 0;
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    };
+    const mount = () => {
+      cssOnce();
+      if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
+      if (!document.documentElement.contains(panel)) document.documentElement.appendChild(panel);
+    };
+    const iconBtn = el("button");
+    iconBtn.className = "ga-ui-icon";
+    iconBtn.title = "GeoAnalyzr";
+    iconBtn.type = "button";
+    iconBtn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-overlay-icon", variant: "light", decorative: true });
+    const panel = el("div");
+    panel.className = "ga-ui-panel";
+    const header = el("div");
+    header.className = "ga-ui-head";
+    const title = el("div");
+    title.className = "ga-ui-title";
+    const titleLogo = el("span");
+    titleLogo.innerHTML = logoSvgMarkup({ size: 16, idPrefix: "ga-overlay-title", variant: "light", decorative: true });
+    const titleText = el("span");
+    titleText.textContent = "GeoAnalyzr";
+    title.appendChild(titleLogo);
+    title.appendChild(titleText);
+    const closeBtn = el("button");
+    closeBtn.className = "ga-ui-close";
+    closeBtn.type = "button";
+    closeBtn.textContent = "x";
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    const status = el("div");
+    status.className = "ga-ui-status";
+    status.textContent = "Ready.";
+    const mkBtn2 = (label, bg) => {
+      const b = el("button");
+      b.className = "ga-ui-btn";
+      b.type = "button";
+      b.textContent = label;
+      b.style.background = bg;
+      return b;
+    };
+    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
+    const syncBtn = isDevBuild() ? mkBtn2("Sync (Dev)", "rgba(255,255,255,0.10)") : null;
+    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
+    const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
+    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
+    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
+    const counts = el("div");
+    counts.className = "ga-ui-counts";
+    counts.textContent = "Data: 0 games, 0 rounds.";
+    panel.appendChild(header);
+    panel.appendChild(status);
+    panel.appendChild(updateBtn);
+    if (syncBtn) panel.appendChild(syncBtn);
+    panel.appendChild(analysisBtn);
+    panel.appendChild(discordBtn);
+    panel.appendChild(exportBtn);
+    panel.appendChild(resetBtn);
+    panel.appendChild(counts);
+    let open = false;
+    const setOpen = (next) => {
+      open = next;
+      panel.style.display = open ? "block" : "none";
+    };
+    iconBtn.addEventListener("click", () => setOpen(!open));
+    closeBtn.addEventListener("click", () => setOpen(false));
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+    else mount();
+    let updateHandler = null;
+    let resetHandler = null;
+    let exportHandler = null;
+    let openAnalysisHandler = null;
+    let discordHandler = null;
+    updateBtn.addEventListener("click", () => void updateHandler?.());
+    if (syncBtn) {
+      syncBtn.addEventListener("click", async (ev) => {
+        syncBtn.disabled = true;
+        const forceFull = !!(ev && ev.shiftKey);
+        status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+        try {
+          let settings = loadServerSyncSettings();
+          if (!settings.token) {
+            const gm = getGmXmlhttpRequest();
+            if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+            status.textContent = "Linking device...";
+            const linkOrigin = "https://geoanalyzr.lmbt.app";
+            const pairStartUrl = `${linkOrigin}/pair/start`;
+            const pair = await new Promise((resolve, reject) => {
+              gm({
+                method: "GET",
+                url: pairStartUrl,
+                headers: { Accept: "application/json" },
+                onload: (res2) => {
+                  const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+                  try {
+                    const parsed = JSON.parse(text);
+                    if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                      return reject(new Error("Pairing failed (invalid response)."));
+                    }
+                    resolve({ linkUrl: String(parsed.linkUrl) });
+                  } catch {
+                    reject(new Error("Pairing failed (invalid JSON)."));
+                  }
+                },
+                onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
+                ontimeout: () => reject(new Error("Pairing timeout"))
+              });
+            });
+            const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+            if (!linkWin) {
+              status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+              return;
+            }
+            const token = await new Promise((resolve, reject) => {
+              const timeout = window.setTimeout(() => {
+                cleanup();
+                reject(new Error("Link timeout"));
+              }, 2 * 60 * 1e3);
+              const onMsg = (ev2) => {
+                if (ev2.origin !== linkOrigin) return;
+                const d = ev2.data;
+                if (!d || d.type !== "geoanalyzr_sync_token") return;
+                const t = typeof d.token === "string" ? d.token.trim() : "";
+                const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+                if (!t) return;
+                cleanup();
+                if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+                resolve(t);
+              };
+              const cleanup = () => {
+                window.clearTimeout(timeout);
+                window.removeEventListener("message", onMsg);
+                try {
+                  linkWin.close();
+                } catch {
+                }
+              };
+              window.addEventListener("message", onMsg);
+            });
+            saveServerSyncSettings({ token });
+            settings = loadServerSyncSettings();
+          }
+          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+          const modeLabel = forceFull ? "Synced full" : "Synced";
+          status.textContent = res.ok ? `${modeLabel} \xB7 rows ${rowsTotal} \xB7 ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+        } catch (e) {
+          status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        } finally {
+          syncBtn.disabled = false;
+        }
+      });
+    }
+    exportBtn.addEventListener("click", () => void exportHandler?.());
+    resetBtn.addEventListener("click", () => void resetHandler?.());
+    analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
+    discordBtn.addEventListener("click", () => void discordHandler?.());
+    return {
+      setVisible(visible) {
+        iconBtn.style.display = visible ? "flex" : "none";
+        if (!visible) panel.style.display = "none";
+      },
+      setStatus(msg) {
+        status.textContent = msg;
+      },
+      setCounts(value) {
+        counts.textContent = `Data: ${value.games} games, ${value.rounds} rounds.`;
+      },
+      onUpdateClick(fn) {
+        updateHandler = fn;
+      },
+      onResetClick(fn) {
+        resetHandler = fn;
+      },
+      onExportClick(fn) {
+        exportHandler = fn;
+      },
+      onOpenAnalysisClick(fn) {
+        openAnalysisHandler = fn;
+      },
+      onDiscordClick(fn) {
+        discordHandler = fn;
+      }
+    };
   }
 
   // src/sync.ts
