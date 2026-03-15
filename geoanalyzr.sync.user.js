@@ -7779,540 +7779,6 @@
     return fromDb;
   }
 
-  // src/serverSync.ts
-  var SYNC_META_KEY = "server_sync_v1";
-  var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
-  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
-  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
-  function compactRecord(row) {
-    const out = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (value === void 0) continue;
-      if (COMPACT_DROP_KEYS.has(key)) continue;
-      out[key] = value;
-    }
-    return out;
-  }
-  function unionOrderedKeys(rows, prefer) {
-    const set = /* @__PURE__ */ new Set();
-    for (const key of prefer) set.add(key);
-    for (const row of rows) {
-      for (const key of Object.keys(row)) set.add(key);
-    }
-    const preferSet = new Set(prefer);
-    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
-    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
-  }
-  function toColumnar(rows, prefer) {
-    if (rows.length === 0) return { cols: [], rows: [] };
-    const cols = unionOrderedKeys(rows, prefer);
-    const outRows = new Array(rows.length);
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      const arr = new Array(cols.length);
-      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
-      outRows[i] = arr;
-    }
-    return { cols, rows: outRows };
-  }
-  function getUserscriptVersion() {
-    const anyGlobal = globalThis;
-    const info = anyGlobal?.GM_info;
-    const v = info?.script?.version;
-    return typeof v === "string" ? v : void 0;
-  }
-  function readGmValue(key) {
-    const g = globalThis;
-    try {
-      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
-    } catch {
-    }
-    try {
-      if (typeof GM_getValue === "function") return GM_getValue(key);
-    } catch {
-    }
-    try {
-      return globalThis?.localStorage?.getItem(key);
-    } catch {
-      return null;
-    }
-  }
-  function writeGmValue(key, value) {
-    const g = globalThis;
-    try {
-      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
-    } catch {
-    }
-    try {
-      if (typeof GM_setValue === "function") return GM_setValue(key, value);
-    } catch {
-    }
-    try {
-      globalThis?.localStorage?.setItem(key, value);
-    } catch {
-    }
-  }
-  function loadServerSyncSettings() {
-    const endpointUrlRaw = readGmValue(`${GM_VALUE_PREFIX}endpoint_url`);
-    const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
-    const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
-    const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
-    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
-    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
-    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
-    const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
-    return {
-      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
-      token,
-      compact,
-      includeAggregates
-    };
-  }
-  function saveServerSyncSettings(next) {
-    if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
-    if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
-    if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
-    if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
-  }
-  async function getLastServerSyncCursor() {
-    const meta = await db.meta.get(SYNC_META_KEY);
-    const cursor = meta?.value?.cursorTo;
-    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
-  }
-  async function setLastServerSyncCursor(status) {
-    await db.meta.put({
-      key: SYNC_META_KEY,
-      value: {
-        cursorFrom: status.cursorFrom,
-        cursorTo: status.cursorTo,
-        lastSyncAt: Date.now(),
-        lastStatus: status.status,
-        lastOk: status.ok,
-        lastBytesJson: status.bytesJson,
-        lastBytesGzip: status.bytesGzip,
-        lastCounts: status.counts
-      },
-      updatedAt: Date.now()
-    });
-  }
-  async function gzipJson(json) {
-    return await new Promise((resolve, reject) => {
-      gzip(strToU8(json), { level: 6 }, (err2, out) => {
-        if (err2) reject(err2);
-        else resolve(out);
-      });
-    });
-  }
-  async function buildDelta(since, opts) {
-    const cursorFrom = Math.max(0, Math.floor(since || 0));
-    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
-      db.games.where("playedAt").above(cursorFrom).toArray(),
-      db.rounds.where("playedAt").above(cursorFrom).toArray(),
-      db.details.where("fetchedAt").above(cursorFrom).toArray(),
-      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
-    ]);
-    const gameIds = gamesByTime.map((g) => g.gameId);
-    const [roundsByGame, detailsByGame] = await Promise.all([
-      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
-      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
-    ]);
-    const roundsMerged = (() => {
-      const byId = /* @__PURE__ */ new Map();
-      for (const r of roundsByGame) byId.set(r.id, r);
-      for (const r of roundsByTime) byId.set(r.id, r);
-      return Array.from(byId.values());
-    })();
-    const detailsMerged = (() => {
-      const byId = /* @__PURE__ */ new Map();
-      for (const d of detailsByGame) byId.set(d.gameId, d);
-      for (const d of detailsByTime) byId.set(d.gameId, d);
-      return Array.from(byId.values());
-    })();
-    const roundsNeedingTsGameIds = Array.from(
-      new Set(
-        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
-      )
-    );
-    if (roundsNeedingTsGameIds.length > 0) {
-      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
-      const gamePlayedAt = /* @__PURE__ */ new Map();
-      for (const g of gamesForBackfill) {
-        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
-      }
-      for (const r of roundsMerged) {
-        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        const ts = gid ? gamePlayedAt.get(gid) : void 0;
-        if (typeof ts === "number") r.playedAt = ts;
-      }
-    }
-    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
-    const roundsPayloadBase = roundsMerged.map((r) => {
-      const out = { ...r };
-      delete out.playedAt;
-      return out;
-    });
-    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
-    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
-    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
-    const cursorToCandidates = [];
-    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
-    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
-    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
-    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
-    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
-    const tables = {
-      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
-      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
-      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
-    };
-    const envelope = {
-      schema: "geoanalyzr-sync",
-      schemaVersion: 1,
-      createdAt: Date.now(),
-      appVersion: getUserscriptVersion(),
-      owner: { playerId: ownerId, playerName: ownerName },
-      cursor: { from: cursorFrom, to: cursorTo },
-      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
-      counts: {
-        games: gamesByTime.length,
-        rounds: roundsMerged.length,
-        details: detailsMerged.length,
-        gameAgg: gameAggByTime.length
-      },
-      tables
-    };
-    const json = JSON.stringify(envelope);
-    const bytesGzip = await gzipJson(json);
-    return {
-      cursorFrom,
-      cursorTo,
-      counts: envelope.counts,
-      json,
-      bytesJson: json.length,
-      bytesGzip
-    };
-  }
-  function gmPostBytes(url, body, opts) {
-    return new Promise((resolve, reject) => {
-      const gm = getGmXmlhttpRequest();
-      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
-      gm({
-        method: "POST",
-        url,
-        headers: opts.headers,
-        data: body,
-        responseType: "text",
-        timeout: opts.timeoutMs ?? 45e3,
-        onload: (res) => {
-          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
-          const text = typeof res?.responseText === "string" ? res.responseText : "";
-          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
-          const headers = {};
-          for (const line of rawHeaders.split(/\r?\n/)) {
-            const idx = line.indexOf(":");
-            if (idx <= 0) continue;
-            const k = line.slice(0, idx).trim().toLowerCase();
-            const v = line.slice(idx + 1).trim();
-            if (!k) continue;
-            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
-            else headers[k] = v;
-          }
-          resolve({ status, text, headers });
-        },
-        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
-  async function runServerSyncOnceWithOptions(settings, opts = {}) {
-    const endpointUrl = (settings.endpointUrl || "").trim();
-    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
-    const token = (settings.token || "").trim();
-    if (!token) throw new Error("Missing sync token.");
-    const forceFull = opts.forceFull === true;
-    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
-    const effectiveCompact = false;
-    const delta = forceFull ? await (async () => {
-      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
-        db.games.toArray(),
-        db.rounds.toArray(),
-        db.details.toArray(),
-        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
-      ]);
-      const gamePlayedAt = /* @__PURE__ */ new Map();
-      for (const g of gamesAll) {
-        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
-      }
-      for (const r of roundsAll) {
-        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        const ts = gid ? gamePlayedAt.get(gid) : void 0;
-        if (typeof ts === "number") r.playedAt = ts;
-      }
-      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
-      const roundsNoPlayedAt = roundsAll.map((r) => {
-        const out = { ...r };
-        delete out.playedAt;
-        return out;
-      });
-      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
-      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
-      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
-      const tables = {
-        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
-        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
-        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
-      };
-      const cursorToCandidates = [];
-      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
-      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
-      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
-      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
-      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
-      const envelope = {
-        schema: "geoanalyzr-sync",
-        schemaVersion: 1,
-        createdAt: Date.now(),
-        appVersion: getUserscriptVersion(),
-        owner: { playerId: ownerId, playerName: ownerName },
-        cursor: { from: 0, to: cursorTo },
-        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
-        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
-        tables
-      };
-      const json = JSON.stringify(envelope);
-      const bytesGzip = await gzipJson(json);
-      return {
-        cursorFrom: 0,
-        cursorTo,
-        counts: envelope.counts,
-        json,
-        bytesJson: json.length,
-        bytesGzip
-      };
-    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
-    const headers = {
-      "Content-Type": "application/json",
-      "Content-Encoding": "gzip",
-      Authorization: `Bearer ${token}`,
-      "X-GA-Cursor-From": String(delta.cursorFrom),
-      "X-GA-Cursor-To": String(delta.cursorTo),
-      "X-GA-Schema-Version": "1",
-      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
-    };
-    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
-    const ok = res.status >= 200 && res.status < 300;
-    const status = {
-      ok,
-      status: res.status,
-      responseText: res.text,
-      cursorFrom: delta.cursorFrom,
-      cursorTo: delta.cursorTo,
-      counts: delta.counts,
-      bytesJson: delta.bytesJson,
-      bytesGzip: delta.bytesGzip.length
-    };
-    await setLastServerSyncCursor(status);
-    return status;
-  }
-
-  // src/ui/logo.ts
-  var LOGO_SVG_DEFS = `
-  <defs>
-    <radialGradient id="bg" cx="30%" cy="20%" r="80%">
-      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.38"/>
-      <stop offset="55%" stop-color="#0b1020" stop-opacity="1"/>
-      <stop offset="100%" stop-color="#060a14" stop-opacity="1"/>
-    </radialGradient>
-    <linearGradient id="g" x1="70" y1="70" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7950E5"/>
-      <stop offset="0.55" stop-color="#00A2FE"/>
-      <stop offset="1" stop-color="#3AE8BD"/>
-    </linearGradient>
-    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
-      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
-    </filter>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="6" result="b"/>
-      <feMerge>
-        <feMergeNode in="b"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-  </defs>
-`;
-  var LOGO_SVG_SHAPES = `
-  <path filter="url(#shadow)"
-        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
-        fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)" stroke-width="4"/>
-
-  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="3"/>
-
-  <path filter="url(#glow)"
-        d="M88 110l26-22 20 16 22-30 30 22"
-        fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <g filter="url(#glow)">
-    <circle cx="88" cy="110" r="5.5" fill="#7950E5"/>
-    <circle cx="114" cy="88" r="5.5" fill="#5f7ff0"/>
-    <circle cx="134" cy="104" r="5.5" fill="#00A2FE"/>
-    <circle cx="156" cy="74" r="5.5" fill="#22cfe0"/>
-    <circle cx="186" cy="96" r="5.5" fill="#3AE8BD"/>
-  </g>
-`;
-  var LOGO_SVG_SHAPES_MARK = `
-  <path filter="url(#shadow)"
-        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
-        fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.24)" stroke-width="4"/>
-
-  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
-
-  <path filter="url(#glow)"
-        d="M88 110l26-22 20 16 22-30 30 22"
-        fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <g filter="url(#glow)">
-    <circle cx="88" cy="110" r="6.2" fill="#7950E5"/>
-    <circle cx="114" cy="88" r="6.2" fill="#5f7ff0"/>
-    <circle cx="134" cy="104" r="6.2" fill="#00A2FE"/>
-    <circle cx="156" cy="74" r="6.2" fill="#22cfe0"/>
-    <circle cx="186" cy="96" r="6.2" fill="#3AE8BD"/>
-  </g>
-`;
-  var LOGO_LIGHT_DEFS = `
-  <defs>
-    <linearGradient id="neon" x1="64" y1="64" x2="196" y2="196" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="0.35" stop-color="#AFA2FF"/>
-      <stop offset="0.7" stop-color="#00C8FF"/>
-      <stop offset="1" stop-color="#3AE8BD"/>
-    </linearGradient>
-    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
-      <feGaussianBlur stdDeviation="7" result="b"/>
-      <feMerge>
-        <feMergeNode in="b"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-  </defs>
-`;
-  var LOGO_LIGHT_SHAPES = `
-  <path d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
-        fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.70)" stroke-width="9"/>
-
-  <circle cx="128" cy="98" r="54" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" stroke-width="6"/>
-
-  <path filter="url(#glow)"
-        d="M90 110l30-26 26 20 28-36 34 26"
-        fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
-`;
-  function replaceAll(haystack, needle, replacement) {
-    return haystack.split(needle).join(replacement);
-  }
-  function escapeAttr(value) {
-    let v = value;
-    v = replaceAll(v, "&", "&amp;");
-    v = replaceAll(v, '"', "&quot;");
-    v = replaceAll(v, "<", "&lt;");
-    v = replaceAll(v, ">", "&gt;");
-    return v;
-  }
-  function logoSvgMarkup(opts) {
-    const { size, idPrefix, decorative, ariaLabel } = opts;
-    const variant = opts.variant ?? "full";
-    let inner = "";
-    let ids = [];
-    if (variant === "light") {
-      inner = `${LOGO_LIGHT_DEFS.trim()}
-${LOGO_LIGHT_SHAPES.trim()}`.trim();
-      ids = ["neon", "glow"];
-    } else {
-      const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
-      const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
-      inner = `${LOGO_SVG_DEFS.trim()}
-${bg}
-${shapes}`.trim();
-      ids = ["bg", "g", "shadow", "glow"];
-    }
-    for (const id of ids) {
-      inner = replaceAll(inner, `id="${id}"`, `id="${idPrefix}-${id}"`);
-      inner = replaceAll(inner, `url(#${id})`, `url(#${idPrefix}-${id})`);
-    }
-    const label = (ariaLabel ?? "GeoAnalyzr").trim() || "GeoAnalyzr";
-    const aria = decorative ? `aria-hidden="true"` : `role="img" aria-label="${escapeAttr(label)}"`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
-  }
-
-  // src/syncOnly/miniButton.ts
-  function el(tag) {
-    return document.createElement(tag);
-  }
-  function cssOnce() {
-    const id = "geoanalyzr-sync-mini-css";
-    if (document.getElementById(id)) return;
-    const style = el("style");
-    style.id = id;
-    style.textContent = `
-    .ga-sync-mini {
-      position: fixed;
-      left: 16px;
-      bottom: 16px;
-      z-index: 999999;
-      width: 44px;
-      height: 44px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(20,20,20,0.95);
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
-    }
-    .ga-sync-mini:active { transform: translateY(1px); }
-    .ga-sync-mini svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
-
-    .ga-sync-mini[data-state="working"] { border-color: rgba(58,232,189,0.55); box-shadow: 0 8px 26px rgba(58,232,189,0.18); }
-    .ga-sync-mini[data-state="ok"] { border-color: rgba(58,232,189,0.70); box-shadow: 0 8px 26px rgba(58,232,189,0.14); }
-    .ga-sync-mini[data-state="error"] { border-color: rgba(255,107,107,0.70); box-shadow: 0 8px 26px rgba(255,107,107,0.16); }
-    .ga-sync-mini[data-state="needs_link"] { border-color: rgba(254,205,25,0.75); box-shadow: 0 8px 26px rgba(254,205,25,0.12); }
-
-    .ga-sync-mini[data-state="working"] svg { animation: ga-spin 900ms linear infinite; transform-origin: 50% 50%; }
-    @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  `;
-    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
-  }
-  function createSyncMiniButton(opts) {
-    cssOnce();
-    const btn = el("button");
-    btn.className = "ga-sync-mini";
-    btn.type = "button";
-    btn.title = "GeoAnalyzr Sync";
-    btn.setAttribute("data-state", "idle");
-    btn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-sync-mini", variant: "light", decorative: true });
-    btn.addEventListener("click", (ev) => void opts.onClick(ev));
-    const mount = () => {
-      if (!document.documentElement.contains(btn)) document.documentElement.appendChild(btn);
-    };
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
-    else mount();
-    return {
-      setState(state) {
-        btn.setAttribute("data-state", state);
-      },
-      setTitle(title) {
-        btn.title = title;
-      }
-    };
-  }
-
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
   var import_which_polygon = __toESM(require_which_polygon(), 1);
   var borders_default = {
@@ -9978,6 +9444,554 @@ ${shapes}`.trim();
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
     opts.onStatus(`Details done. ok=${ok}, fail=${fail}, skipped=${skipped}${reason}`);
     return { queued: total, ok, fail, skipped };
+  }
+
+  // src/serverSync.ts
+  var SYNC_META_KEY = "server_sync_v1";
+  var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
+  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
+  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
+  function compactRecord(row) {
+    const out = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (value === void 0) continue;
+      if (COMPACT_DROP_KEYS.has(key)) continue;
+      out[key] = value;
+    }
+    return out;
+  }
+  function unionOrderedKeys(rows, prefer) {
+    const set = /* @__PURE__ */ new Set();
+    for (const key of prefer) set.add(key);
+    for (const row of rows) {
+      for (const key of Object.keys(row)) set.add(key);
+    }
+    const preferSet = new Set(prefer);
+    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
+    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
+  }
+  function toColumnar(rows, prefer) {
+    if (rows.length === 0) return { cols: [], rows: [] };
+    const cols = unionOrderedKeys(rows, prefer);
+    const outRows = new Array(rows.length);
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const arr = new Array(cols.length);
+      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
+      outRows[i] = arr;
+    }
+    return { cols, rows: outRows };
+  }
+  function getUserscriptVersion() {
+    const anyGlobal = globalThis;
+    const info = anyGlobal?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function readGmValue(key) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
+    } catch {
+    }
+    try {
+      if (typeof GM_getValue === "function") return GM_getValue(key);
+    } catch {
+    }
+    try {
+      return globalThis?.localStorage?.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  function writeGmValue(key, value) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      if (typeof GM_setValue === "function") return GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      globalThis?.localStorage?.setItem(key, value);
+    } catch {
+    }
+  }
+  function loadServerSyncSettings() {
+    const endpointUrlRaw = readGmValue(`${GM_VALUE_PREFIX}endpoint_url`);
+    const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
+    const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
+    const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
+    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
+    const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
+    const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
+    return {
+      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
+      token,
+      compact,
+      includeAggregates
+    };
+  }
+  function saveServerSyncSettings(next) {
+    if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
+    if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
+    if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
+    if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
+  }
+  async function getLastServerSyncCursor() {
+    const meta = await db.meta.get(SYNC_META_KEY);
+    const cursor = meta?.value?.cursorTo;
+    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
+  }
+  async function setLastServerSyncCursor(status) {
+    await db.meta.put({
+      key: SYNC_META_KEY,
+      value: {
+        cursorFrom: status.cursorFrom,
+        cursorTo: status.cursorTo,
+        lastSyncAt: Date.now(),
+        lastStatus: status.status,
+        lastOk: status.ok,
+        lastBytesJson: status.bytesJson,
+        lastBytesGzip: status.bytesGzip,
+        lastCounts: status.counts
+      },
+      updatedAt: Date.now()
+    });
+  }
+  async function gzipJson(json) {
+    return await new Promise((resolve, reject) => {
+      gzip(strToU8(json), { level: 6 }, (err2, out) => {
+        if (err2) reject(err2);
+        else resolve(out);
+      });
+    });
+  }
+  async function ensureSyncDetailCoverage(forceFull) {
+    const games = forceFull ? await db.games.toArray() : await db.games.orderBy("playedAt").reverse().limit(500).toArray();
+    if (!games.length) return;
+    await fetchDetailsForGames({
+      games,
+      concurrency: 4,
+      retryErrors: true,
+      verifyCompleteness: true,
+      reason: forceFull ? "pre-sync-full" : "pre-sync",
+      onStatus: () => {
+      }
+    });
+  }
+  async function buildDelta(since, opts) {
+    const cursorFrom = Math.max(0, Math.floor(since || 0));
+    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
+      db.games.where("playedAt").above(cursorFrom).toArray(),
+      db.rounds.where("playedAt").above(cursorFrom).toArray(),
+      db.details.where("fetchedAt").above(cursorFrom).toArray(),
+      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
+    ]);
+    const gameIds = gamesByTime.map((g) => g.gameId);
+    const [roundsByGame, detailsByGame] = await Promise.all([
+      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
+      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
+    ]);
+    const roundsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const r of roundsByGame) byId.set(r.id, r);
+      for (const r of roundsByTime) byId.set(r.id, r);
+      return Array.from(byId.values());
+    })();
+    const detailsMerged = (() => {
+      const byId = /* @__PURE__ */ new Map();
+      for (const d of detailsByGame) byId.set(d.gameId, d);
+      for (const d of detailsByTime) byId.set(d.gameId, d);
+      return Array.from(byId.values());
+    })();
+    const roundsNeedingTsGameIds = Array.from(
+      new Set(
+        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
+      )
+    );
+    if (roundsNeedingTsGameIds.length > 0) {
+      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesForBackfill) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsMerged) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+    }
+    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
+    const roundsPayloadBase = roundsMerged.map((r) => {
+      const out = { ...r };
+      delete out.playedAt;
+      return out;
+    });
+    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
+    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
+    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
+    const cursorToCandidates = [];
+    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
+    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
+    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
+    const tables = {
+      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
+      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+    };
+    const envelope = {
+      schema: "geoanalyzr-sync",
+      schemaVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion(),
+      owner: { playerId: ownerId, playerName: ownerName },
+      cursor: { from: cursorFrom, to: cursorTo },
+      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
+      counts: {
+        games: gamesByTime.length,
+        rounds: roundsMerged.length,
+        details: detailsMerged.length,
+        gameAgg: gameAggByTime.length
+      },
+      tables
+    };
+    const json = JSON.stringify(envelope);
+    const bytesGzip = await gzipJson(json);
+    return {
+      cursorFrom,
+      cursorTo,
+      counts: envelope.counts,
+      json,
+      bytesJson: json.length,
+      bytesGzip
+    };
+  }
+  function gmPostBytes(url, body, opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "POST",
+        url,
+        headers: opts.headers,
+        data: body,
+        responseType: "text",
+        timeout: opts.timeoutMs ?? 45e3,
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+          const headers = {};
+          for (const line of rawHeaders.split(/\r?\n/)) {
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            const k = line.slice(0, idx).trim().toLowerCase();
+            const v = line.slice(idx + 1).trim();
+            if (!k) continue;
+            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
+            else headers[k] = v;
+          }
+          resolve({ status, text, headers });
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  async function runServerSyncOnceWithOptions(settings, opts = {}) {
+    const endpointUrl = (settings.endpointUrl || "").trim();
+    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+    const token = (settings.token || "").trim();
+    if (!token) throw new Error("Missing sync token.");
+    const forceFull = opts.forceFull === true;
+    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+    await ensureSyncDetailCoverage(forceFull);
+    const effectiveCompact = settings.compact === true;
+    const delta = forceFull ? await (async () => {
+      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
+        db.games.toArray(),
+        db.rounds.toArray(),
+        db.details.toArray(),
+        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
+      ]);
+      const gamePlayedAt = /* @__PURE__ */ new Map();
+      for (const g of gamesAll) {
+        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
+      }
+      for (const r of roundsAll) {
+        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        const ts = gid ? gamePlayedAt.get(gid) : void 0;
+        if (typeof ts === "number") r.playedAt = ts;
+      }
+      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
+      const roundsNoPlayedAt = roundsAll.map((r) => {
+        const out = { ...r };
+        delete out.playedAt;
+        return out;
+      });
+      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
+      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
+      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
+      const tables = {
+        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
+        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
+        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
+        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
+      };
+      const cursorToCandidates = [];
+      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
+      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
+      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
+      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
+      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
+      const envelope = {
+        schema: "geoanalyzr-sync",
+        schemaVersion: 1,
+        createdAt: Date.now(),
+        appVersion: getUserscriptVersion(),
+        owner: { playerId: ownerId, playerName: ownerName },
+        cursor: { from: 0, to: cursorTo },
+        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
+        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+        tables
+      };
+      const json = JSON.stringify(envelope);
+      const bytesGzip = await gzipJson(json);
+      return {
+        cursorFrom: 0,
+        cursorTo,
+        counts: envelope.counts,
+        json,
+        bytesJson: json.length,
+        bytesGzip
+      };
+    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
+    const headers = {
+      "Content-Type": "application/json",
+      "Content-Encoding": "gzip",
+      Authorization: `Bearer ${token}`,
+      "X-GA-Cursor-From": String(delta.cursorFrom),
+      "X-GA-Cursor-To": String(delta.cursorTo),
+      "X-GA-Schema-Version": "1",
+      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
+    };
+    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
+    const ok = res.status >= 200 && res.status < 300;
+    const status = {
+      ok,
+      status: res.status,
+      responseText: res.text,
+      cursorFrom: delta.cursorFrom,
+      cursorTo: delta.cursorTo,
+      counts: delta.counts,
+      bytesJson: delta.bytesJson,
+      bytesGzip: delta.bytesGzip.length
+    };
+    await setLastServerSyncCursor(status);
+    return status;
+  }
+
+  // src/ui/logo.ts
+  var LOGO_SVG_DEFS = `
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="20%" r="80%">
+      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.38"/>
+      <stop offset="55%" stop-color="#0b1020" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#060a14" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="g" x1="70" y1="70" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7950E5"/>
+      <stop offset="0.55" stop-color="#00A2FE"/>
+      <stop offset="1" stop-color="#3AE8BD"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+`;
+  var LOGO_SVG_SHAPES = `
+  <path filter="url(#shadow)"
+        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)" stroke-width="4"/>
+
+  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="3"/>
+
+  <path filter="url(#glow)"
+        d="M88 110l26-22 20 16 22-30 30 22"
+        fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g filter="url(#glow)">
+    <circle cx="88" cy="110" r="5.5" fill="#7950E5"/>
+    <circle cx="114" cy="88" r="5.5" fill="#5f7ff0"/>
+    <circle cx="134" cy="104" r="5.5" fill="#00A2FE"/>
+    <circle cx="156" cy="74" r="5.5" fill="#22cfe0"/>
+    <circle cx="186" cy="96" r="5.5" fill="#3AE8BD"/>
+  </g>
+`;
+  var LOGO_SVG_SHAPES_MARK = `
+  <path filter="url(#shadow)"
+        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.24)" stroke-width="4"/>
+
+  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
+
+  <path filter="url(#glow)"
+        d="M88 110l26-22 20 16 22-30 30 22"
+        fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g filter="url(#glow)">
+    <circle cx="88" cy="110" r="6.2" fill="#7950E5"/>
+    <circle cx="114" cy="88" r="6.2" fill="#5f7ff0"/>
+    <circle cx="134" cy="104" r="6.2" fill="#00A2FE"/>
+    <circle cx="156" cy="74" r="6.2" fill="#22cfe0"/>
+    <circle cx="186" cy="96" r="6.2" fill="#3AE8BD"/>
+  </g>
+`;
+  var LOGO_LIGHT_DEFS = `
+  <defs>
+    <linearGradient id="neon" x1="64" y1="64" x2="196" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.35" stop-color="#AFA2FF"/>
+      <stop offset="0.7" stop-color="#00C8FF"/>
+      <stop offset="1" stop-color="#3AE8BD"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+`;
+  var LOGO_LIGHT_SHAPES = `
+  <path d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.70)" stroke-width="9"/>
+
+  <circle cx="128" cy="98" r="54" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" stroke-width="6"/>
+
+  <path filter="url(#glow)"
+        d="M90 110l30-26 26 20 28-36 34 26"
+        fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+`;
+  function replaceAll(haystack, needle, replacement) {
+    return haystack.split(needle).join(replacement);
+  }
+  function escapeAttr(value) {
+    let v = value;
+    v = replaceAll(v, "&", "&amp;");
+    v = replaceAll(v, '"', "&quot;");
+    v = replaceAll(v, "<", "&lt;");
+    v = replaceAll(v, ">", "&gt;");
+    return v;
+  }
+  function logoSvgMarkup(opts) {
+    const { size, idPrefix, decorative, ariaLabel } = opts;
+    const variant = opts.variant ?? "full";
+    let inner = "";
+    let ids = [];
+    if (variant === "light") {
+      inner = `${LOGO_LIGHT_DEFS.trim()}
+${LOGO_LIGHT_SHAPES.trim()}`.trim();
+      ids = ["neon", "glow"];
+    } else {
+      const bg = variant === "full" ? `<circle cx="128" cy="128" r="112" fill="url(#bg)"/>` : "";
+      const shapes = variant === "full" ? LOGO_SVG_SHAPES.trim() : LOGO_SVG_SHAPES_MARK.trim();
+      inner = `${LOGO_SVG_DEFS.trim()}
+${bg}
+${shapes}`.trim();
+      ids = ["bg", "g", "shadow", "glow"];
+    }
+    for (const id of ids) {
+      inner = replaceAll(inner, `id="${id}"`, `id="${idPrefix}-${id}"`);
+      inner = replaceAll(inner, `url(#${id})`, `url(#${idPrefix}-${id})`);
+    }
+    const label = (ariaLabel ?? "GeoAnalyzr").trim() || "GeoAnalyzr";
+    const aria = decorative ? `aria-hidden="true"` : `role="img" aria-label="${escapeAttr(label)}"`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
+  }
+
+  // src/syncOnly/miniButton.ts
+  function el(tag) {
+    return document.createElement(tag);
+  }
+  function cssOnce() {
+    const id = "geoanalyzr-sync-mini-css";
+    if (document.getElementById(id)) return;
+    const style = el("style");
+    style.id = id;
+    style.textContent = `
+    .ga-sync-mini {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 999999;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(20,20,20,0.95);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+      transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .ga-sync-mini:active { transform: translateY(1px); }
+    .ga-sync-mini svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.40)); }
+
+    .ga-sync-mini[data-state="working"] { border-color: rgba(58,232,189,0.55); box-shadow: 0 8px 26px rgba(58,232,189,0.18); }
+    .ga-sync-mini[data-state="ok"] { border-color: rgba(58,232,189,0.70); box-shadow: 0 8px 26px rgba(58,232,189,0.14); }
+    .ga-sync-mini[data-state="error"] { border-color: rgba(255,107,107,0.70); box-shadow: 0 8px 26px rgba(255,107,107,0.16); }
+    .ga-sync-mini[data-state="needs_link"] { border-color: rgba(254,205,25,0.75); box-shadow: 0 8px 26px rgba(254,205,25,0.12); }
+
+    .ga-sync-mini[data-state="working"] svg { animation: ga-spin 900ms linear infinite; transform-origin: 50% 50%; }
+    @keyframes ga-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  `;
+    (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
+  }
+  function createSyncMiniButton(opts) {
+    cssOnce();
+    const btn = el("button");
+    btn.className = "ga-sync-mini";
+    btn.type = "button";
+    btn.title = "GeoAnalyzr Sync";
+    btn.setAttribute("data-state", "idle");
+    btn.innerHTML = logoSvgMarkup({ size: 28, idPrefix: "ga-sync-mini", variant: "light", decorative: true });
+    btn.addEventListener("click", (ev) => void opts.onClick(ev));
+    const mount = () => {
+      if (!document.documentElement.contains(btn)) document.documentElement.appendChild(btn);
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
+    else mount();
+    return {
+      setState(state) {
+        btn.setAttribute("data-state", state);
+      },
+      setTitle(title) {
+        btn.title = title;
+      }
+    };
   }
 
   // src/sync.ts

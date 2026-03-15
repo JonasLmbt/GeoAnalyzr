@@ -1,6 +1,7 @@
 import { gzip, strToU8 } from "fflate";
 import { db, type FeedGameRow, type GameAggRow, type GameRow, type RoundRow } from "./db";
 import { getCurrentPlayerId, getCurrentPlayerName } from "./app/playerIdentity";
+import { fetchDetailsForGames } from "./details";
 import { getGmXmlhttpRequest } from "./gm";
 
 type ColumnarTable = {
@@ -176,6 +177,24 @@ async function gzipJson(json: string): Promise<Uint8Array> {
   });
 }
 
+async function ensureSyncDetailCoverage(forceFull: boolean): Promise<void> {
+  const games = forceFull
+    ? await db.games.toArray()
+    : await db.games.orderBy("playedAt").reverse().limit(500).toArray();
+  if (!games.length) return;
+
+  await fetchDetailsForGames({
+    games,
+    concurrency: 4,
+    retryErrors: true,
+    verifyCompleteness: true,
+    reason: forceFull ? "pre-sync-full" : "pre-sync",
+    onStatus: () => {
+      // Keep sync preflight silent in the generic API. UI callers only get the final sync status.
+    }
+  });
+}
+
 async function buildDelta(since: number, opts: { compact: boolean; includeAggregates: boolean }): Promise<{
   cursorFrom: number;
   cursorTo: number;
@@ -348,10 +367,10 @@ export async function runServerSyncOnceWithOptions(
 
   const forceFull = opts.forceFull === true;
   const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
+  await ensureSyncDetailCoverage(forceFull);
 
-  // Full-fidelity sync: keep payload complete so the server/website can reproduce
-  // the old semantic dashboard without missing fields.
-  const effectiveCompact = false;
+  // "Compact" only drops bulky raw payloads, never analytical fields.
+  const effectiveCompact = settings.compact === true;
 
   const delta = forceFull
     ? await (async () => {
