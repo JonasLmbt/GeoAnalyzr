@@ -18,21 +18,21 @@ For development:
 
 GeoAnalyzr is available in three variants:
 
-1) **Local (recommended)** — full dashboard + analysis stored locally in your browser  
-2) **Sync-only** — minimal: only a small button to *Fetch + Sync* to the GeoAnalyzr website  
+1) **GeoAnalyzr (recommended)** — full dashboard + analysis stored locally in your browser  
+2) **Minimal** — minimal: only a small button to *Fetch + Sync* to the GeoAnalyzr website  
 3) **Dev** — testing build that tracks `master`
 
-### 1) Local (recommended)
+### 1) GeoAnalyzr (recommended)
 
 1. Open this file in your browser:
-   - [Local](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js)
+   - [GeoAnalyzr](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js)
 2. Tampermonkey will show the install dialog.
 3. Click install.
 
-### 2) Sync-only (minimal)
+### 2) Minimal
 
 1. Open this file in your browser:
-   - [Sync-only](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js)
+   - [Minimal](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js)
 2. Install it in Tampermonkey.
 3. Open GeoGuessr and click the small GeoAnalyzr icon (bottom-left). It runs **Fetch + Sync**.
 
@@ -67,14 +67,14 @@ Tampermonkey can therefore detect and install updates automatically.
 
 ## Security and Privacy
 
-### Local (recommended)
+### GeoAnalyzr (recommended)
 
-- The Local script stores data locally in your browser (IndexedDB).
+- GeoAnalyzr stores data locally in your browser (IndexedDB).
 - It does **not** sync your dataset to the GeoAnalyzr website.
 - You can remove local data at any time using **Reset Database**.
-- You can export/import your dataset via **Settings → Data** (useful for moving browsers).
+- You can export your analysis to Excel anytime.
 
-### Sync-only / Dev (opt-in sync)
+### Minimal / Dev (opt-in sync)
 
 - These variants can sync data to the GeoAnalyzr server, but only after your device is linked (Discord OAuth).
 - A per-device sync token is stored locally in your browser and sent as `Authorization: Bearer …` over HTTPS.
@@ -99,7 +99,7 @@ npm run build:dev
 # Release build (geoanalyzr.user.js)
 npm run build:release
 
-# Sync-only build (geoanalyzr.sync.user.js)
+# Minimal build (geoanalyzr.sync.user.js)
 npm run build:sync
 
 # Build all

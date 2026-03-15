@@ -5,7 +5,7 @@ const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 const isSyncOnly = /(^|[\\/])geoanalyzr\.sync\.user\.js$/i.test(outFile);
 const isLocal = !isDev && !isSyncOnly;
 
-const version = isDev ? "2.4.1-dev" : "2.4.1";
+const version = isDev ? "2.4.2-dev" : "2.4.2";
 
 // GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,
 // which breaks installation/auto-updates. Raw GitHub URLs are always backed by the repo contents.
@@ -23,7 +23,7 @@ const syncExtraConnect = isDev || isSyncOnly || isLocal
   : "";
 
 const banner = `// ==UserScript==
-// @name         ${isDev ? "GeoAnalyzr (Dev)" : isSyncOnly ? "GeoAnalyzr Sync" : "GeoAnalyzr (Local)"}
+// @name         ${isDev ? "GeoAnalyzr (Dev)" : isSyncOnly ? "GeoAnalyzr (Minimal)" : "GeoAnalyzr"}
 // @namespace    ${isDev ? "geoanalyzr-dev" : isSyncOnly ? "geoanalyzr-sync" : "geoanalyzr"}
 // @author       JonasLmbt
 // @version      ${version}
