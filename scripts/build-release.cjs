@@ -5,18 +5,19 @@ const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 const isSyncOnly = /(^|[\\/])geoanalyzr\.sync\.user\.js$/i.test(outFile);
 const isLocal = !isDev && !isSyncOnly;
 
-const version = isDev ? "2.4.0-dev" : "2.4.0";
+const version = isDev ? "2.4.1-dev" : "2.4.1";
 
 // GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,
 // which breaks installation/auto-updates. Raw GitHub URLs are always backed by the repo contents.
 const rawBase = "https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master";
 
-const syncExtraGrants = isDev || isSyncOnly
+// Server sync and device linking need these grants/permissions in all variants that can sync.
+const syncExtraGrants = isDev || isSyncOnly || isLocal
   ? `// @grant        GM_getValue
 // @grant        GM_setValue`
   : "";
 
-const syncExtraConnect = isDev || isSyncOnly
+const syncExtraConnect = isDev || isSyncOnly || isLocal
   ? `// @connect      sync.geoanalyzr.lmbt.app
 // @connect      geoanalyzr.lmbt.app`
   : "";
