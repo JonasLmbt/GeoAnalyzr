@@ -319,10 +319,10 @@ export function createUIOverlay(): UIOverlay {
   actions.className = "ga-ui-actions";
   actions.appendChild(updateBtn);
   actions.appendChild(syncBtn);
-  actions.appendChild(unsyncBtn);
   actions.appendChild(analysisBtn);
   actions.appendChild(discordBtn);
   actions.appendChild(exportBtn);
+  actions.appendChild(unsyncBtn);
   actions.appendChild(resetBtn);
 
   panel.appendChild(header);
@@ -444,7 +444,11 @@ export function createUIOverlay(): UIOverlay {
     }
 
     const input = window.prompt(
-      "This will permanently delete your data from the GeoAnalyzr server and unlink this device.\n\nType DELETE to confirm."
+      "WARNING:\n" +
+        "- This permanently deletes ALL your data from the GeoAnalyzr server.\n" +
+        "- Your local data in this browser will NOT be deleted.\n" +
+        "- Access via the website and the Discord bot will no longer be possible after this.\n\n" +
+        "Type DELETE to confirm."
     );
     if (input !== "DELETE") {
       status.textContent = "Cancelled.";
