@@ -388,6 +388,7 @@ export async function updateData(opts: {
   verifyCompleteness?: boolean;
   retryErrors?: boolean;
   enrichLimit?: number;
+  gameFilter?: { modeFamily?: "all" | "duels" | "teamduels" };
 }): Promise<{
   feedPages: number;
   feedUpserted: number;
@@ -410,6 +411,10 @@ export async function updateData(opts: {
   const startedAt = Date.now();
   const meta = await db.meta.get("sync");
   const lastSeen = (meta?.value as any)?.lastSeenTime ? Number((meta?.value as any)?.lastSeenTime) : null;
+  const filterModeFamily = (() => {
+    const raw = opts?.gameFilter?.modeFamily;
+    return raw === "duels" || raw === "teamduels" ? raw : "all";
+  })();
 
   let paginationToken: string | undefined;
   let feedPages = 0;
@@ -471,10 +476,12 @@ export async function updateData(opts: {
       if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
     }
     const deduped = [...byId.values()];
+    const dedupedFiltered =
+      filterModeFamily === "all" ? deduped : deduped.filter((g) => String((g as any)?.modeFamily || "") === filterModeFamily);
 
-    if (deduped.length > 0) {
-      await db.games.bulkPut(deduped);
-      feedUpserted += deduped.length;
+    if (dedupedFiltered.length > 0) {
+      await db.games.bulkPut(dedupedFiltered);
+      feedUpserted += dedupedFiltered.length;
     }
 
     const newestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
@@ -554,10 +561,10 @@ export async function updateData(opts: {
     await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
 
     // Fetch/enrich details for games we just saw, so the update proceeds step-by-step.
-    if (deduped.length > 0) {
+    if (dedupedFiltered.length > 0) {
       const res = await fetchDetailsForGames({
         onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
-        games: deduped,
+        games: dedupedFiltered,
         concurrency: detailConcurrency,
         verifyCompleteness,
         retryErrors,
@@ -595,7 +602,7 @@ export async function updateData(opts: {
     }
 
     opts.onStatus(
-      `Feed page ${page}: upserted ${deduped.length} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
+      `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" ? "" : ` (${filterModeFamily})`} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
     );
 
     paginationToken = nextPaginationToken;
@@ -625,7 +632,11 @@ export async function updateData(opts: {
   let enrichedSkipped = 0;
   if (enrichLimit > 0) {
     opts.onStatus(`Enriching existing details (limit ${enrichLimit})...`);
-    const recentDetails = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
+    const recentDetailsAll = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
+    const recentDetails =
+      filterModeFamily === "all"
+        ? recentDetailsAll
+        : recentDetailsAll.filter((d: any) => String(d?.modeFamily || "") === filterModeFamily);
     const needIds = recentDetails
       .filter((d: any) => d?.status === "ok")
       .filter((d: any) => {

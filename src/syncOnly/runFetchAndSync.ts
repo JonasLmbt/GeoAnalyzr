@@ -1,5 +1,6 @@
 import { updateData } from "../sync";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions } from "../serverSync";
+import { loadFetchGameFilter } from "../fetchGameFilter";
 import { linkDeviceViaDiscord } from "./linkDevice";
 
 function readLocalNumber(key: string): number {
@@ -35,7 +36,8 @@ export async function runFetchAndSync(opts: {
     detailConcurrency: 4,
     verifyCompleteness: true,
     retryErrors: true,
-    enrichLimit: 1500
+    enrichLimit: 1500,
+    gameFilter: loadFetchGameFilter()
   });
 
   let settings = loadServerSyncSettings();

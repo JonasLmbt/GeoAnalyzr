@@ -3,9 +3,9 @@ import { updateData } from "../sync";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
 import { backfillGuessCountries } from "../migrations/backfillGuessCountries";
 import { invalidateRoundsCache } from "../engine/queryEngine";
-import { exportExcel } from "../export";
 import { initAnalysisWindow } from "../ui";
 import { httpGetJson } from "../http";
+import { loadFetchGameFilter } from "../fetchGameFilter";
 
 type DashboardFilter = {
   fromTs?: number;
@@ -27,9 +27,7 @@ type UI = {
   }) => void;
   onUpdateClick: (handler: () => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
-  onExportClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
-  onDiscordClick: (handler: () => void | Promise<void>) => void;
 };
 
 function errorText(e: unknown): string {
@@ -211,7 +209,8 @@ export function registerUiActions(ui: UI): void {
         detailConcurrency: 4,
         retryErrors: true,
         verifyCompleteness: true,
-        enrichLimit: 2000
+        enrichLimit: 2000,
+        gameFilter: loadFetchGameFilter()
       });
       const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
       const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
@@ -237,7 +236,15 @@ export function registerUiActions(ui: UI): void {
   });
 
   ui.onResetClick(async () => {
-    if (!confirm("Reset database? This will permanently delete all local analyzer data.")) return;
+    if (
+      !confirm(
+        "WARNING:\n" +
+          "- This permanently deletes ALL GeoAnalyzr data stored locally in this browser.\n" +
+          "- This does NOT delete any data on the server.\n\n" +
+          "Reset local database?"
+      )
+    )
+      return;
     try {
       ui.setStatus("Resetting DB...");
       await db.transaction("rw", db.games, db.rounds, db.details, db.meta, async () => {
@@ -246,15 +253,6 @@ export function registerUiActions(ui: UI): void {
       invalidateRoundsCache();
       ui.setStatus("DB reset complete.");
       await refreshUI(ui);
-    } catch (e) {
-      ui.setStatus("Error: " + errorText(e));
-      console.error(e);
-    }
-  });
-
-  ui.onExportClick(async () => {
-    try {
-      await exportExcel((m) => ui.setStatus(m));
     } catch (e) {
       ui.setStatus("Error: " + errorText(e));
       console.error(e);
@@ -305,9 +303,4 @@ export function registerUiActions(ui: UI): void {
     }
   });
 
-  ui.onDiscordClick(() => {
-    const url = "https://discord.gg/8RA3VtSC";
-    const w = window.open(url, "_blank", "noopener,noreferrer");
-    if (w) w.opener = null;
-  });
 }

@@ -14,6 +14,8 @@ export type ServerSyncSettings = {
   token: string;
   compact: boolean;
   includeAggregates: boolean;
+  filterModeFamily: "all" | "duels" | "teamduels";
+  filterMovement: "all" | "moving" | "no_move" | "nmpz" | "unknown";
 };
 
 export type ServerSyncStatus = {
@@ -129,12 +131,24 @@ export function loadServerSyncSettings(): ServerSyncSettings {
     typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
   const includeAggregates =
     typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
+  const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
+  const filterMovementRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
+  const filterModeFamily = (() => {
+    const s = typeof filterModeFamilyRaw === "string" ? filterModeFamilyRaw.trim().toLowerCase() : "";
+    return s === "duels" || s === "teamduels" ? s : "all";
+  })();
+  const filterMovement = (() => {
+    const s = typeof filterMovementRaw === "string" ? filterMovementRaw.trim().toLowerCase() : "";
+    return s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown" ? s : "all";
+  })();
 
   return {
     endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
     token,
     compact,
-    includeAggregates
+    includeAggregates,
+    filterModeFamily,
+    filterMovement
   };
 }
 
@@ -143,6 +157,8 @@ export function saveServerSyncSettings(next: Partial<ServerSyncSettings>): void 
   if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
   if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
   if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
+  if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
+  if (typeof next.filterMovement === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_movement`, next.filterMovement);
 }
 
 export async function getLastServerSyncCursor(): Promise<number> {
@@ -195,7 +211,15 @@ async function ensureSyncDetailCoverage(forceFull: boolean): Promise<void> {
   });
 }
 
-async function buildDelta(since: number, opts: { compact: boolean; includeAggregates: boolean }): Promise<{
+async function buildDelta(
+  since: number,
+  opts: {
+    compact: boolean;
+    includeAggregates: boolean;
+    filterModeFamily: "all" | "duels" | "teamduels";
+    filterMovement: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+  }
+): Promise<{
   cursorFrom: number;
   cursorTo: number;
   counts: { games: number; rounds: number; details: number; gameAgg: number };
@@ -259,18 +283,66 @@ async function buildDelta(since: number, opts: { compact: boolean; includeAggreg
     }
   }
 
-  const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
+  const filterModeFamily = opts.filterModeFamily || "all";
+  const filterMovement = opts.filterMovement || "all";
+
+  const movementForGame = (() => {
+    const out = new Map<string, "moving" | "no_move" | "nmpz" | "unknown">();
+    const counts = new Map<string, Map<string, number>>();
+    for (const r of roundsMerged as any[]) {
+      const gid = typeof r?.gameId === "string" ? r.gameId : "";
+      if (!gid) continue;
+      const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+      const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+      let m = counts.get(gid);
+      if (!m) {
+        m = new Map();
+        counts.set(gid, m);
+      }
+      m.set(mt, (m.get(mt) || 0) + 1);
+    }
+    for (const [gid, m] of counts.entries()) {
+      let best: { k: "moving" | "no_move" | "nmpz" | "unknown"; n: number } = { k: "unknown", n: 0 };
+      for (const [k, n] of m.entries()) {
+        const kk = k as any;
+        if (typeof n === "number" && n > best.n) best = { k: kk, n };
+      }
+      out.set(gid, best.k);
+    }
+    return out;
+  })();
+
+  const allowedGameIds = (() => {
+    const ids = new Set<string>();
+    for (const g of gamesByTime as any[]) {
+      const gid = typeof g?.gameId === "string" ? g.gameId : "";
+      if (!gid) continue;
+      if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+      const mt = movementForGame.get(gid) || "unknown";
+      if (filterMovement !== "all" && mt !== filterMovement) continue;
+      ids.add(gid);
+    }
+    return ids;
+  })();
+
+  const gamesByTimeFiltered = gamesByTime.filter((g) => allowedGameIds.has(g.gameId));
+  const roundsMergedFiltered = roundsMerged.filter((r: any) => allowedGameIds.has(String(r?.gameId || "")));
+  const detailsMergedFiltered = detailsMerged.filter((d: any) => allowedGameIds.has(String(d?.gameId || "")));
+  const gameAggByTimeFiltered = gameAggByTime.filter((a: any) => allowedGameIds.has(String(a?.gameId || "")));
+
+  const games = opts.compact ? gamesByTimeFiltered.map(compactRecord) : gamesByTimeFiltered;
   // rounds.playedAt is redundant (it mirrors game.playedAt). Server can backfill by gameId.
-  const roundsPayloadBase = roundsMerged.map((r: any) => {
+  const roundsPayloadBase = roundsMergedFiltered.map((r: any) => {
     const out = { ...(r as any) };
     delete out.playedAt;
     return out;
   });
   const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
-  const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
-  const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
+  const details = opts.compact ? detailsMergedFiltered.map(compactRecord) : detailsMergedFiltered;
+  const gameAgg = opts.compact ? gameAggByTimeFiltered.map(compactRecord) : gameAggByTimeFiltered;
 
   const cursorToCandidates: number[] = [];
+  // Cursor advances based on the full local dataset (not filtered), so filtered-out games won't be re-sent on every run.
   for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
   for (const r of roundsMerged) if (typeof (r as any).playedAt === "number") cursorToCandidates.push((r as any).playedAt);
   for (const d of detailsMerged) if (typeof (d as any).fetchedAt === "number") cursorToCandidates.push((d as any).fetchedAt);
@@ -293,10 +365,10 @@ async function buildDelta(since: number, opts: { compact: boolean; includeAggreg
     cursor: { from: cursorFrom, to: cursorTo },
     options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
     counts: {
-      games: gamesByTime.length,
-      rounds: roundsMerged.length,
-      details: detailsMerged.length,
-      gameAgg: gameAggByTime.length
+      games: gamesByTimeFiltered.length,
+      rounds: roundsMergedFiltered.length,
+      details: detailsMergedFiltered.length,
+      gameAgg: gameAggByTimeFiltered.length
     },
     tables
   };
@@ -505,16 +577,62 @@ export async function runServerSyncOnceWithOptions(
           if (typeof ts === "number") (r as any).playedAt = ts;
         }
 
-        const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
+        const movementForGame = (() => {
+          const out = new Map<string, "moving" | "no_move" | "nmpz" | "unknown">();
+          const counts = new Map<string, Map<string, number>>();
+          for (const r of roundsAll as any[]) {
+            const gid = typeof r?.gameId === "string" ? r.gameId : "";
+            if (!gid) continue;
+            const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+            const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+            let m = counts.get(gid);
+            if (!m) {
+              m = new Map();
+              counts.set(gid, m);
+            }
+            m.set(mt, (m.get(mt) || 0) + 1);
+          }
+          for (const [gid, m] of counts.entries()) {
+            let best: { k: "moving" | "no_move" | "nmpz" | "unknown"; n: number } = { k: "unknown", n: 0 };
+            for (const [k, n] of m.entries()) {
+              const kk = k as any;
+              if (typeof n === "number" && n > best.n) best = { k: kk, n };
+            }
+            out.set(gid, best.k);
+          }
+          return out;
+        })();
+
+        const filterModeFamily = settings.filterModeFamily || "all";
+        const filterMovement = settings.filterMovement || "all";
+        const allowedGameIds = (() => {
+          const ids = new Set<string>();
+          for (const g of gamesAll as any[]) {
+            const gid = typeof g?.gameId === "string" ? g.gameId : "";
+            if (!gid) continue;
+            if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+            const mt = movementForGame.get(gid) || "unknown";
+            if (filterMovement !== "all" && mt !== filterMovement) continue;
+            ids.add(gid);
+          }
+          return ids;
+        })();
+
+        const gamesAllFiltered = gamesAll.filter((g) => allowedGameIds.has(g.gameId));
+        const roundsAllFiltered = (roundsAll as any[]).filter((r: any) => allowedGameIds.has(String(r?.gameId || "")));
+        const detailsAllFiltered = (detailsAll as any[]).filter((d: any) => allowedGameIds.has(String(d?.gameId || "")));
+        const gameAggAllFiltered = (gameAggAll as any[]).filter((a: any) => allowedGameIds.has(String(a?.gameId || "")));
+
+        const games = effectiveCompact ? gamesAllFiltered.map(compactRecord) : gamesAllFiltered;
         // rounds.playedAt is redundant (it mirrors game.playedAt). Server can backfill by gameId.
-        const roundsNoPlayedAt = (roundsAll as any[]).map((r: any) => {
+        const roundsNoPlayedAt = roundsAllFiltered.map((r: any) => {
           const out = { ...(r as any) };
           delete out.playedAt;
           return out;
         });
         const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
-        const details = effectiveCompact ? (detailsAll as any[]).map(compactRecord) : detailsAll;
-        const gameAgg = effectiveCompact ? (gameAggAll as any[]).map(compactRecord) : gameAggAll;
+        const details = effectiveCompact ? detailsAllFiltered.map(compactRecord) : detailsAllFiltered;
+        const gameAgg = effectiveCompact ? gameAggAllFiltered.map(compactRecord) : gameAggAllFiltered;
 
         const tables: Record<string, ColumnarTable> = {
           games: toColumnar(games as any, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
@@ -538,7 +656,7 @@ export async function runServerSyncOnceWithOptions(
           owner: { playerId: ownerId, playerName: ownerName },
           cursor: { from: 0, to: cursorTo },
           options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
-          counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+          counts: { games: gamesAllFiltered.length, rounds: roundsAllFiltered.length, details: detailsAllFiltered.length, gameAgg: gameAggAllFiltered.length },
           tables
         };
 
@@ -553,7 +671,12 @@ export async function runServerSyncOnceWithOptions(
           bytesGzip
         };
       })()
-    : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
+    : await buildDelta(cursorFrom, {
+        compact: effectiveCompact,
+        includeAggregates: settings.includeAggregates,
+        filterModeFamily: settings.filterModeFamily,
+        filterMovement: settings.filterMovement
+      });
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

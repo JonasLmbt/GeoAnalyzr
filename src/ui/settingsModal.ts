@@ -4,6 +4,7 @@ import { validateDashboardAgainstSemantic } from "../engine/validate";
 import { mergeSemanticWithDashboard } from "../engine/semanticMerge";
 import { renderLayoutEditor } from "./layoutEditor";
 import { analysisConsole, formatConsoleEntry } from "./consoleStore";
+import { exportExcel } from "../export";
 import {
   DEFAULT_SETTINGS,
   normalizeColor,
@@ -468,6 +469,38 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         unsyncBtn.disabled = false;
         syncNowBtn.disabled = false;
         void refreshSyncMeta();
+      }
+    });
+
+    const excelNote = doc.createElement("div");
+    excelNote.className = "ga-settings-note";
+    excelNote.textContent = "Excel export downloads a spreadsheet built from your local dataset (this never uploads data).";
+    dataPane.appendChild(excelNote);
+
+    const excelActions = doc.createElement("div");
+    excelActions.className = "ga-settings-actions";
+    const excelBtn = doc.createElement("button");
+    excelBtn.type = "button";
+    excelBtn.className = "ga-filter-btn";
+    excelBtn.textContent = "Export Excel";
+    excelBtn.title = "Download an Excel file from your local dataset";
+    excelActions.appendChild(excelBtn);
+    dataPane.appendChild(excelActions);
+
+    const excelStatus = doc.createElement("div");
+    excelStatus.className = "ga-settings-status";
+    dataPane.appendChild(excelStatus);
+
+    excelBtn.addEventListener("click", async () => {
+      excelBtn.disabled = true;
+      excelStatus.textContent = "Preparing export...";
+      try {
+        await exportExcel((m) => (excelStatus.textContent = m));
+        excelStatus.textContent = "Export complete.";
+      } catch (e: any) {
+        excelStatus.textContent = e instanceof Error ? e.message : String(e || "Export failed");
+      } finally {
+        excelBtn.disabled = false;
       }
     });
 

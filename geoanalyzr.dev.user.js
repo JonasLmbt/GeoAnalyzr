@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.3-dev
+// @version      2.4.4-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9945,11 +9945,23 @@ ${shapes}`.trim();
     const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
     const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
     const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
+    const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
+    const filterMovementRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
+    const filterModeFamily = (() => {
+      const s = typeof filterModeFamilyRaw === "string" ? filterModeFamilyRaw.trim().toLowerCase() : "";
+      return s === "duels" || s === "teamduels" ? s : "all";
+    })();
+    const filterMovement = (() => {
+      const s = typeof filterMovementRaw === "string" ? filterMovementRaw.trim().toLowerCase() : "";
+      return s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown" ? s : "all";
+    })();
     return {
       endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
       token,
       compact,
-      includeAggregates
+      includeAggregates,
+      filterModeFamily,
+      filterMovement
     };
   }
   function saveServerSyncSettings(next) {
@@ -9957,6 +9969,8 @@ ${shapes}`.trim();
     if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
     if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
     if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
+    if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
+    if (typeof next.filterMovement === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_movement`, next.filterMovement);
   }
   async function getLastServerSyncCursor() {
     const meta = await db.meta.get(SYNC_META_KEY);
@@ -10044,15 +10058,58 @@ ${shapes}`.trim();
         if (typeof ts === "number") r.playedAt = ts;
       }
     }
-    const games = opts.compact ? gamesByTime.map(compactRecord) : gamesByTime;
-    const roundsPayloadBase = roundsMerged.map((r) => {
+    const filterModeFamily = opts.filterModeFamily || "all";
+    const filterMovement = opts.filterMovement || "all";
+    const movementForGame = (() => {
+      const out = /* @__PURE__ */ new Map();
+      const counts = /* @__PURE__ */ new Map();
+      for (const r of roundsMerged) {
+        const gid = typeof r?.gameId === "string" ? r.gameId : "";
+        if (!gid) continue;
+        const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+        const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+        let m = counts.get(gid);
+        if (!m) {
+          m = /* @__PURE__ */ new Map();
+          counts.set(gid, m);
+        }
+        m.set(mt, (m.get(mt) || 0) + 1);
+      }
+      for (const [gid, m] of counts.entries()) {
+        let best = { k: "unknown", n: 0 };
+        for (const [k, n] of m.entries()) {
+          const kk = k;
+          if (typeof n === "number" && n > best.n) best = { k: kk, n };
+        }
+        out.set(gid, best.k);
+      }
+      return out;
+    })();
+    const allowedGameIds = (() => {
+      const ids = /* @__PURE__ */ new Set();
+      for (const g of gamesByTime) {
+        const gid = typeof g?.gameId === "string" ? g.gameId : "";
+        if (!gid) continue;
+        if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+        const mt = movementForGame.get(gid) || "unknown";
+        if (filterMovement !== "all" && mt !== filterMovement) continue;
+        ids.add(gid);
+      }
+      return ids;
+    })();
+    const gamesByTimeFiltered = gamesByTime.filter((g) => allowedGameIds.has(g.gameId));
+    const roundsMergedFiltered = roundsMerged.filter((r) => allowedGameIds.has(String(r?.gameId || "")));
+    const detailsMergedFiltered = detailsMerged.filter((d) => allowedGameIds.has(String(d?.gameId || "")));
+    const gameAggByTimeFiltered = gameAggByTime.filter((a) => allowedGameIds.has(String(a?.gameId || "")));
+    const games = opts.compact ? gamesByTimeFiltered.map(compactRecord) : gamesByTimeFiltered;
+    const roundsPayloadBase = roundsMergedFiltered.map((r) => {
       const out = { ...r };
       delete out.playedAt;
       return out;
     });
     const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
-    const details = opts.compact ? detailsMerged.map(compactRecord) : detailsMerged;
-    const gameAgg = opts.compact ? gameAggByTime.map(compactRecord) : gameAggByTime;
+    const details = opts.compact ? detailsMergedFiltered.map(compactRecord) : detailsMergedFiltered;
+    const gameAgg = opts.compact ? gameAggByTimeFiltered.map(compactRecord) : gameAggByTimeFiltered;
     const cursorToCandidates = [];
     for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
     for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
@@ -10074,10 +10131,10 @@ ${shapes}`.trim();
       cursor: { from: cursorFrom, to: cursorTo },
       options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
       counts: {
-        games: gamesByTime.length,
-        rounds: roundsMerged.length,
-        details: detailsMerged.length,
-        gameAgg: gameAggByTime.length
+        games: gamesByTimeFiltered.length,
+        rounds: roundsMergedFiltered.length,
+        details: detailsMergedFiltered.length,
+        gameAgg: gameAggByTimeFiltered.length
       },
       tables
     };
@@ -10244,15 +10301,58 @@ ${shapes}`.trim();
         const ts = gid ? gamePlayedAt.get(gid) : void 0;
         if (typeof ts === "number") r.playedAt = ts;
       }
-      const games = effectiveCompact ? gamesAll.map(compactRecord) : gamesAll;
-      const roundsNoPlayedAt = roundsAll.map((r) => {
+      const movementForGame = (() => {
+        const out = /* @__PURE__ */ new Map();
+        const counts = /* @__PURE__ */ new Map();
+        for (const r of roundsAll) {
+          const gid = typeof r?.gameId === "string" ? r.gameId : "";
+          if (!gid) continue;
+          const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+          const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+          let m = counts.get(gid);
+          if (!m) {
+            m = /* @__PURE__ */ new Map();
+            counts.set(gid, m);
+          }
+          m.set(mt, (m.get(mt) || 0) + 1);
+        }
+        for (const [gid, m] of counts.entries()) {
+          let best = { k: "unknown", n: 0 };
+          for (const [k, n] of m.entries()) {
+            const kk = k;
+            if (typeof n === "number" && n > best.n) best = { k: kk, n };
+          }
+          out.set(gid, best.k);
+        }
+        return out;
+      })();
+      const filterModeFamily = settings.filterModeFamily || "all";
+      const filterMovement = settings.filterMovement || "all";
+      const allowedGameIds = (() => {
+        const ids = /* @__PURE__ */ new Set();
+        for (const g of gamesAll) {
+          const gid = typeof g?.gameId === "string" ? g.gameId : "";
+          if (!gid) continue;
+          if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+          const mt = movementForGame.get(gid) || "unknown";
+          if (filterMovement !== "all" && mt !== filterMovement) continue;
+          ids.add(gid);
+        }
+        return ids;
+      })();
+      const gamesAllFiltered = gamesAll.filter((g) => allowedGameIds.has(g.gameId));
+      const roundsAllFiltered = roundsAll.filter((r) => allowedGameIds.has(String(r?.gameId || "")));
+      const detailsAllFiltered = detailsAll.filter((d) => allowedGameIds.has(String(d?.gameId || "")));
+      const gameAggAllFiltered = gameAggAll.filter((a) => allowedGameIds.has(String(a?.gameId || "")));
+      const games = effectiveCompact ? gamesAllFiltered.map(compactRecord) : gamesAllFiltered;
+      const roundsNoPlayedAt = roundsAllFiltered.map((r) => {
         const out = { ...r };
         delete out.playedAt;
         return out;
       });
       const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
-      const details = effectiveCompact ? detailsAll.map(compactRecord) : detailsAll;
-      const gameAgg = effectiveCompact ? gameAggAll.map(compactRecord) : gameAggAll;
+      const details = effectiveCompact ? detailsAllFiltered.map(compactRecord) : detailsAllFiltered;
+      const gameAgg = effectiveCompact ? gameAggAllFiltered.map(compactRecord) : gameAggAllFiltered;
       const tables = {
         games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
         rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
@@ -10273,7 +10373,7 @@ ${shapes}`.trim();
         owner: { playerId: ownerId, playerName: ownerName },
         cursor: { from: 0, to: cursorTo },
         options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
-        counts: { games: gamesAll.length, rounds: roundsAll.length, details: detailsAll.length, gameAgg: gameAggAll.length },
+        counts: { games: gamesAllFiltered.length, rounds: roundsAllFiltered.length, details: detailsAllFiltered.length, gameAgg: gameAggAllFiltered.length },
         tables
       };
       const json = JSON.stringify(envelope);
@@ -10286,7 +10386,12 @@ ${shapes}`.trim();
         bytesJson: json.length,
         bytesGzip
       };
-    })() : await buildDelta(cursorFrom, { compact: effectiveCompact, includeAggregates: settings.includeAggregates });
+    })() : await buildDelta(cursorFrom, {
+      compact: effectiveCompact,
+      includeAggregates: settings.includeAggregates,
+      filterModeFamily: settings.filterModeFamily,
+      filterMovement: settings.filterMovement
+    });
     const headers = {
       "Content-Type": "application/json",
       "Content-Encoding": "gzip",
@@ -10314,6 +10419,52 @@ ${shapes}`.trim();
   async function getLastServerSyncMeta() {
     const meta = await db.meta.get(SYNC_META_KEY);
     return meta?.value ?? null;
+  }
+
+  // src/fetchGameFilter.ts
+  var GM_VALUE_PREFIX2 = "geoanalyzr_fetch_filter_v1_";
+  function readGmValue2(key) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_getValue === "function") return g.GM_getValue(key);
+    } catch {
+    }
+    try {
+      if (typeof GM_getValue === "function") return GM_getValue(key);
+    } catch {
+    }
+    try {
+      return globalThis?.localStorage?.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  function writeGmValue2(key, value) {
+    const g = globalThis;
+    try {
+      if (typeof g?.GM_setValue === "function") return g.GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      if (typeof GM_setValue === "function") return GM_setValue(key, value);
+    } catch {
+    }
+    try {
+      globalThis?.localStorage?.setItem(key, value);
+    } catch {
+    }
+  }
+  function normalizeModeFamily(value) {
+    const s = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (s === "duels" || s === "teamduels") return s;
+    return "all";
+  }
+  function loadFetchGameFilter() {
+    const raw = readGmValue2(`${GM_VALUE_PREFIX2}mode_family`);
+    return { modeFamily: normalizeModeFamily(raw) };
+  }
+  function saveFetchGameFilter(next) {
+    if (next.modeFamily) writeGmValue2(`${GM_VALUE_PREFIX2}mode_family`, String(next.modeFamily));
   }
 
   // src/uiOverlay.ts
@@ -10411,7 +10562,23 @@ ${shapes}`.trim();
     .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
     .ga-ui-btn-icon { display: inline-flex; width: 16px; height: 16px; opacity: 0.95; }
     .ga-ui-btn-icon svg { width: 16px; height: 16px; display: block; }
-    .ga-ui-actions { display:flex; flex-direction: column; gap: 8px; }
+    .ga-ui-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 8px; align-items: stretch; }
+    .ga-ui-iconbtn {
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .ga-ui-iconbtn:active { transform: translateY(1px); }
+    .ga-ui-iconbtn:disabled { opacity: 0.65; cursor: not-allowed; }
+    .ga-ui-iconbtn.danger { background: rgba(160,35,35,0.24); border-color: rgba(255,255,255,0.18); }
+    .ga-ui-iconbtn svg { width: 16px; height: 16px; display: block; }
+    .ga-ui-actions { display:flex; flex-direction: column; gap: 10px; }
 
     .ga-ui-counts {
       margin-top: 10px;
@@ -10548,6 +10715,9 @@ ${shapes}`.trim();
       if (name === "refresh") {
         return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 12a9 9 0 1 1-2.64-6.36"/><path ${common} d="M21 3v6h-6"/></svg>`;
       }
+      if (name === "gear") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path ${common} d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.6-2-3.4-2.4.5a7.2 7.2 0 0 0-1.7-1l-.4-2.5H9l-.4 2.5a7.2 7.2 0 0 0-1.7 1L4.5 9l-2 3.4 2 1.6a7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-.5a7.2 7.2 0 0 0 1.7 1l.4 2.5h6l.4-2.5a7.2 7.2 0 0 0 1.7-1l2.4.5 2-3.4-2-1.6z"/></svg>`;
+      }
       return "";
     };
     const mkBtn2 = (opts) => {
@@ -10567,40 +10737,48 @@ ${shapes}`.trim();
       b.appendChild(t);
       return b;
     };
-    const updateBtn = mkBtn2({ label: "Fetch Data", bg: "rgba(255,255,255,0.10)", icon: iconSvg("download") });
+    const mkIconBtn2 = (opts) => {
+      const b = el("button");
+      b.type = "button";
+      b.className = `ga-ui-iconbtn${opts.danger ? " danger" : ""}`;
+      b.title = opts.title;
+      b.innerHTML = opts.icon;
+      return b;
+    };
+    const fetchBtn = mkBtn2({ label: "Fetch Data", bg: "rgba(255,255,255,0.10)", icon: iconSvg("download") });
+    const fetchGearBtn = mkIconBtn2({ icon: iconSvg("gear"), title: "Fetch filters" });
+    const fetchTrashBtn = mkIconBtn2({ icon: iconSvg("trash"), title: "Reset local database", danger: true });
     const syncBtn = mkBtn2({
       label: "Sync",
       bg: "rgba(0,162,254,0.18)",
       icon: iconSvg("upload"),
       title: "Upload a compact delta to your server (Shift = full snapshot)"
     });
-    const unsyncBtn = mkBtn2({
-      label: "Unsync",
-      bg: "rgba(160,35,35,0.26)",
-      icon: iconSvg("trash"),
-      title: "Delete your data from the server and unlink this device"
-    });
+    const syncGearBtn = mkIconBtn2({ icon: iconSvg("gear"), title: "Sync filters" });
+    const syncTrashBtn = mkIconBtn2({ icon: iconSvg("trash"), title: "Unsync (delete server data)", danger: true });
     const analysisBtn = mkBtn2({ label: "Open Analysis Window", bg: "rgba(35,95,160,0.28)", icon: iconSvg("chart") });
-    const discordBtn = mkBtn2({ label: "Join Discord", bg: "rgba(121,80,229,0.30)", icon: iconSvg("chat") });
-    const exportBtn = mkBtn2({ label: "Export Excel", bg: "rgba(40,120,50,0.35)", icon: iconSvg("file") });
-    const resetBtn = mkBtn2({
-      label: "Reset Database",
-      bg: "rgba(160,35,35,0.35)",
-      icon: iconSvg("refresh"),
-      title: "Delete all local GeoAnalyzr data in this browser"
-    });
     const counts = el("div");
     counts.className = "ga-ui-counts";
     counts.textContent = "Data: 0 games, 0 rounds.";
     const actions = el("div");
     actions.className = "ga-ui-actions";
-    actions.appendChild(updateBtn);
-    actions.appendChild(syncBtn);
-    actions.appendChild(analysisBtn);
-    actions.appendChild(discordBtn);
-    actions.appendChild(exportBtn);
-    actions.appendChild(unsyncBtn);
-    actions.appendChild(resetBtn);
+    const fetchRow = el("div");
+    fetchRow.className = "ga-ui-row";
+    fetchRow.appendChild(fetchBtn);
+    fetchRow.appendChild(fetchGearBtn);
+    fetchRow.appendChild(fetchTrashBtn);
+    actions.appendChild(fetchRow);
+    const syncRow = el("div");
+    syncRow.className = "ga-ui-row";
+    syncRow.appendChild(syncBtn);
+    syncRow.appendChild(syncGearBtn);
+    syncRow.appendChild(syncTrashBtn);
+    actions.appendChild(syncRow);
+    const analysisRow = el("div");
+    analysisRow.className = "ga-ui-row";
+    analysisRow.style.gridTemplateColumns = "1fr";
+    analysisRow.appendChild(analysisBtn);
+    actions.appendChild(analysisRow);
     panel.appendChild(header);
     panel.appendChild(status);
     panel.appendChild(actions);
@@ -10616,13 +10794,93 @@ ${shapes}`.trim();
     else mount();
     let updateHandler = null;
     let resetHandler = null;
-    let exportHandler = null;
     let openAnalysisHandler = null;
-    let discordHandler = null;
-    updateBtn.addEventListener("click", () => void updateHandler?.());
+    const openModal = (opts) => {
+      const modal = el("div");
+      modal.className = "ga-ui-modal";
+      const card = el("div");
+      card.className = "ga-ui-modal-card";
+      const head = el("div");
+      head.className = "ga-ui-modal-head";
+      const headTitle = el("div");
+      headTitle.className = "ga-ui-modal-head-title";
+      headTitle.textContent = opts.title;
+      const headX = el("button");
+      headX.className = "ga-ui-modal-x";
+      headX.type = "button";
+      headX.textContent = "x";
+      head.appendChild(headTitle);
+      head.appendChild(headX);
+      const actions2 = el("div");
+      actions2.className = "ga-ui-modal-actions";
+      const cancelBtn = el("button");
+      cancelBtn.className = "ga-ui-btn";
+      cancelBtn.type = "button";
+      cancelBtn.style.background = "rgba(255,255,255,0.10)";
+      cancelBtn.textContent = "Cancel";
+      actions2.appendChild(cancelBtn);
+      const saveBtn = el("button");
+      saveBtn.className = "ga-ui-btn";
+      saveBtn.type = "button";
+      saveBtn.style.background = "rgba(0,162,254,0.18)";
+      saveBtn.textContent = "Save";
+      actions2.appendChild(saveBtn);
+      const close = () => {
+        try {
+          modal.remove();
+        } catch {
+        }
+      };
+      headX.addEventListener("click", close);
+      cancelBtn.addEventListener("click", close);
+      modal.addEventListener("click", (ev) => {
+        if (ev.target === modal) close();
+      });
+      saveBtn.addEventListener("click", () => {
+        try {
+          opts.onSave?.();
+        } finally {
+          close();
+        }
+      });
+      card.appendChild(head);
+      card.appendChild(opts.body);
+      card.appendChild(actions2);
+      modal.appendChild(card);
+      (document.body ?? document.documentElement).appendChild(modal);
+    };
+    fetchBtn.addEventListener("click", () => void updateHandler?.());
+    fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
+    fetchGearBtn.addEventListener("click", () => {
+      const cur = loadFetchGameFilter();
+      const wrap = el("div");
+      const label = el("div");
+      label.className = "ga-ui-modal-help";
+      label.textContent = "Game filter (applies on game level only; never partial rounds):";
+      const sel = el("select");
+      sel.className = "ga-ui-modal-input";
+      sel.innerHTML = `<option value="all">All games</option><option value="duels">Duels only</option><option value="teamduels">Team Duels only</option>`;
+      sel.value = cur.modeFamily;
+      const help = el("div");
+      help.className = "ga-ui-modal-help";
+      help.textContent = "Fetch Data will only store/fetch games that match this filter. Games outside the filter are skipped (cursor still advances).";
+      wrap.appendChild(label);
+      wrap.appendChild(sel);
+      wrap.appendChild(help);
+      openModal({
+        title: "Fetch filters",
+        body: wrap,
+        onSave: () => {
+          const v = String(sel.value || "");
+          const modeFamily = v === "duels" || v === "teamduels" ? v : "all";
+          saveFetchGameFilter({ modeFamily });
+          status.textContent = `Fetch filter saved: ${modeFamily}.`;
+        }
+      });
+    });
     syncBtn.addEventListener("click", async (ev) => {
       syncBtn.disabled = true;
-      unsyncBtn.disabled = true;
+      syncTrashBtn.disabled = true;
       const forceFull = !!(ev && ev.shiftKey);
       status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
       try {
@@ -10696,10 +10954,10 @@ ${shapes}`.trim();
         status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
       } finally {
         syncBtn.disabled = false;
-        unsyncBtn.disabled = false;
+        syncTrashBtn.disabled = false;
       }
     });
-    unsyncBtn.addEventListener("click", async () => {
+    syncTrashBtn.addEventListener("click", async () => {
       const settings = loadServerSyncSettings();
       if (!settings.token) {
         status.textContent = "Not linked. Sync once to link the device first.";
@@ -10712,7 +10970,7 @@ ${shapes}`.trim();
         status.textContent = "Cancelled.";
         return;
       }
-      unsyncBtn.disabled = true;
+      syncTrashBtn.disabled = true;
       syncBtn.disabled = true;
       status.textContent = "Deleting server data...";
       try {
@@ -10726,14 +10984,49 @@ ${shapes}`.trim();
       } catch (e) {
         status.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
       } finally {
-        unsyncBtn.disabled = false;
+        syncTrashBtn.disabled = false;
         syncBtn.disabled = false;
       }
     });
-    exportBtn.addEventListener("click", () => void exportHandler?.());
-    resetBtn.addEventListener("click", () => void resetHandler?.());
+    syncGearBtn.addEventListener("click", () => {
+      const cur = loadServerSyncSettings();
+      const wrap = el("div");
+      const label1 = el("div");
+      label1.className = "ga-ui-modal-help";
+      label1.textContent = "Mode filter (game level only):";
+      const selMode = el("select");
+      selMode.className = "ga-ui-modal-input";
+      selMode.innerHTML = `<option value="all">All games</option><option value="duels">Duels only</option><option value="teamduels">Team Duels only</option>`;
+      selMode.value = cur.filterModeFamily;
+      const label2 = el("div");
+      label2.className = "ga-ui-modal-help";
+      label2.textContent = "Movement filter (game level only):";
+      const selMove = el("select");
+      selMove.className = "ga-ui-modal-input";
+      selMove.innerHTML = `<option value="all">All</option><option value="moving">Moving</option><option value="no_move">No move</option><option value="nmpz">NMPZ</option><option value="unknown">Unknown</option>`;
+      selMove.value = cur.filterMovement;
+      const help = el("div");
+      help.className = "ga-ui-modal-help";
+      help.textContent = "Sync only sends games that match these filters (no partial rounds). Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games.";
+      wrap.appendChild(label1);
+      wrap.appendChild(selMode);
+      wrap.appendChild(label2);
+      wrap.appendChild(selMove);
+      wrap.appendChild(help);
+      openModal({
+        title: "Sync filters",
+        body: wrap,
+        onSave: () => {
+          const modeRaw = String(selMode.value || "");
+          const movRaw = String(selMove.value || "");
+          const filterModeFamily = modeRaw === "duels" || modeRaw === "teamduels" ? modeRaw : "all";
+          const filterMovement = movRaw === "moving" || movRaw === "no_move" || movRaw === "nmpz" || movRaw === "unknown" ? movRaw : "all";
+          saveServerSyncSettings({ filterModeFamily, filterMovement });
+          status.textContent = `Sync filter saved: ${filterModeFamily}, ${filterMovement}.`;
+        }
+      });
+    });
     analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
-    discordBtn.addEventListener("click", () => void discordHandler?.());
     return {
       setVisible(visible) {
         iconBtn.style.display = visible ? "flex" : "none";
@@ -10751,14 +11044,8 @@ ${shapes}`.trim();
       onResetClick(fn) {
         resetHandler = fn;
       },
-      onExportClick(fn) {
-        exportHandler = fn;
-      },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;
-      },
-      onDiscordClick(fn) {
-        discordHandler = fn;
       }
     };
   }
@@ -10886,6 +11173,10 @@ ${shapes}`.trim();
     const startedAt = Date.now();
     const meta = await db.meta.get("sync");
     const lastSeen = meta?.value?.lastSeenTime ? Number(meta?.value?.lastSeenTime) : null;
+    const filterModeFamily = (() => {
+      const raw = opts?.gameFilter?.modeFamily;
+      return raw === "duels" || raw === "teamduels" ? raw : "all";
+    })();
     let paginationToken;
     let feedPages = 0;
     let feedUpserted = 0;
@@ -10937,9 +11228,10 @@ ${shapes}`.trim();
         if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
       }
       const deduped = [...byId.values()];
-      if (deduped.length > 0) {
-        await db.games.bulkPut(deduped);
-        feedUpserted += deduped.length;
+      const dedupedFiltered = filterModeFamily === "all" ? deduped : deduped.filter((g) => String(g?.modeFamily || "") === filterModeFamily);
+      if (dedupedFiltered.length > 0) {
+        await db.games.bulkPut(dedupedFiltered);
+        feedUpserted += dedupedFiltered.length;
       }
       const newestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
       const oldestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
@@ -11004,10 +11296,10 @@ ${shapes}`.trim();
       }
       const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
       await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
-      if (deduped.length > 0) {
+      if (dedupedFiltered.length > 0) {
         const res = await fetchDetailsForGames({
           onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
-          games: deduped,
+          games: dedupedFiltered,
           concurrency: detailConcurrency,
           verifyCompleteness,
           retryErrors,
@@ -11041,7 +11333,7 @@ ${shapes}`.trim();
         pageEtaText = "Overall: estimate unavailable.";
       }
       opts.onStatus(
-        `Feed page ${page}: upserted ${deduped.length} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
+        `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" ? "" : ` (${filterModeFamily})`} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
       );
       paginationToken = nextPaginationToken;
       if (!paginationToken) {
@@ -11065,7 +11357,8 @@ ${shapes}`.trim();
     let enrichedSkipped = 0;
     if (enrichLimit > 0) {
       opts.onStatus(`Enriching existing details (limit ${enrichLimit})...`);
-      const recentDetails = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
+      const recentDetailsAll = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
+      const recentDetails = filterModeFamily === "all" ? recentDetailsAll : recentDetailsAll.filter((d) => String(d?.modeFamily || "") === filterModeFamily);
       const needIds = recentDetails.filter((d) => d?.status === "ok").filter((d) => {
         const missSlug = typeof d?.mapSlug !== "string" || !d.mapSlug.trim();
         const missName = typeof d?.mapName !== "string" || !d.mapName.trim();
@@ -12818,6 +13111,9564 @@ ${shapes}`.trim();
     gamesFilteredCache.set(key, rows);
     return rows;
   }
+
+  // src/engine/validate.ts
+  var ValidationError = class extends Error {
+    code;
+    constructor(code, message) {
+      super(message);
+      this.code = code;
+    }
+  };
+  function assert(condition, code, msg) {
+    if (!condition) throw new ValidationError(code, msg);
+  }
+  function validateDashboardAgainstSemantic(semantic, dash) {
+    if (dash.dashboard.globalFilters) validateGlobalFiltersSpec(semantic, dash);
+    for (const section of dash.dashboard.sections) {
+      if (section.localFilters) validateLocalFiltersSpec(semantic, section);
+      for (const placedCard of section.layout.cards) {
+        for (const widget of placedCard.card.children) {
+          validateWidget(semantic, widget);
+        }
+      }
+    }
+  }
+  function validateGlobalFiltersSpec(semantic, dash) {
+    const gf = dash.dashboard.globalFilters;
+    assert(!!gf && typeof gf === "object", "E_BAD_SPEC", "dashboard.globalFilters must be an object");
+    assert(typeof gf.enabled === "boolean", "E_BAD_SPEC", "dashboard.globalFilters.enabled must be boolean");
+    assert(Array.isArray(gf.controls), "E_BAD_SPEC", "dashboard.globalFilters.controls must be an array");
+    const ids = /* @__PURE__ */ new Set();
+    for (const c of gf.controls) {
+      assert(!!c && typeof c === "object", "E_BAD_SPEC", "Global filter control must be an object");
+      assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", "Global filter control id must be a string");
+      assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate global filter control id '${c.id}'`);
+      ids.add(c.id);
+      assert(typeof c.type === "string", "E_BAD_SPEC", `Global filter control '${c.id}' missing type`);
+      assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' missing label`);
+      assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' appliesTo must be a non-empty array`);
+      if (c.type === "date_range") {
+        assert(!!c.default && typeof c.default === "object", "E_BAD_SPEC", `date_range '${c.id}' default must be an object`);
+        const fromTs = c.default.fromTs;
+        const toTs2 = c.default.toTs;
+        assert(fromTs === null || typeof fromTs === "number", "E_BAD_SPEC", `date_range '${c.id}' default.fromTs must be number|null`);
+        assert(toTs2 === null || typeof toTs2 === "number", "E_BAD_SPEC", `date_range '${c.id}' default.toTs must be number|null`);
+        continue;
+      }
+      if (c.type === "select") {
+        assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
+        assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
+        assert(
+          c.options === "auto_distinct" || c.options === "auto_teammates",
+          "E_BAD_SPEC",
+          `select '${c.id}' options must be 'auto_distinct' | 'auto_teammates'`
+        );
+        assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
+        const dimId = String(c.dimension);
+        const dim = semantic.dimensions[dimId];
+        assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in global filter '${c.id}'`);
+        const dimGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+        for (const g of c.appliesTo) {
+          assert(dimGrains.includes(g), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo includes unsupported grain '${g}' for dimension '${dimId}'`);
+        }
+        continue;
+      }
+      throw new ValidationError("E_BAD_SPEC", `Unknown global filter control type '${c.type}'`);
+    }
+  }
+  function validateLocalFiltersSpec(semantic, section) {
+    const lf = section.localFilters;
+    assert(!!lf && typeof lf === "object", "E_BAD_SPEC", `section '${section.id}' localFilters must be an object`);
+    assert(Array.isArray(lf.controls) && lf.controls.length > 0, "E_BAD_SPEC", `section '${section.id}' localFilters.controls must be a non-empty array`);
+    const ids = /* @__PURE__ */ new Set();
+    for (const c of lf.controls) {
+      assert(!!c && typeof c === "object", "E_BAD_SPEC", `Local filter control in section '${section.id}' must be an object`);
+      assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", `Local filter control id must be a string`);
+      assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate local filter control id '${c.id}' in section '${section.id}'`);
+      ids.add(c.id);
+      assert(c.type === "select", "E_BAD_SPEC", `Local filter '${c.id}' in section '${section.id}' must have type 'select'`);
+      assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing label`);
+      assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
+      assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
+      assert(
+        c.options === "auto_distinct" || c.options === "auto_teammates",
+        "E_BAD_SPEC",
+        `Local filter '${c.id}' options must be 'auto_distinct' | 'auto_teammates'`
+      );
+      assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
+      assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);
+      const dimId = String(c.dimension);
+      const dim = semantic.dimensions[dimId];
+      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in local filter '${c.id}' (section '${section.id}')`);
+      const dimGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+      for (const g of c.appliesTo) {
+        assert(dimGrains.includes(g), "E_GRAIN_MISMATCH", `Local filter '${c.id}' appliesTo includes unsupported grain '${g}' for dimension '${dimId}'`);
+      }
+    }
+  }
+  function validateWidget(semantic, widget) {
+    assert(semantic.datasets[widget.grain] !== void 0, "E_UNKNOWN_GRAIN", `Unknown grain: ${widget.grain}`);
+    if (widget.type === "chart") {
+      const spec = widget.spec;
+      const xDimId = spec.x?.dimension;
+      assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
+      const yMeasureIds = getChartMeasureIds(spec);
+      assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
+      const xDim = semantic.dimensions[xDimId];
+      assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
+      const xGrains = Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain];
+      assert(xGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `x '${xDimId}' grain mismatch for widget grain=${widget.grain}`);
+      assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
+      if (spec.sort?.mode) {
+        assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
+      }
+      if (Array.isArray(spec.sorts)) {
+        for (const s of spec.sorts) {
+          const mode = s?.mode;
+          if (!mode) continue;
+          assert(xDim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${xDimId}'`);
+        }
+      }
+      if (spec.activeSort?.mode) {
+        assert(xDim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${xDimId}'`);
+      }
+      for (const yMeasId of yMeasureIds) {
+        const yMeas = semantic.measures[yMeasId];
+        assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
+        assert(
+          xGrains.includes(yMeas.grain),
+          "E_GRAIN_MISMATCH",
+          `y '${yMeasId}' grain=${yMeas.grain} not supported by x '${xDimId}' grains=${xGrains.join(",")}`
+        );
+        assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
+      }
+      const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : void 0;
+      if (activeMeasure) {
+        assert(yMeasureIds.includes(activeMeasure), "E_BAD_SPEC", `activeMeasure '${activeMeasure}' is not listed in y.measures`);
+      }
+      if (spec.type === "line") {
+        assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
+      }
+      if (xDim.cardinality?.selectorRequired) {
+        const hasTopN = typeof spec.limit === "number" && spec.limit > 0;
+        const selectorMode = spec.x?.selector?.mode;
+        const hasSelector = selectorMode === "top_n" || selectorMode === "selected";
+        assert(
+          hasTopN || hasSelector,
+          "E_SELECTOR_REQUIRED",
+          `Dimension '${xDimId}' requires selector; set chart.limit or x.selector`
+        );
+      }
+      if (spec.series) {
+        const sDimId = spec.series.dimension;
+        const sDim = semantic.dimensions[sDimId];
+        assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
+        const sGrains = Array.isArray(sDim.grain) ? sDim.grain : [sDim.grain];
+        assert(sGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `series '${sDimId}' grain mismatch for widget grain=${widget.grain}`);
+        assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
+        const maxSeries = sDim.cardinality?.maxSeries ?? 50;
+        const requested = spec.series.selector.mode === "selected" ? spec.series.selector.values?.length ?? 0 : spec.series.selector.mode === "top_n" ? spec.series.selector.n ?? 0 : spec.series.selector.maxSeries ?? maxSeries;
+        assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
+      }
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "stat_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `stat_list ${widget.widgetId} has no rows`);
+      for (const row of spec.rows) {
+        const meas = semantic.measures[row.measure];
+        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
+        const rowGrain = row.grain ?? widget.grain;
+        assert(
+          meas.grain === rowGrain,
+          "E_GRAIN_MISMATCH",
+          `Measure '${row.measure}' grain=${meas.grain} but stat row grain=${rowGrain} (widget grain=${widget.grain})`
+        );
+        validateClickAction(semantic, widget.widgetId, row.actions?.click);
+      }
+    }
+    if (widget.type === "stat_value") {
+      const spec = widget.spec;
+      const meas = semantic.measures[spec.measure];
+      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
+      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "breakdown") {
+      const spec = widget.spec;
+      const dim = semantic.dimensions[spec.dimension];
+      const measIds = getBreakdownMeasureIds(spec);
+      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
+      const dGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
+      assert(dGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
+      assert(measIds.length > 0, "E_BAD_SPEC", `Breakdown ${widget.widgetId} missing measure or measures[]`);
+      for (const measId of measIds) {
+        const meas = semantic.measures[measId];
+        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
+        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure '${measId}' grain mismatch in ${widget.widgetId}`);
+      }
+      if (typeof spec.activeMeasure === "string" && spec.activeMeasure.trim()) {
+        assert(measIds.includes(spec.activeMeasure.trim()), "E_BAD_SPEC", `breakdown ${widget.widgetId} activeMeasure must be in measures[]`);
+      }
+      if (spec.sort?.mode) {
+        assert(dim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${spec.dimension}'`);
+      }
+      if (Array.isArray(spec.sorts)) {
+        for (const s of spec.sorts) {
+          const mode = s?.mode;
+          if (!mode) continue;
+          assert(dim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${spec.dimension}'`);
+        }
+      }
+      if (spec.activeSort?.mode) {
+        assert(dim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${spec.dimension}'`);
+      }
+      if (dim.cardinality?.selectorRequired) {
+        assert(
+          typeof spec.limit === "number" && spec.limit > 0,
+          "E_SELECTOR_REQUIRED",
+          `Breakdown '${spec.dimension}' requires a positive limit`
+        );
+      }
+      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
+    }
+    if (widget.type === "record_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.records) && spec.records.length > 0, "E_BAD_SPEC", `record_list ${widget.widgetId} has no records`);
+      for (const r of spec.records) {
+        const kind = r?.kind === "same_value_streak" ? "same_value_streak" : r?.kind === "streak" ? "streak" : r?.kind === "overall" ? "overall" : "group_extreme";
+        if (kind === "streak") {
+          assert(Array.isArray(r.streakFilters) && r.streakFilters.length > 0, "E_BAD_SPEC", `record ${r.id} missing streakFilters`);
+          validateClickAction(semantic, widget.widgetId, r.actions?.click);
+          continue;
+        }
+        if (kind === "same_value_streak") {
+          assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `record ${r.id} missing dimension`);
+          const d2 = semantic.dimensions[r.dimension];
+          assert(!!d2, "E_UNKNOWN_DIMENSION", `Unknown record dimension '${r.dimension}' in ${widget.widgetId}`);
+          const grains2 = Array.isArray(d2.grain) ? d2.grain : [d2.grain];
+          assert(grains2.includes(widget.grain), "E_GRAIN_MISMATCH", `Record dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
+          validateClickAction(semantic, widget.widgetId, r.actions?.click);
+          continue;
+        }
+        if (kind === "overall") {
+          assert(typeof r.metric === "string" && r.metric.trim().length > 0, "E_BAD_SPEC", `record ${r.id} missing metric`);
+          const m2 = semantic.measures[r.metric];
+          assert(!!m2, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
+          assert(m2.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
+          validateClickAction(semantic, widget.widgetId, r.actions?.click);
+          continue;
+        }
+        const m = semantic.measures[r.metric];
+        assert(!!m, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
+        assert(m.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
+        const d = semantic.dimensions[r.groupBy];
+        assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown record groupBy '${r.groupBy}' in ${widget.widgetId}`);
+        const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
+        assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record groupBy '${r.groupBy}' grain mismatch in ${widget.widgetId}`);
+        assert(r.extreme === "max" || r.extreme === "min", "E_BAD_SPEC", `Record extreme must be max|min in ${widget.widgetId}`);
+        validateClickAction(semantic, widget.widgetId, r.actions?.click);
+      }
+    }
+    if (widget.type === "leader_list") {
+      const spec = widget.spec;
+      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `leader_list ${widget.widgetId} has no rows`);
+      for (const r of spec.rows) {
+        assert(typeof r.label === "string" && r.label.trim().length > 0, "E_BAD_SPEC", `leader_list row missing label in ${widget.widgetId}`);
+        assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `leader_list row missing dimension in ${widget.widgetId}`);
+        const d = semantic.dimensions[r.dimension];
+        assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown leader_list dimension '${r.dimension}' in ${widget.widgetId}`);
+        const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
+        assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `leader_list dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
+        validateClickAction(semantic, widget.widgetId, r.actions?.click);
+      }
+    }
+  }
+  function validateClickAction(semantic, widgetId, click) {
+    if (!click || click.type !== "drilldown") return;
+    const target = click.target;
+    const targetPreset = semantic.drilldownPresets[target];
+    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
+    const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
+    assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
+  }
+  function getChartMeasureIds(spec) {
+    const result = [];
+    const single = typeof spec?.y?.measure === "string" ? spec.y.measure.trim() : "";
+    if (single) result.push(single);
+    if (Array.isArray(spec?.y?.measures)) {
+      for (const m of spec.y.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || result.includes(clean)) continue;
+        result.push(clean);
+      }
+    }
+    return result;
+  }
+  function getBreakdownMeasureIds(spec) {
+    const result = [];
+    const single = typeof spec?.measure === "string" ? spec.measure.trim() : "";
+    if (single) result.push(single);
+    if (Array.isArray(spec?.measures)) {
+      for (const m of spec.measures) {
+        if (typeof m !== "string") continue;
+        const clean = m.trim();
+        if (!clean || result.includes(clean)) continue;
+        result.push(clean);
+      }
+    }
+    return result;
+  }
+
+  // src/config/semantic.json
+  var semantic_default = {
+    $schema: "./semantic.schema.json",
+    schemaVersion: "0.1.0",
+    grains: ["session", "game", "round"],
+    datasets: {
+      session: {
+        primaryKey: ["sessionId"],
+        timeField: "sessionStartTs"
+      },
+      game: {
+        primaryKey: ["gameId"],
+        timeField: "ts"
+      },
+      round: {
+        primaryKey: ["gameId", "roundNumber"],
+        timeField: "ts"
+      }
+    },
+    settings: {
+      sessionGapMinutesDefault: 45
+    },
+    dimensions: {
+      time_day: {
+        label: "Date",
+        kind: "time",
+        grain: ["round", "game", "session"],
+        ordered: true,
+        allowedCharts: ["line", "bar"],
+        sortModes: ["chronological"]
+      },
+      weekday: {
+        label: "Weekday",
+        kind: "category",
+        grain: ["round", "game"],
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      hour: {
+        label: "Hour of day",
+        kind: "category",
+        grain: ["round", "game"],
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      session_index: {
+        label: "Session #",
+        kind: "category",
+        grain: "session",
+        ordered: true,
+        allowedCharts: ["bar", "line"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      session_start: {
+        label: "Session start",
+        kind: "category",
+        grain: "session",
+        ordered: true,
+        allowedCharts: ["bar", "line"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      game_mode: {
+        label: "Game mode",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 10 }
+      },
+      mode_family: {
+        label: "Mode",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 10 }
+      },
+      is_rated: {
+        label: "Rated",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      map_name: {
+        label: "Map",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      map_slug: {
+        label: "Map (slug)",
+        kind: "category",
+        grain: ["game", "round"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      true_state: {
+        label: "State",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      true_district: {
+        label: "District",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40, selectorRequired: true }
+      },
+      true_us_state: {
+        label: "US state",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      true_ca_province: {
+        label: "Canada province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      true_id_province: {
+        label: "Indonesia province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40 }
+      },
+      true_id_kabupaten: {
+        label: "Indonesia kabupaten",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 60, selectorRequired: true }
+      },
+      true_ph_province: {
+        label: "Philippines province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40 }
+      },
+      true_vn_province: {
+        label: "Vietnam province",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 40 }
+      },
+      admin_true_unit: {
+        label: "Admin unit",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "map"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
+      },
+      admin_guess_unit: {
+        label: "Guessed admin unit",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
+      },
+      true_location: {
+        label: "True location",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 50, selectorRequired: true }
+      },
+      is_true_location_repeat: {
+        label: "True location repeat?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      score_vs_opponent: {
+        label: "Score vs opponents",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      result: {
+        label: "Result",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 5 }
+      },
+      is_flawless_win: {
+        label: "Flawless win?",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      game_length: {
+        label: "Game length (rounds)",
+        kind: "category",
+        grain: "game",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 30 }
+      },
+      opponent_country: {
+        label: "Opponent country",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30 }
+      },
+      opponent_name: {
+        label: "Opponent",
+        kind: "category",
+        grain: "game",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 30, selectorRequired: true }
+      },
+      round_number: {
+        label: "Round #",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      round_id: {
+        label: "Round",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 200, selectorRequired: true }
+      },
+      true_country: {
+        label: "True country",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 12, selectorRequired: true }
+      },
+      teammate_name: {
+        label: "Teammate",
+        kind: "category",
+        grain: ["round", "game"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 15, selectorRequired: true }
+      },
+      movement_type: {
+        label: "Movement",
+        kind: "category",
+        grain: ["round", "game"],
+        allowedCharts: ["bar", "line"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 8 }
+      },
+      game_id: {
+        label: "Game",
+        kind: "category",
+        grain: ["round", "game"],
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 50, selectorRequired: true }
+      },
+      is_hit: {
+        label: "Hit?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_throw: {
+        label: "Throw?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_damage_dealt: {
+        label: "Damage dealt?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_damage_taken: {
+        label: "Damage taken?",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_near_perfect: {
+        label: "Near-perfect? (>=4500)",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      is_low_score: {
+        label: "Low score? (<500)",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 2 }
+      },
+      duration_bucket: {
+        label: "Guess duration bucket",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological", "asc", "desc"]
+      },
+      confused_countries: {
+        label: "Confused countries",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
+      },
+      guess_country: {
+        label: "Guessed country",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "large", maxSeries: 20, selectorRequired: true }
+      },
+      score_bucket: {
+        label: "Score bucket",
+        kind: "category",
+        grain: "round",
+        ordered: true,
+        allowedCharts: ["bar"],
+        sortModes: ["chronological"]
+      },
+      team_closer_winner: {
+        label: "Closer guesses",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      team_higher_score_winner: {
+        label: "Higher score rounds",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      team_fewer_throw_winner: {
+        label: "Fewer throws (<50)",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      },
+      team_more_5k_winner: {
+        label: "More 5k rounds",
+        kind: "category",
+        grain: "round",
+        allowedCharts: ["bar"],
+        sortModes: ["asc", "desc"],
+        cardinality: { policy: "small", maxSeries: 3 }
+      }
+    },
+    measures: {
+      games_count: {
+        label: "Games",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games",
+        range: { min: 0 }
+      },
+      rounds_share: {
+        label: "Share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar"],
+        formulaId: "share_rounds",
+        range: { min: 0, max: 1 }
+      },
+      matchups_count: {
+        label: "Match-ups",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games"
+      },
+      strongest_opponent_rating: {
+        label: "Strongest opponent (rating)",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_opponent_start_rating"
+      },
+      strongest_defeated_opponent_rating: {
+        label: "Strongest defeated opponent (rating)",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_defeated_opponent_start_rating"
+      },
+      unique_opponents_count: {
+        label: "Unique opponents",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_opponent_name"
+      },
+      unique_opponent_countries_count: {
+        label: "Unique countries",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_opponent_country"
+      },
+      avg_game_length: {
+        label: "Avg game length",
+        unit: "float",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_game_length_rounds"
+      },
+      rounds_count: {
+        label: "Rounds",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_rounds"
+      },
+      games_distinct_count: {
+        label: "Games",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_game_id"
+      },
+      distinct_locations_count: {
+        label: "Distinct locations",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_distinct_true_location"
+      },
+      repeat_locations_count: {
+        label: "Repeat locations (groups)",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_true_location_repeat_groups"
+      },
+      repeat_location_rounds_count: {
+        label: "Rounds on repeat locations",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_true_location_repeat_rounds"
+      },
+      repeat_location_pairs_count: {
+        label: "Repeat location pairs",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_true_location_repeat_pairs"
+      },
+      repeat_location_rounds_rate: {
+        label: "Repeat location share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_true_location_repeat_rounds",
+        range: { min: 0, max: 1 }
+      },
+      first_played_at: {
+        label: "First game together",
+        unit: "datetime",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "min_played_at_ts"
+      },
+      last_played_at: {
+        label: "Most recent game together",
+        unit: "datetime",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_played_at_ts"
+      },
+      score_spread: {
+        label: "Score spread",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar"],
+        formulaId: "spread_player_self_score",
+        range: { min: 0, max: 5e3 }
+      },
+      avg_score: {
+        label: "Avg score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_score",
+        range: { min: 0, max: 5e3 }
+      },
+      round_score: {
+        label: "Round score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_score_value",
+        range: { min: 0, max: 5e3 }
+      },
+      round_damage_dealt: {
+        label: "Damage dealt",
+        unit: "int",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_damage_dealt_value",
+        range: { min: 0 }
+      },
+      round_damage_taken: {
+        label: "Damage taken",
+        unit: "int",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_damage_taken_value",
+        range: { min: 0 }
+      },
+      round_guess_duration: {
+        label: "Guess duration",
+        unit: "seconds",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_guess_duration_value",
+        range: { min: 0 }
+      },
+      round_score_per_second: {
+        label: "Score per second",
+        unit: "float",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "round_score_per_second",
+        range: { min: 0 }
+      },
+      avg_score_hit_only: {
+        label: "Avg score (hit only)",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_score_hit_only",
+        range: { min: 0, max: 5e3 }
+      },
+      avg_distance_km: {
+        label: "Avg distance",
+        unit: "km",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_distance_km",
+        range: { min: 0 }
+      },
+      avg_guess_duration: {
+        label: "Avg guess duration",
+        unit: "seconds",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_duration_seconds",
+        range: { min: 0 }
+      },
+      fivek_rate: {
+        label: "5k rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_player_self_score_eq_5000",
+        range: { min: 0, max: 100 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+        }
+      },
+      fivek_count: {
+        label: "5k count",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_5k_round",
+        range: { min: 0 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
+        }
+      },
+      near_perfect_rate: {
+        label: "Near-perfect rate (>=4500)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_near_perfect_round",
+        range: { min: 0, max: 100 }
+      },
+      near_perfect_count: {
+        label: "Near-perfect count (>=4500)",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_near_perfect_round",
+        range: { min: 0 }
+      },
+      low_score_rate: {
+        label: "Low score rate (<500)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_low_score_round",
+        range: { min: 0, max: 100 }
+      },
+      low_score_count: {
+        label: "Low score count (<500)",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_low_score_round",
+        range: { min: 0 }
+      },
+      win_rate: {
+        label: "Win rate",
+        unit: "percent",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_player_self_win",
+        range: { min: 0, max: 100 }
+      },
+      win_count: {
+        label: "Win count",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_win_game",
+        range: { min: 0 }
+      },
+      games_with_result_count: {
+        label: "Games with result data",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_games_with_result",
+        range: { min: 0 }
+      },
+      loss_count: {
+        label: "Loss count",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_loss_game",
+        range: { min: 0 }
+      },
+      tie_count: {
+        label: "Tie count",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_tie_game",
+        range: { min: 0 }
+      },
+      end_rating: {
+        label: "End rating",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "last_player_self_end_rating",
+        timeDayFill: "carry_forward",
+        range: { min: 0 }
+      },
+      rating_trend: {
+        label: "Trend",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "trend_player_self_rating"
+      },
+      best_end_rating: {
+        label: "Best rating",
+        unit: "rating",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_player_self_end_rating"
+      },
+      rating_delta_avg: {
+        label: "Avg rating delta",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_player_self_rating_delta"
+      },
+      rating_delta_highest: {
+        label: "Highest rating delta",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_player_self_rating_delta"
+      },
+      rating_delta_lowest: {
+        label: "Lowest rating delta",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "min_player_self_rating_delta"
+      },
+      game_avg_score: {
+        label: "Avg score (game)",
+        unit: "points",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_avg_score_over_rounds",
+        range: { min: 0, max: 5e3 }
+      },
+      game_5k_count: {
+        label: "5k count (game)",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_5k_count",
+        range: { min: 0 }
+      },
+      game_throw_count: {
+        label: "Throw count (game)",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_throw_count",
+        range: { min: 0 }
+      },
+      game_hit_rate: {
+        label: "Hit rate (game)",
+        unit: "percent",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_hit_rate",
+        range: { min: 0, max: 1 }
+      },
+      game_rating_delta: {
+        label: "Rating delta (game)",
+        unit: "rating_delta",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_rating_delta_value"
+      },
+      game_duration: {
+        label: "Game duration",
+        unit: "duration",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_duration_seconds",
+        range: { min: 0 }
+      },
+      game_final_health: {
+        label: "Final health",
+        unit: "int",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "game_final_health",
+        range: { min: 0 }
+      },
+      flawless_wins_count: {
+        label: "Flawless wins",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_flawless_wins",
+        range: { min: 0 }
+      },
+      longest_win_streak: {
+        label: "Longest win streak",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_win_streak"
+      },
+      longest_loss_streak: {
+        label: "Longest loss streak",
+        unit: "count",
+        grain: "game",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_loss_streak"
+      },
+      hit_rate: {
+        label: "Country hit rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_true_country_hit",
+        range: { min: 0, max: 100 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+        }
+      },
+      admin_hit_rate_de_state: {
+        label: "Admin-unit hit rate (DE ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_de_state_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_de_district: {
+        label: "Admin-unit hit rate (DE ADM2)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_de_district_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_us_state: {
+        label: "Admin-unit hit rate (US ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_us_state_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_ca_province: {
+        label: "Admin-unit hit rate (CA ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_ca_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_id_province: {
+        label: "Admin-unit hit rate (ID ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_id_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_id_kabupaten: {
+        label: "Admin-unit hit rate (ID ADM2)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_id_kabupaten_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_ph_province: {
+        label: "Admin-unit hit rate (PH ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_ph_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_hit_rate_vn_province: {
+        label: "Admin-unit hit rate (VN ADM1)",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_vn_province_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_unit_hit_rate: {
+        label: "Admin-unit hit rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line", "map"],
+        formulaId: "rate_admin_unit_hit",
+        range: { min: 0, max: 100 }
+      },
+      admin_unit_hit_count: {
+        label: "Admin hits",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line", "map"],
+        formulaId: "count_admin_unit_hit",
+        range: { min: 0 }
+      },
+      admin_unit_miss_count: {
+        label: "Admin misses",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line", "map"],
+        formulaId: "count_admin_unit_miss",
+        range: { min: 0 }
+      },
+      hit_count: {
+        label: "Hit count",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_hit_round",
+        range: { min: 0 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
+        }
+      },
+      throw_rate: {
+        label: "Throw rate",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "rate_throw_round",
+        range: { min: 0, max: 100 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+        }
+      },
+      throw_count: {
+        label: "Throw count",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_throw_round",
+        range: { min: 0 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
+        }
+      },
+      score_median: {
+        label: "Median score",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "median_player_self_score",
+        range: { min: 0, max: 5e3 }
+      },
+      score_stddev: {
+        label: "Score Std Dev",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "stddev_player_self_score",
+        range: { min: 0, max: 5e3 }
+      },
+      distance_median_km: {
+        label: "Median distance",
+        unit: "km",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "median_player_self_distance_km",
+        range: { min: 0 }
+      },
+      guess_duration_median: {
+        label: "Median guess duration",
+        unit: "seconds",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "median_duration_seconds",
+        range: { min: 0 }
+      },
+      rounds_with_time_count: {
+        label: "Rounds with time data",
+        unit: "count",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_rounds_with_duration",
+        range: { min: 0 }
+      },
+      time_played_seconds: {
+        label: "Time played",
+        unit: "duration",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "sum_duration_seconds"
+      },
+      damage_dealt_avg: {
+        label: "Avg damage dealt",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_dealt",
+        range: { min: 0, max: 5e3 }
+      },
+      damage_taken_avg: {
+        label: "Avg damage taken",
+        unit: "points",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_taken",
+        range: { min: 0, max: 5e3 }
+      },
+      damage_dealt_share: {
+        label: "Damage dealt share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "share_damage_dealt",
+        range: { min: 0, max: 100 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
+        }
+      },
+      damage_taken_share: {
+        label: "Damage taken share",
+        unit: "percent",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "share_damage_taken",
+        range: { min: 0, max: 100 },
+        drilldown: {
+          filterFromPoint: true,
+          extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
+        }
+      },
+      hit_signed: {
+        label: "Hit",
+        unit: "float",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_hit_signed",
+        range: { min: -1, max: 1 }
+      },
+      damage_net_avg: {
+        label: "Damage",
+        unit: "points_delta",
+        grain: "round",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_damage_net"
+      },
+      sessions_count: {
+        label: "Sessions",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "count_sessions",
+        range: { min: 0 }
+      },
+      sessions_longest_break_seconds: {
+        label: "Longest break between sessions",
+        unit: "duration",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_break_between_sessions_seconds"
+      },
+      sessions_avg_games: {
+        label: "Avg games per session",
+        unit: "float",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "mean_games_per_session"
+      },
+      session_avg_score_hit: {
+        label: "Avg score (hits only)",
+        unit: "points",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_score_hit",
+        range: { min: 0, max: 5e3 }
+      },
+      session_5k_count: {
+        label: "5k count",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_5k_count",
+        range: { min: 0 }
+      },
+      session_hit_count: {
+        label: "Hit count",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_hit_count",
+        range: { min: 0 }
+      },
+      session_throw_count: {
+        label: "Throw count",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_throw_count",
+        range: { min: 0 }
+      },
+      session_win_rate: {
+        label: "Win rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_win_rate",
+        range: { min: 0, max: 1 }
+      },
+      session_win_count: {
+        label: "Wins",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_win_count",
+        range: { min: 0 }
+      },
+      session_start_rating: {
+        label: "Start rating",
+        unit: "rating",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_start_rating"
+      },
+      session_end_rating: {
+        label: "End rating",
+        unit: "rating",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_end_rating"
+      },
+      session_duration_minutes: {
+        label: "Session duration",
+        unit: "duration",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_duration_seconds",
+        range: { min: 0 }
+      },
+      session_games_count: {
+        label: "Games",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_games_count"
+      },
+      session_rounds_count: {
+        label: "Rounds",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_rounds_count"
+      },
+      session_avg_score: {
+        label: "Avg score",
+        unit: "points",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_score",
+        range: { min: 0, max: 5e3 }
+      },
+      session_avg_guess_duration: {
+        label: "Avg guess duration",
+        unit: "seconds",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_guess_duration"
+      },
+      session_avg_distance_km: {
+        label: "Avg distance",
+        unit: "km",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_avg_distance_km"
+      },
+      session_fivek_rate: {
+        label: "5k rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_fivek_rate"
+      },
+      session_hit_rate: {
+        label: "Hit rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_hit_rate"
+      },
+      session_throw_rate: {
+        label: "Throw rate",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_throw_rate"
+      },
+      session_delta_rating: {
+        label: "Session rating delta",
+        unit: "rating_delta",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_delta_rating"
+      },
+      session_rating_delta: {
+        label: "Rating delta",
+        unit: "rating_delta",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "session_delta_rating"
+      },
+      day_win_rate_min5: {
+        label: "Win rate (day, min 5 games)",
+        unit: "percent",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "day_win_rate_min5",
+        range: { min: 0, max: 1 }
+      },
+      max_consecutive_days_without_games: {
+        label: "Most consecutive days without games",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "max_consecutive_days_without_games",
+        range: { min: 0 }
+      },
+      longest_active_streak_days: {
+        label: "Longest active streak (days)",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "longest_active_streak_days",
+        range: { min: 0 }
+      },
+      longest_5k_day_streak_days: {
+        label: "Longest 5k day streak (days)",
+        unit: "count",
+        grain: "session",
+        allowedCharts: ["bar", "line"],
+        formulaId: "longest_5k_day_streak_days",
+        range: { min: 0 }
+      }
+    },
+    units: {
+      count: { format: "int" },
+      int: { format: "int" },
+      points: { format: "float", decimals: 1 },
+      points_delta: { format: "float", decimals: 0, showSign: true },
+      percent: { format: "percent", decimals: 1 },
+      seconds: { format: "float", decimals: 1 },
+      duration: { format: "duration" },
+      datetime: { format: "datetime" },
+      rating: { format: "float", decimals: 0 },
+      rating_delta: { format: "float", decimals: 0, showSign: true },
+      km: { format: "float", decimals: 1 },
+      float: { format: "float", decimals: 2 }
+    },
+    columnAliases: {
+      ts: ["playedAt", "startTime"],
+      game_mode: ["gameMode", "gameModeSimple", "game_mode", "mode", "gameType"],
+      true_country: ["trueCountry", "true_country"],
+      player_self_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
+      player_self_score: ["player_self_score", "p1_score", "score"],
+      player_opponent_name: ["player_opponent_name", "playerTwoName", "playerOpponentName"],
+      player_opponent_id: ["player_opponent_id", "playerTwoId", "playerOpponentId"],
+      player_opponent_mate_name: ["player_opponent_mate_name", "teamTwoPlayerTwoName", "playerOpponentMateName"],
+      player_opponent_mate_id: ["player_opponent_mate_id", "teamTwoPlayerTwoId", "playerOpponentMateId"],
+      player_mate_name: ["player_mate_name", "teamOnePlayerTwoName", "playerMateName"],
+      player_mate_id: ["player_mate_id", "teamOnePlayerTwoId", "playerMateId"],
+      player_self_guessLat: ["p1_guessLat", "player_self_guessLat"],
+      player_self_guessLng: ["p1_guessLng", "player_self_guessLng"],
+      player_self_isBestGuess: ["p1_isBestGuess", "player_self_isBestGuess"],
+      player_mate_guessLat: ["p2_guessLat", "player_mate_guessLat"],
+      player_mate_guessLng: ["p2_guessLng", "player_mate_guessLng"],
+      player_mate_score: ["p2_score", "player_mate_score"],
+      player_mate_isBestGuess: ["p2_isBestGuess", "player_mate_isBestGuess"],
+      player_opponent_guessLat: ["p3_guessLat", "player_opponent_guessLat", "p2_guessLat"],
+      player_opponent_guessLng: ["p3_guessLng", "player_opponent_guessLng", "p2_guessLng"],
+      player_opponent_score: ["p3_score", "player_opponent_score", "p2_score"],
+      player_opponent_isBestGuess: ["p3_isBestGuess", "player_opponent_isBestGuess", "p2_isBestGuess"],
+      player_opponent_mate_guessLat: ["p4_guessLat", "player_opponent_mate_guessLat"],
+      player_opponent_mate_guessLng: ["p4_guessLng", "player_opponent_mate_guessLng"],
+      player_opponent_mate_score: ["p4_score", "player_opponent_mate_score"],
+      player_opponent_mate_isBestGuess: ["p4_isBestGuess", "player_opponent_mate_isBestGuess"],
+      distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
+      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"],
+      mapName: ["mapName", "map_name"],
+      mapSlug: ["mapSlug", "map_slug"],
+      isRanked: ["isRated", "is_rated", "rated"],
+      isRated: ["is_rated", "rated"]
+    },
+    drilldownPresets: {
+      rounds: {
+        entity: "round",
+        columnsPresets: {
+          roundMode: [
+            { key: "ts", label: "Date", sortable: true },
+            { key: "result", label: "Result", sortable: true, colored: true },
+            { key: "roundNumber", label: "Round", sortable: true },
+            { key: "movementType", label: "Movement", sortable: true },
+            { key: "player_self_score", label: "Score", sortable: true },
+            { key: "true_country", label: "Country", sortable: true },
+            { key: "durationSeconds", label: "Guess Duration", sortable: true },
+            { key: "damage", label: "Damage", sortable: true, colored: true },
+            { key: "teammateName", label: "Mate", sortable: true },
+            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
+            { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
+            { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
+          ]
+        },
+        defaultPreset: "roundMode"
+      },
+      sessions: {
+        entity: "session",
+        columnsPresets: {
+          sessionMode: [
+            { key: "sessionStartTs", label: "Start", sortable: true },
+            { key: "sessionEndTs", label: "End", sortable: true },
+            { key: "gamesCount", label: "Games", sortable: true },
+            { key: "roundsCount", label: "Rounds", sortable: true },
+            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } }
+          ]
+        },
+        defaultPreset: "sessionMode"
+      },
+      games: {
+        entity: "game",
+        columnsPresets: {
+          gameMode: [
+            { key: "ts", label: "Date", sortable: true },
+            { key: "modeFamily", label: "Game Mode", sortable: true },
+            { key: "movementType", label: "Movement", sortable: true },
+            { key: "roundsCount", label: "Rounds", sortable: true },
+            { key: "result", label: "Result", sortable: true, colored: true },
+            { key: "endRating", label: "End Rating", sortable: true },
+            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
+            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
+          ]
+        },
+        defaultPreset: "gameMode"
+      },
+      players: {
+        entity: "game",
+        columnsPresets: {
+          opponentMode: [
+            { key: "ts", label: "Date", sortable: true },
+            { key: "modeFamily", label: "Game Mode", sortable: true },
+            { key: "movementType", label: "Movement", sortable: true },
+            { key: "roundsCount", label: "Rounds", sortable: true },
+            { key: "teammateName", label: "Mate", sortable: true },
+            { key: "result", label: "Result", sortable: true, colored: true },
+            { key: "player_opponent_name", label: "Opponent", sortable: true },
+            { key: "player_opponent_mate_name", label: "Opponent Mate", sortable: true },
+            { key: "endRating", label: "End Rating", sortable: true },
+            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
+            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
+            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
+          ]
+        },
+        defaultPreset: "opponentMode"
+      }
+    },
+    errors: {
+      E_GRAIN_MISMATCH: "Selected fields have incompatible grains.",
+      E_CHART_X_NOT_ORDERED: "Line charts require an ordered x-dimension.",
+      E_SELECTOR_REQUIRED: "This dimension requires a selector (Top-N or Selected).",
+      E_TOO_MANY_SERIES: "Too many series requested; reduce categories or use selector."
+    }
+  };
+
+  // src/config/dashboard.json
+  var dashboard_default = {
+    $schema: "./dashboard.schema.json",
+    schemaVersion: "0.1.0",
+    dashboard: {
+      id: "default",
+      title: "GeoAnalyzr",
+      ui: {
+        topbarTitle: "{{playerName}}",
+        windowTitle: "{{playerName}} - GeoAnalyzr"
+      },
+      globalFilters: {
+        enabled: true,
+        layout: {
+          variant: "compact"
+        },
+        controls: [
+          {
+            id: "dateRange",
+            type: "date_range",
+            label: "From / To",
+            default: {
+              fromTs: null,
+              toTs: null
+            },
+            appliesTo: [
+              "round",
+              "game",
+              "session"
+            ]
+          },
+          {
+            id: "modeFamily",
+            type: "select",
+            label: "Game mode",
+            dimension: "mode_family",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: [
+              "round",
+              "game"
+            ]
+          },
+          {
+            id: "rated",
+            type: "select",
+            label: "Rated",
+            dimension: "is_rated",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: [
+              "round",
+              "game"
+            ]
+          },
+          {
+            id: "map",
+            type: "select",
+            label: "Map",
+            width: 220,
+            dimension: "map_slug",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: [
+              "round",
+              "game"
+            ]
+          },
+          {
+            id: "teammate",
+            type: "select",
+            label: "Teammate",
+            dimension: "teammate_name",
+            default: "all",
+            options: "auto_teammates",
+            appliesTo: [
+              "round",
+              "game"
+            ]
+          },
+          {
+            id: "movement",
+            type: "select",
+            label: "Movement",
+            dimension: "movement_type",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: [
+              "round",
+              "game"
+            ]
+          },
+          {
+            id: "guessTimeBucket",
+            type: "select",
+            label: "Guess time",
+            dimension: "duration_bucket",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: [
+              "round"
+            ]
+          },
+          {
+            id: "country",
+            type: "select",
+            label: "Country",
+            dimension: "true_country",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: [
+              "round"
+            ]
+          }
+        ],
+        buttons: {
+          apply: false,
+          reset: true
+        }
+      },
+      drilldownPresets: {
+        rounds: {
+          entity: "round",
+          columnsPresets: {
+            roundMode: [
+              {
+                key: "ts",
+                label: "Date",
+                sortable: true
+              },
+              {
+                key: "result",
+                label: "Result",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "roundNumber",
+                label: "Round",
+                sortable: true
+              },
+              {
+                key: "movementType",
+                label: "Movement",
+                sortable: true
+              },
+              {
+                key: "player_self_score",
+                label: "Score",
+                sortable: true
+              },
+              {
+                key: "true_country",
+                label: "Country",
+                sortable: true
+              },
+              {
+                key: "durationSeconds",
+                label: "Guess Duration",
+                sortable: true
+              },
+              {
+                key: "damage",
+                label: "Damage",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "teammateName",
+                label: "Mate",
+                sortable: true
+              },
+              {
+                key: "gameId",
+                label: "Game",
+                sortable: true
+              },
+              {
+                key: "guess_maps",
+                label: "Guess Maps",
+                type: "link",
+                link: {
+                  kind: "guess_maps",
+                  label: "Open"
+                }
+              },
+              {
+                key: "street_view",
+                label: "True Street View",
+                type: "link",
+                link: {
+                  kind: "street_view",
+                  label: "Open"
+                }
+              }
+            ]
+          },
+          defaultPreset: "roundMode"
+        },
+        sessions: {
+          entity: "session",
+          columnsPresets: {
+            sessionMode: [
+              {
+                key: "sessionStartTs",
+                label: "Start",
+                sortable: true
+              },
+              {
+                key: "sessionEndTs",
+                label: "End",
+                sortable: true
+              },
+              {
+                key: "gamesCount",
+                label: "Games",
+                sortable: true
+              },
+              {
+                key: "roundsCount",
+                label: "Rounds",
+                sortable: true
+              },
+              {
+                key: "ratingDelta",
+                label: "Rating Delta",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "sessionId",
+                label: "Session",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 2
+                }
+              }
+            ]
+          },
+          defaultPreset: "sessionMode"
+        },
+        games: {
+          entity: "game",
+          columnsPresets: {
+            gameMode: [
+              {
+                key: "ts",
+                label: "Date",
+                sortable: true
+              },
+              {
+                key: "modeFamily",
+                label: "Game Mode",
+                sortable: true
+              },
+              {
+                key: "movementType",
+                label: "Movement",
+                sortable: true
+              },
+              {
+                key: "teammateName",
+                label: "Mate",
+                sortable: true
+              },
+              {
+                key: "roundsCount",
+                label: "Rounds",
+                sortable: true
+              },
+              {
+                key: "result",
+                label: "Result",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "endRating",
+                label: "End Rating",
+                sortable: true
+              },
+              {
+                key: "ratingDelta",
+                label: "Rating Delta",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "sessionId",
+                label: "Session",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 2
+                }
+              },
+              {
+                key: "gameId",
+                label: "Game",
+                sortable: true
+              }
+            ]
+          },
+          defaultPreset: "gameMode"
+        },
+        players: {
+          entity: "game",
+          columnsPresets: {
+            opponentMode: [
+              {
+                key: "ts",
+                label: "Date",
+                sortable: true
+              },
+              {
+                key: "modeFamily",
+                label: "Game Mode",
+                sortable: true
+              },
+              {
+                key: "movementType",
+                label: "Movement",
+                sortable: true
+              },
+              {
+                key: "roundsCount",
+                label: "Rounds",
+                sortable: true
+              },
+              {
+                key: "teammateName",
+                label: "Mate",
+                sortable: true
+              },
+              {
+                key: "result",
+                label: "Result",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "player_opponent_name",
+                label: "Opponent",
+                sortable: true
+              },
+              {
+                key: "player_opponent_mate_name",
+                label: "Opponent Mate",
+                sortable: true
+              },
+              {
+                key: "endRating",
+                label: "End Rating",
+                sortable: true
+              },
+              {
+                key: "ratingDelta",
+                label: "Rating Delta",
+                sortable: true,
+                colored: true
+              },
+              {
+                key: "sessionId",
+                label: "Session",
+                sortable: true,
+                display: {
+                  truncate: true,
+                  truncateHead: 2
+                }
+              },
+              {
+                key: "gameId",
+                label: "Game",
+                sortable: true
+              }
+            ]
+          },
+          defaultPreset: "opponentMode"
+        }
+      },
+      sections: [
+        {
+          id: "overview",
+          title: "Overview",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_overview_main",
+                title: "Overview",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 22,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_overview_facts",
+                      type: "stat_list",
+                      title: "Results, Win Rate & Streaks",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 7
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Games with result data",
+                            measure: "games_with_result_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Wins",
+                            measure: "win_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Losses",
+                            measure: "loss_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Loss"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Win rate",
+                            measure: "win_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Best rating",
+                            measure: "best_end_rating",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false,
+                                initialSort: {
+                                  key: "endRating",
+                                  dir: "desc"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            label: "Longest win streak",
+                            measure: "longest_win_streak",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Longest loss streak",
+                            measure: "longest_loss_streak",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg score (pts)",
+                            measure: "avg_score",
+                            grain: "round",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg distance (km)",
+                            measure: "avg_distance_km",
+                            grain: "round",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg time (s)",
+                            measure: "avg_guess_duration",
+                            grain: "round",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Time played",
+                            measure: "time_played_seconds",
+                            grain: "round",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Perfect 5k rounds",
+                            measure: "fivek_count",
+                            grain: "round",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Throws (<50)",
+                            measure: "throw_count",
+                            grain: "round",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_overview_mode_breakdown",
+                      type: "breakdown",
+                      title: "Mode Breakdown",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 7,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        dimension: "mode_family",
+                        excludeKeys: [
+                          "other",
+                          "Streak"
+                        ],
+                        measure: "games_count",
+                        sort: {
+                          mode: "desc"
+                        },
+                        limit: 12,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_overview_movement_breakdown",
+                      type: "breakdown",
+                      title: "Movement Breakdown",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 11,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        dimension: "movement_type",
+                        measure: "rounds_count",
+                        sort: {
+                          mode: "desc"
+                        },
+                        limit: 12,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_overview_time_progression",
+                      type: "chart",
+                      title: "Time progression metrics",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 15,
+                        w: 12,
+                        h: 7
+                      },
+                      spec: {
+                        type: "line",
+                        maxPoints: 100,
+                        x: {
+                          dimension: "time_day"
+                        },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "time_played_seconds",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "end_rating",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count",
+                          accumulations: [
+                            "period",
+                            "to_date",
+                            "session"
+                          ],
+                          activeAccumulation: "to_date"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "rating",
+          title: "Rating",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_rating",
+                title: "Rating",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 16,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_rating_kpis",
+                      type: "stat_list",
+                      title: "Rating",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Current rating",
+                            measure: "end_rating"
+                          },
+                          {
+                            label: "Trend",
+                            measure: "rating_trend"
+                          },
+                          {
+                            label: "Avg rating delta",
+                            measure: "rating_delta_avg"
+                          },
+                          {
+                            label: "Highest rating delta",
+                            measure: "rating_delta_highest",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            label: "Lowest rating delta",
+                            measure: "rating_delta_lowest",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_rating_session_records",
+                      type: "record_list",
+                      title: "Sessions",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 4,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "biggest_session_rating_gain",
+                            label: "Biggest session rating gain",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "biggest_session_rating_loss",
+                            label: "Biggest session rating loss",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_rating_over_time",
+                      type: "chart",
+                      title: "Rating over time",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 8,
+                        w: 12,
+                        h: 8
+                      },
+                      spec: {
+                        type: "line",
+                        maxPoints: 220,
+                        x: {
+                          dimension: "time_day"
+                        },
+                        y: {
+                          measures: [
+                            "end_rating"
+                          ],
+                          activeMeasure: "end_rating"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "personal_records",
+          title: "Personal Records",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_personal_records",
+                title: "Personal Records",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 30,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_round_records",
+                      type: "record_list",
+                      title: "Round Records",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 6
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "highest_score_round",
+                            label: "Highest score round",
+                            metric: "round_score",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "lowest_score_round",
+                            label: "Lowest score round",
+                            metric: "round_score",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "biggest_damage_dealt_round",
+                            label: "Biggest damage dealt round",
+                            metric: "round_damage_dealt",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "biggest_damage_taken_round",
+                            label: "Biggest damage taken round",
+                            metric: "round_damage_taken",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "fastest_round",
+                            label: "Fastest round (min duration)",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_round",
+                            label: "Slowest round (max duration)",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "fastest_5k",
+                            label: "Fastest 5k",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            filters: [
+                              {
+                                dimension: "score_bucket",
+                                op: "eq",
+                                value: "5000"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_throw",
+                            label: "Slowest throw",
+                            metric: "round_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            filters: [
+                              {
+                                dimension: "is_throw",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "best_score_per_second",
+                            label: "Best score-per-second",
+                            metric: "round_score_per_second",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_region_guess",
+                            label: "Worst region-guess (hit but low score)",
+                            metric: "round_score",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            filters: [
+                              {
+                                dimension: "is_hit",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_hit",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_game_records",
+                      type: "record_list",
+                      title: "Game Records",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 6,
+                        w: 12,
+                        h: 7
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "flawless_wins",
+                            label: "Flawless wins (no damage taken)",
+                            kind: "overall",
+                            metric: "flawless_wins_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_flawless_win",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "highest_avg_score_game",
+                            label: "Highest avg score game",
+                            metric: "game_avg_score",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "lowest_avg_score_game",
+                            label: "Lowest avg score game",
+                            metric: "game_avg_score",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_5ks_in_game",
+                            label: "Most 5ks in a game",
+                            metric: "game_5k_count",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_throws_in_game",
+                            label: "Most throws in a game",
+                            metric: "game_throw_count",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_hit_rate_game",
+                            label: "Worst hit rate game",
+                            metric: "game_hit_rate",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "highest_rating_gain_game",
+                            label: "Highest rating gain",
+                            metric: "game_rating_delta",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "fastest_win_game",
+                            label: "Fastest win game",
+                            metric: "game_duration",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Win"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_win_game",
+                            label: "Slowest win game",
+                            metric: "game_duration",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Win"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "best_clutch_game",
+                            label: "Best clutch (win with lowest health)",
+                            metric: "game_final_health",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Win"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Win"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_throw_game",
+                            label: "Worst throw (loss with highest health in last round)",
+                            metric: "game_final_health",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            filters: [
+                              {
+                                dimension: "result",
+                                op: "eq",
+                                value: "Loss"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "result",
+                                    op: "eq",
+                                    value: "Loss"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_session_records",
+                      type: "record_list",
+                      title: "Session Records",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 13,
+                        w: 12,
+                        h: 6
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "highest_win_rate_session",
+                            label: "Highest win rate session",
+                            metric: "session_win_rate",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "highest_avg_score_session",
+                            label: "Highest avg score session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "lowest_avg_score_session",
+                            label: "Lowest avg score session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_games_session",
+                            label: "Most games session",
+                            metric: "session_games_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "longest_session_total_duration",
+                            label: "Longest session (total duration)",
+                            metric: "session_duration_minutes",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_5ks_session",
+                            label: "Most 5ks session",
+                            metric: "session_5k_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "best_hit_rate_session",
+                            label: "Best hit rate session",
+                            metric: "session_hit_rate",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "highest_throw_rate_session",
+                            label: "Highest throw rate session",
+                            metric: "session_throw_rate",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "biggest_rating_gain_in_session",
+                            label: "Biggest rating gain in a session",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "biggest_rating_loss_in_session",
+                            label: "Biggest rating loss in a session",
+                            metric: "session_delta_rating",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_day_records",
+                      type: "record_list",
+                      title: "Day Records",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 19,
+                        w: 12,
+                        h: 7
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "best_day_by_avg_score",
+                            label: "Best day by avg score",
+                            metric: "session_avg_score",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_day_by_avg_score",
+                            label: "Worst day by avg score",
+                            metric: "session_avg_score",
+                            groupBy: "time_day",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_sessions_in_a_day",
+                            label: "Most sessions in a day",
+                            metric: "sessions_count",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_games_in_a_day",
+                            label: "Most games in a day",
+                            metric: "session_games_count",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_time_played_in_a_day",
+                            label: "Most time played in a day",
+                            metric: "session_duration_minutes",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "most_5ks_in_a_day",
+                            label: "Most 5ks in a day",
+                            metric: "session_5k_count",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "best_win_rate_day",
+                            label: "Best win rate day (min 5 games)",
+                            metric: "day_win_rate_min5",
+                            groupBy: "time_day",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_win_rate_day",
+                            label: "Worst win rate day (min 5 games)",
+                            metric: "day_win_rate_min5",
+                            groupBy: "time_day",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_day_streaks",
+                      type: "stat_list",
+                      title: "Day Streaks",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 26,
+                        w: 12,
+                        h: 3
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Most consecutive days without games",
+                            measure: "max_consecutive_days_without_games"
+                          },
+                          {
+                            label: "Longest active streak (min 1 game/day)",
+                            measure: "longest_active_streak_days"
+                          },
+                          {
+                            label: "Longest 5k day streak (min 1 5k/day)",
+                            measure: "longest_5k_day_streak_days"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "sessions",
+          title: "Sessions",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_sessions",
+                title: "Sessions",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 20,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_sessions_kpis",
+                      type: "stat_list",
+                      title: "Sessions",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Sessions detected (gap >45m)",
+                            measure: "sessions_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Longest break between sessions",
+                            measure: "sessions_longest_break_seconds"
+                          },
+                          {
+                            label: "Avg games per session",
+                            measure: "sessions_avg_games"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_sessions_records",
+                      type: "record_list",
+                      title: "Session Records",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 4,
+                        w: 12,
+                        h: 5
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "longest_session",
+                            label: "Longest session",
+                            metric: "session_games_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "best_session",
+                            label: "Best session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "worst_session",
+                            label: "Worst session",
+                            metric: "session_avg_score",
+                            groupBy: "session_start",
+                            extreme: "min",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_sessions_line",
+                      type: "chart",
+                      title: "Sessions over time (line)",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 9,
+                        w: 12,
+                        h: 5
+                      },
+                      spec: {
+                        type: "line",
+                        maxPoints: 120,
+                        x: {
+                          dimension: "session_index"
+                        },
+                        y: {
+                          measures: [
+                            "session_avg_score",
+                            "session_avg_score_hit",
+                            "session_fivek_rate",
+                            "session_5k_count",
+                            "session_throw_rate",
+                            "session_throw_count",
+                            "session_hit_rate",
+                            "session_hit_count",
+                            "session_win_rate",
+                            "session_win_count",
+                            "session_start_rating",
+                            "session_end_rating",
+                            "session_rating_delta",
+                            "session_duration_minutes",
+                            "session_games_count",
+                            "session_rounds_count",
+                            "session_avg_guess_duration",
+                            "session_avg_distance_km"
+                          ],
+                          activeMeasure: "session_avg_score",
+                          accumulations: [
+                            "period",
+                            "to_date"
+                          ],
+                          activeAccumulation: "period"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "sessions",
+                            columnsPreset: "sessionMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_sessions_breakdown",
+                      type: "breakdown",
+                      title: "Sessions (bar)",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 14,
+                        w: 12,
+                        h: 6
+                      },
+                      spec: {
+                        dimension: "session_start",
+                        measures: [
+                          "session_avg_score",
+                          "session_avg_score_hit",
+                          "session_fivek_rate",
+                          "session_5k_count",
+                          "session_throw_rate",
+                          "session_throw_count",
+                          "session_hit_rate",
+                          "session_hit_count",
+                          "session_win_rate",
+                          "session_win_count",
+                          "session_start_rating",
+                          "session_end_rating",
+                          "session_rating_delta",
+                          "session_duration_minutes",
+                          "session_games_count",
+                          "session_rounds_count"
+                        ],
+                        activeMeasure: "session_avg_score",
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
+                        limit: 12,
+                        extendable: true,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "sessions",
+                            columnsPreset: "sessionMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "tempo",
+          title: "Tempo",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_tempo",
+                title: "Tempo",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_tempo_records",
+                      type: "record_list",
+                      title: "Tempo",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 6
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "fastest_guess",
+                            label: "Fastest guess",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            displayKey: "none",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_guess",
+                            label: "Slowest guess",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            displayKey: "none",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "fastest_5k",
+                            label: "Fastest 5k",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "min",
+                            filters: [
+                              {
+                                dimension: "score_bucket",
+                                op: "eq",
+                                value: "5000"
+                              }
+                            ],
+                            displayKey: "none",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "slowest_throw",
+                            label: "Slowest throw (<50)",
+                            metric: "avg_guess_duration",
+                            groupBy: "round_id",
+                            extreme: "max",
+                            filters: [
+                              {
+                                dimension: "is_throw",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
+                            displayKey: "none",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_tempo_bucket_breakdown",
+                      type: "breakdown",
+                      title: "Tempo - Time bucket metrics",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 6,
+                        w: 12,
+                        h: 8
+                      },
+                      spec: {
+                        dimension: "duration_bucket",
+                        measures: [
+                          "avg_score",
+                          "fivek_rate",
+                          "throw_rate",
+                          "hit_rate",
+                          "avg_guess_duration"
+                        ],
+                        activeMeasure: "avg_score",
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
+                        limit: 12,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "scores",
+          title: "Scores",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_scores_kpis",
+                title: "Scores",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_scores_kpis",
+                      type: "stat_list",
+                      title: "Scores",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Perfect 5k",
+                            measure: "fivek_count",
+                            secondaryMeasure: "fivek_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Near-perfect (>=4500)",
+                            measure: "near_perfect_count",
+                            secondaryMeasure: "near_perfect_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_near_perfect",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Low scores (<500)",
+                            measure: "low_score_count",
+                            secondaryMeasure: "low_score_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_low_score",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Throws (<50)",
+                            measure: "throw_count",
+                            secondaryMeasure: "throw_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_score_vs_opponents",
+                      type: "breakdown",
+                      title: "Score vs opponents",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 4,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        dimension: "score_vs_opponent",
+                        measure: "rounds_share",
+                        sort: {
+                          mode: "desc"
+                        },
+                        limit: 3,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_score_distribution",
+                      type: "chart",
+                      title: "Scores - Score distribution (smoothed)",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 8,
+                        w: 12,
+                        h: 10
+                      },
+                      spec: {
+                        type: "bar",
+                        limit: 200,
+                        x: {
+                          dimension: "score_bucket"
+                        },
+                        y: {
+                          measure: "rounds_count"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "rounds",
+          title: "Rounds",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_rounds",
+                title: "Rounds",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 24,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_rounds_records",
+                      type: "record_list",
+                      title: "Rounds",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 7
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "game_most_rounds",
+                            label: "Game with most rounds",
+                            metric: "rounds_count",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            displayKey: "first_ts",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "game_fewest_rounds",
+                            label: "Games with fewest rounds",
+                            metric: "rounds_count",
+                            groupBy: "game_id",
+                            extreme: "min",
+                            displayKey: "first_ts",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "largest_score_spread_game",
+                            label: "Largest score spread (max-min in one game)",
+                            metric: "score_spread",
+                            groupBy: "game_id",
+                            extreme: "max",
+                            displayKey: "first_ts",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "games",
+                                columnsPreset: "gameMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "fast_round_streak",
+                            label: "Fastest round streak (<20s)",
+                            kind: "streak",
+                            streakFilters: [
+                              {
+                                dimension: "duration_bucket",
+                                op: "eq",
+                                value: "<20 sec"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "duration_bucket",
+                                    op: "eq",
+                                    value: "<20 sec"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "damage_dealt_streak",
+                            label: "Damage dealt streak",
+                            kind: "streak",
+                            streakFilters: [
+                              {
+                                dimension: "is_damage_dealt",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_damage_dealt",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "damage_taken_streak",
+                            label: "Damage taken streak",
+                            kind: "streak",
+                            streakFilters: [
+                              {
+                                dimension: "is_damage_taken",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_damage_taken",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            id: "same_country_streak",
+                            label: "Longest same-country streak",
+                            kind: "same_value_streak",
+                            dimension: "true_country",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          },
+                          {
+                            id: "correct_country_streak",
+                            label: "Correct-country streak",
+                            kind: "streak",
+                            streakFilters: [
+                              {
+                                dimension: "is_hit",
+                                op: "eq",
+                                value: "true"
+                              }
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: true,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_hit",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_rounds_progression",
+                      type: "chart",
+                      title: "Rounds - Round progression metrics",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 7,
+                        w: 12,
+                        h: 8
+                      },
+                      spec: {
+                        type: "bar",
+                        x: {
+                          dimension: "round_number"
+                        },
+                        y: {
+                          measures: [
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "fivek_rate",
+                            "throw_rate",
+                            "hit_rate",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "avg_score"
+                        },
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
+                        limit: 20,
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_game_length_perf",
+                      type: "chart",
+                      title: "Rounds - Performance by game length (rounds per game, 2+)",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 15,
+                        w: 12,
+                        h: 9
+                      },
+                      spec: {
+                        type: "bar",
+                        x: {
+                          dimension: "game_length"
+                        },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "win_rate",
+                            "win_count",
+                            "loss_count",
+                            "tie_count",
+                            "best_end_rating"
+                          ],
+                          activeMeasure: "games_count"
+                        },
+                        sorts: [
+                          {
+                            mode: "chronological"
+                          },
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
+                        limit: 20,
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "time_patterns",
+          title: "Time Patterns",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_by_weekday",
+                title: "By weekday",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "by_weekday_chart",
+                      type: "chart",
+                      title: "Weekday Analysis",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 10
+                      },
+                      spec: {
+                        type: "bar",
+                        x: {
+                          dimension: "weekday"
+                        },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count"
+                        },
+                        sorts: [
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          },
+                          {
+                            mode: "chronological"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                cardId: "card_by_hour",
+                title: "By hour",
+                x: 0,
+                y: 10,
+                w: 12,
+                h: 10,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "by_hour_chart",
+                      type: "chart",
+                      title: "Hour Analysis",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 10
+                      },
+                      spec: {
+                        type: "bar",
+                        x: {
+                          dimension: "hour"
+                        },
+                        y: {
+                          measures: [
+                            "games_count",
+                            "rounds_count",
+                            "avg_score",
+                            "avg_score_hit_only",
+                            "avg_distance_km",
+                            "avg_guess_duration",
+                            "throw_rate",
+                            "throw_count",
+                            "fivek_rate",
+                            "fivek_count",
+                            "hit_rate",
+                            "hit_count",
+                            "win_rate",
+                            "win_count",
+                            "damage_dealt_avg",
+                            "damage_taken_avg"
+                          ],
+                          activeMeasure: "games_count"
+                        },
+                        sorts: [
+                          {
+                            mode: "desc"
+                          },
+                          {
+                            mode: "asc"
+                          },
+                          {
+                            mode: "chronological"
+                          }
+                        ],
+                        activeSort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "countries",
+          title: "Countries",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_countries",
+                title: "Countries",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 26,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_metrics",
+                      type: "multi_view",
+                      title: "Countries - Country metrics",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 18
+                      },
+                      spec: {
+                        activeView: "bar",
+                        views: [
+                          {
+                            id: "bar",
+                            label: "Bar",
+                            type: "breakdown",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_country",
+                              measures: [
+                                "avg_score",
+                                "avg_score_hit_only",
+                                "avg_distance_km",
+                                "avg_guess_duration",
+                                "rounds_count",
+                                "fivek_rate",
+                                "fivek_count",
+                                "throw_rate",
+                                "throw_count",
+                                "hit_rate",
+                                "hit_count",
+                                "damage_dealt_avg",
+                                "damage_taken_avg",
+                                "damage_dealt_share",
+                                "damage_taken_share"
+                              ],
+                              activeMeasure: "avg_score",
+                              sorts: [
+                                {
+                                  mode: "desc"
+                                },
+                                {
+                                  mode: "asc"
+                                }
+                              ],
+                              activeSort: {
+                                mode: "desc"
+                              },
+                              limit: 15,
+                              extendable: true,
+                              actions: {
+                                click: {
+                                  type: "drilldown",
+                                  target: "rounds",
+                                  columnsPreset: "roundMode",
+                                  filterFromPoint: true
+                                }
+                              }
+                            }
+                          },
+                          {
+                            id: "map",
+                            label: "Map",
+                            type: "country_map",
+                            grain: "round",
+                            spec: {
+                              dimension: "true_country",
+                              mapHeight: 420,
+                              measures: [
+                                "avg_score",
+                                "avg_score_hit_only",
+                                "avg_distance_km",
+                                "avg_guess_duration",
+                                "rounds_count",
+                                "fivek_rate",
+                                "fivek_count",
+                                "throw_rate",
+                                "throw_count",
+                                "hit_rate",
+                                "hit_count",
+                                "damage_dealt_avg",
+                                "damage_taken_avg",
+                                "damage_dealt_share",
+                                "damage_taken_share"
+                              ],
+                              activeMeasure: "avg_score",
+                              actions: {
+                                click: {
+                                  type: "drilldown",
+                                  target: "rounds",
+                                  columnsPreset: "roundMode",
+                                  filterFromPoint: true
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_confusion",
+                      type: "chart",
+                      title: "Countries - Confusion matrix (top pairs)",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 18,
+                        w: 12,
+                        h: 8
+                      },
+                      spec: {
+                        type: "bar",
+                        limit: 20,
+                        x: {
+                          dimension: "confused_countries"
+                        },
+                        y: {
+                          measure: "rounds_count"
+                        },
+                        sort: {
+                          mode: "desc"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "coordinates",
+          title: "Coordinates",
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_coordinates",
+                title: "Coordinates",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 24,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_coordinates_repeats",
+                      type: "stat_list",
+                      title: "Coordinates - Repeats",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 5
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Rounds on repeat locations",
+                            measure: "repeat_location_rounds_count",
+                            secondaryMeasure: "repeat_location_rounds_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false,
+                                extraFilters: [
+                                  {
+                                    dimension: "is_true_location_repeat",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Distinct locations",
+                            measure: "distinct_locations_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_coordinates_map",
+                      type: "point_map",
+                      title: "Coordinates - Distribution",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 5,
+                        w: 12,
+                        h: 19
+                      },
+                      spec: {
+                        points: [
+                          {
+                            id: "true",
+                            label: "True location",
+                            latField: "trueLat",
+                            lngField: "trueLng"
+                          },
+                          {
+                            id: "self",
+                            label: "Your guesses",
+                            latField: "player_self_guessLat",
+                            lngField: "player_self_guessLng"
+                          },
+                          {
+                            id: "mate",
+                            label: "Mate guesses",
+                            latField: "player_mate_guessLat",
+                            lngField: "player_mate_guessLng"
+                          },
+                          {
+                            id: "opp",
+                            label: "Opponent guesses",
+                            latField: "player_opponent_guessLat",
+                            lngField: "player_opponent_guessLng"
+                          },
+                          {
+                            id: "oppMate",
+                            label: "Opponent mate guesses",
+                            latField: "player_opponent_mate_guessLat",
+                            lngField: "player_opponent_mate_guessLng"
+                          }
+                        ],
+                        pointSelect: {
+                          enabled: true,
+                          defaultId: "true",
+                          allowAll: false
+                        },
+                        rangeFilter: {
+                          label: "Score",
+                          field: "player_self_score",
+                          min: 0,
+                          max: 5e3,
+                          defaultMin: 0,
+                          defaultMax: 5e3,
+                          step: 10
+                        },
+                        mapHeight: 520,
+                        maxDots: 0,
+                        measures: [
+                          "rounds_count",
+                          "hit_signed",
+                          "damage_net_avg"
+                        ],
+                        activeMeasure: "rounds_count",
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "opponents",
+          title: "Opponents",
+          filterScope: {
+            exclude: [
+              "movement",
+              "guessTimeBucket",
+              "country"
+            ]
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_opponents",
+                title: "Opponents",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_opponents_scope",
+                      type: "stat_list",
+                      title: "Scope",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 3
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Unique opponents",
+                            measure: "unique_opponents_count"
+                          },
+                          {
+                            label: "Unique countries",
+                            measure: "unique_opponent_countries_count"
+                          },
+                          {
+                            label: "Strongest opponent (rating)",
+                            measure: "strongest_opponent_rating",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Strongest defeated opponent (rating)",
+                            measure: "strongest_defeated_opponent_rating",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "players",
+                                columnsPreset: "opponentMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_opponents_by_country",
+                      type: "chart",
+                      title: "Opponents - Match-ups by opponent country",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 3,
+                        w: 12,
+                        h: 8
+                      },
+                      spec: {
+                        type: "bar",
+                        limit: 20,
+                        x: {
+                          dimension: "opponent_country"
+                        },
+                        y: {
+                          measure: "matchups_count"
+                        },
+                        sort: {
+                          mode: "desc"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_opponents_top",
+                      type: "breakdown",
+                      title: "Opponents - Top opponents",
+                      grain: "game",
+                      placement: {
+                        x: 0,
+                        y: 11,
+                        w: 12,
+                        h: 7
+                      },
+                      spec: {
+                        dimension: "opponent_name",
+                        measure: "matchups_count",
+                        sort: {
+                          mode: "desc"
+                        },
+                        limit: 15,
+                        extendable: true,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "players",
+                            columnsPreset: "opponentMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "team",
+          title: "Team",
+          localFilters: {
+            enabled: true,
+            controls: [
+              {
+                id: "mate",
+                type: "select",
+                label: "Mate",
+                dimension: "teammate_name",
+                default: "auto_top",
+                options: "auto_teammates",
+                required: true,
+                appliesTo: [
+                  "round"
+                ]
+              }
+            ],
+            buttons: {
+              reset: true
+            }
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_team",
+                title: "Team: You + {{local.mate}}",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_team_h2h",
+                      type: "leader_list",
+                      title: "Head-to-head questions",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 5
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Closer guesses",
+                            dimension: "team_closer_winner",
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Higher score rounds",
+                            dimension: "team_higher_score_winner",
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Fewer throws (<50)",
+                            dimension: "team_fewer_throw_winner",
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "More 5k rounds",
+                            dimension: "team_more_5k_winner",
+                            excludeKeys: [
+                              "Tie"
+                            ],
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_team_facts_round",
+                      type: "stat_list",
+                      title: "Team facts",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 5,
+                        w: 12,
+                        h: 5
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Games together",
+                            measure: "games_distinct_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Rounds together",
+                            measure: "rounds_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Time played together",
+                            measure: "time_played_seconds",
+                            secondaryMeasure: "rounds_with_time_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "First game together",
+                            measure: "first_played_at",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Most recent game together",
+                            measure: "last_played_at",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_team_session_records",
+                      type: "record_list",
+                      title: "Session records together",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 10,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        records: [
+                          {
+                            id: "longest_session_together",
+                            label: "Longest session together",
+                            metric: "session_games_count",
+                            groupBy: "session_start",
+                            extreme: "max",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: true
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_team_facts_sessions",
+                      type: "stat_list",
+                      title: "Session stats together",
+                      grain: "session",
+                      placement: {
+                        x: 0,
+                        y: 14,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Sessions detected (gap > session standard)",
+                            measure: "sessions_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "sessions",
+                                columnsPreset: "sessionMode",
+                                filterFromPoint: false
+                              }
+                            }
+                          },
+                          {
+                            label: "Longest break between sessions",
+                            measure: "sessions_longest_break_seconds"
+                          },
+                          {
+                            label: "Avg games per session",
+                            measure: "sessions_avg_games"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "country_insight",
+          title: "Country Insight",
+          localFilters: {
+            enabled: true,
+            controls: [
+              {
+                id: "spotlightCountry",
+                type: "select",
+                label: "Country",
+                dimension: "true_country",
+                presentation: "map",
+                map: {
+                  variant: "wide",
+                  height: 720,
+                  restrictToOptions: true,
+                  tintSelectable: true
+                },
+                default: "auto_top",
+                options: "auto_distinct",
+                required: true,
+                appliesTo: [
+                  "round"
+                ]
+              }
+            ],
+            buttons: {
+              reset: false
+            }
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_country_insight",
+                title: "Country Spotlight: {{local.spotlightCountry}}",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 18,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_country_insight_stats",
+                      type: "stat_list",
+                      title: "Country spotlight",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 6
+                      },
+                      spec: {
+                        rows: [
+                          {
+                            label: "Rounds",
+                            measure: "rounds_count",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Hit rate",
+                            measure: "hit_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg score",
+                            measure: "avg_score",
+                            secondaryMeasure: "score_median",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Avg distance",
+                            measure: "avg_distance_km",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode"
+                              }
+                            }
+                          },
+                          {
+                            label: "Perfect 5k in this country",
+                            measure: "fivek_count",
+                            secondaryMeasure: "fivek_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                extraFilters: [
+                                  {
+                                    dimension: "score_bucket",
+                                    op: "eq",
+                                    value: "5000"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            label: "Throws (<50) in this country",
+                            measure: "throw_count",
+                            secondaryMeasure: "throw_rate",
+                            actions: {
+                              click: {
+                                type: "drilldown",
+                                target: "rounds",
+                                columnsPreset: "roundMode",
+                                extraFilters: [
+                                  {
+                                    dimension: "is_throw",
+                                    op: "eq",
+                                    value: "true"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_confusions",
+                      type: "breakdown",
+                      title: "Top confusions (guessed country on misses)",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 6,
+                        w: 12,
+                        h: 4
+                      },
+                      spec: {
+                        dimension: "guess_country",
+                        measure: "rounds_count",
+                        filters: [
+                          {
+                            dimension: "is_hit",
+                            op: "eq",
+                            value: "false"
+                          }
+                        ],
+                        sort: {
+                          mode: "desc"
+                        },
+                        limit: 3,
+                        actions: {
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    },
+                    {
+                      widgetId: "w_country_insight_distribution",
+                      type: "chart",
+                      title: "Score distribution (smoothed)",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 10,
+                        w: 12,
+                        h: 8
+                      },
+                      spec: {
+                        type: "bar",
+                        limit: 200,
+                        x: {
+                          dimension: "score_bucket"
+                        },
+                        y: {
+                          measure: "rounds_count"
+                        },
+                        sort: {
+                          mode: "chronological"
+                        },
+                        actions: {
+                          hover: true,
+                          click: {
+                            type: "drilldown",
+                            target: "rounds",
+                            columnsPreset: "roundMode",
+                            filterFromPoint: true
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          id: "admin",
+          title: "Regions",
+          localFilters: {
+            enabled: true,
+            controls: [
+              {
+                id: "adminCountry",
+                type: "select",
+                label: "Country",
+                dimension: "true_country",
+                default: "auto_top",
+                options: "auto_distinct",
+                required: true,
+                appliesTo: [
+                  "round"
+                ]
+              }
+            ],
+            buttons: {
+              reset: true
+            }
+          },
+          layout: {
+            mode: "grid",
+            columns: 12,
+            cards: [
+              {
+                cardId: "card_admin",
+                title: "Regions: {{local.adminCountry}}",
+                x: 0,
+                y: 0,
+                w: 12,
+                h: 22,
+                card: {
+                  type: "composite",
+                  children: [
+                    {
+                      widgetId: "w_admin_analysis",
+                      type: "admin_analysis",
+                      title: "Regions",
+                      grain: "round",
+                      placement: {
+                        x: 0,
+                        y: 0,
+                        w: 12,
+                        h: 18
+                      },
+                      spec: {
+                        description: "Load province/state/county boundaries on-demand to compute regional accuracy. Nothing is saved into your database."
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  };
+
+  // src/ui/semanticDashboardCss.ts
+  function injectSemanticDashboardCssOnce(doc) {
+    const id = "geoanalyzr-semantic-dashboard-css";
+    if (doc.getElementById(id)) return;
+    const style = doc.createElement("style");
+    style.id = id;
+    style.textContent = `
+    html.ga-semantic-page, body.ga-semantic-page {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      background: var(--ga-bg);
+      color: var(--ga-text);
+    }
+    /* Scrollbars (Chromium + Firefox) */
+    .ga-root, .ga-root * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 55%, transparent) transparent;
+    }
+    .ga-root ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    .ga-root ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .ga-root ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    .ga-root ::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 40%, transparent);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    .ga-root ::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--ga-text, #f3f4ff) 35%, transparent);
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    .ga-root {
+      --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      --ga-topbar-h: 0px;
+      --ga-filters-h: 0px;
+      --ga-bg: #0f1115;
+      --ga-surface: #15181e;
+      --ga-surface-2: #171b22;
+      --ga-card: #12161d;
+      --ga-card-2: #10141b;
+      --ga-text: #d7deea;
+      --ga-text-muted: #9aa5b6;
+      --ga-border: #2b3340;
+      --ga-control-bg: #161b23;
+      --ga-control-text: #d7deea;
+      --ga-control-border: #3a4352;
+      --ga-axis-color: #7f8ca2;
+      --ga-axis-grid: #3c4555;
+      --ga-axis-text: #c7d2e4;
+      --ga-graph-color: #7eb6ff;
+      --ga-accent: #7950E5;
+      --ga-accent2: #00A2FE;
+      --ga-good: #97E851;
+      --ga-warn: #FECD19;
+      --ga-danger: #ff6b6b;
+      --ga-link: var(--ga-accent2);
+      --ga-overlay-bg: rgba(0,0,0,0.62);
+      --ga-focus-ring: color-mix(in srgb, var(--ga-accent2) 55%, transparent);
+      --ga-map-border: rgba(255,255,255,0.10);
+      --ga-map-toolbar-bg: rgba(20,20,32,0.78);
+      --ga-map-toolbar-border: rgba(255,255,255,0.16);
+      --ga-map-hint: rgba(243,244,255,0.66);
+      --ga-map-fill: rgba(255,255,255,0.03);
+      --ga-map-stroke: rgba(255,255,255,0.16);
+      --ga-map-selectable-fill: rgba(0, 162, 254, 0.11);
+      --ga-map-selectable-hover: rgba(0, 162, 254, 0.20);
+      --ga-map-disabled-fill: rgba(255,255,255,0.02);
+      --ga-map-disabled-stroke: rgba(255,255,255,0.08);
+      --ga-map-active-fill: rgba(254,205,25,0.40);
+      --ga-map-active-stroke: rgba(254,205,25,0.72);
+      --ga-map-bg:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
+        rgba(22,22,38,0.60);
+      min-height: 100vh;
+      background: var(--ga-bg);
+      color: var(--ga-text);
+      font-family: var(--ga-font);
+    }
+    .ga-root[data-ga-theme="light"] {
+      --ga-bg: #f4f7fc;
+      --ga-surface: #ffffff;
+      --ga-surface-2: #f9fbff;
+      --ga-card: #ffffff;
+      --ga-card-2: #f8fbff;
+      --ga-text: #1f2a38;
+      --ga-text-muted: #4b5d74;
+      --ga-border: #c8d5e6;
+      --ga-control-bg: #ffffff;
+      --ga-control-text: #1f2a38;
+      --ga-control-border: #b7c7dd;
+      --ga-axis-color: #51647e;
+      --ga-axis-grid: #c2cfdf;
+      --ga-axis-text: #2b3d56;
+      --ga-link: #563B9A;
+      --ga-overlay-bg: rgba(10,12,18,0.35);
+      --ga-focus-ring: color-mix(in srgb, var(--ga-accent) 55%, transparent);
+      --ga-map-border: rgba(0,0,0,0.12);
+      --ga-map-toolbar-bg: rgba(255,255,255,0.86);
+      --ga-map-toolbar-border: rgba(0,0,0,0.12);
+      --ga-map-hint: rgba(31,42,56,0.68);
+      --ga-map-fill: rgba(31,42,56,0.05);
+      --ga-map-stroke: rgba(31,42,56,0.18);
+      --ga-map-selectable-fill: rgba(0, 162, 254, 0.16);
+      --ga-map-selectable-hover: rgba(0, 162, 254, 0.24);
+      --ga-map-disabled-fill: rgba(31,42,56,0.03);
+      --ga-map-disabled-stroke: rgba(31,42,56,0.10);
+      --ga-map-active-fill: rgba(121, 80, 229, 0.34);
+      --ga-map-active-stroke: rgba(121, 80, 229, 0.74);
+      --ga-map-bg:
+        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.10), transparent 60%),
+        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.10), transparent 62%),
+        rgba(255,255,255,0.92);
+    }
+    .ga-root[data-ga-theme="geoguessr"] {
+      --ga-font: "Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      --ga-bg:
+        radial-gradient(1200px 720px at 18% -12%, rgba(58, 232, 189, 0.18), transparent 62%),
+        radial-gradient(980px 560px at 86% -6%, rgba(0, 162, 254, 0.18), transparent 60%),
+        radial-gradient(1200px 860px at 50% 112%, rgba(121, 80, 229, 0.24), transparent 56%),
+        linear-gradient(180deg, #10101C 0%, #1A1A2E 100%);
+      --ga-surface: rgba(22, 22, 38, 0.72);
+      --ga-surface-2: rgba(26, 26, 46, 0.78);
+      --ga-card: rgba(22, 22, 38, 0.62);
+      --ga-card-2: rgba(18, 18, 32, 0.56);
+      --ga-text: rgba(243, 244, 255, 0.92);
+      --ga-text-muted: rgba(208, 214, 238, 0.68);
+      --ga-border: rgba(255,255,255,0.12);
+      --ga-control-bg: rgba(16, 16, 28, 0.45);
+      --ga-control-text: rgba(243, 244, 255, 0.92);
+      --ga-control-border: rgba(255,255,255,0.14);
+      --ga-axis-color: rgba(220, 226, 250, 0.50);
+      --ga-axis-grid: rgba(255,255,255,0.10);
+      --ga-axis-text: rgba(233, 236, 255, 0.78);
+      --ga-accent: #7950E5;
+      --ga-accent2: #00A2FE;
+      --ga-good: #3AE8BD;
+      --ga-warn: #FECD19;
+      --ga-danger: #ff6b6b;
+      --ga-link: #3AE8BD;
+      --ga-overlay-bg: rgba(6, 6, 14, 0.72);
+      --ga-focus-ring: color-mix(in srgb, #00A2FE 55%, transparent);
+      --ga-graph-color: var(--ga-good);
+    }
+    .ga-topbar {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 14px;
+      border-bottom:1px solid var(--ga-border);
+      background: var(--ga-surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .ga-title { font-weight: 700; display:flex; align-items:center; gap:10px; }
+    .ga-title-logo svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.28)); }
+    .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
+    .ga-close, .ga-gear {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color:var(--ga-control-text);
+      border-radius:10px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-root button:focus-visible,
+    .ga-root select:focus-visible,
+    .ga-root input:focus-visible,
+    .ga-root textarea:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--ga-focus-ring);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-topbar {
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 34px rgba(0,0,0,0.20);
+    }
+    .ga-body { padding: 8px 12px 16px; }
+
+    .ga-filters-host {
+      position: sticky;
+      top: var(--ga-topbar-h);
+      z-index: 9;
+      background: var(--ga-bg);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-filters-host {
+      background: linear-gradient(180deg, rgba(16, 16, 28, 0.68) 0%, rgba(16, 16, 28, 0.28) 100%);
+      backdrop-filter: blur(14px);
+    }
+    .ga-filters {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px 6px;
+      flex-wrap:wrap;
+    }
+    .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; flex: 1 1 auto; min-width: 0; }
+    .ga-filters-right { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
+    .ga-filter {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      padding:8px 10px;
+      background: var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      min-width: 200px;
+    }
+    .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-filter-row { display:flex; gap:8px; align-items:center; }
+    .ga-filter select, .ga-filter input[type="date"] {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:6px 8px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .ga-filter select { width: 100%; min-width: 0; }
+
+    .ga-filter.ga-filter-map { min-width: 340px; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; width: 100%; min-width: 520px; }
+    .ga-filter-map-selected {
+      font-size: 12px;
+      color: var(--ga-text-muted);
+      margin-bottom: 2px;
+    }
+    .ga-filter-map-host { width: 340px; max-width: 100%; }
+    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-filter-map-host { width: 100%; }
+    .ga-country-map {
+      height: var(--ga-country-map-h, 240px);
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--ga-map-border);
+      background: var(--ga-map-bg);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .ga-loading {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      height:100%;
+      min-height: 44px;
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--ga-card) 70%, transparent);
+      border: 1px dashed color-mix(in srgb, var(--ga-border) 75%, transparent);
+      color: var(--ga-text-muted);
+      font-size: 13px;
+    }
+    .ga-spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--ga-text-muted) 30%, transparent);
+      border-top-color: color-mix(in srgb, var(--ga-accent2) 75%, transparent);
+      animation: ga-spin 0.9s linear infinite;
+      flex: 0 0 auto;
+    }
+    .ga-loading-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 10%, rgba(0,0,0,0.10), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.55));
+      backdrop-filter: blur(8px);
+    }
+    .ga-loading-screen-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 16px 16px 14px 16px;
+      border-radius: 16px;
+      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 70%, transparent);
+      background: color-mix(in srgb, var(--ga-surface, rgba(22,22,38,0.80)) 86%, rgba(0,0,0,0.65));
+      color: var(--ga-text, #f3f4ff);
+      box-shadow: 0 10px 35px rgba(0,0,0,0.35);
+      width: min(560px, calc(100vw - 28px));
+    }
+    .ga-loading-top {
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+    .ga-loading-screen-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 220px;
+    }
+    .ga-loading-screen-title {
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: 0.25px;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+    }
+    .ga-loading-screen-subtitle {
+      font-size: 13px;
+      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 88%, var(--ga-text-muted, rgba(208,214,238,0.75)));
+      text-shadow: 0 1px 0 rgba(0,0,0,0.35);
+    }
+    .ga-loading-progress {
+      display:flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .ga-loading-progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-control-bg, rgba(16,16,28,0.55)) 88%, rgba(0,0,0,0.45));
+      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 78%, transparent);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .ga-loading-progress-bar {
+      height: 100%;
+      width: 25%;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--ga-accent2) 85%, #fff), color-mix(in srgb, var(--ga-warn) 70%, var(--ga-accent2)));
+      border-radius: 999px;
+      transition: width 120ms linear, opacity 120ms linear;
+    }
+    .ga-loading-progress-text {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.35;
+      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 90%, var(--ga-text-muted, rgba(208,214,238,0.75)));
+      white-space: pre-wrap;
+    }
+    .ga-loading-console {
+      margin: 0;
+      padding: 10px 12px;
+      max-height: 160px;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 80%, transparent);
+      background: color-mix(in srgb, var(--ga-control-bg, rgba(16,16,28,0.55)) 84%, rgba(0,0,0,0.55));
+      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 92%, #fff);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11.5px;
+      line-height: 1.35;
+      white-space: pre;
+    }
+    @keyframes ga-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    /* Wide map: keep correct world aspect by default; cap via dashboard.json map.height (max-height). */
+    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-country-map {
+      height: auto;
+      aspect-ratio: 2 / 1;
+      max-height: var(--ga-country-map-h, 720px);
+      min-height: 320px;
+    }
+    .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
+    .ga-country-map-toolbar { display:flex; gap:8px; align-items:center; }
+    .ga-country-map-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      border: 1px solid var(--ga-map-toolbar-border);
+      background: var(--ga-map-toolbar-bg);
+      color: var(--ga-control-text);
+      cursor: pointer;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .ga-country-map-btn:hover { background: color-mix(in srgb, var(--ga-map-toolbar-bg) 78%, #000); }
+    .ga-country-map-hint { font-size: 11px; color: var(--ga-map-hint); }
+    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; touch-action: none; display:block; }
+    .ga-country-shape {
+      fill: var(--ga-map-fill);
+      stroke: var(--ga-map-stroke);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      cursor: grab;
+      transition: fill 120ms ease, stroke 120ms ease;
+    }
+    .ga-country-shape.selectable { fill: var(--ga-map-selectable-fill); stroke: var(--ga-map-stroke); cursor: pointer; }
+    .ga-country-shape.disabled { fill: var(--ga-map-disabled-fill); stroke: var(--ga-map-disabled-stroke); opacity: 0.45; pointer-events: none; }
+    .ga-country-shape.selectable.hover { fill: var(--ga-map-selectable-hover); }
+    .ga-country-shape.active {
+      fill: var(--ga-map-active-fill);
+      stroke: var(--ga-map-active-stroke);
+      stroke-width: 2;
+    }
+    .ga-point-dot {
+      stroke: rgba(0,0,0,0.55);
+      stroke-width: 1;
+      vector-effect: non-scaling-stroke;
+      cursor: pointer;
+      transition: filter 120ms ease, r 120ms ease;
+    }
+    .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
+    .ga-filter-btn {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:10px;
+      padding:7px 10px;
+      cursor:pointer;
+      font-size:12px;
+      height: 34px;
+    }
+    .ga-tabs {
+      display:flex;
+      gap:8px;
+      padding:10px;
+      position: sticky;
+      top: calc(var(--ga-topbar-h) + var(--ga-filters-h));
+      z-index: 8;
+      background: var(--ga-bg);
+    }
+    .ga-tab {
+      background:var(--ga-control-bg);
+      color:var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      padding:6px 10px;
+      border-radius:10px;
+      cursor:pointer;
+    }
+    .ga-tab.active { background: var(--ga-surface-2); }
+    .ga-content { padding:10px; }
+    .ga-card {
+      background: var(--ga-card);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-card {
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 54px rgba(0,0,0,0.18);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-close,
+    .ga-root[data-ga-theme="geoguessr"] .ga-gear,
+    .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn,
+    .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button,
+    .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle {
+      background: linear-gradient(180deg, rgba(121, 80, 229, 0.38) 0%, rgba(86, 59, 154, 0.26) 100%);
+      border-color: rgba(255,255,255,0.16);
+      box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-weight: 650;
+      letter-spacing: 0.15px;
+      transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-close:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-gear:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button:hover,
+    .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle:hover {
+      filter: brightness(1.06);
+      box-shadow: 0 16px 38px rgba(0,0,0,0.28);
+      transform: translateY(-1px);
+    }
+
+    /* GeoGuessr-like section tabs (top navigation vibe) */
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs {
+      padding: 6px 10px;
+      gap: 12px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(16, 16, 28, 0.42) 0%, rgba(16, 16, 28, 0.18) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.20);
+      backdrop-filter: blur(14px);
+      overflow-x: auto;
+      scrollbar-width: none;
+      width: fit-content;
+      max-width: 100%;
+      margin: 4px 10px 0;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs::-webkit-scrollbar { display: none; }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab {
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      border-radius: 10px;
+      padding: 8px 4px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+      color: rgba(243,244,255,0.70);
+      transition: color 160ms ease, background 160ms ease;
+    }
+
+    .ga-team-local-filters, .ga-country-local-filters {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+      margin: 6px 0 10px;
+    }
+    .ga-team-local-filters .ga-filter, .ga-country-local-filters .ga-filter { min-width: 240px; }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
+      background: rgba(255,255,255,0.04);
+      color: rgba(255,255,255,0.88);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab.active {
+      background: transparent;
+      color: rgba(255,255,255,0.96);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab.active::after {
+      content: "";
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      bottom: 2px;
+      height: 2px;
+      border-radius: 999px;
+      background: rgba(254, 205, 25, 0.95);
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.32));
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab { position: relative; }
+
+    /* GeoGuessr-like drilldown styling */
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-panel {
+      border-radius: 18px;
+      background:
+        radial-gradient(900px 520px at 18% 0%, rgba(121, 80, 229, 0.22), transparent 58%),
+        radial-gradient(900px 520px at 86% 0%, rgba(0, 162, 254, 0.16), transparent 60%),
+        color-mix(in srgb, var(--ga-surface) 88%, transparent);
+      border-color: rgba(255,255,255,0.14);
+      box-shadow: 0 28px 90px rgba(0,0,0,0.48);
+      overflow: auto;
+      overscroll-behavior: contain;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-header {
+      background: linear-gradient(180deg, rgba(22,22,38,0.82) 0%, rgba(22,22,38,0.58) 100%);
+      border-bottom-color: rgba(255,255,255,0.10);
+      backdrop-filter: blur(14px);
+      padding: 12px 14px;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-title {
+      font-size: 13px;
+      font-weight: 750;
+      letter-spacing: 0.3px;
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close {
+      border-radius: 999px;
+      width: 34px;
+      height: 34px;
+      background: rgba(16, 16, 28, 0.45);
+      border-color: rgba(255,255,255,0.16);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.32);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table thead th {
+      background: rgba(16,16,28,0.42);
+      border-bottom-color: rgba(255,255,255,0.10);
+      color: rgba(243,244,255,0.72);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table th,
+    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table td {
+      border-bottom-color: rgba(255,255,255,0.08);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-dd-tr:hover td {
+      background: rgba(121, 80, 229, 0.10);
+    }
+    .ga-root[data-ga-theme="geoguessr"] .ga-dd-th.ga-dd-sortable:hover {
+      background: rgba(58, 232, 189, 0.08);
+    }
+    .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
+    .ga-card-body { padding:12px; }
+    .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }
+    .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
+    .ga-statlist-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-recordlist-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-statrow {
+      display:flex;
+      justify-content:space-between;
+      padding:6px 2px;
+      border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
+    }
+    .ga-statrow:last-child { border-bottom:none; }
+    .ga-chart-box {
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+      color: var(--ga-text);
+      width: 100%;
+      overflow: hidden;
+    }
+    .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
+    .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-chart-actions { display:flex; gap:8px; align-items:center; }
+    .ga-chart-actions button {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:8px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .ga-chart-host { width:100%; }
+    .ga-chart-svg { width:100%; max-width:100%; display:block; overflow: visible; }
+    .ga-chart-bar { transform-box: view-box; }
+
+    /* Hover emphasis (only when animations are enabled). */
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar,
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot {
+      transition: opacity 140ms ease, filter 140ms ease, stroke-width 140ms ease;
+    }
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar:hover {
+      opacity: 0.95;
+      filter: brightness(1.18);
+      stroke: rgba(255,255,255,0.55);
+      stroke-width: 1.25px;
+    }
+    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot:hover {
+      opacity: 1;
+      filter: brightness(1.25);
+      stroke: rgba(255,255,255,0.70);
+      stroke-width: 2px;
+      paint-order: stroke fill;
+    }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
+      transform: scaleY(0);
+      opacity: 0.25;
+    }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-path {
+      stroke-dashoffset: var(--ga-line-length);
+      opacity: 0.65;
+    }
+    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-dot {
+      transform: scale(0);
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-bar {
+      transform: none !important;
+      opacity: 0.72 !important;
+      animation: none !important;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-path {
+      stroke-dasharray: none !important;
+      stroke-dashoffset: 0 !important;
+      animation: none !important;
+      opacity: 0.9 !important;
+    }
+    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-dot {
+      transform: none !important;
+      animation: none !important;
+      opacity: 0.95 !important;
+    }
+    @keyframes ga-bar-rise {
+      from { transform: scaleY(0); opacity: 0.25; }
+      to { transform: scaleY(1); opacity: 0.72; }
+    }
+    @keyframes ga-line-draw {
+      from { stroke-dashoffset: var(--ga-line-length); opacity: 0.65; }
+      to { stroke-dashoffset: 0; opacity: 0.9; }
+    }
+    @keyframes ga-dot-in {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 0.95; }
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-bar {
+      animation: ga-bar-rise 420ms ease-out both;
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-path {
+      animation: ga-line-draw 520ms ease-out both;
+    }
+    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-dot {
+      animation: ga-dot-in 220ms ease-out both;
+      animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
+    }
+    .ga-breakdown-box {
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background: var(--ga-card-2);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-breakdown-header {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:flex-end;
+      margin: 2px 0 8px 0;
+      font-size: 11px;
+      letter-spacing: 0.15px;
+      color: color-mix(in srgb, var(--ga-text) 78%, transparent);
+    }
+    .ga-breakdown-header-left {
+      flex: 0 0 var(--ga-breakdown-label-w);
+      max-width: var(--ga-breakdown-label-w);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-weight: 650;
+    }
+    .ga-breakdown-header-right { flex:1; text-align:right; font-weight: 650; }
+    .ga-breakdown-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-breakdown-ctl-label { opacity: 0.9; font-weight: 650; }
+    .ga-breakdown-ctl-select {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:3px 8px;
+      font-size:12px;
+      max-width: min(360px, 62vw);
+    }
+
+    /* Range sliders (e.g. Coordinates score range) */
+    .ga-range-filter input[type="range"] { accent-color: var(--ga-accent2); }
+    .ga-range-filter input[type="range"] { appearance: none; background: transparent; height: 18px; }
+    .ga-range-filter input[type="range"]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      margin-top: -5px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]::-moz-range-track {
+      height: 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-range-filter input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: var(--ga-accent2);
+      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      cursor: pointer;
+    }
+    .ga-range-filter input[type="range"]:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ga-focus-ring); border-radius: 12px; }
+    .ga-breakdown { --ga-breakdown-label-w: clamp(120px, 20%, 260px); }
+    .ga-breakdown-row { display:flex; gap:8px; align-items:center; justify-content:flex-start; }
+    .ga-breakdown-label {
+      flex: 0 0 var(--ga-breakdown-label-w);
+      max-width: var(--ga-breakdown-label-w);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .ga-breakdown-right { flex:1; min-width:0; display:flex; align-items:center; gap:10px; }
+    .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
+    .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
+    .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
+    .ga-breakdown-footer { display:flex; justify-content:flex-end; margin-top: 10px; }
+    .ga-breakdown-toggle {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:8px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:12px;
+    }
+    .ga-breakdown-toggle:hover { filter: brightness(1.02); }
+
+    .ga-country-map-legend {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size: 12px;
+      color: var(--ga-text-muted);
+      margin: 2px 2px 6px;
+    }
+    .ga-country-map-legend-min, .ga-country-map-legend-max { font-variant-numeric: tabular-nums; min-width: 70px; }
+    .ga-country-map-legend-bar {
+      flex: 1;
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid var(--ga-border);
+      background: linear-gradient(90deg, rgba(96,140,214,0.25), rgba(18,64,128,0.95));
+    }
+    .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
+    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
+    .ga-drilldown-panel {
+      position:absolute;
+      top:6%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(1260px, 96vw);
+      max-height:88vh;
+      overflow:auto;
+      background:var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      color: var(--ga-text);
+    }
+    .ga-drilldown-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid var(--ga-border);
+      background: var(--ga-surface);
+      backdrop-filter: blur(8px);
+    }
+    .ga-drilldown-title {
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+    .ga-drilldown-close {
+      background: var(--ga-control-bg);
+      border:1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius:10px;
+      width: 30px;
+      height: 30px;
+      padding:0;
+      cursor:pointer;
+    }
+    .ga-drilldown-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
+    .ga-drilldown-table th, .ga-drilldown-table td {
+      padding:8px 10px;
+      border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
+      text-align:left;
+    }
+    .ga-drilldown-table td { color: var(--ga-text); }
+    .ga-drilldown-table thead th {
+      position: sticky;
+      top: 52px;
+      z-index: 4;
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--ga-text) 14%, transparent);
+      font-weight: 600;
+      color: color-mix(in srgb, var(--ga-text) 85%, transparent);
+    }
+    .ga-dd-th.ga-dd-sortable { cursor: pointer; user-select: none; }
+    .ga-dd-th.ga-dd-sortable:hover { background: color-mix(in srgb, var(--ga-text) 6%, transparent); }
+    .ga-dd-tr:hover td { background: color-mix(in srgb, var(--ga-text) 5%, transparent); }
+    .ga-dd-tr.ga-dd-no-sep td { border-bottom-color: transparent; }
+    .ga-dd-link {
+      color: var(--ga-link);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .ga-dd-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-wrap: anywhere;
+    }
+    .ga-dd-pos { color: var(--ga-good); font-variant-numeric: tabular-nums; }
+    .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }
+    .ga-settings-panel {
+      position:absolute;
+      top:6%;
+      left:50%;
+      transform:translateX(-50%);
+      width:min(1260px, 96vw);
+      max-height:90vh;
+      overflow:auto;
+      background: var(--ga-surface);
+      border:1px solid var(--ga-border);
+      border-radius:14px;
+      box-shadow: 0 28px 90px rgba(0,0,0,0.55);
+    }
+    .ga-settings-header {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px 12px;
+      border-bottom:1px solid var(--ga-border);
+    }
+    .ga-settings-body { padding: 14px; }
+    .ga-settings-tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .ga-settings-tab {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:6px 10px;
+      cursor:pointer;
+    }
+    .ga-settings-tab.active { background: var(--ga-surface-2); }
+    .ga-settings-pane { display:none; }
+    .ga-settings-pane.active { display:block; }
+    .ga-settings-grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .ga-settings-field { display:flex; flex-direction:column; gap:6px; }
+    .ga-settings-field label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-settings-field input, .ga-settings-field select, .ga-settings-field textarea {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:8px;
+      font: inherit;
+    }
+    .ga-settings-field textarea {
+      min-height: 340px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre;
+    }
+    .ga-settings-note { font-size:12px; color: var(--ga-text-muted); }
+    .ga-settings-status { margin-top: 8px; font-size:12px; }
+    .ga-settings-status.error { color: #ff8f8f; }
+    .ga-settings-status.ok { color: #8fe3a1; }
+    .ga-settings-actions { display:flex; gap:8px; margin-top: 8px; flex-wrap:wrap; }
+
+    /* Layout editor (Settings -> Layout) */
+    .ga-layout-editor-wrap { display:flex; flex-direction:column; gap:10px; }
+    .ga-le-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+    .ga-le-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .ga-le-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color: var(--ga-text-muted); user-select:none; }
+    .ga-le-toggle input { width: 16px; height: 16px; }
+    .ga-le-head {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 10px 0;
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
+    }
+    .ga-layout-editor { display:block; padding-top: 10px; }
+    .ga-le-left, .ga-le-right { min-width: 0; }
+    .ga-le-left-head { display:flex; gap:8px; margin-bottom:10px; }
+    .ga-le-list { display:flex; flex-direction:column; gap:6px; }
+    .ga-le-list-item {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 650;
+      opacity: 0.9;
+    }
+    .ga-le-list-item.active { background: var(--ga-surface-2); opacity: 1; }
+    .ga-le-toprow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+    .ga-le-btn {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      height: 32px;
+    }
+    .ga-le-btn-icon {
+      width: 32px;
+      min-width: 32px;
+      padding: 0;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .ga-le-btn-primary { border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
+    .ga-le-btn-danger { border-color: color-mix(in srgb, var(--ga-danger) 60%, var(--ga-control-border)); }
+    .ga-le-field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+    .ga-le-field label { font-size:12px; color: var(--ga-text-muted); }
+    .ga-le-inputhost { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .ga-le-field input, .ga-le-field select, .ga-le-inline-select {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      min-width: 220px;
+    }
+    .ga-le-field textarea {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:8px;
+      font: inherit;
+      font-size: 12px;
+      min-height: 200px;
+      resize: vertical;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      white-space: pre;
+      line-height: 1.35;
+    }
+    .ga-le-field select[multiple] { min-width: 260px; padding: 6px; }
+    .ga-le-hr { border:0; height:1px; background: var(--ga-border); margin: 12px 0; opacity: 0.9; }
+    .ga-le-box { background: var(--ga-card-2); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-bottom:10px; }
+    .ga-le-box-head { font-weight: 750; font-size: 12px; color: var(--ga-text); margin-bottom: 8px; }
+    .ga-le-item { background: color-mix(in srgb, var(--ga-card) 65%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-compact-row {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      background: color-mix(in srgb, var(--ga-card) 65%, transparent);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:8px 10px;
+      margin-top:8px;
+    }
+    .ga-le-compact-row.dragover { outline: 2px solid color-mix(in srgb, var(--ga-accent2) 55%, transparent); }
+    .ga-le-drag {
+      width: 18px;
+      min-width: 18px;
+      opacity: 0.8;
+      cursor: grab;
+      user-select:none;
+      text-align:center;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+    .ga-le-compact-title { font-weight: 750; font-size: 12px; color: var(--ga-text); flex: 1 1 auto; min-width: 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ga-le-compact-meta { font-size: 11px; color: var(--ga-text-muted); opacity: 0.9; flex: 0 0 auto; }
+    .ga-le-compact-actions { display:flex; gap:8px; align-items:center; flex: 0 0 auto; }
+    .ga-le-compact-row-col { justify-content:flex-start; }
+    .ga-le-col-key { min-width: 160px; width: 160px; }
+    .ga-le-col-label { min-width: 220px; width: min(420px, 42vw); }
+    .ga-le-compact-chk { display:flex; align-items:center; gap:6px; font-size:11px; color: var(--ga-text-muted); user-select:none; }
+    .ga-le-compact-chk input { width: 14px; height: 14px; }
+    .ga-le-grid4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px; }
+    @media (max-width: 820px) { .ga-le-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .ga-le-subbox { background: color-mix(in srgb, var(--ga-card) 55%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-subhead { font-weight: 700; font-size: 12px; color: var(--ga-text-muted); margin-bottom: 8px; }
+    .ga-le-widget { background: color-mix(in srgb, var(--ga-card-2) 65%, transparent); border:1px dashed var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
+    .ga-le-details { border:1px solid var(--ga-border); border-radius:12px; padding:0; margin-top:10px; background: color-mix(in srgb, var(--ga-card-2) 60%, transparent); }
+    .ga-le-details > summary {
+      cursor:pointer;
+      padding:10px 12px;
+      font-weight: 750;
+      font-size: 12px;
+      color: var(--ga-text);
+      user-select:none;
+      list-style: none;
+    }
+    .ga-le-details[open] > summary { border-bottom: 1px solid var(--ga-border); }
+    .ga-le-details > summary::-webkit-details-marker { display:none; }
+    .ga-le-details > .ga-le-item { margin-top: 0; border: 0; border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; }
+    .ga-le-adv { margin-top: 10px; }
+    .ga-le-adv > summary { cursor:pointer; user-select:none; font-weight: 700; font-size:12px; color: var(--ga-text-muted); list-style:none; }
+    .ga-le-adv > summary::-webkit-details-marker { display:none; }
+    .ga-le-panels { display:flex; flex-direction:column; gap:12px; }
+    .ga-le-inline-input {
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      min-width: 220px;
+      height: 32px;
+    }
+
+    /* Section editor modal */
+    .ga-le-modal { position: fixed; inset: 0; z-index: 99999999; }
+    .ga-le-modal-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
+    .ga-le-modal-panel {
+      position:absolute;
+      top: 6%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(1200px, 96vw);
+      max-height: 88vh;
+      overflow: auto;
+      background: var(--ga-surface);
+      border: 1px solid var(--ga-border);
+      border-radius: 14px;
+      box-shadow: 0 28px 90px rgba(0,0,0,0.55);
+      color: var(--ga-text);
+    }
+    .ga-le-modal-header {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--ga-border);
+      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
+      backdrop-filter: blur(10px);
+    }
+    .ga-le-modal-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
+    .ga-le-modal-body { padding: 12px; }
+    .ga-le-cards-layout { display:grid; grid-template-columns: minmax(220px, 320px) 1fr; gap:12px; align-items:start; }
+    @media (max-width: 980px) { .ga-le-cards-layout { grid-template-columns: 1fr; } }
+    .ga-le-outline {
+      position: sticky;
+      top: 86px;
+      background: color-mix(in srgb, var(--ga-card) 55%, transparent);
+      border:1px solid var(--ga-border);
+      border-radius:12px;
+      padding:10px;
+    }
+    .ga-le-outline-head { font-weight: 800; font-size: 12px; color: var(--ga-text); margin-bottom: 6px; }
+    .ga-le-outline-search {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      background: var(--ga-control-bg);
+      color: var(--ga-control-text);
+      border:1px solid var(--ga-control-border);
+      border-radius:8px;
+      padding:7px 8px;
+      font: inherit;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .ga-le-outline-list { display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height: 62vh; overflow:auto; padding-right: 4px; }
+    .ga-le-outline-item {
+      background: var(--ga-control-bg);
+      border: 1px solid var(--ga-control-border);
+      color: var(--ga-control-text);
+      border-radius: 10px;
+      padding: 7px 10px;
+      cursor: pointer;
+      text-align: left;
+      font-weight: 650;
+      opacity: 0.95;
+      font-size: 12px;
+    }
+    .ga-le-outline-item:hover { filter: brightness(1.03); }
+    .ga-le-outline-item.active { background: var(--ga-surface-2); border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
+    .ga-le-outline-item-widget { padding-left: 18px; font-weight: 600; opacity: 0.9; }
+    .ga-le-flash { outline: 2px solid color-mix(in srgb, var(--ga-accent2) 70%, transparent); outline-offset: 2px; }
+  `;
+    doc.head.appendChild(style);
+  }
+
+  // src/ui/settingsStore.ts
+  var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
+  var THEME_KEY = "geoanalyzr.theme";
+  var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
+  var DEFAULT_SETTINGS = {
+    appearance: {
+      theme: "geoguessr",
+      graphColor: "#7eb6ff",
+      chartAnimations: true
+    },
+    standards: {
+      dateFormat: "dd/mm/yyyy",
+      sessionGapMinutes: 45,
+      countryFormat: "iso2"
+    }
+  };
+  function cloneTemplate(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function normalizeColor(value, fallback) {
+    if (typeof value !== "string") return fallback;
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
+    return fallback;
+  }
+  function normalizeTheme(value) {
+    if (value === "geoguessr") return value;
+    if (value === "light" || value === "dark") return value;
+    return "geoguessr";
+  }
+  function normalizeBool(value, fallback) {
+    if (typeof value === "boolean") return value;
+    return fallback;
+  }
+  function normalizeDateFormat(value) {
+    return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
+  }
+  function normalizeCountryFormat(value) {
+    return value === "english" ? "english" : "iso2";
+  }
+  function normalizeSettings(raw) {
+    const r = typeof raw === "object" && raw ? raw : {};
+    const appearance = typeof r.appearance === "object" && r.appearance ? r.appearance : {};
+    const standards = typeof r.standards === "object" && r.standards ? r.standards : {};
+    const sessionGapRaw = Number(standards.sessionGapMinutes);
+    return {
+      appearance: {
+        theme: normalizeTheme(appearance.theme),
+        graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor),
+        chartAnimations: normalizeBool(appearance.chartAnimations, DEFAULT_SETTINGS.appearance.chartAnimations)
+      },
+      standards: {
+        dateFormat: normalizeDateFormat(standards.dateFormat),
+        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes,
+        countryFormat: normalizeCountryFormat(standards.countryFormat)
+      }
+    };
+  }
+  function getStorage(doc) {
+    try {
+      return doc.defaultView?.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function getSystemPreferredTheme(doc) {
+    try {
+      const w = doc.defaultView;
+      if (!w || typeof w.matchMedia !== "function") return DEFAULT_SETTINGS.appearance.theme;
+      if (w.matchMedia("(prefers-color-scheme: light)").matches) return "light";
+      return "geoguessr";
+    } catch {
+      return DEFAULT_SETTINGS.appearance.theme;
+    }
+  }
+  function loadSettings(doc) {
+    const storage = getStorage(doc);
+    if (!storage) {
+      const s = cloneTemplate(DEFAULT_SETTINGS);
+      s.appearance.theme = getSystemPreferredTheme(doc);
+      return s;
+    }
+    try {
+      const themeOverrideRaw = storage.getItem(THEME_KEY);
+      const raw = storage.getItem(SETTINGS_KEY);
+      if (!raw) {
+        const s2 = cloneTemplate(DEFAULT_SETTINGS);
+        s2.appearance.theme = themeOverrideRaw ? normalizeTheme(themeOverrideRaw) : getSystemPreferredTheme(doc);
+        return s2;
+      }
+      const s = normalizeSettings(JSON.parse(raw));
+      if (themeOverrideRaw) s.appearance.theme = normalizeTheme(themeOverrideRaw);
+      return s;
+    } catch {
+      const s = cloneTemplate(DEFAULT_SETTINGS);
+      s.appearance.theme = getSystemPreferredTheme(doc);
+      return s;
+    }
+  }
+  function saveSettings(doc, settings) {
+    const storage = getStorage(doc);
+    if (!storage) return;
+    try {
+      storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      storage.setItem(THEME_KEY, settings.appearance.theme);
+    } catch {
+    }
+  }
+  function loadDashboardTemplate(doc, fallback) {
+    const storage = getStorage(doc);
+    if (!storage) return cloneTemplate(fallback);
+    try {
+      const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
+      if (!raw) return cloneTemplate(fallback);
+      const parsed = JSON.parse(raw);
+      const merged = {
+        ...cloneTemplate(fallback),
+        ...parsed,
+        dashboard: {
+          ...cloneTemplate(fallback).dashboard,
+          ...parsed.dashboard,
+          globalFilters: parsed.dashboard?.globalFilters ?? cloneTemplate(fallback).dashboard.globalFilters,
+          sections: Array.isArray(parsed.dashboard?.sections) ? parsed.dashboard.sections : cloneTemplate(fallback).dashboard.sections
+        }
+      };
+      return merged;
+    } catch {
+      return cloneTemplate(fallback);
+    }
+  }
+  function saveDashboardTemplate(doc, dashboard) {
+    const storage = getStorage(doc);
+    if (!storage) return;
+    try {
+      storage.setItem(DASHBOARD_TEMPLATE_KEY, JSON.stringify(dashboard, null, 2));
+    } catch {
+    }
+  }
+  function applySettingsToRoot(root, settings) {
+    root.dataset.gaTheme = settings.appearance.theme;
+    root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
+    root.dataset.gaDateFormat = settings.standards.dateFormat;
+    root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
+    root.dataset.gaCountryFormat = settings.standards.countryFormat;
+    root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
+  }
+
+  // src/engine/semanticMerge.ts
+  function cloneJson(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function getDrilldownPresetsOverrideFromDashboard(dashboard) {
+    const raw = dashboard?.dashboard?.drilldownPresets;
+    if (!raw || typeof raw !== "object") return {};
+    return raw;
+  }
+  function mergeSemanticWithDashboard(base, dashboard) {
+    const override = getDrilldownPresetsOverrideFromDashboard(dashboard);
+    const hasOverride = override && Object.keys(override).length > 0;
+    if (!hasOverride) return base;
+    const next = { ...base, drilldownPresets: { ...base.drilldownPresets } };
+    for (const [target, o] of Object.entries(override)) {
+      const baseTarget = next.drilldownPresets?.[target] ?? {};
+      const baseCols = { ...baseTarget.columnsPresets ?? {} };
+      const rawO = o && typeof o === "object" ? cloneJson(o) : {};
+      const oCols = rawO?.columnsPresets && typeof rawO.columnsPresets === "object" ? rawO.columnsPresets : {};
+      const mergedCols = { ...baseCols, ...cloneJson(oCols) };
+      try {
+        delete rawO.columnsPresets;
+      } catch {
+      }
+      next.drilldownPresets[target] = {
+        ...baseTarget,
+        ...rawO,
+        columnsPresets: mergedCols
+      };
+    }
+    return next;
+  }
+
+  // src/ui/layoutEditor.ts
+  function cloneJson2(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+  function safePrompt(doc, message, value) {
+    try {
+      const w = doc.defaultView;
+      const out = typeof w?.prompt === "function" ? w.prompt(message, value ?? "") : null;
+      return typeof out === "string" ? out : null;
+    } catch {
+      return null;
+    }
+  }
+  function asInt(value, fallback) {
+    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    return Number.isFinite(n) ? Math.round(n) : fallback;
+  }
+  function mkBtn(doc, label, onClick, kind = "ghost") {
+    const b = doc.createElement("button");
+    b.type = "button";
+    b.className = `ga-le-btn ga-le-btn-${kind}`;
+    b.textContent = label;
+    b.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.stopImmediatePropagation?.();
+      onClick();
+    });
+    return b;
+  }
+  function mkIconBtn(doc, label, onClick, kind = "ghost") {
+    const b = mkBtn(doc, label, onClick, kind);
+    b.classList.add("ga-le-btn-icon");
+    b.setAttribute("aria-label", label);
+    return b;
+  }
+  function mkField(doc, label) {
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-le-field";
+    const l = doc.createElement("label");
+    l.textContent = label;
+    wrap.appendChild(l);
+    const inputHost = doc.createElement("div");
+    inputHost.className = "ga-le-inputhost";
+    wrap.appendChild(inputHost);
+    return { wrap, inputHost };
+  }
+  function mkTextInput(doc, label, value, onChange) {
+    const f = mkField(doc, label);
+    const input = doc.createElement("input");
+    input.type = "text";
+    input.value = value ?? "";
+    input.addEventListener("change", () => onChange(input.value));
+    f.inputHost.appendChild(input);
+    return f.wrap;
+  }
+  function mkNumberInput(doc, label, value, onChange, opts) {
+    const f = mkField(doc, label);
+    const input = doc.createElement("input");
+    input.type = "number";
+    if (opts?.min !== void 0) input.min = String(opts.min);
+    if (opts?.max !== void 0) input.max = String(opts.max);
+    input.step = String(opts?.step ?? 1);
+    input.value = String(value);
+    input.addEventListener("change", () => onChange(asInt(input.value, value)));
+    f.inputHost.appendChild(input);
+    return f.wrap;
+  }
+  function mkSelect(doc, label, value, options, onChange) {
+    const f = mkField(doc, label);
+    const sel = doc.createElement("select");
+    for (const o of options) sel.appendChild(new Option(o.label, o.value));
+    if (options.some((o) => o.value === value)) sel.value = value;
+    sel.addEventListener("change", () => onChange(sel.value));
+    f.inputHost.appendChild(sel);
+    return f.wrap;
+  }
+  function mkMultiSelect(doc, label, values, options, onChange) {
+    const f = mkField(doc, label);
+    const sel = doc.createElement("select");
+    sel.multiple = true;
+    sel.size = Math.min(10, Math.max(3, options.length));
+    for (const o of options) {
+      const opt = new Option(o.label, o.value);
+      opt.selected = values.includes(o.value);
+      sel.appendChild(opt);
+    }
+    sel.addEventListener("change", () => onChange(Array.from(sel.selectedOptions).map((o) => o.value)));
+    f.inputHost.appendChild(sel);
+    return f.wrap;
+  }
+  function mkToggle(doc, label, checked, onChange) {
+    const f = mkField(doc, label);
+    const input = doc.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    input.addEventListener("change", () => onChange(input.checked));
+    f.inputHost.appendChild(input);
+    return f.wrap;
+  }
+  function mkHr(doc) {
+    const hr = doc.createElement("hr");
+    hr.className = "ga-le-hr";
+    return hr;
+  }
+  function allowedGrains(semantic) {
+    return Object.keys(semantic.datasets ?? {});
+  }
+  function allowedMeasureOptions(semantic, grain) {
+    const keys2 = Object.keys(semantic.measures ?? {});
+    const out = [];
+    for (const id of keys2) {
+      const m = semantic.measures[id];
+      if (m?.grain === grain) out.push({ value: id, label: `${id}${m?.label ? ` \u2014 ${m.label}` : ""}` });
+    }
+    out.sort((a, b) => a.value.localeCompare(b.value));
+    return out;
+  }
+  function allowedDimensionOptions(semantic, grain) {
+    const keys2 = Object.keys(semantic.dimensions ?? {});
+    const out = [];
+    for (const id of keys2) {
+      const d = semantic.dimensions[id];
+      const grains = Array.isArray(d?.grain) ? d.grain : [d?.grain];
+      if (grains.includes(grain)) out.push({ value: id, label: `${id}${d?.label ? ` \u2014 ${d.label}` : ""}` });
+    }
+    out.sort((a, b) => a.value.localeCompare(b.value));
+    return out;
+  }
+  function renderLayoutEditor(args) {
+    const { doc, semantic, onChange, statusEl } = args;
+    const mode = args.mode ?? "section_layout";
+    const win = doc.defaultView ?? window;
+    const safeConfirm = (msg) => {
+      try {
+        return typeof win.confirm === "function" ? win.confirm(msg) : true;
+      } catch {
+        return true;
+      }
+    };
+    const wrap = doc.createElement("div");
+    wrap.className = "ga-layout-editor-wrap";
+    const head = doc.createElement("div");
+    head.className = "ga-le-head";
+    const help = doc.createElement("div");
+    help.className = "ga-settings-note";
+    help.textContent = "Build your dashboard here (sections, cards, widgets, global filters). Tip: text fields apply on blur (click outside). Use Focus mode + the Outline to jump between cards/widgets without drowning in nested panels. Advanced JSON is optional - use it for drilldowns and other power features.";
+    const headActions = doc.createElement("div");
+    headActions.className = "ga-le-head-actions";
+    const autoWrap = doc.createElement("label");
+    autoWrap.className = "ga-le-toggle";
+    const auto = doc.createElement("input");
+    auto.type = "checkbox";
+    const autoTxt = doc.createElement("span");
+    autoTxt.textContent = "Auto-apply";
+    autoWrap.appendChild(auto);
+    autoWrap.appendChild(autoTxt);
+    const applyBtn = mkBtn(doc, "Apply changes", () => applyNow(), "primary");
+    const revertBtn = mkBtn(doc, "Revert", () => revertNow(), "ghost");
+    headActions.appendChild(autoWrap);
+    headActions.appendChild(applyBtn);
+    headActions.appendChild(revertBtn);
+    head.appendChild(help);
+    head.appendChild(headActions);
+    wrap.appendChild(head);
+    const root = doc.createElement("div");
+    root.className = "ga-layout-editor";
+    wrap.appendChild(root);
+    let applied = cloneJson2(args.dashboard);
+    let draft = cloneJson2(args.dashboard);
+    let dirty = false;
+    let autoApply = false;
+    let editSectionIdx = null;
+    let newPresetIdByTarget = {};
+    let active = { kind: "section", idx: 0 };
+    let lastSectionIdx = 0;
+    let focusMode = true;
+    let focusCardIdx = 0;
+    let focusWidgetIdx = 0;
+    let scrollToId = null;
+    let editGlobalFilters = false;
+    let editGlobalFilterIdx = null;
+    let editDrilldownTarget = null;
+    let editDrilldownPreset = null;
+    const grains = allowedGrains(semantic);
+    const grainDefault = grains[0] ?? "round";
+    const grainOpts = grains.map((g) => ({ value: g, label: g }));
+    const setStatus = (kind, message) => {
+      statusEl.textContent = message;
+      statusEl.className = "ga-settings-status";
+      if (kind === "ok") statusEl.classList.add("ok");
+      if (kind === "error") statusEl.classList.add("error");
+    };
+    const validateDraft = () => {
+      try {
+        validateDashboardAgainstSemantic(mergeSemanticWithDashboard(semantic, draft), draft);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    };
+    const syncActions = () => {
+      applyBtn.disabled = !dirty;
+      revertBtn.disabled = false;
+    };
+    const applyNow = () => {
+      const res = validateDraft();
+      if (!res.ok) return setStatus("error", res.error);
+      onChange(cloneJson2(draft));
+      applied = cloneJson2(draft);
+      dirty = false;
+      syncActions();
+      setStatus("ok", "Layout applied.");
+    };
+    const revertNow = () => {
+      if (!dirty) {
+        setStatus("ok", "Nothing to revert.");
+        return;
+      }
+      if (!safeConfirm("Discard unsaved layout changes?")) return;
+      draft = cloneJson2(applied);
+      dirty = false;
+      syncActions();
+      setStatus("ok", "Reverted.");
+      render();
+    };
+    syncActions();
+    let debounce = null;
+    const markDirty = (rerender = true) => {
+      dirty = true;
+      syncActions();
+      if (debounce !== null) doc.defaultView?.clearTimeout?.(debounce);
+      debounce = doc.defaultView?.setTimeout?.(() => {
+        debounce = null;
+        const res = validateDraft();
+        if (!res.ok) return setStatus("error", res.error);
+        if (!autoApply) return setStatus("ok", "Valid. Click Apply changes to update the dashboard.");
+        setStatus("info", "Applying...");
+        applyNow();
+      }, 200);
+      if (rerender) render();
+    };
+    auto.addEventListener("change", () => {
+      autoApply = auto.checked;
+      if (autoApply && dirty) markDirty(false);
+    });
+    const renderGlobalFilters = (right) => {
+      const current = draft.dashboard.globalFilters ?? {
+        enabled: true,
+        layout: { variant: "compact" },
+        controls: [],
+        buttons: { apply: false, reset: true }
+      };
+      const patch = (next) => {
+        const n = cloneJson2(draft);
+        n.dashboard.globalFilters = next;
+        draft = n;
+        markDirty();
+      };
+      const controls = Array.isArray(current.controls) ? current.controls : [];
+      const dimsAll = Object.keys(semantic.dimensions ?? {}).map((id) => ({ value: id, label: id }));
+      const addRow = doc.createElement("div");
+      addRow.className = "ga-le-toprow";
+      addRow.appendChild(
+        mkBtn(
+          doc,
+          "Add select filter",
+          () => {
+            const id = `filter_${Math.random().toString(36).slice(2, 7)}`;
+            patch({
+              ...current,
+              controls: [
+                ...controls,
+                { id, type: "select", label: "New filter", dimension: "", default: "all", options: "auto_distinct", appliesTo: [grainDefault] }
+              ]
+            });
+          },
+          "primary"
+        )
+      );
+      addRow.appendChild(
+        mkBtn(
+          doc,
+          "Add date range",
+          () => {
+            const id = `date_${Math.random().toString(36).slice(2, 7)}`;
+            patch({ ...current, controls: [...controls, { id, type: "date_range", label: "Date range", default: { fromTs: null, toTs: null }, appliesTo: [grainDefault] }] });
+          },
+          "primary"
+        )
+      );
+      const presets = [
+        {
+          id: "country_map",
+          label: "Country (map)",
+          make: () => ({
+            id: `country_${Math.random().toString(36).slice(2, 7)}`,
+            type: "select",
+            label: "Country",
+            dimension: "true_country",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"],
+            presentation: "map",
+            map: { variant: "compact", height: 340, restrictToOptions: true, tintSelectable: true }
+          })
+        },
+        {
+          id: "movement",
+          label: "Movement",
+          make: () => ({
+            id: `move_${Math.random().toString(36).slice(2, 7)}`,
+            type: "select",
+            label: "Movement",
+            dimension: "movement_type",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"]
+          })
+        },
+        {
+          id: "mode_family",
+          label: "Mode family",
+          make: () => ({
+            id: `mode_${Math.random().toString(36).slice(2, 7)}`,
+            type: "select",
+            label: "Mode family",
+            dimension: "mode_family",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"]
+          })
+        },
+        {
+          id: "guess_time",
+          label: "Guess time bucket",
+          make: () => ({
+            id: `time_${Math.random().toString(36).slice(2, 7)}`,
+            type: "select",
+            label: "Guess time",
+            dimension: "duration_bucket",
+            default: "all",
+            options: "auto_distinct",
+            appliesTo: ["round"]
+          })
+        },
+        {
+          id: "teammate",
+          label: "Teammate",
+          make: () => ({
+            id: `mate_${Math.random().toString(36).slice(2, 7)}`,
+            type: "select",
+            label: "Teammate",
+            dimension: "teammate_name",
+            default: "all",
+            options: "auto_teammates",
+            appliesTo: ["round"]
+          })
+        }
+      ];
+      const presetSel = doc.createElement("select");
+      presetSel.className = "ga-le-inline-select";
+      for (const p of presets) presetSel.appendChild(new Option(p.label, p.id));
+      addRow.appendChild(presetSel);
+      addRow.appendChild(
+        mkBtn(
+          doc,
+          "Add preset",
+          () => {
+            const picked = presets.find((p) => p.id === presetSel.value) ?? presets[0];
+            if (!picked) return;
+            const ctrl = picked.make();
+            if (Array.isArray(ctrl.appliesTo) && ctrl.appliesTo.length) ctrl.appliesTo = [grainDefault];
+            patch({ ...current, controls: [...controls, ctrl] });
+          },
+          "primary"
+        )
+      );
+      right.appendChild(addRow);
+      right.appendChild(mkToggle(doc, "enabled", !!current.enabled, (v) => patch({ ...current, enabled: v })));
+      const gfNote = doc.createElement("div");
+      gfNote.className = "ga-settings-note";
+      gfNote.textContent = "`appliesTo` controls where each filter is active (round/game/session).";
+      right.appendChild(gfNote);
+      right.appendChild(
+        mkSelect(
+          doc,
+          "layout.variant",
+          String(current?.layout?.variant ?? "compact"),
+          [{ value: "compact", label: "compact" }, { value: "full", label: "full" }],
+          (v) => patch({ ...current, layout: { ...current.layout ?? {}, variant: v } })
+        )
+      );
+      right.appendChild(mkToggle(doc, "buttons.reset", current?.buttons?.reset !== false, (v) => patch({ ...current, buttons: { ...current.buttons ?? {}, reset: v } })));
+      right.appendChild(mkToggle(doc, "buttons.apply", !!current?.buttons?.apply, (v) => patch({ ...current, buttons: { ...current.buttons ?? {}, apply: v } })));
+      right.appendChild(renderAdvancedJson(doc, "Advanced JSON (globalFilters)", current, (next) => patch(next)));
+      right.appendChild(mkHr(doc));
+      controls.forEach((ctrl, idx) => {
+        const item = doc.createElement("div");
+        item.className = "ga-le-item";
+        const row = doc.createElement("div");
+        row.className = "ga-le-toprow";
+        const t = doc.createElement("div");
+        t.className = "ga-le-box-head";
+        t.textContent = `${ctrl.type} \u2014 ${ctrl.label || ctrl.id}`;
+        row.appendChild(t);
+        row.appendChild(
+          mkBtn(
+            doc,
+            "Delete",
+            () => {
+              if (!safeConfirm(`Delete global filter '${ctrl.label || ctrl.id}'?`)) return;
+              patch({ ...current, controls: controls.filter((_, i) => i !== idx) });
+            },
+            "danger"
+          )
+        );
+        item.appendChild(row);
+        const patchCtrl = (nextCtrl) => patch({ ...current, controls: controls.map((c, i) => i === idx ? nextCtrl : c) });
+        item.appendChild(mkTextInput(doc, "id", String(ctrl.id ?? ""), (v) => patchCtrl({ ...ctrl, id: v })));
+        item.appendChild(
+          mkSelect(
+            doc,
+            "type",
+            String(ctrl.type ?? "select"),
+            [
+              { value: "select", label: "select" },
+              { value: "date_range", label: "date_range" }
+            ],
+            (v) => {
+              if (v === ctrl.type) return;
+              if (v === "date_range") {
+                patchCtrl({ id: ctrl.id, type: "date_range", label: ctrl.label || "Date range", default: { fromTs: null, toTs: null }, appliesTo: ctrl.appliesTo ?? [grainDefault] });
+              } else {
+                patchCtrl({
+                  id: ctrl.id,
+                  type: "select",
+                  label: ctrl.label || "New filter",
+                  dimension: "",
+                  default: "all",
+                  options: "auto_distinct",
+                  appliesTo: ctrl.appliesTo ?? [grainDefault]
+                });
+              }
+            }
+          )
+        );
+        item.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
+        item.appendChild(mkMultiSelect(doc, "appliesTo", Array.isArray(ctrl.appliesTo) ? ctrl.appliesTo : [grainDefault], grainOpts, (vals) => patchCtrl({ ...ctrl, appliesTo: vals })));
+        if (ctrl.type === "select") {
+          item.appendChild(mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => patchCtrl({ ...ctrl, dimension: v })));
+          item.appendChild(
+            mkSelect(
+              doc,
+              "options",
+              String(ctrl.options ?? "auto_distinct"),
+              [{ value: "auto_distinct", label: "auto_distinct" }, { value: "auto_teammates", label: "auto_teammates" }],
+              (v) => patchCtrl({ ...ctrl, options: v })
+            )
+          );
+          item.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
+          item.appendChild(
+            mkSelect(
+              doc,
+              "presentation",
+              String(ctrl.presentation ?? "dropdown"),
+              [{ value: "dropdown", label: "dropdown" }, { value: "map", label: "map" }],
+              (v) => patchCtrl({ ...ctrl, presentation: v })
+            )
+          );
+          if (ctrl.presentation === "map") {
+            const map = ctrl.map ?? {};
+            item.appendChild(
+              mkSelect(
+                doc,
+                "map.variant",
+                String(map.variant ?? "compact"),
+                [{ value: "compact", label: "compact" }, { value: "wide", label: "wide" }],
+                (v) => patchCtrl({ ...ctrl, map: { ...map, variant: v } })
+              )
+            );
+            item.appendChild(
+              mkNumberInput(doc, "map.height", asInt(map.height, 340), (n) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n)) } }), {
+                min: 160,
+                max: 1200,
+                step: 10
+              })
+            );
+            item.appendChild(mkToggle(doc, "map.restrictToOptions", !!map.restrictToOptions, (v) => patchCtrl({ ...ctrl, map: { ...map, restrictToOptions: v } })));
+            item.appendChild(mkToggle(doc, "map.tintSelectable", map.tintSelectable !== false, (v) => patchCtrl({ ...ctrl, map: { ...map, tintSelectable: v } })));
+          }
+        } else if (ctrl.type === "date_range") {
+          const btnRow = doc.createElement("div");
+          btnRow.className = "ga-le-toprow";
+          btnRow.appendChild(mkBtn(doc, "Reset default", () => patchCtrl({ ...ctrl, default: { fromTs: null, toTs: null } })));
+          item.appendChild(btnRow);
+        }
+        item.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
+        right.appendChild(item);
+      });
+    };
+    const mkModal = (title, onClose) => {
+      const overlay = doc.createElement("div");
+      overlay.className = "ga-le-modal";
+      const bg = doc.createElement("div");
+      bg.className = "ga-le-modal-bg";
+      bg.addEventListener("click", onClose);
+      const panel = doc.createElement("div");
+      panel.className = "ga-le-modal-panel";
+      const header = doc.createElement("div");
+      header.className = "ga-le-modal-header";
+      const ht = doc.createElement("div");
+      ht.className = "ga-le-modal-title";
+      ht.textContent = title;
+      header.appendChild(ht);
+      header.appendChild(mkBtn(doc, "Close", onClose));
+      const body = doc.createElement("div");
+      body.className = "ga-le-modal-body";
+      panel.appendChild(header);
+      panel.appendChild(body);
+      overlay.appendChild(bg);
+      overlay.appendChild(panel);
+      return { overlay, body };
+    };
+    function renderPanels() {
+      try {
+        wrap.querySelector(".ga-le-modal")?.remove();
+      } catch {
+      }
+      const sem = mergeSemanticWithDashboard(semantic, draft);
+      const ddOverride = draft.dashboard?.drilldownPresets ?? {};
+      const setDdOverride = (target, nextTarget) => {
+        const next = cloneJson2(draft);
+        const cur = next.dashboard.drilldownPresets ?? {};
+        next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
+        draft = next;
+        markDirty();
+      };
+      const removeDdOverride = (target) => {
+        const next = cloneJson2(draft);
+        const cur = next.dashboard.drilldownPresets ?? {};
+        const { [target]: _, ...rest } = cur;
+        next.dashboard.drilldownPresets = rest;
+        draft = next;
+        markDirty();
+      };
+      const panels = doc.createElement("div");
+      panels.className = "ga-le-panels";
+      panels.style.gridColumn = "1 / -1";
+      root.appendChild(panels);
+      const sections = Array.isArray(draft.dashboard?.sections) ? draft.dashboard.sections : [];
+      const setSections = (nextSections) => {
+        const next = cloneJson2(draft);
+        next.dashboard.sections = nextSections;
+        draft = next;
+        markDirty();
+      };
+      const ensureOneCardContainer = (sectionIdx) => {
+        const next = cloneJson2(draft);
+        const sec = next.dashboard.sections?.[sectionIdx];
+        if (!sec) return;
+        const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
+        sec.layout = sec.layout ?? { mode: "grid", columns: cols, cards: [] };
+        sec.layout.columns = cols;
+        const cards = Array.isArray(sec.layout.cards) ? sec.layout.cards : [];
+        if (cards.length === 0) cards.push(defaultCard());
+        const first = cards[0];
+        first.x = 0;
+        first.y = 0;
+        first.w = cols;
+        first.h = Math.max(10, asInt(first.h, 12));
+        first.title = String(sec.title ?? first.title ?? "Section");
+        first.card = first.card ?? { type: "composite", children: [] };
+        first.card.children = Array.isArray(first.card.children) ? first.card.children : [];
+        sec.layout.cards = [first];
+        next.dashboard.sections[sectionIdx] = sec;
+        draft = next;
+        markDirty();
+      };
+      const flattenCardsIntoFirst = (sectionIdx) => {
+        const next = cloneJson2(draft);
+        const sec = next.dashboard.sections?.[sectionIdx];
+        if (!sec) return;
+        const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
+        const cards = Array.isArray(sec.layout?.cards) ? sec.layout.cards : [];
+        if (cards.length <= 1) return ensureOneCardContainer(sectionIdx);
+        const base = cards[0];
+        base.card = base.card ?? { type: "composite", children: [] };
+        const baseChildren = Array.isArray(base.card.children) ? base.card.children : [];
+        let cursorY = 0;
+        for (const w of baseChildren) {
+          const p = w?.placement ?? {};
+          cursorY = Math.max(cursorY, asInt(p.y, 0) + asInt(p.h, 3));
+        }
+        cursorY += 1;
+        for (const c of cards.slice(1)) {
+          const kids = Array.isArray(c?.card?.children) ? c.card.children : [];
+          for (const w of kids) {
+            const p = w?.placement ?? { x: 0, y: 0, w: cols, h: 3 };
+            baseChildren.push({ ...w, placement: { ...p, y: asInt(p.y, 0) + cursorY } });
+          }
+          let maxLocal = 0;
+          for (const w of kids) {
+            const p = w?.placement ?? {};
+            maxLocal = Math.max(maxLocal, asInt(p.y, 0) + asInt(p.h, 3));
+          }
+          cursorY += maxLocal + 1;
+        }
+        base.card.children = baseChildren;
+        base.x = 0;
+        base.y = 0;
+        base.w = cols;
+        base.h = Math.max(10, asInt(base.h, 12));
+        base.title = String(sec.title ?? base.title ?? "Section");
+        sec.layout.cards = [base];
+        next.dashboard.sections[sectionIdx] = sec;
+        draft = next;
+        markDirty();
+      };
+      const getSectionChildren = (sectionIdx) => {
+        const sec = draft.dashboard.sections?.[sectionIdx] ?? null;
+        const c0 = Array.isArray(sec?.layout?.cards) ? sec.layout.cards[0] : null;
+        const kids = c0?.card ? c0.card.children : null;
+        return Array.isArray(kids) ? kids : [];
+      };
+      const setSectionChildren = (sectionIdx, nextChildren) => {
+        const next = cloneJson2(draft);
+        const sec = next.dashboard.sections?.[sectionIdx];
+        if (!sec) return;
+        const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
+        sec.layout = sec.layout ?? { mode: "grid", columns: cols, cards: [] };
+        sec.layout.columns = cols;
+        const cards = Array.isArray(sec.layout.cards) ? sec.layout.cards : [];
+        if (cards.length === 0) cards.push(defaultCard());
+        const first = cards[0];
+        first.x = 0;
+        first.y = 0;
+        first.w = cols;
+        first.h = Math.max(10, asInt(first.h, 12));
+        first.title = String(sec.title ?? first.title ?? "Section");
+        first.card = first.card ?? { type: "composite", children: [] };
+        first.card.children = nextChildren;
+        sec.layout.cards = [first];
+        next.dashboard.sections[sectionIdx] = sec;
+        draft = next;
+        markDirty();
+      };
+      const sectionsBox = doc.createElement("div");
+      sectionsBox.className = "ga-le-box";
+      const sHead = doc.createElement("div");
+      sHead.className = "ga-le-box-head";
+      sHead.textContent = "Sections";
+      sectionsBox.appendChild(sHead);
+      const sNote = doc.createElement("div");
+      sNote.className = "ga-settings-note";
+      sNote.textContent = "Sections are your tabs. Rename, reorder, and click Edit to configure widgets.";
+      sectionsBox.appendChild(sNote);
+      const reorderSection = (fromIdx, toIdx) => {
+        if (fromIdx === toIdx) return;
+        if (fromIdx < 0 || fromIdx >= sections.length) return;
+        if (toIdx < 0 || toIdx >= sections.length) return;
+        const next = [...sections];
+        const [picked] = next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, picked);
+        setSections(next);
+      };
+      sections.forEach((sec, idx) => {
+        const row = doc.createElement("div");
+        row.className = "ga-le-compact-row";
+        row.draggable = true;
+        row.dataset.idx = String(idx);
+        row.addEventListener("dragstart", (ev) => {
+          try {
+            ev.dataTransfer?.setData("text/plain", String(idx));
+            ev.dataTransfer?.setDragImage?.(row, 12, 12);
+          } catch {
+          }
+          row.classList.add("dragging");
+        });
+        row.addEventListener("dragend", () => row.classList.remove("dragging"));
+        row.addEventListener("dragover", (ev) => {
+          ev.preventDefault();
+          row.classList.add("dragover");
+        });
+        row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+        row.addEventListener("drop", (ev) => {
+          ev.preventDefault();
+          row.classList.remove("dragover");
+          const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+          const fromIdx = asInt(raw, -1);
+          if (fromIdx < 0) return;
+          reorderSection(fromIdx, idx);
+        });
+        const drag = doc.createElement("div");
+        drag.className = "ga-le-drag";
+        drag.title = "Drag to reorder";
+        drag.textContent = "\u22EE\u22EE";
+        row.appendChild(drag);
+        const title = doc.createElement("div");
+        title.className = "ga-le-compact-title";
+        title.textContent = sec?.title || sec?.id || "Untitled";
+        row.appendChild(title);
+        const meta = doc.createElement("div");
+        meta.className = "ga-le-compact-meta";
+        meta.textContent = String(sec?.id || "");
+        row.appendChild(meta);
+        const actions = doc.createElement("div");
+        actions.className = "ga-le-compact-actions";
+        actions.appendChild(
+          mkIconBtn(doc, "\u270E", () => {
+            const nextTitle = safePrompt(doc, "Rename section title:", String(sec?.title ?? ""));
+            if (nextTitle === null) return;
+            const next = [...sections];
+            next[idx] = { ...sec, title: nextTitle };
+            setSections(next);
+          })
+        );
+        actions.appendChild(
+          mkIconBtn(
+            doc,
+            "\u{1F5D1}",
+            () => {
+              if (!safeConfirm(`Delete section '${sec?.title || sec?.id}'?`)) return;
+              const next = sections.filter((_, i) => i !== idx);
+              setSections(next);
+              if (editSectionIdx === idx) editSectionIdx = null;
+            },
+            "danger"
+          )
+        );
+        actions.appendChild(
+          mkBtn(
+            doc,
+            "Edit",
+            () => {
+              editSectionIdx = idx;
+              render();
+            },
+            "primary"
+          )
+        );
+        row.appendChild(actions);
+        sectionsBox.appendChild(row);
+      });
+      const addSectionRow = doc.createElement("div");
+      addSectionRow.className = "ga-le-compact-row";
+      addSectionRow.title = "Add section";
+      const addSection = () => {
+        const next = [...sections, defaultSection()];
+        setSections(next);
+        editSectionIdx = Math.max(0, next.length - 1);
+        render();
+      };
+      addSectionRow.addEventListener("click", () => addSection());
+      const addDrag = doc.createElement("div");
+      addDrag.className = "ga-le-drag";
+      addDrag.textContent = "+";
+      addSectionRow.appendChild(addDrag);
+      const addTitle = doc.createElement("div");
+      addTitle.className = "ga-le-compact-title";
+      addTitle.textContent = "Add section";
+      addSectionRow.appendChild(addTitle);
+      const addMeta = doc.createElement("div");
+      addMeta.className = "ga-le-compact-meta";
+      addMeta.textContent = "";
+      addSectionRow.appendChild(addMeta);
+      const addActions = doc.createElement("div");
+      addActions.className = "ga-le-compact-actions";
+      addActions.appendChild(mkBtn(doc, "+", () => addSection(), "primary"));
+      addSectionRow.appendChild(addActions);
+      sectionsBox.appendChild(addSectionRow);
+      if (mode === "section_layout") {
+        panels.appendChild(sectionsBox);
+      }
+      if (mode === "global_filters") {
+        const gfFallback = {
+          enabled: true,
+          layout: { variant: "compact" },
+          controls: [],
+          buttons: { apply: false, reset: true }
+        };
+        const gfRaw = draft.dashboard.globalFilters;
+        const gfCurrent = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
+        if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
+        if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
+        const gfControls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+        const setGlobalFilters = (nextGlobalFilters) => {
+          const next = cloneJson2(draft);
+          next.dashboard.globalFilters = nextGlobalFilters;
+          draft = next;
+          markDirty();
+        };
+        const setControls = (nextControls) => setGlobalFilters({ ...gfCurrent, controls: nextControls });
+        const normalizedControls = gfControls.map((c) => {
+          if (!c || typeof c !== "object") return c;
+          if (c.type !== "select") return c;
+          const dimId = typeof c.dimension === "string" ? c.dimension : "";
+          const dim = dimId ? semantic.dimensions?.[dimId] : null;
+          const grains2 = dim ? Array.isArray(dim.grain) ? dim.grain : [dim.grain] : null;
+          if (!grains2 || grains2.length === 0) return c;
+          return { ...c, appliesTo: grains2 };
+        });
+        if (JSON.stringify(normalizedControls) !== JSON.stringify(gfControls)) {
+          setControls(normalizedControls);
+          return true;
+        }
+        const gfBox = doc.createElement("div");
+        gfBox.className = "ga-le-box";
+        const gfh = doc.createElement("div");
+        gfh.className = "ga-le-box-head";
+        gfh.textContent = "Global filters";
+        gfBox.appendChild(gfh);
+        const gfNote = doc.createElement("div");
+        gfNote.className = "ga-settings-note";
+        gfNote.textContent = "Drag to reorder. Click Edit to configure a filter. Use + to add a new filter.";
+        gfBox.appendChild(gfNote);
+        const gfEnabled = gfCurrent?.enabled !== false;
+        const barRow = doc.createElement("div");
+        barRow.className = "ga-le-compact-row";
+        const barDrag = doc.createElement("div");
+        barDrag.className = "ga-le-drag";
+        barDrag.textContent = "";
+        barRow.appendChild(barDrag);
+        const barTitle = doc.createElement("div");
+        barTitle.className = "ga-le-compact-title";
+        barTitle.textContent = "Global filter bar";
+        barRow.appendChild(barTitle);
+        const barMeta = doc.createElement("div");
+        barMeta.className = "ga-le-compact-meta";
+        barMeta.textContent = `${gfEnabled ? "Enabled" : "Disabled"} \u2022 ${String(gfCurrent?.layout?.variant ?? "compact")}`;
+        barRow.appendChild(barMeta);
+        const barActions = doc.createElement("div");
+        barActions.className = "ga-le-compact-actions";
+        barActions.appendChild(
+          mkBtn(
+            doc,
+            gfEnabled ? "Disable" : "Enable",
+            () => setGlobalFilters({ ...gfCurrent, enabled: !gfEnabled }),
+            gfEnabled ? "ghost" : "primary"
+          )
+        );
+        barActions.appendChild(
+          mkBtn(
+            doc,
+            "Advanced",
+            () => {
+              editGlobalFilters = true;
+              render();
+            },
+            "ghost"
+          )
+        );
+        barRow.appendChild(barActions);
+        gfBox.appendChild(barRow);
+        const reorderControl = (fromIdx, toIdx) => {
+          if (fromIdx === toIdx) return;
+          if (fromIdx < 0 || fromIdx >= gfControls.length) return;
+          if (toIdx < 0 || toIdx >= gfControls.length) return;
+          const next = [...gfControls];
+          const [picked] = next.splice(fromIdx, 1);
+          next.splice(toIdx, 0, picked);
+          setControls(next);
+        };
+        gfControls.forEach((ctrl, idx) => {
+          const row = doc.createElement("div");
+          row.className = "ga-le-compact-row";
+          row.draggable = true;
+          row.dataset.idx = String(idx);
+          row.addEventListener("click", () => {
+            editGlobalFilterIdx = idx;
+            render();
+          });
+          row.addEventListener("dragstart", (ev) => {
+            try {
+              ev.dataTransfer?.setData("text/plain", String(idx));
+              ev.dataTransfer?.setDragImage?.(row, 12, 12);
+            } catch {
+            }
+            row.classList.add("dragging");
+          });
+          row.addEventListener("dragend", () => row.classList.remove("dragging"));
+          row.addEventListener("dragover", (ev) => {
+            ev.preventDefault();
+            row.classList.add("dragover");
+          });
+          row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+          row.addEventListener("drop", (ev) => {
+            ev.preventDefault();
+            row.classList.remove("dragover");
+            const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+            const fromIdx = asInt(raw, -1);
+            if (fromIdx < 0) return;
+            reorderControl(fromIdx, idx);
+          });
+          const drag = doc.createElement("div");
+          drag.className = "ga-le-drag";
+          drag.title = "Drag to reorder";
+          drag.textContent = "\u22EE\u22EE";
+          row.appendChild(drag);
+          const title = doc.createElement("div");
+          title.className = "ga-le-compact-title";
+          title.textContent = String(ctrl?.label || ctrl?.id || "Untitled filter");
+          row.appendChild(title);
+          const meta = doc.createElement("div");
+          meta.className = "ga-le-compact-meta";
+          const metaParts = [];
+          if (ctrl?.id) metaParts.push(String(ctrl.id));
+          if (ctrl?.type === "select") metaParts.push(String(ctrl?.dimension ?? "(no dimension)"));
+          else metaParts.push(String(ctrl?.type ?? "select"));
+          meta.textContent = metaParts.filter(Boolean).join(" \u2022 ");
+          row.appendChild(meta);
+          const actions = doc.createElement("div");
+          actions.className = "ga-le-compact-actions";
+          actions.appendChild(
+            mkIconBtn(doc, "\u270E", () => {
+              const nextLabel = safePrompt(doc, "Rename filter label:", String(ctrl?.label ?? ""));
+              if (nextLabel === null) return;
+              const next = gfControls.map((x, i) => i === idx ? { ...x, label: nextLabel } : x);
+              setControls(next);
+            })
+          );
+          actions.appendChild(
+            mkIconBtn(
+              doc,
+              "\u{1F5D1}",
+              () => {
+                if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
+                setControls(gfControls.filter((_, i) => i !== idx));
+                if (editGlobalFilterIdx === idx) editGlobalFilterIdx = null;
+              },
+              "danger"
+            )
+          );
+          actions.appendChild(
+            mkBtn(
+              doc,
+              "Edit",
+              () => {
+                editGlobalFilterIdx = idx;
+                render();
+              },
+              "primary"
+            )
+          );
+          row.appendChild(actions);
+          gfBox.appendChild(row);
+        });
+        const addFilter = () => {
+          const id = `filter_${Math.random().toString(36).slice(2, 7)}`;
+          const next = [
+            ...gfControls,
+            { id, type: "select", label: "New filter", dimension: "", default: "all", options: "auto_distinct", appliesTo: [grainDefault] }
+          ];
+          setControls(next);
+          editGlobalFilterIdx = Math.max(0, next.length - 1);
+          render();
+        };
+        const addFilterRow = doc.createElement("div");
+        addFilterRow.className = "ga-le-compact-row";
+        addFilterRow.title = "Add filter";
+        addFilterRow.addEventListener("click", () => addFilter());
+        const addDrag2 = doc.createElement("div");
+        addDrag2.className = "ga-le-drag";
+        addDrag2.textContent = "+";
+        addFilterRow.appendChild(addDrag2);
+        const addTitle2 = doc.createElement("div");
+        addTitle2.className = "ga-le-compact-title";
+        addTitle2.textContent = "Add filter";
+        addFilterRow.appendChild(addTitle2);
+        const addMeta2 = doc.createElement("div");
+        addMeta2.className = "ga-le-compact-meta";
+        addMeta2.textContent = "";
+        addFilterRow.appendChild(addMeta2);
+        const addActions2 = doc.createElement("div");
+        addActions2.className = "ga-le-compact-actions";
+        addActions2.appendChild(mkBtn(doc, "+", () => addFilter(), "primary"));
+        addFilterRow.appendChild(addActions2);
+        gfBox.appendChild(addFilterRow);
+        panels.appendChild(gfBox);
+      }
+      if (mode === "drilldowns") {
+        panels.appendChild(mkHr(doc));
+        const ddBox = doc.createElement("div");
+        ddBox.className = "ga-le-box";
+        const ddh = doc.createElement("div");
+        ddh.className = "ga-le-box-head";
+        ddh.textContent = "Drilldown presets";
+        ddBox.appendChild(ddh);
+        const ddn = doc.createElement("div");
+        ddn.className = "ga-settings-note";
+        ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
+        ddBox.appendChild(ddn);
+        const targets = Object.keys(sem?.drilldownPresets ?? {});
+        if (targets.length === 0) {
+          const none = doc.createElement("div");
+          none.className = "ga-settings-note";
+          none.textContent = "No drilldown targets found.";
+          ddBox.appendChild(none);
+        }
+        targets.forEach((target) => {
+          const preset = sem?.drilldownPresets?.[target] ?? {};
+          const keys2 = Object.keys(preset?.columnsPresets ?? {});
+          const left = doc.createElement("div");
+          left.className = "ga-le-compact-title";
+          left.textContent = `${target} \u2022 ${keys2.length} presets`;
+          const row = doc.createElement("div");
+          row.className = "ga-le-compact-row";
+          row.appendChild(left);
+          const actions = doc.createElement("div");
+          actions.className = "ga-le-compact-actions";
+          actions.appendChild(
+            mkBtn(
+              doc,
+              "Edit",
+              () => {
+                editDrilldownTarget = target;
+                render();
+              },
+              "primary"
+            )
+          );
+          row.appendChild(actions);
+          ddBox.appendChild(row);
+        });
+        panels.appendChild(ddBox);
+      }
+      if (editGlobalFilters) {
+        const { overlay, body } = mkModal("Global filters", () => {
+          editGlobalFilters = false;
+          render();
+        });
+        renderGlobalFilters(body);
+        wrap.appendChild(overlay);
+      }
+      if (editGlobalFilterIdx !== null) {
+        const gfFallback = {
+          enabled: true,
+          layout: { variant: "compact" },
+          controls: [],
+          buttons: { apply: false, reset: true }
+        };
+        const gfRaw = draft.dashboard.globalFilters;
+        const gfCurrent = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
+        if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
+        if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
+        const controls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
+        const idx = editGlobalFilterIdx;
+        const ctrl = controls[idx];
+        if (!ctrl) {
+          editGlobalFilterIdx = null;
+        } else {
+          const { overlay, body } = mkModal(`Global filter: ${String(ctrl?.label || ctrl?.id || "")}`, () => {
+            editGlobalFilterIdx = null;
+            render();
+          });
+          const setGlobalFilters = (nextGlobalFilters) => {
+            const next = cloneJson2(draft);
+            next.dashboard.globalFilters = nextGlobalFilters;
+            draft = next;
+            markDirty();
+          };
+          const patchCtrl = (nextCtrl) => setGlobalFilters({ ...gfCurrent, controls: controls.map((c, i) => i === idx ? nextCtrl : c) });
+          const top = doc.createElement("div");
+          top.className = "ga-le-toprow";
+          top.appendChild(
+            mkBtn(
+              doc,
+              "Delete",
+              () => {
+                if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
+                setGlobalFilters({ ...gfCurrent, controls: controls.filter((_, i) => i !== idx) });
+                editGlobalFilterIdx = null;
+                render();
+              },
+              "danger"
+            )
+          );
+          top.appendChild(
+            mkBtn(doc, "Advanced (all)", () => {
+              editGlobalFilterIdx = null;
+              editGlobalFilters = true;
+              render();
+            })
+          );
+          body.appendChild(top);
+          const dimsAll = Object.keys(semantic.dimensions ?? {}).map((id) => ({ value: id, label: id }));
+          const idField = doc.createElement("div");
+          idField.className = "ga-le-field";
+          const idLabel = doc.createElement("label");
+          idLabel.textContent = "id";
+          idField.appendChild(idLabel);
+          const idHost = doc.createElement("div");
+          idHost.className = "ga-le-inputhost";
+          const idText = doc.createElement("div");
+          idText.style.padding = "8px 10px";
+          idText.style.border = "1px solid var(--ga-control-border)";
+          idText.style.borderRadius = "8px";
+          idText.style.background = "var(--ga-control-bg)";
+          idText.style.color = "var(--ga-control-text)";
+          idText.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+          idText.textContent = String(ctrl.id ?? "");
+          idHost.appendChild(idText);
+          idField.appendChild(idHost);
+          body.appendChild(idField);
+          body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
+          const widthField = mkField(doc, "width (px)");
+          const widthInput = doc.createElement("input");
+          widthInput.type = "number";
+          widthInput.min = "120";
+          widthInput.max = "900";
+          widthInput.step = "10";
+          widthInput.placeholder = "auto";
+          widthInput.value = typeof ctrl.width === "number" ? String(ctrl.width) : "";
+          widthInput.addEventListener("change", () => {
+            const raw = widthInput.value.trim();
+            if (!raw) {
+              const next = { ...ctrl };
+              delete next.width;
+              patchCtrl(next);
+              return;
+            }
+            const n = asInt(raw, ctrl.width ?? 0);
+            const clamped = Math.max(120, Math.min(900, n));
+            patchCtrl({ ...ctrl, width: clamped });
+          });
+          widthField.inputHost.appendChild(widthInput);
+          body.appendChild(widthField.wrap);
+          if (ctrl.type === "select") {
+            body.appendChild(
+              mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => {
+                const dim = semantic.dimensions?.[v];
+                const grains2 = dim ? Array.isArray(dim.grain) ? dim.grain : [dim.grain] : null;
+                const nextOptions = v === "teammate_name" ? "auto_teammates" : typeof ctrl.options === "string" && ctrl.options.trim().length > 0 ? ctrl.options : "auto_distinct";
+                patchCtrl({ ...ctrl, dimension: v, options: nextOptions, appliesTo: grains2 && grains2.length ? grains2 : ctrl.appliesTo ?? [grainDefault] });
+              })
+            );
+            body.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
+          } else if (ctrl.type === "date_range") {
+            const note = doc.createElement("div");
+            note.className = "ga-settings-note";
+            note.textContent = "Date range defaults are automatically initialized to your full dataset span. Advanced JSON can override behavior.";
+            body.appendChild(note);
+          }
+          body.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
+          wrap.appendChild(overlay);
+        }
+      }
+      if (editDrilldownTarget) {
+        const target = editDrilldownTarget;
+        const preset = sem?.drilldownPresets?.[target] ?? {};
+        const keys2 = Object.keys(preset?.columnsPresets ?? {});
+        const override = ddOverride?.[target] ?? {};
+        const { overlay, body } = mkModal(`Drilldown presets: ${target}`, () => {
+          editDrilldownTarget = null;
+          editDrilldownPreset = null;
+          render();
+        });
+        if (override && Object.keys(override).length) {
+          const top = doc.createElement("div");
+          top.className = "ga-le-toprow";
+          top.appendChild(mkBtn(doc, "Reset overrides", () => removeDdOverride(target), "danger"));
+          body.appendChild(top);
+        }
+        if (keys2.length > 0) {
+          body.appendChild(
+            mkSelect(
+              doc,
+              "defaultPreset",
+              String(preset?.defaultPreset ?? keys2[0]),
+              keys2.map((k) => ({ value: k, label: k })),
+              (v) => setDdOverride(target, { ...override, defaultPreset: v, columnsPresets: override?.columnsPresets ?? {} })
+            )
+          );
+        }
+        const addRow = doc.createElement("div");
+        addRow.className = "ga-le-toprow";
+        const input = doc.createElement("input");
+        input.type = "text";
+        input.className = "ga-le-inline-input";
+        input.placeholder = "new preset id (e.g. myPreset)";
+        input.value = String(newPresetIdByTarget[target] ?? "");
+        input.addEventListener("input", () => newPresetIdByTarget[target] = input.value);
+        addRow.appendChild(input);
+        addRow.appendChild(
+          mkBtn(
+            doc,
+            "Add preset",
+            () => {
+              const id = String(newPresetIdByTarget[target] ?? "").trim();
+              if (!id) return;
+              const colsNext = { ...override?.columnsPresets ?? {} };
+              if (colsNext[id]) return;
+              colsNext[id] = [{ key: "ts", label: "Date", sortable: true }];
+              setDdOverride(target, { ...override, columnsPresets: colsNext });
+              newPresetIdByTarget[target] = "";
+              render();
+            },
+            "primary"
+          )
+        );
+        body.appendChild(addRow);
+        const mergedPresets = preset?.columnsPresets ?? {};
+        for (const [pid, cols] of Object.entries(mergedPresets)) {
+          const isEditable = !!override?.columnsPresets?.[pid];
+          const row = doc.createElement("div");
+          row.className = "ga-le-compact-row";
+          const left = doc.createElement("div");
+          left.className = "ga-le-compact-title";
+          left.textContent = `${pid} \u2022 ${Array.isArray(cols) ? cols.length : 0} cols`;
+          row.appendChild(left);
+          const actions = doc.createElement("div");
+          actions.className = "ga-le-compact-actions";
+          if (!isEditable) {
+            actions.appendChild(
+              mkBtn(doc, "Customize", () => {
+                const colsNext = { ...override?.columnsPresets ?? {} };
+                colsNext[pid] = cloneJson2(cols);
+                setDdOverride(target, { ...override, columnsPresets: colsNext });
+                editDrilldownPreset = { target, presetId: pid };
+                render();
+              })
+            );
+          } else {
+            actions.appendChild(
+              mkIconBtn(
+                doc,
+                "\u{1F5D1}",
+                () => {
+                  if (!safeConfirm(`Delete preset '${pid}'?`)) return;
+                  const colsNext = { ...override?.columnsPresets ?? {} };
+                  delete colsNext[pid];
+                  setDdOverride(target, { ...override, columnsPresets: colsNext });
+                  if (editDrilldownPreset?.target === target && editDrilldownPreset?.presetId === pid) editDrilldownPreset = null;
+                  render();
+                },
+                "danger"
+              )
+            );
+          }
+          actions.appendChild(
+            mkBtn(
+              doc,
+              "Edit",
+              () => {
+                if (!isEditable) {
+                  const colsNext = { ...override?.columnsPresets ?? {} };
+                  colsNext[pid] = cloneJson2(cols);
+                  setDdOverride(target, { ...override, columnsPresets: colsNext });
+                }
+                editDrilldownPreset = { target, presetId: pid };
+                render();
+              },
+              "primary"
+            )
+          );
+          row.appendChild(actions);
+          body.appendChild(row);
+        }
+        wrap.appendChild(overlay);
+      }
+      if (editDrilldownPreset) {
+        const { target, presetId } = editDrilldownPreset;
+        const semPreset = sem?.drilldownPresets?.[target] ?? {};
+        const mergedCols = semPreset?.columnsPresets?.[presetId] ?? [];
+        const override = ddOverride?.[target] ?? {};
+        const isEditable = !!override?.columnsPresets?.[presetId];
+        if (!isEditable) {
+          editDrilldownPreset = null;
+        } else {
+          const colsArr = Array.isArray(mergedCols) ? mergedCols : [];
+          const { overlay, body } = mkModal(`Edit columns: ${target}.${presetId}`, () => {
+            editDrilldownPreset = null;
+            render();
+          });
+          const colsNextBase = () => ({ ...override?.columnsPresets ?? {} });
+          const setColsForPreset = (nextArr) => {
+            const colsNext = colsNextBase();
+            colsNext[presetId] = nextArr;
+            setDdOverride(target, { ...override, columnsPresets: colsNext });
+          };
+          const addRow = doc.createElement("div");
+          addRow.className = "ga-le-toprow";
+          addRow.appendChild(
+            mkBtn(
+              doc,
+              "Add column",
+              () => setColsForPreset([...colsArr, { key: "", label: "", sortable: false }]),
+              "primary"
+            )
+          );
+          body.appendChild(addRow);
+          const reorder = (fromIdx, toIdx) => {
+            if (fromIdx === toIdx) return;
+            if (fromIdx < 0 || toIdx < 0) return;
+            if (fromIdx >= colsArr.length || toIdx >= colsArr.length) return;
+            const next = [...colsArr];
+            const [picked] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, picked);
+            setColsForPreset(next);
+          };
+          colsArr.forEach((c, cIdx) => {
+            const row = doc.createElement("div");
+            row.className = "ga-le-compact-row ga-le-compact-row-col";
+            row.draggable = true;
+            row.addEventListener("dragstart", (ev) => {
+              try {
+                ev.dataTransfer?.setData("text/plain", String(cIdx));
+                ev.dataTransfer?.setDragImage?.(row, 12, 12);
+              } catch {
+              }
+              row.classList.add("dragging");
+            });
+            row.addEventListener("dragend", () => row.classList.remove("dragging"));
+            row.addEventListener("dragover", (ev) => {
+              ev.preventDefault();
+              row.classList.add("dragover");
+            });
+            row.addEventListener("dragleave", () => row.classList.remove("dragover"));
+            row.addEventListener("drop", (ev) => {
+              ev.preventDefault();
+              row.classList.remove("dragover");
+              const raw = ev.dataTransfer?.getData("text/plain") ?? "";
+              reorder(asInt(raw, -1), cIdx);
+            });
+            const drag = doc.createElement("div");
+            drag.className = "ga-le-drag";
+            drag.title = "Drag to reorder";
+            drag.textContent = "\u22EE\u22EE";
+            row.appendChild(drag);
+            const key = doc.createElement("input");
+            key.type = "text";
+            key.className = "ga-le-inline-input ga-le-col-key";
+            key.placeholder = "key";
+            key.value = String(c?.key ?? "");
+            key.addEventListener("change", () => {
+              const next = [...colsArr];
+              next[cIdx] = { ...c, key: key.value };
+              setColsForPreset(next);
+            });
+            row.appendChild(key);
+            const label = doc.createElement("input");
+            label.type = "text";
+            label.className = "ga-le-inline-input ga-le-col-label";
+            label.placeholder = "label";
+            label.value = String(c?.label ?? "");
+            label.addEventListener("change", () => {
+              const next = [...colsArr];
+              next[cIdx] = { ...c, label: label.value };
+              setColsForPreset(next);
+            });
+            row.appendChild(label);
+            const mkChk = (txt, checked, onChange2) => {
+              const w = doc.createElement("label");
+              w.className = "ga-le-compact-chk";
+              const cb = doc.createElement("input");
+              cb.type = "checkbox";
+              cb.checked = checked;
+              cb.addEventListener("change", () => onChange2(cb.checked));
+              const s = doc.createElement("span");
+              s.textContent = txt;
+              w.appendChild(cb);
+              w.appendChild(s);
+              return w;
+            };
+            row.appendChild(
+              mkChk("sort", !!c?.sortable, (v) => {
+                const next = [...colsArr];
+                next[cIdx] = { ...c, sortable: v };
+                setColsForPreset(next);
+              })
+            );
+            row.appendChild(
+              mkChk("color", !!c?.colored, (v) => {
+                const next = [...colsArr];
+                next[cIdx] = { ...c, colored: v };
+                setColsForPreset(next);
+              })
+            );
+            row.appendChild(
+              mkIconBtn(
+                doc,
+                "\u{1F5D1}",
+                () => setColsForPreset(colsArr.filter((_, i) => i !== cIdx)),
+                "danger"
+              )
+            );
+            body.appendChild(row);
+            const adv = renderAdvancedJson(doc, "Advanced JSON (column)", c, (nextCol) => {
+              const next = [...colsArr];
+              next[cIdx] = nextCol;
+              setColsForPreset(next);
+            });
+            body.appendChild(adv);
+          });
+          wrap.appendChild(overlay);
+        }
+      }
+      if (editSectionIdx !== null && sections[editSectionIdx]) {
+        const sec = sections[editSectionIdx];
+        const overlay = doc.createElement("div");
+        overlay.className = "ga-le-modal";
+        const bg = doc.createElement("div");
+        bg.className = "ga-le-modal-bg";
+        bg.addEventListener("click", () => {
+          editSectionIdx = null;
+          render();
+        });
+        const panel = doc.createElement("div");
+        panel.className = "ga-le-modal-panel";
+        const header = doc.createElement("div");
+        header.className = "ga-le-modal-header";
+        const ht = doc.createElement("div");
+        ht.className = "ga-le-modal-title";
+        ht.textContent = `Edit section: ${sec?.title || sec?.id || editSectionIdx}`;
+        header.appendChild(ht);
+        header.appendChild(
+          mkBtn(doc, "Close", () => {
+            editSectionIdx = null;
+            render();
+          })
+        );
+        panel.appendChild(header);
+        const body = doc.createElement("div");
+        body.className = "ga-le-modal-body";
+        const patchSection = (partial) => {
+          const next = [...sections];
+          next[editSectionIdx] = { ...sec, ...partial };
+          setSections(next);
+        };
+        body.appendChild(mkTextInput(doc, "section.id", String(sec?.id ?? ""), (v) => patchSection({ id: v })));
+        body.appendChild(mkTextInput(doc, "section.title", String(sec?.title ?? ""), (v) => patchSection({ title: v })));
+        const colNote = doc.createElement("div");
+        colNote.className = "ga-settings-note";
+        colNote.textContent = "layout.columns = the grid width inside the section (recommended: 12).";
+        body.appendChild(colNote);
+        body.appendChild(
+          mkNumberInput(
+            doc,
+            "layout.columns",
+            asInt(sec?.layout?.columns, 12),
+            (n) => patchSection({ layout: { ...sec.layout ?? {}, columns: Math.max(1, Math.min(24, n)) } }),
+            { min: 1, max: 24 }
+          )
+        );
+        const cardsCount = Array.isArray(sec?.layout?.cards) ? sec.layout.cards.length : 0;
+        if (cardsCount !== 1) {
+          const warn = doc.createElement("div");
+          warn.className = "ga-settings-note";
+          warn.textContent = cardsCount === 0 ? "This section has no container yet. Create one to add widgets." : `This section has ${cardsCount} cards. Layout UI assumes 1 container per section.`;
+          body.appendChild(warn);
+          const fix = doc.createElement("div");
+          fix.className = "ga-le-toprow";
+          fix.appendChild(
+            mkBtn(
+              doc,
+              cardsCount === 0 ? "Create container" : "Flatten to 1 container",
+              () => {
+                if (cardsCount <= 1) ensureOneCardContainer(editSectionIdx);
+                else {
+                  if (!safeConfirm("Flatten all cards into one container?")) return;
+                  flattenCardsIntoFirst(editSectionIdx);
+                }
+                render();
+              },
+              "primary"
+            )
+          );
+          body.appendChild(fix);
+        }
+        body.appendChild(mkHr(doc));
+        const cols = Math.max(1, Math.min(24, asInt(sec?.layout?.columns, 12)));
+        const children = getSectionChildren(editSectionIdx);
+        const addRow = doc.createElement("div");
+        addRow.className = "ga-le-toprow";
+        addRow.appendChild(mkBtn(doc, "Add graph", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "chart", cols)]), "primary"));
+        addRow.appendChild(mkBtn(doc, "Add stat rows", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "stat_list", cols)]), "primary"));
+        addRow.appendChild(mkBtn(doc, "Add box", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "stat_value", cols)]), "primary"));
+        body.appendChild(addRow);
+        const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
+        const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
+        const patchWidgetAt = (wIdx, nextWidget) => {
+          const next = children.map((x, i) => i === wIdx ? nextWidget : x);
+          setSectionChildren(editSectionIdx, next);
+        };
+        const moveWidget = (wIdx, delta) => {
+          const nextIdx = wIdx + delta;
+          if (nextIdx < 0 || nextIdx >= children.length) return;
+          const next = [...children];
+          const [picked] = next.splice(wIdx, 1);
+          next.splice(nextIdx, 0, picked);
+          setSectionChildren(editSectionIdx, next);
+        };
+        const renderWidgetEditor = (w, wIdx) => {
+          const det = doc.createElement("details");
+          det.className = "ga-le-details";
+          det.open = false;
+          const sum = doc.createElement("summary");
+          sum.textContent = `${w.type} - ${w.title || w.widgetId}`;
+          det.appendChild(sum);
+          const wItem = doc.createElement("div");
+          wItem.className = "ga-le-widget";
+          const actions = doc.createElement("div");
+          actions.className = "ga-le-toprow";
+          actions.appendChild(mkBtn(doc, "Up", () => moveWidget(wIdx, -1)));
+          actions.appendChild(mkBtn(doc, "Down", () => moveWidget(wIdx, 1)));
+          actions.appendChild(
+            mkBtn(
+              doc,
+              "Delete",
+              () => {
+                if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
+                setSectionChildren(editSectionIdx, children.filter((_, i) => i !== wIdx));
+              },
+              "danger"
+            )
+          );
+          wItem.appendChild(actions);
+          wItem.appendChild(mkTextInput(doc, "widgetId", String(w.widgetId ?? ""), (v) => patchWidgetAt(wIdx, { ...w, widgetId: v })));
+          wItem.appendChild(
+            mkSelect(doc, "type", String(w.type ?? "stat_list"), typeOpts, (v) => {
+              const nextWidget = defaultWidget(String(w.grain ?? grainDefault), v);
+              nextWidget.widgetId = w.widgetId;
+              nextWidget.title = w.title;
+              nextWidget.grain = w.grain ?? grainDefault;
+              nextWidget.placement = w.placement;
+              patchWidgetAt(wIdx, nextWidget);
+            })
+          );
+          wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidgetAt(wIdx, { ...w, title: v })));
+          wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidgetAt(wIdx, { ...w, grain: v })));
+          const p = w.placement ?? { x: 0, y: 0, w: cols, h: 3 };
+          const pGrid = doc.createElement("div");
+          pGrid.className = "ga-le-grid4";
+          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, x: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, y: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, cols), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, w: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, h: n } })));
+          wItem.appendChild(pGrid);
+          const widgetGrain = String(w.grain ?? grainDefault);
+          const spec = w.spec ?? {};
+          const dims = allowedDimensionOptions(semantic, widgetGrain);
+          const meas = allowedMeasureOptions(semantic, widgetGrain);
+          if (w.type === "chart") {
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "chart.type",
+                String(spec.type ?? "bar"),
+                [
+                  { value: "bar", label: "bar" },
+                  { value: "line", label: "line" }
+                ],
+                (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, type: v } })
+              )
+            );
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "x.dimension",
+                String(spec?.x?.dimension ?? ""),
+                dims,
+                (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, x: { ...spec.x ?? {}, dimension: v } } })
+              )
+            );
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "y.measure",
+                String(spec?.y?.measure ?? ""),
+                meas,
+                (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, y: { ...spec.y ?? {}, measure: v } } })
+              )
+            );
+            wItem.appendChild(
+              renderClickActionEditor(
+                doc,
+                sem,
+                "actions.click (drilldown)",
+                spec.actions,
+                (nextActions) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } })
+              )
+            );
+          } else if (w.type === "breakdown") {
+            wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, dimension: v } })));
+            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } })));
+            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, limit: n } }), { min: 1, max: 500 }));
+            wItem.appendChild(
+              renderClickActionEditor(
+                doc,
+                sem,
+                "actions.click (drilldown)",
+                spec.actions,
+                (nextActions) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } })
+              )
+            );
+          } else if (w.type === "stat_value") {
+            wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, label: v } })));
+            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } })));
+            wItem.appendChild(
+              renderClickActionEditor(
+                doc,
+                sem,
+                "actions.click (drilldown)",
+                spec.actions,
+                (nextActions) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } })
+              )
+            );
+          } else if (w.type === "stat_list") {
+            const rows = Array.isArray(spec.rows) ? spec.rows : [];
+            const rowsBox = doc.createElement("div");
+            rowsBox.className = "ga-le-subbox";
+            const rh = doc.createElement("div");
+            rh.className = "ga-le-subhead";
+            rh.textContent = `Rows (${rows.length})`;
+            rowsBox.appendChild(rh);
+            rowsBox.appendChild(mkBtn(doc, "Add row", () => patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: [...rows, { label: "Row", measure: "" }] } }), "primary"));
+            rows.forEach((r, rIdx) => {
+              const rowItem = doc.createElement("div");
+              rowItem.className = "ga-le-item";
+              rowItem.appendChild(
+                mkTextInput(doc, "label", String(r.label ?? ""), (v) => {
+                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, label: v } : x);
+                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                })
+              );
+              rowItem.appendChild(
+                mkSelect(doc, "measure", String(r.measure ?? ""), meas, (v) => {
+                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, measure: v } : x);
+                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                })
+              );
+              rowItem.appendChild(
+                renderClickActionEditor(doc, sem, "row.actions.click (drilldown)", r.actions, (nextActions) => {
+                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, actions: nextActions } : x);
+                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                })
+              );
+              rowItem.appendChild(
+                mkBtn(
+                  doc,
+                  "Delete row",
+                  () => {
+                    if (!safeConfirm("Delete this row?")) return;
+                    patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: rows.filter((_, i) => i !== rIdx) } });
+                  },
+                  "danger"
+                )
+              );
+              rowsBox.appendChild(rowItem);
+            });
+            wItem.appendChild(rowsBox);
+          } else {
+            wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
+          }
+          wItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (spec)", spec, (nextSpec) => patchWidgetAt(wIdx, { ...w, spec: nextSpec })));
+          det.appendChild(wItem);
+          return det;
+        };
+        const byCat = { graphs: [], statrows: [], boxes: [], other: [] };
+        children.forEach((w, i) => {
+          const t = String(w?.type ?? "");
+          if (t === "chart" || t === "breakdown") byCat.graphs.push(i);
+          else if (t === "stat_list") byCat.statrows.push(i);
+          else if (t === "stat_value" || t === "record_list" || t === "leader_list") byCat.boxes.push(i);
+          else byCat.other.push(i);
+        });
+        const renderCat = (title, idxs) => {
+          const det = doc.createElement("details");
+          det.className = "ga-le-details";
+          det.open = true;
+          const sum = doc.createElement("summary");
+          sum.textContent = `${title} (${idxs.length})`;
+          det.appendChild(sum);
+          const host = doc.createElement("div");
+          host.className = "ga-le-item";
+          idxs.forEach((i) => host.appendChild(renderWidgetEditor(children[i], i)));
+          det.appendChild(host);
+          body.appendChild(det);
+        };
+        renderCat("Graphs", byCat.graphs);
+        renderCat("Stat rows", byCat.statrows);
+        renderCat("Boxes", byCat.boxes);
+        if (byCat.other.length) renderCat("Other", byCat.other);
+        panel.appendChild(body);
+        overlay.appendChild(bg);
+        overlay.appendChild(panel);
+        wrap.appendChild(overlay);
+      }
+      void sem;
+      return true;
+    }
+    const render = () => {
+      root.innerHTML = "";
+      if (renderPanels()) return;
+      const left = doc.createElement("div");
+      left.className = "ga-le-left";
+      const right = doc.createElement("div");
+      right.className = "ga-le-right";
+      const sections = draft.dashboard.sections ?? [] ?? [];
+      if (active.kind === "section") {
+        if (active.idx < 0) active = { kind: "section", idx: 0 };
+        if (active.idx >= sections.length) active = { kind: "section", idx: Math.max(0, sections.length - 1) };
+      }
+      const leftHead = doc.createElement("div");
+      leftHead.className = "ga-le-left-head";
+      leftHead.appendChild(
+        mkBtn(
+          doc,
+          "Add section",
+          () => {
+            const next = cloneJson2(draft);
+            next.dashboard.sections = [...next.dashboard.sections ?? [], defaultSection()];
+            draft = next;
+            active = { kind: "section", idx: next.dashboard.sections.length - 1 };
+            markDirty();
+          },
+          "primary"
+        )
+      );
+      left.appendChild(leftHead);
+      const list = doc.createElement("div");
+      list.className = "ga-le-list";
+      const globalItem = doc.createElement("button");
+      globalItem.type = "button";
+      globalItem.className = "ga-le-list-item";
+      globalItem.classList.toggle("active", active.kind === "global_filters");
+      globalItem.textContent = "Global filters";
+      globalItem.addEventListener("click", () => {
+        active = { kind: "global_filters" };
+        render();
+      });
+      list.appendChild(globalItem);
+      sections.forEach((s, idx) => {
+        const item = doc.createElement("button");
+        item.type = "button";
+        item.className = "ga-le-list-item";
+        item.classList.toggle("active", active.kind === "section" && active.idx === idx);
+        item.textContent = s.title || s.id || "(untitled)";
+        item.addEventListener("click", () => {
+          active = { kind: "section", idx };
+          render();
+        });
+        list.appendChild(item);
+      });
+      left.appendChild(list);
+      if (active.kind === "global_filters") {
+        renderGlobalFilters(right);
+        root.appendChild(left);
+        root.appendChild(right);
+        return;
+      }
+      const section = sections[active.idx];
+      if (!section) {
+        const note = doc.createElement("div");
+        note.className = "ga-settings-note";
+        note.textContent = "No sections yet. Click Add section to get started.";
+        right.appendChild(note);
+        root.appendChild(left);
+        root.appendChild(right);
+        return;
+      }
+      if (lastSectionIdx !== active.idx) {
+        lastSectionIdx = active.idx;
+        focusCardIdx = 0;
+        focusWidgetIdx = 0;
+        scrollToId = null;
+      }
+      const topRow = doc.createElement("div");
+      topRow.className = "ga-le-toprow";
+      topRow.appendChild(
+        mkBtn(doc, "Move up", () => {
+          if (active.idx <= 0) return;
+          const next = cloneJson2(draft);
+          const arr = [...next.dashboard.sections];
+          const [picked] = arr.splice(active.idx, 1);
+          arr.splice(active.idx - 1, 0, picked);
+          next.dashboard.sections = arr;
+          draft = next;
+          active = { kind: "section", idx: active.idx - 1 };
+          markDirty();
+        })
+      );
+      topRow.appendChild(
+        mkBtn(doc, "Move down", () => {
+          if (active.idx >= sections.length - 1) return;
+          const next = cloneJson2(draft);
+          const arr = [...next.dashboard.sections];
+          const [picked] = arr.splice(active.idx, 1);
+          arr.splice(active.idx + 1, 0, picked);
+          next.dashboard.sections = arr;
+          draft = next;
+          active = { kind: "section", idx: active.idx + 1 };
+          markDirty();
+        })
+      );
+      topRow.appendChild(
+        mkBtn(
+          doc,
+          "Delete",
+          () => {
+            setStatus("info", "Deleting section\u2026");
+            if (!safeConfirm(`Delete section '${section.title || section.id}'?`)) return;
+            const next = cloneJson2(draft);
+            next.dashboard.sections = next.dashboard.sections.filter((_, i) => i !== active.idx);
+            draft = next;
+            active = { kind: "section", idx: Math.max(0, active.idx - 1) };
+            markDirty();
+          },
+          "danger"
+        )
+      );
+      right.appendChild(topRow);
+      const patchSection = (partial) => {
+        const next = cloneJson2(draft);
+        next.dashboard.sections[active.idx] = { ...next.dashboard.sections[active.idx], ...partial };
+        draft = next;
+        markDirty();
+      };
+      right.appendChild(mkTextInput(doc, "section.id", section.id, (v) => patchSection({ id: v })));
+      right.appendChild(mkTextInput(doc, "section.title", section.title, (v) => patchSection({ title: v })));
+      right.appendChild(
+        mkNumberInput(
+          doc,
+          "layout.columns",
+          asInt(section.layout?.columns, 12),
+          (n) => patchSection({ layout: { ...section.layout, columns: Math.max(1, Math.min(24, n)) } }),
+          { min: 1, max: 24 }
+        )
+      );
+      const gf = draft.dashboard.globalFilters;
+      const controlIds = gf?.enabled ? (gf.controls ?? []).map((c) => c.id) : [];
+      const ctrlOpts = controlIds.map((id) => ({ value: id, label: id }));
+      const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : [];
+      const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : [];
+      if (ctrlOpts.length > 0) {
+        const fsBox = doc.createElement("div");
+        fsBox.className = "ga-le-box";
+        const fsHead = doc.createElement("div");
+        fsHead.className = "ga-le-box-head";
+        fsHead.textContent = "Global filter visibility (optional)";
+        fsBox.appendChild(fsHead);
+        const note = doc.createElement("div");
+        note.className = "ga-settings-note";
+        note.textContent = "Choose which global filter controls are shown for this section. Default: show all.";
+        fsBox.appendChild(note);
+        const mode2 = include.length ? "only" : exclude.length ? "except" : "all";
+        fsBox.appendChild(
+          mkSelect(
+            doc,
+            "Mode",
+            mode2,
+            [
+              { value: "all", label: "Show all filters" },
+              { value: "only", label: "Show only selected" },
+              { value: "except", label: "Show all except selected" }
+            ],
+            (v) => {
+              if (v === "all") return patchSection({ filterScope: void 0 });
+              if (v === "only") return patchSection({ filterScope: normalizeFilterScope({ include, exclude: [] }) });
+              return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude }) });
+            }
+          )
+        );
+        const selected = mode2 === "only" ? include : mode2 === "except" ? exclude : [];
+        if (mode2 !== "all") {
+          fsBox.appendChild(
+            mkMultiSelect(doc, "Filters", selected, ctrlOpts, (vals) => {
+              if (mode2 === "only") return patchSection({ filterScope: normalizeFilterScope({ include: vals, exclude: [] }) });
+              return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude: vals }) });
+            })
+          );
+        }
+        right.appendChild(fsBox);
+      }
+      right.appendChild(mkHr(doc));
+      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
+      const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
+      const cardsBox = doc.createElement("div");
+      cardsBox.className = "ga-le-box";
+      const ch3 = doc.createElement("div");
+      ch3.className = "ga-le-box-head";
+      ch3.textContent = "Cards";
+      cardsBox.appendChild(ch3);
+      const patchCard = (cardIdx, partial) => {
+        const next = cloneJson2(draft);
+        const sec = next.dashboard.sections[active.idx];
+        const cards2 = [...sec.layout.cards];
+        cards2[cardIdx] = { ...cards2[cardIdx], ...partial };
+        sec.layout.cards = cards2;
+        draft = next;
+        markDirty();
+      };
+      const patchWidget = (cardIdx, widgetIdx, nextWidget) => {
+        const next = cloneJson2(draft);
+        const sec = next.dashboard.sections[active.idx];
+        const card = sec.layout.cards[cardIdx];
+        const children = card.card.children ?? [];
+        children[widgetIdx] = nextWidget;
+        card.card.children = children;
+        draft = next;
+        markDirty();
+      };
+      const moveCard = (cardIdx, delta) => {
+        const cards2 = draft.dashboard.sections[active.idx].layout.cards ?? [];
+        const nextIdx = cardIdx + delta;
+        if (nextIdx < 0 || nextIdx >= cards2.length) return;
+        const next = cloneJson2(draft);
+        const arr = [...next.dashboard.sections[active.idx].layout.cards];
+        const [picked] = arr.splice(cardIdx, 1);
+        arr.splice(nextIdx, 0, picked);
+        next.dashboard.sections[active.idx].layout.cards = arr;
+        draft = next;
+        markDirty();
+      };
+      const moveWidget = (cardIdx, widgetIdx, delta) => {
+        const sec = draft.dashboard.sections[active.idx];
+        const card = sec.layout.cards[cardIdx];
+        const children = card.card.children ?? [];
+        const nextIdx = widgetIdx + delta;
+        if (nextIdx < 0 || nextIdx >= children.length) return;
+        const next = cloneJson2(draft);
+        const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
+        const arr = [...c.card.children ?? []];
+        const [picked] = arr.splice(widgetIdx, 1);
+        arr.splice(nextIdx, 0, picked);
+        c.card.children = arr;
+        draft = next;
+        markDirty();
+      };
+      const cards = section.layout.cards ?? [] ?? [];
+      if (focusCardIdx < 0) focusCardIdx = 0;
+      if (focusCardIdx >= cards.length) focusCardIdx = Math.max(0, cards.length - 1);
+      const focusedCard = cards[focusCardIdx] ?? null;
+      const focusedChildren = focusedCard ? focusedCard.card.children ?? [] : [];
+      if (focusWidgetIdx < 0) focusWidgetIdx = 0;
+      if (focusWidgetIdx >= focusedChildren.length) focusWidgetIdx = Math.max(0, focusedChildren.length - 1);
+      const cardsTop = doc.createElement("div");
+      cardsTop.className = "ga-le-toprow";
+      cardsTop.appendChild(
+        mkBtn(
+          doc,
+          "Add card",
+          () => {
+            const next = cloneJson2(draft);
+            next.dashboard.sections[active.idx].layout.cards = [...next.dashboard.sections[active.idx].layout.cards ?? [], defaultCard()];
+            draft = next;
+            focusCardIdx = Math.max(0, (next.dashboard.sections[active.idx].layout.cards ?? []).length - 1);
+            focusWidgetIdx = 0;
+            scrollToId = `ga-le-card-${focusCardIdx}`;
+            markDirty();
+          },
+          "primary"
+        )
+      );
+      const focusWrap = doc.createElement("label");
+      focusWrap.className = "ga-le-toggle";
+      const focusInput = doc.createElement("input");
+      focusInput.type = "checkbox";
+      focusInput.checked = focusMode;
+      const focusTxt = doc.createElement("span");
+      focusTxt.textContent = "Focus mode";
+      focusWrap.appendChild(focusInput);
+      focusWrap.appendChild(focusTxt);
+      focusInput.addEventListener("change", () => {
+        focusMode = focusInput.checked;
+        render();
+      });
+      cardsTop.appendChild(focusWrap);
+      cardsTop.appendChild(
+        mkBtn(
+          doc,
+          focusMode ? "Show all" : "Focus selected",
+          () => {
+            focusMode = !focusMode;
+            render();
+          },
+          "ghost"
+        )
+      );
+      cardsBox.appendChild(cardsTop);
+      const cardsLayout = doc.createElement("div");
+      cardsLayout.className = "ga-le-cards-layout";
+      const outline = doc.createElement("div");
+      outline.className = "ga-le-outline";
+      const oh = doc.createElement("div");
+      oh.className = "ga-le-outline-head";
+      oh.textContent = "Outline";
+      outline.appendChild(oh);
+      const oNote = doc.createElement("div");
+      oNote.className = "ga-settings-note";
+      oNote.textContent = "Click to jump. In Focus mode only the selected card/widget stays open.";
+      outline.appendChild(oNote);
+      const oSearch = doc.createElement("input");
+      oSearch.type = "text";
+      oSearch.placeholder = "Search cards/widgets...";
+      oSearch.className = "ga-le-outline-search";
+      outline.appendChild(oSearch);
+      const oList = doc.createElement("div");
+      oList.className = "ga-le-outline-list";
+      outline.appendChild(oList);
+      const cardsHost = doc.createElement("div");
+      cardsHost.className = "ga-le-cards-host";
+      cards.forEach((card, cardIdx) => {
+        const cardElId = `ga-le-card-${cardIdx}`;
+        const cardTitle = `${card.title || "Card"} (${card.cardId})`;
+        const cBtn = doc.createElement("button");
+        cBtn.type = "button";
+        cBtn.className = "ga-le-outline-item";
+        cBtn.classList.toggle("active", focusCardIdx === cardIdx);
+        cBtn.textContent = cardTitle;
+        cBtn.dataset.searchText = cardTitle.toLowerCase();
+        cBtn.addEventListener("click", () => {
+          focusMode = true;
+          focusCardIdx = cardIdx;
+          focusWidgetIdx = 0;
+          scrollToId = cardElId;
+          render();
+        });
+        oList.appendChild(cBtn);
+        const outlineChildren = card.card.children ?? [];
+        outlineChildren.forEach((w, wIdx) => {
+          const wElId = `ga-le-widget-${cardIdx}-${wIdx}`;
+          const wTitle = `${w.type} - ${w.title || w.widgetId}`;
+          const wBtn = doc.createElement("button");
+          wBtn.type = "button";
+          wBtn.className = "ga-le-outline-item ga-le-outline-item-widget";
+          wBtn.classList.toggle("active", focusCardIdx === cardIdx && focusWidgetIdx === wIdx);
+          wBtn.textContent = wTitle;
+          wBtn.dataset.searchText = `${cardTitle} ${wTitle}`.toLowerCase();
+          wBtn.addEventListener("click", () => {
+            focusMode = true;
+            focusCardIdx = cardIdx;
+            focusWidgetIdx = wIdx;
+            scrollToId = wElId;
+            render();
+          });
+          oList.appendChild(wBtn);
+        });
+        const details = doc.createElement("details");
+        details.id = cardElId;
+        details.open = focusMode ? cardIdx === focusCardIdx : true;
+        details.className = "ga-le-details";
+        const summary = doc.createElement("summary");
+        summary.textContent = cardTitle;
+        summary.addEventListener("click", (ev) => {
+          focusCardIdx = cardIdx;
+          if (focusMode) {
+            ev.preventDefault();
+            focusWidgetIdx = 0;
+            scrollToId = cardElId;
+            render();
+          }
+        });
+        details.appendChild(summary);
+        const cardItem = doc.createElement("div");
+        cardItem.className = "ga-le-item";
+        const cardActions = doc.createElement("div");
+        cardActions.className = "ga-le-toprow";
+        cardActions.appendChild(mkBtn(doc, "Up", () => moveCard(cardIdx, -1)));
+        cardActions.appendChild(mkBtn(doc, "Down", () => moveCard(cardIdx, 1)));
+        cardActions.appendChild(
+          mkBtn(
+            doc,
+            "Delete card",
+            () => {
+              setStatus("info", "Deleting card\u2026");
+              if (!safeConfirm(`Delete card '${card.title || card.cardId}'?`)) return;
+              const next = cloneJson2(draft);
+              next.dashboard.sections[active.idx].layout.cards = next.dashboard.sections[active.idx].layout.cards.filter((_, i) => i !== cardIdx);
+              draft = next;
+              markDirty();
+            },
+            "danger"
+          )
+        );
+        cardItem.appendChild(cardActions);
+        cardItem.appendChild(mkTextInput(doc, "cardId", String(card.cardId ?? ""), (v) => patchCard(cardIdx, { cardId: v })));
+        cardItem.appendChild(mkTextInput(doc, "title", String(card.title ?? ""), (v) => patchCard(cardIdx, { title: v })));
+        const placeNote = doc.createElement("div");
+        placeNote.className = "ga-settings-note";
+        placeNote.textContent = `Card placement uses the section grid (layout.columns = ${asInt(section.layout?.columns, 12)}): x/y = position, w/h = size (grid units).`;
+        cardItem.appendChild(placeNote);
+        const grid = doc.createElement("div");
+        grid.className = "ga-le-grid4";
+        grid.appendChild(mkNumberInput(doc, "x", asInt(card.x, 0), (n) => patchCard(cardIdx, { x: n })));
+        grid.appendChild(mkNumberInput(doc, "y", asInt(card.y, 0), (n) => patchCard(cardIdx, { y: n })));
+        grid.appendChild(mkNumberInput(doc, "w", asInt(card.w, 12), (n) => patchCard(cardIdx, { w: n })));
+        grid.appendChild(mkNumberInput(doc, "h", asInt(card.h, 10), (n) => patchCard(cardIdx, { h: n })));
+        cardItem.appendChild(grid);
+        const wBox = doc.createElement("div");
+        wBox.className = "ga-le-subbox";
+        const wh = doc.createElement("div");
+        wh.className = "ga-le-subhead";
+        const children = card.card.children ?? [];
+        wh.textContent = `Widgets (${children.length})`;
+        wBox.appendChild(wh);
+        wBox.appendChild(
+          mkBtn(
+            doc,
+            "Add widget",
+            () => {
+              const next = cloneJson2(draft);
+              const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
+              const w = defaultWidget(grainDefault, widgetTypes[0]);
+              c.card.children = [...c.card.children ?? [], w];
+              draft = next;
+              focusCardIdx = cardIdx;
+              focusWidgetIdx = Math.max(0, (c.card.children ?? []).length - 1);
+              scrollToId = `ga-le-widget-${cardIdx}-${focusWidgetIdx}`;
+              markDirty();
+            },
+            "primary"
+          )
+        );
+        children.forEach((w, wIdx) => {
+          const wDetails = doc.createElement("details");
+          const wElId = `ga-le-widget-${cardIdx}-${wIdx}`;
+          wDetails.id = wElId;
+          wDetails.open = focusMode ? cardIdx === focusCardIdx && wIdx === focusWidgetIdx : false;
+          wDetails.className = "ga-le-details";
+          const wSummary = doc.createElement("summary");
+          wSummary.addEventListener("click", (ev) => {
+            focusCardIdx = cardIdx;
+            focusWidgetIdx = wIdx;
+            if (focusMode) {
+              ev.preventDefault();
+              scrollToId = wElId;
+              render();
+            }
+          });
+          wSummary.textContent = `${w.type} \u2014 ${w.title || w.widgetId}`;
+          wDetails.appendChild(wSummary);
+          const wItem = doc.createElement("div");
+          wItem.className = "ga-le-widget";
+          const wActions = doc.createElement("div");
+          wActions.className = "ga-le-toprow";
+          wActions.appendChild(mkBtn(doc, "Up", () => moveWidget(cardIdx, wIdx, -1)));
+          wActions.appendChild(mkBtn(doc, "Down", () => moveWidget(cardIdx, wIdx, 1)));
+          wActions.appendChild(
+            mkBtn(
+              doc,
+              "Delete",
+              () => {
+                setStatus("info", "Deleting widget\u2026");
+                if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
+                const next = cloneJson2(draft);
+                const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
+                c.card.children = (c.card.children ?? []).filter((_, i) => i !== wIdx);
+                draft = next;
+                markDirty();
+              },
+              "danger"
+            )
+          );
+          wItem.appendChild(wActions);
+          wItem.appendChild(mkTextInput(doc, "widgetId", String(w.widgetId ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, widgetId: v })));
+          wItem.appendChild(
+            mkSelect(doc, "type", String(w.type ?? "stat_list"), typeOpts, (v) => {
+              const nextWidget = defaultWidget(String(w.grain ?? grainDefault), v);
+              nextWidget.widgetId = w.widgetId;
+              nextWidget.title = w.title;
+              nextWidget.grain = w.grain ?? grainDefault;
+              nextWidget.placement = w.placement;
+              patchWidget(cardIdx, wIdx, nextWidget);
+            })
+          );
+          wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, title: v })));
+          const grainNote = doc.createElement("div");
+          grainNote.className = "ga-settings-note";
+          grainNote.textContent = "grain = the dataset level the widget is calculated on (e.g. round vs. game).";
+          wItem.appendChild(grainNote);
+          wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidget(cardIdx, wIdx, { ...w, grain: v })));
+          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
+          const widgetPlaceNote = doc.createElement("div");
+          widgetPlaceNote.className = "ga-settings-note";
+          widgetPlaceNote.textContent = `Widget placement uses a grid inside the card: x/y = position, w/h = size (grid units). Tip: keep w within layout.columns (${asInt(section.layout?.columns, 12)}).`;
+          wItem.appendChild(widgetPlaceNote);
+          const pGrid = doc.createElement("div");
+          pGrid.className = "ga-le-grid4";
+          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, x: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, y: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, w: n } })));
+          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, h: n } })));
+          wItem.appendChild(pGrid);
+          const widgetGrain = String(w.grain ?? grainDefault);
+          const spec = w.spec ?? {};
+          const dims = allowedDimensionOptions(semantic, widgetGrain);
+          const meas = allowedMeasureOptions(semantic, widgetGrain);
+          if (w.type === "chart") {
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "chart.type",
+                String(spec.type ?? "bar"),
+                [{ value: "bar", label: "bar" }, { value: "line", label: "line" }],
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, type: v } })
+              )
+            );
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "x.dimension",
+                String(spec?.x?.dimension ?? ""),
+                dims,
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, x: { ...spec.x ?? {}, dimension: v } } })
+              )
+            );
+            wItem.appendChild(
+              mkSelect(
+                doc,
+                "y.measure",
+                String(spec?.y?.measure ?? ""),
+                meas,
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, y: { ...spec.y ?? {}, measure: v } } })
+              )
+            );
+            wItem.appendChild(
+              mkToggle(
+                doc,
+                "actions.hover",
+                !!spec?.actions?.hover,
+                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: { ...spec.actions ?? {}, hover: v } } })
+              )
+            );
+            wItem.appendChild(
+              renderClickActionEditor(
+                doc,
+                semantic,
+                "actions.click (drilldown)",
+                spec.actions,
+                (nextActions) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } })
+              )
+            );
+          } else if (w.type === "breakdown") {
+            wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, dimension: v } })));
+            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
+            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, limit: n } }), { min: 1, max: 500 }));
+            wItem.appendChild(
+              renderClickActionEditor(
+                doc,
+                semantic,
+                "actions.click (drilldown)",
+                spec.actions,
+                (nextActions) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } })
+              )
+            );
+          } else if (w.type === "stat_value") {
+            wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, label: v } })));
+            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
+            wItem.appendChild(
+              renderClickActionEditor(
+                doc,
+                semantic,
+                "actions.click (drilldown)",
+                spec.actions,
+                (nextActions) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } })
+              )
+            );
+          } else if (w.type === "stat_list") {
+            const rows = Array.isArray(spec.rows) ? spec.rows : [];
+            const rowsBox = doc.createElement("div");
+            rowsBox.className = "ga-le-subbox";
+            const rh = doc.createElement("div");
+            rh.className = "ga-le-subhead";
+            rh.textContent = `Rows (${rows.length})`;
+            rowsBox.appendChild(rh);
+            rowsBox.appendChild(
+              mkBtn(doc, "Add row", () => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: [...rows, { label: "Row", measure: "" }] } }), "primary")
+            );
+            rows.forEach((r, rIdx) => {
+              const rowItem = doc.createElement("div");
+              rowItem.className = "ga-le-item";
+              rowItem.appendChild(
+                mkTextInput(doc, "label", String(r.label ?? ""), (v) => {
+                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, label: v } : x);
+                  patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                })
+              );
+              rowItem.appendChild(
+                mkSelect(doc, "measure", String(r.measure ?? ""), meas, (v) => {
+                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, measure: v } : x);
+                  patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                })
+              );
+              rowItem.appendChild(
+                renderClickActionEditor(doc, semantic, "row.actions.click (drilldown)", r.actions, (nextActions) => {
+                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, actions: nextActions } : x);
+                  patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                })
+              );
+              const delRow = doc.createElement("div");
+              delRow.className = "ga-le-toprow";
+              delRow.appendChild(
+                mkBtn(
+                  doc,
+                  "Delete row",
+                  () => {
+                    if (!safeConfirm("Delete this row?")) return;
+                    const nextRows = rows.filter((_, i) => i !== rIdx);
+                    patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
+                  },
+                  "danger"
+                )
+              );
+              rowItem.appendChild(delRow);
+              rowsBox.appendChild(rowItem);
+            });
+            wItem.appendChild(rowsBox);
+          } else if (w.type === "record_list") {
+            const records = Array.isArray(spec.records) ? spec.records : [];
+            const recBox = doc.createElement("div");
+            recBox.className = "ga-le-subbox";
+            const rh = doc.createElement("div");
+            rh.className = "ga-le-subhead";
+            rh.textContent = `Records (${records.length})`;
+            recBox.appendChild(rh);
+            const addRecord = mkBtn(
+              doc,
+              "Add record",
+              () => {
+                const id = `rec_${Math.random().toString(36).slice(2, 7)}`;
+                const next = [...records, { id, label: "Record", kind: "group_extreme", extreme: "max" }];
+                patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
+              },
+              "primary"
+            );
+            recBox.appendChild(addRecord);
+            const recNote = doc.createElement("div");
+            recNote.className = "ga-settings-note";
+            recNote.textContent = "Records are configurable items (not stat rows). Use kind + fields below, or Advanced JSON for full control.";
+            recBox.appendChild(recNote);
+            const kindOpts = [
+              { value: "group_extreme", label: "group_extreme" },
+              { value: "streak", label: "streak" },
+              { value: "same_value_streak", label: "same_value_streak" }
+            ];
+            const extremeOpts = [
+              { value: "max", label: "max" },
+              { value: "min", label: "min" }
+            ];
+            const displayKeyOpts = [
+              { value: "group", label: "group" },
+              { value: "first_ts", label: "first_ts" },
+              { value: "first_ts_score", label: "first_ts_score" }
+            ];
+            records.forEach((r, rIdx) => {
+              const rDetails = doc.createElement("details");
+              rDetails.open = false;
+              rDetails.className = "ga-le-details";
+              const sum = doc.createElement("summary");
+              sum.textContent = `${r.label || "Record"} (${r.id || rIdx})`;
+              rDetails.appendChild(sum);
+              const item = doc.createElement("div");
+              item.className = "ga-le-item";
+              const top = doc.createElement("div");
+              top.className = "ga-le-toprow";
+              top.appendChild(
+                mkBtn(
+                  doc,
+                  "Delete record",
+                  () => {
+                    if (!safeConfirm("Delete this record?")) return;
+                    const next = records.filter((_, i) => i !== rIdx);
+                    patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
+                  },
+                  "danger"
+                )
+              );
+              item.appendChild(top);
+              const patchRecord = (nextRec) => {
+                const next = records.map((x, i) => i === rIdx ? nextRec : x);
+                patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
+              };
+              item.appendChild(mkTextInput(doc, "id", String(r.id ?? ""), (v) => patchRecord({ ...r, id: v })));
+              item.appendChild(mkTextInput(doc, "label", String(r.label ?? ""), (v) => patchRecord({ ...r, label: v })));
+              item.appendChild(mkSelect(doc, "kind", String(r.kind ?? "group_extreme"), kindOpts, (v) => patchRecord({ ...r, kind: v })));
+              item.appendChild(mkSelect(doc, "displayKey", String(r.displayKey ?? "group"), displayKeyOpts, (v) => patchRecord({ ...r, displayKey: v })));
+              if ((r.kind ?? "group_extreme") === "group_extreme") {
+                item.appendChild(mkSelect(doc, "metric", String(r.metric ?? ""), meas, (v) => patchRecord({ ...r, metric: v })));
+                item.appendChild(mkSelect(doc, "groupBy", String(r.groupBy ?? ""), dims, (v) => patchRecord({ ...r, groupBy: v })));
+                item.appendChild(mkSelect(doc, "extreme", String(r.extreme ?? "max"), extremeOpts, (v) => patchRecord({ ...r, extreme: v })));
+              }
+              if ((r.kind ?? "") === "same_value_streak") {
+                item.appendChild(mkSelect(doc, "dimension", String(r.dimension ?? ""), dims, (v) => patchRecord({ ...r, dimension: v })));
+              }
+              item.appendChild(
+                renderClickActionEditor(doc, semantic, "actions.click (drilldown)", r.actions, (nextActions) => {
+                  patchRecord({ ...r, actions: nextActions });
+                })
+              );
+              item.appendChild(renderAdvancedJson(doc, "Advanced JSON (record)", r, (next) => patchRecord(next)));
+              rDetails.appendChild(item);
+              recBox.appendChild(rDetails);
+            });
+            wItem.appendChild(recBox);
+          } else {
+            wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
+          }
+          wItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (spec)", spec, (next) => patchWidget(cardIdx, wIdx, { ...w, spec: next })));
+          wDetails.appendChild(wItem);
+          wBox.appendChild(wDetails);
+        });
+        cardItem.appendChild(wBox);
+        details.appendChild(cardItem);
+        cardsHost.appendChild(details);
+      });
+      oSearch.addEventListener("input", () => {
+        const q = oSearch.value.trim().toLowerCase();
+        const items = Array.from(oList.querySelectorAll("button"));
+        for (const it of items) {
+          const hay = String(it.dataset.searchText ?? "").toLowerCase();
+          it.style.display = !q || hay.includes(q) ? "" : "none";
+        }
+      });
+      cardsLayout.appendChild(outline);
+      cardsLayout.appendChild(cardsHost);
+      cardsBox.appendChild(cardsLayout);
+      right.appendChild(cardsBox);
+      root.appendChild(left);
+      root.appendChild(right);
+      if (scrollToId) {
+        const el2 = doc.getElementById(scrollToId);
+        scrollToId = null;
+        if (el2) {
+          try {
+            el2.classList.add("ga-le-flash");
+            el2.scrollIntoView?.({ behavior: "smooth", block: "start" });
+            win?.setTimeout?.(() => el2.classList.remove("ga-le-flash"), 900);
+          } catch {
+          }
+        }
+      }
+    };
+    render();
+    const initRes = validateDraft();
+    if (!initRes.ok) setStatus("error", initRes.error);
+    return wrap;
+  }
+  function defaultCard() {
+    return {
+      cardId: `card_${Math.random().toString(36).slice(2, 7)}`,
+      title: "Card",
+      x: 0,
+      y: 0,
+      w: 12,
+      h: 10,
+      card: { type: "composite", children: [] }
+    };
+  }
+  function defaultSection() {
+    return {
+      id: `section_${Math.random().toString(36).slice(2, 7)}`,
+      title: "New Section",
+      layout: { mode: "grid", columns: 12, cards: [defaultCard()] }
+    };
+  }
+  function defaultWidget(grain, type, columns = 12) {
+    const widgetId = `w_${type}_${Math.random().toString(36).slice(2, 7)}`;
+    const w = Math.max(1, Math.min(24, asInt(columns, 12)));
+    const placement = { x: 0, y: 0, w, h: 3 };
+    const base = { widgetId, type, title: type, grain, placement };
+    if (type === "stat_value") base.spec = { label: "Value", measure: "" };
+    else if (type === "stat_list") base.spec = { rows: [{ label: "Row", measure: "" }] };
+    else if (type === "chart") base.spec = { type: "bar", x: { dimension: "" }, y: { measure: "" }, actions: { hover: true } };
+    else if (type === "breakdown") base.spec = { dimension: "", measure: "", limit: 12 };
+    else if (type === "point_map") base.spec = { points: [{ latField: "trueLat", lngField: "trueLng" }], measures: ["rounds_count"], activeMeasure: "rounds_count" };
+    else if (type === "record_list") base.spec = { records: [] };
+    else base.spec = {};
+    return base;
+  }
+  function normalizeFilterScope(fs) {
+    const include = Array.isArray(fs?.include) ? fs.include.filter((x) => typeof x === "string" && x.trim()) : [];
+    const exclude = Array.isArray(fs?.exclude) ? fs.exclude.filter((x) => typeof x === "string" && x.trim()) : [];
+    const out = {};
+    if (include.length) out.include = include;
+    if (exclude.length) out.exclude = exclude;
+    return Object.keys(out).length ? out : void 0;
+  }
+  function renderWidgetSpecEditorPlaceholder(doc) {
+    const note = doc.createElement("div");
+    note.className = "ga-settings-note";
+    note.textContent = "Advanced widget settings are available in the Advanced JSON editor below.";
+    return note;
+  }
+  function renderAdvancedJson(doc, title, value, onApply) {
+    const details = doc.createElement("details");
+    details.className = "ga-le-adv";
+    const summary = doc.createElement("summary");
+    summary.textContent = title;
+    details.appendChild(summary);
+    const areaField = mkField(doc, "JSON");
+    const area = doc.createElement("textarea");
+    area.value = JSON.stringify(value ?? {}, null, 2);
+    areaField.inputHost.appendChild(area);
+    details.appendChild(areaField.wrap);
+    const actions = doc.createElement("div");
+    actions.className = "ga-le-toprow";
+    actions.appendChild(
+      mkBtn(doc, "Format", () => {
+        try {
+          const parsed = JSON.parse(area.value);
+          area.value = JSON.stringify(parsed, null, 2);
+        } catch {
+        }
+      })
+    );
+    actions.appendChild(
+      mkBtn(
+        doc,
+        "Apply JSON",
+        () => {
+          const parsed = JSON.parse(area.value);
+          onApply(parsed);
+        },
+        "primary"
+      )
+    );
+    details.appendChild(actions);
+    return details;
+  }
+  function renderClickActionEditor(doc, semantic, title, actions, onChange) {
+    const box = doc.createElement("div");
+    box.className = "ga-le-subbox";
+    const head = doc.createElement("div");
+    head.className = "ga-le-subhead";
+    head.textContent = title;
+    box.appendChild(head);
+    const current = actions ?? {};
+    const click = current?.click ?? null;
+    const drilldownPresets = semantic?.drilldownPresets ?? {};
+    const targetIds = Object.keys(drilldownPresets);
+    const targetOptions = targetIds.length > 0 ? targetIds.map((t) => ({ value: t, label: t })) : ["rounds", "games", "sessions", "players"].map((t) => ({ value: t, label: t }));
+    const normalizeTarget = (value) => {
+      const s = String(value ?? "");
+      return targetOptions.some((o) => o.value === s) ? s : String(targetOptions[0]?.value ?? "rounds");
+    };
+    const defaultClickForTarget = (target) => {
+      const preset = drilldownPresets?.[target];
+      const keys2 = Object.keys(preset?.columnsPresets ?? {});
+      const columnsPreset = String(preset?.defaultPreset ?? keys2[0] ?? "default");
+      return { type: "drilldown", target, columnsPreset };
+    };
+    box.appendChild(
+      mkToggle(doc, "enabled", !!click, (enabled) => {
+        const next = { ...current ?? {} };
+        if (!enabled) delete next.click;
+        else {
+          const target = normalizeTarget(click?.target);
+          next.click = defaultClickForTarget(target);
+        }
+        onChange(next);
+      })
+    );
+    if (!click) return box;
+    const storedTarget = String(click?.target ?? "");
+    const uiTarget = normalizeTarget(storedTarget || (targetOptions[0]?.value ?? "rounds"));
+    box.appendChild(
+      mkSelect(
+        doc,
+        "target",
+        uiTarget,
+        targetOptions,
+        (v) => {
+          const preset = drilldownPresets?.[v];
+          const keys2 = Object.keys(preset?.columnsPresets ?? {});
+          const currentPreset = String(click.columnsPreset ?? "");
+          const nextPreset = keys2.includes(currentPreset) ? currentPreset : String(preset?.defaultPreset ?? keys2[0] ?? currentPreset ?? "default");
+          onChange({ ...current ?? {}, click: { ...click, target: v, columnsPreset: nextPreset } });
+        }
+      )
+    );
+    if (storedTarget && storedTarget !== uiTarget) {
+      const warn = doc.createElement("div");
+      warn.className = "ga-settings-note";
+      warn.textContent = `Unknown target '${storedTarget}'. Select a valid target or click Fix to use '${uiTarget}'.`;
+      box.appendChild(warn);
+      box.appendChild(mkBtn(doc, "Fix target", () => onChange({ ...current ?? {}, click: defaultClickForTarget(uiTarget) }), "primary"));
+    }
+    const currentTarget = uiTarget;
+    const targetPreset = drilldownPresets?.[currentTarget];
+    const presetKeys = Object.keys(targetPreset?.columnsPresets ?? {});
+    if (presetKeys.length > 0) {
+      const presetOptions = presetKeys.map((k) => ({
+        value: k,
+        label: `${k} (${(targetPreset?.columnsPresets?.[k] ?? []).length})`
+      }));
+      const wanted = String(click.columnsPreset ?? "");
+      const safeValue = presetKeys.includes(wanted) ? wanted : String(targetPreset?.defaultPreset ?? presetKeys[0]);
+      box.appendChild(mkSelect(doc, "columnsPreset", safeValue, presetOptions, (v) => onChange({ ...current ?? {}, click: { ...click, columnsPreset: v } })));
+      if (wanted && wanted !== safeValue) {
+        const warn = doc.createElement("div");
+        warn.className = "ga-settings-note";
+        warn.textContent = `Unknown columnsPreset '${wanted}' for target '${currentTarget}'. Click Fix to use '${safeValue}'.`;
+        box.appendChild(warn);
+        box.appendChild(mkBtn(doc, "Fix columnsPreset", () => onChange({ ...current ?? {}, click: { ...click, columnsPreset: safeValue } }), "primary"));
+      }
+      const presetNote = doc.createElement("div");
+      presetNote.className = "ga-settings-note";
+      presetNote.textContent = "columnsPreset selects a predefined set of columns for the drilldown table (per target).";
+      box.appendChild(presetNote);
+    } else {
+      box.appendChild(
+        mkTextInput(doc, "columnsPreset", String(click.columnsPreset ?? ""), (v) => onChange({ ...current ?? {}, click: { ...click, columnsPreset: v } }))
+      );
+      const presetNote = doc.createElement("div");
+      presetNote.className = "ga-settings-note";
+      presetNote.textContent = "No presets found for this target. If drilldown fails validation, check semantic.json drilldownPresets.";
+      box.appendChild(presetNote);
+    }
+    box.appendChild(mkToggle(doc, "filterFromPoint", !!click.filterFromPoint, (v) => onChange({ ...current ?? {}, click: { ...click, filterFromPoint: v } })));
+    const sortBox = doc.createElement("div");
+    sortBox.className = "ga-le-subbox";
+    const sh = doc.createElement("div");
+    sh.className = "ga-le-subhead";
+    sh.textContent = "initialSort (optional)";
+    sortBox.appendChild(sh);
+    sortBox.appendChild(
+      mkTextInput(doc, "key", String(click?.initialSort?.key ?? ""), (v) => {
+        const key = v.trim();
+        if (!key) {
+          const nextClick = { ...click };
+          delete nextClick.initialSort;
+          return onChange({ ...current ?? {}, click: nextClick });
+        }
+        onChange({ ...current ?? {}, click: { ...click, initialSort: { key, dir: click?.initialSort?.dir ?? "desc" } } });
+      })
+    );
+    sortBox.appendChild(
+      mkSelect(doc, "dir", String(click?.initialSort?.dir ?? "desc"), [{ value: "asc", label: "asc" }, { value: "desc", label: "desc" }], (v) => {
+        if (!click?.initialSort?.key) return;
+        onChange({ ...current ?? {}, click: { ...click, initialSort: { ...click.initialSort, dir: v } } });
+      })
+    );
+    box.appendChild(sortBox);
+    const note = doc.createElement("div");
+    note.className = "ga-settings-note";
+    note.textContent = "For extraFilters and advanced settings, use Advanced JSON.";
+    box.appendChild(note);
+    return box;
+  }
+
+  // src/ui/consoleStore.ts
+  var MAX_ENTRIES = 800;
+  var entries = [];
+  var listeners = /* @__PURE__ */ new Set();
+  var pad = (n, w) => String(n).padStart(w, "0");
+  function formatConsoleEntry(e) {
+    const d = new Date(e.ts);
+    const hh = pad(d.getHours(), 2);
+    const mm = pad(d.getMinutes(), 2);
+    const ss = pad(d.getSeconds(), 2);
+    const ms = pad(d.getMilliseconds(), 3);
+    const lvl = e.level.toUpperCase().padEnd(5, " ");
+    return `[${hh}:${mm}:${ss}.${ms}] ${lvl} ${e.message}`;
+  }
+  function emit() {
+    for (const fn of listeners) {
+      try {
+        fn();
+      } catch {
+      }
+    }
+  }
+  function describeError(err2) {
+    if (!err2) return "";
+    if (err2 instanceof Error) {
+      const stack = typeof err2.stack === "string" && err2.stack.trim().length ? `
+${err2.stack}` : "";
+      return `${err2.name}: ${err2.message}${stack}`;
+    }
+    try {
+      return String(err2);
+    } catch {
+      return "<unprintable error>";
+    }
+  }
+  var analysisConsole = {
+    entries,
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    clear() {
+      entries.splice(0, entries.length);
+      emit();
+    },
+    push(level, message, err2) {
+      const full = err2 ? `${message}
+${describeError(err2)}` : message;
+      entries.push({ ts: Date.now(), level, message: String(full ?? "") });
+      if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
+      emit();
+    },
+    log(message) {
+      this.push("log", message);
+    },
+    info(message) {
+      this.push("info", message);
+    },
+    warn(message) {
+      this.push("warn", message);
+    },
+    error(message, err2) {
+      this.push("error", message, err2);
+    }
+  };
 
   // node_modules/xlsx/xlsx.mjs
   var XLSX = {};
@@ -33873,9564 +43724,6 @@ ${shapes}`.trim();
     onStatus(`Export done: ${games.length} games, ${rounds.length} rounds (${gamesByMode.size} mode sheets).`);
   }
 
-  // src/engine/validate.ts
-  var ValidationError = class extends Error {
-    code;
-    constructor(code, message) {
-      super(message);
-      this.code = code;
-    }
-  };
-  function assert(condition, code, msg) {
-    if (!condition) throw new ValidationError(code, msg);
-  }
-  function validateDashboardAgainstSemantic(semantic, dash) {
-    if (dash.dashboard.globalFilters) validateGlobalFiltersSpec(semantic, dash);
-    for (const section of dash.dashboard.sections) {
-      if (section.localFilters) validateLocalFiltersSpec(semantic, section);
-      for (const placedCard of section.layout.cards) {
-        for (const widget of placedCard.card.children) {
-          validateWidget(semantic, widget);
-        }
-      }
-    }
-  }
-  function validateGlobalFiltersSpec(semantic, dash) {
-    const gf = dash.dashboard.globalFilters;
-    assert(!!gf && typeof gf === "object", "E_BAD_SPEC", "dashboard.globalFilters must be an object");
-    assert(typeof gf.enabled === "boolean", "E_BAD_SPEC", "dashboard.globalFilters.enabled must be boolean");
-    assert(Array.isArray(gf.controls), "E_BAD_SPEC", "dashboard.globalFilters.controls must be an array");
-    const ids = /* @__PURE__ */ new Set();
-    for (const c of gf.controls) {
-      assert(!!c && typeof c === "object", "E_BAD_SPEC", "Global filter control must be an object");
-      assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", "Global filter control id must be a string");
-      assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate global filter control id '${c.id}'`);
-      ids.add(c.id);
-      assert(typeof c.type === "string", "E_BAD_SPEC", `Global filter control '${c.id}' missing type`);
-      assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' missing label`);
-      assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Global filter control '${c.id}' appliesTo must be a non-empty array`);
-      if (c.type === "date_range") {
-        assert(!!c.default && typeof c.default === "object", "E_BAD_SPEC", `date_range '${c.id}' default must be an object`);
-        const fromTs = c.default.fromTs;
-        const toTs2 = c.default.toTs;
-        assert(fromTs === null || typeof fromTs === "number", "E_BAD_SPEC", `date_range '${c.id}' default.fromTs must be number|null`);
-        assert(toTs2 === null || typeof toTs2 === "number", "E_BAD_SPEC", `date_range '${c.id}' default.toTs must be number|null`);
-        continue;
-      }
-      if (c.type === "select") {
-        assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' missing dimension`);
-        assert(typeof c.options === "string", "E_BAD_SPEC", `select '${c.id}' missing options`);
-        assert(
-          c.options === "auto_distinct" || c.options === "auto_teammates",
-          "E_BAD_SPEC",
-          `select '${c.id}' options must be 'auto_distinct' | 'auto_teammates'`
-        );
-        assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `select '${c.id}' default must be a string`);
-        const dimId = String(c.dimension);
-        const dim = semantic.dimensions[dimId];
-        assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in global filter '${c.id}'`);
-        const dimGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
-        for (const g of c.appliesTo) {
-          assert(dimGrains.includes(g), "E_GRAIN_MISMATCH", `Global filter '${c.id}' appliesTo includes unsupported grain '${g}' for dimension '${dimId}'`);
-        }
-        continue;
-      }
-      throw new ValidationError("E_BAD_SPEC", `Unknown global filter control type '${c.type}'`);
-    }
-  }
-  function validateLocalFiltersSpec(semantic, section) {
-    const lf = section.localFilters;
-    assert(!!lf && typeof lf === "object", "E_BAD_SPEC", `section '${section.id}' localFilters must be an object`);
-    assert(Array.isArray(lf.controls) && lf.controls.length > 0, "E_BAD_SPEC", `section '${section.id}' localFilters.controls must be a non-empty array`);
-    const ids = /* @__PURE__ */ new Set();
-    for (const c of lf.controls) {
-      assert(!!c && typeof c === "object", "E_BAD_SPEC", `Local filter control in section '${section.id}' must be an object`);
-      assert(typeof c.id === "string" && c.id.trim().length > 0, "E_BAD_SPEC", `Local filter control id must be a string`);
-      assert(!ids.has(c.id), "E_BAD_SPEC", `Duplicate local filter control id '${c.id}' in section '${section.id}'`);
-      ids.add(c.id);
-      assert(c.type === "select", "E_BAD_SPEC", `Local filter '${c.id}' in section '${section.id}' must have type 'select'`);
-      assert(typeof c.label === "string" && c.label.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing label`);
-      assert(typeof c.dimension === "string" && c.dimension.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' missing dimension`);
-      assert(typeof c.options === "string", "E_BAD_SPEC", `Local filter '${c.id}' missing options`);
-      assert(
-        c.options === "auto_distinct" || c.options === "auto_teammates",
-        "E_BAD_SPEC",
-        `Local filter '${c.id}' options must be 'auto_distinct' | 'auto_teammates'`
-      );
-      assert(typeof c.default === "string" && c.default.trim().length > 0, "E_BAD_SPEC", `Local filter '${c.id}' default must be a string`);
-      assert(Array.isArray(c.appliesTo) && c.appliesTo.length > 0, "E_BAD_SPEC", `Local filter '${c.id}' appliesTo must be a non-empty array`);
-      const dimId = String(c.dimension);
-      const dim = semantic.dimensions[dimId];
-      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${dimId}' in local filter '${c.id}' (section '${section.id}')`);
-      const dimGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
-      for (const g of c.appliesTo) {
-        assert(dimGrains.includes(g), "E_GRAIN_MISMATCH", `Local filter '${c.id}' appliesTo includes unsupported grain '${g}' for dimension '${dimId}'`);
-      }
-    }
-  }
-  function validateWidget(semantic, widget) {
-    assert(semantic.datasets[widget.grain] !== void 0, "E_UNKNOWN_GRAIN", `Unknown grain: ${widget.grain}`);
-    if (widget.type === "chart") {
-      const spec = widget.spec;
-      const xDimId = spec.x?.dimension;
-      assert(typeof xDimId === "string", "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing x.dimension`);
-      const yMeasureIds = getChartMeasureIds(spec);
-      assert(yMeasureIds.length > 0, "E_BAD_SPEC", `Chart widget ${widget.widgetId} missing y.measure or y.measures`);
-      const xDim = semantic.dimensions[xDimId];
-      assert(!!xDim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${xDimId}' in widget ${widget.widgetId}`);
-      const xGrains = Array.isArray(xDim.grain) ? xDim.grain : [xDim.grain];
-      assert(xGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `x '${xDimId}' grain mismatch for widget grain=${widget.grain}`);
-      assert(xDim.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Dimension '${xDimId}' not allowed for ${spec.type}`);
-      if (spec.sort?.mode) {
-        assert(xDim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${xDimId}'`);
-      }
-      if (Array.isArray(spec.sorts)) {
-        for (const s of spec.sorts) {
-          const mode = s?.mode;
-          if (!mode) continue;
-          assert(xDim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${xDimId}'`);
-        }
-      }
-      if (spec.activeSort?.mode) {
-        assert(xDim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${xDimId}'`);
-      }
-      for (const yMeasId of yMeasureIds) {
-        const yMeas = semantic.measures[yMeasId];
-        assert(!!yMeas, "E_UNKNOWN_MEASURE", `Unknown measure '${yMeasId}' in widget ${widget.widgetId}`);
-        assert(
-          xGrains.includes(yMeas.grain),
-          "E_GRAIN_MISMATCH",
-          `y '${yMeasId}' grain=${yMeas.grain} not supported by x '${xDimId}' grains=${xGrains.join(",")}`
-        );
-        assert(yMeas.allowedCharts.includes(spec.type), "E_NOT_ALLOWED", `Measure '${yMeasId}' not allowed for ${spec.type}`);
-      }
-      const activeMeasure = typeof spec.y?.activeMeasure === "string" ? spec.y.activeMeasure : void 0;
-      if (activeMeasure) {
-        assert(yMeasureIds.includes(activeMeasure), "E_BAD_SPEC", `activeMeasure '${activeMeasure}' is not listed in y.measures`);
-      }
-      if (spec.type === "line") {
-        assert(xDim.ordered === true, "E_CHART_X_NOT_ORDERED", `Line chart requires ordered x dimension '${xDimId}'`);
-      }
-      if (xDim.cardinality?.selectorRequired) {
-        const hasTopN = typeof spec.limit === "number" && spec.limit > 0;
-        const selectorMode = spec.x?.selector?.mode;
-        const hasSelector = selectorMode === "top_n" || selectorMode === "selected";
-        assert(
-          hasTopN || hasSelector,
-          "E_SELECTOR_REQUIRED",
-          `Dimension '${xDimId}' requires selector; set chart.limit or x.selector`
-        );
-      }
-      if (spec.series) {
-        const sDimId = spec.series.dimension;
-        const sDim = semantic.dimensions[sDimId];
-        assert(!!sDim, "E_UNKNOWN_DIMENSION", `Unknown series dimension '${sDimId}'`);
-        const sGrains = Array.isArray(sDim.grain) ? sDim.grain : [sDim.grain];
-        assert(sGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `series '${sDimId}' grain mismatch for widget grain=${widget.grain}`);
-        assert(!!spec.series.selector, "E_BAD_SPEC", `series.selector missing for '${sDimId}'`);
-        const maxSeries = sDim.cardinality?.maxSeries ?? 50;
-        const requested = spec.series.selector.mode === "selected" ? spec.series.selector.values?.length ?? 0 : spec.series.selector.mode === "top_n" ? spec.series.selector.n ?? 0 : spec.series.selector.maxSeries ?? maxSeries;
-        assert(requested <= maxSeries, "E_TOO_MANY_SERIES", `Too many series for '${sDimId}' requested=${requested} max=${maxSeries}`);
-      }
-      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    }
-    if (widget.type === "stat_list") {
-      const spec = widget.spec;
-      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `stat_list ${widget.widgetId} has no rows`);
-      for (const row of spec.rows) {
-        const meas = semantic.measures[row.measure];
-        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${row.measure}' in stat_list ${widget.widgetId}`);
-        const rowGrain = row.grain ?? widget.grain;
-        assert(
-          meas.grain === rowGrain,
-          "E_GRAIN_MISMATCH",
-          `Measure '${row.measure}' grain=${meas.grain} but stat row grain=${rowGrain} (widget grain=${widget.grain})`
-        );
-        validateClickAction(semantic, widget.widgetId, row.actions?.click);
-      }
-    }
-    if (widget.type === "stat_value") {
-      const spec = widget.spec;
-      const meas = semantic.measures[spec.measure];
-      assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${spec.measure}' in stat_value ${widget.widgetId}`);
-      assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Measure '${spec.measure}' grain=${meas.grain} but widget grain=${widget.grain}`);
-      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    }
-    if (widget.type === "breakdown") {
-      const spec = widget.spec;
-      const dim = semantic.dimensions[spec.dimension];
-      const measIds = getBreakdownMeasureIds(spec);
-      assert(!!dim, "E_UNKNOWN_DIMENSION", `Unknown dimension '${spec.dimension}' in breakdown ${widget.widgetId}`);
-      const dGrains = Array.isArray(dim.grain) ? dim.grain : [dim.grain];
-      assert(dGrains.includes(widget.grain), "E_GRAIN_MISMATCH", `Breakdown dim grain mismatch in ${widget.widgetId}`);
-      assert(measIds.length > 0, "E_BAD_SPEC", `Breakdown ${widget.widgetId} missing measure or measures[]`);
-      for (const measId of measIds) {
-        const meas = semantic.measures[measId];
-        assert(!!meas, "E_UNKNOWN_MEASURE", `Unknown measure '${measId}' in breakdown ${widget.widgetId}`);
-        assert(meas.grain === widget.grain, "E_GRAIN_MISMATCH", `Breakdown measure '${measId}' grain mismatch in ${widget.widgetId}`);
-      }
-      if (typeof spec.activeMeasure === "string" && spec.activeMeasure.trim()) {
-        assert(measIds.includes(spec.activeMeasure.trim()), "E_BAD_SPEC", `breakdown ${widget.widgetId} activeMeasure must be in measures[]`);
-      }
-      if (spec.sort?.mode) {
-        assert(dim.sortModes.includes(spec.sort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.sort.mode}' not allowed for dimension '${spec.dimension}'`);
-      }
-      if (Array.isArray(spec.sorts)) {
-        for (const s of spec.sorts) {
-          const mode = s?.mode;
-          if (!mode) continue;
-          assert(dim.sortModes.includes(mode), "E_NOT_ALLOWED", `Sort mode '${mode}' not allowed for dimension '${spec.dimension}'`);
-        }
-      }
-      if (spec.activeSort?.mode) {
-        assert(dim.sortModes.includes(spec.activeSort.mode), "E_NOT_ALLOWED", `Sort mode '${spec.activeSort.mode}' not allowed for dimension '${spec.dimension}'`);
-      }
-      if (dim.cardinality?.selectorRequired) {
-        assert(
-          typeof spec.limit === "number" && spec.limit > 0,
-          "E_SELECTOR_REQUIRED",
-          `Breakdown '${spec.dimension}' requires a positive limit`
-        );
-      }
-      validateClickAction(semantic, widget.widgetId, spec.actions?.click);
-    }
-    if (widget.type === "record_list") {
-      const spec = widget.spec;
-      assert(Array.isArray(spec.records) && spec.records.length > 0, "E_BAD_SPEC", `record_list ${widget.widgetId} has no records`);
-      for (const r of spec.records) {
-        const kind = r?.kind === "same_value_streak" ? "same_value_streak" : r?.kind === "streak" ? "streak" : r?.kind === "overall" ? "overall" : "group_extreme";
-        if (kind === "streak") {
-          assert(Array.isArray(r.streakFilters) && r.streakFilters.length > 0, "E_BAD_SPEC", `record ${r.id} missing streakFilters`);
-          validateClickAction(semantic, widget.widgetId, r.actions?.click);
-          continue;
-        }
-        if (kind === "same_value_streak") {
-          assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `record ${r.id} missing dimension`);
-          const d2 = semantic.dimensions[r.dimension];
-          assert(!!d2, "E_UNKNOWN_DIMENSION", `Unknown record dimension '${r.dimension}' in ${widget.widgetId}`);
-          const grains2 = Array.isArray(d2.grain) ? d2.grain : [d2.grain];
-          assert(grains2.includes(widget.grain), "E_GRAIN_MISMATCH", `Record dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
-          validateClickAction(semantic, widget.widgetId, r.actions?.click);
-          continue;
-        }
-        if (kind === "overall") {
-          assert(typeof r.metric === "string" && r.metric.trim().length > 0, "E_BAD_SPEC", `record ${r.id} missing metric`);
-          const m2 = semantic.measures[r.metric];
-          assert(!!m2, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
-          assert(m2.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
-          validateClickAction(semantic, widget.widgetId, r.actions?.click);
-          continue;
-        }
-        const m = semantic.measures[r.metric];
-        assert(!!m, "E_UNKNOWN_MEASURE", `Unknown record metric '${r.metric}' in ${widget.widgetId}`);
-        assert(m.grain === widget.grain, "E_GRAIN_MISMATCH", `Record metric '${r.metric}' grain mismatch in ${widget.widgetId}`);
-        const d = semantic.dimensions[r.groupBy];
-        assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown record groupBy '${r.groupBy}' in ${widget.widgetId}`);
-        const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
-        assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `Record groupBy '${r.groupBy}' grain mismatch in ${widget.widgetId}`);
-        assert(r.extreme === "max" || r.extreme === "min", "E_BAD_SPEC", `Record extreme must be max|min in ${widget.widgetId}`);
-        validateClickAction(semantic, widget.widgetId, r.actions?.click);
-      }
-    }
-    if (widget.type === "leader_list") {
-      const spec = widget.spec;
-      assert(Array.isArray(spec.rows) && spec.rows.length > 0, "E_BAD_SPEC", `leader_list ${widget.widgetId} has no rows`);
-      for (const r of spec.rows) {
-        assert(typeof r.label === "string" && r.label.trim().length > 0, "E_BAD_SPEC", `leader_list row missing label in ${widget.widgetId}`);
-        assert(typeof r.dimension === "string" && r.dimension.trim().length > 0, "E_BAD_SPEC", `leader_list row missing dimension in ${widget.widgetId}`);
-        const d = semantic.dimensions[r.dimension];
-        assert(!!d, "E_UNKNOWN_DIMENSION", `Unknown leader_list dimension '${r.dimension}' in ${widget.widgetId}`);
-        const grains = Array.isArray(d.grain) ? d.grain : [d.grain];
-        assert(grains.includes(widget.grain), "E_GRAIN_MISMATCH", `leader_list dimension '${r.dimension}' grain mismatch in ${widget.widgetId}`);
-        validateClickAction(semantic, widget.widgetId, r.actions?.click);
-      }
-    }
-  }
-  function validateClickAction(semantic, widgetId, click) {
-    if (!click || click.type !== "drilldown") return;
-    const target = click.target;
-    const targetPreset = semantic.drilldownPresets[target];
-    assert(!!targetPreset, "E_BAD_SPEC", `Unknown drilldown target '${target}' in widget ${widgetId}`);
-    const columns = targetPreset?.columnsPresets?.[click.columnsPreset];
-    assert(!!columns && columns.length > 0, "E_BAD_SPEC", `Unknown columnsPreset '${click.columnsPreset}' in widget ${widgetId}`);
-  }
-  function getChartMeasureIds(spec) {
-    const result = [];
-    const single = typeof spec?.y?.measure === "string" ? spec.y.measure.trim() : "";
-    if (single) result.push(single);
-    if (Array.isArray(spec?.y?.measures)) {
-      for (const m of spec.y.measures) {
-        if (typeof m !== "string") continue;
-        const clean = m.trim();
-        if (!clean || result.includes(clean)) continue;
-        result.push(clean);
-      }
-    }
-    return result;
-  }
-  function getBreakdownMeasureIds(spec) {
-    const result = [];
-    const single = typeof spec?.measure === "string" ? spec.measure.trim() : "";
-    if (single) result.push(single);
-    if (Array.isArray(spec?.measures)) {
-      for (const m of spec.measures) {
-        if (typeof m !== "string") continue;
-        const clean = m.trim();
-        if (!clean || result.includes(clean)) continue;
-        result.push(clean);
-      }
-    }
-    return result;
-  }
-
-  // src/config/semantic.json
-  var semantic_default = {
-    $schema: "./semantic.schema.json",
-    schemaVersion: "0.1.0",
-    grains: ["session", "game", "round"],
-    datasets: {
-      session: {
-        primaryKey: ["sessionId"],
-        timeField: "sessionStartTs"
-      },
-      game: {
-        primaryKey: ["gameId"],
-        timeField: "ts"
-      },
-      round: {
-        primaryKey: ["gameId", "roundNumber"],
-        timeField: "ts"
-      }
-    },
-    settings: {
-      sessionGapMinutesDefault: 45
-    },
-    dimensions: {
-      time_day: {
-        label: "Date",
-        kind: "time",
-        grain: ["round", "game", "session"],
-        ordered: true,
-        allowedCharts: ["line", "bar"],
-        sortModes: ["chronological"]
-      },
-      weekday: {
-        label: "Weekday",
-        kind: "category",
-        grain: ["round", "game"],
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      hour: {
-        label: "Hour of day",
-        kind: "category",
-        grain: ["round", "game"],
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      session_index: {
-        label: "Session #",
-        kind: "category",
-        grain: "session",
-        ordered: true,
-        allowedCharts: ["bar", "line"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      session_start: {
-        label: "Session start",
-        kind: "category",
-        grain: "session",
-        ordered: true,
-        allowedCharts: ["bar", "line"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      game_mode: {
-        label: "Game mode",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 10 }
-      },
-      mode_family: {
-        label: "Mode",
-        kind: "category",
-        grain: ["game", "round"],
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 10 }
-      },
-      is_rated: {
-        label: "Rated",
-        kind: "category",
-        grain: ["game", "round"],
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 3 }
-      },
-      map_name: {
-        label: "Map",
-        kind: "category",
-        grain: ["game", "round"],
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30 }
-      },
-      map_slug: {
-        label: "Map (slug)",
-        kind: "category",
-        grain: ["game", "round"],
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30 }
-      },
-      true_state: {
-        label: "State",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30 }
-      },
-      true_district: {
-        label: "District",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 40, selectorRequired: true }
-      },
-      true_us_state: {
-        label: "US state",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30 }
-      },
-      true_ca_province: {
-        label: "Canada province",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30 }
-      },
-      true_id_province: {
-        label: "Indonesia province",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 40 }
-      },
-      true_id_kabupaten: {
-        label: "Indonesia kabupaten",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 60, selectorRequired: true }
-      },
-      true_ph_province: {
-        label: "Philippines province",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 40 }
-      },
-      true_vn_province: {
-        label: "Vietnam province",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 40 }
-      },
-      admin_true_unit: {
-        label: "Admin unit",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar", "map"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
-      },
-      admin_guess_unit: {
-        label: "Guessed admin unit",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
-      },
-      true_location: {
-        label: "True location",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 50, selectorRequired: true }
-      },
-      is_true_location_repeat: {
-        label: "True location repeat?",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      score_vs_opponent: {
-        label: "Score vs opponents",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 3 }
-      },
-      result: {
-        label: "Result",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 5 }
-      },
-      is_flawless_win: {
-        label: "Flawless win?",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      game_length: {
-        label: "Game length (rounds)",
-        kind: "category",
-        grain: "game",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 30 }
-      },
-      opponent_country: {
-        label: "Opponent country",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30 }
-      },
-      opponent_name: {
-        label: "Opponent",
-        kind: "category",
-        grain: "game",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 30, selectorRequired: true }
-      },
-      round_number: {
-        label: "Round #",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      round_id: {
-        label: "Round",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 200, selectorRequired: true }
-      },
-      true_country: {
-        label: "True country",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 12, selectorRequired: true }
-      },
-      teammate_name: {
-        label: "Teammate",
-        kind: "category",
-        grain: ["round", "game"],
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 15, selectorRequired: true }
-      },
-      movement_type: {
-        label: "Movement",
-        kind: "category",
-        grain: ["round", "game"],
-        allowedCharts: ["bar", "line"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 8 }
-      },
-      game_id: {
-        label: "Game",
-        kind: "category",
-        grain: ["round", "game"],
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 50, selectorRequired: true }
-      },
-      is_hit: {
-        label: "Hit?",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      is_throw: {
-        label: "Throw?",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      is_damage_dealt: {
-        label: "Damage dealt?",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      is_damage_taken: {
-        label: "Damage taken?",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      is_near_perfect: {
-        label: "Near-perfect? (>=4500)",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      is_low_score: {
-        label: "Low score? (<500)",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 2 }
-      },
-      duration_bucket: {
-        label: "Guess duration bucket",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological", "asc", "desc"]
-      },
-      confused_countries: {
-        label: "Confused countries",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 80, selectorRequired: true }
-      },
-      guess_country: {
-        label: "Guessed country",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "large", maxSeries: 20, selectorRequired: true }
-      },
-      score_bucket: {
-        label: "Score bucket",
-        kind: "category",
-        grain: "round",
-        ordered: true,
-        allowedCharts: ["bar"],
-        sortModes: ["chronological"]
-      },
-      team_closer_winner: {
-        label: "Closer guesses",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 3 }
-      },
-      team_higher_score_winner: {
-        label: "Higher score rounds",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 3 }
-      },
-      team_fewer_throw_winner: {
-        label: "Fewer throws (<50)",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 3 }
-      },
-      team_more_5k_winner: {
-        label: "More 5k rounds",
-        kind: "category",
-        grain: "round",
-        allowedCharts: ["bar"],
-        sortModes: ["asc", "desc"],
-        cardinality: { policy: "small", maxSeries: 3 }
-      }
-    },
-    measures: {
-      games_count: {
-        label: "Games",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_games",
-        range: { min: 0 }
-      },
-      rounds_share: {
-        label: "Share",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar"],
-        formulaId: "share_rounds",
-        range: { min: 0, max: 1 }
-      },
-      matchups_count: {
-        label: "Match-ups",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_games"
-      },
-      strongest_opponent_rating: {
-        label: "Strongest opponent (rating)",
-        unit: "rating",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_opponent_start_rating"
-      },
-      strongest_defeated_opponent_rating: {
-        label: "Strongest defeated opponent (rating)",
-        unit: "rating",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_defeated_opponent_start_rating"
-      },
-      unique_opponents_count: {
-        label: "Unique opponents",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_distinct_opponent_name"
-      },
-      unique_opponent_countries_count: {
-        label: "Unique countries",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_distinct_opponent_country"
-      },
-      avg_game_length: {
-        label: "Avg game length",
-        unit: "float",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_game_length_rounds"
-      },
-      rounds_count: {
-        label: "Rounds",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_rounds"
-      },
-      games_distinct_count: {
-        label: "Games",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_distinct_game_id"
-      },
-      distinct_locations_count: {
-        label: "Distinct locations",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_distinct_true_location"
-      },
-      repeat_locations_count: {
-        label: "Repeat locations (groups)",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_true_location_repeat_groups"
-      },
-      repeat_location_rounds_count: {
-        label: "Rounds on repeat locations",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_true_location_repeat_rounds"
-      },
-      repeat_location_pairs_count: {
-        label: "Repeat location pairs",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_true_location_repeat_pairs"
-      },
-      repeat_location_rounds_rate: {
-        label: "Repeat location share",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_true_location_repeat_rounds",
-        range: { min: 0, max: 1 }
-      },
-      first_played_at: {
-        label: "First game together",
-        unit: "datetime",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "min_played_at_ts"
-      },
-      last_played_at: {
-        label: "Most recent game together",
-        unit: "datetime",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_played_at_ts"
-      },
-      score_spread: {
-        label: "Score spread",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar"],
-        formulaId: "spread_player_self_score",
-        range: { min: 0, max: 5e3 }
-      },
-      avg_score: {
-        label: "Avg score",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_score",
-        range: { min: 0, max: 5e3 }
-      },
-      round_score: {
-        label: "Round score",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "round_score_value",
-        range: { min: 0, max: 5e3 }
-      },
-      round_damage_dealt: {
-        label: "Damage dealt",
-        unit: "int",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "round_damage_dealt_value",
-        range: { min: 0 }
-      },
-      round_damage_taken: {
-        label: "Damage taken",
-        unit: "int",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "round_damage_taken_value",
-        range: { min: 0 }
-      },
-      round_guess_duration: {
-        label: "Guess duration",
-        unit: "seconds",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "round_guess_duration_value",
-        range: { min: 0 }
-      },
-      round_score_per_second: {
-        label: "Score per second",
-        unit: "float",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "round_score_per_second",
-        range: { min: 0 }
-      },
-      avg_score_hit_only: {
-        label: "Avg score (hit only)",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_score_hit_only",
-        range: { min: 0, max: 5e3 }
-      },
-      avg_distance_km: {
-        label: "Avg distance",
-        unit: "km",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_distance_km",
-        range: { min: 0 }
-      },
-      avg_guess_duration: {
-        label: "Avg guess duration",
-        unit: "seconds",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_duration_seconds",
-        range: { min: 0 }
-      },
-      fivek_rate: {
-        label: "5k rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_player_self_score_eq_5000",
-        range: { min: 0, max: 100 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-        }
-      },
-      fivek_count: {
-        label: "5k count",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_5k_round",
-        range: { min: 0 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "score_bucket", op: "eq", value: "5000" }]
-        }
-      },
-      near_perfect_rate: {
-        label: "Near-perfect rate (>=4500)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_near_perfect_round",
-        range: { min: 0, max: 100 }
-      },
-      near_perfect_count: {
-        label: "Near-perfect count (>=4500)",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_near_perfect_round",
-        range: { min: 0 }
-      },
-      low_score_rate: {
-        label: "Low score rate (<500)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_low_score_round",
-        range: { min: 0, max: 100 }
-      },
-      low_score_count: {
-        label: "Low score count (<500)",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_low_score_round",
-        range: { min: 0 }
-      },
-      win_rate: {
-        label: "Win rate",
-        unit: "percent",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_player_self_win",
-        range: { min: 0, max: 100 }
-      },
-      win_count: {
-        label: "Win count",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_win_game",
-        range: { min: 0 }
-      },
-      games_with_result_count: {
-        label: "Games with result data",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_games_with_result",
-        range: { min: 0 }
-      },
-      loss_count: {
-        label: "Loss count",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_loss_game",
-        range: { min: 0 }
-      },
-      tie_count: {
-        label: "Tie count",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_tie_game",
-        range: { min: 0 }
-      },
-      end_rating: {
-        label: "End rating",
-        unit: "rating",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "last_player_self_end_rating",
-        timeDayFill: "carry_forward",
-        range: { min: 0 }
-      },
-      rating_trend: {
-        label: "Trend",
-        unit: "rating_delta",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "trend_player_self_rating"
-      },
-      best_end_rating: {
-        label: "Best rating",
-        unit: "rating",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_player_self_end_rating"
-      },
-      rating_delta_avg: {
-        label: "Avg rating delta",
-        unit: "rating_delta",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_player_self_rating_delta"
-      },
-      rating_delta_highest: {
-        label: "Highest rating delta",
-        unit: "rating_delta",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_player_self_rating_delta"
-      },
-      rating_delta_lowest: {
-        label: "Lowest rating delta",
-        unit: "rating_delta",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "min_player_self_rating_delta"
-      },
-      game_avg_score: {
-        label: "Avg score (game)",
-        unit: "points",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_avg_score_over_rounds",
-        range: { min: 0, max: 5e3 }
-      },
-      game_5k_count: {
-        label: "5k count (game)",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_5k_count",
-        range: { min: 0 }
-      },
-      game_throw_count: {
-        label: "Throw count (game)",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_throw_count",
-        range: { min: 0 }
-      },
-      game_hit_rate: {
-        label: "Hit rate (game)",
-        unit: "percent",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_hit_rate",
-        range: { min: 0, max: 1 }
-      },
-      game_rating_delta: {
-        label: "Rating delta (game)",
-        unit: "rating_delta",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_rating_delta_value"
-      },
-      game_duration: {
-        label: "Game duration",
-        unit: "duration",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_duration_seconds",
-        range: { min: 0 }
-      },
-      game_final_health: {
-        label: "Final health",
-        unit: "int",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "game_final_health",
-        range: { min: 0 }
-      },
-      flawless_wins_count: {
-        label: "Flawless wins",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_flawless_wins",
-        range: { min: 0 }
-      },
-      longest_win_streak: {
-        label: "Longest win streak",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_win_streak"
-      },
-      longest_loss_streak: {
-        label: "Longest loss streak",
-        unit: "count",
-        grain: "game",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_loss_streak"
-      },
-      hit_rate: {
-        label: "Country hit rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_true_country_hit",
-        range: { min: 0, max: 100 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
-        }
-      },
-      admin_hit_rate_de_state: {
-        label: "Admin-unit hit rate (DE ADM1)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_de_state_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_de_district: {
-        label: "Admin-unit hit rate (DE ADM2)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_de_district_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_us_state: {
-        label: "Admin-unit hit rate (US ADM1)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_us_state_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_ca_province: {
-        label: "Admin-unit hit rate (CA ADM1)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_ca_province_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_id_province: {
-        label: "Admin-unit hit rate (ID ADM1)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_id_province_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_id_kabupaten: {
-        label: "Admin-unit hit rate (ID ADM2)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_id_kabupaten_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_ph_province: {
-        label: "Admin-unit hit rate (PH ADM1)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_ph_province_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_hit_rate_vn_province: {
-        label: "Admin-unit hit rate (VN ADM1)",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_vn_province_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_unit_hit_rate: {
-        label: "Admin-unit hit rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line", "map"],
-        formulaId: "rate_admin_unit_hit",
-        range: { min: 0, max: 100 }
-      },
-      admin_unit_hit_count: {
-        label: "Admin hits",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line", "map"],
-        formulaId: "count_admin_unit_hit",
-        range: { min: 0 }
-      },
-      admin_unit_miss_count: {
-        label: "Admin misses",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line", "map"],
-        formulaId: "count_admin_unit_miss",
-        range: { min: 0 }
-      },
-      hit_count: {
-        label: "Hit count",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_hit_round",
-        range: { min: 0 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "is_hit", op: "eq", value: "true" }]
-        }
-      },
-      throw_rate: {
-        label: "Throw rate",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "rate_throw_round",
-        range: { min: 0, max: 100 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-        }
-      },
-      throw_count: {
-        label: "Throw count",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_throw_round",
-        range: { min: 0 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "is_throw", op: "eq", value: "true" }]
-        }
-      },
-      score_median: {
-        label: "Median score",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "median_player_self_score",
-        range: { min: 0, max: 5e3 }
-      },
-      score_stddev: {
-        label: "Score Std Dev",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "stddev_player_self_score",
-        range: { min: 0, max: 5e3 }
-      },
-      distance_median_km: {
-        label: "Median distance",
-        unit: "km",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "median_player_self_distance_km",
-        range: { min: 0 }
-      },
-      guess_duration_median: {
-        label: "Median guess duration",
-        unit: "seconds",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "median_duration_seconds",
-        range: { min: 0 }
-      },
-      rounds_with_time_count: {
-        label: "Rounds with time data",
-        unit: "count",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_rounds_with_duration",
-        range: { min: 0 }
-      },
-      time_played_seconds: {
-        label: "Time played",
-        unit: "duration",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "sum_duration_seconds"
-      },
-      damage_dealt_avg: {
-        label: "Avg damage dealt",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_dealt",
-        range: { min: 0, max: 5e3 }
-      },
-      damage_taken_avg: {
-        label: "Avg damage taken",
-        unit: "points",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_taken",
-        range: { min: 0, max: 5e3 }
-      },
-      damage_dealt_share: {
-        label: "Damage dealt share",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "share_damage_dealt",
-        range: { min: 0, max: 100 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "is_damage_dealt", op: "eq", value: "true" }]
-        }
-      },
-      damage_taken_share: {
-        label: "Damage taken share",
-        unit: "percent",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "share_damage_taken",
-        range: { min: 0, max: 100 },
-        drilldown: {
-          filterFromPoint: true,
-          extraFilters: [{ dimension: "is_damage_taken", op: "eq", value: "true" }]
-        }
-      },
-      hit_signed: {
-        label: "Hit",
-        unit: "float",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_hit_signed",
-        range: { min: -1, max: 1 }
-      },
-      damage_net_avg: {
-        label: "Damage",
-        unit: "points_delta",
-        grain: "round",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_damage_net"
-      },
-      sessions_count: {
-        label: "Sessions",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "count_sessions",
-        range: { min: 0 }
-      },
-      sessions_longest_break_seconds: {
-        label: "Longest break between sessions",
-        unit: "duration",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_break_between_sessions_seconds"
-      },
-      sessions_avg_games: {
-        label: "Avg games per session",
-        unit: "float",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "mean_games_per_session"
-      },
-      session_avg_score_hit: {
-        label: "Avg score (hits only)",
-        unit: "points",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_avg_score_hit",
-        range: { min: 0, max: 5e3 }
-      },
-      session_5k_count: {
-        label: "5k count",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_5k_count",
-        range: { min: 0 }
-      },
-      session_hit_count: {
-        label: "Hit count",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_hit_count",
-        range: { min: 0 }
-      },
-      session_throw_count: {
-        label: "Throw count",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_throw_count",
-        range: { min: 0 }
-      },
-      session_win_rate: {
-        label: "Win rate",
-        unit: "percent",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_win_rate",
-        range: { min: 0, max: 1 }
-      },
-      session_win_count: {
-        label: "Wins",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_win_count",
-        range: { min: 0 }
-      },
-      session_start_rating: {
-        label: "Start rating",
-        unit: "rating",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_start_rating"
-      },
-      session_end_rating: {
-        label: "End rating",
-        unit: "rating",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_end_rating"
-      },
-      session_duration_minutes: {
-        label: "Session duration",
-        unit: "duration",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_duration_seconds",
-        range: { min: 0 }
-      },
-      session_games_count: {
-        label: "Games",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_games_count"
-      },
-      session_rounds_count: {
-        label: "Rounds",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_rounds_count"
-      },
-      session_avg_score: {
-        label: "Avg score",
-        unit: "points",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_avg_score",
-        range: { min: 0, max: 5e3 }
-      },
-      session_avg_guess_duration: {
-        label: "Avg guess duration",
-        unit: "seconds",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_avg_guess_duration"
-      },
-      session_avg_distance_km: {
-        label: "Avg distance",
-        unit: "km",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_avg_distance_km"
-      },
-      session_fivek_rate: {
-        label: "5k rate",
-        unit: "percent",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_fivek_rate"
-      },
-      session_hit_rate: {
-        label: "Hit rate",
-        unit: "percent",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_hit_rate"
-      },
-      session_throw_rate: {
-        label: "Throw rate",
-        unit: "percent",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_throw_rate"
-      },
-      session_delta_rating: {
-        label: "Session rating delta",
-        unit: "rating_delta",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_delta_rating"
-      },
-      session_rating_delta: {
-        label: "Rating delta",
-        unit: "rating_delta",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "session_delta_rating"
-      },
-      day_win_rate_min5: {
-        label: "Win rate (day, min 5 games)",
-        unit: "percent",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "day_win_rate_min5",
-        range: { min: 0, max: 1 }
-      },
-      max_consecutive_days_without_games: {
-        label: "Most consecutive days without games",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "max_consecutive_days_without_games",
-        range: { min: 0 }
-      },
-      longest_active_streak_days: {
-        label: "Longest active streak (days)",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "longest_active_streak_days",
-        range: { min: 0 }
-      },
-      longest_5k_day_streak_days: {
-        label: "Longest 5k day streak (days)",
-        unit: "count",
-        grain: "session",
-        allowedCharts: ["bar", "line"],
-        formulaId: "longest_5k_day_streak_days",
-        range: { min: 0 }
-      }
-    },
-    units: {
-      count: { format: "int" },
-      int: { format: "int" },
-      points: { format: "float", decimals: 1 },
-      points_delta: { format: "float", decimals: 0, showSign: true },
-      percent: { format: "percent", decimals: 1 },
-      seconds: { format: "float", decimals: 1 },
-      duration: { format: "duration" },
-      datetime: { format: "datetime" },
-      rating: { format: "float", decimals: 0 },
-      rating_delta: { format: "float", decimals: 0, showSign: true },
-      km: { format: "float", decimals: 1 },
-      float: { format: "float", decimals: 2 }
-    },
-    columnAliases: {
-      ts: ["playedAt", "startTime"],
-      game_mode: ["gameMode", "gameModeSimple", "game_mode", "mode", "gameType"],
-      true_country: ["trueCountry", "true_country"],
-      player_self_country: ["player_self_guessCountry", "p1_guessCountry", "guessCountry"],
-      player_self_score: ["player_self_score", "p1_score", "score"],
-      player_opponent_name: ["player_opponent_name", "playerTwoName", "playerOpponentName"],
-      player_opponent_id: ["player_opponent_id", "playerTwoId", "playerOpponentId"],
-      player_opponent_mate_name: ["player_opponent_mate_name", "teamTwoPlayerTwoName", "playerOpponentMateName"],
-      player_opponent_mate_id: ["player_opponent_mate_id", "teamTwoPlayerTwoId", "playerOpponentMateId"],
-      player_mate_name: ["player_mate_name", "teamOnePlayerTwoName", "playerMateName"],
-      player_mate_id: ["player_mate_id", "teamOnePlayerTwoId", "playerMateId"],
-      player_self_guessLat: ["p1_guessLat", "player_self_guessLat"],
-      player_self_guessLng: ["p1_guessLng", "player_self_guessLng"],
-      player_self_isBestGuess: ["p1_isBestGuess", "player_self_isBestGuess"],
-      player_mate_guessLat: ["p2_guessLat", "player_mate_guessLat"],
-      player_mate_guessLng: ["p2_guessLng", "player_mate_guessLng"],
-      player_mate_score: ["p2_score", "player_mate_score"],
-      player_mate_isBestGuess: ["p2_isBestGuess", "player_mate_isBestGuess"],
-      player_opponent_guessLat: ["p3_guessLat", "player_opponent_guessLat", "p2_guessLat"],
-      player_opponent_guessLng: ["p3_guessLng", "player_opponent_guessLng", "p2_guessLng"],
-      player_opponent_score: ["p3_score", "player_opponent_score", "p2_score"],
-      player_opponent_isBestGuess: ["p3_isBestGuess", "player_opponent_isBestGuess", "p2_isBestGuess"],
-      player_opponent_mate_guessLat: ["p4_guessLat", "player_opponent_mate_guessLat"],
-      player_opponent_mate_guessLng: ["p4_guessLng", "player_opponent_mate_guessLng"],
-      player_opponent_mate_score: ["p4_score", "player_opponent_mate_score"],
-      player_opponent_mate_isBestGuess: ["p4_isBestGuess", "player_opponent_mate_isBestGuess"],
-      distanceKm: ["player_self_distanceKm", "p1_distanceKm", "distanceKm"],
-      durationSeconds: ["durationSeconds", "guessDurationSec", "timeSec"],
-      mapName: ["mapName", "map_name"],
-      mapSlug: ["mapSlug", "map_slug"],
-      isRanked: ["isRated", "is_rated", "rated"],
-      isRated: ["is_rated", "rated"]
-    },
-    drilldownPresets: {
-      rounds: {
-        entity: "round",
-        columnsPresets: {
-          roundMode: [
-            { key: "ts", label: "Date", sortable: true },
-            { key: "result", label: "Result", sortable: true, colored: true },
-            { key: "roundNumber", label: "Round", sortable: true },
-            { key: "movementType", label: "Movement", sortable: true },
-            { key: "player_self_score", label: "Score", sortable: true },
-            { key: "true_country", label: "Country", sortable: true },
-            { key: "durationSeconds", label: "Guess Duration", sortable: true },
-            { key: "damage", label: "Damage", sortable: true, colored: true },
-            { key: "teammateName", label: "Mate", sortable: true },
-            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } },
-            { key: "guess_maps", label: "Guess Maps", type: "link", link: { kind: "guess_maps", label: "Open" } },
-            { key: "street_view", label: "True Street View", type: "link", link: { kind: "street_view", label: "Open" } }
-          ]
-        },
-        defaultPreset: "roundMode"
-      },
-      sessions: {
-        entity: "session",
-        columnsPresets: {
-          sessionMode: [
-            { key: "sessionStartTs", label: "Start", sortable: true },
-            { key: "sessionEndTs", label: "End", sortable: true },
-            { key: "gamesCount", label: "Games", sortable: true },
-            { key: "roundsCount", label: "Rounds", sortable: true },
-            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
-            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } }
-          ]
-        },
-        defaultPreset: "sessionMode"
-      },
-      games: {
-        entity: "game",
-        columnsPresets: {
-          gameMode: [
-            { key: "ts", label: "Date", sortable: true },
-            { key: "modeFamily", label: "Game Mode", sortable: true },
-            { key: "movementType", label: "Movement", sortable: true },
-            { key: "roundsCount", label: "Rounds", sortable: true },
-            { key: "result", label: "Result", sortable: true, colored: true },
-            { key: "endRating", label: "End Rating", sortable: true },
-            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
-            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
-            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
-          ]
-        },
-        defaultPreset: "gameMode"
-      },
-      players: {
-        entity: "game",
-        columnsPresets: {
-          opponentMode: [
-            { key: "ts", label: "Date", sortable: true },
-            { key: "modeFamily", label: "Game Mode", sortable: true },
-            { key: "movementType", label: "Movement", sortable: true },
-            { key: "roundsCount", label: "Rounds", sortable: true },
-            { key: "teammateName", label: "Mate", sortable: true },
-            { key: "result", label: "Result", sortable: true, colored: true },
-            { key: "player_opponent_name", label: "Opponent", sortable: true },
-            { key: "player_opponent_mate_name", label: "Opponent Mate", sortable: true },
-            { key: "endRating", label: "End Rating", sortable: true },
-            { key: "ratingDelta", label: "Rating Delta", sortable: true, colored: true },
-            { key: "sessionId", label: "Session", sortable: true, display: { truncate: true, truncateHead: 2 } },
-            { key: "gameId", label: "Game", sortable: true, display: { truncate: true, truncateHead: 8 } }
-          ]
-        },
-        defaultPreset: "opponentMode"
-      }
-    },
-    errors: {
-      E_GRAIN_MISMATCH: "Selected fields have incompatible grains.",
-      E_CHART_X_NOT_ORDERED: "Line charts require an ordered x-dimension.",
-      E_SELECTOR_REQUIRED: "This dimension requires a selector (Top-N or Selected).",
-      E_TOO_MANY_SERIES: "Too many series requested; reduce categories or use selector."
-    }
-  };
-
-  // src/config/dashboard.json
-  var dashboard_default = {
-    $schema: "./dashboard.schema.json",
-    schemaVersion: "0.1.0",
-    dashboard: {
-      id: "default",
-      title: "GeoAnalyzr",
-      ui: {
-        topbarTitle: "{{playerName}}",
-        windowTitle: "{{playerName}} - GeoAnalyzr"
-      },
-      globalFilters: {
-        enabled: true,
-        layout: {
-          variant: "compact"
-        },
-        controls: [
-          {
-            id: "dateRange",
-            type: "date_range",
-            label: "From / To",
-            default: {
-              fromTs: null,
-              toTs: null
-            },
-            appliesTo: [
-              "round",
-              "game",
-              "session"
-            ]
-          },
-          {
-            id: "modeFamily",
-            type: "select",
-            label: "Game mode",
-            dimension: "mode_family",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: [
-              "round",
-              "game"
-            ]
-          },
-          {
-            id: "rated",
-            type: "select",
-            label: "Rated",
-            dimension: "is_rated",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: [
-              "round",
-              "game"
-            ]
-          },
-          {
-            id: "map",
-            type: "select",
-            label: "Map",
-            width: 220,
-            dimension: "map_slug",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: [
-              "round",
-              "game"
-            ]
-          },
-          {
-            id: "teammate",
-            type: "select",
-            label: "Teammate",
-            dimension: "teammate_name",
-            default: "all",
-            options: "auto_teammates",
-            appliesTo: [
-              "round",
-              "game"
-            ]
-          },
-          {
-            id: "movement",
-            type: "select",
-            label: "Movement",
-            dimension: "movement_type",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: [
-              "round",
-              "game"
-            ]
-          },
-          {
-            id: "guessTimeBucket",
-            type: "select",
-            label: "Guess time",
-            dimension: "duration_bucket",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: [
-              "round"
-            ]
-          },
-          {
-            id: "country",
-            type: "select",
-            label: "Country",
-            dimension: "true_country",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: [
-              "round"
-            ]
-          }
-        ],
-        buttons: {
-          apply: false,
-          reset: true
-        }
-      },
-      drilldownPresets: {
-        rounds: {
-          entity: "round",
-          columnsPresets: {
-            roundMode: [
-              {
-                key: "ts",
-                label: "Date",
-                sortable: true
-              },
-              {
-                key: "result",
-                label: "Result",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "roundNumber",
-                label: "Round",
-                sortable: true
-              },
-              {
-                key: "movementType",
-                label: "Movement",
-                sortable: true
-              },
-              {
-                key: "player_self_score",
-                label: "Score",
-                sortable: true
-              },
-              {
-                key: "true_country",
-                label: "Country",
-                sortable: true
-              },
-              {
-                key: "durationSeconds",
-                label: "Guess Duration",
-                sortable: true
-              },
-              {
-                key: "damage",
-                label: "Damage",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "teammateName",
-                label: "Mate",
-                sortable: true
-              },
-              {
-                key: "gameId",
-                label: "Game",
-                sortable: true
-              },
-              {
-                key: "guess_maps",
-                label: "Guess Maps",
-                type: "link",
-                link: {
-                  kind: "guess_maps",
-                  label: "Open"
-                }
-              },
-              {
-                key: "street_view",
-                label: "True Street View",
-                type: "link",
-                link: {
-                  kind: "street_view",
-                  label: "Open"
-                }
-              }
-            ]
-          },
-          defaultPreset: "roundMode"
-        },
-        sessions: {
-          entity: "session",
-          columnsPresets: {
-            sessionMode: [
-              {
-                key: "sessionStartTs",
-                label: "Start",
-                sortable: true
-              },
-              {
-                key: "sessionEndTs",
-                label: "End",
-                sortable: true
-              },
-              {
-                key: "gamesCount",
-                label: "Games",
-                sortable: true
-              },
-              {
-                key: "roundsCount",
-                label: "Rounds",
-                sortable: true
-              },
-              {
-                key: "ratingDelta",
-                label: "Rating Delta",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "sessionId",
-                label: "Session",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 2
-                }
-              }
-            ]
-          },
-          defaultPreset: "sessionMode"
-        },
-        games: {
-          entity: "game",
-          columnsPresets: {
-            gameMode: [
-              {
-                key: "ts",
-                label: "Date",
-                sortable: true
-              },
-              {
-                key: "modeFamily",
-                label: "Game Mode",
-                sortable: true
-              },
-              {
-                key: "movementType",
-                label: "Movement",
-                sortable: true
-              },
-              {
-                key: "teammateName",
-                label: "Mate",
-                sortable: true
-              },
-              {
-                key: "roundsCount",
-                label: "Rounds",
-                sortable: true
-              },
-              {
-                key: "result",
-                label: "Result",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "endRating",
-                label: "End Rating",
-                sortable: true
-              },
-              {
-                key: "ratingDelta",
-                label: "Rating Delta",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "sessionId",
-                label: "Session",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 2
-                }
-              },
-              {
-                key: "gameId",
-                label: "Game",
-                sortable: true
-              }
-            ]
-          },
-          defaultPreset: "gameMode"
-        },
-        players: {
-          entity: "game",
-          columnsPresets: {
-            opponentMode: [
-              {
-                key: "ts",
-                label: "Date",
-                sortable: true
-              },
-              {
-                key: "modeFamily",
-                label: "Game Mode",
-                sortable: true
-              },
-              {
-                key: "movementType",
-                label: "Movement",
-                sortable: true
-              },
-              {
-                key: "roundsCount",
-                label: "Rounds",
-                sortable: true
-              },
-              {
-                key: "teammateName",
-                label: "Mate",
-                sortable: true
-              },
-              {
-                key: "result",
-                label: "Result",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "player_opponent_name",
-                label: "Opponent",
-                sortable: true
-              },
-              {
-                key: "player_opponent_mate_name",
-                label: "Opponent Mate",
-                sortable: true
-              },
-              {
-                key: "endRating",
-                label: "End Rating",
-                sortable: true
-              },
-              {
-                key: "ratingDelta",
-                label: "Rating Delta",
-                sortable: true,
-                colored: true
-              },
-              {
-                key: "sessionId",
-                label: "Session",
-                sortable: true,
-                display: {
-                  truncate: true,
-                  truncateHead: 2
-                }
-              },
-              {
-                key: "gameId",
-                label: "Game",
-                sortable: true
-              }
-            ]
-          },
-          defaultPreset: "opponentMode"
-        }
-      },
-      sections: [
-        {
-          id: "overview",
-          title: "Overview",
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_overview_main",
-                title: "Overview",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 22,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_overview_facts",
-                      type: "stat_list",
-                      title: "Results, Win Rate & Streaks",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 7
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Games with result data",
-                            measure: "games_with_result_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Wins",
-                            measure: "win_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Win"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Losses",
-                            measure: "loss_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Loss"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Win rate",
-                            measure: "win_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Win"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Best rating",
-                            measure: "best_end_rating",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false,
-                                initialSort: {
-                                  key: "endRating",
-                                  dir: "desc"
-                                }
-                              }
-                            }
-                          },
-                          {
-                            label: "Longest win streak",
-                            measure: "longest_win_streak",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Longest loss streak",
-                            measure: "longest_loss_streak",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Avg score (pts)",
-                            measure: "avg_score",
-                            grain: "round",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Avg distance (km)",
-                            measure: "avg_distance_km",
-                            grain: "round",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Avg time (s)",
-                            measure: "avg_guess_duration",
-                            grain: "round",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Time played",
-                            measure: "time_played_seconds",
-                            grain: "round",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Perfect 5k rounds",
-                            measure: "fivek_count",
-                            grain: "round",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Throws (<50)",
-                            measure: "throw_count",
-                            grain: "round",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_overview_mode_breakdown",
-                      type: "breakdown",
-                      title: "Mode Breakdown",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 7,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        dimension: "mode_family",
-                        excludeKeys: [
-                          "other",
-                          "Streak"
-                        ],
-                        measure: "games_count",
-                        sort: {
-                          mode: "desc"
-                        },
-                        limit: 12,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "players",
-                            columnsPreset: "opponentMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_overview_movement_breakdown",
-                      type: "breakdown",
-                      title: "Movement Breakdown",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 11,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        dimension: "movement_type",
-                        measure: "rounds_count",
-                        sort: {
-                          mode: "desc"
-                        },
-                        limit: 12,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_overview_time_progression",
-                      type: "chart",
-                      title: "Time progression metrics",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 15,
-                        w: 12,
-                        h: 7
-                      },
-                      spec: {
-                        type: "line",
-                        maxPoints: 100,
-                        x: {
-                          dimension: "time_day"
-                        },
-                        y: {
-                          measures: [
-                            "games_count",
-                            "rounds_count",
-                            "time_played_seconds",
-                            "avg_score",
-                            "avg_score_hit_only",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "throw_rate",
-                            "throw_count",
-                            "fivek_rate",
-                            "fivek_count",
-                            "hit_rate",
-                            "hit_count",
-                            "win_rate",
-                            "win_count",
-                            "end_rating",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
-                          activeMeasure: "games_count",
-                          accumulations: [
-                            "period",
-                            "to_date",
-                            "session"
-                          ],
-                          activeAccumulation: "to_date"
-                        },
-                        sort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "rating",
-          title: "Rating",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket",
-              "country"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_rating",
-                title: "Rating",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 16,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_rating_kpis",
-                      type: "stat_list",
-                      title: "Rating",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Current rating",
-                            measure: "end_rating"
-                          },
-                          {
-                            label: "Trend",
-                            measure: "rating_trend"
-                          },
-                          {
-                            label: "Avg rating delta",
-                            measure: "rating_delta_avg"
-                          },
-                          {
-                            label: "Highest rating delta",
-                            measure: "rating_delta_highest",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            label: "Lowest rating delta",
-                            measure: "rating_delta_lowest",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_rating_session_records",
-                      type: "record_list",
-                      title: "Sessions",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 4,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "biggest_session_rating_gain",
-                            label: "Biggest session rating gain",
-                            metric: "session_delta_rating",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "biggest_session_rating_loss",
-                            label: "Biggest session rating loss",
-                            metric: "session_delta_rating",
-                            groupBy: "session_start",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_rating_over_time",
-                      type: "chart",
-                      title: "Rating over time",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 8,
-                        w: 12,
-                        h: 8
-                      },
-                      spec: {
-                        type: "line",
-                        maxPoints: 220,
-                        x: {
-                          dimension: "time_day"
-                        },
-                        y: {
-                          measures: [
-                            "end_rating"
-                          ],
-                          activeMeasure: "end_rating"
-                        },
-                        sort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "players",
-                            columnsPreset: "opponentMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "personal_records",
-          title: "Personal Records",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_personal_records",
-                title: "Personal Records",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 30,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_round_records",
-                      type: "record_list",
-                      title: "Round Records",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 6
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "highest_score_round",
-                            label: "Highest score round",
-                            metric: "round_score",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "lowest_score_round",
-                            label: "Lowest score round",
-                            metric: "round_score",
-                            groupBy: "round_id",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "biggest_damage_dealt_round",
-                            label: "Biggest damage dealt round",
-                            metric: "round_damage_dealt",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "biggest_damage_taken_round",
-                            label: "Biggest damage taken round",
-                            metric: "round_damage_taken",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "fastest_round",
-                            label: "Fastest round (min duration)",
-                            metric: "round_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "slowest_round",
-                            label: "Slowest round (max duration)",
-                            metric: "round_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "fastest_5k",
-                            label: "Fastest 5k",
-                            metric: "round_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "min",
-                            filters: [
-                              {
-                                dimension: "score_bucket",
-                                op: "eq",
-                                value: "5000"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "score_bucket",
-                                    op: "eq",
-                                    value: "5000"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "slowest_throw",
-                            label: "Slowest throw",
-                            metric: "round_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            filters: [
-                              {
-                                dimension: "is_throw",
-                                op: "eq",
-                                value: "true"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_throw",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "best_score_per_second",
-                            label: "Best score-per-second",
-                            metric: "round_score_per_second",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_region_guess",
-                            label: "Worst region-guess (hit but low score)",
-                            metric: "round_score",
-                            groupBy: "round_id",
-                            extreme: "min",
-                            filters: [
-                              {
-                                dimension: "is_hit",
-                                op: "eq",
-                                value: "true"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_hit",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_game_records",
-                      type: "record_list",
-                      title: "Game Records",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 6,
-                        w: 12,
-                        h: 7
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "flawless_wins",
-                            label: "Flawless wins (no damage taken)",
-                            kind: "overall",
-                            metric: "flawless_wins_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_flawless_win",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "highest_avg_score_game",
-                            label: "Highest avg score game",
-                            metric: "game_avg_score",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "lowest_avg_score_game",
-                            label: "Lowest avg score game",
-                            metric: "game_avg_score",
-                            groupBy: "game_id",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_5ks_in_game",
-                            label: "Most 5ks in a game",
-                            metric: "game_5k_count",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_throws_in_game",
-                            label: "Most throws in a game",
-                            metric: "game_throw_count",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_hit_rate_game",
-                            label: "Worst hit rate game",
-                            metric: "game_hit_rate",
-                            groupBy: "game_id",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "highest_rating_gain_game",
-                            label: "Highest rating gain",
-                            metric: "game_rating_delta",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "fastest_win_game",
-                            label: "Fastest win game",
-                            metric: "game_duration",
-                            groupBy: "game_id",
-                            extreme: "min",
-                            filters: [
-                              {
-                                dimension: "result",
-                                op: "eq",
-                                value: "Win"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Win"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "slowest_win_game",
-                            label: "Slowest win game",
-                            metric: "game_duration",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            filters: [
-                              {
-                                dimension: "result",
-                                op: "eq",
-                                value: "Win"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Win"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "best_clutch_game",
-                            label: "Best clutch (win with lowest health)",
-                            metric: "game_final_health",
-                            groupBy: "game_id",
-                            extreme: "min",
-                            filters: [
-                              {
-                                dimension: "result",
-                                op: "eq",
-                                value: "Win"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Win"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_throw_game",
-                            label: "Worst throw (loss with highest health in last round)",
-                            metric: "game_final_health",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            filters: [
-                              {
-                                dimension: "result",
-                                op: "eq",
-                                value: "Loss"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "result",
-                                    op: "eq",
-                                    value: "Loss"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_session_records",
-                      type: "record_list",
-                      title: "Session Records",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 13,
-                        w: 12,
-                        h: 6
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "highest_win_rate_session",
-                            label: "Highest win rate session",
-                            metric: "session_win_rate",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "highest_avg_score_session",
-                            label: "Highest avg score session",
-                            metric: "session_avg_score",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "lowest_avg_score_session",
-                            label: "Lowest avg score session",
-                            metric: "session_avg_score",
-                            groupBy: "session_start",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_games_session",
-                            label: "Most games session",
-                            metric: "session_games_count",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "longest_session_total_duration",
-                            label: "Longest session (total duration)",
-                            metric: "session_duration_minutes",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_5ks_session",
-                            label: "Most 5ks session",
-                            metric: "session_5k_count",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "best_hit_rate_session",
-                            label: "Best hit rate session",
-                            metric: "session_hit_rate",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "highest_throw_rate_session",
-                            label: "Highest throw rate session",
-                            metric: "session_throw_rate",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "biggest_rating_gain_in_session",
-                            label: "Biggest rating gain in a session",
-                            metric: "session_delta_rating",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "biggest_rating_loss_in_session",
-                            label: "Biggest rating loss in a session",
-                            metric: "session_delta_rating",
-                            groupBy: "session_start",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_day_records",
-                      type: "record_list",
-                      title: "Day Records",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 19,
-                        w: 12,
-                        h: 7
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "best_day_by_avg_score",
-                            label: "Best day by avg score",
-                            metric: "session_avg_score",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_day_by_avg_score",
-                            label: "Worst day by avg score",
-                            metric: "session_avg_score",
-                            groupBy: "time_day",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_sessions_in_a_day",
-                            label: "Most sessions in a day",
-                            metric: "sessions_count",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_games_in_a_day",
-                            label: "Most games in a day",
-                            metric: "session_games_count",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_time_played_in_a_day",
-                            label: "Most time played in a day",
-                            metric: "session_duration_minutes",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "most_5ks_in_a_day",
-                            label: "Most 5ks in a day",
-                            metric: "session_5k_count",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "best_win_rate_day",
-                            label: "Best win rate day (min 5 games)",
-                            metric: "day_win_rate_min5",
-                            groupBy: "time_day",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_win_rate_day",
-                            label: "Worst win rate day (min 5 games)",
-                            metric: "day_win_rate_min5",
-                            groupBy: "time_day",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_day_streaks",
-                      type: "stat_list",
-                      title: "Day Streaks",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 26,
-                        w: 12,
-                        h: 3
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Most consecutive days without games",
-                            measure: "max_consecutive_days_without_games"
-                          },
-                          {
-                            label: "Longest active streak (min 1 game/day)",
-                            measure: "longest_active_streak_days"
-                          },
-                          {
-                            label: "Longest 5k day streak (min 1 5k/day)",
-                            measure: "longest_5k_day_streak_days"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "sessions",
-          title: "Sessions",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_sessions",
-                title: "Sessions",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 20,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_sessions_kpis",
-                      type: "stat_list",
-                      title: "Sessions",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Sessions detected (gap >45m)",
-                            measure: "sessions_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Longest break between sessions",
-                            measure: "sessions_longest_break_seconds"
-                          },
-                          {
-                            label: "Avg games per session",
-                            measure: "sessions_avg_games"
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_sessions_records",
-                      type: "record_list",
-                      title: "Session Records",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 4,
-                        w: 12,
-                        h: 5
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "longest_session",
-                            label: "Longest session",
-                            metric: "session_games_count",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "best_session",
-                            label: "Best session",
-                            metric: "session_avg_score",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "worst_session",
-                            label: "Worst session",
-                            metric: "session_avg_score",
-                            groupBy: "session_start",
-                            extreme: "min",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_sessions_line",
-                      type: "chart",
-                      title: "Sessions over time (line)",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 9,
-                        w: 12,
-                        h: 5
-                      },
-                      spec: {
-                        type: "line",
-                        maxPoints: 120,
-                        x: {
-                          dimension: "session_index"
-                        },
-                        y: {
-                          measures: [
-                            "session_avg_score",
-                            "session_avg_score_hit",
-                            "session_fivek_rate",
-                            "session_5k_count",
-                            "session_throw_rate",
-                            "session_throw_count",
-                            "session_hit_rate",
-                            "session_hit_count",
-                            "session_win_rate",
-                            "session_win_count",
-                            "session_start_rating",
-                            "session_end_rating",
-                            "session_rating_delta",
-                            "session_duration_minutes",
-                            "session_games_count",
-                            "session_rounds_count",
-                            "session_avg_guess_duration",
-                            "session_avg_distance_km"
-                          ],
-                          activeMeasure: "session_avg_score",
-                          accumulations: [
-                            "period",
-                            "to_date"
-                          ],
-                          activeAccumulation: "period"
-                        },
-                        sort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "sessions",
-                            columnsPreset: "sessionMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_sessions_breakdown",
-                      type: "breakdown",
-                      title: "Sessions (bar)",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 14,
-                        w: 12,
-                        h: 6
-                      },
-                      spec: {
-                        dimension: "session_start",
-                        measures: [
-                          "session_avg_score",
-                          "session_avg_score_hit",
-                          "session_fivek_rate",
-                          "session_5k_count",
-                          "session_throw_rate",
-                          "session_throw_count",
-                          "session_hit_rate",
-                          "session_hit_count",
-                          "session_win_rate",
-                          "session_win_count",
-                          "session_start_rating",
-                          "session_end_rating",
-                          "session_rating_delta",
-                          "session_duration_minutes",
-                          "session_games_count",
-                          "session_rounds_count"
-                        ],
-                        activeMeasure: "session_avg_score",
-                        sorts: [
-                          {
-                            mode: "chronological"
-                          },
-                          {
-                            mode: "desc"
-                          },
-                          {
-                            mode: "asc"
-                          }
-                        ],
-                        activeSort: {
-                          mode: "chronological"
-                        },
-                        limit: 12,
-                        extendable: true,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "sessions",
-                            columnsPreset: "sessionMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "tempo",
-          title: "Tempo",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_tempo",
-                title: "Tempo",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 18,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_tempo_records",
-                      type: "record_list",
-                      title: "Tempo",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 6
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "fastest_guess",
-                            label: "Fastest guess",
-                            metric: "avg_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "min",
-                            displayKey: "none",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "slowest_guess",
-                            label: "Slowest guess",
-                            metric: "avg_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            displayKey: "none",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "fastest_5k",
-                            label: "Fastest 5k",
-                            metric: "avg_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "min",
-                            filters: [
-                              {
-                                dimension: "score_bucket",
-                                op: "eq",
-                                value: "5000"
-                              }
-                            ],
-                            displayKey: "none",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "score_bucket",
-                                    op: "eq",
-                                    value: "5000"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "slowest_throw",
-                            label: "Slowest throw (<50)",
-                            metric: "avg_guess_duration",
-                            groupBy: "round_id",
-                            extreme: "max",
-                            filters: [
-                              {
-                                dimension: "is_throw",
-                                op: "eq",
-                                value: "true"
-                              }
-                            ],
-                            displayKey: "none",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_throw",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_tempo_bucket_breakdown",
-                      type: "breakdown",
-                      title: "Tempo - Time bucket metrics",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 6,
-                        w: 12,
-                        h: 8
-                      },
-                      spec: {
-                        dimension: "duration_bucket",
-                        measures: [
-                          "avg_score",
-                          "fivek_rate",
-                          "throw_rate",
-                          "hit_rate",
-                          "avg_guess_duration"
-                        ],
-                        activeMeasure: "avg_score",
-                        sorts: [
-                          {
-                            mode: "chronological"
-                          },
-                          {
-                            mode: "desc"
-                          },
-                          {
-                            mode: "asc"
-                          }
-                        ],
-                        activeSort: {
-                          mode: "chronological"
-                        },
-                        limit: 12,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "scores",
-          title: "Scores",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_scores_kpis",
-                title: "Scores",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 18,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_scores_kpis",
-                      type: "stat_list",
-                      title: "Scores",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Perfect 5k",
-                            measure: "fivek_count",
-                            secondaryMeasure: "fivek_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "score_bucket",
-                                    op: "eq",
-                                    value: "5000"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Near-perfect (>=4500)",
-                            measure: "near_perfect_count",
-                            secondaryMeasure: "near_perfect_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_near_perfect",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Low scores (<500)",
-                            measure: "low_score_count",
-                            secondaryMeasure: "low_score_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_low_score",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Throws (<50)",
-                            measure: "throw_count",
-                            secondaryMeasure: "throw_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_throw",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_score_vs_opponents",
-                      type: "breakdown",
-                      title: "Score vs opponents",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 4,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        dimension: "score_vs_opponent",
-                        measure: "rounds_share",
-                        sort: {
-                          mode: "desc"
-                        },
-                        limit: 3,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_score_distribution",
-                      type: "chart",
-                      title: "Scores - Score distribution (smoothed)",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 8,
-                        w: 12,
-                        h: 10
-                      },
-                      spec: {
-                        type: "bar",
-                        limit: 200,
-                        x: {
-                          dimension: "score_bucket"
-                        },
-                        y: {
-                          measure: "rounds_count"
-                        },
-                        sort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "rounds",
-          title: "Rounds",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket",
-              "country"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_rounds",
-                title: "Rounds",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 24,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_rounds_records",
-                      type: "record_list",
-                      title: "Rounds",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 7
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "game_most_rounds",
-                            label: "Game with most rounds",
-                            metric: "rounds_count",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            displayKey: "first_ts",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "game_fewest_rounds",
-                            label: "Games with fewest rounds",
-                            metric: "rounds_count",
-                            groupBy: "game_id",
-                            extreme: "min",
-                            displayKey: "first_ts",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "largest_score_spread_game",
-                            label: "Largest score spread (max-min in one game)",
-                            metric: "score_spread",
-                            groupBy: "game_id",
-                            extreme: "max",
-                            displayKey: "first_ts",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "games",
-                                columnsPreset: "gameMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "fast_round_streak",
-                            label: "Fastest round streak (<20s)",
-                            kind: "streak",
-                            streakFilters: [
-                              {
-                                dimension: "duration_bucket",
-                                op: "eq",
-                                value: "<20 sec"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "duration_bucket",
-                                    op: "eq",
-                                    value: "<20 sec"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "damage_dealt_streak",
-                            label: "Damage dealt streak",
-                            kind: "streak",
-                            streakFilters: [
-                              {
-                                dimension: "is_damage_dealt",
-                                op: "eq",
-                                value: "true"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_damage_dealt",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "damage_taken_streak",
-                            label: "Damage taken streak",
-                            kind: "streak",
-                            streakFilters: [
-                              {
-                                dimension: "is_damage_taken",
-                                op: "eq",
-                                value: "true"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_damage_taken",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            id: "same_country_streak",
-                            label: "Longest same-country streak",
-                            kind: "same_value_streak",
-                            dimension: "true_country",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          },
-                          {
-                            id: "correct_country_streak",
-                            label: "Correct-country streak",
-                            kind: "streak",
-                            streakFilters: [
-                              {
-                                dimension: "is_hit",
-                                op: "eq",
-                                value: "true"
-                              }
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: true,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_hit",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_rounds_progression",
-                      type: "chart",
-                      title: "Rounds - Round progression metrics",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 7,
-                        w: 12,
-                        h: 8
-                      },
-                      spec: {
-                        type: "bar",
-                        x: {
-                          dimension: "round_number"
-                        },
-                        y: {
-                          measures: [
-                            "avg_score",
-                            "avg_score_hit_only",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "fivek_rate",
-                            "throw_rate",
-                            "hit_rate",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
-                          activeMeasure: "avg_score"
-                        },
-                        sorts: [
-                          {
-                            mode: "chronological"
-                          },
-                          {
-                            mode: "desc"
-                          },
-                          {
-                            mode: "asc"
-                          }
-                        ],
-                        activeSort: {
-                          mode: "chronological"
-                        },
-                        limit: 20,
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_game_length_perf",
-                      type: "chart",
-                      title: "Rounds - Performance by game length (rounds per game, 2+)",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 15,
-                        w: 12,
-                        h: 9
-                      },
-                      spec: {
-                        type: "bar",
-                        x: {
-                          dimension: "game_length"
-                        },
-                        y: {
-                          measures: [
-                            "games_count",
-                            "win_rate",
-                            "win_count",
-                            "loss_count",
-                            "tie_count",
-                            "best_end_rating"
-                          ],
-                          activeMeasure: "games_count"
-                        },
-                        sorts: [
-                          {
-                            mode: "chronological"
-                          },
-                          {
-                            mode: "desc"
-                          },
-                          {
-                            mode: "asc"
-                          }
-                        ],
-                        activeSort: {
-                          mode: "chronological"
-                        },
-                        limit: 20,
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "players",
-                            columnsPreset: "opponentMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "time_patterns",
-          title: "Time Patterns",
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_by_weekday",
-                title: "By weekday",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "by_weekday_chart",
-                      type: "chart",
-                      title: "Weekday Analysis",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 10
-                      },
-                      spec: {
-                        type: "bar",
-                        x: {
-                          dimension: "weekday"
-                        },
-                        y: {
-                          measures: [
-                            "games_count",
-                            "rounds_count",
-                            "avg_score",
-                            "avg_score_hit_only",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "throw_rate",
-                            "throw_count",
-                            "fivek_rate",
-                            "fivek_count",
-                            "hit_rate",
-                            "hit_count",
-                            "win_rate",
-                            "win_count",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
-                          activeMeasure: "games_count"
-                        },
-                        sorts: [
-                          {
-                            mode: "desc"
-                          },
-                          {
-                            mode: "asc"
-                          },
-                          {
-                            mode: "chronological"
-                          }
-                        ],
-                        activeSort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              {
-                cardId: "card_by_hour",
-                title: "By hour",
-                x: 0,
-                y: 10,
-                w: 12,
-                h: 10,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "by_hour_chart",
-                      type: "chart",
-                      title: "Hour Analysis",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 10
-                      },
-                      spec: {
-                        type: "bar",
-                        x: {
-                          dimension: "hour"
-                        },
-                        y: {
-                          measures: [
-                            "games_count",
-                            "rounds_count",
-                            "avg_score",
-                            "avg_score_hit_only",
-                            "avg_distance_km",
-                            "avg_guess_duration",
-                            "throw_rate",
-                            "throw_count",
-                            "fivek_rate",
-                            "fivek_count",
-                            "hit_rate",
-                            "hit_count",
-                            "win_rate",
-                            "win_count",
-                            "damage_dealt_avg",
-                            "damage_taken_avg"
-                          ],
-                          activeMeasure: "games_count"
-                        },
-                        sorts: [
-                          {
-                            mode: "desc"
-                          },
-                          {
-                            mode: "asc"
-                          },
-                          {
-                            mode: "chronological"
-                          }
-                        ],
-                        activeSort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "countries",
-          title: "Countries",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket",
-              "country"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_countries",
-                title: "Countries",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 26,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_country_metrics",
-                      type: "multi_view",
-                      title: "Countries - Country metrics",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 18
-                      },
-                      spec: {
-                        activeView: "bar",
-                        views: [
-                          {
-                            id: "bar",
-                            label: "Bar",
-                            type: "breakdown",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_country",
-                              measures: [
-                                "avg_score",
-                                "avg_score_hit_only",
-                                "avg_distance_km",
-                                "avg_guess_duration",
-                                "rounds_count",
-                                "fivek_rate",
-                                "fivek_count",
-                                "throw_rate",
-                                "throw_count",
-                                "hit_rate",
-                                "hit_count",
-                                "damage_dealt_avg",
-                                "damage_taken_avg",
-                                "damage_dealt_share",
-                                "damage_taken_share"
-                              ],
-                              activeMeasure: "avg_score",
-                              sorts: [
-                                {
-                                  mode: "desc"
-                                },
-                                {
-                                  mode: "asc"
-                                }
-                              ],
-                              activeSort: {
-                                mode: "desc"
-                              },
-                              limit: 15,
-                              extendable: true,
-                              actions: {
-                                click: {
-                                  type: "drilldown",
-                                  target: "rounds",
-                                  columnsPreset: "roundMode",
-                                  filterFromPoint: true
-                                }
-                              }
-                            }
-                          },
-                          {
-                            id: "map",
-                            label: "Map",
-                            type: "country_map",
-                            grain: "round",
-                            spec: {
-                              dimension: "true_country",
-                              mapHeight: 420,
-                              measures: [
-                                "avg_score",
-                                "avg_score_hit_only",
-                                "avg_distance_km",
-                                "avg_guess_duration",
-                                "rounds_count",
-                                "fivek_rate",
-                                "fivek_count",
-                                "throw_rate",
-                                "throw_count",
-                                "hit_rate",
-                                "hit_count",
-                                "damage_dealt_avg",
-                                "damage_taken_avg",
-                                "damage_dealt_share",
-                                "damage_taken_share"
-                              ],
-                              activeMeasure: "avg_score",
-                              actions: {
-                                click: {
-                                  type: "drilldown",
-                                  target: "rounds",
-                                  columnsPreset: "roundMode",
-                                  filterFromPoint: true
-                                }
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_confusion",
-                      type: "chart",
-                      title: "Countries - Confusion matrix (top pairs)",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 18,
-                        w: 12,
-                        h: 8
-                      },
-                      spec: {
-                        type: "bar",
-                        limit: 20,
-                        x: {
-                          dimension: "confused_countries"
-                        },
-                        y: {
-                          measure: "rounds_count"
-                        },
-                        sort: {
-                          mode: "desc"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "coordinates",
-          title: "Coordinates",
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_coordinates",
-                title: "Coordinates",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 24,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_coordinates_repeats",
-                      type: "stat_list",
-                      title: "Coordinates - Repeats",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 5
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Rounds on repeat locations",
-                            measure: "repeat_location_rounds_count",
-                            secondaryMeasure: "repeat_location_rounds_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false,
-                                extraFilters: [
-                                  {
-                                    dimension: "is_true_location_repeat",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Distinct locations",
-                            measure: "distinct_locations_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_coordinates_map",
-                      type: "point_map",
-                      title: "Coordinates - Distribution",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 5,
-                        w: 12,
-                        h: 19
-                      },
-                      spec: {
-                        points: [
-                          {
-                            id: "true",
-                            label: "True location",
-                            latField: "trueLat",
-                            lngField: "trueLng"
-                          },
-                          {
-                            id: "self",
-                            label: "Your guesses",
-                            latField: "player_self_guessLat",
-                            lngField: "player_self_guessLng"
-                          },
-                          {
-                            id: "mate",
-                            label: "Mate guesses",
-                            latField: "player_mate_guessLat",
-                            lngField: "player_mate_guessLng"
-                          },
-                          {
-                            id: "opp",
-                            label: "Opponent guesses",
-                            latField: "player_opponent_guessLat",
-                            lngField: "player_opponent_guessLng"
-                          },
-                          {
-                            id: "oppMate",
-                            label: "Opponent mate guesses",
-                            latField: "player_opponent_mate_guessLat",
-                            lngField: "player_opponent_mate_guessLng"
-                          }
-                        ],
-                        pointSelect: {
-                          enabled: true,
-                          defaultId: "true",
-                          allowAll: false
-                        },
-                        rangeFilter: {
-                          label: "Score",
-                          field: "player_self_score",
-                          min: 0,
-                          max: 5e3,
-                          defaultMin: 0,
-                          defaultMax: 5e3,
-                          step: 10
-                        },
-                        mapHeight: 520,
-                        maxDots: 0,
-                        measures: [
-                          "rounds_count",
-                          "hit_signed",
-                          "damage_net_avg"
-                        ],
-                        activeMeasure: "rounds_count",
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "opponents",
-          title: "Opponents",
-          filterScope: {
-            exclude: [
-              "movement",
-              "guessTimeBucket",
-              "country"
-            ]
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_opponents",
-                title: "Opponents",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 18,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_opponents_scope",
-                      type: "stat_list",
-                      title: "Scope",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 3
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Unique opponents",
-                            measure: "unique_opponents_count"
-                          },
-                          {
-                            label: "Unique countries",
-                            measure: "unique_opponent_countries_count"
-                          },
-                          {
-                            label: "Strongest opponent (rating)",
-                            measure: "strongest_opponent_rating",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Strongest defeated opponent (rating)",
-                            measure: "strongest_defeated_opponent_rating",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "players",
-                                columnsPreset: "opponentMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_opponents_by_country",
-                      type: "chart",
-                      title: "Opponents - Match-ups by opponent country",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 3,
-                        w: 12,
-                        h: 8
-                      },
-                      spec: {
-                        type: "bar",
-                        limit: 20,
-                        x: {
-                          dimension: "opponent_country"
-                        },
-                        y: {
-                          measure: "matchups_count"
-                        },
-                        sort: {
-                          mode: "desc"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "players",
-                            columnsPreset: "opponentMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_opponents_top",
-                      type: "breakdown",
-                      title: "Opponents - Top opponents",
-                      grain: "game",
-                      placement: {
-                        x: 0,
-                        y: 11,
-                        w: 12,
-                        h: 7
-                      },
-                      spec: {
-                        dimension: "opponent_name",
-                        measure: "matchups_count",
-                        sort: {
-                          mode: "desc"
-                        },
-                        limit: 15,
-                        extendable: true,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "players",
-                            columnsPreset: "opponentMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "team",
-          title: "Team",
-          localFilters: {
-            enabled: true,
-            controls: [
-              {
-                id: "mate",
-                type: "select",
-                label: "Mate",
-                dimension: "teammate_name",
-                default: "auto_top",
-                options: "auto_teammates",
-                required: true,
-                appliesTo: [
-                  "round"
-                ]
-              }
-            ],
-            buttons: {
-              reset: true
-            }
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_team",
-                title: "Team: You + {{local.mate}}",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 18,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_team_h2h",
-                      type: "leader_list",
-                      title: "Head-to-head questions",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 5
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Closer guesses",
-                            dimension: "team_closer_winner",
-                            excludeKeys: [
-                              "Tie"
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Higher score rounds",
-                            dimension: "team_higher_score_winner",
-                            excludeKeys: [
-                              "Tie"
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Fewer throws (<50)",
-                            dimension: "team_fewer_throw_winner",
-                            excludeKeys: [
-                              "Tie"
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "More 5k rounds",
-                            dimension: "team_more_5k_winner",
-                            excludeKeys: [
-                              "Tie"
-                            ],
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_team_facts_round",
-                      type: "stat_list",
-                      title: "Team facts",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 5,
-                        w: 12,
-                        h: 5
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Games together",
-                            measure: "games_distinct_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Rounds together",
-                            measure: "rounds_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Time played together",
-                            measure: "time_played_seconds",
-                            secondaryMeasure: "rounds_with_time_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "First game together",
-                            measure: "first_played_at",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Most recent game together",
-                            measure: "last_played_at",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_team_session_records",
-                      type: "record_list",
-                      title: "Session records together",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 10,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        records: [
-                          {
-                            id: "longest_session_together",
-                            label: "Longest session together",
-                            metric: "session_games_count",
-                            groupBy: "session_start",
-                            extreme: "max",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: true
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_team_facts_sessions",
-                      type: "stat_list",
-                      title: "Session stats together",
-                      grain: "session",
-                      placement: {
-                        x: 0,
-                        y: 14,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Sessions detected (gap > session standard)",
-                            measure: "sessions_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "sessions",
-                                columnsPreset: "sessionMode",
-                                filterFromPoint: false
-                              }
-                            }
-                          },
-                          {
-                            label: "Longest break between sessions",
-                            measure: "sessions_longest_break_seconds"
-                          },
-                          {
-                            label: "Avg games per session",
-                            measure: "sessions_avg_games"
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "country_insight",
-          title: "Country Insight",
-          localFilters: {
-            enabled: true,
-            controls: [
-              {
-                id: "spotlightCountry",
-                type: "select",
-                label: "Country",
-                dimension: "true_country",
-                presentation: "map",
-                map: {
-                  variant: "wide",
-                  height: 720,
-                  restrictToOptions: true,
-                  tintSelectable: true
-                },
-                default: "auto_top",
-                options: "auto_distinct",
-                required: true,
-                appliesTo: [
-                  "round"
-                ]
-              }
-            ],
-            buttons: {
-              reset: false
-            }
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_country_insight",
-                title: "Country Spotlight: {{local.spotlightCountry}}",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 18,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_country_insight_stats",
-                      type: "stat_list",
-                      title: "Country spotlight",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 6
-                      },
-                      spec: {
-                        rows: [
-                          {
-                            label: "Rounds",
-                            measure: "rounds_count",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Hit rate",
-                            measure: "hit_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Avg score",
-                            measure: "avg_score",
-                            secondaryMeasure: "score_median",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Avg distance",
-                            measure: "avg_distance_km",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode"
-                              }
-                            }
-                          },
-                          {
-                            label: "Perfect 5k in this country",
-                            measure: "fivek_count",
-                            secondaryMeasure: "fivek_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                extraFilters: [
-                                  {
-                                    dimension: "score_bucket",
-                                    op: "eq",
-                                    value: "5000"
-                                  }
-                                ]
-                              }
-                            }
-                          },
-                          {
-                            label: "Throws (<50) in this country",
-                            measure: "throw_count",
-                            secondaryMeasure: "throw_rate",
-                            actions: {
-                              click: {
-                                type: "drilldown",
-                                target: "rounds",
-                                columnsPreset: "roundMode",
-                                extraFilters: [
-                                  {
-                                    dimension: "is_throw",
-                                    op: "eq",
-                                    value: "true"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_confusions",
-                      type: "breakdown",
-                      title: "Top confusions (guessed country on misses)",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 6,
-                        w: 12,
-                        h: 4
-                      },
-                      spec: {
-                        dimension: "guess_country",
-                        measure: "rounds_count",
-                        filters: [
-                          {
-                            dimension: "is_hit",
-                            op: "eq",
-                            value: "false"
-                          }
-                        ],
-                        sort: {
-                          mode: "desc"
-                        },
-                        limit: 3,
-                        actions: {
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    },
-                    {
-                      widgetId: "w_country_insight_distribution",
-                      type: "chart",
-                      title: "Score distribution (smoothed)",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 10,
-                        w: 12,
-                        h: 8
-                      },
-                      spec: {
-                        type: "bar",
-                        limit: 200,
-                        x: {
-                          dimension: "score_bucket"
-                        },
-                        y: {
-                          measure: "rounds_count"
-                        },
-                        sort: {
-                          mode: "chronological"
-                        },
-                        actions: {
-                          hover: true,
-                          click: {
-                            type: "drilldown",
-                            target: "rounds",
-                            columnsPreset: "roundMode",
-                            filterFromPoint: true
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        },
-        {
-          id: "admin",
-          title: "Regions",
-          localFilters: {
-            enabled: true,
-            controls: [
-              {
-                id: "adminCountry",
-                type: "select",
-                label: "Country",
-                dimension: "true_country",
-                default: "auto_top",
-                options: "auto_distinct",
-                required: true,
-                appliesTo: [
-                  "round"
-                ]
-              }
-            ],
-            buttons: {
-              reset: true
-            }
-          },
-          layout: {
-            mode: "grid",
-            columns: 12,
-            cards: [
-              {
-                cardId: "card_admin",
-                title: "Regions: {{local.adminCountry}}",
-                x: 0,
-                y: 0,
-                w: 12,
-                h: 22,
-                card: {
-                  type: "composite",
-                  children: [
-                    {
-                      widgetId: "w_admin_analysis",
-                      type: "admin_analysis",
-                      title: "Regions",
-                      grain: "round",
-                      placement: {
-                        x: 0,
-                        y: 0,
-                        w: 12,
-                        h: 18
-                      },
-                      spec: {
-                        description: "Load province/state/county boundaries on-demand to compute regional accuracy. Nothing is saved into your database."
-                      }
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      ]
-    }
-  };
-
-  // src/ui/semanticDashboardCss.ts
-  function injectSemanticDashboardCssOnce(doc) {
-    const id = "geoanalyzr-semantic-dashboard-css";
-    if (doc.getElementById(id)) return;
-    const style = doc.createElement("style");
-    style.id = id;
-    style.textContent = `
-    html.ga-semantic-page, body.ga-semantic-page {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
-      background: var(--ga-bg);
-      color: var(--ga-text);
-    }
-    /* Scrollbars (Chromium + Firefox) */
-    .ga-root, .ga-root * {
-      scrollbar-width: thin;
-      scrollbar-color: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 55%, transparent) transparent;
-    }
-    .ga-root ::-webkit-scrollbar {
-      width: 10px;
-      height: 10px;
-    }
-    .ga-root ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .ga-root ::-webkit-scrollbar-corner {
-      background: transparent;
-    }
-    .ga-root ::-webkit-scrollbar-thumb {
-      background: color-mix(in srgb, var(--ga-text-muted, rgba(208,214,238,0.75)) 40%, transparent);
-      border-radius: 999px;
-      border: 2px solid transparent;
-      background-clip: padding-box;
-    }
-    .ga-root ::-webkit-scrollbar-thumb:hover {
-      background: color-mix(in srgb, var(--ga-text, #f3f4ff) 35%, transparent);
-      border: 2px solid transparent;
-      background-clip: padding-box;
-    }
-    .ga-root {
-      --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
-      --ga-topbar-h: 0px;
-      --ga-filters-h: 0px;
-      --ga-bg: #0f1115;
-      --ga-surface: #15181e;
-      --ga-surface-2: #171b22;
-      --ga-card: #12161d;
-      --ga-card-2: #10141b;
-      --ga-text: #d7deea;
-      --ga-text-muted: #9aa5b6;
-      --ga-border: #2b3340;
-      --ga-control-bg: #161b23;
-      --ga-control-text: #d7deea;
-      --ga-control-border: #3a4352;
-      --ga-axis-color: #7f8ca2;
-      --ga-axis-grid: #3c4555;
-      --ga-axis-text: #c7d2e4;
-      --ga-graph-color: #7eb6ff;
-      --ga-accent: #7950E5;
-      --ga-accent2: #00A2FE;
-      --ga-good: #97E851;
-      --ga-warn: #FECD19;
-      --ga-danger: #ff6b6b;
-      --ga-link: var(--ga-accent2);
-      --ga-overlay-bg: rgba(0,0,0,0.62);
-      --ga-focus-ring: color-mix(in srgb, var(--ga-accent2) 55%, transparent);
-      --ga-map-border: rgba(255,255,255,0.10);
-      --ga-map-toolbar-bg: rgba(20,20,32,0.78);
-      --ga-map-toolbar-border: rgba(255,255,255,0.16);
-      --ga-map-hint: rgba(243,244,255,0.66);
-      --ga-map-fill: rgba(255,255,255,0.03);
-      --ga-map-stroke: rgba(255,255,255,0.16);
-      --ga-map-selectable-fill: rgba(0, 162, 254, 0.11);
-      --ga-map-selectable-hover: rgba(0, 162, 254, 0.20);
-      --ga-map-disabled-fill: rgba(255,255,255,0.02);
-      --ga-map-disabled-stroke: rgba(255,255,255,0.08);
-      --ga-map-active-fill: rgba(254,205,25,0.40);
-      --ga-map-active-stroke: rgba(254,205,25,0.72);
-      --ga-map-bg:
-        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.16), transparent 60%),
-        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.12), transparent 62%),
-        rgba(22,22,38,0.60);
-      min-height: 100vh;
-      background: var(--ga-bg);
-      color: var(--ga-text);
-      font-family: var(--ga-font);
-    }
-    .ga-root[data-ga-theme="light"] {
-      --ga-bg: #f4f7fc;
-      --ga-surface: #ffffff;
-      --ga-surface-2: #f9fbff;
-      --ga-card: #ffffff;
-      --ga-card-2: #f8fbff;
-      --ga-text: #1f2a38;
-      --ga-text-muted: #4b5d74;
-      --ga-border: #c8d5e6;
-      --ga-control-bg: #ffffff;
-      --ga-control-text: #1f2a38;
-      --ga-control-border: #b7c7dd;
-      --ga-axis-color: #51647e;
-      --ga-axis-grid: #c2cfdf;
-      --ga-axis-text: #2b3d56;
-      --ga-link: #563B9A;
-      --ga-overlay-bg: rgba(10,12,18,0.35);
-      --ga-focus-ring: color-mix(in srgb, var(--ga-accent) 55%, transparent);
-      --ga-map-border: rgba(0,0,0,0.12);
-      --ga-map-toolbar-bg: rgba(255,255,255,0.86);
-      --ga-map-toolbar-border: rgba(0,0,0,0.12);
-      --ga-map-hint: rgba(31,42,56,0.68);
-      --ga-map-fill: rgba(31,42,56,0.05);
-      --ga-map-stroke: rgba(31,42,56,0.18);
-      --ga-map-selectable-fill: rgba(0, 162, 254, 0.16);
-      --ga-map-selectable-hover: rgba(0, 162, 254, 0.24);
-      --ga-map-disabled-fill: rgba(31,42,56,0.03);
-      --ga-map-disabled-stroke: rgba(31,42,56,0.10);
-      --ga-map-active-fill: rgba(121, 80, 229, 0.34);
-      --ga-map-active-stroke: rgba(121, 80, 229, 0.74);
-      --ga-map-bg:
-        radial-gradient(520px 260px at 20% 0%, rgba(121, 80, 229, 0.10), transparent 60%),
-        radial-gradient(520px 260px at 90% 0%, rgba(0, 162, 254, 0.10), transparent 62%),
-        rgba(255,255,255,0.92);
-    }
-    .ga-root[data-ga-theme="geoguessr"] {
-      --ga-font: "Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
-      --ga-bg:
-        radial-gradient(1200px 720px at 18% -12%, rgba(58, 232, 189, 0.18), transparent 62%),
-        radial-gradient(980px 560px at 86% -6%, rgba(0, 162, 254, 0.18), transparent 60%),
-        radial-gradient(1200px 860px at 50% 112%, rgba(121, 80, 229, 0.24), transparent 56%),
-        linear-gradient(180deg, #10101C 0%, #1A1A2E 100%);
-      --ga-surface: rgba(22, 22, 38, 0.72);
-      --ga-surface-2: rgba(26, 26, 46, 0.78);
-      --ga-card: rgba(22, 22, 38, 0.62);
-      --ga-card-2: rgba(18, 18, 32, 0.56);
-      --ga-text: rgba(243, 244, 255, 0.92);
-      --ga-text-muted: rgba(208, 214, 238, 0.68);
-      --ga-border: rgba(255,255,255,0.12);
-      --ga-control-bg: rgba(16, 16, 28, 0.45);
-      --ga-control-text: rgba(243, 244, 255, 0.92);
-      --ga-control-border: rgba(255,255,255,0.14);
-      --ga-axis-color: rgba(220, 226, 250, 0.50);
-      --ga-axis-grid: rgba(255,255,255,0.10);
-      --ga-axis-text: rgba(233, 236, 255, 0.78);
-      --ga-accent: #7950E5;
-      --ga-accent2: #00A2FE;
-      --ga-good: #3AE8BD;
-      --ga-warn: #FECD19;
-      --ga-danger: #ff6b6b;
-      --ga-link: #3AE8BD;
-      --ga-overlay-bg: rgba(6, 6, 14, 0.72);
-      --ga-focus-ring: color-mix(in srgb, #00A2FE 55%, transparent);
-      --ga-graph-color: var(--ga-good);
-    }
-    .ga-topbar {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px 14px;
-      border-bottom:1px solid var(--ga-border);
-      background: var(--ga-surface);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
-    .ga-title { font-weight: 700; display:flex; align-items:center; gap:10px; }
-    .ga-title-logo svg { display:block; filter: drop-shadow(0 0 14px rgba(0,162,254,0.28)); }
-    .ga-topbar-actions { display:flex; align-items:center; gap:8px; }
-    .ga-close, .ga-gear {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color:var(--ga-control-text);
-      border-radius:10px;
-      padding:6px 10px;
-      cursor:pointer;
-    }
-    .ga-root button:focus-visible,
-    .ga-root select:focus-visible,
-    .ga-root input:focus-visible,
-    .ga-root textarea:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 3px var(--ga-focus-ring);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-topbar {
-      backdrop-filter: blur(12px);
-      box-shadow: 0 10px 34px rgba(0,0,0,0.20);
-    }
-    .ga-body { padding: 8px 12px 16px; }
-
-    .ga-filters-host {
-      position: sticky;
-      top: var(--ga-topbar-h);
-      z-index: 9;
-      background: var(--ga-bg);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-filters-host {
-      background: linear-gradient(180deg, rgba(16, 16, 28, 0.68) 0%, rgba(16, 16, 28, 0.28) 100%);
-      backdrop-filter: blur(14px);
-    }
-    .ga-filters {
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      padding:10px 10px 6px;
-      flex-wrap:wrap;
-    }
-    .ga-filters-left { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; flex: 1 1 auto; min-width: 0; }
-    .ga-filters-right { display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; }
-    .ga-filter {
-      display:flex;
-      flex-direction:column;
-      gap:6px;
-      padding:8px 10px;
-      background: var(--ga-surface);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      min-width: 200px;
-    }
-    .ga-filter-label { font-size:12px; color: var(--ga-text-muted); }
-    .ga-filter-row { display:flex; gap:8px; align-items:center; }
-    .ga-filter select, .ga-filter input[type="date"] {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:6px 8px;
-      font: inherit;
-      font-size: 12px;
-    }
-    .ga-filter select { width: 100%; min-width: 0; }
-
-    .ga-filter.ga-filter-map { min-width: 340px; }
-    .ga-filter.ga-filter-map.ga-filter-map-wide { flex: 1 1 100%; width: 100%; min-width: 520px; }
-    .ga-filter-map-selected {
-      font-size: 12px;
-      color: var(--ga-text-muted);
-      margin-bottom: 2px;
-    }
-    .ga-filter-map-host { width: 340px; max-width: 100%; }
-    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-filter-map-host { width: 100%; }
-    .ga-country-map {
-      height: var(--ga-country-map-h, 240px);
-      width: 100%;
-      border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid var(--ga-map-border);
-      background: var(--ga-map-bg);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    .ga-loading {
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      height:100%;
-      min-height: 44px;
-      border-radius: 14px;
-      background: color-mix(in srgb, var(--ga-card) 70%, transparent);
-      border: 1px dashed color-mix(in srgb, var(--ga-border) 75%, transparent);
-      color: var(--ga-text-muted);
-      font-size: 13px;
-    }
-    .ga-spinner {
-      width: 16px;
-      height: 16px;
-      border-radius: 999px;
-      border: 2px solid color-mix(in srgb, var(--ga-text-muted) 30%, transparent);
-      border-top-color: color-mix(in srgb, var(--ga-accent2) 75%, transparent);
-      animation: ga-spin 0.9s linear infinite;
-      flex: 0 0 auto;
-    }
-    .ga-loading-screen {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 999999;
-      pointer-events: none;
-      background: radial-gradient(circle at 50% 10%, rgba(0,0,0,0.10), rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.55));
-      backdrop-filter: blur(8px);
-    }
-    .ga-loading-screen-inner {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 10px;
-      padding: 16px 16px 14px 16px;
-      border-radius: 16px;
-      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 70%, transparent);
-      background: color-mix(in srgb, var(--ga-surface, rgba(22,22,38,0.80)) 86%, rgba(0,0,0,0.65));
-      color: var(--ga-text, #f3f4ff);
-      box-shadow: 0 10px 35px rgba(0,0,0,0.35);
-      width: min(560px, calc(100vw - 28px));
-    }
-    .ga-loading-top {
-      display:flex;
-      align-items:center;
-      gap: 12px;
-    }
-    .ga-loading-screen-text {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 220px;
-    }
-    .ga-loading-screen-title {
-      font-weight: 800;
-      font-size: 15px;
-      letter-spacing: 0.25px;
-      text-shadow: 0 1px 0 rgba(0,0,0,0.45);
-    }
-    .ga-loading-screen-subtitle {
-      font-size: 13px;
-      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 88%, var(--ga-text-muted, rgba(208,214,238,0.75)));
-      text-shadow: 0 1px 0 rgba(0,0,0,0.35);
-    }
-    .ga-loading-progress {
-      display:flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .ga-loading-progress-track {
-      width: 100%;
-      height: 10px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--ga-control-bg, rgba(16,16,28,0.55)) 88%, rgba(0,0,0,0.45));
-      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 78%, transparent);
-      overflow: hidden;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-    }
-    .ga-loading-progress-bar {
-      height: 100%;
-      width: 25%;
-      background: linear-gradient(90deg, color-mix(in srgb, var(--ga-accent2) 85%, #fff), color-mix(in srgb, var(--ga-warn) 70%, var(--ga-accent2)));
-      border-radius: 999px;
-      transition: width 120ms linear, opacity 120ms linear;
-    }
-    .ga-loading-progress-text {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 12px;
-      line-height: 1.35;
-      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 90%, var(--ga-text-muted, rgba(208,214,238,0.75)));
-      white-space: pre-wrap;
-    }
-    .ga-loading-console {
-      margin: 0;
-      padding: 10px 12px;
-      max-height: 160px;
-      overflow: auto;
-      border-radius: 12px;
-      border: 1px solid color-mix(in srgb, var(--ga-border, rgba(255,255,255,0.16)) 80%, transparent);
-      background: color-mix(in srgb, var(--ga-control-bg, rgba(16,16,28,0.55)) 84%, rgba(0,0,0,0.55));
-      color: color-mix(in srgb, var(--ga-text, #f3f4ff) 92%, #fff);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 11.5px;
-      line-height: 1.35;
-      white-space: pre;
-    }
-    @keyframes ga-spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    /* Wide map: keep correct world aspect by default; cap via dashboard.json map.height (max-height). */
-    .ga-filter.ga-filter-map.ga-filter-map-wide .ga-country-map {
-      height: auto;
-      aspect-ratio: 2 / 1;
-      max-height: var(--ga-country-map-h, 720px);
-      min-height: 320px;
-    }
-    .ga-country-map-wrap { width: 100%; height: 100%; display:flex; flex-direction:column; gap:6px; padding:8px; box-sizing:border-box; }
-    .ga-country-map-toolbar { display:flex; gap:8px; align-items:center; }
-    .ga-country-map-btn {
-      width: 30px;
-      height: 30px;
-      border-radius: 10px;
-      border: 1px solid var(--ga-map-toolbar-border);
-      background: var(--ga-map-toolbar-bg);
-      color: var(--ga-control-text);
-      cursor: pointer;
-      font-weight: 800;
-      line-height: 1;
-    }
-    .ga-country-map-btn:hover { background: color-mix(in srgb, var(--ga-map-toolbar-bg) 78%, #000); }
-    .ga-country-map-hint { font-size: 11px; color: var(--ga-map-hint); }
-    .ga-country-map-svg { width: 100%; flex: 1; border-radius: 10px; overflow: hidden; touch-action: none; display:block; }
-    .ga-country-shape {
-      fill: var(--ga-map-fill);
-      stroke: var(--ga-map-stroke);
-      stroke-width: 1;
-      vector-effect: non-scaling-stroke;
-      cursor: grab;
-      transition: fill 120ms ease, stroke 120ms ease;
-    }
-    .ga-country-shape.selectable { fill: var(--ga-map-selectable-fill); stroke: var(--ga-map-stroke); cursor: pointer; }
-    .ga-country-shape.disabled { fill: var(--ga-map-disabled-fill); stroke: var(--ga-map-disabled-stroke); opacity: 0.45; pointer-events: none; }
-    .ga-country-shape.selectable.hover { fill: var(--ga-map-selectable-hover); }
-    .ga-country-shape.active {
-      fill: var(--ga-map-active-fill);
-      stroke: var(--ga-map-active-stroke);
-      stroke-width: 2;
-    }
-    .ga-point-dot {
-      stroke: rgba(0,0,0,0.55);
-      stroke-width: 1;
-      vector-effect: non-scaling-stroke;
-      cursor: pointer;
-      transition: filter 120ms ease, r 120ms ease;
-    }
-    .ga-filter-map-error { font-size: 12px; color: rgba(255,143,143,0.95); }
-    .ga-filter-btn {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius:10px;
-      padding:7px 10px;
-      cursor:pointer;
-      font-size:12px;
-      height: 34px;
-    }
-    .ga-tabs {
-      display:flex;
-      gap:8px;
-      padding:10px;
-      position: sticky;
-      top: calc(var(--ga-topbar-h) + var(--ga-filters-h));
-      z-index: 8;
-      background: var(--ga-bg);
-    }
-    .ga-tab {
-      background:var(--ga-control-bg);
-      color:var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      padding:6px 10px;
-      border-radius:10px;
-      cursor:pointer;
-    }
-    .ga-tab.active { background: var(--ga-surface-2); }
-    .ga-content { padding:10px; }
-    .ga-card {
-      background: var(--ga-card);
-      border:1px solid var(--ga-border);
-      border-radius:14px;
-      overflow:hidden;
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-card {
-      backdrop-filter: blur(10px);
-      box-shadow: 0 18px 54px rgba(0,0,0,0.18);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-close,
-    .ga-root[data-ga-theme="geoguessr"] .ga-gear,
-    .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn,
-    .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button,
-    .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle {
-      background: linear-gradient(180deg, rgba(121, 80, 229, 0.38) 0%, rgba(86, 59, 154, 0.26) 100%);
-      border-color: rgba(255,255,255,0.16);
-      box-shadow: 0 10px 26px rgba(0,0,0,0.22);
-      border-radius: 999px;
-      padding: 7px 12px;
-      font-weight: 650;
-      letter-spacing: 0.15px;
-      transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-close:hover,
-    .ga-root[data-ga-theme="geoguessr"] .ga-gear:hover,
-    .ga-root[data-ga-theme="geoguessr"] .ga-filter-btn:hover,
-    .ga-root[data-ga-theme="geoguessr"] .ga-chart-actions button:hover,
-    .ga-root[data-ga-theme="geoguessr"] .ga-breakdown-toggle:hover {
-      filter: brightness(1.06);
-      box-shadow: 0 16px 38px rgba(0,0,0,0.28);
-      transform: translateY(-1px);
-    }
-
-    /* GeoGuessr-like section tabs (top navigation vibe) */
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs {
-      padding: 6px 10px;
-      gap: 12px;
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(16, 16, 28, 0.42) 0%, rgba(16, 16, 28, 0.18) 100%);
-      border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.20);
-      backdrop-filter: blur(14px);
-      overflow-x: auto;
-      scrollbar-width: none;
-      width: fit-content;
-      max-width: 100%;
-      margin: 4px 10px 0;
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs::-webkit-scrollbar { display: none; }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab {
-      background: transparent;
-      border: 0;
-      box-shadow: none;
-      border-radius: 10px;
-      padding: 8px 4px;
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.9px;
-      text-transform: uppercase;
-      color: rgba(243,244,255,0.70);
-      transition: color 160ms ease, background 160ms ease;
-    }
-
-    .ga-team-local-filters, .ga-country-local-filters {
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:flex-end;
-      margin: 6px 0 10px;
-    }
-    .ga-team-local-filters .ga-filter, .ga-country-local-filters .ga-filter { min-width: 240px; }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab:hover {
-      background: rgba(255,255,255,0.04);
-      color: rgba(255,255,255,0.88);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab.active {
-      background: transparent;
-      color: rgba(255,255,255,0.96);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab.active::after {
-      content: "";
-      position: absolute;
-      left: 6px;
-      right: 6px;
-      bottom: 2px;
-      height: 2px;
-      border-radius: 999px;
-      background: rgba(254, 205, 25, 0.95);
-      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.32));
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-tabs .ga-tab { position: relative; }
-
-    /* GeoGuessr-like drilldown styling */
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-panel {
-      border-radius: 18px;
-      background:
-        radial-gradient(900px 520px at 18% 0%, rgba(121, 80, 229, 0.22), transparent 58%),
-        radial-gradient(900px 520px at 86% 0%, rgba(0, 162, 254, 0.16), transparent 60%),
-        color-mix(in srgb, var(--ga-surface) 88%, transparent);
-      border-color: rgba(255,255,255,0.14);
-      box-shadow: 0 28px 90px rgba(0,0,0,0.48);
-      overflow: auto;
-      overscroll-behavior: contain;
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-header {
-      background: linear-gradient(180deg, rgba(22,22,38,0.82) 0%, rgba(22,22,38,0.58) 100%);
-      border-bottom-color: rgba(255,255,255,0.10);
-      backdrop-filter: blur(14px);
-      padding: 12px 14px;
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-title {
-      font-size: 13px;
-      font-weight: 750;
-      letter-spacing: 0.3px;
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close {
-      border-radius: 999px;
-      width: 34px;
-      height: 34px;
-      background: rgba(16, 16, 28, 0.45);
-      border-color: rgba(255,255,255,0.16);
-      box-shadow: 0 10px 24px rgba(0,0,0,0.32);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-close:hover {
-      filter: brightness(1.06);
-      transform: translateY(-1px);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table thead th {
-      background: rgba(16,16,28,0.42);
-      border-bottom-color: rgba(255,255,255,0.10);
-      color: rgba(243,244,255,0.72);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table th,
-    .ga-root[data-ga-theme="geoguessr"] .ga-drilldown-table td {
-      border-bottom-color: rgba(255,255,255,0.08);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-dd-tr:hover td {
-      background: rgba(121, 80, 229, 0.10);
-    }
-    .ga-root[data-ga-theme="geoguessr"] .ga-dd-th.ga-dd-sortable:hover {
-      background: rgba(58, 232, 189, 0.08);
-    }
-    .ga-card-header { padding:10px 12px; border-bottom:1px solid var(--ga-border); font-weight:650; }
-    .ga-card-body { padding:12px; }
-    .ga-card-inner, .ga-child, .ga-widget { min-width: 0; width: 100%; }
-    .ga-widget-title { font-size:12px; color: var(--ga-text-muted); margin-bottom:6px; }
-    .ga-statlist-box {
-      background: var(--ga-card-2);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-    }
-    .ga-recordlist-box {
-      background: var(--ga-card-2);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-    }
-    .ga-statrow {
-      display:flex;
-      justify-content:space-between;
-      padding:6px 2px;
-      border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
-    }
-    .ga-statrow:last-child { border-bottom:none; }
-    .ga-chart-box {
-      background: var(--ga-card-2);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-      color: var(--ga-text);
-      width: 100%;
-      overflow: hidden;
-    }
-    .ga-chart-controls { display:flex; gap:8px; align-items:center; margin-bottom:8px; justify-content:space-between; flex-wrap:wrap; }
-    .ga-chart-controls-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .ga-chart-actions { display:flex; gap:8px; align-items:center; }
-    .ga-chart-actions button {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius:8px;
-      padding:4px 8px;
-      cursor:pointer;
-      font-size:12px;
-    }
-    .ga-chart-host { width:100%; }
-    .ga-chart-svg { width:100%; max-width:100%; display:block; overflow: visible; }
-    .ga-chart-bar { transform-box: view-box; }
-
-    /* Hover emphasis (only when animations are enabled). */
-    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar,
-    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot {
-      transition: opacity 140ms ease, filter 140ms ease, stroke-width 140ms ease;
-    }
-    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-bar:hover {
-      opacity: 0.95;
-      filter: brightness(1.18);
-      stroke: rgba(255,255,255,0.55);
-      stroke-width: 1.25px;
-    }
-    .ga-root[data-ga-chart-animations="on"] .ga-chart-svg .ga-chart-line-dot:hover {
-      opacity: 1;
-      filter: brightness(1.25);
-      stroke: rgba(255,255,255,0.70);
-      stroke-width: 2px;
-      paint-order: stroke fill;
-    }
-    .ga-chart-svg[data-anim-state="pending"] .ga-chart-bar {
-      transform: scaleY(0);
-      opacity: 0.25;
-    }
-    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-path {
-      stroke-dashoffset: var(--ga-line-length);
-      opacity: 0.65;
-    }
-    .ga-chart-svg[data-anim-state="pending"] .ga-chart-line-dot {
-      transform: scale(0);
-      opacity: 0;
-      transform-box: fill-box;
-      transform-origin: center;
-    }
-    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-bar {
-      transform: none !important;
-      opacity: 0.72 !important;
-      animation: none !important;
-    }
-    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-path {
-      stroke-dasharray: none !important;
-      stroke-dashoffset: 0 !important;
-      animation: none !important;
-      opacity: 0.9 !important;
-    }
-    .ga-root[data-ga-chart-animations="off"] .ga-chart-svg .ga-chart-line-dot {
-      transform: none !important;
-      animation: none !important;
-      opacity: 0.95 !important;
-    }
-    @keyframes ga-bar-rise {
-      from { transform: scaleY(0); opacity: 0.25; }
-      to { transform: scaleY(1); opacity: 0.72; }
-    }
-    @keyframes ga-line-draw {
-      from { stroke-dashoffset: var(--ga-line-length); opacity: 0.65; }
-      to { stroke-dashoffset: 0; opacity: 0.9; }
-    }
-    @keyframes ga-dot-in {
-      from { transform: scale(0); opacity: 0; }
-      to { transform: scale(1); opacity: 0.95; }
-    }
-    .ga-chart-svg[data-anim-state="run"] .ga-chart-bar {
-      animation: ga-bar-rise 420ms ease-out both;
-    }
-    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-path {
-      animation: ga-line-draw 520ms ease-out both;
-    }
-    .ga-chart-svg[data-anim-state="run"] .ga-chart-line-dot {
-      animation: ga-dot-in 220ms ease-out both;
-      animation-delay: calc(min(var(--ga-dot-index, 0) * 60ms, 520ms));
-    }
-    .ga-breakdown-box {
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      background: var(--ga-card-2);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-    }
-    .ga-breakdown-header {
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      align-items:flex-end;
-      margin: 2px 0 8px 0;
-      font-size: 11px;
-      letter-spacing: 0.15px;
-      color: color-mix(in srgb, var(--ga-text) 78%, transparent);
-    }
-    .ga-breakdown-header-left {
-      flex: 0 0 var(--ga-breakdown-label-w);
-      max-width: var(--ga-breakdown-label-w);
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-      font-weight: 650;
-    }
-    .ga-breakdown-header-right { flex:1; text-align:right; font-weight: 650; }
-    .ga-breakdown-controls { display:flex; justify-content:flex-end; gap:8px; align-items:center; flex-wrap:wrap; }
-    .ga-breakdown-ctl-label { opacity: 0.9; font-weight: 650; }
-    .ga-breakdown-ctl-select {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:3px 8px;
-      font-size:12px;
-      max-width: min(360px, 62vw);
-    }
-
-    /* Range sliders (e.g. Coordinates score range) */
-    .ga-range-filter input[type="range"] { accent-color: var(--ga-accent2); }
-    .ga-range-filter input[type="range"] { appearance: none; background: transparent; height: 18px; }
-    .ga-range-filter input[type="range"]::-webkit-slider-runnable-track {
-      height: 6px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
-      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
-    }
-    .ga-range-filter input[type="range"]::-webkit-slider-thumb {
-      appearance: none;
-      width: 14px;
-      height: 14px;
-      border-radius: 999px;
-      margin-top: -5px;
-      background: var(--ga-accent2);
-      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
-      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-      cursor: pointer;
-    }
-    .ga-range-filter input[type="range"]::-moz-range-track {
-      height: 6px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--ga-text) 18%, transparent);
-      border: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
-    }
-    .ga-range-filter input[type="range"]::-moz-range-thumb {
-      width: 14px;
-      height: 14px;
-      border-radius: 999px;
-      background: var(--ga-accent2);
-      border: 2px solid color-mix(in srgb, var(--ga-surface) 85%, transparent);
-      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-      cursor: pointer;
-    }
-    .ga-range-filter input[type="range"]:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ga-focus-ring); border-radius: 12px; }
-    .ga-breakdown { --ga-breakdown-label-w: clamp(120px, 20%, 260px); }
-    .ga-breakdown-row { display:flex; gap:8px; align-items:center; justify-content:flex-start; }
-    .ga-breakdown-label {
-      flex: 0 0 var(--ga-breakdown-label-w);
-      max-width: var(--ga-breakdown-label-w);
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .ga-breakdown-right { flex:1; min-width:0; display:flex; align-items:center; gap:10px; }
-    .ga-breakdown-value { min-width:72px; text-align:right; font-variant-numeric: tabular-nums; }
-    .ga-breakdown-barwrap { flex:1; height:8px; background: color-mix(in srgb, var(--ga-text) 14%, transparent); border-radius:999px; overflow:hidden; }
-    .ga-breakdown-bar { height:100%; background: var(--ga-graph-color); border-radius:999px; }
-    .ga-breakdown-footer { display:flex; justify-content:flex-end; margin-top: 10px; }
-    .ga-breakdown-toggle {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius:8px;
-      padding:4px 8px;
-      cursor:pointer;
-      font-size:12px;
-    }
-    .ga-breakdown-toggle:hover { filter: brightness(1.02); }
-
-    .ga-country-map-legend {
-      display:flex;
-      align-items:center;
-      gap:10px;
-      font-size: 12px;
-      color: var(--ga-text-muted);
-      margin: 2px 2px 6px;
-    }
-    .ga-country-map-legend-min, .ga-country-map-legend-max { font-variant-numeric: tabular-nums; min-width: 70px; }
-    .ga-country-map-legend-bar {
-      flex: 1;
-      height: 10px;
-      border-radius: 999px;
-      border: 1px solid var(--ga-border);
-      background: linear-gradient(90deg, rgba(96,140,214,0.25), rgba(18,64,128,0.95));
-    }
-    .ga-drilldown-modal, .ga-settings-modal { position:fixed; inset:0; z-index:9999999; }
-    .ga-drilldown-bg, .ga-settings-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
-    .ga-drilldown-panel {
-      position:absolute;
-      top:6%;
-      left:50%;
-      transform:translateX(-50%);
-      width:min(1260px, 96vw);
-      max-height:88vh;
-      overflow:auto;
-      background:var(--ga-surface);
-      border:1px solid var(--ga-border);
-      border-radius:14px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-      color: var(--ga-text);
-    }
-    .ga-drilldown-header {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px 12px;
-      border-bottom:1px solid var(--ga-border);
-      background: var(--ga-surface);
-      backdrop-filter: blur(8px);
-    }
-    .ga-drilldown-title {
-      font-size: 13px;
-      font-weight: 650;
-      letter-spacing: 0.2px;
-    }
-    .ga-drilldown-close {
-      background: var(--ga-control-bg);
-      border:1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius:10px;
-      width: 30px;
-      height: 30px;
-      padding:0;
-      cursor:pointer;
-    }
-    .ga-drilldown-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
-    .ga-drilldown-table th, .ga-drilldown-table td {
-      padding:8px 10px;
-      border-bottom:1px solid color-mix(in srgb, var(--ga-text) 10%, transparent);
-      text-align:left;
-    }
-    .ga-drilldown-table td { color: var(--ga-text); }
-    .ga-drilldown-table thead th {
-      position: sticky;
-      top: 52px;
-      z-index: 4;
-      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
-      border-bottom: 1px solid color-mix(in srgb, var(--ga-text) 14%, transparent);
-      font-weight: 600;
-      color: color-mix(in srgb, var(--ga-text) 85%, transparent);
-    }
-    .ga-dd-th.ga-dd-sortable { cursor: pointer; user-select: none; }
-    .ga-dd-th.ga-dd-sortable:hover { background: color-mix(in srgb, var(--ga-text) 6%, transparent); }
-    .ga-dd-tr:hover td { background: color-mix(in srgb, var(--ga-text) 5%, transparent); }
-    .ga-dd-tr.ga-dd-no-sep td { border-bottom-color: transparent; }
-    .ga-dd-link {
-      color: var(--ga-link);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-    .ga-dd-id {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      overflow-wrap: anywhere;
-    }
-    .ga-dd-pos { color: var(--ga-good); font-variant-numeric: tabular-nums; }
-    .ga-dd-neg { color: var(--ga-danger); font-variant-numeric: tabular-nums; }
-    .ga-settings-panel {
-      position:absolute;
-      top:6%;
-      left:50%;
-      transform:translateX(-50%);
-      width:min(1260px, 96vw);
-      max-height:90vh;
-      overflow:auto;
-      background: var(--ga-surface);
-      border:1px solid var(--ga-border);
-      border-radius:14px;
-      box-shadow: 0 28px 90px rgba(0,0,0,0.55);
-    }
-    .ga-settings-header {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px 12px;
-      border-bottom:1px solid var(--ga-border);
-    }
-    .ga-settings-body { padding: 14px; }
-    .ga-settings-tabs { display:flex; gap:8px; margin-bottom:12px; }
-    .ga-settings-tab {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:6px 10px;
-      cursor:pointer;
-    }
-    .ga-settings-tab.active { background: var(--ga-surface-2); }
-    .ga-settings-pane { display:none; }
-    .ga-settings-pane.active { display:block; }
-    .ga-settings-grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    .ga-settings-field { display:flex; flex-direction:column; gap:6px; }
-    .ga-settings-field label { font-size:12px; color: var(--ga-text-muted); }
-    .ga-settings-field input, .ga-settings-field select, .ga-settings-field textarea {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:8px;
-      font: inherit;
-    }
-    .ga-settings-field textarea {
-      min-height: 340px;
-      resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      line-height: 1.4;
-      white-space: pre;
-    }
-    .ga-settings-note { font-size:12px; color: var(--ga-text-muted); }
-    .ga-settings-status { margin-top: 8px; font-size:12px; }
-    .ga-settings-status.error { color: #ff8f8f; }
-    .ga-settings-status.ok { color: #8fe3a1; }
-    .ga-settings-actions { display:flex; gap:8px; margin-top: 8px; flex-wrap:wrap; }
-
-    /* Layout editor (Settings -> Layout) */
-    .ga-layout-editor-wrap { display:flex; flex-direction:column; gap:10px; }
-    .ga-le-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
-    .ga-le-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .ga-le-toggle { display:flex; align-items:center; gap:8px; font-size:12px; color: var(--ga-text-muted); user-select:none; }
-    .ga-le-toggle input { width: 16px; height: 16px; }
-    .ga-le-head {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      padding: 10px 0;
-      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid color-mix(in srgb, var(--ga-border) 70%, transparent);
-    }
-    .ga-layout-editor { display:block; padding-top: 10px; }
-    .ga-le-left, .ga-le-right { min-width: 0; }
-    .ga-le-left-head { display:flex; gap:8px; margin-bottom:10px; }
-    .ga-le-list { display:flex; flex-direction:column; gap:6px; }
-    .ga-le-list-item {
-      background: var(--ga-control-bg);
-      border: 1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius: 10px;
-      padding: 8px 10px;
-      cursor: pointer;
-      text-align: left;
-      font-weight: 650;
-      opacity: 0.9;
-    }
-    .ga-le-list-item.active { background: var(--ga-surface-2); opacity: 1; }
-    .ga-le-toprow { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
-    .ga-le-btn {
-      background: var(--ga-control-bg);
-      border: 1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius: 10px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-size: 12px;
-      height: 32px;
-    }
-    .ga-le-btn-icon {
-      width: 32px;
-      min-width: 32px;
-      padding: 0;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      font-size: 13px;
-      line-height: 1;
-    }
-    .ga-le-btn-primary { border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
-    .ga-le-btn-danger { border-color: color-mix(in srgb, var(--ga-danger) 60%, var(--ga-control-border)); }
-    .ga-le-field { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
-    .ga-le-field label { font-size:12px; color: var(--ga-text-muted); }
-    .ga-le-inputhost { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .ga-le-field input, .ga-le-field select, .ga-le-inline-select {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:7px 8px;
-      font: inherit;
-      font-size: 12px;
-      min-width: 220px;
-    }
-    .ga-le-field textarea {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:8px;
-      font: inherit;
-      font-size: 12px;
-      min-height: 200px;
-      resize: vertical;
-      width: 100%;
-      box-sizing: border-box;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      white-space: pre;
-      line-height: 1.35;
-    }
-    .ga-le-field select[multiple] { min-width: 260px; padding: 6px; }
-    .ga-le-hr { border:0; height:1px; background: var(--ga-border); margin: 12px 0; opacity: 0.9; }
-    .ga-le-box { background: var(--ga-card-2); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-bottom:10px; }
-    .ga-le-box-head { font-weight: 750; font-size: 12px; color: var(--ga-text); margin-bottom: 8px; }
-    .ga-le-item { background: color-mix(in srgb, var(--ga-card) 65%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
-    .ga-le-compact-row {
-      display:flex;
-      gap:10px;
-      align-items:center;
-      justify-content:space-between;
-      background: color-mix(in srgb, var(--ga-card) 65%, transparent);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:8px 10px;
-      margin-top:8px;
-    }
-    .ga-le-compact-row.dragover { outline: 2px solid color-mix(in srgb, var(--ga-accent2) 55%, transparent); }
-    .ga-le-drag {
-      width: 18px;
-      min-width: 18px;
-      opacity: 0.8;
-      cursor: grab;
-      user-select:none;
-      text-align:center;
-      font-weight: 900;
-      letter-spacing: -1px;
-    }
-    .ga-le-compact-title { font-weight: 750; font-size: 12px; color: var(--ga-text); flex: 1 1 auto; min-width: 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .ga-le-compact-meta { font-size: 11px; color: var(--ga-text-muted); opacity: 0.9; flex: 0 0 auto; }
-    .ga-le-compact-actions { display:flex; gap:8px; align-items:center; flex: 0 0 auto; }
-    .ga-le-compact-row-col { justify-content:flex-start; }
-    .ga-le-col-key { min-width: 160px; width: 160px; }
-    .ga-le-col-label { min-width: 220px; width: min(420px, 42vw); }
-    .ga-le-compact-chk { display:flex; align-items:center; gap:6px; font-size:11px; color: var(--ga-text-muted); user-select:none; }
-    .ga-le-compact-chk input { width: 14px; height: 14px; }
-    .ga-le-grid4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px; }
-    @media (max-width: 820px) { .ga-le-grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    .ga-le-subbox { background: color-mix(in srgb, var(--ga-card) 55%, transparent); border:1px solid var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
-    .ga-le-subhead { font-weight: 700; font-size: 12px; color: var(--ga-text-muted); margin-bottom: 8px; }
-    .ga-le-widget { background: color-mix(in srgb, var(--ga-card-2) 65%, transparent); border:1px dashed var(--ga-border); border-radius:12px; padding:10px; margin-top:10px; }
-    .ga-le-details { border:1px solid var(--ga-border); border-radius:12px; padding:0; margin-top:10px; background: color-mix(in srgb, var(--ga-card-2) 60%, transparent); }
-    .ga-le-details > summary {
-      cursor:pointer;
-      padding:10px 12px;
-      font-weight: 750;
-      font-size: 12px;
-      color: var(--ga-text);
-      user-select:none;
-      list-style: none;
-    }
-    .ga-le-details[open] > summary { border-bottom: 1px solid var(--ga-border); }
-    .ga-le-details > summary::-webkit-details-marker { display:none; }
-    .ga-le-details > .ga-le-item { margin-top: 0; border: 0; border-top-left-radius: 0; border-top-right-radius: 0; background: transparent; }
-    .ga-le-adv { margin-top: 10px; }
-    .ga-le-adv > summary { cursor:pointer; user-select:none; font-weight: 700; font-size:12px; color: var(--ga-text-muted); list-style:none; }
-    .ga-le-adv > summary::-webkit-details-marker { display:none; }
-    .ga-le-panels { display:flex; flex-direction:column; gap:12px; }
-    .ga-le-inline-input {
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:7px 8px;
-      font: inherit;
-      font-size: 12px;
-      min-width: 220px;
-      height: 32px;
-    }
-
-    /* Section editor modal */
-    .ga-le-modal { position: fixed; inset: 0; z-index: 99999999; }
-    .ga-le-modal-bg { position:absolute; inset:0; background: var(--ga-overlay-bg); }
-    .ga-le-modal-panel {
-      position:absolute;
-      top: 6%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(1200px, 96vw);
-      max-height: 88vh;
-      overflow: auto;
-      background: var(--ga-surface);
-      border: 1px solid var(--ga-border);
-      border-radius: 14px;
-      box-shadow: 0 28px 90px rgba(0,0,0,0.55);
-      color: var(--ga-text);
-    }
-    .ga-le-modal-header {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      display:flex;
-      align-items:center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--ga-border);
-      background: color-mix(in srgb, var(--ga-surface) 92%, transparent);
-      backdrop-filter: blur(10px);
-    }
-    .ga-le-modal-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; }
-    .ga-le-modal-body { padding: 12px; }
-    .ga-le-cards-layout { display:grid; grid-template-columns: minmax(220px, 320px) 1fr; gap:12px; align-items:start; }
-    @media (max-width: 980px) { .ga-le-cards-layout { grid-template-columns: 1fr; } }
-    .ga-le-outline {
-      position: sticky;
-      top: 86px;
-      background: color-mix(in srgb, var(--ga-card) 55%, transparent);
-      border:1px solid var(--ga-border);
-      border-radius:12px;
-      padding:10px;
-    }
-    .ga-le-outline-head { font-weight: 800; font-size: 12px; color: var(--ga-text); margin-bottom: 6px; }
-    .ga-le-outline-search {
-      width: 100%;
-      min-width: 0;
-      box-sizing: border-box;
-      background: var(--ga-control-bg);
-      color: var(--ga-control-text);
-      border:1px solid var(--ga-control-border);
-      border-radius:8px;
-      padding:7px 8px;
-      font: inherit;
-      font-size: 12px;
-      margin-top: 6px;
-    }
-    .ga-le-outline-list { display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height: 62vh; overflow:auto; padding-right: 4px; }
-    .ga-le-outline-item {
-      background: var(--ga-control-bg);
-      border: 1px solid var(--ga-control-border);
-      color: var(--ga-control-text);
-      border-radius: 10px;
-      padding: 7px 10px;
-      cursor: pointer;
-      text-align: left;
-      font-weight: 650;
-      opacity: 0.95;
-      font-size: 12px;
-    }
-    .ga-le-outline-item:hover { filter: brightness(1.03); }
-    .ga-le-outline-item.active { background: var(--ga-surface-2); border-color: color-mix(in srgb, var(--ga-accent2) 55%, var(--ga-control-border)); }
-    .ga-le-outline-item-widget { padding-left: 18px; font-weight: 600; opacity: 0.9; }
-    .ga-le-flash { outline: 2px solid color-mix(in srgb, var(--ga-accent2) 70%, transparent); outline-offset: 2px; }
-  `;
-    doc.head.appendChild(style);
-  }
-
-  // src/ui/settingsStore.ts
-  var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
-  var THEME_KEY = "geoanalyzr.theme";
-  var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
-  var DEFAULT_SETTINGS = {
-    appearance: {
-      theme: "geoguessr",
-      graphColor: "#7eb6ff",
-      chartAnimations: true
-    },
-    standards: {
-      dateFormat: "dd/mm/yyyy",
-      sessionGapMinutes: 45,
-      countryFormat: "iso2"
-    }
-  };
-  function cloneTemplate(value) {
-    if (typeof structuredClone === "function") return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-  }
-  function normalizeColor(value, fallback) {
-    if (typeof value !== "string") return fallback;
-    const trimmed = value.trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
-    return fallback;
-  }
-  function normalizeTheme(value) {
-    if (value === "geoguessr") return value;
-    if (value === "light" || value === "dark") return value;
-    return "geoguessr";
-  }
-  function normalizeBool(value, fallback) {
-    if (typeof value === "boolean") return value;
-    return fallback;
-  }
-  function normalizeDateFormat(value) {
-    return value === "mm/dd/yyyy" || value === "yyyy-mm-dd" || value === "locale" ? value : "dd/mm/yyyy";
-  }
-  function normalizeCountryFormat(value) {
-    return value === "english" ? "english" : "iso2";
-  }
-  function normalizeSettings(raw) {
-    const r = typeof raw === "object" && raw ? raw : {};
-    const appearance = typeof r.appearance === "object" && r.appearance ? r.appearance : {};
-    const standards = typeof r.standards === "object" && r.standards ? r.standards : {};
-    const sessionGapRaw = Number(standards.sessionGapMinutes);
-    return {
-      appearance: {
-        theme: normalizeTheme(appearance.theme),
-        graphColor: normalizeColor(appearance.graphColor, DEFAULT_SETTINGS.appearance.graphColor),
-        chartAnimations: normalizeBool(appearance.chartAnimations, DEFAULT_SETTINGS.appearance.chartAnimations)
-      },
-      standards: {
-        dateFormat: normalizeDateFormat(standards.dateFormat),
-        sessionGapMinutes: Number.isFinite(sessionGapRaw) ? Math.max(1, Math.min(360, Math.round(sessionGapRaw))) : DEFAULT_SETTINGS.standards.sessionGapMinutes,
-        countryFormat: normalizeCountryFormat(standards.countryFormat)
-      }
-    };
-  }
-  function getStorage(doc) {
-    try {
-      return doc.defaultView?.localStorage ?? null;
-    } catch {
-      return null;
-    }
-  }
-  function getSystemPreferredTheme(doc) {
-    try {
-      const w = doc.defaultView;
-      if (!w || typeof w.matchMedia !== "function") return DEFAULT_SETTINGS.appearance.theme;
-      if (w.matchMedia("(prefers-color-scheme: light)").matches) return "light";
-      return "geoguessr";
-    } catch {
-      return DEFAULT_SETTINGS.appearance.theme;
-    }
-  }
-  function loadSettings(doc) {
-    const storage = getStorage(doc);
-    if (!storage) {
-      const s = cloneTemplate(DEFAULT_SETTINGS);
-      s.appearance.theme = getSystemPreferredTheme(doc);
-      return s;
-    }
-    try {
-      const themeOverrideRaw = storage.getItem(THEME_KEY);
-      const raw = storage.getItem(SETTINGS_KEY);
-      if (!raw) {
-        const s2 = cloneTemplate(DEFAULT_SETTINGS);
-        s2.appearance.theme = themeOverrideRaw ? normalizeTheme(themeOverrideRaw) : getSystemPreferredTheme(doc);
-        return s2;
-      }
-      const s = normalizeSettings(JSON.parse(raw));
-      if (themeOverrideRaw) s.appearance.theme = normalizeTheme(themeOverrideRaw);
-      return s;
-    } catch {
-      const s = cloneTemplate(DEFAULT_SETTINGS);
-      s.appearance.theme = getSystemPreferredTheme(doc);
-      return s;
-    }
-  }
-  function saveSettings(doc, settings) {
-    const storage = getStorage(doc);
-    if (!storage) return;
-    try {
-      storage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-      storage.setItem(THEME_KEY, settings.appearance.theme);
-    } catch {
-    }
-  }
-  function loadDashboardTemplate(doc, fallback) {
-    const storage = getStorage(doc);
-    if (!storage) return cloneTemplate(fallback);
-    try {
-      const raw = storage.getItem(DASHBOARD_TEMPLATE_KEY);
-      if (!raw) return cloneTemplate(fallback);
-      const parsed = JSON.parse(raw);
-      const merged = {
-        ...cloneTemplate(fallback),
-        ...parsed,
-        dashboard: {
-          ...cloneTemplate(fallback).dashboard,
-          ...parsed.dashboard,
-          globalFilters: parsed.dashboard?.globalFilters ?? cloneTemplate(fallback).dashboard.globalFilters,
-          sections: Array.isArray(parsed.dashboard?.sections) ? parsed.dashboard.sections : cloneTemplate(fallback).dashboard.sections
-        }
-      };
-      return merged;
-    } catch {
-      return cloneTemplate(fallback);
-    }
-  }
-  function saveDashboardTemplate(doc, dashboard) {
-    const storage = getStorage(doc);
-    if (!storage) return;
-    try {
-      storage.setItem(DASHBOARD_TEMPLATE_KEY, JSON.stringify(dashboard, null, 2));
-    } catch {
-    }
-  }
-  function applySettingsToRoot(root, settings) {
-    root.dataset.gaTheme = settings.appearance.theme;
-    root.dataset.gaChartAnimations = settings.appearance.chartAnimations ? "on" : "off";
-    root.dataset.gaDateFormat = settings.standards.dateFormat;
-    root.dataset.gaSessionGapMinutes = String(settings.standards.sessionGapMinutes);
-    root.dataset.gaCountryFormat = settings.standards.countryFormat;
-    root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
-  }
-
-  // src/engine/semanticMerge.ts
-  function cloneJson(value) {
-    if (typeof structuredClone === "function") return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-  }
-  function getDrilldownPresetsOverrideFromDashboard(dashboard) {
-    const raw = dashboard?.dashboard?.drilldownPresets;
-    if (!raw || typeof raw !== "object") return {};
-    return raw;
-  }
-  function mergeSemanticWithDashboard(base, dashboard) {
-    const override = getDrilldownPresetsOverrideFromDashboard(dashboard);
-    const hasOverride = override && Object.keys(override).length > 0;
-    if (!hasOverride) return base;
-    const next = { ...base, drilldownPresets: { ...base.drilldownPresets } };
-    for (const [target, o] of Object.entries(override)) {
-      const baseTarget = next.drilldownPresets?.[target] ?? {};
-      const baseCols = { ...baseTarget.columnsPresets ?? {} };
-      const rawO = o && typeof o === "object" ? cloneJson(o) : {};
-      const oCols = rawO?.columnsPresets && typeof rawO.columnsPresets === "object" ? rawO.columnsPresets : {};
-      const mergedCols = { ...baseCols, ...cloneJson(oCols) };
-      try {
-        delete rawO.columnsPresets;
-      } catch {
-      }
-      next.drilldownPresets[target] = {
-        ...baseTarget,
-        ...rawO,
-        columnsPresets: mergedCols
-      };
-    }
-    return next;
-  }
-
-  // src/ui/layoutEditor.ts
-  function cloneJson2(value) {
-    if (typeof structuredClone === "function") return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-  }
-  function safePrompt(doc, message, value) {
-    try {
-      const w = doc.defaultView;
-      const out = typeof w?.prompt === "function" ? w.prompt(message, value ?? "") : null;
-      return typeof out === "string" ? out : null;
-    } catch {
-      return null;
-    }
-  }
-  function asInt(value, fallback) {
-    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-    return Number.isFinite(n) ? Math.round(n) : fallback;
-  }
-  function mkBtn(doc, label, onClick, kind = "ghost") {
-    const b = doc.createElement("button");
-    b.type = "button";
-    b.className = `ga-le-btn ga-le-btn-${kind}`;
-    b.textContent = label;
-    b.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      ev.stopImmediatePropagation?.();
-      onClick();
-    });
-    return b;
-  }
-  function mkIconBtn(doc, label, onClick, kind = "ghost") {
-    const b = mkBtn(doc, label, onClick, kind);
-    b.classList.add("ga-le-btn-icon");
-    b.setAttribute("aria-label", label);
-    return b;
-  }
-  function mkField(doc, label) {
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-le-field";
-    const l = doc.createElement("label");
-    l.textContent = label;
-    wrap.appendChild(l);
-    const inputHost = doc.createElement("div");
-    inputHost.className = "ga-le-inputhost";
-    wrap.appendChild(inputHost);
-    return { wrap, inputHost };
-  }
-  function mkTextInput(doc, label, value, onChange) {
-    const f = mkField(doc, label);
-    const input = doc.createElement("input");
-    input.type = "text";
-    input.value = value ?? "";
-    input.addEventListener("change", () => onChange(input.value));
-    f.inputHost.appendChild(input);
-    return f.wrap;
-  }
-  function mkNumberInput(doc, label, value, onChange, opts) {
-    const f = mkField(doc, label);
-    const input = doc.createElement("input");
-    input.type = "number";
-    if (opts?.min !== void 0) input.min = String(opts.min);
-    if (opts?.max !== void 0) input.max = String(opts.max);
-    input.step = String(opts?.step ?? 1);
-    input.value = String(value);
-    input.addEventListener("change", () => onChange(asInt(input.value, value)));
-    f.inputHost.appendChild(input);
-    return f.wrap;
-  }
-  function mkSelect(doc, label, value, options, onChange) {
-    const f = mkField(doc, label);
-    const sel = doc.createElement("select");
-    for (const o of options) sel.appendChild(new Option(o.label, o.value));
-    if (options.some((o) => o.value === value)) sel.value = value;
-    sel.addEventListener("change", () => onChange(sel.value));
-    f.inputHost.appendChild(sel);
-    return f.wrap;
-  }
-  function mkMultiSelect(doc, label, values, options, onChange) {
-    const f = mkField(doc, label);
-    const sel = doc.createElement("select");
-    sel.multiple = true;
-    sel.size = Math.min(10, Math.max(3, options.length));
-    for (const o of options) {
-      const opt = new Option(o.label, o.value);
-      opt.selected = values.includes(o.value);
-      sel.appendChild(opt);
-    }
-    sel.addEventListener("change", () => onChange(Array.from(sel.selectedOptions).map((o) => o.value)));
-    f.inputHost.appendChild(sel);
-    return f.wrap;
-  }
-  function mkToggle(doc, label, checked, onChange) {
-    const f = mkField(doc, label);
-    const input = doc.createElement("input");
-    input.type = "checkbox";
-    input.checked = checked;
-    input.addEventListener("change", () => onChange(input.checked));
-    f.inputHost.appendChild(input);
-    return f.wrap;
-  }
-  function mkHr(doc) {
-    const hr = doc.createElement("hr");
-    hr.className = "ga-le-hr";
-    return hr;
-  }
-  function allowedGrains(semantic) {
-    return Object.keys(semantic.datasets ?? {});
-  }
-  function allowedMeasureOptions(semantic, grain) {
-    const keys2 = Object.keys(semantic.measures ?? {});
-    const out = [];
-    for (const id of keys2) {
-      const m = semantic.measures[id];
-      if (m?.grain === grain) out.push({ value: id, label: `${id}${m?.label ? ` \u2014 ${m.label}` : ""}` });
-    }
-    out.sort((a, b) => a.value.localeCompare(b.value));
-    return out;
-  }
-  function allowedDimensionOptions(semantic, grain) {
-    const keys2 = Object.keys(semantic.dimensions ?? {});
-    const out = [];
-    for (const id of keys2) {
-      const d = semantic.dimensions[id];
-      const grains = Array.isArray(d?.grain) ? d.grain : [d?.grain];
-      if (grains.includes(grain)) out.push({ value: id, label: `${id}${d?.label ? ` \u2014 ${d.label}` : ""}` });
-    }
-    out.sort((a, b) => a.value.localeCompare(b.value));
-    return out;
-  }
-  function renderLayoutEditor(args) {
-    const { doc, semantic, onChange, statusEl } = args;
-    const mode = args.mode ?? "section_layout";
-    const win = doc.defaultView ?? window;
-    const safeConfirm = (msg) => {
-      try {
-        return typeof win.confirm === "function" ? win.confirm(msg) : true;
-      } catch {
-        return true;
-      }
-    };
-    const wrap = doc.createElement("div");
-    wrap.className = "ga-layout-editor-wrap";
-    const head = doc.createElement("div");
-    head.className = "ga-le-head";
-    const help = doc.createElement("div");
-    help.className = "ga-settings-note";
-    help.textContent = "Build your dashboard here (sections, cards, widgets, global filters). Tip: text fields apply on blur (click outside). Use Focus mode + the Outline to jump between cards/widgets without drowning in nested panels. Advanced JSON is optional - use it for drilldowns and other power features.";
-    const headActions = doc.createElement("div");
-    headActions.className = "ga-le-head-actions";
-    const autoWrap = doc.createElement("label");
-    autoWrap.className = "ga-le-toggle";
-    const auto = doc.createElement("input");
-    auto.type = "checkbox";
-    const autoTxt = doc.createElement("span");
-    autoTxt.textContent = "Auto-apply";
-    autoWrap.appendChild(auto);
-    autoWrap.appendChild(autoTxt);
-    const applyBtn = mkBtn(doc, "Apply changes", () => applyNow(), "primary");
-    const revertBtn = mkBtn(doc, "Revert", () => revertNow(), "ghost");
-    headActions.appendChild(autoWrap);
-    headActions.appendChild(applyBtn);
-    headActions.appendChild(revertBtn);
-    head.appendChild(help);
-    head.appendChild(headActions);
-    wrap.appendChild(head);
-    const root = doc.createElement("div");
-    root.className = "ga-layout-editor";
-    wrap.appendChild(root);
-    let applied = cloneJson2(args.dashboard);
-    let draft = cloneJson2(args.dashboard);
-    let dirty = false;
-    let autoApply = false;
-    let editSectionIdx = null;
-    let newPresetIdByTarget = {};
-    let active = { kind: "section", idx: 0 };
-    let lastSectionIdx = 0;
-    let focusMode = true;
-    let focusCardIdx = 0;
-    let focusWidgetIdx = 0;
-    let scrollToId = null;
-    let editGlobalFilters = false;
-    let editGlobalFilterIdx = null;
-    let editDrilldownTarget = null;
-    let editDrilldownPreset = null;
-    const grains = allowedGrains(semantic);
-    const grainDefault = grains[0] ?? "round";
-    const grainOpts = grains.map((g) => ({ value: g, label: g }));
-    const setStatus = (kind, message) => {
-      statusEl.textContent = message;
-      statusEl.className = "ga-settings-status";
-      if (kind === "ok") statusEl.classList.add("ok");
-      if (kind === "error") statusEl.classList.add("error");
-    };
-    const validateDraft = () => {
-      try {
-        validateDashboardAgainstSemantic(mergeSemanticWithDashboard(semantic, draft), draft);
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e) };
-      }
-    };
-    const syncActions = () => {
-      applyBtn.disabled = !dirty;
-      revertBtn.disabled = false;
-    };
-    const applyNow = () => {
-      const res = validateDraft();
-      if (!res.ok) return setStatus("error", res.error);
-      onChange(cloneJson2(draft));
-      applied = cloneJson2(draft);
-      dirty = false;
-      syncActions();
-      setStatus("ok", "Layout applied.");
-    };
-    const revertNow = () => {
-      if (!dirty) {
-        setStatus("ok", "Nothing to revert.");
-        return;
-      }
-      if (!safeConfirm("Discard unsaved layout changes?")) return;
-      draft = cloneJson2(applied);
-      dirty = false;
-      syncActions();
-      setStatus("ok", "Reverted.");
-      render();
-    };
-    syncActions();
-    let debounce = null;
-    const markDirty = (rerender = true) => {
-      dirty = true;
-      syncActions();
-      if (debounce !== null) doc.defaultView?.clearTimeout?.(debounce);
-      debounce = doc.defaultView?.setTimeout?.(() => {
-        debounce = null;
-        const res = validateDraft();
-        if (!res.ok) return setStatus("error", res.error);
-        if (!autoApply) return setStatus("ok", "Valid. Click Apply changes to update the dashboard.");
-        setStatus("info", "Applying...");
-        applyNow();
-      }, 200);
-      if (rerender) render();
-    };
-    auto.addEventListener("change", () => {
-      autoApply = auto.checked;
-      if (autoApply && dirty) markDirty(false);
-    });
-    const renderGlobalFilters = (right) => {
-      const current = draft.dashboard.globalFilters ?? {
-        enabled: true,
-        layout: { variant: "compact" },
-        controls: [],
-        buttons: { apply: false, reset: true }
-      };
-      const patch = (next) => {
-        const n = cloneJson2(draft);
-        n.dashboard.globalFilters = next;
-        draft = n;
-        markDirty();
-      };
-      const controls = Array.isArray(current.controls) ? current.controls : [];
-      const dimsAll = Object.keys(semantic.dimensions ?? {}).map((id) => ({ value: id, label: id }));
-      const addRow = doc.createElement("div");
-      addRow.className = "ga-le-toprow";
-      addRow.appendChild(
-        mkBtn(
-          doc,
-          "Add select filter",
-          () => {
-            const id = `filter_${Math.random().toString(36).slice(2, 7)}`;
-            patch({
-              ...current,
-              controls: [
-                ...controls,
-                { id, type: "select", label: "New filter", dimension: "", default: "all", options: "auto_distinct", appliesTo: [grainDefault] }
-              ]
-            });
-          },
-          "primary"
-        )
-      );
-      addRow.appendChild(
-        mkBtn(
-          doc,
-          "Add date range",
-          () => {
-            const id = `date_${Math.random().toString(36).slice(2, 7)}`;
-            patch({ ...current, controls: [...controls, { id, type: "date_range", label: "Date range", default: { fromTs: null, toTs: null }, appliesTo: [grainDefault] }] });
-          },
-          "primary"
-        )
-      );
-      const presets = [
-        {
-          id: "country_map",
-          label: "Country (map)",
-          make: () => ({
-            id: `country_${Math.random().toString(36).slice(2, 7)}`,
-            type: "select",
-            label: "Country",
-            dimension: "true_country",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: ["round"],
-            presentation: "map",
-            map: { variant: "compact", height: 340, restrictToOptions: true, tintSelectable: true }
-          })
-        },
-        {
-          id: "movement",
-          label: "Movement",
-          make: () => ({
-            id: `move_${Math.random().toString(36).slice(2, 7)}`,
-            type: "select",
-            label: "Movement",
-            dimension: "movement_type",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: ["round"]
-          })
-        },
-        {
-          id: "mode_family",
-          label: "Mode family",
-          make: () => ({
-            id: `mode_${Math.random().toString(36).slice(2, 7)}`,
-            type: "select",
-            label: "Mode family",
-            dimension: "mode_family",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: ["round"]
-          })
-        },
-        {
-          id: "guess_time",
-          label: "Guess time bucket",
-          make: () => ({
-            id: `time_${Math.random().toString(36).slice(2, 7)}`,
-            type: "select",
-            label: "Guess time",
-            dimension: "duration_bucket",
-            default: "all",
-            options: "auto_distinct",
-            appliesTo: ["round"]
-          })
-        },
-        {
-          id: "teammate",
-          label: "Teammate",
-          make: () => ({
-            id: `mate_${Math.random().toString(36).slice(2, 7)}`,
-            type: "select",
-            label: "Teammate",
-            dimension: "teammate_name",
-            default: "all",
-            options: "auto_teammates",
-            appliesTo: ["round"]
-          })
-        }
-      ];
-      const presetSel = doc.createElement("select");
-      presetSel.className = "ga-le-inline-select";
-      for (const p of presets) presetSel.appendChild(new Option(p.label, p.id));
-      addRow.appendChild(presetSel);
-      addRow.appendChild(
-        mkBtn(
-          doc,
-          "Add preset",
-          () => {
-            const picked = presets.find((p) => p.id === presetSel.value) ?? presets[0];
-            if (!picked) return;
-            const ctrl = picked.make();
-            if (Array.isArray(ctrl.appliesTo) && ctrl.appliesTo.length) ctrl.appliesTo = [grainDefault];
-            patch({ ...current, controls: [...controls, ctrl] });
-          },
-          "primary"
-        )
-      );
-      right.appendChild(addRow);
-      right.appendChild(mkToggle(doc, "enabled", !!current.enabled, (v) => patch({ ...current, enabled: v })));
-      const gfNote = doc.createElement("div");
-      gfNote.className = "ga-settings-note";
-      gfNote.textContent = "`appliesTo` controls where each filter is active (round/game/session).";
-      right.appendChild(gfNote);
-      right.appendChild(
-        mkSelect(
-          doc,
-          "layout.variant",
-          String(current?.layout?.variant ?? "compact"),
-          [{ value: "compact", label: "compact" }, { value: "full", label: "full" }],
-          (v) => patch({ ...current, layout: { ...current.layout ?? {}, variant: v } })
-        )
-      );
-      right.appendChild(mkToggle(doc, "buttons.reset", current?.buttons?.reset !== false, (v) => patch({ ...current, buttons: { ...current.buttons ?? {}, reset: v } })));
-      right.appendChild(mkToggle(doc, "buttons.apply", !!current?.buttons?.apply, (v) => patch({ ...current, buttons: { ...current.buttons ?? {}, apply: v } })));
-      right.appendChild(renderAdvancedJson(doc, "Advanced JSON (globalFilters)", current, (next) => patch(next)));
-      right.appendChild(mkHr(doc));
-      controls.forEach((ctrl, idx) => {
-        const item = doc.createElement("div");
-        item.className = "ga-le-item";
-        const row = doc.createElement("div");
-        row.className = "ga-le-toprow";
-        const t = doc.createElement("div");
-        t.className = "ga-le-box-head";
-        t.textContent = `${ctrl.type} \u2014 ${ctrl.label || ctrl.id}`;
-        row.appendChild(t);
-        row.appendChild(
-          mkBtn(
-            doc,
-            "Delete",
-            () => {
-              if (!safeConfirm(`Delete global filter '${ctrl.label || ctrl.id}'?`)) return;
-              patch({ ...current, controls: controls.filter((_, i) => i !== idx) });
-            },
-            "danger"
-          )
-        );
-        item.appendChild(row);
-        const patchCtrl = (nextCtrl) => patch({ ...current, controls: controls.map((c, i) => i === idx ? nextCtrl : c) });
-        item.appendChild(mkTextInput(doc, "id", String(ctrl.id ?? ""), (v) => patchCtrl({ ...ctrl, id: v })));
-        item.appendChild(
-          mkSelect(
-            doc,
-            "type",
-            String(ctrl.type ?? "select"),
-            [
-              { value: "select", label: "select" },
-              { value: "date_range", label: "date_range" }
-            ],
-            (v) => {
-              if (v === ctrl.type) return;
-              if (v === "date_range") {
-                patchCtrl({ id: ctrl.id, type: "date_range", label: ctrl.label || "Date range", default: { fromTs: null, toTs: null }, appliesTo: ctrl.appliesTo ?? [grainDefault] });
-              } else {
-                patchCtrl({
-                  id: ctrl.id,
-                  type: "select",
-                  label: ctrl.label || "New filter",
-                  dimension: "",
-                  default: "all",
-                  options: "auto_distinct",
-                  appliesTo: ctrl.appliesTo ?? [grainDefault]
-                });
-              }
-            }
-          )
-        );
-        item.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
-        item.appendChild(mkMultiSelect(doc, "appliesTo", Array.isArray(ctrl.appliesTo) ? ctrl.appliesTo : [grainDefault], grainOpts, (vals) => patchCtrl({ ...ctrl, appliesTo: vals })));
-        if (ctrl.type === "select") {
-          item.appendChild(mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => patchCtrl({ ...ctrl, dimension: v })));
-          item.appendChild(
-            mkSelect(
-              doc,
-              "options",
-              String(ctrl.options ?? "auto_distinct"),
-              [{ value: "auto_distinct", label: "auto_distinct" }, { value: "auto_teammates", label: "auto_teammates" }],
-              (v) => patchCtrl({ ...ctrl, options: v })
-            )
-          );
-          item.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
-          item.appendChild(
-            mkSelect(
-              doc,
-              "presentation",
-              String(ctrl.presentation ?? "dropdown"),
-              [{ value: "dropdown", label: "dropdown" }, { value: "map", label: "map" }],
-              (v) => patchCtrl({ ...ctrl, presentation: v })
-            )
-          );
-          if (ctrl.presentation === "map") {
-            const map = ctrl.map ?? {};
-            item.appendChild(
-              mkSelect(
-                doc,
-                "map.variant",
-                String(map.variant ?? "compact"),
-                [{ value: "compact", label: "compact" }, { value: "wide", label: "wide" }],
-                (v) => patchCtrl({ ...ctrl, map: { ...map, variant: v } })
-              )
-            );
-            item.appendChild(
-              mkNumberInput(doc, "map.height", asInt(map.height, 340), (n) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n)) } }), {
-                min: 160,
-                max: 1200,
-                step: 10
-              })
-            );
-            item.appendChild(mkToggle(doc, "map.restrictToOptions", !!map.restrictToOptions, (v) => patchCtrl({ ...ctrl, map: { ...map, restrictToOptions: v } })));
-            item.appendChild(mkToggle(doc, "map.tintSelectable", map.tintSelectable !== false, (v) => patchCtrl({ ...ctrl, map: { ...map, tintSelectable: v } })));
-          }
-        } else if (ctrl.type === "date_range") {
-          const btnRow = doc.createElement("div");
-          btnRow.className = "ga-le-toprow";
-          btnRow.appendChild(mkBtn(doc, "Reset default", () => patchCtrl({ ...ctrl, default: { fromTs: null, toTs: null } })));
-          item.appendChild(btnRow);
-        }
-        item.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
-        right.appendChild(item);
-      });
-    };
-    const mkModal = (title, onClose) => {
-      const overlay = doc.createElement("div");
-      overlay.className = "ga-le-modal";
-      const bg = doc.createElement("div");
-      bg.className = "ga-le-modal-bg";
-      bg.addEventListener("click", onClose);
-      const panel = doc.createElement("div");
-      panel.className = "ga-le-modal-panel";
-      const header = doc.createElement("div");
-      header.className = "ga-le-modal-header";
-      const ht = doc.createElement("div");
-      ht.className = "ga-le-modal-title";
-      ht.textContent = title;
-      header.appendChild(ht);
-      header.appendChild(mkBtn(doc, "Close", onClose));
-      const body = doc.createElement("div");
-      body.className = "ga-le-modal-body";
-      panel.appendChild(header);
-      panel.appendChild(body);
-      overlay.appendChild(bg);
-      overlay.appendChild(panel);
-      return { overlay, body };
-    };
-    function renderPanels() {
-      try {
-        wrap.querySelector(".ga-le-modal")?.remove();
-      } catch {
-      }
-      const sem = mergeSemanticWithDashboard(semantic, draft);
-      const ddOverride = draft.dashboard?.drilldownPresets ?? {};
-      const setDdOverride = (target, nextTarget) => {
-        const next = cloneJson2(draft);
-        const cur = next.dashboard.drilldownPresets ?? {};
-        next.dashboard.drilldownPresets = { ...cur, [target]: nextTarget };
-        draft = next;
-        markDirty();
-      };
-      const removeDdOverride = (target) => {
-        const next = cloneJson2(draft);
-        const cur = next.dashboard.drilldownPresets ?? {};
-        const { [target]: _, ...rest } = cur;
-        next.dashboard.drilldownPresets = rest;
-        draft = next;
-        markDirty();
-      };
-      const panels = doc.createElement("div");
-      panels.className = "ga-le-panels";
-      panels.style.gridColumn = "1 / -1";
-      root.appendChild(panels);
-      const sections = Array.isArray(draft.dashboard?.sections) ? draft.dashboard.sections : [];
-      const setSections = (nextSections) => {
-        const next = cloneJson2(draft);
-        next.dashboard.sections = nextSections;
-        draft = next;
-        markDirty();
-      };
-      const ensureOneCardContainer = (sectionIdx) => {
-        const next = cloneJson2(draft);
-        const sec = next.dashboard.sections?.[sectionIdx];
-        if (!sec) return;
-        const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
-        sec.layout = sec.layout ?? { mode: "grid", columns: cols, cards: [] };
-        sec.layout.columns = cols;
-        const cards = Array.isArray(sec.layout.cards) ? sec.layout.cards : [];
-        if (cards.length === 0) cards.push(defaultCard());
-        const first = cards[0];
-        first.x = 0;
-        first.y = 0;
-        first.w = cols;
-        first.h = Math.max(10, asInt(first.h, 12));
-        first.title = String(sec.title ?? first.title ?? "Section");
-        first.card = first.card ?? { type: "composite", children: [] };
-        first.card.children = Array.isArray(first.card.children) ? first.card.children : [];
-        sec.layout.cards = [first];
-        next.dashboard.sections[sectionIdx] = sec;
-        draft = next;
-        markDirty();
-      };
-      const flattenCardsIntoFirst = (sectionIdx) => {
-        const next = cloneJson2(draft);
-        const sec = next.dashboard.sections?.[sectionIdx];
-        if (!sec) return;
-        const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
-        const cards = Array.isArray(sec.layout?.cards) ? sec.layout.cards : [];
-        if (cards.length <= 1) return ensureOneCardContainer(sectionIdx);
-        const base = cards[0];
-        base.card = base.card ?? { type: "composite", children: [] };
-        const baseChildren = Array.isArray(base.card.children) ? base.card.children : [];
-        let cursorY = 0;
-        for (const w of baseChildren) {
-          const p = w?.placement ?? {};
-          cursorY = Math.max(cursorY, asInt(p.y, 0) + asInt(p.h, 3));
-        }
-        cursorY += 1;
-        for (const c of cards.slice(1)) {
-          const kids = Array.isArray(c?.card?.children) ? c.card.children : [];
-          for (const w of kids) {
-            const p = w?.placement ?? { x: 0, y: 0, w: cols, h: 3 };
-            baseChildren.push({ ...w, placement: { ...p, y: asInt(p.y, 0) + cursorY } });
-          }
-          let maxLocal = 0;
-          for (const w of kids) {
-            const p = w?.placement ?? {};
-            maxLocal = Math.max(maxLocal, asInt(p.y, 0) + asInt(p.h, 3));
-          }
-          cursorY += maxLocal + 1;
-        }
-        base.card.children = baseChildren;
-        base.x = 0;
-        base.y = 0;
-        base.w = cols;
-        base.h = Math.max(10, asInt(base.h, 12));
-        base.title = String(sec.title ?? base.title ?? "Section");
-        sec.layout.cards = [base];
-        next.dashboard.sections[sectionIdx] = sec;
-        draft = next;
-        markDirty();
-      };
-      const getSectionChildren = (sectionIdx) => {
-        const sec = draft.dashboard.sections?.[sectionIdx] ?? null;
-        const c0 = Array.isArray(sec?.layout?.cards) ? sec.layout.cards[0] : null;
-        const kids = c0?.card ? c0.card.children : null;
-        return Array.isArray(kids) ? kids : [];
-      };
-      const setSectionChildren = (sectionIdx, nextChildren) => {
-        const next = cloneJson2(draft);
-        const sec = next.dashboard.sections?.[sectionIdx];
-        if (!sec) return;
-        const cols = Math.max(1, Math.min(24, asInt(sec.layout?.columns, 12)));
-        sec.layout = sec.layout ?? { mode: "grid", columns: cols, cards: [] };
-        sec.layout.columns = cols;
-        const cards = Array.isArray(sec.layout.cards) ? sec.layout.cards : [];
-        if (cards.length === 0) cards.push(defaultCard());
-        const first = cards[0];
-        first.x = 0;
-        first.y = 0;
-        first.w = cols;
-        first.h = Math.max(10, asInt(first.h, 12));
-        first.title = String(sec.title ?? first.title ?? "Section");
-        first.card = first.card ?? { type: "composite", children: [] };
-        first.card.children = nextChildren;
-        sec.layout.cards = [first];
-        next.dashboard.sections[sectionIdx] = sec;
-        draft = next;
-        markDirty();
-      };
-      const sectionsBox = doc.createElement("div");
-      sectionsBox.className = "ga-le-box";
-      const sHead = doc.createElement("div");
-      sHead.className = "ga-le-box-head";
-      sHead.textContent = "Sections";
-      sectionsBox.appendChild(sHead);
-      const sNote = doc.createElement("div");
-      sNote.className = "ga-settings-note";
-      sNote.textContent = "Sections are your tabs. Rename, reorder, and click Edit to configure widgets.";
-      sectionsBox.appendChild(sNote);
-      const reorderSection = (fromIdx, toIdx) => {
-        if (fromIdx === toIdx) return;
-        if (fromIdx < 0 || fromIdx >= sections.length) return;
-        if (toIdx < 0 || toIdx >= sections.length) return;
-        const next = [...sections];
-        const [picked] = next.splice(fromIdx, 1);
-        next.splice(toIdx, 0, picked);
-        setSections(next);
-      };
-      sections.forEach((sec, idx) => {
-        const row = doc.createElement("div");
-        row.className = "ga-le-compact-row";
-        row.draggable = true;
-        row.dataset.idx = String(idx);
-        row.addEventListener("dragstart", (ev) => {
-          try {
-            ev.dataTransfer?.setData("text/plain", String(idx));
-            ev.dataTransfer?.setDragImage?.(row, 12, 12);
-          } catch {
-          }
-          row.classList.add("dragging");
-        });
-        row.addEventListener("dragend", () => row.classList.remove("dragging"));
-        row.addEventListener("dragover", (ev) => {
-          ev.preventDefault();
-          row.classList.add("dragover");
-        });
-        row.addEventListener("dragleave", () => row.classList.remove("dragover"));
-        row.addEventListener("drop", (ev) => {
-          ev.preventDefault();
-          row.classList.remove("dragover");
-          const raw = ev.dataTransfer?.getData("text/plain") ?? "";
-          const fromIdx = asInt(raw, -1);
-          if (fromIdx < 0) return;
-          reorderSection(fromIdx, idx);
-        });
-        const drag = doc.createElement("div");
-        drag.className = "ga-le-drag";
-        drag.title = "Drag to reorder";
-        drag.textContent = "\u22EE\u22EE";
-        row.appendChild(drag);
-        const title = doc.createElement("div");
-        title.className = "ga-le-compact-title";
-        title.textContent = sec?.title || sec?.id || "Untitled";
-        row.appendChild(title);
-        const meta = doc.createElement("div");
-        meta.className = "ga-le-compact-meta";
-        meta.textContent = String(sec?.id || "");
-        row.appendChild(meta);
-        const actions = doc.createElement("div");
-        actions.className = "ga-le-compact-actions";
-        actions.appendChild(
-          mkIconBtn(doc, "\u270E", () => {
-            const nextTitle = safePrompt(doc, "Rename section title:", String(sec?.title ?? ""));
-            if (nextTitle === null) return;
-            const next = [...sections];
-            next[idx] = { ...sec, title: nextTitle };
-            setSections(next);
-          })
-        );
-        actions.appendChild(
-          mkIconBtn(
-            doc,
-            "\u{1F5D1}",
-            () => {
-              if (!safeConfirm(`Delete section '${sec?.title || sec?.id}'?`)) return;
-              const next = sections.filter((_, i) => i !== idx);
-              setSections(next);
-              if (editSectionIdx === idx) editSectionIdx = null;
-            },
-            "danger"
-          )
-        );
-        actions.appendChild(
-          mkBtn(
-            doc,
-            "Edit",
-            () => {
-              editSectionIdx = idx;
-              render();
-            },
-            "primary"
-          )
-        );
-        row.appendChild(actions);
-        sectionsBox.appendChild(row);
-      });
-      const addSectionRow = doc.createElement("div");
-      addSectionRow.className = "ga-le-compact-row";
-      addSectionRow.title = "Add section";
-      const addSection = () => {
-        const next = [...sections, defaultSection()];
-        setSections(next);
-        editSectionIdx = Math.max(0, next.length - 1);
-        render();
-      };
-      addSectionRow.addEventListener("click", () => addSection());
-      const addDrag = doc.createElement("div");
-      addDrag.className = "ga-le-drag";
-      addDrag.textContent = "+";
-      addSectionRow.appendChild(addDrag);
-      const addTitle = doc.createElement("div");
-      addTitle.className = "ga-le-compact-title";
-      addTitle.textContent = "Add section";
-      addSectionRow.appendChild(addTitle);
-      const addMeta = doc.createElement("div");
-      addMeta.className = "ga-le-compact-meta";
-      addMeta.textContent = "";
-      addSectionRow.appendChild(addMeta);
-      const addActions = doc.createElement("div");
-      addActions.className = "ga-le-compact-actions";
-      addActions.appendChild(mkBtn(doc, "+", () => addSection(), "primary"));
-      addSectionRow.appendChild(addActions);
-      sectionsBox.appendChild(addSectionRow);
-      if (mode === "section_layout") {
-        panels.appendChild(sectionsBox);
-      }
-      if (mode === "global_filters") {
-        const gfFallback = {
-          enabled: true,
-          layout: { variant: "compact" },
-          controls: [],
-          buttons: { apply: false, reset: true }
-        };
-        const gfRaw = draft.dashboard.globalFilters;
-        const gfCurrent = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
-        if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
-        if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
-        const gfControls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
-        const setGlobalFilters = (nextGlobalFilters) => {
-          const next = cloneJson2(draft);
-          next.dashboard.globalFilters = nextGlobalFilters;
-          draft = next;
-          markDirty();
-        };
-        const setControls = (nextControls) => setGlobalFilters({ ...gfCurrent, controls: nextControls });
-        const normalizedControls = gfControls.map((c) => {
-          if (!c || typeof c !== "object") return c;
-          if (c.type !== "select") return c;
-          const dimId = typeof c.dimension === "string" ? c.dimension : "";
-          const dim = dimId ? semantic.dimensions?.[dimId] : null;
-          const grains2 = dim ? Array.isArray(dim.grain) ? dim.grain : [dim.grain] : null;
-          if (!grains2 || grains2.length === 0) return c;
-          return { ...c, appliesTo: grains2 };
-        });
-        if (JSON.stringify(normalizedControls) !== JSON.stringify(gfControls)) {
-          setControls(normalizedControls);
-          return true;
-        }
-        const gfBox = doc.createElement("div");
-        gfBox.className = "ga-le-box";
-        const gfh = doc.createElement("div");
-        gfh.className = "ga-le-box-head";
-        gfh.textContent = "Global filters";
-        gfBox.appendChild(gfh);
-        const gfNote = doc.createElement("div");
-        gfNote.className = "ga-settings-note";
-        gfNote.textContent = "Drag to reorder. Click Edit to configure a filter. Use + to add a new filter.";
-        gfBox.appendChild(gfNote);
-        const gfEnabled = gfCurrent?.enabled !== false;
-        const barRow = doc.createElement("div");
-        barRow.className = "ga-le-compact-row";
-        const barDrag = doc.createElement("div");
-        barDrag.className = "ga-le-drag";
-        barDrag.textContent = "";
-        barRow.appendChild(barDrag);
-        const barTitle = doc.createElement("div");
-        barTitle.className = "ga-le-compact-title";
-        barTitle.textContent = "Global filter bar";
-        barRow.appendChild(barTitle);
-        const barMeta = doc.createElement("div");
-        barMeta.className = "ga-le-compact-meta";
-        barMeta.textContent = `${gfEnabled ? "Enabled" : "Disabled"} \u2022 ${String(gfCurrent?.layout?.variant ?? "compact")}`;
-        barRow.appendChild(barMeta);
-        const barActions = doc.createElement("div");
-        barActions.className = "ga-le-compact-actions";
-        barActions.appendChild(
-          mkBtn(
-            doc,
-            gfEnabled ? "Disable" : "Enable",
-            () => setGlobalFilters({ ...gfCurrent, enabled: !gfEnabled }),
-            gfEnabled ? "ghost" : "primary"
-          )
-        );
-        barActions.appendChild(
-          mkBtn(
-            doc,
-            "Advanced",
-            () => {
-              editGlobalFilters = true;
-              render();
-            },
-            "ghost"
-          )
-        );
-        barRow.appendChild(barActions);
-        gfBox.appendChild(barRow);
-        const reorderControl = (fromIdx, toIdx) => {
-          if (fromIdx === toIdx) return;
-          if (fromIdx < 0 || fromIdx >= gfControls.length) return;
-          if (toIdx < 0 || toIdx >= gfControls.length) return;
-          const next = [...gfControls];
-          const [picked] = next.splice(fromIdx, 1);
-          next.splice(toIdx, 0, picked);
-          setControls(next);
-        };
-        gfControls.forEach((ctrl, idx) => {
-          const row = doc.createElement("div");
-          row.className = "ga-le-compact-row";
-          row.draggable = true;
-          row.dataset.idx = String(idx);
-          row.addEventListener("click", () => {
-            editGlobalFilterIdx = idx;
-            render();
-          });
-          row.addEventListener("dragstart", (ev) => {
-            try {
-              ev.dataTransfer?.setData("text/plain", String(idx));
-              ev.dataTransfer?.setDragImage?.(row, 12, 12);
-            } catch {
-            }
-            row.classList.add("dragging");
-          });
-          row.addEventListener("dragend", () => row.classList.remove("dragging"));
-          row.addEventListener("dragover", (ev) => {
-            ev.preventDefault();
-            row.classList.add("dragover");
-          });
-          row.addEventListener("dragleave", () => row.classList.remove("dragover"));
-          row.addEventListener("drop", (ev) => {
-            ev.preventDefault();
-            row.classList.remove("dragover");
-            const raw = ev.dataTransfer?.getData("text/plain") ?? "";
-            const fromIdx = asInt(raw, -1);
-            if (fromIdx < 0) return;
-            reorderControl(fromIdx, idx);
-          });
-          const drag = doc.createElement("div");
-          drag.className = "ga-le-drag";
-          drag.title = "Drag to reorder";
-          drag.textContent = "\u22EE\u22EE";
-          row.appendChild(drag);
-          const title = doc.createElement("div");
-          title.className = "ga-le-compact-title";
-          title.textContent = String(ctrl?.label || ctrl?.id || "Untitled filter");
-          row.appendChild(title);
-          const meta = doc.createElement("div");
-          meta.className = "ga-le-compact-meta";
-          const metaParts = [];
-          if (ctrl?.id) metaParts.push(String(ctrl.id));
-          if (ctrl?.type === "select") metaParts.push(String(ctrl?.dimension ?? "(no dimension)"));
-          else metaParts.push(String(ctrl?.type ?? "select"));
-          meta.textContent = metaParts.filter(Boolean).join(" \u2022 ");
-          row.appendChild(meta);
-          const actions = doc.createElement("div");
-          actions.className = "ga-le-compact-actions";
-          actions.appendChild(
-            mkIconBtn(doc, "\u270E", () => {
-              const nextLabel = safePrompt(doc, "Rename filter label:", String(ctrl?.label ?? ""));
-              if (nextLabel === null) return;
-              const next = gfControls.map((x, i) => i === idx ? { ...x, label: nextLabel } : x);
-              setControls(next);
-            })
-          );
-          actions.appendChild(
-            mkIconBtn(
-              doc,
-              "\u{1F5D1}",
-              () => {
-                if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
-                setControls(gfControls.filter((_, i) => i !== idx));
-                if (editGlobalFilterIdx === idx) editGlobalFilterIdx = null;
-              },
-              "danger"
-            )
-          );
-          actions.appendChild(
-            mkBtn(
-              doc,
-              "Edit",
-              () => {
-                editGlobalFilterIdx = idx;
-                render();
-              },
-              "primary"
-            )
-          );
-          row.appendChild(actions);
-          gfBox.appendChild(row);
-        });
-        const addFilter = () => {
-          const id = `filter_${Math.random().toString(36).slice(2, 7)}`;
-          const next = [
-            ...gfControls,
-            { id, type: "select", label: "New filter", dimension: "", default: "all", options: "auto_distinct", appliesTo: [grainDefault] }
-          ];
-          setControls(next);
-          editGlobalFilterIdx = Math.max(0, next.length - 1);
-          render();
-        };
-        const addFilterRow = doc.createElement("div");
-        addFilterRow.className = "ga-le-compact-row";
-        addFilterRow.title = "Add filter";
-        addFilterRow.addEventListener("click", () => addFilter());
-        const addDrag2 = doc.createElement("div");
-        addDrag2.className = "ga-le-drag";
-        addDrag2.textContent = "+";
-        addFilterRow.appendChild(addDrag2);
-        const addTitle2 = doc.createElement("div");
-        addTitle2.className = "ga-le-compact-title";
-        addTitle2.textContent = "Add filter";
-        addFilterRow.appendChild(addTitle2);
-        const addMeta2 = doc.createElement("div");
-        addMeta2.className = "ga-le-compact-meta";
-        addMeta2.textContent = "";
-        addFilterRow.appendChild(addMeta2);
-        const addActions2 = doc.createElement("div");
-        addActions2.className = "ga-le-compact-actions";
-        addActions2.appendChild(mkBtn(doc, "+", () => addFilter(), "primary"));
-        addFilterRow.appendChild(addActions2);
-        gfBox.appendChild(addFilterRow);
-        panels.appendChild(gfBox);
-      }
-      if (mode === "drilldowns") {
-        panels.appendChild(mkHr(doc));
-        const ddBox = doc.createElement("div");
-        ddBox.className = "ga-le-box";
-        const ddh = doc.createElement("div");
-        ddh.className = "ga-le-box-head";
-        ddh.textContent = "Drilldown presets";
-        ddBox.appendChild(ddh);
-        const ddn = doc.createElement("div");
-        ddn.className = "ga-settings-note";
-        ddn.textContent = "Define which columns show up in drilldown tables (and which are sortable). Saved into your template.";
-        ddBox.appendChild(ddn);
-        const targets = Object.keys(sem?.drilldownPresets ?? {});
-        if (targets.length === 0) {
-          const none = doc.createElement("div");
-          none.className = "ga-settings-note";
-          none.textContent = "No drilldown targets found.";
-          ddBox.appendChild(none);
-        }
-        targets.forEach((target) => {
-          const preset = sem?.drilldownPresets?.[target] ?? {};
-          const keys2 = Object.keys(preset?.columnsPresets ?? {});
-          const left = doc.createElement("div");
-          left.className = "ga-le-compact-title";
-          left.textContent = `${target} \u2022 ${keys2.length} presets`;
-          const row = doc.createElement("div");
-          row.className = "ga-le-compact-row";
-          row.appendChild(left);
-          const actions = doc.createElement("div");
-          actions.className = "ga-le-compact-actions";
-          actions.appendChild(
-            mkBtn(
-              doc,
-              "Edit",
-              () => {
-                editDrilldownTarget = target;
-                render();
-              },
-              "primary"
-            )
-          );
-          row.appendChild(actions);
-          ddBox.appendChild(row);
-        });
-        panels.appendChild(ddBox);
-      }
-      if (editGlobalFilters) {
-        const { overlay, body } = mkModal("Global filters", () => {
-          editGlobalFilters = false;
-          render();
-        });
-        renderGlobalFilters(body);
-        wrap.appendChild(overlay);
-      }
-      if (editGlobalFilterIdx !== null) {
-        const gfFallback = {
-          enabled: true,
-          layout: { variant: "compact" },
-          controls: [],
-          buttons: { apply: false, reset: true }
-        };
-        const gfRaw = draft.dashboard.globalFilters;
-        const gfCurrent = gfRaw && typeof gfRaw === "object" ? { ...gfFallback, ...gfRaw } : gfFallback;
-        if (!gfCurrent.layout || typeof gfCurrent.layout !== "object") gfCurrent.layout = { variant: "compact" };
-        if (!gfCurrent.buttons || typeof gfCurrent.buttons !== "object") gfCurrent.buttons = { apply: false, reset: true };
-        const controls = Array.isArray(gfCurrent.controls) ? gfCurrent.controls : [];
-        const idx = editGlobalFilterIdx;
-        const ctrl = controls[idx];
-        if (!ctrl) {
-          editGlobalFilterIdx = null;
-        } else {
-          const { overlay, body } = mkModal(`Global filter: ${String(ctrl?.label || ctrl?.id || "")}`, () => {
-            editGlobalFilterIdx = null;
-            render();
-          });
-          const setGlobalFilters = (nextGlobalFilters) => {
-            const next = cloneJson2(draft);
-            next.dashboard.globalFilters = nextGlobalFilters;
-            draft = next;
-            markDirty();
-          };
-          const patchCtrl = (nextCtrl) => setGlobalFilters({ ...gfCurrent, controls: controls.map((c, i) => i === idx ? nextCtrl : c) });
-          const top = doc.createElement("div");
-          top.className = "ga-le-toprow";
-          top.appendChild(
-            mkBtn(
-              doc,
-              "Delete",
-              () => {
-                if (!safeConfirm(`Delete global filter '${ctrl?.label || ctrl?.id}'?`)) return;
-                setGlobalFilters({ ...gfCurrent, controls: controls.filter((_, i) => i !== idx) });
-                editGlobalFilterIdx = null;
-                render();
-              },
-              "danger"
-            )
-          );
-          top.appendChild(
-            mkBtn(doc, "Advanced (all)", () => {
-              editGlobalFilterIdx = null;
-              editGlobalFilters = true;
-              render();
-            })
-          );
-          body.appendChild(top);
-          const dimsAll = Object.keys(semantic.dimensions ?? {}).map((id) => ({ value: id, label: id }));
-          const idField = doc.createElement("div");
-          idField.className = "ga-le-field";
-          const idLabel = doc.createElement("label");
-          idLabel.textContent = "id";
-          idField.appendChild(idLabel);
-          const idHost = doc.createElement("div");
-          idHost.className = "ga-le-inputhost";
-          const idText = doc.createElement("div");
-          idText.style.padding = "8px 10px";
-          idText.style.border = "1px solid var(--ga-control-border)";
-          idText.style.borderRadius = "8px";
-          idText.style.background = "var(--ga-control-bg)";
-          idText.style.color = "var(--ga-control-text)";
-          idText.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
-          idText.textContent = String(ctrl.id ?? "");
-          idHost.appendChild(idText);
-          idField.appendChild(idHost);
-          body.appendChild(idField);
-          body.appendChild(mkTextInput(doc, "label", String(ctrl.label ?? ""), (v) => patchCtrl({ ...ctrl, label: v })));
-          const widthField = mkField(doc, "width (px)");
-          const widthInput = doc.createElement("input");
-          widthInput.type = "number";
-          widthInput.min = "120";
-          widthInput.max = "900";
-          widthInput.step = "10";
-          widthInput.placeholder = "auto";
-          widthInput.value = typeof ctrl.width === "number" ? String(ctrl.width) : "";
-          widthInput.addEventListener("change", () => {
-            const raw = widthInput.value.trim();
-            if (!raw) {
-              const next = { ...ctrl };
-              delete next.width;
-              patchCtrl(next);
-              return;
-            }
-            const n = asInt(raw, ctrl.width ?? 0);
-            const clamped = Math.max(120, Math.min(900, n));
-            patchCtrl({ ...ctrl, width: clamped });
-          });
-          widthField.inputHost.appendChild(widthInput);
-          body.appendChild(widthField.wrap);
-          if (ctrl.type === "select") {
-            body.appendChild(
-              mkSelect(doc, "dimension", String(ctrl.dimension ?? ""), dimsAll, (v) => {
-                const dim = semantic.dimensions?.[v];
-                const grains2 = dim ? Array.isArray(dim.grain) ? dim.grain : [dim.grain] : null;
-                const nextOptions = v === "teammate_name" ? "auto_teammates" : typeof ctrl.options === "string" && ctrl.options.trim().length > 0 ? ctrl.options : "auto_distinct";
-                patchCtrl({ ...ctrl, dimension: v, options: nextOptions, appliesTo: grains2 && grains2.length ? grains2 : ctrl.appliesTo ?? [grainDefault] });
-              })
-            );
-            body.appendChild(mkTextInput(doc, "default", String(ctrl.default ?? "all"), (v) => patchCtrl({ ...ctrl, default: v })));
-          } else if (ctrl.type === "date_range") {
-            const note = doc.createElement("div");
-            note.className = "ga-settings-note";
-            note.textContent = "Date range defaults are automatically initialized to your full dataset span. Advanced JSON can override behavior.";
-            body.appendChild(note);
-          }
-          body.appendChild(renderAdvancedJson(doc, "Advanced JSON (control)", ctrl, (next) => patchCtrl(next)));
-          wrap.appendChild(overlay);
-        }
-      }
-      if (editDrilldownTarget) {
-        const target = editDrilldownTarget;
-        const preset = sem?.drilldownPresets?.[target] ?? {};
-        const keys2 = Object.keys(preset?.columnsPresets ?? {});
-        const override = ddOverride?.[target] ?? {};
-        const { overlay, body } = mkModal(`Drilldown presets: ${target}`, () => {
-          editDrilldownTarget = null;
-          editDrilldownPreset = null;
-          render();
-        });
-        if (override && Object.keys(override).length) {
-          const top = doc.createElement("div");
-          top.className = "ga-le-toprow";
-          top.appendChild(mkBtn(doc, "Reset overrides", () => removeDdOverride(target), "danger"));
-          body.appendChild(top);
-        }
-        if (keys2.length > 0) {
-          body.appendChild(
-            mkSelect(
-              doc,
-              "defaultPreset",
-              String(preset?.defaultPreset ?? keys2[0]),
-              keys2.map((k) => ({ value: k, label: k })),
-              (v) => setDdOverride(target, { ...override, defaultPreset: v, columnsPresets: override?.columnsPresets ?? {} })
-            )
-          );
-        }
-        const addRow = doc.createElement("div");
-        addRow.className = "ga-le-toprow";
-        const input = doc.createElement("input");
-        input.type = "text";
-        input.className = "ga-le-inline-input";
-        input.placeholder = "new preset id (e.g. myPreset)";
-        input.value = String(newPresetIdByTarget[target] ?? "");
-        input.addEventListener("input", () => newPresetIdByTarget[target] = input.value);
-        addRow.appendChild(input);
-        addRow.appendChild(
-          mkBtn(
-            doc,
-            "Add preset",
-            () => {
-              const id = String(newPresetIdByTarget[target] ?? "").trim();
-              if (!id) return;
-              const colsNext = { ...override?.columnsPresets ?? {} };
-              if (colsNext[id]) return;
-              colsNext[id] = [{ key: "ts", label: "Date", sortable: true }];
-              setDdOverride(target, { ...override, columnsPresets: colsNext });
-              newPresetIdByTarget[target] = "";
-              render();
-            },
-            "primary"
-          )
-        );
-        body.appendChild(addRow);
-        const mergedPresets = preset?.columnsPresets ?? {};
-        for (const [pid, cols] of Object.entries(mergedPresets)) {
-          const isEditable = !!override?.columnsPresets?.[pid];
-          const row = doc.createElement("div");
-          row.className = "ga-le-compact-row";
-          const left = doc.createElement("div");
-          left.className = "ga-le-compact-title";
-          left.textContent = `${pid} \u2022 ${Array.isArray(cols) ? cols.length : 0} cols`;
-          row.appendChild(left);
-          const actions = doc.createElement("div");
-          actions.className = "ga-le-compact-actions";
-          if (!isEditable) {
-            actions.appendChild(
-              mkBtn(doc, "Customize", () => {
-                const colsNext = { ...override?.columnsPresets ?? {} };
-                colsNext[pid] = cloneJson2(cols);
-                setDdOverride(target, { ...override, columnsPresets: colsNext });
-                editDrilldownPreset = { target, presetId: pid };
-                render();
-              })
-            );
-          } else {
-            actions.appendChild(
-              mkIconBtn(
-                doc,
-                "\u{1F5D1}",
-                () => {
-                  if (!safeConfirm(`Delete preset '${pid}'?`)) return;
-                  const colsNext = { ...override?.columnsPresets ?? {} };
-                  delete colsNext[pid];
-                  setDdOverride(target, { ...override, columnsPresets: colsNext });
-                  if (editDrilldownPreset?.target === target && editDrilldownPreset?.presetId === pid) editDrilldownPreset = null;
-                  render();
-                },
-                "danger"
-              )
-            );
-          }
-          actions.appendChild(
-            mkBtn(
-              doc,
-              "Edit",
-              () => {
-                if (!isEditable) {
-                  const colsNext = { ...override?.columnsPresets ?? {} };
-                  colsNext[pid] = cloneJson2(cols);
-                  setDdOverride(target, { ...override, columnsPresets: colsNext });
-                }
-                editDrilldownPreset = { target, presetId: pid };
-                render();
-              },
-              "primary"
-            )
-          );
-          row.appendChild(actions);
-          body.appendChild(row);
-        }
-        wrap.appendChild(overlay);
-      }
-      if (editDrilldownPreset) {
-        const { target, presetId } = editDrilldownPreset;
-        const semPreset = sem?.drilldownPresets?.[target] ?? {};
-        const mergedCols = semPreset?.columnsPresets?.[presetId] ?? [];
-        const override = ddOverride?.[target] ?? {};
-        const isEditable = !!override?.columnsPresets?.[presetId];
-        if (!isEditable) {
-          editDrilldownPreset = null;
-        } else {
-          const colsArr = Array.isArray(mergedCols) ? mergedCols : [];
-          const { overlay, body } = mkModal(`Edit columns: ${target}.${presetId}`, () => {
-            editDrilldownPreset = null;
-            render();
-          });
-          const colsNextBase = () => ({ ...override?.columnsPresets ?? {} });
-          const setColsForPreset = (nextArr) => {
-            const colsNext = colsNextBase();
-            colsNext[presetId] = nextArr;
-            setDdOverride(target, { ...override, columnsPresets: colsNext });
-          };
-          const addRow = doc.createElement("div");
-          addRow.className = "ga-le-toprow";
-          addRow.appendChild(
-            mkBtn(
-              doc,
-              "Add column",
-              () => setColsForPreset([...colsArr, { key: "", label: "", sortable: false }]),
-              "primary"
-            )
-          );
-          body.appendChild(addRow);
-          const reorder = (fromIdx, toIdx) => {
-            if (fromIdx === toIdx) return;
-            if (fromIdx < 0 || toIdx < 0) return;
-            if (fromIdx >= colsArr.length || toIdx >= colsArr.length) return;
-            const next = [...colsArr];
-            const [picked] = next.splice(fromIdx, 1);
-            next.splice(toIdx, 0, picked);
-            setColsForPreset(next);
-          };
-          colsArr.forEach((c, cIdx) => {
-            const row = doc.createElement("div");
-            row.className = "ga-le-compact-row ga-le-compact-row-col";
-            row.draggable = true;
-            row.addEventListener("dragstart", (ev) => {
-              try {
-                ev.dataTransfer?.setData("text/plain", String(cIdx));
-                ev.dataTransfer?.setDragImage?.(row, 12, 12);
-              } catch {
-              }
-              row.classList.add("dragging");
-            });
-            row.addEventListener("dragend", () => row.classList.remove("dragging"));
-            row.addEventListener("dragover", (ev) => {
-              ev.preventDefault();
-              row.classList.add("dragover");
-            });
-            row.addEventListener("dragleave", () => row.classList.remove("dragover"));
-            row.addEventListener("drop", (ev) => {
-              ev.preventDefault();
-              row.classList.remove("dragover");
-              const raw = ev.dataTransfer?.getData("text/plain") ?? "";
-              reorder(asInt(raw, -1), cIdx);
-            });
-            const drag = doc.createElement("div");
-            drag.className = "ga-le-drag";
-            drag.title = "Drag to reorder";
-            drag.textContent = "\u22EE\u22EE";
-            row.appendChild(drag);
-            const key = doc.createElement("input");
-            key.type = "text";
-            key.className = "ga-le-inline-input ga-le-col-key";
-            key.placeholder = "key";
-            key.value = String(c?.key ?? "");
-            key.addEventListener("change", () => {
-              const next = [...colsArr];
-              next[cIdx] = { ...c, key: key.value };
-              setColsForPreset(next);
-            });
-            row.appendChild(key);
-            const label = doc.createElement("input");
-            label.type = "text";
-            label.className = "ga-le-inline-input ga-le-col-label";
-            label.placeholder = "label";
-            label.value = String(c?.label ?? "");
-            label.addEventListener("change", () => {
-              const next = [...colsArr];
-              next[cIdx] = { ...c, label: label.value };
-              setColsForPreset(next);
-            });
-            row.appendChild(label);
-            const mkChk = (txt, checked, onChange2) => {
-              const w = doc.createElement("label");
-              w.className = "ga-le-compact-chk";
-              const cb = doc.createElement("input");
-              cb.type = "checkbox";
-              cb.checked = checked;
-              cb.addEventListener("change", () => onChange2(cb.checked));
-              const s = doc.createElement("span");
-              s.textContent = txt;
-              w.appendChild(cb);
-              w.appendChild(s);
-              return w;
-            };
-            row.appendChild(
-              mkChk("sort", !!c?.sortable, (v) => {
-                const next = [...colsArr];
-                next[cIdx] = { ...c, sortable: v };
-                setColsForPreset(next);
-              })
-            );
-            row.appendChild(
-              mkChk("color", !!c?.colored, (v) => {
-                const next = [...colsArr];
-                next[cIdx] = { ...c, colored: v };
-                setColsForPreset(next);
-              })
-            );
-            row.appendChild(
-              mkIconBtn(
-                doc,
-                "\u{1F5D1}",
-                () => setColsForPreset(colsArr.filter((_, i) => i !== cIdx)),
-                "danger"
-              )
-            );
-            body.appendChild(row);
-            const adv = renderAdvancedJson(doc, "Advanced JSON (column)", c, (nextCol) => {
-              const next = [...colsArr];
-              next[cIdx] = nextCol;
-              setColsForPreset(next);
-            });
-            body.appendChild(adv);
-          });
-          wrap.appendChild(overlay);
-        }
-      }
-      if (editSectionIdx !== null && sections[editSectionIdx]) {
-        const sec = sections[editSectionIdx];
-        const overlay = doc.createElement("div");
-        overlay.className = "ga-le-modal";
-        const bg = doc.createElement("div");
-        bg.className = "ga-le-modal-bg";
-        bg.addEventListener("click", () => {
-          editSectionIdx = null;
-          render();
-        });
-        const panel = doc.createElement("div");
-        panel.className = "ga-le-modal-panel";
-        const header = doc.createElement("div");
-        header.className = "ga-le-modal-header";
-        const ht = doc.createElement("div");
-        ht.className = "ga-le-modal-title";
-        ht.textContent = `Edit section: ${sec?.title || sec?.id || editSectionIdx}`;
-        header.appendChild(ht);
-        header.appendChild(
-          mkBtn(doc, "Close", () => {
-            editSectionIdx = null;
-            render();
-          })
-        );
-        panel.appendChild(header);
-        const body = doc.createElement("div");
-        body.className = "ga-le-modal-body";
-        const patchSection = (partial) => {
-          const next = [...sections];
-          next[editSectionIdx] = { ...sec, ...partial };
-          setSections(next);
-        };
-        body.appendChild(mkTextInput(doc, "section.id", String(sec?.id ?? ""), (v) => patchSection({ id: v })));
-        body.appendChild(mkTextInput(doc, "section.title", String(sec?.title ?? ""), (v) => patchSection({ title: v })));
-        const colNote = doc.createElement("div");
-        colNote.className = "ga-settings-note";
-        colNote.textContent = "layout.columns = the grid width inside the section (recommended: 12).";
-        body.appendChild(colNote);
-        body.appendChild(
-          mkNumberInput(
-            doc,
-            "layout.columns",
-            asInt(sec?.layout?.columns, 12),
-            (n) => patchSection({ layout: { ...sec.layout ?? {}, columns: Math.max(1, Math.min(24, n)) } }),
-            { min: 1, max: 24 }
-          )
-        );
-        const cardsCount = Array.isArray(sec?.layout?.cards) ? sec.layout.cards.length : 0;
-        if (cardsCount !== 1) {
-          const warn = doc.createElement("div");
-          warn.className = "ga-settings-note";
-          warn.textContent = cardsCount === 0 ? "This section has no container yet. Create one to add widgets." : `This section has ${cardsCount} cards. Layout UI assumes 1 container per section.`;
-          body.appendChild(warn);
-          const fix = doc.createElement("div");
-          fix.className = "ga-le-toprow";
-          fix.appendChild(
-            mkBtn(
-              doc,
-              cardsCount === 0 ? "Create container" : "Flatten to 1 container",
-              () => {
-                if (cardsCount <= 1) ensureOneCardContainer(editSectionIdx);
-                else {
-                  if (!safeConfirm("Flatten all cards into one container?")) return;
-                  flattenCardsIntoFirst(editSectionIdx);
-                }
-                render();
-              },
-              "primary"
-            )
-          );
-          body.appendChild(fix);
-        }
-        body.appendChild(mkHr(doc));
-        const cols = Math.max(1, Math.min(24, asInt(sec?.layout?.columns, 12)));
-        const children = getSectionChildren(editSectionIdx);
-        const addRow = doc.createElement("div");
-        addRow.className = "ga-le-toprow";
-        addRow.appendChild(mkBtn(doc, "Add graph", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "chart", cols)]), "primary"));
-        addRow.appendChild(mkBtn(doc, "Add stat rows", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "stat_list", cols)]), "primary"));
-        addRow.appendChild(mkBtn(doc, "Add box", () => setSectionChildren(editSectionIdx, [...children, defaultWidget(grainDefault, "stat_value", cols)]), "primary"));
-        body.appendChild(addRow);
-        const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
-        const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
-        const patchWidgetAt = (wIdx, nextWidget) => {
-          const next = children.map((x, i) => i === wIdx ? nextWidget : x);
-          setSectionChildren(editSectionIdx, next);
-        };
-        const moveWidget = (wIdx, delta) => {
-          const nextIdx = wIdx + delta;
-          if (nextIdx < 0 || nextIdx >= children.length) return;
-          const next = [...children];
-          const [picked] = next.splice(wIdx, 1);
-          next.splice(nextIdx, 0, picked);
-          setSectionChildren(editSectionIdx, next);
-        };
-        const renderWidgetEditor = (w, wIdx) => {
-          const det = doc.createElement("details");
-          det.className = "ga-le-details";
-          det.open = false;
-          const sum = doc.createElement("summary");
-          sum.textContent = `${w.type} - ${w.title || w.widgetId}`;
-          det.appendChild(sum);
-          const wItem = doc.createElement("div");
-          wItem.className = "ga-le-widget";
-          const actions = doc.createElement("div");
-          actions.className = "ga-le-toprow";
-          actions.appendChild(mkBtn(doc, "Up", () => moveWidget(wIdx, -1)));
-          actions.appendChild(mkBtn(doc, "Down", () => moveWidget(wIdx, 1)));
-          actions.appendChild(
-            mkBtn(
-              doc,
-              "Delete",
-              () => {
-                if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
-                setSectionChildren(editSectionIdx, children.filter((_, i) => i !== wIdx));
-              },
-              "danger"
-            )
-          );
-          wItem.appendChild(actions);
-          wItem.appendChild(mkTextInput(doc, "widgetId", String(w.widgetId ?? ""), (v) => patchWidgetAt(wIdx, { ...w, widgetId: v })));
-          wItem.appendChild(
-            mkSelect(doc, "type", String(w.type ?? "stat_list"), typeOpts, (v) => {
-              const nextWidget = defaultWidget(String(w.grain ?? grainDefault), v);
-              nextWidget.widgetId = w.widgetId;
-              nextWidget.title = w.title;
-              nextWidget.grain = w.grain ?? grainDefault;
-              nextWidget.placement = w.placement;
-              patchWidgetAt(wIdx, nextWidget);
-            })
-          );
-          wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidgetAt(wIdx, { ...w, title: v })));
-          wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidgetAt(wIdx, { ...w, grain: v })));
-          const p = w.placement ?? { x: 0, y: 0, w: cols, h: 3 };
-          const pGrid = doc.createElement("div");
-          pGrid.className = "ga-le-grid4";
-          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, x: n } })));
-          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, y: n } })));
-          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, cols), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, w: n } })));
-          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n) => patchWidgetAt(wIdx, { ...w, placement: { ...p, h: n } })));
-          wItem.appendChild(pGrid);
-          const widgetGrain = String(w.grain ?? grainDefault);
-          const spec = w.spec ?? {};
-          const dims = allowedDimensionOptions(semantic, widgetGrain);
-          const meas = allowedMeasureOptions(semantic, widgetGrain);
-          if (w.type === "chart") {
-            wItem.appendChild(
-              mkSelect(
-                doc,
-                "chart.type",
-                String(spec.type ?? "bar"),
-                [
-                  { value: "bar", label: "bar" },
-                  { value: "line", label: "line" }
-                ],
-                (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, type: v } })
-              )
-            );
-            wItem.appendChild(
-              mkSelect(
-                doc,
-                "x.dimension",
-                String(spec?.x?.dimension ?? ""),
-                dims,
-                (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, x: { ...spec.x ?? {}, dimension: v } } })
-              )
-            );
-            wItem.appendChild(
-              mkSelect(
-                doc,
-                "y.measure",
-                String(spec?.y?.measure ?? ""),
-                meas,
-                (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, y: { ...spec.y ?? {}, measure: v } } })
-              )
-            );
-            wItem.appendChild(
-              renderClickActionEditor(
-                doc,
-                sem,
-                "actions.click (drilldown)",
-                spec.actions,
-                (nextActions) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } })
-              )
-            );
-          } else if (w.type === "breakdown") {
-            wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, dimension: v } })));
-            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } })));
-            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, limit: n } }), { min: 1, max: 500 }));
-            wItem.appendChild(
-              renderClickActionEditor(
-                doc,
-                sem,
-                "actions.click (drilldown)",
-                spec.actions,
-                (nextActions) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } })
-              )
-            );
-          } else if (w.type === "stat_value") {
-            wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, label: v } })));
-            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } })));
-            wItem.appendChild(
-              renderClickActionEditor(
-                doc,
-                sem,
-                "actions.click (drilldown)",
-                spec.actions,
-                (nextActions) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, actions: nextActions } })
-              )
-            );
-          } else if (w.type === "stat_list") {
-            const rows = Array.isArray(spec.rows) ? spec.rows : [];
-            const rowsBox = doc.createElement("div");
-            rowsBox.className = "ga-le-subbox";
-            const rh = doc.createElement("div");
-            rh.className = "ga-le-subhead";
-            rh.textContent = `Rows (${rows.length})`;
-            rowsBox.appendChild(rh);
-            rowsBox.appendChild(mkBtn(doc, "Add row", () => patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: [...rows, { label: "Row", measure: "" }] } }), "primary"));
-            rows.forEach((r, rIdx) => {
-              const rowItem = doc.createElement("div");
-              rowItem.className = "ga-le-item";
-              rowItem.appendChild(
-                mkTextInput(doc, "label", String(r.label ?? ""), (v) => {
-                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, label: v } : x);
-                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                })
-              );
-              rowItem.appendChild(
-                mkSelect(doc, "measure", String(r.measure ?? ""), meas, (v) => {
-                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, measure: v } : x);
-                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                })
-              );
-              rowItem.appendChild(
-                renderClickActionEditor(doc, sem, "row.actions.click (drilldown)", r.actions, (nextActions) => {
-                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, actions: nextActions } : x);
-                  patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                })
-              );
-              rowItem.appendChild(
-                mkBtn(
-                  doc,
-                  "Delete row",
-                  () => {
-                    if (!safeConfirm("Delete this row?")) return;
-                    patchWidgetAt(wIdx, { ...w, spec: { ...spec, rows: rows.filter((_, i) => i !== rIdx) } });
-                  },
-                  "danger"
-                )
-              );
-              rowsBox.appendChild(rowItem);
-            });
-            wItem.appendChild(rowsBox);
-          } else {
-            wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
-          }
-          wItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (spec)", spec, (nextSpec) => patchWidgetAt(wIdx, { ...w, spec: nextSpec })));
-          det.appendChild(wItem);
-          return det;
-        };
-        const byCat = { graphs: [], statrows: [], boxes: [], other: [] };
-        children.forEach((w, i) => {
-          const t = String(w?.type ?? "");
-          if (t === "chart" || t === "breakdown") byCat.graphs.push(i);
-          else if (t === "stat_list") byCat.statrows.push(i);
-          else if (t === "stat_value" || t === "record_list" || t === "leader_list") byCat.boxes.push(i);
-          else byCat.other.push(i);
-        });
-        const renderCat = (title, idxs) => {
-          const det = doc.createElement("details");
-          det.className = "ga-le-details";
-          det.open = true;
-          const sum = doc.createElement("summary");
-          sum.textContent = `${title} (${idxs.length})`;
-          det.appendChild(sum);
-          const host = doc.createElement("div");
-          host.className = "ga-le-item";
-          idxs.forEach((i) => host.appendChild(renderWidgetEditor(children[i], i)));
-          det.appendChild(host);
-          body.appendChild(det);
-        };
-        renderCat("Graphs", byCat.graphs);
-        renderCat("Stat rows", byCat.statrows);
-        renderCat("Boxes", byCat.boxes);
-        if (byCat.other.length) renderCat("Other", byCat.other);
-        panel.appendChild(body);
-        overlay.appendChild(bg);
-        overlay.appendChild(panel);
-        wrap.appendChild(overlay);
-      }
-      void sem;
-      return true;
-    }
-    const render = () => {
-      root.innerHTML = "";
-      if (renderPanels()) return;
-      const left = doc.createElement("div");
-      left.className = "ga-le-left";
-      const right = doc.createElement("div");
-      right.className = "ga-le-right";
-      const sections = draft.dashboard.sections ?? [] ?? [];
-      if (active.kind === "section") {
-        if (active.idx < 0) active = { kind: "section", idx: 0 };
-        if (active.idx >= sections.length) active = { kind: "section", idx: Math.max(0, sections.length - 1) };
-      }
-      const leftHead = doc.createElement("div");
-      leftHead.className = "ga-le-left-head";
-      leftHead.appendChild(
-        mkBtn(
-          doc,
-          "Add section",
-          () => {
-            const next = cloneJson2(draft);
-            next.dashboard.sections = [...next.dashboard.sections ?? [], defaultSection()];
-            draft = next;
-            active = { kind: "section", idx: next.dashboard.sections.length - 1 };
-            markDirty();
-          },
-          "primary"
-        )
-      );
-      left.appendChild(leftHead);
-      const list = doc.createElement("div");
-      list.className = "ga-le-list";
-      const globalItem = doc.createElement("button");
-      globalItem.type = "button";
-      globalItem.className = "ga-le-list-item";
-      globalItem.classList.toggle("active", active.kind === "global_filters");
-      globalItem.textContent = "Global filters";
-      globalItem.addEventListener("click", () => {
-        active = { kind: "global_filters" };
-        render();
-      });
-      list.appendChild(globalItem);
-      sections.forEach((s, idx) => {
-        const item = doc.createElement("button");
-        item.type = "button";
-        item.className = "ga-le-list-item";
-        item.classList.toggle("active", active.kind === "section" && active.idx === idx);
-        item.textContent = s.title || s.id || "(untitled)";
-        item.addEventListener("click", () => {
-          active = { kind: "section", idx };
-          render();
-        });
-        list.appendChild(item);
-      });
-      left.appendChild(list);
-      if (active.kind === "global_filters") {
-        renderGlobalFilters(right);
-        root.appendChild(left);
-        root.appendChild(right);
-        return;
-      }
-      const section = sections[active.idx];
-      if (!section) {
-        const note = doc.createElement("div");
-        note.className = "ga-settings-note";
-        note.textContent = "No sections yet. Click Add section to get started.";
-        right.appendChild(note);
-        root.appendChild(left);
-        root.appendChild(right);
-        return;
-      }
-      if (lastSectionIdx !== active.idx) {
-        lastSectionIdx = active.idx;
-        focusCardIdx = 0;
-        focusWidgetIdx = 0;
-        scrollToId = null;
-      }
-      const topRow = doc.createElement("div");
-      topRow.className = "ga-le-toprow";
-      topRow.appendChild(
-        mkBtn(doc, "Move up", () => {
-          if (active.idx <= 0) return;
-          const next = cloneJson2(draft);
-          const arr = [...next.dashboard.sections];
-          const [picked] = arr.splice(active.idx, 1);
-          arr.splice(active.idx - 1, 0, picked);
-          next.dashboard.sections = arr;
-          draft = next;
-          active = { kind: "section", idx: active.idx - 1 };
-          markDirty();
-        })
-      );
-      topRow.appendChild(
-        mkBtn(doc, "Move down", () => {
-          if (active.idx >= sections.length - 1) return;
-          const next = cloneJson2(draft);
-          const arr = [...next.dashboard.sections];
-          const [picked] = arr.splice(active.idx, 1);
-          arr.splice(active.idx + 1, 0, picked);
-          next.dashboard.sections = arr;
-          draft = next;
-          active = { kind: "section", idx: active.idx + 1 };
-          markDirty();
-        })
-      );
-      topRow.appendChild(
-        mkBtn(
-          doc,
-          "Delete",
-          () => {
-            setStatus("info", "Deleting section\u2026");
-            if (!safeConfirm(`Delete section '${section.title || section.id}'?`)) return;
-            const next = cloneJson2(draft);
-            next.dashboard.sections = next.dashboard.sections.filter((_, i) => i !== active.idx);
-            draft = next;
-            active = { kind: "section", idx: Math.max(0, active.idx - 1) };
-            markDirty();
-          },
-          "danger"
-        )
-      );
-      right.appendChild(topRow);
-      const patchSection = (partial) => {
-        const next = cloneJson2(draft);
-        next.dashboard.sections[active.idx] = { ...next.dashboard.sections[active.idx], ...partial };
-        draft = next;
-        markDirty();
-      };
-      right.appendChild(mkTextInput(doc, "section.id", section.id, (v) => patchSection({ id: v })));
-      right.appendChild(mkTextInput(doc, "section.title", section.title, (v) => patchSection({ title: v })));
-      right.appendChild(
-        mkNumberInput(
-          doc,
-          "layout.columns",
-          asInt(section.layout?.columns, 12),
-          (n) => patchSection({ layout: { ...section.layout, columns: Math.max(1, Math.min(24, n)) } }),
-          { min: 1, max: 24 }
-        )
-      );
-      const gf = draft.dashboard.globalFilters;
-      const controlIds = gf?.enabled ? (gf.controls ?? []).map((c) => c.id) : [];
-      const ctrlOpts = controlIds.map((id) => ({ value: id, label: id }));
-      const include = Array.isArray(section?.filterScope?.include) ? section.filterScope.include : [];
-      const exclude = Array.isArray(section?.filterScope?.exclude) ? section.filterScope.exclude : [];
-      if (ctrlOpts.length > 0) {
-        const fsBox = doc.createElement("div");
-        fsBox.className = "ga-le-box";
-        const fsHead = doc.createElement("div");
-        fsHead.className = "ga-le-box-head";
-        fsHead.textContent = "Global filter visibility (optional)";
-        fsBox.appendChild(fsHead);
-        const note = doc.createElement("div");
-        note.className = "ga-settings-note";
-        note.textContent = "Choose which global filter controls are shown for this section. Default: show all.";
-        fsBox.appendChild(note);
-        const mode2 = include.length ? "only" : exclude.length ? "except" : "all";
-        fsBox.appendChild(
-          mkSelect(
-            doc,
-            "Mode",
-            mode2,
-            [
-              { value: "all", label: "Show all filters" },
-              { value: "only", label: "Show only selected" },
-              { value: "except", label: "Show all except selected" }
-            ],
-            (v) => {
-              if (v === "all") return patchSection({ filterScope: void 0 });
-              if (v === "only") return patchSection({ filterScope: normalizeFilterScope({ include, exclude: [] }) });
-              return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude }) });
-            }
-          )
-        );
-        const selected = mode2 === "only" ? include : mode2 === "except" ? exclude : [];
-        if (mode2 !== "all") {
-          fsBox.appendChild(
-            mkMultiSelect(doc, "Filters", selected, ctrlOpts, (vals) => {
-              if (mode2 === "only") return patchSection({ filterScope: normalizeFilterScope({ include: vals, exclude: [] }) });
-              return patchSection({ filterScope: normalizeFilterScope({ include: [], exclude: vals }) });
-            })
-          );
-        }
-        right.appendChild(fsBox);
-      }
-      right.appendChild(mkHr(doc));
-      const widgetTypes = ["stat_list", "stat_value", "chart", "breakdown", "record_list", "leader_list", "point_map"];
-      const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
-      const cardsBox = doc.createElement("div");
-      cardsBox.className = "ga-le-box";
-      const ch3 = doc.createElement("div");
-      ch3.className = "ga-le-box-head";
-      ch3.textContent = "Cards";
-      cardsBox.appendChild(ch3);
-      const patchCard = (cardIdx, partial) => {
-        const next = cloneJson2(draft);
-        const sec = next.dashboard.sections[active.idx];
-        const cards2 = [...sec.layout.cards];
-        cards2[cardIdx] = { ...cards2[cardIdx], ...partial };
-        sec.layout.cards = cards2;
-        draft = next;
-        markDirty();
-      };
-      const patchWidget = (cardIdx, widgetIdx, nextWidget) => {
-        const next = cloneJson2(draft);
-        const sec = next.dashboard.sections[active.idx];
-        const card = sec.layout.cards[cardIdx];
-        const children = card.card.children ?? [];
-        children[widgetIdx] = nextWidget;
-        card.card.children = children;
-        draft = next;
-        markDirty();
-      };
-      const moveCard = (cardIdx, delta) => {
-        const cards2 = draft.dashboard.sections[active.idx].layout.cards ?? [];
-        const nextIdx = cardIdx + delta;
-        if (nextIdx < 0 || nextIdx >= cards2.length) return;
-        const next = cloneJson2(draft);
-        const arr = [...next.dashboard.sections[active.idx].layout.cards];
-        const [picked] = arr.splice(cardIdx, 1);
-        arr.splice(nextIdx, 0, picked);
-        next.dashboard.sections[active.idx].layout.cards = arr;
-        draft = next;
-        markDirty();
-      };
-      const moveWidget = (cardIdx, widgetIdx, delta) => {
-        const sec = draft.dashboard.sections[active.idx];
-        const card = sec.layout.cards[cardIdx];
-        const children = card.card.children ?? [];
-        const nextIdx = widgetIdx + delta;
-        if (nextIdx < 0 || nextIdx >= children.length) return;
-        const next = cloneJson2(draft);
-        const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
-        const arr = [...c.card.children ?? []];
-        const [picked] = arr.splice(widgetIdx, 1);
-        arr.splice(nextIdx, 0, picked);
-        c.card.children = arr;
-        draft = next;
-        markDirty();
-      };
-      const cards = section.layout.cards ?? [] ?? [];
-      if (focusCardIdx < 0) focusCardIdx = 0;
-      if (focusCardIdx >= cards.length) focusCardIdx = Math.max(0, cards.length - 1);
-      const focusedCard = cards[focusCardIdx] ?? null;
-      const focusedChildren = focusedCard ? focusedCard.card.children ?? [] : [];
-      if (focusWidgetIdx < 0) focusWidgetIdx = 0;
-      if (focusWidgetIdx >= focusedChildren.length) focusWidgetIdx = Math.max(0, focusedChildren.length - 1);
-      const cardsTop = doc.createElement("div");
-      cardsTop.className = "ga-le-toprow";
-      cardsTop.appendChild(
-        mkBtn(
-          doc,
-          "Add card",
-          () => {
-            const next = cloneJson2(draft);
-            next.dashboard.sections[active.idx].layout.cards = [...next.dashboard.sections[active.idx].layout.cards ?? [], defaultCard()];
-            draft = next;
-            focusCardIdx = Math.max(0, (next.dashboard.sections[active.idx].layout.cards ?? []).length - 1);
-            focusWidgetIdx = 0;
-            scrollToId = `ga-le-card-${focusCardIdx}`;
-            markDirty();
-          },
-          "primary"
-        )
-      );
-      const focusWrap = doc.createElement("label");
-      focusWrap.className = "ga-le-toggle";
-      const focusInput = doc.createElement("input");
-      focusInput.type = "checkbox";
-      focusInput.checked = focusMode;
-      const focusTxt = doc.createElement("span");
-      focusTxt.textContent = "Focus mode";
-      focusWrap.appendChild(focusInput);
-      focusWrap.appendChild(focusTxt);
-      focusInput.addEventListener("change", () => {
-        focusMode = focusInput.checked;
-        render();
-      });
-      cardsTop.appendChild(focusWrap);
-      cardsTop.appendChild(
-        mkBtn(
-          doc,
-          focusMode ? "Show all" : "Focus selected",
-          () => {
-            focusMode = !focusMode;
-            render();
-          },
-          "ghost"
-        )
-      );
-      cardsBox.appendChild(cardsTop);
-      const cardsLayout = doc.createElement("div");
-      cardsLayout.className = "ga-le-cards-layout";
-      const outline = doc.createElement("div");
-      outline.className = "ga-le-outline";
-      const oh = doc.createElement("div");
-      oh.className = "ga-le-outline-head";
-      oh.textContent = "Outline";
-      outline.appendChild(oh);
-      const oNote = doc.createElement("div");
-      oNote.className = "ga-settings-note";
-      oNote.textContent = "Click to jump. In Focus mode only the selected card/widget stays open.";
-      outline.appendChild(oNote);
-      const oSearch = doc.createElement("input");
-      oSearch.type = "text";
-      oSearch.placeholder = "Search cards/widgets...";
-      oSearch.className = "ga-le-outline-search";
-      outline.appendChild(oSearch);
-      const oList = doc.createElement("div");
-      oList.className = "ga-le-outline-list";
-      outline.appendChild(oList);
-      const cardsHost = doc.createElement("div");
-      cardsHost.className = "ga-le-cards-host";
-      cards.forEach((card, cardIdx) => {
-        const cardElId = `ga-le-card-${cardIdx}`;
-        const cardTitle = `${card.title || "Card"} (${card.cardId})`;
-        const cBtn = doc.createElement("button");
-        cBtn.type = "button";
-        cBtn.className = "ga-le-outline-item";
-        cBtn.classList.toggle("active", focusCardIdx === cardIdx);
-        cBtn.textContent = cardTitle;
-        cBtn.dataset.searchText = cardTitle.toLowerCase();
-        cBtn.addEventListener("click", () => {
-          focusMode = true;
-          focusCardIdx = cardIdx;
-          focusWidgetIdx = 0;
-          scrollToId = cardElId;
-          render();
-        });
-        oList.appendChild(cBtn);
-        const outlineChildren = card.card.children ?? [];
-        outlineChildren.forEach((w, wIdx) => {
-          const wElId = `ga-le-widget-${cardIdx}-${wIdx}`;
-          const wTitle = `${w.type} - ${w.title || w.widgetId}`;
-          const wBtn = doc.createElement("button");
-          wBtn.type = "button";
-          wBtn.className = "ga-le-outline-item ga-le-outline-item-widget";
-          wBtn.classList.toggle("active", focusCardIdx === cardIdx && focusWidgetIdx === wIdx);
-          wBtn.textContent = wTitle;
-          wBtn.dataset.searchText = `${cardTitle} ${wTitle}`.toLowerCase();
-          wBtn.addEventListener("click", () => {
-            focusMode = true;
-            focusCardIdx = cardIdx;
-            focusWidgetIdx = wIdx;
-            scrollToId = wElId;
-            render();
-          });
-          oList.appendChild(wBtn);
-        });
-        const details = doc.createElement("details");
-        details.id = cardElId;
-        details.open = focusMode ? cardIdx === focusCardIdx : true;
-        details.className = "ga-le-details";
-        const summary = doc.createElement("summary");
-        summary.textContent = cardTitle;
-        summary.addEventListener("click", (ev) => {
-          focusCardIdx = cardIdx;
-          if (focusMode) {
-            ev.preventDefault();
-            focusWidgetIdx = 0;
-            scrollToId = cardElId;
-            render();
-          }
-        });
-        details.appendChild(summary);
-        const cardItem = doc.createElement("div");
-        cardItem.className = "ga-le-item";
-        const cardActions = doc.createElement("div");
-        cardActions.className = "ga-le-toprow";
-        cardActions.appendChild(mkBtn(doc, "Up", () => moveCard(cardIdx, -1)));
-        cardActions.appendChild(mkBtn(doc, "Down", () => moveCard(cardIdx, 1)));
-        cardActions.appendChild(
-          mkBtn(
-            doc,
-            "Delete card",
-            () => {
-              setStatus("info", "Deleting card\u2026");
-              if (!safeConfirm(`Delete card '${card.title || card.cardId}'?`)) return;
-              const next = cloneJson2(draft);
-              next.dashboard.sections[active.idx].layout.cards = next.dashboard.sections[active.idx].layout.cards.filter((_, i) => i !== cardIdx);
-              draft = next;
-              markDirty();
-            },
-            "danger"
-          )
-        );
-        cardItem.appendChild(cardActions);
-        cardItem.appendChild(mkTextInput(doc, "cardId", String(card.cardId ?? ""), (v) => patchCard(cardIdx, { cardId: v })));
-        cardItem.appendChild(mkTextInput(doc, "title", String(card.title ?? ""), (v) => patchCard(cardIdx, { title: v })));
-        const placeNote = doc.createElement("div");
-        placeNote.className = "ga-settings-note";
-        placeNote.textContent = `Card placement uses the section grid (layout.columns = ${asInt(section.layout?.columns, 12)}): x/y = position, w/h = size (grid units).`;
-        cardItem.appendChild(placeNote);
-        const grid = doc.createElement("div");
-        grid.className = "ga-le-grid4";
-        grid.appendChild(mkNumberInput(doc, "x", asInt(card.x, 0), (n) => patchCard(cardIdx, { x: n })));
-        grid.appendChild(mkNumberInput(doc, "y", asInt(card.y, 0), (n) => patchCard(cardIdx, { y: n })));
-        grid.appendChild(mkNumberInput(doc, "w", asInt(card.w, 12), (n) => patchCard(cardIdx, { w: n })));
-        grid.appendChild(mkNumberInput(doc, "h", asInt(card.h, 10), (n) => patchCard(cardIdx, { h: n })));
-        cardItem.appendChild(grid);
-        const wBox = doc.createElement("div");
-        wBox.className = "ga-le-subbox";
-        const wh = doc.createElement("div");
-        wh.className = "ga-le-subhead";
-        const children = card.card.children ?? [];
-        wh.textContent = `Widgets (${children.length})`;
-        wBox.appendChild(wh);
-        wBox.appendChild(
-          mkBtn(
-            doc,
-            "Add widget",
-            () => {
-              const next = cloneJson2(draft);
-              const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
-              const w = defaultWidget(grainDefault, widgetTypes[0]);
-              c.card.children = [...c.card.children ?? [], w];
-              draft = next;
-              focusCardIdx = cardIdx;
-              focusWidgetIdx = Math.max(0, (c.card.children ?? []).length - 1);
-              scrollToId = `ga-le-widget-${cardIdx}-${focusWidgetIdx}`;
-              markDirty();
-            },
-            "primary"
-          )
-        );
-        children.forEach((w, wIdx) => {
-          const wDetails = doc.createElement("details");
-          const wElId = `ga-le-widget-${cardIdx}-${wIdx}`;
-          wDetails.id = wElId;
-          wDetails.open = focusMode ? cardIdx === focusCardIdx && wIdx === focusWidgetIdx : false;
-          wDetails.className = "ga-le-details";
-          const wSummary = doc.createElement("summary");
-          wSummary.addEventListener("click", (ev) => {
-            focusCardIdx = cardIdx;
-            focusWidgetIdx = wIdx;
-            if (focusMode) {
-              ev.preventDefault();
-              scrollToId = wElId;
-              render();
-            }
-          });
-          wSummary.textContent = `${w.type} \u2014 ${w.title || w.widgetId}`;
-          wDetails.appendChild(wSummary);
-          const wItem = doc.createElement("div");
-          wItem.className = "ga-le-widget";
-          const wActions = doc.createElement("div");
-          wActions.className = "ga-le-toprow";
-          wActions.appendChild(mkBtn(doc, "Up", () => moveWidget(cardIdx, wIdx, -1)));
-          wActions.appendChild(mkBtn(doc, "Down", () => moveWidget(cardIdx, wIdx, 1)));
-          wActions.appendChild(
-            mkBtn(
-              doc,
-              "Delete",
-              () => {
-                setStatus("info", "Deleting widget\u2026");
-                if (!safeConfirm(`Delete widget '${w.title || w.widgetId}'?`)) return;
-                const next = cloneJson2(draft);
-                const c = next.dashboard.sections[active.idx].layout.cards[cardIdx];
-                c.card.children = (c.card.children ?? []).filter((_, i) => i !== wIdx);
-                draft = next;
-                markDirty();
-              },
-              "danger"
-            )
-          );
-          wItem.appendChild(wActions);
-          wItem.appendChild(mkTextInput(doc, "widgetId", String(w.widgetId ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, widgetId: v })));
-          wItem.appendChild(
-            mkSelect(doc, "type", String(w.type ?? "stat_list"), typeOpts, (v) => {
-              const nextWidget = defaultWidget(String(w.grain ?? grainDefault), v);
-              nextWidget.widgetId = w.widgetId;
-              nextWidget.title = w.title;
-              nextWidget.grain = w.grain ?? grainDefault;
-              nextWidget.placement = w.placement;
-              patchWidget(cardIdx, wIdx, nextWidget);
-            })
-          );
-          wItem.appendChild(mkTextInput(doc, "title", String(w.title ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, title: v })));
-          const grainNote = doc.createElement("div");
-          grainNote.className = "ga-settings-note";
-          grainNote.textContent = "grain = the dataset level the widget is calculated on (e.g. round vs. game).";
-          wItem.appendChild(grainNote);
-          wItem.appendChild(mkSelect(doc, "grain", String(w.grain ?? grainDefault), grainOpts, (v) => patchWidget(cardIdx, wIdx, { ...w, grain: v })));
-          const p = w.placement ?? { x: 0, y: 0, w: 12, h: 3 };
-          const widgetPlaceNote = doc.createElement("div");
-          widgetPlaceNote.className = "ga-settings-note";
-          widgetPlaceNote.textContent = `Widget placement uses a grid inside the card: x/y = position, w/h = size (grid units). Tip: keep w within layout.columns (${asInt(section.layout?.columns, 12)}).`;
-          wItem.appendChild(widgetPlaceNote);
-          const pGrid = doc.createElement("div");
-          pGrid.className = "ga-le-grid4";
-          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, x: n } })));
-          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, y: n } })));
-          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, w: n } })));
-          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, h: n } })));
-          wItem.appendChild(pGrid);
-          const widgetGrain = String(w.grain ?? grainDefault);
-          const spec = w.spec ?? {};
-          const dims = allowedDimensionOptions(semantic, widgetGrain);
-          const meas = allowedMeasureOptions(semantic, widgetGrain);
-          if (w.type === "chart") {
-            wItem.appendChild(
-              mkSelect(
-                doc,
-                "chart.type",
-                String(spec.type ?? "bar"),
-                [{ value: "bar", label: "bar" }, { value: "line", label: "line" }],
-                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, type: v } })
-              )
-            );
-            wItem.appendChild(
-              mkSelect(
-                doc,
-                "x.dimension",
-                String(spec?.x?.dimension ?? ""),
-                dims,
-                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, x: { ...spec.x ?? {}, dimension: v } } })
-              )
-            );
-            wItem.appendChild(
-              mkSelect(
-                doc,
-                "y.measure",
-                String(spec?.y?.measure ?? ""),
-                meas,
-                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, y: { ...spec.y ?? {}, measure: v } } })
-              )
-            );
-            wItem.appendChild(
-              mkToggle(
-                doc,
-                "actions.hover",
-                !!spec?.actions?.hover,
-                (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: { ...spec.actions ?? {}, hover: v } } })
-              )
-            );
-            wItem.appendChild(
-              renderClickActionEditor(
-                doc,
-                semantic,
-                "actions.click (drilldown)",
-                spec.actions,
-                (nextActions) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } })
-              )
-            );
-          } else if (w.type === "breakdown") {
-            wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, dimension: v } })));
-            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
-            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, limit: n } }), { min: 1, max: 500 }));
-            wItem.appendChild(
-              renderClickActionEditor(
-                doc,
-                semantic,
-                "actions.click (drilldown)",
-                spec.actions,
-                (nextActions) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } })
-              )
-            );
-          } else if (w.type === "stat_value") {
-            wItem.appendChild(mkTextInput(doc, "label", String(spec.label ?? ""), (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, label: v } })));
-            wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
-            wItem.appendChild(
-              renderClickActionEditor(
-                doc,
-                semantic,
-                "actions.click (drilldown)",
-                spec.actions,
-                (nextActions) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, actions: nextActions } })
-              )
-            );
-          } else if (w.type === "stat_list") {
-            const rows = Array.isArray(spec.rows) ? spec.rows : [];
-            const rowsBox = doc.createElement("div");
-            rowsBox.className = "ga-le-subbox";
-            const rh = doc.createElement("div");
-            rh.className = "ga-le-subhead";
-            rh.textContent = `Rows (${rows.length})`;
-            rowsBox.appendChild(rh);
-            rowsBox.appendChild(
-              mkBtn(doc, "Add row", () => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: [...rows, { label: "Row", measure: "" }] } }), "primary")
-            );
-            rows.forEach((r, rIdx) => {
-              const rowItem = doc.createElement("div");
-              rowItem.className = "ga-le-item";
-              rowItem.appendChild(
-                mkTextInput(doc, "label", String(r.label ?? ""), (v) => {
-                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, label: v } : x);
-                  patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                })
-              );
-              rowItem.appendChild(
-                mkSelect(doc, "measure", String(r.measure ?? ""), meas, (v) => {
-                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, measure: v } : x);
-                  patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                })
-              );
-              rowItem.appendChild(
-                renderClickActionEditor(doc, semantic, "row.actions.click (drilldown)", r.actions, (nextActions) => {
-                  const nextRows = rows.map((x, i) => i === rIdx ? { ...x, actions: nextActions } : x);
-                  patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                })
-              );
-              const delRow = doc.createElement("div");
-              delRow.className = "ga-le-toprow";
-              delRow.appendChild(
-                mkBtn(
-                  doc,
-                  "Delete row",
-                  () => {
-                    if (!safeConfirm("Delete this row?")) return;
-                    const nextRows = rows.filter((_, i) => i !== rIdx);
-                    patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, rows: nextRows } });
-                  },
-                  "danger"
-                )
-              );
-              rowItem.appendChild(delRow);
-              rowsBox.appendChild(rowItem);
-            });
-            wItem.appendChild(rowsBox);
-          } else if (w.type === "record_list") {
-            const records = Array.isArray(spec.records) ? spec.records : [];
-            const recBox = doc.createElement("div");
-            recBox.className = "ga-le-subbox";
-            const rh = doc.createElement("div");
-            rh.className = "ga-le-subhead";
-            rh.textContent = `Records (${records.length})`;
-            recBox.appendChild(rh);
-            const addRecord = mkBtn(
-              doc,
-              "Add record",
-              () => {
-                const id = `rec_${Math.random().toString(36).slice(2, 7)}`;
-                const next = [...records, { id, label: "Record", kind: "group_extreme", extreme: "max" }];
-                patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
-              },
-              "primary"
-            );
-            recBox.appendChild(addRecord);
-            const recNote = doc.createElement("div");
-            recNote.className = "ga-settings-note";
-            recNote.textContent = "Records are configurable items (not stat rows). Use kind + fields below, or Advanced JSON for full control.";
-            recBox.appendChild(recNote);
-            const kindOpts = [
-              { value: "group_extreme", label: "group_extreme" },
-              { value: "streak", label: "streak" },
-              { value: "same_value_streak", label: "same_value_streak" }
-            ];
-            const extremeOpts = [
-              { value: "max", label: "max" },
-              { value: "min", label: "min" }
-            ];
-            const displayKeyOpts = [
-              { value: "group", label: "group" },
-              { value: "first_ts", label: "first_ts" },
-              { value: "first_ts_score", label: "first_ts_score" }
-            ];
-            records.forEach((r, rIdx) => {
-              const rDetails = doc.createElement("details");
-              rDetails.open = false;
-              rDetails.className = "ga-le-details";
-              const sum = doc.createElement("summary");
-              sum.textContent = `${r.label || "Record"} (${r.id || rIdx})`;
-              rDetails.appendChild(sum);
-              const item = doc.createElement("div");
-              item.className = "ga-le-item";
-              const top = doc.createElement("div");
-              top.className = "ga-le-toprow";
-              top.appendChild(
-                mkBtn(
-                  doc,
-                  "Delete record",
-                  () => {
-                    if (!safeConfirm("Delete this record?")) return;
-                    const next = records.filter((_, i) => i !== rIdx);
-                    patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
-                  },
-                  "danger"
-                )
-              );
-              item.appendChild(top);
-              const patchRecord = (nextRec) => {
-                const next = records.map((x, i) => i === rIdx ? nextRec : x);
-                patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, records: next } });
-              };
-              item.appendChild(mkTextInput(doc, "id", String(r.id ?? ""), (v) => patchRecord({ ...r, id: v })));
-              item.appendChild(mkTextInput(doc, "label", String(r.label ?? ""), (v) => patchRecord({ ...r, label: v })));
-              item.appendChild(mkSelect(doc, "kind", String(r.kind ?? "group_extreme"), kindOpts, (v) => patchRecord({ ...r, kind: v })));
-              item.appendChild(mkSelect(doc, "displayKey", String(r.displayKey ?? "group"), displayKeyOpts, (v) => patchRecord({ ...r, displayKey: v })));
-              if ((r.kind ?? "group_extreme") === "group_extreme") {
-                item.appendChild(mkSelect(doc, "metric", String(r.metric ?? ""), meas, (v) => patchRecord({ ...r, metric: v })));
-                item.appendChild(mkSelect(doc, "groupBy", String(r.groupBy ?? ""), dims, (v) => patchRecord({ ...r, groupBy: v })));
-                item.appendChild(mkSelect(doc, "extreme", String(r.extreme ?? "max"), extremeOpts, (v) => patchRecord({ ...r, extreme: v })));
-              }
-              if ((r.kind ?? "") === "same_value_streak") {
-                item.appendChild(mkSelect(doc, "dimension", String(r.dimension ?? ""), dims, (v) => patchRecord({ ...r, dimension: v })));
-              }
-              item.appendChild(
-                renderClickActionEditor(doc, semantic, "actions.click (drilldown)", r.actions, (nextActions) => {
-                  patchRecord({ ...r, actions: nextActions });
-                })
-              );
-              item.appendChild(renderAdvancedJson(doc, "Advanced JSON (record)", r, (next) => patchRecord(next)));
-              rDetails.appendChild(item);
-              recBox.appendChild(rDetails);
-            });
-            wItem.appendChild(recBox);
-          } else {
-            wItem.appendChild(renderWidgetSpecEditorPlaceholder(doc));
-          }
-          wItem.appendChild(renderAdvancedJson(doc, "Advanced JSON (spec)", spec, (next) => patchWidget(cardIdx, wIdx, { ...w, spec: next })));
-          wDetails.appendChild(wItem);
-          wBox.appendChild(wDetails);
-        });
-        cardItem.appendChild(wBox);
-        details.appendChild(cardItem);
-        cardsHost.appendChild(details);
-      });
-      oSearch.addEventListener("input", () => {
-        const q = oSearch.value.trim().toLowerCase();
-        const items = Array.from(oList.querySelectorAll("button"));
-        for (const it of items) {
-          const hay = String(it.dataset.searchText ?? "").toLowerCase();
-          it.style.display = !q || hay.includes(q) ? "" : "none";
-        }
-      });
-      cardsLayout.appendChild(outline);
-      cardsLayout.appendChild(cardsHost);
-      cardsBox.appendChild(cardsLayout);
-      right.appendChild(cardsBox);
-      root.appendChild(left);
-      root.appendChild(right);
-      if (scrollToId) {
-        const el2 = doc.getElementById(scrollToId);
-        scrollToId = null;
-        if (el2) {
-          try {
-            el2.classList.add("ga-le-flash");
-            el2.scrollIntoView?.({ behavior: "smooth", block: "start" });
-            win?.setTimeout?.(() => el2.classList.remove("ga-le-flash"), 900);
-          } catch {
-          }
-        }
-      }
-    };
-    render();
-    const initRes = validateDraft();
-    if (!initRes.ok) setStatus("error", initRes.error);
-    return wrap;
-  }
-  function defaultCard() {
-    return {
-      cardId: `card_${Math.random().toString(36).slice(2, 7)}`,
-      title: "Card",
-      x: 0,
-      y: 0,
-      w: 12,
-      h: 10,
-      card: { type: "composite", children: [] }
-    };
-  }
-  function defaultSection() {
-    return {
-      id: `section_${Math.random().toString(36).slice(2, 7)}`,
-      title: "New Section",
-      layout: { mode: "grid", columns: 12, cards: [defaultCard()] }
-    };
-  }
-  function defaultWidget(grain, type, columns = 12) {
-    const widgetId = `w_${type}_${Math.random().toString(36).slice(2, 7)}`;
-    const w = Math.max(1, Math.min(24, asInt(columns, 12)));
-    const placement = { x: 0, y: 0, w, h: 3 };
-    const base = { widgetId, type, title: type, grain, placement };
-    if (type === "stat_value") base.spec = { label: "Value", measure: "" };
-    else if (type === "stat_list") base.spec = { rows: [{ label: "Row", measure: "" }] };
-    else if (type === "chart") base.spec = { type: "bar", x: { dimension: "" }, y: { measure: "" }, actions: { hover: true } };
-    else if (type === "breakdown") base.spec = { dimension: "", measure: "", limit: 12 };
-    else if (type === "point_map") base.spec = { points: [{ latField: "trueLat", lngField: "trueLng" }], measures: ["rounds_count"], activeMeasure: "rounds_count" };
-    else if (type === "record_list") base.spec = { records: [] };
-    else base.spec = {};
-    return base;
-  }
-  function normalizeFilterScope(fs) {
-    const include = Array.isArray(fs?.include) ? fs.include.filter((x) => typeof x === "string" && x.trim()) : [];
-    const exclude = Array.isArray(fs?.exclude) ? fs.exclude.filter((x) => typeof x === "string" && x.trim()) : [];
-    const out = {};
-    if (include.length) out.include = include;
-    if (exclude.length) out.exclude = exclude;
-    return Object.keys(out).length ? out : void 0;
-  }
-  function renderWidgetSpecEditorPlaceholder(doc) {
-    const note = doc.createElement("div");
-    note.className = "ga-settings-note";
-    note.textContent = "Advanced widget settings are available in the Advanced JSON editor below.";
-    return note;
-  }
-  function renderAdvancedJson(doc, title, value, onApply) {
-    const details = doc.createElement("details");
-    details.className = "ga-le-adv";
-    const summary = doc.createElement("summary");
-    summary.textContent = title;
-    details.appendChild(summary);
-    const areaField = mkField(doc, "JSON");
-    const area = doc.createElement("textarea");
-    area.value = JSON.stringify(value ?? {}, null, 2);
-    areaField.inputHost.appendChild(area);
-    details.appendChild(areaField.wrap);
-    const actions = doc.createElement("div");
-    actions.className = "ga-le-toprow";
-    actions.appendChild(
-      mkBtn(doc, "Format", () => {
-        try {
-          const parsed = JSON.parse(area.value);
-          area.value = JSON.stringify(parsed, null, 2);
-        } catch {
-        }
-      })
-    );
-    actions.appendChild(
-      mkBtn(
-        doc,
-        "Apply JSON",
-        () => {
-          const parsed = JSON.parse(area.value);
-          onApply(parsed);
-        },
-        "primary"
-      )
-    );
-    details.appendChild(actions);
-    return details;
-  }
-  function renderClickActionEditor(doc, semantic, title, actions, onChange) {
-    const box = doc.createElement("div");
-    box.className = "ga-le-subbox";
-    const head = doc.createElement("div");
-    head.className = "ga-le-subhead";
-    head.textContent = title;
-    box.appendChild(head);
-    const current = actions ?? {};
-    const click = current?.click ?? null;
-    const drilldownPresets = semantic?.drilldownPresets ?? {};
-    const targetIds = Object.keys(drilldownPresets);
-    const targetOptions = targetIds.length > 0 ? targetIds.map((t) => ({ value: t, label: t })) : ["rounds", "games", "sessions", "players"].map((t) => ({ value: t, label: t }));
-    const normalizeTarget = (value) => {
-      const s = String(value ?? "");
-      return targetOptions.some((o) => o.value === s) ? s : String(targetOptions[0]?.value ?? "rounds");
-    };
-    const defaultClickForTarget = (target) => {
-      const preset = drilldownPresets?.[target];
-      const keys2 = Object.keys(preset?.columnsPresets ?? {});
-      const columnsPreset = String(preset?.defaultPreset ?? keys2[0] ?? "default");
-      return { type: "drilldown", target, columnsPreset };
-    };
-    box.appendChild(
-      mkToggle(doc, "enabled", !!click, (enabled) => {
-        const next = { ...current ?? {} };
-        if (!enabled) delete next.click;
-        else {
-          const target = normalizeTarget(click?.target);
-          next.click = defaultClickForTarget(target);
-        }
-        onChange(next);
-      })
-    );
-    if (!click) return box;
-    const storedTarget = String(click?.target ?? "");
-    const uiTarget = normalizeTarget(storedTarget || (targetOptions[0]?.value ?? "rounds"));
-    box.appendChild(
-      mkSelect(
-        doc,
-        "target",
-        uiTarget,
-        targetOptions,
-        (v) => {
-          const preset = drilldownPresets?.[v];
-          const keys2 = Object.keys(preset?.columnsPresets ?? {});
-          const currentPreset = String(click.columnsPreset ?? "");
-          const nextPreset = keys2.includes(currentPreset) ? currentPreset : String(preset?.defaultPreset ?? keys2[0] ?? currentPreset ?? "default");
-          onChange({ ...current ?? {}, click: { ...click, target: v, columnsPreset: nextPreset } });
-        }
-      )
-    );
-    if (storedTarget && storedTarget !== uiTarget) {
-      const warn = doc.createElement("div");
-      warn.className = "ga-settings-note";
-      warn.textContent = `Unknown target '${storedTarget}'. Select a valid target or click Fix to use '${uiTarget}'.`;
-      box.appendChild(warn);
-      box.appendChild(mkBtn(doc, "Fix target", () => onChange({ ...current ?? {}, click: defaultClickForTarget(uiTarget) }), "primary"));
-    }
-    const currentTarget = uiTarget;
-    const targetPreset = drilldownPresets?.[currentTarget];
-    const presetKeys = Object.keys(targetPreset?.columnsPresets ?? {});
-    if (presetKeys.length > 0) {
-      const presetOptions = presetKeys.map((k) => ({
-        value: k,
-        label: `${k} (${(targetPreset?.columnsPresets?.[k] ?? []).length})`
-      }));
-      const wanted = String(click.columnsPreset ?? "");
-      const safeValue = presetKeys.includes(wanted) ? wanted : String(targetPreset?.defaultPreset ?? presetKeys[0]);
-      box.appendChild(mkSelect(doc, "columnsPreset", safeValue, presetOptions, (v) => onChange({ ...current ?? {}, click: { ...click, columnsPreset: v } })));
-      if (wanted && wanted !== safeValue) {
-        const warn = doc.createElement("div");
-        warn.className = "ga-settings-note";
-        warn.textContent = `Unknown columnsPreset '${wanted}' for target '${currentTarget}'. Click Fix to use '${safeValue}'.`;
-        box.appendChild(warn);
-        box.appendChild(mkBtn(doc, "Fix columnsPreset", () => onChange({ ...current ?? {}, click: { ...click, columnsPreset: safeValue } }), "primary"));
-      }
-      const presetNote = doc.createElement("div");
-      presetNote.className = "ga-settings-note";
-      presetNote.textContent = "columnsPreset selects a predefined set of columns for the drilldown table (per target).";
-      box.appendChild(presetNote);
-    } else {
-      box.appendChild(
-        mkTextInput(doc, "columnsPreset", String(click.columnsPreset ?? ""), (v) => onChange({ ...current ?? {}, click: { ...click, columnsPreset: v } }))
-      );
-      const presetNote = doc.createElement("div");
-      presetNote.className = "ga-settings-note";
-      presetNote.textContent = "No presets found for this target. If drilldown fails validation, check semantic.json drilldownPresets.";
-      box.appendChild(presetNote);
-    }
-    box.appendChild(mkToggle(doc, "filterFromPoint", !!click.filterFromPoint, (v) => onChange({ ...current ?? {}, click: { ...click, filterFromPoint: v } })));
-    const sortBox = doc.createElement("div");
-    sortBox.className = "ga-le-subbox";
-    const sh = doc.createElement("div");
-    sh.className = "ga-le-subhead";
-    sh.textContent = "initialSort (optional)";
-    sortBox.appendChild(sh);
-    sortBox.appendChild(
-      mkTextInput(doc, "key", String(click?.initialSort?.key ?? ""), (v) => {
-        const key = v.trim();
-        if (!key) {
-          const nextClick = { ...click };
-          delete nextClick.initialSort;
-          return onChange({ ...current ?? {}, click: nextClick });
-        }
-        onChange({ ...current ?? {}, click: { ...click, initialSort: { key, dir: click?.initialSort?.dir ?? "desc" } } });
-      })
-    );
-    sortBox.appendChild(
-      mkSelect(doc, "dir", String(click?.initialSort?.dir ?? "desc"), [{ value: "asc", label: "asc" }, { value: "desc", label: "desc" }], (v) => {
-        if (!click?.initialSort?.key) return;
-        onChange({ ...current ?? {}, click: { ...click, initialSort: { ...click.initialSort, dir: v } } });
-      })
-    );
-    box.appendChild(sortBox);
-    const note = doc.createElement("div");
-    note.className = "ga-settings-note";
-    note.textContent = "For extraFilters and advanced settings, use Advanced JSON.";
-    box.appendChild(note);
-    return box;
-  }
-
-  // src/ui/consoleStore.ts
-  var MAX_ENTRIES = 800;
-  var entries = [];
-  var listeners = /* @__PURE__ */ new Set();
-  var pad = (n, w) => String(n).padStart(w, "0");
-  function formatConsoleEntry(e) {
-    const d = new Date(e.ts);
-    const hh = pad(d.getHours(), 2);
-    const mm = pad(d.getMinutes(), 2);
-    const ss = pad(d.getSeconds(), 2);
-    const ms = pad(d.getMilliseconds(), 3);
-    const lvl = e.level.toUpperCase().padEnd(5, " ");
-    return `[${hh}:${mm}:${ss}.${ms}] ${lvl} ${e.message}`;
-  }
-  function emit() {
-    for (const fn of listeners) {
-      try {
-        fn();
-      } catch {
-      }
-    }
-  }
-  function describeError(err2) {
-    if (!err2) return "";
-    if (err2 instanceof Error) {
-      const stack = typeof err2.stack === "string" && err2.stack.trim().length ? `
-${err2.stack}` : "";
-      return `${err2.name}: ${err2.message}${stack}`;
-    }
-    try {
-      return String(err2);
-    } catch {
-      return "<unprintable error>";
-    }
-  }
-  var analysisConsole = {
-    entries,
-    subscribe(fn) {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    clear() {
-      entries.splice(0, entries.length);
-      emit();
-    },
-    push(level, message, err2) {
-      const full = err2 ? `${message}
-${describeError(err2)}` : message;
-      entries.push({ ts: Date.now(), level, message: String(full ?? "") });
-      if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
-      emit();
-    },
-    log(message) {
-      this.push("log", message);
-    },
-    info(message) {
-      this.push("info", message);
-    },
-    warn(message) {
-      this.push("warn", message);
-    },
-    error(message, err2) {
-      this.push("error", message, err2);
-    }
-  };
-
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
@@ -43811,6 +44104,34 @@ ${describeError(err2)}` : message;
           unsyncBtn.disabled = false;
           syncNowBtn.disabled = false;
           void refreshSyncMeta();
+        }
+      });
+      const excelNote = doc.createElement("div");
+      excelNote.className = "ga-settings-note";
+      excelNote.textContent = "Excel export downloads a spreadsheet built from your local dataset (this never uploads data).";
+      dataPane.appendChild(excelNote);
+      const excelActions = doc.createElement("div");
+      excelActions.className = "ga-settings-actions";
+      const excelBtn = doc.createElement("button");
+      excelBtn.type = "button";
+      excelBtn.className = "ga-filter-btn";
+      excelBtn.textContent = "Export Excel";
+      excelBtn.title = "Download an Excel file from your local dataset";
+      excelActions.appendChild(excelBtn);
+      dataPane.appendChild(excelActions);
+      const excelStatus = doc.createElement("div");
+      excelStatus.className = "ga-settings-status";
+      dataPane.appendChild(excelStatus);
+      excelBtn.addEventListener("click", async () => {
+        excelBtn.disabled = true;
+        excelStatus.textContent = "Preparing export...";
+        try {
+          await exportExcel((m) => excelStatus.textContent = m);
+          excelStatus.textContent = "Export complete.";
+        } catch (e) {
+          excelStatus.textContent = e instanceof Error ? e.message : String(e || "Export failed");
+        } finally {
+          excelBtn.disabled = false;
         }
       });
       const templatePane = doc.createElement("div");
@@ -54380,7 +54701,8 @@ If this persists in your setup, please report it in the Discord.`
           detailConcurrency: 4,
           retryErrors: true,
           verifyCompleteness: true,
-          enrichLimit: 2e3
+          enrichLimit: 2e3,
+          gameFilter: loadFetchGameFilter()
         });
         const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
         const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
@@ -54404,7 +54726,10 @@ If this persists in your setup, please report it in the Discord.`
       }
     });
     ui.onResetClick(async () => {
-      if (!confirm("Reset database? This will permanently delete all local analyzer data.")) return;
+      if (!confirm(
+        "WARNING:\n- This permanently deletes ALL GeoAnalyzr data stored locally in this browser.\n- This does NOT delete any data on the server.\n\nReset local database?"
+      ))
+        return;
       try {
         ui.setStatus("Resetting DB...");
         await db.transaction("rw", db.games, db.rounds, db.details, db.meta, async () => {
@@ -54413,14 +54738,6 @@ If this persists in your setup, please report it in the Discord.`
         invalidateRoundsCache();
         ui.setStatus("DB reset complete.");
         await refreshUI(ui);
-      } catch (e) {
-        ui.setStatus("Error: " + errorText(e));
-        console.error(e);
-      }
-    });
-    ui.onExportClick(async () => {
-      try {
-        await exportExcel((m) => ui.setStatus(m));
       } catch (e) {
         ui.setStatus("Error: " + errorText(e));
         console.error(e);
@@ -54469,11 +54786,6 @@ After it finishes, open the dashboard again.`
         ui.setStatus("Error: " + errorText(e));
         console.error(e);
       }
-    });
-    ui.onDiscordClick(() => {
-      const url = "https://discord.gg/8RA3VtSC";
-      const w = window.open(url, "_blank", "noopener,noreferrer");
-      if (w) w.opener = null;
     });
   }
 
