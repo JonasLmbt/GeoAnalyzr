@@ -39,15 +39,15 @@ const LOGO_SVG_SHAPES = `
   <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="3"/>
 
   <path filter="url(#glow)"
-        d="M88 110l26-22 20 16 22-30 30 22"
-        fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="88" cy="110" r="5.5" fill="#7950E5"/>
-    <circle cx="114" cy="88" r="5.5" fill="#5f7ff0"/>
-    <circle cx="134" cy="104" r="5.5" fill="#00A2FE"/>
-    <circle cx="156" cy="74" r="5.5" fill="#22cfe0"/>
-    <circle cx="186" cy="96" r="5.5" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="6.5" fill="#7950E5"/>
+    <circle cx="108" cy="82"  r="6.5" fill="#5f7ff0"/>
+    <circle cx="130" cy="108" r="6.5" fill="#00A2FE"/>
+    <circle cx="154" cy="68"  r="6.5" fill="#22cfe0"/>
+    <circle cx="188" cy="94"  r="6.5" fill="#3AE8BD"/>
   </g>
 `;
 
@@ -59,15 +59,15 @@ const LOGO_SVG_SHAPES_MARK = `
   <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
 
   <path filter="url(#glow)"
-        d="M88 110l26-22 20 16 22-30 30 22"
-        fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="88" cy="110" r="6.2" fill="#7950E5"/>
-    <circle cx="114" cy="88" r="6.2" fill="#5f7ff0"/>
-    <circle cx="134" cy="104" r="6.2" fill="#00A2FE"/>
-    <circle cx="156" cy="74" r="6.2" fill="#22cfe0"/>
-    <circle cx="186" cy="96" r="6.2" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="7.5" fill="#7950E5"/>
+    <circle cx="108" cy="82"  r="7.5" fill="#5f7ff0"/>
+    <circle cx="130" cy="108" r="7.5" fill="#00A2FE"/>
+    <circle cx="154" cy="68"  r="7.5" fill="#22cfe0"/>
+    <circle cx="188" cy="94"  r="7.5" fill="#3AE8BD"/>
   </g>
 `;
 
@@ -96,8 +96,8 @@ const LOGO_LIGHT_SHAPES = `
   <circle cx="128" cy="98" r="54" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" stroke-width="6"/>
 
   <path filter="url(#glow)"
-        d="M90 110l30-26 26 20 28-36 34 26"
-        fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#neon)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
 `;
 
 function replaceAll(haystack: string, needle: string, replacement: string): string {

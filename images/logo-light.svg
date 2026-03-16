@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="GeoAnalyzr icon">
+  <defs>
+    <linearGradient id="g" x1="70" y1="70" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1D9E75"/>
+      <stop offset="0.55" stop-color="#22C98C"/>
+      <stop offset="1" stop-color="#5DDDAA"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <path filter="url(#shadow)"
+        d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
+        fill="rgba(20,30,60,0.07)" stroke="rgba(20,30,60,0.20)" stroke-width="4"/>
+
+  <circle cx="128" cy="98" r="46" fill="rgba(20,30,60,0.04)" stroke="rgba(20,30,60,0.12)" stroke-width="3"/>
+
+  <path filter="url(#glow)"
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g filter="url(#glow)">
+    <circle cx="80"  cy="118" r="6.5" fill="#1D9E75"/>
+    <circle cx="108" cy="82"  r="6.5" fill="#1ab882"/>
+    <circle cx="130" cy="108" r="6.5" fill="#22C98C"/>
+    <circle cx="154" cy="68"  r="6.5" fill="#3dd49a"/>
+    <circle cx="188" cy="94"  r="6.5" fill="#5DDDAA"/>
+  </g>
+</svg>

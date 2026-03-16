@@ -352,6 +352,117 @@ function gmPostBytes(
   });
 }
 
+function gmRequestText(opts: {
+  method: "GET" | "POST" | "PUT" | "DELETE";
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  timeoutMs?: number;
+}): Promise<{ status: number; text: string; headers: Record<string, string> }> {
+  return new Promise((resolve, reject) => {
+    const gm = getGmXmlhttpRequest();
+    if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+
+    gm({
+      method: opts.method,
+      url: opts.url,
+      headers: opts.headers,
+      data: opts.body as any,
+      responseType: "text",
+      timeout: opts.timeoutMs ?? 45000,
+      onload: (res: any) => {
+        const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
+        const text = typeof res?.responseText === "string" ? res.responseText : "";
+        const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+        const headers: Record<string, string> = {};
+        for (const line of rawHeaders.split(/\r?\n/)) {
+          const idx = line.indexOf(":");
+          if (idx <= 0) continue;
+          const k = line.slice(0, idx).trim().toLowerCase();
+          const v = line.slice(idx + 1).trim();
+          if (!k) continue;
+          if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
+          else headers[k] = v;
+        }
+        resolve({ status, text, headers });
+      },
+      onerror: (err: any) => reject(err instanceof Error ? err : new Error("GM_xmlhttpRequest failed")),
+      ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+    });
+  });
+}
+
+function deriveUnsyncUrl(endpointUrl: string): string {
+  try {
+    const u = new URL(endpointUrl);
+    const p = u.pathname || "/";
+    if (/\/api\/sync\/?$/i.test(p)) u.pathname = p.replace(/\/api\/sync\/?$/i, "/api/unsync");
+    else u.pathname = "/api/unsync";
+    return u.toString();
+  } catch {
+    if (/\/api\/sync\/?$/i.test(endpointUrl)) return endpointUrl.replace(/\/api\/sync\/?$/i, "/api/unsync");
+    return `${endpointUrl.replace(/\/+$/, "")}/api/unsync`;
+  }
+}
+
+export async function runServerUnsync(settings: ServerSyncSettings, opts: { deleteUploads?: boolean } = {}): Promise<{
+  ok: boolean;
+  status: number;
+  responseText: string;
+  deleted?: any;
+}> {
+  const endpointUrl = (settings.endpointUrl || "").trim();
+  if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+  const token = (settings.token || "").trim();
+  if (!token) throw new Error("Missing sync token.");
+
+  const playerId = await getCurrentPlayerId();
+  if (!playerId) throw new Error("Could not detect your playerId.");
+
+  const url = deriveUnsyncUrl(endpointUrl);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+    ...(getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {})
+  };
+
+  const body = JSON.stringify({
+    playerId,
+    confirm: "delete",
+    deleteUploads: opts.deleteUploads === undefined ? true : !!opts.deleteUploads
+  });
+
+  const res = await gmRequestText({ method: "POST", url, headers, body, timeoutMs: 60000 });
+  const httpOk = res.status >= 200 && res.status < 300;
+  const parsed = (() => {
+    try {
+      return JSON.parse(res.text);
+    } catch {
+      return null;
+    }
+  })();
+  const ok = httpOk && !!parsed?.ok;
+
+  if (ok) {
+    await db.meta.put({
+      key: SYNC_META_KEY,
+      value: {
+        cursorFrom: 0,
+        cursorTo: 0,
+        lastSyncAt: Date.now(),
+        lastStatus: res.status,
+        lastOk: true,
+        lastBytesJson: 0,
+        lastBytesGzip: 0,
+        lastCounts: { games: 0, rounds: 0, details: 0, gameAgg: 0 }
+      },
+      updatedAt: Date.now()
+    });
+  }
+
+  return { ok, status: res.status, responseText: res.text, deleted: parsed?.deleted };
+}
+
 export async function runServerSyncOnce(settings: ServerSyncSettings): Promise<ServerSyncStatus> {
   return runServerSyncOnceWithOptions(settings, {});
 }

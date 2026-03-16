@@ -1,4 +1,4 @@
-import { loadServerSyncSettings } from "./serverSync";
+import { loadServerSyncSettings, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { createSyncMiniButton } from "./syncOnly/miniButton";
 import { markAutoRun, runFetchAndSync, shouldAutoRun } from "./syncOnly/runFetchAndSync";
 
@@ -69,6 +69,42 @@ async function runOnce(
 const ui = createSyncMiniButton({
   onClick: async (ev) => {
     const forceFull = !!(ev && (ev as any).shiftKey);
+    const wantUnsync = !!(ev && (ev as any).shiftKey && (ev as any).altKey);
+
+    if (wantUnsync) {
+      if (running) return;
+      running = (async () => {
+        ui.setState("working");
+        ui.setTitle("GeoAnalyzr Sync - Deleting server data...");
+        const input = window.prompt(
+          "This will permanently delete your data from the GeoAnalyzr server and unlink this device.\n\nType DELETE to confirm."
+        );
+        if (input !== "DELETE") {
+          ui.setState("idle");
+          ui.setTitle("GeoAnalyzr Sync - Cancelled");
+          return;
+        }
+
+        try {
+          const settings = loadServerSyncSettings();
+          const res = await runServerUnsync(settings, { deleteUploads: true });
+          if (!res.ok) throw new Error(`Failed (HTTP ${res.status})`);
+          saveServerSyncSettings({ token: "" });
+          ui.setState("needs_link");
+          ui.setTitle("GeoAnalyzr Sync - Click to link device");
+          ui.showToast("Server data deleted. Device unlinked.", "warn");
+        } catch (e: any) {
+          const msg = e instanceof Error ? e.message : String(e || "Unsync failed");
+          ui.setTitle(`GeoAnalyzr Sync - ${msg}`);
+          ui.setState("error");
+          ui.showToast(msg, "error");
+        } finally {
+          running = null;
+        }
+      })();
+      return running;
+    }
+
     const settings = loadServerSyncSettings();
     const ensureLinked = !settings.token; // click can open linking tab when token missing
     await runOnce(ui, { forceFull, ensureLinked, showHints: true });

@@ -1,14 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="GeoAnalyzr icon">
   <defs>
-    <radialGradient id="bg" cx="30%" cy="20%" r="80%">
-      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.38"/>
-      <stop offset="55%" stop-color="#0b1020" stop-opacity="1"/>
-      <stop offset="100%" stop-color="#060a14" stop-opacity="1"/>
-    </radialGradient>
     <linearGradient id="g" x1="70" y1="70" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7950E5"/>
-      <stop offset="0.55" stop-color="#00A2FE"/>
-      <stop offset="1" stop-color="#3AE8BD"/>
+      <stop offset="0" stop-color="#FFB300"/>
+      <stop offset="0.55" stop-color="#FFCD02"/>
+      <stop offset="1" stop-color="#FFE040"/>
     </linearGradient>
     <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
       <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
@@ -22,23 +17,21 @@
     </filter>
   </defs>
 
-  <circle cx="128" cy="128" r="112" fill="url(#bg)"/>
-
   <path filter="url(#shadow)"
         d="M128 28c-38.7 0-70 31.3-70 70 0 55.3 70 130 70 130s70-74.7 70-130c0-38.7-31.3-70-70-70z"
-        fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.16)" stroke-width="4"/>
+        fill="rgba(255,205,2,0.07)" stroke="rgba(255,205,2,0.22)" stroke-width="4"/>
 
-  <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="3"/>
+  <circle cx="128" cy="98" r="46" fill="rgba(255,205,2,0.05)" stroke="rgba(255,205,2,0.14)" stroke-width="3"/>
 
   <path filter="url(#glow)"
         d="M80 118l28-36 22 26 24-40 34 26"
         fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="80"  cy="118" r="6.5" fill="#7950E5"/>
-    <circle cx="108" cy="82"  r="6.5" fill="#5f7ff0"/>
-    <circle cx="130" cy="108" r="6.5" fill="#00A2FE"/>
-    <circle cx="154" cy="68"  r="6.5" fill="#22cfe0"/>
-    <circle cx="188" cy="94"  r="6.5" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="6.5" fill="#FFB300"/>
+    <circle cx="108" cy="82"  r="6.5" fill="#FFC200"/>
+    <circle cx="130" cy="108" r="6.5" fill="#FFCD02"/>
+    <circle cx="154" cy="68"  r="6.5" fill="#FFD940"/>
+    <circle cx="188" cy="94"  r="6.5" fill="#FFE040"/>
   </g>
 </svg>

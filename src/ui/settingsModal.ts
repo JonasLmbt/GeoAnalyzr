@@ -17,6 +17,7 @@ import {
   getLastServerSyncMeta,
   loadServerSyncSettings,
   runServerSyncOnce,
+  runServerUnsync,
   saveServerSyncSettings
 } from "../serverSync";
 
@@ -343,6 +344,14 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     syncNowBtn.textContent = "Sync now";
     syncNowBtn.title = "Upload a compact delta to your server";
     syncActions.appendChild(syncNowBtn);
+
+    const unsyncBtn = doc.createElement("button");
+    unsyncBtn.type = "button";
+    unsyncBtn.className = "ga-filter-btn";
+    unsyncBtn.textContent = "Unsync (delete server data)";
+    unsyncBtn.title = "Delete your data from the server and unlink this device";
+    unsyncBtn.style.background = "rgba(160,35,35,0.35)";
+    syncActions.appendChild(unsyncBtn);
     dataPane.appendChild(syncActions);
 
     const syncStatus = doc.createElement("div");
@@ -424,6 +433,39 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       } catch (e: any) {
         syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
       } finally {
+        syncNowBtn.disabled = false;
+        void refreshSyncMeta();
+      }
+    });
+
+    unsyncBtn.addEventListener("click", async () => {
+      const input = targetWindow.prompt(
+        "This will permanently delete your data from the GeoAnalyzr server and unlink this device.\n\nType DELETE to confirm."
+      );
+      if (input !== "DELETE") {
+        syncStatus.textContent = "Cancelled.";
+        return;
+      }
+
+      unsyncBtn.disabled = true;
+      syncNowBtn.disabled = true;
+      syncStatus.textContent = "Deleting server data...";
+      try {
+        persistSyncSettings();
+        const latest = loadServerSyncSettings();
+        const res = await runServerUnsync(latest, { deleteUploads: true });
+        if (!res.ok) {
+          syncStatus.textContent = `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
+          return;
+        }
+
+        saveServerSyncSettings({ token: "" });
+        syncTokenInput.value = "";
+        syncStatus.textContent = "OK - server data deleted and device unlinked.";
+      } catch (e: any) {
+        syncStatus.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
+      } finally {
+        unsyncBtn.disabled = false;
         syncNowBtn.disabled = false;
         void refreshSyncMeta();
       }

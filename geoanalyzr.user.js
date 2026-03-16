@@ -6725,15 +6725,15 @@
   <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.12)" stroke-width="3"/>
 
   <path filter="url(#glow)"
-        d="M88 110l26-22 20 16 22-30 30 22"
-        fill="none" stroke="url(#g)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="88" cy="110" r="5.5" fill="#7950E5"/>
-    <circle cx="114" cy="88" r="5.5" fill="#5f7ff0"/>
-    <circle cx="134" cy="104" r="5.5" fill="#00A2FE"/>
-    <circle cx="156" cy="74" r="5.5" fill="#22cfe0"/>
-    <circle cx="186" cy="96" r="5.5" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="6.5" fill="#7950E5"/>
+    <circle cx="108" cy="82"  r="6.5" fill="#5f7ff0"/>
+    <circle cx="130" cy="108" r="6.5" fill="#00A2FE"/>
+    <circle cx="154" cy="68"  r="6.5" fill="#22cfe0"/>
+    <circle cx="188" cy="94"  r="6.5" fill="#3AE8BD"/>
   </g>
 `;
   var LOGO_SVG_SHAPES_MARK = `
@@ -6744,15 +6744,15 @@
   <circle cx="128" cy="98" r="46" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
 
   <path filter="url(#glow)"
-        d="M88 110l26-22 20 16 22-30 30 22"
-        fill="none" stroke="url(#g)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="88" cy="110" r="6.2" fill="#7950E5"/>
-    <circle cx="114" cy="88" r="6.2" fill="#5f7ff0"/>
-    <circle cx="134" cy="104" r="6.2" fill="#00A2FE"/>
-    <circle cx="156" cy="74" r="6.2" fill="#22cfe0"/>
-    <circle cx="186" cy="96" r="6.2" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="7.5" fill="#7950E5"/>
+    <circle cx="108" cy="82"  r="7.5" fill="#5f7ff0"/>
+    <circle cx="130" cy="108" r="7.5" fill="#00A2FE"/>
+    <circle cx="154" cy="68"  r="7.5" fill="#22cfe0"/>
+    <circle cx="188" cy="94"  r="7.5" fill="#3AE8BD"/>
   </g>
 `;
   var LOGO_LIGHT_DEFS = `
@@ -6779,8 +6779,8 @@
   <circle cx="128" cy="98" r="54" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.55)" stroke-width="6"/>
 
   <path filter="url(#glow)"
-        d="M90 110l30-26 26 20 28-36 34 26"
-        fill="none" stroke="url(#neon)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+        d="M80 118l28-36 22 26 24-40 34 26"
+        fill="none" stroke="url(#neon)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
 `;
   function replaceAll(haystack, needle, replacement) {
     return haystack.split(needle).join(replacement);
@@ -10123,6 +10123,96 @@ ${shapes}`.trim();
         ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
       });
     });
+  }
+  function gmRequestText(opts) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: opts.method,
+        url: opts.url,
+        headers: opts.headers,
+        data: opts.body,
+        responseType: "text",
+        timeout: opts.timeoutMs ?? 45e3,
+        onload: (res) => {
+          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
+          const headers = {};
+          for (const line of rawHeaders.split(/\r?\n/)) {
+            const idx = line.indexOf(":");
+            if (idx <= 0) continue;
+            const k = line.slice(0, idx).trim().toLowerCase();
+            const v = line.slice(idx + 1).trim();
+            if (!k) continue;
+            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
+            else headers[k] = v;
+          }
+          resolve({ status, text, headers });
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
+      });
+    });
+  }
+  function deriveUnsyncUrl(endpointUrl) {
+    try {
+      const u = new URL(endpointUrl);
+      const p = u.pathname || "/";
+      if (/\/api\/sync\/?$/i.test(p)) u.pathname = p.replace(/\/api\/sync\/?$/i, "/api/unsync");
+      else u.pathname = "/api/unsync";
+      return u.toString();
+    } catch {
+      if (/\/api\/sync\/?$/i.test(endpointUrl)) return endpointUrl.replace(/\/api\/sync\/?$/i, "/api/unsync");
+      return `${endpointUrl.replace(/\/+$/, "")}/api/unsync`;
+    }
+  }
+  async function runServerUnsync(settings, opts = {}) {
+    const endpointUrl = (settings.endpointUrl || "").trim();
+    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+    const token = (settings.token || "").trim();
+    if (!token) throw new Error("Missing sync token.");
+    const playerId = await getCurrentPlayerId();
+    if (!playerId) throw new Error("Could not detect your playerId.");
+    const url = deriveUnsyncUrl(endpointUrl);
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
+    };
+    const body = JSON.stringify({
+      playerId,
+      confirm: "delete",
+      deleteUploads: opts.deleteUploads === void 0 ? true : !!opts.deleteUploads
+    });
+    const res = await gmRequestText({ method: "POST", url, headers, body, timeoutMs: 6e4 });
+    const httpOk = res.status >= 200 && res.status < 300;
+    const parsed = (() => {
+      try {
+        return JSON.parse(res.text);
+      } catch {
+        return null;
+      }
+    })();
+    const ok = httpOk && !!parsed?.ok;
+    if (ok) {
+      await db.meta.put({
+        key: SYNC_META_KEY,
+        value: {
+          cursorFrom: 0,
+          cursorTo: 0,
+          lastSyncAt: Date.now(),
+          lastStatus: res.status,
+          lastOk: true,
+          lastBytesJson: 0,
+          lastBytesGzip: 0,
+          lastCounts: { games: 0, rounds: 0, details: 0, gameAgg: 0 }
+        },
+        updatedAt: Date.now()
+      });
+    }
+    return { ok, status: res.status, responseText: res.text, deleted: parsed?.deleted };
   }
   async function runServerSyncOnce(settings) {
     return runServerSyncOnceWithOptions(settings, {});
@@ -43521,6 +43611,13 @@ ${describeError(err2)}` : message;
       syncNowBtn.textContent = "Sync now";
       syncNowBtn.title = "Upload a compact delta to your server";
       syncActions.appendChild(syncNowBtn);
+      const unsyncBtn = doc.createElement("button");
+      unsyncBtn.type = "button";
+      unsyncBtn.className = "ga-filter-btn";
+      unsyncBtn.textContent = "Unsync (delete server data)";
+      unsyncBtn.title = "Delete your data from the server and unlink this device";
+      unsyncBtn.style.background = "rgba(160,35,35,0.35)";
+      syncActions.appendChild(unsyncBtn);
       dataPane.appendChild(syncActions);
       const syncStatus = doc.createElement("div");
       syncStatus.className = "ga-settings-status";
@@ -43589,6 +43686,36 @@ ${describeError(err2)}` : message;
         } catch (e) {
           syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
         } finally {
+          syncNowBtn.disabled = false;
+          void refreshSyncMeta();
+        }
+      });
+      unsyncBtn.addEventListener("click", async () => {
+        const input = targetWindow.prompt(
+          "This will permanently delete your data from the GeoAnalyzr server and unlink this device.\n\nType DELETE to confirm."
+        );
+        if (input !== "DELETE") {
+          syncStatus.textContent = "Cancelled.";
+          return;
+        }
+        unsyncBtn.disabled = true;
+        syncNowBtn.disabled = true;
+        syncStatus.textContent = "Deleting server data...";
+        try {
+          persistSyncSettings();
+          const latest = loadServerSyncSettings();
+          const res = await runServerUnsync(latest, { deleteUploads: true });
+          if (!res.ok) {
+            syncStatus.textContent = `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
+            return;
+          }
+          saveServerSyncSettings({ token: "" });
+          syncTokenInput.value = "";
+          syncStatus.textContent = "OK - server data deleted and device unlinked.";
+        } catch (e) {
+          syncStatus.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
+        } finally {
+          unsyncBtn.disabled = false;
           syncNowBtn.disabled = false;
           void refreshSyncMeta();
         }
