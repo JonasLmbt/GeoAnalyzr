@@ -10402,10 +10402,16 @@ ${shapes}`.trim();
       color: white;
       cursor: pointer;
       font-weight: 600;
-      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
     }
     .ga-ui-btn:active { transform: translateY(1px); }
     .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+    .ga-ui-btn-icon { display: inline-flex; width: 16px; height: 16px; opacity: 0.95; }
+    .ga-ui-btn-icon svg { width: 16px; height: 16px; display: block; }
+    .ga-ui-actions { display:flex; flex-direction: column; gap: 8px; }
 
     .ga-ui-counts {
       margin-top: 10px;
@@ -10519,31 +10525,85 @@ ${shapes}`.trim();
     const status = el("div");
     status.className = "ga-ui-status";
     status.textContent = "Ready.";
-    const mkBtn2 = (label, bg) => {
+    const iconSvg = (name) => {
+      const common = `fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+      if (name === "download") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path ${common} d="M7 10l5 5 5-5"/><path ${common} d="M12 15V3"/></svg>`;
+      }
+      if (name === "upload") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path ${common} d="M17 8l-5-5-5 5"/><path ${common} d="M12 3v12"/></svg>`;
+      }
+      if (name === "chart") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M4 19V5"/><path ${common} d="M4 19h16"/><path ${common} d="M8 17v-6"/><path ${common} d="M12 17V7"/><path ${common} d="M16 17v-9"/></svg>`;
+      }
+      if (name === "chat") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>`;
+      }
+      if (name === "file") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path ${common} d="M14 2v6h6"/><path ${common} d="M8 13h8"/><path ${common} d="M8 17h6"/></svg>`;
+      }
+      if (name === "trash") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M3 6h18"/><path ${common} d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path ${common} d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path ${common} d="M10 11v6"/><path ${common} d="M14 11v6"/></svg>`;
+      }
+      if (name === "refresh") {
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 12a9 9 0 1 1-2.64-6.36"/><path ${common} d="M21 3v6h-6"/></svg>`;
+      }
+      return "";
+    };
+    const mkBtn2 = (opts) => {
       const b = el("button");
       b.className = "ga-ui-btn";
       b.type = "button";
-      b.textContent = label;
-      b.style.background = bg;
+      b.style.background = opts.bg;
+      if (opts.title) b.title = opts.title;
+      if (opts.icon) {
+        const ic = el("span");
+        ic.className = "ga-ui-btn-icon";
+        ic.innerHTML = opts.icon;
+        b.appendChild(ic);
+      }
+      const t = el("span");
+      t.textContent = opts.label;
+      b.appendChild(t);
       return b;
     };
-    const updateBtn = mkBtn2("Fetch Data", "rgba(255,255,255,0.10)");
-    const syncBtn = mkBtn2("Sync", "rgba(0,162,254,0.18)");
-    const analysisBtn = mkBtn2("Open Analysis Window", "rgba(35,95,160,0.28)");
-    const discordBtn = mkBtn2("Join Discord", "rgba(121,80,229,0.30)");
-    const exportBtn = mkBtn2("Export Excel", "rgba(40,120,50,0.35)");
-    const resetBtn = mkBtn2("Reset Database", "rgba(160,35,35,0.35)");
+    const updateBtn = mkBtn2({ label: "Fetch Data", bg: "rgba(255,255,255,0.10)", icon: iconSvg("download") });
+    const syncBtn = mkBtn2({
+      label: "Sync",
+      bg: "rgba(0,162,254,0.18)",
+      icon: iconSvg("upload"),
+      title: "Upload a compact delta to your server (Shift = full snapshot)"
+    });
+    const unsyncBtn = mkBtn2({
+      label: "Unsync",
+      bg: "rgba(160,35,35,0.26)",
+      icon: iconSvg("trash"),
+      title: "Delete your data from the server and unlink this device"
+    });
+    const analysisBtn = mkBtn2({ label: "Open Analysis Window", bg: "rgba(35,95,160,0.28)", icon: iconSvg("chart") });
+    const discordBtn = mkBtn2({ label: "Join Discord", bg: "rgba(121,80,229,0.30)", icon: iconSvg("chat") });
+    const exportBtn = mkBtn2({ label: "Export Excel", bg: "rgba(40,120,50,0.35)", icon: iconSvg("file") });
+    const resetBtn = mkBtn2({
+      label: "Reset Database",
+      bg: "rgba(160,35,35,0.35)",
+      icon: iconSvg("refresh"),
+      title: "Delete all local GeoAnalyzr data in this browser"
+    });
     const counts = el("div");
     counts.className = "ga-ui-counts";
     counts.textContent = "Data: 0 games, 0 rounds.";
+    const actions = el("div");
+    actions.className = "ga-ui-actions";
+    actions.appendChild(updateBtn);
+    actions.appendChild(syncBtn);
+    actions.appendChild(unsyncBtn);
+    actions.appendChild(analysisBtn);
+    actions.appendChild(discordBtn);
+    actions.appendChild(exportBtn);
+    actions.appendChild(resetBtn);
     panel.appendChild(header);
     panel.appendChild(status);
-    panel.appendChild(updateBtn);
-    panel.appendChild(syncBtn);
-    panel.appendChild(analysisBtn);
-    panel.appendChild(discordBtn);
-    panel.appendChild(exportBtn);
-    panel.appendChild(resetBtn);
+    panel.appendChild(actions);
     panel.appendChild(counts);
     let open = false;
     const setOpen = (next) => {
@@ -10562,6 +10622,7 @@ ${shapes}`.trim();
     updateBtn.addEventListener("click", () => void updateHandler?.());
     syncBtn.addEventListener("click", async (ev) => {
       syncBtn.disabled = true;
+      unsyncBtn.disabled = true;
       const forceFull = !!(ev && ev.shiftKey);
       status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
       try {
@@ -10634,6 +10695,38 @@ ${shapes}`.trim();
       } catch (e) {
         status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
       } finally {
+        syncBtn.disabled = false;
+        unsyncBtn.disabled = false;
+      }
+    });
+    unsyncBtn.addEventListener("click", async () => {
+      const settings = loadServerSyncSettings();
+      if (!settings.token) {
+        status.textContent = "Not linked. Sync once to link the device first.";
+        return;
+      }
+      const input = window.prompt(
+        "This will permanently delete your data from the GeoAnalyzr server and unlink this device.\n\nType DELETE to confirm."
+      );
+      if (input !== "DELETE") {
+        status.textContent = "Cancelled.";
+        return;
+      }
+      unsyncBtn.disabled = true;
+      syncBtn.disabled = true;
+      status.textContent = "Deleting server data...";
+      try {
+        const res = await runServerUnsync(settings, { deleteUploads: true });
+        if (!res.ok) {
+          status.textContent = `Unsync failed (HTTP ${res.status})`;
+          return;
+        }
+        saveServerSyncSettings({ token: "" });
+        status.textContent = "Unsynced. Server data deleted and device unlinked.";
+      } catch (e) {
+        status.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
+      } finally {
+        unsyncBtn.disabled = false;
         syncBtn.disabled = false;
       }
     });
