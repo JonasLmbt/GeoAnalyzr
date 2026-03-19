@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.4-dev
+// @version      2.4.5-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9947,6 +9947,10 @@ ${shapes}`.trim();
     const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
     const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
     const filterMovementRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
+    const filterRatedRaw = readGmValue(`${GM_VALUE_PREFIX}filter_rated`);
+    const filterModeRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode`);
+    const filterFromRaw = readGmValue(`${GM_VALUE_PREFIX}filter_from_ms`);
+    const filterToRaw = readGmValue(`${GM_VALUE_PREFIX}filter_to_ms`);
     const filterModeFamily = (() => {
       const s = typeof filterModeFamilyRaw === "string" ? filterModeFamilyRaw.trim().toLowerCase() : "";
       return s === "duels" || s === "teamduels" ? s : "all";
@@ -9955,13 +9959,30 @@ ${shapes}`.trim();
       const s = typeof filterMovementRaw === "string" ? filterMovementRaw.trim().toLowerCase() : "";
       return s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown" ? s : "all";
     })();
+    const filterRated = (() => {
+      const s = typeof filterRatedRaw === "string" ? filterRatedRaw.trim().toLowerCase() : "";
+      return s === "rated" || s === "unrated" || s === "unknown" ? s : "all";
+    })();
+    const filterMode = typeof filterModeRaw === "string" ? filterModeRaw.trim().slice(0, 60) : "";
+    const filterFromMs = (() => {
+      const n = typeof filterFromRaw === "number" ? filterFromRaw : typeof filterFromRaw === "string" ? Number(filterFromRaw) : NaN;
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    })();
+    const filterToMs = (() => {
+      const n = typeof filterToRaw === "number" ? filterToRaw : typeof filterToRaw === "string" ? Number(filterToRaw) : NaN;
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    })();
     return {
       endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
       token,
       compact,
       includeAggregates,
       filterModeFamily,
-      filterMovement
+      filterMovement,
+      filterRated,
+      filterMode,
+      filterFromMs,
+      filterToMs
     };
   }
   function saveServerSyncSettings(next) {
@@ -9971,6 +9992,10 @@ ${shapes}`.trim();
     if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
     if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
     if (typeof next.filterMovement === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_movement`, next.filterMovement);
+    if (typeof next.filterRated === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_rated`, next.filterRated);
+    if (typeof next.filterMode === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode`, next.filterMode.trim().slice(0, 60));
+    if (typeof next.filterFromMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_from_ms`, String(Math.max(0, Math.floor(next.filterFromMs))));
+    if (typeof next.filterToMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_to_ms`, String(Math.max(0, Math.floor(next.filterToMs))));
   }
   async function getLastServerSyncCursor() {
     const meta = await db.meta.get(SYNC_META_KEY);
@@ -10060,6 +10085,19 @@ ${shapes}`.trim();
     }
     const filterModeFamily = opts.filterModeFamily || "all";
     const filterMovement = opts.filterMovement || "all";
+    const filterRated = opts.filterRated || "all";
+    const filterModeNeedle = typeof opts.filterMode === "string" ? opts.filterMode.trim().toLowerCase() : "";
+    const filterFromMs = typeof opts.filterFromMs === "number" && Number.isFinite(opts.filterFromMs) ? Math.max(0, Math.floor(opts.filterFromMs)) : 0;
+    const filterToMs = typeof opts.filterToMs === "number" && Number.isFinite(opts.filterToMs) ? Math.max(0, Math.floor(opts.filterToMs)) : 0;
+    const ratedByGameId = (() => {
+      const m = /* @__PURE__ */ new Map();
+      for (const d of detailsMerged) {
+        const gid = typeof d?.gameId === "string" ? d.gameId : "";
+        if (!gid) continue;
+        if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
+      }
+      return m;
+    })();
     const movementForGame = (() => {
       const out = /* @__PURE__ */ new Map();
       const counts = /* @__PURE__ */ new Map();
@@ -10091,8 +10129,18 @@ ${shapes}`.trim();
         const gid = typeof g?.gameId === "string" ? g.gameId : "";
         if (!gid) continue;
         if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+        if (filterModeNeedle) {
+          const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+          if (!m.includes(filterModeNeedle)) continue;
+        }
+        if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
+        if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
         const mt = movementForGame.get(gid) || "unknown";
         if (filterMovement !== "all" && mt !== filterMovement) continue;
+        const rated = ratedByGameId.get(gid);
+        if (filterRated === "rated" && rated !== true) continue;
+        if (filterRated === "unrated" && rated !== false) continue;
+        if (filterRated === "unknown" && typeof rated === "boolean") continue;
         ids.add(gid);
       }
       return ids;
@@ -10328,14 +10376,37 @@ ${shapes}`.trim();
       })();
       const filterModeFamily = settings.filterModeFamily || "all";
       const filterMovement = settings.filterMovement || "all";
+      const filterRated = settings.filterRated || "all";
+      const filterModeNeedle = typeof settings.filterMode === "string" ? settings.filterMode.trim().toLowerCase() : "";
+      const filterFromMs = typeof settings.filterFromMs === "number" && Number.isFinite(settings.filterFromMs) ? Math.max(0, Math.floor(settings.filterFromMs)) : 0;
+      const filterToMs = typeof settings.filterToMs === "number" && Number.isFinite(settings.filterToMs) ? Math.max(0, Math.floor(settings.filterToMs)) : 0;
+      const ratedByGameId = (() => {
+        const m = /* @__PURE__ */ new Map();
+        for (const d of detailsAll) {
+          const gid = typeof d?.gameId === "string" ? d.gameId : "";
+          if (!gid) continue;
+          if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
+        }
+        return m;
+      })();
       const allowedGameIds = (() => {
         const ids = /* @__PURE__ */ new Set();
         for (const g of gamesAll) {
           const gid = typeof g?.gameId === "string" ? g.gameId : "";
           if (!gid) continue;
           if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+          if (filterModeNeedle) {
+            const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+            if (!m.includes(filterModeNeedle)) continue;
+          }
+          if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
+          if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
           const mt = movementForGame.get(gid) || "unknown";
           if (filterMovement !== "all" && mt !== filterMovement) continue;
+          const rated = ratedByGameId.get(gid);
+          if (filterRated === "rated" && rated !== true) continue;
+          if (filterRated === "unrated" && rated !== false) continue;
+          if (filterRated === "unknown" && typeof rated === "boolean") continue;
           ids.add(gid);
         }
         return ids;
@@ -10390,7 +10461,11 @@ ${shapes}`.trim();
       compact: effectiveCompact,
       includeAggregates: settings.includeAggregates,
       filterModeFamily: settings.filterModeFamily,
-      filterMovement: settings.filterMovement
+      filterMovement: settings.filterMovement,
+      filterRated: settings.filterRated,
+      filterMode: settings.filterMode,
+      filterFromMs: settings.filterFromMs,
+      filterToMs: settings.filterToMs
     });
     const headers = {
       "Content-Type": "application/json",
@@ -10459,12 +10534,40 @@ ${shapes}`.trim();
     if (s === "duels" || s === "teamduels") return s;
     return "all";
   }
+  function normalizeMovement(value) {
+    const s = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown") return s;
+    return "all";
+  }
+  function normalizeRated(value) {
+    const s = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (s === "rated" || s === "unrated" || s === "unknown") return s;
+    return "all";
+  }
+  function normalizeMode(value) {
+    return typeof value === "string" ? value.trim().slice(0, 60) : "";
+  }
+  function normalizeMs(value) {
+    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.floor(n));
+  }
   function loadFetchGameFilter() {
-    const raw = readGmValue2(`${GM_VALUE_PREFIX2}mode_family`);
-    return { modeFamily: normalizeModeFamily(raw) };
+    const modeFamily = normalizeModeFamily(readGmValue2(`${GM_VALUE_PREFIX2}mode_family`));
+    const movement = normalizeMovement(readGmValue2(`${GM_VALUE_PREFIX2}movement`));
+    const rated = normalizeRated(readGmValue2(`${GM_VALUE_PREFIX2}rated`));
+    const mode = normalizeMode(readGmValue2(`${GM_VALUE_PREFIX2}mode`));
+    const fromMs = normalizeMs(readGmValue2(`${GM_VALUE_PREFIX2}from_ms`));
+    const toMs = normalizeMs(readGmValue2(`${GM_VALUE_PREFIX2}to_ms`));
+    return { modeFamily, movement, rated, mode, fromMs, toMs };
   }
   function saveFetchGameFilter(next) {
-    if (next.modeFamily) writeGmValue2(`${GM_VALUE_PREFIX2}mode_family`, String(next.modeFamily));
+    if (typeof next.modeFamily === "string") writeGmValue2(`${GM_VALUE_PREFIX2}mode_family`, String(next.modeFamily));
+    if (typeof next.movement === "string") writeGmValue2(`${GM_VALUE_PREFIX2}movement`, String(next.movement));
+    if (typeof next.rated === "string") writeGmValue2(`${GM_VALUE_PREFIX2}rated`, String(next.rated));
+    if (typeof next.mode === "string") writeGmValue2(`${GM_VALUE_PREFIX2}mode`, next.mode.trim().slice(0, 60));
+    if (typeof next.fromMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}from_ms`, String(Math.max(0, Math.floor(next.fromMs))));
+    if (typeof next.toMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}to_ms`, String(Math.max(0, Math.floor(next.toMs))));
   }
 
   // src/uiOverlay.ts
@@ -10716,7 +10819,7 @@ ${shapes}`.trim();
         return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 12a9 9 0 1 1-2.64-6.36"/><path ${common} d="M21 3v6h-6"/></svg>`;
       }
       if (name === "gear") {
-        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path ${common} d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.6-2-3.4-2.4.5a7.2 7.2 0 0 0-1.7-1l-.4-2.5H9l-.4 2.5a7.2 7.2 0 0 0-1.7 1L4.5 9l-2 3.4 2 1.6a7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-.5a7.2 7.2 0 0 0 1.7 1l.4 2.5h6l.4-2.5a7.2 7.2 0 0 0 1.7-1l2.4.5 2-3.4-2-1.6z"/></svg>`;
+        return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M4 21v-7"/><path ${common} d="M4 10V3"/><path ${common} d="M12 21v-9"/><path ${common} d="M12 8V3"/><path ${common} d="M20 21v-5"/><path ${common} d="M20 12V3"/><path ${common} d="M2 14h4"/><path ${common} d="M10 12h4"/><path ${common} d="M18 16h4"/></svg>`;
       }
       return "";
     };
@@ -10854,27 +10957,91 @@ ${shapes}`.trim();
     fetchGearBtn.addEventListener("click", () => {
       const cur = loadFetchGameFilter();
       const wrap = el("div");
-      const label = el("div");
-      label.className = "ga-ui-modal-help";
-      label.textContent = "Game filter (applies on game level only; never partial rounds):";
-      const sel = el("select");
-      sel.className = "ga-ui-modal-input";
-      sel.innerHTML = `<option value="all">All games</option><option value="duels">Duels only</option><option value="teamduels">Team Duels only</option>`;
-      sel.value = cur.modeFamily;
-      const help = el("div");
-      help.className = "ga-ui-modal-help";
-      help.textContent = "Fetch Data will only store/fetch games that match this filter. Games outside the filter are skipped (cursor still advances).";
-      wrap.appendChild(label);
-      wrap.appendChild(sel);
-      wrap.appendChild(help);
+      const mkHelp = (t) => {
+        const d = el("div");
+        d.className = "ga-ui-modal-help";
+        d.textContent = t;
+        return d;
+      };
+      const mkSelect2 = (html, value) => {
+        const s = el("select");
+        s.className = "ga-ui-modal-input";
+        s.innerHTML = html;
+        s.value = value;
+        return s;
+      };
+      const mkInput = (value, placeholder) => {
+        const i = el("input");
+        i.className = "ga-ui-modal-input";
+        i.type = "text";
+        i.placeholder = placeholder;
+        i.value = value;
+        return i;
+      };
+      const fmtDate = (ms) => {
+        if (!ms || !Number.isFinite(ms)) return "";
+        try {
+          return new Date(ms).toISOString().slice(0, 10);
+        } catch {
+          return "";
+        }
+      };
+      const parseDateStartMs = (s) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
+        if (!m) return 0;
+        const y = Number(m[1]);
+        const mo = Number(m[2]);
+        const d = Number(m[3]);
+        if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
+        return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+      };
+      const parseDateEndMs = (s) => {
+        const start = parseDateStartMs(s);
+        if (!start) return 0;
+        return start + 24 * 60 * 60 * 1e3 - 1;
+      };
+      wrap.appendChild(mkHelp("Fetch filters (always game-level; never partial rounds):"));
+      const selFamily = mkSelect2(
+        `<option value="all">Mode family: All</option><option value="duels">Mode family: Duels only</option><option value="teamduels">Mode family: Team Duels only</option>`,
+        cur.modeFamily
+      );
+      const selMovement = mkSelect2(
+        `<option value="all">Movement: All</option><option value="moving">Movement: Moving</option><option value="no_move">Movement: No move</option><option value="nmpz">Movement: NMPZ</option><option value="unknown">Movement: Unknown</option>`,
+        cur.movement
+      );
+      const selRated = mkSelect2(
+        `<option value="all">Rated: All</option><option value="rated">Rated: Rated only</option><option value="unrated">Rated: Unrated only</option><option value="unknown">Rated: Unknown only</option>`,
+        cur.rated
+      );
+      const modeInput = mkInput(cur.mode || "", "Mode contains\u2026 (e.g. moving, no_move, nmpz)");
+      const fromInput = mkInput(fmtDate(cur.fromMs), "From date (YYYY-MM-DD)");
+      const toInput = mkInput(fmtDate(cur.toMs), "To date (YYYY-MM-DD)");
+      wrap.appendChild(selFamily);
+      wrap.appendChild(selMovement);
+      wrap.appendChild(selRated);
+      wrap.appendChild(modeInput);
+      wrap.appendChild(fromInput);
+      wrap.appendChild(toInput);
+      wrap.appendChild(
+        mkHelp(
+          "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps."
+        )
+      );
       openModal({
         title: "Fetch filters",
         body: wrap,
         onSave: () => {
-          const v = String(sel.value || "");
-          const modeFamily = v === "duels" || v === "teamduels" ? v : "all";
-          saveFetchGameFilter({ modeFamily });
-          status.textContent = `Fetch filter saved: ${modeFamily}.`;
+          const familyRaw = String(selFamily.value || "");
+          const movementRaw = String(selMovement.value || "");
+          const ratedRaw = String(selRated.value || "");
+          const modeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? familyRaw : "all";
+          const movement = movementRaw === "moving" || movementRaw === "no_move" || movementRaw === "nmpz" || movementRaw === "unknown" ? movementRaw : "all";
+          const rated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? ratedRaw : "all";
+          const mode = String(modeInput.value || "");
+          const fromMs = parseDateStartMs(fromInput.value);
+          const toMs = parseDateEndMs(toInput.value);
+          saveFetchGameFilter({ modeFamily, movement, rated, mode, fromMs, toMs });
+          status.textContent = "Fetch filters saved.";
         }
       });
     });
@@ -10991,38 +11158,91 @@ ${shapes}`.trim();
     syncGearBtn.addEventListener("click", () => {
       const cur = loadServerSyncSettings();
       const wrap = el("div");
-      const label1 = el("div");
-      label1.className = "ga-ui-modal-help";
-      label1.textContent = "Mode filter (game level only):";
-      const selMode = el("select");
-      selMode.className = "ga-ui-modal-input";
-      selMode.innerHTML = `<option value="all">All games</option><option value="duels">Duels only</option><option value="teamduels">Team Duels only</option>`;
-      selMode.value = cur.filterModeFamily;
-      const label2 = el("div");
-      label2.className = "ga-ui-modal-help";
-      label2.textContent = "Movement filter (game level only):";
-      const selMove = el("select");
-      selMove.className = "ga-ui-modal-input";
-      selMove.innerHTML = `<option value="all">All</option><option value="moving">Moving</option><option value="no_move">No move</option><option value="nmpz">NMPZ</option><option value="unknown">Unknown</option>`;
-      selMove.value = cur.filterMovement;
-      const help = el("div");
-      help.className = "ga-ui-modal-help";
-      help.textContent = "Sync only sends games that match these filters (no partial rounds). Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games.";
-      wrap.appendChild(label1);
-      wrap.appendChild(selMode);
-      wrap.appendChild(label2);
-      wrap.appendChild(selMove);
-      wrap.appendChild(help);
+      const mkHelp = (t) => {
+        const d = el("div");
+        d.className = "ga-ui-modal-help";
+        d.textContent = t;
+        return d;
+      };
+      const mkSelect2 = (html, value) => {
+        const s = el("select");
+        s.className = "ga-ui-modal-input";
+        s.innerHTML = html;
+        s.value = value;
+        return s;
+      };
+      const mkInput = (value, placeholder) => {
+        const i = el("input");
+        i.className = "ga-ui-modal-input";
+        i.type = "text";
+        i.placeholder = placeholder;
+        i.value = value;
+        return i;
+      };
+      const fmtDate = (ms) => {
+        if (!ms || !Number.isFinite(ms)) return "";
+        try {
+          return new Date(ms).toISOString().slice(0, 10);
+        } catch {
+          return "";
+        }
+      };
+      const parseDateStartMs = (s) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
+        if (!m) return 0;
+        const y = Number(m[1]);
+        const mo = Number(m[2]);
+        const d = Number(m[3]);
+        if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
+        return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+      };
+      const parseDateEndMs = (s) => {
+        const start = parseDateStartMs(s);
+        if (!start) return 0;
+        return start + 24 * 60 * 60 * 1e3 - 1;
+      };
+      wrap.appendChild(mkHelp("Sync filters (always game-level; never partial rounds):"));
+      const selFamily = mkSelect2(
+        `<option value="all">Mode family: All</option><option value="duels">Mode family: Duels only</option><option value="teamduels">Mode family: Team Duels only</option>`,
+        cur.filterModeFamily
+      );
+      const selMovement = mkSelect2(
+        `<option value="all">Movement: All</option><option value="moving">Movement: Moving</option><option value="no_move">Movement: No move</option><option value="nmpz">Movement: NMPZ</option><option value="unknown">Movement: Unknown</option>`,
+        cur.filterMovement
+      );
+      const selRated = mkSelect2(
+        `<option value="all">Rated: All</option><option value="rated">Rated: Rated only</option><option value="unrated">Rated: Unrated only</option><option value="unknown">Rated: Unknown only</option>`,
+        cur.filterRated
+      );
+      const modeInput = mkInput(cur.filterMode || "", "Mode contains\u2026 (case-insensitive)");
+      const fromInput = mkInput(fmtDate(cur.filterFromMs), "From date (YYYY-MM-DD)");
+      const toInput = mkInput(fmtDate(cur.filterToMs), "To date (YYYY-MM-DD)");
+      wrap.appendChild(selFamily);
+      wrap.appendChild(selMovement);
+      wrap.appendChild(selRated);
+      wrap.appendChild(modeInput);
+      wrap.appendChild(fromInput);
+      wrap.appendChild(toInput);
+      wrap.appendChild(
+        mkHelp(
+          "Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games. Cursor still advances even for excluded games."
+        )
+      );
       openModal({
         title: "Sync filters",
         body: wrap,
         onSave: () => {
-          const modeRaw = String(selMode.value || "");
-          const movRaw = String(selMove.value || "");
-          const filterModeFamily = modeRaw === "duels" || modeRaw === "teamduels" ? modeRaw : "all";
-          const filterMovement = movRaw === "moving" || movRaw === "no_move" || movRaw === "nmpz" || movRaw === "unknown" ? movRaw : "all";
-          saveServerSyncSettings({ filterModeFamily, filterMovement });
-          status.textContent = `Sync filter saved: ${filterModeFamily}, ${filterMovement}.`;
+          const familyRaw = String(selFamily.value || "");
+          const movementRaw = String(selMovement.value || "");
+          const ratedRaw = String(selRated.value || "");
+          const filterModeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? familyRaw : "all";
+          const filterMovement = movementRaw === "moving" || movementRaw === "no_move" || movementRaw === "nmpz" || movementRaw === "unknown" ? movementRaw : "all";
+          const filterRated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? ratedRaw : "all";
+          const filterMode = String(modeInput.value || "");
+          const filterFromMs = parseDateStartMs(fromInput.value);
+          const filterToMs = parseDateEndMs(toInput.value);
+          saveServerSyncSettings({ filterModeFamily, filterMovement, filterRated, filterMode, filterFromMs, filterToMs });
+          status.textContent = "Sync filters saved.";
         }
       });
     });
@@ -11173,10 +11393,13 @@ ${shapes}`.trim();
     const startedAt = Date.now();
     const meta = await db.meta.get("sync");
     const lastSeen = meta?.value?.lastSeenTime ? Number(meta?.value?.lastSeenTime) : null;
-    const filterModeFamily = (() => {
-      const raw = opts?.gameFilter?.modeFamily;
-      return raw === "duels" || raw === "teamduels" ? raw : "all";
-    })();
+    const filter = opts?.gameFilter;
+    const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
+    const filterModeNeedle = typeof filter?.mode === "string" ? filter.mode.trim().toLowerCase() : "";
+    const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
+    const filterToMs = typeof filter?.toMs === "number" && Number.isFinite(filter.toMs) ? Math.max(0, Math.floor(filter.toMs)) : 0;
+    const filterMovement = filter?.movement === "moving" || filter?.movement === "no_move" || filter?.movement === "nmpz" || filter?.movement === "unknown" ? filter.movement : "all";
+    const filterRated = filter?.rated === "rated" || filter?.rated === "unrated" || filter?.rated === "unknown" ? filter.rated : "all";
     let paginationToken;
     let feedPages = 0;
     let feedUpserted = 0;
@@ -11228,7 +11451,16 @@ ${shapes}`.trim();
         if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
       }
       const deduped = [...byId.values()];
-      const dedupedFiltered = filterModeFamily === "all" ? deduped : deduped.filter((g) => String(g?.modeFamily || "") === filterModeFamily);
+      const dedupedFiltered = deduped.filter((g) => {
+        if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) return false;
+        if (filterModeNeedle) {
+          const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+          if (!m.includes(filterModeNeedle)) return false;
+        }
+        if (filterFromMs && (!Number.isFinite(g.playedAt) || g.playedAt < filterFromMs)) return false;
+        if (filterToMs && (!Number.isFinite(g.playedAt) || g.playedAt > filterToMs)) return false;
+        return true;
+      });
       if (dedupedFiltered.length > 0) {
         await db.games.bulkPut(dedupedFiltered);
         feedUpserted += dedupedFiltered.length;
@@ -11297,9 +11529,58 @@ ${shapes}`.trim();
       const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
       await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
       if (dedupedFiltered.length > 0) {
+        let detailCandidates = dedupedFiltered;
+        if (filterMovement !== "all" || filterRated !== "all") {
+          const ids = dedupedFiltered.map((g) => g.gameId);
+          const [existingDetails, existingRounds] = await Promise.all([
+            db.details.bulkGet(ids),
+            filterMovement !== "all" ? db.rounds.where("gameId").anyOf(ids).toArray() : Promise.resolve([])
+          ]);
+          const ratedByGameId = /* @__PURE__ */ new Map();
+          for (const d of existingDetails) {
+            const gid = typeof d?.gameId === "string" ? d.gameId : "";
+            if (!gid) continue;
+            if (typeof d?.isRated === "boolean") ratedByGameId.set(gid, d.isRated);
+          }
+          const movementByGameId = (() => {
+            const out = /* @__PURE__ */ new Map();
+            const counts = /* @__PURE__ */ new Map();
+            for (const r of existingRounds) {
+              const gid = typeof r?.gameId === "string" ? r.gameId : "";
+              if (!gid) continue;
+              const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+              const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+              let m = counts.get(gid);
+              if (!m) {
+                m = /* @__PURE__ */ new Map();
+                counts.set(gid, m);
+              }
+              m.set(mt, (m.get(mt) || 0) + 1);
+            }
+            for (const [gid, m] of counts.entries()) {
+              let best = { k: "unknown", n: 0 };
+              for (const [k, n] of m.entries()) {
+                const kk = k;
+                if (typeof n === "number" && n > best.n) best = { k: kk, n };
+              }
+              out.set(gid, best.k);
+            }
+            return out;
+          })();
+          detailCandidates = dedupedFiltered.filter((g) => {
+            const gid = g.gameId;
+            const rated = ratedByGameId.get(gid);
+            if (filterRated === "rated" && rated === false) return false;
+            if (filterRated === "unrated" && rated === true) return false;
+            if (filterRated === "unknown" && typeof rated === "boolean") return false;
+            const mv = movementByGameId.get(gid);
+            if (filterMovement !== "all" && mv && mv !== "unknown" && mv !== filterMovement) return false;
+            return true;
+          });
+        }
         const res = await fetchDetailsForGames({
           onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
-          games: dedupedFiltered,
+          games: detailCandidates,
           concurrency: detailConcurrency,
           verifyCompleteness,
           retryErrors,
@@ -11333,7 +11614,7 @@ ${shapes}`.trim();
         pageEtaText = "Overall: estimate unavailable.";
       }
       opts.onStatus(
-        `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" ? "" : ` (${filterModeFamily})`} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
+        `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" && !filterModeNeedle && !filterFromMs && !filterToMs ? "" : " (filtered)"} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
       );
       paginationToken = nextPaginationToken;
       if (!paginationToken) {
@@ -11358,7 +11639,16 @@ ${shapes}`.trim();
     if (enrichLimit > 0) {
       opts.onStatus(`Enriching existing details (limit ${enrichLimit})...`);
       const recentDetailsAll = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
-      const recentDetails = filterModeFamily === "all" ? recentDetailsAll : recentDetailsAll.filter((d) => String(d?.modeFamily || "") === filterModeFamily);
+      const recentDetails = recentDetailsAll.filter((d) => {
+        if (filterModeFamily !== "all" && String(d?.modeFamily || "") !== filterModeFamily) return false;
+        if (filterModeNeedle) {
+          const m = String(d?.gameMode || "").toLowerCase();
+          if (!m.includes(filterModeNeedle)) return false;
+        }
+        if (filterFromMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) < filterFromMs)) return false;
+        if (filterToMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) > filterToMs)) return false;
+        return true;
+      });
       const needIds = recentDetails.filter((d) => d?.status === "ok").filter((d) => {
         const missSlug = typeof d?.mapSlug !== "string" || !d.mapSlug.trim();
         const missName = typeof d?.mapName !== "string" || !d.mapName.trim();

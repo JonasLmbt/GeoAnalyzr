@@ -1,6 +1,7 @@
 import { db, FeedGameRow, ModeFamily } from "./db";
 import { httpGetJsonWithRetry } from "./http";
 import { fetchDetailsForGames } from "./details";
+import type { FetchGameFilter } from "./fetchGameFilter";
 
 function etaLabel(ms: number): string {
   const sec = Math.max(0, Math.round(ms / 1e3));
@@ -388,7 +389,7 @@ export async function updateData(opts: {
   verifyCompleteness?: boolean;
   retryErrors?: boolean;
   enrichLimit?: number;
-  gameFilter?: { modeFamily?: "all" | "duels" | "teamduels" };
+  gameFilter?: FetchGameFilter;
 }): Promise<{
   feedPages: number;
   feedUpserted: number;
@@ -411,10 +412,17 @@ export async function updateData(opts: {
   const startedAt = Date.now();
   const meta = await db.meta.get("sync");
   const lastSeen = (meta?.value as any)?.lastSeenTime ? Number((meta?.value as any)?.lastSeenTime) : null;
-  const filterModeFamily = (() => {
-    const raw = opts?.gameFilter?.modeFamily;
-    return raw === "duels" || raw === "teamduels" ? raw : "all";
-  })();
+  const filter = opts?.gameFilter;
+  const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
+  const filterModeNeedle = typeof filter?.mode === "string" ? filter.mode.trim().toLowerCase() : "";
+  const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
+  const filterToMs = typeof filter?.toMs === "number" && Number.isFinite(filter.toMs) ? Math.max(0, Math.floor(filter.toMs)) : 0;
+  const filterMovement =
+    filter?.movement === "moving" || filter?.movement === "no_move" || filter?.movement === "nmpz" || filter?.movement === "unknown"
+      ? filter.movement
+      : "all";
+  const filterRated =
+    filter?.rated === "rated" || filter?.rated === "unrated" || filter?.rated === "unknown" ? filter.rated : "all";
 
   let paginationToken: string | undefined;
   let feedPages = 0;
@@ -476,8 +484,16 @@ export async function updateData(opts: {
       if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
     }
     const deduped = [...byId.values()];
-    const dedupedFiltered =
-      filterModeFamily === "all" ? deduped : deduped.filter((g) => String((g as any)?.modeFamily || "") === filterModeFamily);
+    const dedupedFiltered = deduped.filter((g) => {
+      if (filterModeFamily !== "all" && String((g as any)?.modeFamily || "") !== filterModeFamily) return false;
+      if (filterModeNeedle) {
+        const m = String((g as any)?.gameMode || (g as any)?.mode || "").toLowerCase();
+        if (!m.includes(filterModeNeedle)) return false;
+      }
+      if (filterFromMs && (!Number.isFinite(g.playedAt) || g.playedAt < filterFromMs)) return false;
+      if (filterToMs && (!Number.isFinite(g.playedAt) || g.playedAt > filterToMs)) return false;
+      return true;
+    });
 
     if (dedupedFiltered.length > 0) {
       await db.games.bulkPut(dedupedFiltered);
@@ -562,9 +578,62 @@ export async function updateData(opts: {
 
     // Fetch/enrich details for games we just saw, so the update proceeds step-by-step.
     if (dedupedFiltered.length > 0) {
+      let detailCandidates = dedupedFiltered;
+      if (filterMovement !== "all" || filterRated !== "all") {
+        const ids = dedupedFiltered.map((g) => g.gameId);
+        const [existingDetails, existingRounds] = await Promise.all([
+          db.details.bulkGet(ids),
+          filterMovement !== "all" ? db.rounds.where("gameId").anyOf(ids).toArray() : Promise.resolve([] as any[])
+        ]);
+
+        const ratedByGameId = new Map<string, boolean>();
+        for (const d of existingDetails as any[]) {
+          const gid = typeof d?.gameId === "string" ? d.gameId : "";
+          if (!gid) continue;
+          if (typeof d?.isRated === "boolean") ratedByGameId.set(gid, d.isRated);
+        }
+
+        const movementByGameId = (() => {
+          const out = new Map<string, "moving" | "no_move" | "nmpz" | "unknown">();
+          const counts = new Map<string, Map<string, number>>();
+          for (const r of existingRounds as any[]) {
+            const gid = typeof r?.gameId === "string" ? r.gameId : "";
+            if (!gid) continue;
+            const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+            const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+            let m = counts.get(gid);
+            if (!m) {
+              m = new Map();
+              counts.set(gid, m);
+            }
+            m.set(mt, (m.get(mt) || 0) + 1);
+          }
+          for (const [gid, m] of counts.entries()) {
+            let best: { k: "moving" | "no_move" | "nmpz" | "unknown"; n: number } = { k: "unknown", n: 0 };
+            for (const [k, n] of m.entries()) {
+              const kk = k as any;
+              if (typeof n === "number" && n > best.n) best = { k: kk, n };
+            }
+            out.set(gid, best.k);
+          }
+          return out;
+        })();
+
+        detailCandidates = dedupedFiltered.filter((g) => {
+          const gid = g.gameId;
+          const rated = ratedByGameId.get(gid);
+          if (filterRated === "rated" && rated === false) return false;
+          if (filterRated === "unrated" && rated === true) return false;
+          if (filterRated === "unknown" && typeof rated === "boolean") return false;
+          const mv = movementByGameId.get(gid);
+          if (filterMovement !== "all" && mv && mv !== "unknown" && mv !== filterMovement) return false;
+          return true;
+        });
+      }
+
       const res = await fetchDetailsForGames({
         onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
-        games: dedupedFiltered,
+        games: detailCandidates,
         concurrency: detailConcurrency,
         verifyCompleteness,
         retryErrors,
@@ -602,7 +671,9 @@ export async function updateData(opts: {
     }
 
     opts.onStatus(
-      `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" ? "" : ` (${filterModeFamily})`} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
+      `Feed page ${page}: upserted ${dedupedFiltered.length}` +
+        `${filterModeFamily === "all" && !filterModeNeedle && !filterFromMs && !filterToMs ? "" : " (filtered)"}` +
+        ` games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
     );
 
     paginationToken = nextPaginationToken;
@@ -633,10 +704,16 @@ export async function updateData(opts: {
   if (enrichLimit > 0) {
     opts.onStatus(`Enriching existing details (limit ${enrichLimit})...`);
     const recentDetailsAll = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
-    const recentDetails =
-      filterModeFamily === "all"
-        ? recentDetailsAll
-        : recentDetailsAll.filter((d: any) => String(d?.modeFamily || "") === filterModeFamily);
+    const recentDetails = recentDetailsAll.filter((d: any) => {
+      if (filterModeFamily !== "all" && String(d?.modeFamily || "") !== filterModeFamily) return false;
+      if (filterModeNeedle) {
+        const m = String(d?.gameMode || "").toLowerCase();
+        if (!m.includes(filterModeNeedle)) return false;
+      }
+      if (filterFromMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) < filterFromMs)) return false;
+      if (filterToMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) > filterToMs)) return false;
+      return true;
+    });
     const needIds = recentDetails
       .filter((d: any) => d?.status === "ok")
       .filter((d: any) => {

@@ -281,7 +281,8 @@ export function createUIOverlay(): UIOverlay {
       return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M21 12a9 9 0 1 1-2.64-6.36"/><path ${common} d="M21 3v6h-6"/></svg>`;
     }
     if (name === "gear") {
-      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path ${common} d="M19.4 15a7.9 7.9 0 0 0 .1-1l2-1.6-2-3.4-2.4.5a7.2 7.2 0 0 0-1.7-1l-.4-2.5H9l-.4 2.5a7.2 7.2 0 0 0-1.7 1L4.5 9l-2 3.4 2 1.6a7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-.5a7.2 7.2 0 0 0 1.7 1l.4 2.5h6l.4-2.5a7.2 7.2 0 0 0 1.7-1l2.4.5 2-3.4-2-1.6z"/></svg>`;
+      // Sliders icon (reads better than a dense gear at 16px).
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path ${common} d="M4 21v-7"/><path ${common} d="M4 10V3"/><path ${common} d="M12 21v-9"/><path ${common} d="M12 8V3"/><path ${common} d="M20 21v-5"/><path ${common} d="M20 12V3"/><path ${common} d="M2 14h4"/><path ${common} d="M10 12h4"/><path ${common} d="M18 16h4"/></svg>`;
     }
     return "";
   };
@@ -443,31 +444,106 @@ export function createUIOverlay(): UIOverlay {
   fetchGearBtn.addEventListener("click", () => {
     const cur = loadFetchGameFilter();
     const wrap = el("div");
-    const label = el("div");
-    label.className = "ga-ui-modal-help";
-    label.textContent = "Game filter (applies on game level only; never partial rounds):";
-    const sel = el("select");
-    sel.className = "ga-ui-modal-input" as any;
-    sel.innerHTML =
-      `<option value="all">All games</option>` +
-      `<option value="duels">Duels only</option>` +
-      `<option value="teamduels">Team Duels only</option>`;
-    sel.value = cur.modeFamily;
-    const help = el("div");
-    help.className = "ga-ui-modal-help";
-    help.textContent =
-      "Fetch Data will only store/fetch games that match this filter. Games outside the filter are skipped (cursor still advances).";
-    wrap.appendChild(label);
-    wrap.appendChild(sel);
-    wrap.appendChild(help);
+    const mkHelp = (t: string) => {
+      const d = el("div");
+      d.className = "ga-ui-modal-help";
+      d.textContent = t;
+      return d;
+    };
+    const mkSelect = (html: string, value: string) => {
+      const s = el("select");
+      s.className = "ga-ui-modal-input";
+      s.innerHTML = html;
+      (s as any).value = value;
+      return s;
+    };
+    const mkInput = (value: string, placeholder: string) => {
+      const i = el("input");
+      i.className = "ga-ui-modal-input";
+      i.type = "text";
+      i.placeholder = placeholder;
+      i.value = value;
+      return i;
+    };
+    const fmtDate = (ms: number) => {
+      if (!ms || !Number.isFinite(ms)) return "";
+      try {
+        return new Date(ms).toISOString().slice(0, 10);
+      } catch {
+        return "";
+      }
+    };
+    const parseDateStartMs = (s: string): number => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
+      if (!m) return 0;
+      const y = Number(m[1]);
+      const mo = Number(m[2]);
+      const d = Number(m[3]);
+      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
+      return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+    };
+    const parseDateEndMs = (s: string): number => {
+      const start = parseDateStartMs(s);
+      if (!start) return 0;
+      return start + 24 * 60 * 60 * 1000 - 1;
+    };
+
+    wrap.appendChild(mkHelp("Fetch filters (always game-level; never partial rounds):"));
+
+    const selFamily = mkSelect(
+      `<option value="all">Mode family: All</option>` +
+        `<option value="duels">Mode family: Duels only</option>` +
+        `<option value="teamduels">Mode family: Team Duels only</option>`,
+      cur.modeFamily
+    );
+    const selMovement = mkSelect(
+      `<option value="all">Movement: All</option>` +
+        `<option value="moving">Movement: Moving</option>` +
+        `<option value="no_move">Movement: No move</option>` +
+        `<option value="nmpz">Movement: NMPZ</option>` +
+        `<option value="unknown">Movement: Unknown</option>`,
+      cur.movement
+    );
+    const selRated = mkSelect(
+      `<option value="all">Rated: All</option>` +
+        `<option value="rated">Rated: Rated only</option>` +
+        `<option value="unrated">Rated: Unrated only</option>` +
+        `<option value="unknown">Rated: Unknown only</option>`,
+      cur.rated
+    );
+    const modeInput = mkInput(cur.mode || "", "Mode contains… (e.g. moving, no_move, nmpz)");
+    const fromInput = mkInput(fmtDate(cur.fromMs), "From date (YYYY-MM-DD)");
+    const toInput = mkInput(fmtDate(cur.toMs), "To date (YYYY-MM-DD)");
+
+    wrap.appendChild(selFamily);
+    wrap.appendChild(selMovement);
+    wrap.appendChild(selRated);
+    wrap.appendChild(modeInput);
+    wrap.appendChild(fromInput);
+    wrap.appendChild(toInput);
+    wrap.appendChild(
+      mkHelp(
+        "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps."
+      )
+    );
     openModal({
       title: "Fetch filters",
       body: wrap,
       onSave: () => {
-        const v = String((sel as any).value || "");
-        const modeFamily = v === "duels" || v === "teamduels" ? (v as any) : "all";
-        saveFetchGameFilter({ modeFamily });
-        status.textContent = `Fetch filter saved: ${modeFamily}.`;
+        const familyRaw = String((selFamily as any).value || "");
+        const movementRaw = String((selMovement as any).value || "");
+        const ratedRaw = String((selRated as any).value || "");
+        const modeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? (familyRaw as any) : "all";
+        const movement =
+          movementRaw === "moving" || movementRaw === "no_move" || movementRaw === "nmpz" || movementRaw === "unknown"
+            ? (movementRaw as any)
+            : "all";
+        const rated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
+        const mode = String(modeInput.value || "");
+        const fromMs = parseDateStartMs(fromInput.value);
+        const toMs = parseDateEndMs(toInput.value);
+        saveFetchGameFilter({ modeFamily, movement, rated, mode, fromMs, toMs });
+        status.textContent = "Fetch filters saved.";
       }
     });
   });
@@ -602,53 +678,107 @@ export function createUIOverlay(): UIOverlay {
   syncGearBtn.addEventListener("click", () => {
     const cur = loadServerSyncSettings();
     const wrap = el("div");
+    const mkHelp = (t: string) => {
+      const d = el("div");
+      d.className = "ga-ui-modal-help";
+      d.textContent = t;
+      return d;
+    };
+    const mkSelect = (html: string, value: string) => {
+      const s = el("select");
+      s.className = "ga-ui-modal-input";
+      s.innerHTML = html;
+      (s as any).value = value;
+      return s;
+    };
+    const mkInput = (value: string, placeholder: string) => {
+      const i = el("input");
+      i.className = "ga-ui-modal-input";
+      i.type = "text";
+      i.placeholder = placeholder;
+      i.value = value;
+      return i;
+    };
+    const fmtDate = (ms: number) => {
+      if (!ms || !Number.isFinite(ms)) return "";
+      try {
+        return new Date(ms).toISOString().slice(0, 10);
+      } catch {
+        return "";
+      }
+    };
+    const parseDateStartMs = (s: string): number => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
+      if (!m) return 0;
+      const y = Number(m[1]);
+      const mo = Number(m[2]);
+      const d = Number(m[3]);
+      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
+      return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+    };
+    const parseDateEndMs = (s: string): number => {
+      const start = parseDateStartMs(s);
+      if (!start) return 0;
+      return start + 24 * 60 * 60 * 1000 - 1;
+    };
 
-    const label1 = el("div");
-    label1.className = "ga-ui-modal-help";
-    label1.textContent = "Mode filter (game level only):";
-    const selMode = el("select");
-    selMode.className = "ga-ui-modal-input" as any;
-    selMode.innerHTML =
-      `<option value="all">All games</option>` +
-      `<option value="duels">Duels only</option>` +
-      `<option value="teamduels">Team Duels only</option>`;
-    selMode.value = cur.filterModeFamily;
+    wrap.appendChild(mkHelp("Sync filters (always game-level; never partial rounds):"));
 
-    const label2 = el("div");
-    label2.className = "ga-ui-modal-help";
-    label2.textContent = "Movement filter (game level only):";
-    const selMove = el("select");
-    selMove.className = "ga-ui-modal-input" as any;
-    selMove.innerHTML =
-      `<option value="all">All</option>` +
-      `<option value="moving">Moving</option>` +
-      `<option value="no_move">No move</option>` +
-      `<option value="nmpz">NMPZ</option>` +
-      `<option value="unknown">Unknown</option>`;
-    selMove.value = cur.filterMovement;
+    const selFamily = mkSelect(
+      `<option value="all">Mode family: All</option>` +
+        `<option value="duels">Mode family: Duels only</option>` +
+        `<option value="teamduels">Mode family: Team Duels only</option>`,
+      cur.filterModeFamily
+    );
+    const selMovement = mkSelect(
+      `<option value="all">Movement: All</option>` +
+        `<option value="moving">Movement: Moving</option>` +
+        `<option value="no_move">Movement: No move</option>` +
+        `<option value="nmpz">Movement: NMPZ</option>` +
+        `<option value="unknown">Movement: Unknown</option>`,
+      cur.filterMovement
+    );
+    const selRated = mkSelect(
+      `<option value="all">Rated: All</option>` +
+        `<option value="rated">Rated: Rated only</option>` +
+        `<option value="unrated">Rated: Unrated only</option>` +
+        `<option value="unknown">Rated: Unknown only</option>`,
+      cur.filterRated
+    );
+    const modeInput = mkInput(cur.filterMode || "", "Mode contains… (case-insensitive)");
+    const fromInput = mkInput(fmtDate(cur.filterFromMs), "From date (YYYY-MM-DD)");
+    const toInput = mkInput(fmtDate(cur.filterToMs), "To date (YYYY-MM-DD)");
 
-    const help = el("div");
-    help.className = "ga-ui-modal-help";
-    help.textContent =
-      "Sync only sends games that match these filters (no partial rounds). Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games.";
-
-    wrap.appendChild(label1);
-    wrap.appendChild(selMode);
-    wrap.appendChild(label2);
-    wrap.appendChild(selMove);
-    wrap.appendChild(help);
+    wrap.appendChild(selFamily);
+    wrap.appendChild(selMovement);
+    wrap.appendChild(selRated);
+    wrap.appendChild(modeInput);
+    wrap.appendChild(fromInput);
+    wrap.appendChild(toInput);
+    wrap.appendChild(
+      mkHelp(
+        "Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games. Cursor still advances even for excluded games."
+      )
+    );
 
     openModal({
       title: "Sync filters",
       body: wrap,
       onSave: () => {
-        const modeRaw = String((selMode as any).value || "");
-        const movRaw = String((selMove as any).value || "");
-        const filterModeFamily = modeRaw === "duels" || modeRaw === "teamduels" ? (modeRaw as any) : "all";
+        const familyRaw = String((selFamily as any).value || "");
+        const movementRaw = String((selMovement as any).value || "");
+        const ratedRaw = String((selRated as any).value || "");
+        const filterModeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? (familyRaw as any) : "all";
         const filterMovement =
-          movRaw === "moving" || movRaw === "no_move" || movRaw === "nmpz" || movRaw === "unknown" ? (movRaw as any) : "all";
-        saveServerSyncSettings({ filterModeFamily, filterMovement });
-        status.textContent = `Sync filter saved: ${filterModeFamily}, ${filterMovement}.`;
+          movementRaw === "moving" || movementRaw === "no_move" || movementRaw === "nmpz" || movementRaw === "unknown"
+            ? (movementRaw as any)
+            : "all";
+        const filterRated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
+        const filterMode = String(modeInput.value || "");
+        const filterFromMs = parseDateStartMs(fromInput.value);
+        const filterToMs = parseDateEndMs(toInput.value);
+        saveServerSyncSettings({ filterModeFamily, filterMovement, filterRated, filterMode, filterFromMs, filterToMs });
+        status.textContent = "Sync filters saved.";
       }
     });
   });

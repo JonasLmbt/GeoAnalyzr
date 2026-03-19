@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.4.4
+// @version      2.4.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9555,6 +9555,10 @@
     const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
     const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
     const filterMovementRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
+    const filterRatedRaw = readGmValue(`${GM_VALUE_PREFIX}filter_rated`);
+    const filterModeRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode`);
+    const filterFromRaw = readGmValue(`${GM_VALUE_PREFIX}filter_from_ms`);
+    const filterToRaw = readGmValue(`${GM_VALUE_PREFIX}filter_to_ms`);
     const filterModeFamily = (() => {
       const s = typeof filterModeFamilyRaw === "string" ? filterModeFamilyRaw.trim().toLowerCase() : "";
       return s === "duels" || s === "teamduels" ? s : "all";
@@ -9563,13 +9567,30 @@
       const s = typeof filterMovementRaw === "string" ? filterMovementRaw.trim().toLowerCase() : "";
       return s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown" ? s : "all";
     })();
+    const filterRated = (() => {
+      const s = typeof filterRatedRaw === "string" ? filterRatedRaw.trim().toLowerCase() : "";
+      return s === "rated" || s === "unrated" || s === "unknown" ? s : "all";
+    })();
+    const filterMode = typeof filterModeRaw === "string" ? filterModeRaw.trim().slice(0, 60) : "";
+    const filterFromMs = (() => {
+      const n = typeof filterFromRaw === "number" ? filterFromRaw : typeof filterFromRaw === "string" ? Number(filterFromRaw) : NaN;
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    })();
+    const filterToMs = (() => {
+      const n = typeof filterToRaw === "number" ? filterToRaw : typeof filterToRaw === "string" ? Number(filterToRaw) : NaN;
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    })();
     return {
       endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
       token,
       compact,
       includeAggregates,
       filterModeFamily,
-      filterMovement
+      filterMovement,
+      filterRated,
+      filterMode,
+      filterFromMs,
+      filterToMs
     };
   }
   function saveServerSyncSettings(next) {
@@ -9579,6 +9600,10 @@
     if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
     if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
     if (typeof next.filterMovement === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_movement`, next.filterMovement);
+    if (typeof next.filterRated === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_rated`, next.filterRated);
+    if (typeof next.filterMode === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode`, next.filterMode.trim().slice(0, 60));
+    if (typeof next.filterFromMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_from_ms`, String(Math.max(0, Math.floor(next.filterFromMs))));
+    if (typeof next.filterToMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_to_ms`, String(Math.max(0, Math.floor(next.filterToMs))));
   }
   async function getLastServerSyncCursor() {
     const meta = await db.meta.get(SYNC_META_KEY);
@@ -9668,6 +9693,19 @@
     }
     const filterModeFamily = opts.filterModeFamily || "all";
     const filterMovement = opts.filterMovement || "all";
+    const filterRated = opts.filterRated || "all";
+    const filterModeNeedle = typeof opts.filterMode === "string" ? opts.filterMode.trim().toLowerCase() : "";
+    const filterFromMs = typeof opts.filterFromMs === "number" && Number.isFinite(opts.filterFromMs) ? Math.max(0, Math.floor(opts.filterFromMs)) : 0;
+    const filterToMs = typeof opts.filterToMs === "number" && Number.isFinite(opts.filterToMs) ? Math.max(0, Math.floor(opts.filterToMs)) : 0;
+    const ratedByGameId = (() => {
+      const m = /* @__PURE__ */ new Map();
+      for (const d of detailsMerged) {
+        const gid = typeof d?.gameId === "string" ? d.gameId : "";
+        if (!gid) continue;
+        if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
+      }
+      return m;
+    })();
     const movementForGame = (() => {
       const out = /* @__PURE__ */ new Map();
       const counts = /* @__PURE__ */ new Map();
@@ -9699,8 +9737,18 @@
         const gid = typeof g?.gameId === "string" ? g.gameId : "";
         if (!gid) continue;
         if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+        if (filterModeNeedle) {
+          const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+          if (!m.includes(filterModeNeedle)) continue;
+        }
+        if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
+        if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
         const mt = movementForGame.get(gid) || "unknown";
         if (filterMovement !== "all" && mt !== filterMovement) continue;
+        const rated = ratedByGameId.get(gid);
+        if (filterRated === "rated" && rated !== true) continue;
+        if (filterRated === "unrated" && rated !== false) continue;
+        if (filterRated === "unknown" && typeof rated === "boolean") continue;
         ids.add(gid);
       }
       return ids;
@@ -9933,14 +9981,37 @@
       })();
       const filterModeFamily = settings.filterModeFamily || "all";
       const filterMovement = settings.filterMovement || "all";
+      const filterRated = settings.filterRated || "all";
+      const filterModeNeedle = typeof settings.filterMode === "string" ? settings.filterMode.trim().toLowerCase() : "";
+      const filterFromMs = typeof settings.filterFromMs === "number" && Number.isFinite(settings.filterFromMs) ? Math.max(0, Math.floor(settings.filterFromMs)) : 0;
+      const filterToMs = typeof settings.filterToMs === "number" && Number.isFinite(settings.filterToMs) ? Math.max(0, Math.floor(settings.filterToMs)) : 0;
+      const ratedByGameId = (() => {
+        const m = /* @__PURE__ */ new Map();
+        for (const d of detailsAll) {
+          const gid = typeof d?.gameId === "string" ? d.gameId : "";
+          if (!gid) continue;
+          if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
+        }
+        return m;
+      })();
       const allowedGameIds = (() => {
         const ids = /* @__PURE__ */ new Set();
         for (const g of gamesAll) {
           const gid = typeof g?.gameId === "string" ? g.gameId : "";
           if (!gid) continue;
           if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+          if (filterModeNeedle) {
+            const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+            if (!m.includes(filterModeNeedle)) continue;
+          }
+          if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
+          if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
           const mt = movementForGame.get(gid) || "unknown";
           if (filterMovement !== "all" && mt !== filterMovement) continue;
+          const rated = ratedByGameId.get(gid);
+          if (filterRated === "rated" && rated !== true) continue;
+          if (filterRated === "unrated" && rated !== false) continue;
+          if (filterRated === "unknown" && typeof rated === "boolean") continue;
           ids.add(gid);
         }
         return ids;
@@ -9995,7 +10066,11 @@
       compact: effectiveCompact,
       includeAggregates: settings.includeAggregates,
       filterModeFamily: settings.filterModeFamily,
-      filterMovement: settings.filterMovement
+      filterMovement: settings.filterMovement,
+      filterRated: settings.filterRated,
+      filterMode: settings.filterMode,
+      filterFromMs: settings.filterFromMs,
+      filterToMs: settings.filterToMs
     });
     const headers = {
       "Content-Type": "application/json",
@@ -10402,10 +10477,13 @@ ${shapes}`.trim();
     const startedAt = Date.now();
     const meta = await db.meta.get("sync");
     const lastSeen = meta?.value?.lastSeenTime ? Number(meta?.value?.lastSeenTime) : null;
-    const filterModeFamily = (() => {
-      const raw = opts?.gameFilter?.modeFamily;
-      return raw === "duels" || raw === "teamduels" ? raw : "all";
-    })();
+    const filter = opts?.gameFilter;
+    const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
+    const filterModeNeedle = typeof filter?.mode === "string" ? filter.mode.trim().toLowerCase() : "";
+    const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
+    const filterToMs = typeof filter?.toMs === "number" && Number.isFinite(filter.toMs) ? Math.max(0, Math.floor(filter.toMs)) : 0;
+    const filterMovement = filter?.movement === "moving" || filter?.movement === "no_move" || filter?.movement === "nmpz" || filter?.movement === "unknown" ? filter.movement : "all";
+    const filterRated = filter?.rated === "rated" || filter?.rated === "unrated" || filter?.rated === "unknown" ? filter.rated : "all";
     let paginationToken;
     let feedPages = 0;
     let feedUpserted = 0;
@@ -10457,7 +10535,16 @@ ${shapes}`.trim();
         if (!prev || row.playedAt > prev.playedAt) byId.set(row.gameId, row);
       }
       const deduped = [...byId.values()];
-      const dedupedFiltered = filterModeFamily === "all" ? deduped : deduped.filter((g) => String(g?.modeFamily || "") === filterModeFamily);
+      const dedupedFiltered = deduped.filter((g) => {
+        if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) return false;
+        if (filterModeNeedle) {
+          const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+          if (!m.includes(filterModeNeedle)) return false;
+        }
+        if (filterFromMs && (!Number.isFinite(g.playedAt) || g.playedAt < filterFromMs)) return false;
+        if (filterToMs && (!Number.isFinite(g.playedAt) || g.playedAt > filterToMs)) return false;
+        return true;
+      });
       if (dedupedFiltered.length > 0) {
         await db.games.bulkPut(dedupedFiltered);
         feedUpserted += dedupedFiltered.length;
@@ -10526,9 +10613,58 @@ ${shapes}`.trim();
       const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
       await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
       if (dedupedFiltered.length > 0) {
+        let detailCandidates = dedupedFiltered;
+        if (filterMovement !== "all" || filterRated !== "all") {
+          const ids = dedupedFiltered.map((g) => g.gameId);
+          const [existingDetails, existingRounds] = await Promise.all([
+            db.details.bulkGet(ids),
+            filterMovement !== "all" ? db.rounds.where("gameId").anyOf(ids).toArray() : Promise.resolve([])
+          ]);
+          const ratedByGameId = /* @__PURE__ */ new Map();
+          for (const d of existingDetails) {
+            const gid = typeof d?.gameId === "string" ? d.gameId : "";
+            if (!gid) continue;
+            if (typeof d?.isRated === "boolean") ratedByGameId.set(gid, d.isRated);
+          }
+          const movementByGameId = (() => {
+            const out = /* @__PURE__ */ new Map();
+            const counts = /* @__PURE__ */ new Map();
+            for (const r of existingRounds) {
+              const gid = typeof r?.gameId === "string" ? r.gameId : "";
+              if (!gid) continue;
+              const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
+              const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
+              let m = counts.get(gid);
+              if (!m) {
+                m = /* @__PURE__ */ new Map();
+                counts.set(gid, m);
+              }
+              m.set(mt, (m.get(mt) || 0) + 1);
+            }
+            for (const [gid, m] of counts.entries()) {
+              let best = { k: "unknown", n: 0 };
+              for (const [k, n] of m.entries()) {
+                const kk = k;
+                if (typeof n === "number" && n > best.n) best = { k: kk, n };
+              }
+              out.set(gid, best.k);
+            }
+            return out;
+          })();
+          detailCandidates = dedupedFiltered.filter((g) => {
+            const gid = g.gameId;
+            const rated = ratedByGameId.get(gid);
+            if (filterRated === "rated" && rated === false) return false;
+            if (filterRated === "unrated" && rated === true) return false;
+            if (filterRated === "unknown" && typeof rated === "boolean") return false;
+            const mv = movementByGameId.get(gid);
+            if (filterMovement !== "all" && mv && mv !== "unknown" && mv !== filterMovement) return false;
+            return true;
+          });
+        }
         const res = await fetchDetailsForGames({
           onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
-          games: dedupedFiltered,
+          games: detailCandidates,
           concurrency: detailConcurrency,
           verifyCompleteness,
           retryErrors,
@@ -10562,7 +10698,7 @@ ${shapes}`.trim();
         pageEtaText = "Overall: estimate unavailable.";
       }
       opts.onStatus(
-        `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" ? "" : ` (${filterModeFamily})`} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
+        `Feed page ${page}: upserted ${dedupedFiltered.length}${filterModeFamily === "all" && !filterModeNeedle && !filterFromMs && !filterToMs ? "" : " (filtered)"} games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
       );
       paginationToken = nextPaginationToken;
       if (!paginationToken) {
@@ -10587,7 +10723,16 @@ ${shapes}`.trim();
     if (enrichLimit > 0) {
       opts.onStatus(`Enriching existing details (limit ${enrichLimit})...`);
       const recentDetailsAll = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
-      const recentDetails = filterModeFamily === "all" ? recentDetailsAll : recentDetailsAll.filter((d) => String(d?.modeFamily || "") === filterModeFamily);
+      const recentDetails = recentDetailsAll.filter((d) => {
+        if (filterModeFamily !== "all" && String(d?.modeFamily || "") !== filterModeFamily) return false;
+        if (filterModeNeedle) {
+          const m = String(d?.gameMode || "").toLowerCase();
+          if (!m.includes(filterModeNeedle)) return false;
+        }
+        if (filterFromMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) < filterFromMs)) return false;
+        if (filterToMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) > filterToMs)) return false;
+        return true;
+      });
       const needIds = recentDetails.filter((d) => d?.status === "ok").filter((d) => {
         const missSlug = typeof d?.mapSlug !== "string" || !d.mapSlug.trim();
         const missName = typeof d?.mapName !== "string" || !d.mapName.trim();
@@ -10653,9 +10798,32 @@ ${shapes}`.trim();
     if (s === "duels" || s === "teamduels") return s;
     return "all";
   }
+  function normalizeMovement(value) {
+    const s = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown") return s;
+    return "all";
+  }
+  function normalizeRated(value) {
+    const s = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (s === "rated" || s === "unrated" || s === "unknown") return s;
+    return "all";
+  }
+  function normalizeMode(value) {
+    return typeof value === "string" ? value.trim().slice(0, 60) : "";
+  }
+  function normalizeMs(value) {
+    const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.floor(n));
+  }
   function loadFetchGameFilter() {
-    const raw = readGmValue2(`${GM_VALUE_PREFIX2}mode_family`);
-    return { modeFamily: normalizeModeFamily(raw) };
+    const modeFamily = normalizeModeFamily(readGmValue2(`${GM_VALUE_PREFIX2}mode_family`));
+    const movement = normalizeMovement(readGmValue2(`${GM_VALUE_PREFIX2}movement`));
+    const rated = normalizeRated(readGmValue2(`${GM_VALUE_PREFIX2}rated`));
+    const mode = normalizeMode(readGmValue2(`${GM_VALUE_PREFIX2}mode`));
+    const fromMs = normalizeMs(readGmValue2(`${GM_VALUE_PREFIX2}from_ms`));
+    const toMs = normalizeMs(readGmValue2(`${GM_VALUE_PREFIX2}to_ms`));
+    return { modeFamily, movement, rated, mode, fromMs, toMs };
   }
 
   // src/syncOnly/linkDevice.ts

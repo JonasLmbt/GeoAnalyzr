@@ -16,6 +16,10 @@ export type ServerSyncSettings = {
   includeAggregates: boolean;
   filterModeFamily: "all" | "duels" | "teamduels";
   filterMovement: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+  filterRated: "all" | "rated" | "unrated" | "unknown";
+  filterMode: string; // substring match (case-insensitive) against gameMode/mode
+  filterFromMs: number; // inclusive lower bound (playedAt)
+  filterToMs: number; // inclusive upper bound (playedAt)
 };
 
 export type ServerSyncStatus = {
@@ -133,6 +137,10 @@ export function loadServerSyncSettings(): ServerSyncSettings {
     typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
   const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
   const filterMovementRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
+  const filterRatedRaw = readGmValue(`${GM_VALUE_PREFIX}filter_rated`);
+  const filterModeRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode`);
+  const filterFromRaw = readGmValue(`${GM_VALUE_PREFIX}filter_from_ms`);
+  const filterToRaw = readGmValue(`${GM_VALUE_PREFIX}filter_to_ms`);
   const filterModeFamily = (() => {
     const s = typeof filterModeFamilyRaw === "string" ? filterModeFamilyRaw.trim().toLowerCase() : "";
     return s === "duels" || s === "teamduels" ? s : "all";
@@ -141,6 +149,19 @@ export function loadServerSyncSettings(): ServerSyncSettings {
     const s = typeof filterMovementRaw === "string" ? filterMovementRaw.trim().toLowerCase() : "";
     return s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown" ? s : "all";
   })();
+  const filterRated = (() => {
+    const s = typeof filterRatedRaw === "string" ? filterRatedRaw.trim().toLowerCase() : "";
+    return s === "rated" || s === "unrated" || s === "unknown" ? s : "all";
+  })();
+  const filterMode = typeof filterModeRaw === "string" ? filterModeRaw.trim().slice(0, 60) : "";
+  const filterFromMs = (() => {
+    const n = typeof filterFromRaw === "number" ? filterFromRaw : typeof filterFromRaw === "string" ? Number(filterFromRaw) : NaN;
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  })();
+  const filterToMs = (() => {
+    const n = typeof filterToRaw === "number" ? filterToRaw : typeof filterToRaw === "string" ? Number(filterToRaw) : NaN;
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  })();
 
   return {
     endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
@@ -148,7 +169,11 @@ export function loadServerSyncSettings(): ServerSyncSettings {
     compact,
     includeAggregates,
     filterModeFamily,
-    filterMovement
+    filterMovement,
+    filterRated,
+    filterMode,
+    filterFromMs,
+    filterToMs
   };
 }
 
@@ -159,6 +184,10 @@ export function saveServerSyncSettings(next: Partial<ServerSyncSettings>): void 
   if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
   if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
   if (typeof next.filterMovement === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_movement`, next.filterMovement);
+  if (typeof next.filterRated === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_rated`, next.filterRated);
+  if (typeof next.filterMode === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode`, next.filterMode.trim().slice(0, 60));
+  if (typeof next.filterFromMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_from_ms`, String(Math.max(0, Math.floor(next.filterFromMs))));
+  if (typeof next.filterToMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_to_ms`, String(Math.max(0, Math.floor(next.filterToMs))));
 }
 
 export async function getLastServerSyncCursor(): Promise<number> {
@@ -218,6 +247,10 @@ async function buildDelta(
     includeAggregates: boolean;
     filterModeFamily: "all" | "duels" | "teamduels";
     filterMovement: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+    filterRated: "all" | "rated" | "unrated" | "unknown";
+    filterMode: string;
+    filterFromMs: number;
+    filterToMs: number;
   }
 ): Promise<{
   cursorFrom: number;
@@ -285,6 +318,20 @@ async function buildDelta(
 
   const filterModeFamily = opts.filterModeFamily || "all";
   const filterMovement = opts.filterMovement || "all";
+  const filterRated = opts.filterRated || "all";
+  const filterModeNeedle = typeof opts.filterMode === "string" ? opts.filterMode.trim().toLowerCase() : "";
+  const filterFromMs = typeof opts.filterFromMs === "number" && Number.isFinite(opts.filterFromMs) ? Math.max(0, Math.floor(opts.filterFromMs)) : 0;
+  const filterToMs = typeof opts.filterToMs === "number" && Number.isFinite(opts.filterToMs) ? Math.max(0, Math.floor(opts.filterToMs)) : 0;
+
+  const ratedByGameId = (() => {
+    const m = new Map<string, boolean>();
+    for (const d of detailsMerged as any[]) {
+      const gid = typeof d?.gameId === "string" ? d.gameId : "";
+      if (!gid) continue;
+      if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
+    }
+    return m;
+  })();
 
   const movementForGame = (() => {
     const out = new Map<string, "moving" | "no_move" | "nmpz" | "unknown">();
@@ -318,8 +365,18 @@ async function buildDelta(
       const gid = typeof g?.gameId === "string" ? g.gameId : "";
       if (!gid) continue;
       if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+      if (filterModeNeedle) {
+        const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+        if (!m.includes(filterModeNeedle)) continue;
+      }
+      if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
+      if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
       const mt = movementForGame.get(gid) || "unknown";
       if (filterMovement !== "all" && mt !== filterMovement) continue;
+      const rated = ratedByGameId.get(gid);
+      if (filterRated === "rated" && rated !== true) continue;
+      if (filterRated === "unrated" && rated !== false) continue;
+      if (filterRated === "unknown" && typeof rated === "boolean") continue;
       ids.add(gid);
     }
     return ids;
@@ -605,14 +662,40 @@ export async function runServerSyncOnceWithOptions(
 
         const filterModeFamily = settings.filterModeFamily || "all";
         const filterMovement = settings.filterMovement || "all";
+        const filterRated = settings.filterRated || "all";
+        const filterModeNeedle = typeof settings.filterMode === "string" ? settings.filterMode.trim().toLowerCase() : "";
+        const filterFromMs =
+          typeof settings.filterFromMs === "number" && Number.isFinite(settings.filterFromMs) ? Math.max(0, Math.floor(settings.filterFromMs)) : 0;
+        const filterToMs =
+          typeof settings.filterToMs === "number" && Number.isFinite(settings.filterToMs) ? Math.max(0, Math.floor(settings.filterToMs)) : 0;
+
+        const ratedByGameId = (() => {
+          const m = new Map<string, boolean>();
+          for (const d of detailsAll as any[]) {
+            const gid = typeof d?.gameId === "string" ? d.gameId : "";
+            if (!gid) continue;
+            if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
+          }
+          return m;
+        })();
         const allowedGameIds = (() => {
           const ids = new Set<string>();
           for (const g of gamesAll as any[]) {
             const gid = typeof g?.gameId === "string" ? g.gameId : "";
             if (!gid) continue;
             if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
+            if (filterModeNeedle) {
+              const m = String(g?.gameMode || g?.mode || "").toLowerCase();
+              if (!m.includes(filterModeNeedle)) continue;
+            }
+            if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
+            if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
             const mt = movementForGame.get(gid) || "unknown";
             if (filterMovement !== "all" && mt !== filterMovement) continue;
+            const rated = ratedByGameId.get(gid);
+            if (filterRated === "rated" && rated !== true) continue;
+            if (filterRated === "unrated" && rated !== false) continue;
+            if (filterRated === "unknown" && typeof rated === "boolean") continue;
             ids.add(gid);
           }
           return ids;
@@ -675,7 +758,11 @@ export async function runServerSyncOnceWithOptions(
         compact: effectiveCompact,
         includeAggregates: settings.includeAggregates,
         filterModeFamily: settings.filterModeFamily,
-        filterMovement: settings.filterMovement
+        filterMovement: settings.filterMovement,
+        filterRated: settings.filterRated,
+        filterMode: settings.filterMode,
+        filterFromMs: settings.filterFromMs,
+        filterToMs: settings.filterToMs
       });
 
   const headers: Record<string, string> = {
