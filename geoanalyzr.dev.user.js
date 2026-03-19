@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.5-dev
+// @version      2.4.6-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
