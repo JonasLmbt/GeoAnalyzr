@@ -15,9 +15,8 @@ export type ServerSyncSettings = {
   compact: boolean;
   includeAggregates: boolean;
   filterModeFamily: "all" | "duels" | "teamduels";
-  filterMovement: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+  filterMovementAnyOf: Array<"moving" | "no_move" | "nmpz" | "unknown">; // empty => all
   filterRated: "all" | "rated" | "unrated" | "unknown";
-  filterMode: string; // substring match (case-insensitive) against gameMode/mode
   filterFromMs: number; // inclusive lower bound (playedAt)
   filterToMs: number; // inclusive upper bound (playedAt)
 };
@@ -136,24 +135,37 @@ export function loadServerSyncSettings(): ServerSyncSettings {
   const includeAggregates =
     typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
   const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
-  const filterMovementRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
+  const filterMovementAnyOfRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement_anyof`);
+  const filterMovementLegacyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_movement`);
   const filterRatedRaw = readGmValue(`${GM_VALUE_PREFIX}filter_rated`);
-  const filterModeRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode`);
   const filterFromRaw = readGmValue(`${GM_VALUE_PREFIX}filter_from_ms`);
   const filterToRaw = readGmValue(`${GM_VALUE_PREFIX}filter_to_ms`);
   const filterModeFamily = (() => {
     const s = typeof filterModeFamilyRaw === "string" ? filterModeFamilyRaw.trim().toLowerCase() : "";
     return s === "duels" || s === "teamduels" ? s : "all";
   })();
-  const filterMovement = (() => {
-    const s = typeof filterMovementRaw === "string" ? filterMovementRaw.trim().toLowerCase() : "";
-    return s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown" ? s : "all";
+  const filterMovementAnyOf = (() => {
+    const parse = (v: unknown) => {
+      const raw = typeof v === "string" ? v.trim() : "";
+      if (!raw || raw.toLowerCase() === "all") return [] as Array<"moving" | "no_move" | "nmpz" | "unknown">;
+      const parts = raw
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const out: Array<"moving" | "no_move" | "nmpz" | "unknown"> = [];
+      for (const p of parts) if (p === "moving" || p === "no_move" || p === "nmpz" || p === "unknown") out.push(p);
+      return Array.from(new Set(out));
+    };
+    const parsed = parse(filterMovementAnyOfRaw);
+    if (parsed.length > 0) return parsed;
+    const legacy = typeof filterMovementLegacyRaw === "string" ? filterMovementLegacyRaw.trim().toLowerCase() : "";
+    if (legacy === "moving" || legacy === "no_move" || legacy === "nmpz" || legacy === "unknown") return [legacy];
+    return parsed;
   })();
   const filterRated = (() => {
     const s = typeof filterRatedRaw === "string" ? filterRatedRaw.trim().toLowerCase() : "";
     return s === "rated" || s === "unrated" || s === "unknown" ? s : "all";
   })();
-  const filterMode = typeof filterModeRaw === "string" ? filterModeRaw.trim().slice(0, 60) : "";
   const filterFromMs = (() => {
     const n = typeof filterFromRaw === "number" ? filterFromRaw : typeof filterFromRaw === "string" ? Number(filterFromRaw) : NaN;
     return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
@@ -169,9 +181,8 @@ export function loadServerSyncSettings(): ServerSyncSettings {
     compact,
     includeAggregates,
     filterModeFamily,
-    filterMovement,
+    filterMovementAnyOf,
     filterRated,
-    filterMode,
     filterFromMs,
     filterToMs
   };
@@ -183,9 +194,14 @@ export function saveServerSyncSettings(next: Partial<ServerSyncSettings>): void 
   if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
   if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
   if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
-  if (typeof next.filterMovement === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_movement`, next.filterMovement);
+  if (Array.isArray(next.filterMovementAnyOf)) {
+    const items = next.filterMovementAnyOf
+      .map((s) => String(s || "").trim().toLowerCase())
+      .filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown");
+    const uniq = Array.from(new Set(items));
+    writeGmValue(`${GM_VALUE_PREFIX}filter_movement_anyof`, uniq.length > 0 ? uniq.join(",") : "all");
+  }
   if (typeof next.filterRated === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_rated`, next.filterRated);
-  if (typeof next.filterMode === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode`, next.filterMode.trim().slice(0, 60));
   if (typeof next.filterFromMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_from_ms`, String(Math.max(0, Math.floor(next.filterFromMs))));
   if (typeof next.filterToMs === "number") writeGmValue(`${GM_VALUE_PREFIX}filter_to_ms`, String(Math.max(0, Math.floor(next.filterToMs))));
 }
@@ -246,9 +262,8 @@ async function buildDelta(
     compact: boolean;
     includeAggregates: boolean;
     filterModeFamily: "all" | "duels" | "teamduels";
-    filterMovement: "all" | "moving" | "no_move" | "nmpz" | "unknown";
+    filterMovementAnyOf: Array<"moving" | "no_move" | "nmpz" | "unknown">;
     filterRated: "all" | "rated" | "unrated" | "unknown";
-    filterMode: string;
     filterFromMs: number;
     filterToMs: number;
   }
@@ -317,9 +332,8 @@ async function buildDelta(
   }
 
   const filterModeFamily = opts.filterModeFamily || "all";
-  const filterMovement = opts.filterMovement || "all";
   const filterRated = opts.filterRated || "all";
-  const filterModeNeedle = typeof opts.filterMode === "string" ? opts.filterMode.trim().toLowerCase() : "";
+  const filterMovementAnyOf = Array.isArray(opts.filterMovementAnyOf) ? opts.filterMovementAnyOf : [];
   const filterFromMs = typeof opts.filterFromMs === "number" && Number.isFinite(opts.filterFromMs) ? Math.max(0, Math.floor(opts.filterFromMs)) : 0;
   const filterToMs = typeof opts.filterToMs === "number" && Number.isFinite(opts.filterToMs) ? Math.max(0, Math.floor(opts.filterToMs)) : 0;
 
@@ -365,14 +379,10 @@ async function buildDelta(
       const gid = typeof g?.gameId === "string" ? g.gameId : "";
       if (!gid) continue;
       if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
-      if (filterModeNeedle) {
-        const m = String(g?.gameMode || g?.mode || "").toLowerCase();
-        if (!m.includes(filterModeNeedle)) continue;
-      }
       if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
       if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
       const mt = movementForGame.get(gid) || "unknown";
-      if (filterMovement !== "all" && mt !== filterMovement) continue;
+      if (filterMovementAnyOf.length > 0 && !filterMovementAnyOf.includes(mt)) continue;
       const rated = ratedByGameId.get(gid);
       if (filterRated === "rated" && rated !== true) continue;
       if (filterRated === "unrated" && rated !== false) continue;
@@ -661,9 +671,10 @@ export async function runServerSyncOnceWithOptions(
         })();
 
         const filterModeFamily = settings.filterModeFamily || "all";
-        const filterMovement = settings.filterMovement || "all";
+        const filterMovementAnyOf = Array.isArray(settings.filterMovementAnyOf)
+          ? settings.filterMovementAnyOf.filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown")
+          : [];
         const filterRated = settings.filterRated || "all";
-        const filterModeNeedle = typeof settings.filterMode === "string" ? settings.filterMode.trim().toLowerCase() : "";
         const filterFromMs =
           typeof settings.filterFromMs === "number" && Number.isFinite(settings.filterFromMs) ? Math.max(0, Math.floor(settings.filterFromMs)) : 0;
         const filterToMs =
@@ -684,14 +695,10 @@ export async function runServerSyncOnceWithOptions(
             const gid = typeof g?.gameId === "string" ? g.gameId : "";
             if (!gid) continue;
             if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
-            if (filterModeNeedle) {
-              const m = String(g?.gameMode || g?.mode || "").toLowerCase();
-              if (!m.includes(filterModeNeedle)) continue;
-            }
             if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
             if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
             const mt = movementForGame.get(gid) || "unknown";
-            if (filterMovement !== "all" && mt !== filterMovement) continue;
+            if (filterMovementAnyOf.length > 0 && !filterMovementAnyOf.includes(mt)) continue;
             const rated = ratedByGameId.get(gid);
             if (filterRated === "rated" && rated !== true) continue;
             if (filterRated === "unrated" && rated !== false) continue;
@@ -758,9 +765,8 @@ export async function runServerSyncOnceWithOptions(
         compact: effectiveCompact,
         includeAggregates: settings.includeAggregates,
         filterModeFamily: settings.filterModeFamily,
-        filterMovement: settings.filterMovement,
+        filterMovementAnyOf: settings.filterMovementAnyOf,
         filterRated: settings.filterRated,
-        filterMode: settings.filterMode,
         filterFromMs: settings.filterFromMs,
         filterToMs: settings.filterToMs
       });

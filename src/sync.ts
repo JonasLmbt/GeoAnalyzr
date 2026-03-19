@@ -414,13 +414,11 @@ export async function updateData(opts: {
   const lastSeen = (meta?.value as any)?.lastSeenTime ? Number((meta?.value as any)?.lastSeenTime) : null;
   const filter = opts?.gameFilter;
   const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
-  const filterModeNeedle = typeof filter?.mode === "string" ? filter.mode.trim().toLowerCase() : "";
   const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
   const filterToMs = typeof filter?.toMs === "number" && Number.isFinite(filter.toMs) ? Math.max(0, Math.floor(filter.toMs)) : 0;
-  const filterMovement =
-    filter?.movement === "moving" || filter?.movement === "no_move" || filter?.movement === "nmpz" || filter?.movement === "unknown"
-      ? filter.movement
-      : "all";
+  const filterMovementAnyOf = Array.isArray(filter?.movementAnyOf)
+    ? filter.movementAnyOf.filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown")
+    : [];
   const filterRated =
     filter?.rated === "rated" || filter?.rated === "unrated" || filter?.rated === "unknown" ? filter.rated : "all";
 
@@ -486,10 +484,6 @@ export async function updateData(opts: {
     const deduped = [...byId.values()];
     const dedupedFiltered = deduped.filter((g) => {
       if (filterModeFamily !== "all" && String((g as any)?.modeFamily || "") !== filterModeFamily) return false;
-      if (filterModeNeedle) {
-        const m = String((g as any)?.gameMode || (g as any)?.mode || "").toLowerCase();
-        if (!m.includes(filterModeNeedle)) return false;
-      }
       if (filterFromMs && (!Number.isFinite(g.playedAt) || g.playedAt < filterFromMs)) return false;
       if (filterToMs && (!Number.isFinite(g.playedAt) || g.playedAt > filterToMs)) return false;
       return true;
@@ -579,11 +573,11 @@ export async function updateData(opts: {
     // Fetch/enrich details for games we just saw, so the update proceeds step-by-step.
     if (dedupedFiltered.length > 0) {
       let detailCandidates = dedupedFiltered;
-      if (filterMovement !== "all" || filterRated !== "all") {
+      if (filterMovementAnyOf.length > 0 || filterRated !== "all") {
         const ids = dedupedFiltered.map((g) => g.gameId);
         const [existingDetails, existingRounds] = await Promise.all([
           db.details.bulkGet(ids),
-          filterMovement !== "all" ? db.rounds.where("gameId").anyOf(ids).toArray() : Promise.resolve([] as any[])
+          filterMovementAnyOf.length > 0 ? db.rounds.where("gameId").anyOf(ids).toArray() : Promise.resolve([] as any[])
         ]);
 
         const ratedByGameId = new Map<string, boolean>();
@@ -626,7 +620,7 @@ export async function updateData(opts: {
           if (filterRated === "unrated" && rated === true) return false;
           if (filterRated === "unknown" && typeof rated === "boolean") return false;
           const mv = movementByGameId.get(gid);
-          if (filterMovement !== "all" && mv && mv !== "unknown" && mv !== filterMovement) return false;
+          if (filterMovementAnyOf.length > 0 && mv && mv !== "unknown" && !filterMovementAnyOf.includes(mv)) return false;
           return true;
         });
       }
@@ -672,7 +666,7 @@ export async function updateData(opts: {
 
     opts.onStatus(
       `Feed page ${page}: upserted ${dedupedFiltered.length}` +
-        `${filterModeFamily === "all" && !filterModeNeedle && !filterFromMs && !filterToMs ? "" : " (filtered)"}` +
+        `${filterModeFamily === "all" && !filterFromMs && !filterToMs ? "" : " (filtered)"}` +
         ` games (total ${feedUpserted}). Details queued ${detailsQueued}, ok ${detailsOk}, fail ${detailsFail}. ${pageEtaText || spanEtaText}`
     );
 
@@ -706,10 +700,6 @@ export async function updateData(opts: {
     const recentDetailsAll = await db.details.orderBy("fetchedAt").reverse().limit(enrichLimit).toArray();
     const recentDetails = recentDetailsAll.filter((d: any) => {
       if (filterModeFamily !== "all" && String(d?.modeFamily || "") !== filterModeFamily) return false;
-      if (filterModeNeedle) {
-        const m = String(d?.gameMode || "").toLowerCase();
-        if (!m.includes(filterModeNeedle)) return false;
-      }
       if (filterFromMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) < filterFromMs)) return false;
       if (filterToMs && (!Number.isFinite(d?.fetchedAt) || Number(d.fetchedAt) > filterToMs)) return false;
       return true;

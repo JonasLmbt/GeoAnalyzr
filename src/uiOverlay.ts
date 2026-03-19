@@ -182,6 +182,19 @@ function cssOnce(): void {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       font-size: 12px;
     }
+    .ga-ui-modal-box {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(0,0,0,0.25);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.20);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+    .ga-ui-modal-box-title { font-weight: 700; opacity: 0.95; margin-bottom: 8px; }
+    .ga-ui-modal-check { display:flex; align-items:center; gap: 8px; padding: 4px 0; cursor: pointer; user-select: none; }
     .ga-ui-modal-help {
       margin-top: 8px;
       font-size: 12px;
@@ -465,6 +478,75 @@ export function createUIOverlay(): UIOverlay {
       i.value = value;
       return i;
     };
+    const mkDateInput = (value: string, placeholder: string) => {
+      const i = mkInput(value, placeholder);
+      i.type = "date";
+      return i;
+    };
+    const mkMovementMulti = (selectedAnyOf: unknown) => {
+      const box = el("div");
+      box.className = "ga-ui-modal-box";
+
+      const title = el("div");
+      title.className = "ga-ui-modal-box-title";
+      title.textContent = "Movement:";
+      box.appendChild(title);
+
+      const allWrap = el("label");
+      allWrap.className = "ga-ui-modal-check";
+      const all = el("input") as HTMLInputElement;
+      all.type = "checkbox";
+      const selectedList = Array.isArray(selectedAnyOf) ? selectedAnyOf : [];
+      all.checked = selectedList.length === 0;
+      const allText = el("span");
+      allText.textContent = "All";
+      allWrap.appendChild(all);
+      allWrap.appendChild(allText);
+      box.appendChild(allWrap);
+
+      const opts: Array<{ value: "moving" | "no_move" | "nmpz" | "unknown"; label: string }> = [
+        { value: "moving", label: "Moving" },
+        { value: "no_move", label: "No move" },
+        { value: "nmpz", label: "NMPZ" },
+        { value: "unknown", label: "Unknown" }
+      ];
+
+      const curSet = new Set(
+        selectedList
+          .map((s) => String(s || "").trim().toLowerCase())
+          .filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown")
+      );
+
+      const optionInputs: Array<{ input: HTMLInputElement; value: "moving" | "no_move" | "nmpz" | "unknown" }> = [];
+      for (const o of opts) {
+        const wrap = el("label");
+        wrap.className = "ga-ui-modal-check";
+        const input = el("input") as HTMLInputElement;
+        input.type = "checkbox";
+        input.checked = curSet.has(o.value) && !all.checked;
+        const text = el("span");
+        text.textContent = o.label;
+        wrap.appendChild(input);
+        wrap.appendChild(text);
+        box.appendChild(wrap);
+        optionInputs.push({ input, value: o.value });
+      }
+
+      const syncAll = () => {
+        const anyChecked = optionInputs.some((x) => x.input.checked);
+        all.checked = !anyChecked;
+      };
+
+      all.addEventListener("change", () => {
+        if (all.checked) for (const x of optionInputs) x.input.checked = false;
+      });
+      for (const x of optionInputs) x.input.addEventListener("change", () => syncAll());
+
+      const getSelectedAnyOf = () =>
+        optionInputs.filter((x) => x.input.checked).map((x) => x.value);
+
+      return { box, getSelectedAnyOf };
+    };
     const fmtDate = (ms: number) => {
       if (!ms || !Number.isFinite(ms)) return "";
       try {
@@ -496,14 +578,7 @@ export function createUIOverlay(): UIOverlay {
         `<option value="teamduels">Mode family: Team Duels only</option>`,
       cur.modeFamily
     );
-    const selMovement = mkSelect(
-      `<option value="all">Movement: All</option>` +
-        `<option value="moving">Movement: Moving</option>` +
-        `<option value="no_move">Movement: No move</option>` +
-        `<option value="nmpz">Movement: NMPZ</option>` +
-        `<option value="unknown">Movement: Unknown</option>`,
-      cur.movement
-    );
+    const movementMulti = mkMovementMulti(cur.movementAnyOf);
     const selRated = mkSelect(
       `<option value="all">Rated: All</option>` +
         `<option value="rated">Rated: Rated only</option>` +
@@ -511,14 +586,12 @@ export function createUIOverlay(): UIOverlay {
         `<option value="unknown">Rated: Unknown only</option>`,
       cur.rated
     );
-    const modeInput = mkInput(cur.mode || "", "Mode contains… (e.g. moving, no_move, nmpz)");
-    const fromInput = mkInput(fmtDate(cur.fromMs), "From date (YYYY-MM-DD)");
-    const toInput = mkInput(fmtDate(cur.toMs), "To date (YYYY-MM-DD)");
+    const fromInput = mkDateInput(fmtDate(cur.fromMs), "From date (YYYY-MM-DD)");
+    const toInput = mkDateInput(fmtDate(cur.toMs), "To date (YYYY-MM-DD)");
 
     wrap.appendChild(selFamily);
-    wrap.appendChild(selMovement);
+    wrap.appendChild(movementMulti.box);
     wrap.appendChild(selRated);
-    wrap.appendChild(modeInput);
     wrap.appendChild(fromInput);
     wrap.appendChild(toInput);
     wrap.appendChild(
@@ -531,18 +604,13 @@ export function createUIOverlay(): UIOverlay {
       body: wrap,
       onSave: () => {
         const familyRaw = String((selFamily as any).value || "");
-        const movementRaw = String((selMovement as any).value || "");
         const ratedRaw = String((selRated as any).value || "");
         const modeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? (familyRaw as any) : "all";
-        const movement =
-          movementRaw === "moving" || movementRaw === "no_move" || movementRaw === "nmpz" || movementRaw === "unknown"
-            ? (movementRaw as any)
-            : "all";
+        const movementAnyOf = movementMulti.getSelectedAnyOf();
         const rated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
-        const mode = String(modeInput.value || "");
         const fromMs = parseDateStartMs(fromInput.value);
         const toMs = parseDateEndMs(toInput.value);
-        saveFetchGameFilter({ modeFamily, movement, rated, mode, fromMs, toMs });
+        saveFetchGameFilter({ modeFamily, movementAnyOf, rated, fromMs, toMs });
         status.textContent = "Fetch filters saved.";
       }
     });
@@ -699,6 +767,75 @@ export function createUIOverlay(): UIOverlay {
       i.value = value;
       return i;
     };
+    const mkDateInput = (value: string, placeholder: string) => {
+      const i = mkInput(value, placeholder);
+      i.type = "date";
+      return i;
+    };
+    const mkMovementMulti = (selectedAnyOf: unknown) => {
+      const box = el("div");
+      box.className = "ga-ui-modal-box";
+
+      const title = el("div");
+      title.className = "ga-ui-modal-box-title";
+      title.textContent = "Movement:";
+      box.appendChild(title);
+
+      const allWrap = el("label");
+      allWrap.className = "ga-ui-modal-check";
+      const all = el("input") as HTMLInputElement;
+      all.type = "checkbox";
+      const selectedList = Array.isArray(selectedAnyOf) ? selectedAnyOf : [];
+      all.checked = selectedList.length === 0;
+      const allText = el("span");
+      allText.textContent = "All";
+      allWrap.appendChild(all);
+      allWrap.appendChild(allText);
+      box.appendChild(allWrap);
+
+      const opts: Array<{ value: "moving" | "no_move" | "nmpz" | "unknown"; label: string }> = [
+        { value: "moving", label: "Moving" },
+        { value: "no_move", label: "No move" },
+        { value: "nmpz", label: "NMPZ" },
+        { value: "unknown", label: "Unknown" }
+      ];
+
+      const curSet = new Set(
+        selectedList
+          .map((s) => String(s || "").trim().toLowerCase())
+          .filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown")
+      );
+
+      const optionInputs: Array<{ input: HTMLInputElement; value: "moving" | "no_move" | "nmpz" | "unknown" }> = [];
+      for (const o of opts) {
+        const wrap = el("label");
+        wrap.className = "ga-ui-modal-check";
+        const input = el("input") as HTMLInputElement;
+        input.type = "checkbox";
+        input.checked = curSet.has(o.value) && !all.checked;
+        const text = el("span");
+        text.textContent = o.label;
+        wrap.appendChild(input);
+        wrap.appendChild(text);
+        box.appendChild(wrap);
+        optionInputs.push({ input, value: o.value });
+      }
+
+      const syncAll = () => {
+        const anyChecked = optionInputs.some((x) => x.input.checked);
+        all.checked = !anyChecked;
+      };
+
+      all.addEventListener("change", () => {
+        if (all.checked) for (const x of optionInputs) x.input.checked = false;
+      });
+      for (const x of optionInputs) x.input.addEventListener("change", () => syncAll());
+
+      const getSelectedAnyOf = () =>
+        optionInputs.filter((x) => x.input.checked).map((x) => x.value);
+
+      return { box, getSelectedAnyOf };
+    };
     const fmtDate = (ms: number) => {
       if (!ms || !Number.isFinite(ms)) return "";
       try {
@@ -730,14 +867,7 @@ export function createUIOverlay(): UIOverlay {
         `<option value="teamduels">Mode family: Team Duels only</option>`,
       cur.filterModeFamily
     );
-    const selMovement = mkSelect(
-      `<option value="all">Movement: All</option>` +
-        `<option value="moving">Movement: Moving</option>` +
-        `<option value="no_move">Movement: No move</option>` +
-        `<option value="nmpz">Movement: NMPZ</option>` +
-        `<option value="unknown">Movement: Unknown</option>`,
-      cur.filterMovement
-    );
+    const movementMulti = mkMovementMulti(cur.filterMovementAnyOf);
     const selRated = mkSelect(
       `<option value="all">Rated: All</option>` +
         `<option value="rated">Rated: Rated only</option>` +
@@ -745,14 +875,12 @@ export function createUIOverlay(): UIOverlay {
         `<option value="unknown">Rated: Unknown only</option>`,
       cur.filterRated
     );
-    const modeInput = mkInput(cur.filterMode || "", "Mode contains… (case-insensitive)");
-    const fromInput = mkInput(fmtDate(cur.filterFromMs), "From date (YYYY-MM-DD)");
-    const toInput = mkInput(fmtDate(cur.filterToMs), "To date (YYYY-MM-DD)");
+    const fromInput = mkDateInput(fmtDate(cur.filterFromMs), "From date (YYYY-MM-DD)");
+    const toInput = mkDateInput(fmtDate(cur.filterToMs), "To date (YYYY-MM-DD)");
 
     wrap.appendChild(selFamily);
-    wrap.appendChild(selMovement);
+    wrap.appendChild(movementMulti.box);
     wrap.appendChild(selRated);
-    wrap.appendChild(modeInput);
     wrap.appendChild(fromInput);
     wrap.appendChild(toInput);
     wrap.appendChild(
@@ -766,18 +894,13 @@ export function createUIOverlay(): UIOverlay {
       body: wrap,
       onSave: () => {
         const familyRaw = String((selFamily as any).value || "");
-        const movementRaw = String((selMovement as any).value || "");
         const ratedRaw = String((selRated as any).value || "");
         const filterModeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? (familyRaw as any) : "all";
-        const filterMovement =
-          movementRaw === "moving" || movementRaw === "no_move" || movementRaw === "nmpz" || movementRaw === "unknown"
-            ? (movementRaw as any)
-            : "all";
+        const filterMovementAnyOf = movementMulti.getSelectedAnyOf();
         const filterRated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
-        const filterMode = String(modeInput.value || "");
         const filterFromMs = parseDateStartMs(fromInput.value);
         const filterToMs = parseDateEndMs(toInput.value);
-        saveServerSyncSettings({ filterModeFamily, filterMovement, filterRated, filterMode, filterFromMs, filterToMs });
+        saveServerSyncSettings({ filterModeFamily, filterMovementAnyOf, filterRated, filterFromMs, filterToMs });
         status.textContent = "Sync filters saved.";
       }
     });
