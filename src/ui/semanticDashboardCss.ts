@@ -43,6 +43,8 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       --ga-topbar-h: 0px;
       --ga-filters-h: 0px;
+      --ga-readable-max-w: 72rem;
+      --ga-stat-table-max-w: var(--ga-readable-max-w);
       --ga-bg: #0f1115;
       --ga-surface: #15181e;
       --ga-surface-2: #171b22;
@@ -589,20 +591,32 @@ export function injectSemanticDashboardCssOnce(doc: Document): void {
       border:1px solid var(--ga-border);
       border-radius:12px;
       padding:10px;
+      max-width: min(100%, var(--ga-stat-table-max-w));
+      margin-inline: auto;
     }
     .ga-recordlist-box {
       background: var(--ga-card-2);
       border:1px solid var(--ga-border);
       border-radius:12px;
       padding:10px;
+      max-width: min(100%, var(--ga-stat-table-max-w));
+      margin-inline: auto;
     }
     .ga-statrow {
       display:flex;
+      align-items:center;
       justify-content:space-between;
-      padding:6px 2px;
+      gap: 14px;
+      padding:8px 8px;
+      margin: 0 -2px;
+      border-radius: 10px;
       border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
     }
+    .ga-statrow:nth-child(even) { background: color-mix(in srgb, var(--ga-text) 4%, transparent); }
+    .ga-statrow:hover { background: color-mix(in srgb, var(--ga-accent2) 12%, transparent); }
     .ga-statrow:last-child { border-bottom:none; }
+    .ga-statrow-label { min-width: 0; }
+    .ga-statrow-value { text-align:right; font-variant-numeric: tabular-nums; }
     .ga-chart-box {
       background: var(--ga-card-2);
       border:1px solid var(--ga-border);
