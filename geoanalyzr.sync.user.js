@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.4.7
+// @version      2.4.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9719,12 +9719,18 @@
   }
   async function buildDelta(since, opts) {
     const cursorFrom = Math.max(0, Math.floor(since || 0));
+    const cursorUpper = typeof opts.maxCursorTo === "number" && Number.isFinite(opts.maxCursorTo) && opts.maxCursorTo > 0 ? Math.max(cursorFrom, Math.floor(opts.maxCursorTo)) : 0;
     const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const byTime = (table, index, tsFrom, tsTo, includeTo) => {
+      const w = table.where(index);
+      if (tsTo > 0) return w.between(tsFrom, tsTo, false, includeTo).toArray();
+      return w.above(tsFrom).toArray();
+    };
     const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
-      db.games.where("playedAt").above(cursorFrom).toArray(),
-      db.rounds.where("playedAt").above(cursorFrom).toArray(),
-      db.details.where("fetchedAt").above(cursorFrom).toArray(),
-      opts.includeAggregates ? db.gameAgg.where("computedAt").above(cursorFrom).toArray() : Promise.resolve([])
+      byTime(db.games, "playedAt", cursorFrom, cursorUpper, true),
+      byTime(db.rounds, "playedAt", cursorFrom, cursorUpper, true),
+      byTime(db.details, "fetchedAt", cursorFrom, cursorUpper, true),
+      opts.includeAggregates ? byTime(db.gameAgg, "computedAt", cursorFrom, cursorUpper, true) : Promise.resolve([])
     ]);
     const gameIds = gamesByTime.map((g) => g.gameId);
     const [roundsByGame, detailsByGame] = await Promise.all([
@@ -9836,7 +9842,8 @@
     for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
     for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
     for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
-    const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
+    const cursorToRaw = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
+    const cursorTo = cursorUpper > 0 ? Math.min(cursorUpper, cursorToRaw) : cursorToRaw;
     const tables = {
       games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
       rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
@@ -9850,7 +9857,7 @@
       appVersion: getUserscriptVersion(),
       owner: { playerId: ownerId, playerName: ownerName },
       cursor: { from: cursorFrom, to: cursorTo },
-      options: { compact: opts.compact, includeAggregates: opts.includeAggregates },
+      options: { compact: opts.compact, includeAggregates: opts.includeAggregates, ...opts.forceFull ? { forceFull: true } : {} },
       counts: {
         games: gamesByTimeFiltered.length,
         rounds: roundsMergedFiltered.length,
@@ -10001,159 +10008,126 @@
     const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
     await ensureSyncDetailCoverage(forceFull);
     const effectiveCompact = settings.compact === true;
-    const delta = forceFull ? await (async () => {
-      const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-      const [gamesAll, roundsAll, detailsAll, gameAggAll] = await Promise.all([
-        db.games.toArray(),
-        db.rounds.toArray(),
-        db.details.toArray(),
-        settings.includeAggregates ? db.gameAgg.toArray() : Promise.resolve([])
-      ]);
-      const gamePlayedAt = /* @__PURE__ */ new Map();
-      for (const g of gamesAll) {
-        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
-      }
-      for (const r of roundsAll) {
-        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        const ts = gid ? gamePlayedAt.get(gid) : void 0;
-        if (typeof ts === "number") r.playedAt = ts;
-      }
-      const movementForGame = (() => {
-        const out = /* @__PURE__ */ new Map();
-        const counts = /* @__PURE__ */ new Map();
-        for (const r of roundsAll) {
-          const gid = typeof r?.gameId === "string" ? r.gameId : "";
-          if (!gid) continue;
-          const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
-          const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
-          let m = counts.get(gid);
-          if (!m) {
-            m = /* @__PURE__ */ new Map();
-            counts.set(gid, m);
-          }
-          m.set(mt, (m.get(mt) || 0) + 1);
-        }
-        for (const [gid, m] of counts.entries()) {
-          let best = { k: "unknown", n: 0 };
-          for (const [k, n] of m.entries()) {
-            const kk = k;
-            if (typeof n === "number" && n > best.n) best = { k: kk, n };
-          }
-          out.set(gid, best.k);
-        }
-        return out;
-      })();
-      const filterModeFamily = settings.filterModeFamily || "all";
-      const filterMovementAnyOf = Array.isArray(settings.filterMovementAnyOf) ? settings.filterMovementAnyOf.filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown") : [];
-      const filterRated = settings.filterRated || "all";
-      const filterFromMs = typeof settings.filterFromMs === "number" && Number.isFinite(settings.filterFromMs) ? Math.max(0, Math.floor(settings.filterFromMs)) : 0;
-      const filterToMs = typeof settings.filterToMs === "number" && Number.isFinite(settings.filterToMs) ? Math.max(0, Math.floor(settings.filterToMs)) : 0;
-      const ratedByGameId = (() => {
-        const m = /* @__PURE__ */ new Map();
-        for (const d of detailsAll) {
-          const gid = typeof d?.gameId === "string" ? d.gameId : "";
-          if (!gid) continue;
-          if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
-        }
-        return m;
-      })();
-      const allowedGameIds = (() => {
-        const ids = /* @__PURE__ */ new Set();
-        for (const g of gamesAll) {
-          const gid = typeof g?.gameId === "string" ? g.gameId : "";
-          if (!gid) continue;
-          if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
-          if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
-          if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
-          const mt = movementForGame.get(gid) || "unknown";
-          if (filterMovementAnyOf.length > 0 && !filterMovementAnyOf.includes(mt)) continue;
-          const rated = ratedByGameId.get(gid);
-          if (filterRated === "rated" && rated !== true) continue;
-          if (filterRated === "unrated" && rated !== false) continue;
-          if (filterRated === "unknown" && typeof rated === "boolean") continue;
-          ids.add(gid);
-        }
-        return ids;
-      })();
-      const gamesAllFiltered = gamesAll.filter((g) => allowedGameIds.has(g.gameId));
-      const roundsAllFiltered = roundsAll.filter((r) => allowedGameIds.has(String(r?.gameId || "")));
-      const detailsAllFiltered = detailsAll.filter((d) => allowedGameIds.has(String(d?.gameId || "")));
-      const gameAggAllFiltered = gameAggAll.filter((a) => allowedGameIds.has(String(a?.gameId || "")));
-      const games = effectiveCompact ? gamesAllFiltered.map(compactRecord) : gamesAllFiltered;
-      const roundsNoPlayedAt = roundsAllFiltered.map((r) => {
-        const out = { ...r };
-        delete out.playedAt;
-        return out;
-      });
-      const rounds = effectiveCompact ? roundsNoPlayedAt.map(compactRecord) : roundsNoPlayedAt;
-      const details = effectiveCompact ? detailsAllFiltered.map(compactRecord) : detailsAllFiltered;
-      const gameAgg = effectiveCompact ? gameAggAllFiltered.map(compactRecord) : gameAggAllFiltered;
-      const tables = {
-        games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-        rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
-        details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
-        ...settings.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
-      };
-      const cursorToCandidates = [];
-      for (const g of gamesAll) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
-      for (const r of roundsAll) if (typeof r?.playedAt === "number") cursorToCandidates.push(r.playedAt);
-      for (const d of detailsAll) if (typeof d?.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
-      for (const a of gameAggAll) if (typeof a?.computedAt === "number") cursorToCandidates.push(a.computedAt);
-      const cursorTo = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : 0;
-      const envelope = {
-        schema: "geoanalyzr-sync",
-        schemaVersion: 1,
-        createdAt: Date.now(),
-        appVersion: getUserscriptVersion(),
-        owner: { playerId: ownerId, playerName: ownerName },
-        cursor: { from: 0, to: cursorTo },
-        options: { compact: effectiveCompact, includeAggregates: settings.includeAggregates, forceFull: true },
-        counts: { games: gamesAllFiltered.length, rounds: roundsAllFiltered.length, details: detailsAllFiltered.length, gameAgg: gameAggAllFiltered.length },
-        tables
-      };
-      const json = JSON.stringify(envelope);
-      const bytesGzip = await gzipJson(json);
-      return {
-        cursorFrom: 0,
-        cursorTo,
-        counts: envelope.counts,
-        json,
-        bytesJson: json.length,
-        bytesGzip
-      };
-    })() : await buildDelta(cursorFrom, {
+    const MAX_GZIP_BYTES = 4.5 * 1024 * 1024;
+    const MAX_CHUNKS = 60;
+    const baseDeltaOpts = {
       compact: effectiveCompact,
       includeAggregates: settings.includeAggregates,
+      forceFull,
       filterModeFamily: settings.filterModeFamily,
       filterMovementAnyOf: settings.filterMovementAnyOf,
       filterRated: settings.filterRated,
       filterFromMs: settings.filterFromMs,
       filterToMs: settings.filterToMs
-    });
-    const headers = {
+    };
+    const buildHeaders = (d) => ({
       "Content-Type": "application/json",
       "Content-Encoding": "gzip",
       Authorization: `Bearer ${token}`,
-      "X-GA-Cursor-From": String(delta.cursorFrom),
-      "X-GA-Cursor-To": String(delta.cursorTo),
+      "X-GA-Cursor-From": String(d.cursorFrom),
+      "X-GA-Cursor-To": String(d.cursorTo),
       "X-GA-Schema-Version": "1",
       ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
+    });
+    const postDelta = async (d) => {
+      const headers = buildHeaders(d);
+      const res = await gmPostBytes(endpointUrl, d.bytesGzip, { headers, timeoutMs: 6e4 });
+      const ok = res.status >= 200 && res.status < 300;
+      const status = {
+        ok,
+        status: res.status,
+        responseText: res.text,
+        cursorFrom: d.cursorFrom,
+        cursorTo: d.cursorTo,
+        counts: d.counts,
+        bytesJson: d.bytesJson,
+        bytesGzip: d.bytesGzip.length
+      };
+      if (ok) await setLastServerSyncCursor(status);
+      return status;
     };
-    const res = await gmPostBytes(endpointUrl, delta.bytesGzip, { headers, timeoutMs: 6e4 });
-    const ok = res.status >= 200 && res.status < 300;
-    const status = {
-      ok,
-      status: res.status,
-      responseText: res.text,
-      cursorFrom: delta.cursorFrom,
-      cursorTo: delta.cursorTo,
-      counts: delta.counts,
-      bytesJson: delta.bytesJson,
-      bytesGzip: delta.bytesGzip.length
+    const pickChunkUpperBound = async (since, targetCount) => {
+      const lim = Math.max(50, Math.floor(targetCount || 0));
+      const [games, rounds, details, aggs] = await Promise.all([
+        db.games.where("playedAt").above(since).limit(lim).toArray(),
+        db.rounds.where("playedAt").above(since).limit(lim).toArray(),
+        db.details.where("fetchedAt").above(since).limit(lim).toArray(),
+        settings.includeAggregates ? db.gameAgg.where("computedAt").above(since).limit(lim).toArray() : Promise.resolve([])
+      ]);
+      const ts = [];
+      for (const g of games) if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > since) ts.push(g.playedAt);
+      for (const r of rounds) if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > since) ts.push(r.playedAt);
+      for (const d of details) if (typeof d?.fetchedAt === "number" && Number.isFinite(d.fetchedAt) && d.fetchedAt > since) ts.push(d.fetchedAt);
+      for (const a of aggs) if (typeof a?.computedAt === "number" && Number.isFinite(a.computedAt) && a.computedAt > since) ts.push(a.computedAt);
+      if (ts.length === 0) return null;
+      ts.sort((a, b) => a - b);
+      const uniq = [];
+      for (const t of ts) if (!uniq.length || uniq[uniq.length - 1] !== t) uniq.push(t);
+      const idx = Math.min(uniq.length - 1, Math.max(0, Math.floor(targetCount) - 1));
+      const pick = uniq[idx] ?? uniq[uniq.length - 1];
+      return typeof pick === "number" && Number.isFinite(pick) && pick > since ? pick : uniq[uniq.length - 1] ?? null;
     };
-    await setLastServerSyncCursor(status);
-    return status;
+    const runChunked = async (startCursorFrom) => {
+      let since = Math.max(0, Math.floor(startCursorFrom || 0));
+      let targetCount = forceFull ? 1800 : 3200;
+      let chunks = 0;
+      const totalCounts = { games: 0, rounds: 0, details: 0, gameAgg: 0 };
+      let totalBytesJson = 0;
+      let totalBytesGzip = 0;
+      let last = null;
+      for (let guard = 0; guard < MAX_CHUNKS; guard++) {
+        const upper = await pickChunkUpperBound(since, targetCount);
+        if (!upper || upper <= since) break;
+        const delta = await buildDelta(since, { ...baseDeltaOpts, maxCursorTo: upper });
+        if (!(delta.cursorTo > since)) break;
+        if (delta.bytesGzip.length > MAX_GZIP_BYTES && targetCount > 60) {
+          targetCount = Math.max(60, Math.floor(targetCount / 2));
+          continue;
+        }
+        const st = await postDelta(delta);
+        last = st;
+        if (!st.ok) {
+          if (st.status === 413 && targetCount > 60) {
+            targetCount = Math.max(60, Math.floor(targetCount / 2));
+            continue;
+          }
+          return st;
+        }
+        chunks++;
+        totalCounts.games += Number(delta.counts?.games) || 0;
+        totalCounts.rounds += Number(delta.counts?.rounds) || 0;
+        totalCounts.details += Number(delta.counts?.details) || 0;
+        totalCounts.gameAgg += Number(delta.counts?.gameAgg) || 0;
+        totalBytesJson += delta.bytesJson;
+        totalBytesGzip += delta.bytesGzip.length;
+        since = delta.cursorTo;
+        if (delta.bytesGzip.length < MAX_GZIP_BYTES * 0.55) targetCount = Math.min(2e4, Math.floor(targetCount * 1.35));
+      }
+      if (!last) {
+        const d = await buildDelta(since, { ...baseDeltaOpts, maxCursorTo: 0 });
+        const st = await postDelta(d);
+        return st;
+      }
+      return {
+        ok: true,
+        status: last.status,
+        responseText: last.responseText,
+        cursorFrom: startCursorFrom,
+        cursorTo: since,
+        counts: totalCounts,
+        bytesJson: totalBytesJson,
+        bytesGzip: totalBytesGzip,
+        chunks
+      };
+    };
+    if (!forceFull) {
+      const delta = await buildDelta(cursorFrom, { ...baseDeltaOpts, maxCursorTo: 0 });
+      if (delta.bytesGzip.length <= MAX_GZIP_BYTES) {
+        const st = await postDelta(delta);
+        if (st.ok || st.status !== 413) return st;
+      }
+    }
+    return runChunked(cursorFrom);
   }
 
   // src/ui/logo.ts
@@ -10609,7 +10583,30 @@ ${shapes}`.trim();
         elapsedMs: Date.now() - pageReqStartedAt,
         paginationToken: shortToken(paginationToken)
       });
-      if (feedRes.status < 200 || feedRes.status >= 300) throw new Error(`Feed HTTP ${feedRes.status}`);
+      if (feedRes.status < 200 || feedRes.status >= 300) {
+        const h = (k) => {
+          const v = feedRes.headers?.[k];
+          return typeof v === "string" && v.trim() ? v.trim() : void 0;
+        };
+        const textSnippet = typeof feedRes.text === "string" && feedRes.text ? feedRes.text.slice(0, 800) : feedRes.data && typeof feedRes.data === "object" ? JSON.stringify(feedRes.data).slice(0, 800) : "";
+        logEvent(
+          "http_feed_page_error",
+          {
+            page,
+            url: feedRes.url,
+            status: feedRes.status,
+            elapsedMs: Date.now() - pageReqStartedAt,
+            paginationToken: shortToken(paginationToken),
+            contentType: h("content-type"),
+            server: h("server"),
+            cfRay: h("cf-ray"),
+            xRequestId: h("x-request-id"),
+            textSnippet
+          },
+          "error"
+        );
+        throw new Error(`Feed HTTP ${feedRes.status}`);
+      }
       const data = feedRes.data;
       const entries = Array.isArray(data?.entries) ? data.entries : [];
       if (entries.length === 0) {
@@ -11111,13 +11108,18 @@ ${shapes}`.trim();
     const res = await runServerSyncOnceWithOptions(settings, { forceFull: opts.forceFull });
     const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
     const modeLabel = opts.forceFull ? "Synced full" : "Synced";
-    return res.ok ? { ok: true, message: `${modeLabel} - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB` } : (() => {
+    const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
+    return res.ok ? { ok: true, message: `${modeLabel} - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB${chunkText}` } : (() => {
       const base = `Sync failed (HTTP ${res.status})`;
       if (res.status === 401 || res.status === 403) {
         return { ok: false, message: base, hint: "Token invalid/expired. Click to re-link your device, then retry." };
       }
       if (res.status === 413) {
-        return { ok: false, message: base, hint: "Payload too large. Retry later; if it persists, re-link and try a full sync (Shift+Click)." };
+        return {
+          ok: false,
+          message: base,
+          hint: "Payload too large. Avoid Shift (full snapshot), enable Compact mode, disable aggregates, and narrow Sync filters to reduce upload size."
+        };
       }
       if (res.status >= 500) {
         return { ok: false, message: base, hint: "Server error. Retry in a few minutes." };
@@ -11147,7 +11149,8 @@ ${shapes}`.trim();
     const http = m.match(/HTTP\\s+(\\d{3})/i);
     const status = http ? Number(http[1]) : NaN;
     if (status === 401 || status === 403) return "Token invalid/expired. Click to re-link your device, then retry.";
-    if (status === 413) return "Too much data at once. Retry later (or Shift+Click for a full sync if needed).";
+    if (status === 413)
+      return "Payload too large. Avoid Shift (full snapshot), enable Compact mode, disable aggregates, and narrow Sync filters to reduce upload size.";
     if (status >= 500 && status < 600) return "Server error. Try again in a few minutes.";
     if (/link timeout/i.test(m)) return "Linking timed out. Keep the linking tab open and try again.";
     if (/timeout/i.test(m)) return "Request timed out. Check your connection/ad blockers and retry.";
