@@ -425,11 +425,12 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
         const latest = loadServerSyncSettings();
         const res = await runServerSyncOnce(latest);
         const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+        const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
         const msg =
           `OK (HTTP ${res.status}) - ` +
           `cursor ${res.cursorFrom} -> ${res.cursorTo} - ` +
           `rows ${rowsTotal} - ` +
-          `payload ${formatBytes(res.bytesGzip)} (gz)`;
+          `payload ${formatBytes(res.bytesGzip)} (gz)${chunkText}`;
         syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
       } catch (e: any) {
         syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");

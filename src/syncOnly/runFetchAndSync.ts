@@ -55,15 +55,21 @@ export async function runFetchAndSync(opts: {
   const res = await runServerSyncOnceWithOptions(settings, { forceFull: opts.forceFull });
   const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
   const modeLabel = opts.forceFull ? "Synced full" : "Synced";
+  const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
   return res.ok
-    ? { ok: true, message: `${modeLabel} - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB` }
+    ? { ok: true, message: `${modeLabel} - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB${chunkText}` }
     : (() => {
         const base = `Sync failed (HTTP ${res.status})`;
         if (res.status === 401 || res.status === 403) {
           return { ok: false, message: base, hint: "Token invalid/expired. Click to re-link your device, then retry." };
         }
         if (res.status === 413) {
-          return { ok: false, message: base, hint: "Payload too large. Retry later; if it persists, re-link and try a full sync (Shift+Click)." };
+          return {
+            ok: false,
+            message: base,
+            hint:
+              "Payload too large. Avoid Shift (full snapshot), enable Compact mode, disable aggregates, and narrow Sync filters to reduce upload size."
+          };
         }
         if (res.status >= 500) {
           return { ok: false, message: base, hint: "Server error. Retry in a few minutes." };

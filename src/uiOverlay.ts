@@ -701,7 +701,22 @@ export function createUIOverlay(): UIOverlay {
       const res = await runServerSyncOnceWithOptions(settings, { forceFull });
       const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
       const modeLabel = forceFull ? "Synced full" : "Synced";
-      status.textContent = res.ok ? `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}` : `Sync failed (HTTP ${res.status})`;
+      const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
+      if (res.ok) {
+        status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
+      } else {
+        const size = formatBytes(res.bytesGzip);
+        if (res.status === 413) {
+          status.textContent =
+            `Sync failed (HTTP 413) - payload ${size}. ` +
+            `${forceFull ? "Full snapshot is likely too large. " : ""}` +
+            `Try Compact mode, disable aggregates, narrow Sync filters, and use normal Sync (no Shift).`;
+        } else if (res.status === 401 || res.status === 403) {
+          status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+        } else {
+          status.textContent = `Sync failed (HTTP ${res.status})`;
+        }
+      }
     } catch (e: any) {
       status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
     } finally {

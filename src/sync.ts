@@ -509,7 +509,35 @@ export async function updateData(opts: {
       elapsedMs: Date.now() - pageReqStartedAt,
       paginationToken: shortToken(paginationToken)
     });
-    if (feedRes.status < 200 || feedRes.status >= 300) throw new Error(`Feed HTTP ${feedRes.status}`);
+    if (feedRes.status < 200 || feedRes.status >= 300) {
+      const h = (k: string) => {
+        const v = feedRes.headers?.[k];
+        return typeof v === "string" && v.trim() ? v.trim() : undefined;
+      };
+      const textSnippet =
+        typeof feedRes.text === "string" && feedRes.text
+          ? feedRes.text.slice(0, 800)
+          : feedRes.data && typeof feedRes.data === "object"
+            ? JSON.stringify(feedRes.data).slice(0, 800)
+            : "";
+      logEvent(
+        "http_feed_page_error",
+        {
+          page,
+          url: feedRes.url,
+          status: feedRes.status,
+          elapsedMs: Date.now() - pageReqStartedAt,
+          paginationToken: shortToken(paginationToken),
+          contentType: h("content-type"),
+          server: h("server"),
+          cfRay: h("cf-ray"),
+          xRequestId: h("x-request-id"),
+          textSnippet
+        },
+        "error"
+      );
+      throw new Error(`Feed HTTP ${feedRes.status}`);
+    }
 
     const data = feedRes.data;
     const entries = Array.isArray(data?.entries) ? data.entries : [];

@@ -17,7 +17,8 @@ function buildHintFromMessage(message: string): string | undefined {
   const http = m.match(/HTTP\\s+(\\d{3})/i);
   const status = http ? Number(http[1]) : NaN;
   if (status === 401 || status === 403) return "Token invalid/expired. Click to re-link your device, then retry.";
-  if (status === 413) return "Too much data at once. Retry later (or Shift+Click for a full sync if needed).";
+  if (status === 413)
+    return "Payload too large. Avoid Shift (full snapshot), enable Compact mode, disable aggregates, and narrow Sync filters to reduce upload size.";
   if (status >= 500 && status < 600) return "Server error. Try again in a few minutes.";
 
   if (/link timeout/i.test(m)) return "Linking timed out. Keep the linking tab open and try again.";

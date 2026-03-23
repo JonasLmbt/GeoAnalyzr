@@ -332,7 +332,30 @@ export function registerUiActions(ui: UI): void {
       await refreshUI(ui);
     } catch (e) {
       const se = safeError(e);
-      onStatusNow("Error: " + se.message);
+      const feedHttp = /^Feed HTTP (\d{3})\b/.exec(se.message || "");
+      if (feedHttp) {
+        const code = Number(feedHttp[1]) || 0;
+        const hint =
+          code === 401 || code === 403
+            ? "You are likely logged out, blocked by a privacy/adblock setting, or GeoGuessr denied access for this session."
+            : "GeoGuessr returned an unexpected response for your private feed.";
+        onStatusNow(`Error: Feed HTTP ${code}. ${hint}`);
+        try {
+          alert(
+            `GeoAnalyzr can't access your private feed (HTTP ${code}).\n\n` +
+              `Common causes:\n` +
+              `- Not logged in / expired session\n` +
+              `- Tracking protection / adblocker blocking cookies or requests\n` +
+              `- Temporary GeoGuessr / Cloudflare restriction\n\n` +
+              `Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.\n` +
+              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
+          );
+        } catch {
+          // ignore
+        }
+      } else {
+        onStatusNow("Error: " + se.message);
+      }
       pushLog("handler_error", se, "error");
       console.error(e);
     } finally {
