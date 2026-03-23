@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.4.6
+// @version      2.4.7
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -9136,6 +9136,25 @@ ${shapes}`.trim();
     return agg;
   }
 
+  // src/fetchLog.ts
+  function safeError(e) {
+    if (e instanceof Error) return { name: e.name, message: e.message, stack: e.stack };
+    return { message: String(e) };
+  }
+  function shortToken(token, maxLen = 16) {
+    if (typeof token !== "string") return void 0;
+    const t = token.trim();
+    if (!t) return void 0;
+    if (t.length <= maxLen) return t;
+    return `${t.slice(0, Math.max(4, Math.floor(maxLen / 2)))}\u2026${t.slice(-Math.max(4, Math.floor(maxLen / 2)))}`;
+  }
+  function sampleList(items, head = 10, tail = 10) {
+    const total = Array.isArray(items) ? items.length : 0;
+    const h = items.slice(0, Math.max(0, head));
+    const t = total > tail ? items.slice(Math.max(0, total - Math.max(0, tail))) : items.slice();
+    return { total, head: h, tail: t };
+  }
+
   // src/details.ts
   var cachedOwnPlayerId;
   var profileCache = /* @__PURE__ */ new Map();
@@ -9714,8 +9733,21 @@ ${shapes}`.trim();
     const retryErrors = opts.retryErrors ?? true;
     const verifyCompleteness = opts.verifyCompleteness ?? true;
     const reason = opts.reason ? ` (${opts.reason})` : "";
+    const log = opts.onLog;
+    const logEvent = (kind, data, level = "info", msg) => {
+      if (!log) return;
+      try {
+        const ev = { ts: Date.now(), kind };
+        if (level && level !== "info") ev.level = level;
+        if (msg) ev.msg = msg;
+        if (data !== void 0) ev.data = data;
+        log(ev);
+      } catch {
+      }
+    };
     const ownPlayerId = await getOwnPlayerId();
     opts.onStatus(`Detected own playerId: ${ownPlayerId ?? "not found"}${reason}`);
+    logEvent("details_start", { ownPlayerId: ownPlayerId ?? null, concurrency, retryErrors, verifyCompleteness, reason: opts.reason || "" });
     const missingRetryAfterMs = 7 * 24 * 60 * 60 * 1e3;
     const enrichmentRetryAfterMs = 30 * 24 * 60 * 60 * 1e3;
     const candidates = (opts.games || []).filter((g) => {
@@ -9726,9 +9758,26 @@ ${shapes}`.trim();
     });
     if (candidates.length === 0) {
       opts.onStatus(`No duel candidates to fetch.${reason}`);
+      logEvent("details_no_candidates", { reason: opts.reason || "" });
       return { queued: 0, ok: 0, fail: 0, skipped: 0 };
     }
     const existing = await db.details.bulkGet(candidates.map((g) => g.gameId));
+    try {
+      const counts = { none: 0, ok: 0, missing: 0, error: 0, other: 0 };
+      for (const d of existing) {
+        if (!d) {
+          counts.none++;
+          continue;
+        }
+        const st = String(d?.status || "");
+        if (st === "ok") counts.ok++;
+        else if (st === "missing") counts.missing++;
+        else if (st === "error") counts.error++;
+        else counts.other++;
+      }
+      logEvent("details_existing_summary", { candidates: candidates.length, ...counts, reason: opts.reason || "" });
+    } catch {
+    }
     let roundCountByGame = null;
     if (verifyCompleteness) {
       const ids = candidates.map((g) => g.gameId);
@@ -9797,6 +9846,7 @@ ${shapes}`.trim();
     if (markMissing.length > 0) await db.details.bulkPut(markMissing);
     if (queue.length === 0) {
       opts.onStatus(`No detail fetch needed (skipped ${skipped}).${reason}`);
+      logEvent("details_nothing_to_do", { candidates: candidates.length, skipped, reason: opts.reason || "" });
       return { queued: 0, ok: 0, fail: 0, skipped };
     }
     const existingByGameAndRound = /* @__PURE__ */ new Map();
@@ -9817,6 +9867,7 @@ ${shapes}`.trim();
     } catch {
     }
     opts.onStatus(`Fetching details for ${queue.length} duel games...${reason}`);
+    logEvent("details_queue", { queued: queue.length, candidates: candidates.length, skipped, reason: opts.reason || "", sampleGameIds: sampleList(queue.map((g) => g.gameId), 10, 10) });
     const total = queue.length;
     let done = 0;
     let ok = 0;
@@ -9838,7 +9889,8 @@ ${shapes}`.trim();
           });
           ok++;
         } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
+          const se = safeError(e);
+          const message = se.message;
           const likelyUnavailable = /HTTP (403|404|410)\b/.test(message);
           await db.details.put({
             gameId: game.gameId,
@@ -9849,6 +9901,11 @@ ${shapes}`.trim();
             error: message
           });
           if (!likelyUnavailable) fail++;
+          logEvent(
+            "detail_fetch_error",
+            { gameId: game.gameId, status: likelyUnavailable ? "missing" : "error", error: se, gameMode: game.gameMode || game.mode, modeFamily: classifyFamily(game), reason: opts.reason || "" },
+            likelyUnavailable ? "warn" : "error"
+          );
         } finally {
           done++;
           const elapsed = Date.now() - startedAt;
@@ -9860,6 +9917,7 @@ ${shapes}`.trim();
     }
     await Promise.all(Array.from({ length: concurrency }, () => worker()));
     opts.onStatus(`Details done. ok=${ok}, fail=${fail}, skipped=${skipped}${reason}`);
+    logEvent("details_done", { queued: total, ok, fail, skipped, reason: opts.reason || "" });
     return { queued: total, ok, fail, skipped };
   }
 
@@ -10873,7 +10931,12 @@ ${shapes}`.trim();
       b.innerHTML = opts.icon;
       return b;
     };
-    const fetchBtn = mkBtn2({ label: "Fetch Data", bg: "rgba(255,255,255,0.10)", icon: iconSvg("download") });
+    const fetchBtn = mkBtn2({
+      label: "Fetch Data",
+      bg: "rgba(255,255,255,0.10)",
+      icon: iconSvg("download"),
+      title: "Shift+Click: download fetch log (JSON) after completion"
+    });
     const fetchGearBtn = mkIconBtn2({ icon: iconSvg("gear"), title: "Fetch filters" });
     const fetchTrashBtn = mkIconBtn2({ icon: iconSvg("trash"), title: "Reset local database", danger: true });
     const syncBtn = mkBtn2({
@@ -10977,7 +11040,7 @@ ${shapes}`.trim();
       modal.appendChild(card);
       (document.body ?? document.documentElement).appendChild(modal);
     };
-    fetchBtn.addEventListener("click", () => void updateHandler?.());
+    fetchBtn.addEventListener("click", (ev) => void updateHandler?.(ev));
     fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
     fetchGearBtn.addEventListener("click", () => {
       const cur = loadFetchGameFilter();
@@ -11485,6 +11548,11 @@ ${shapes}`.trim();
     }
     return { source: "none" };
   }
+  function typeHint(ev) {
+    const hintRaw = pickFirst3(ev, ["type", "__typename", "payload.type", "payload.__typename", "payload.gameType", "payload.mode"]);
+    const hint = String(hintRaw || "").trim();
+    return hint || "unknown";
+  }
   function extractEventTimeMs(ev, entry) {
     const timeCandidate = pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
     const parsed = typeof timeCandidate === "string" ? Date.parse(timeCandidate) : NaN;
@@ -11502,11 +11570,15 @@ ${shapes}`.trim();
     );
   }
   async function fetchFeedPage(paginationToken) {
+    const res = await fetchFeedPageWithMeta(paginationToken);
+    if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
+    return res.data;
+  }
+  async function fetchFeedPageWithMeta(paginationToken) {
     const base = "https://www.geoguessr.com/api/v4/feed/private";
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
     const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3 });
-    if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
-    return res.data;
+    return { url, ...res };
   }
   async function updateData(opts) {
     const maxPages = opts.maxPages ?? 5e3;
@@ -11537,23 +11609,100 @@ ${shapes}`.trim();
     let detailsFail = 0;
     let detailsSkipped = 0;
     const seenPaginationTokens = /* @__PURE__ */ new Set();
+    const log = opts.onLog;
+    const logEvent = (kind, data, level = "info", msg) => {
+      if (!log) return;
+      try {
+        const ev = { ts: Date.now(), kind };
+        if (level && level !== "info") ev.level = level;
+        if (msg) ev.msg = msg;
+        if (data !== void 0) ev.data = data;
+        log(ev);
+      } catch {
+      }
+    };
+    const idSourceCounts = /* @__PURE__ */ new Map();
+    let droppedNoGameIdTotal = 0;
+    const droppedEventSamples = [];
     opts.onStatus("Update started (feed + details)...");
+    logEvent("fetch_start", {
+      maxPages,
+      delayMs,
+      detailConcurrency,
+      verifyCompleteness,
+      retryErrors,
+      enrichLimit,
+      lastSeen,
+      filter: {
+        modeFamily: filterModeFamily,
+        fromMs: filterFromMs || 0,
+        toMs: filterToMs || 0,
+        movementAnyOf: filterMovementAnyOf,
+        rated: filterRated
+      }
+    });
     for (let page = 0; page < maxPages; page++) {
       feedPages = page + 1;
       opts.onStatus(`Fetching feed page ${page}...`);
-      const data = await fetchFeedPage(paginationToken);
+      const pageReqStartedAt = Date.now();
+      const feedRes = await fetchFeedPageWithMeta(paginationToken);
+      logEvent("http_feed_page", {
+        page,
+        url: feedRes.url,
+        status: feedRes.status,
+        retryAfter: feedRes.headers?.["retry-after"] ? String(feedRes.headers["retry-after"]) : void 0,
+        elapsedMs: Date.now() - pageReqStartedAt,
+        paginationToken: shortToken(paginationToken)
+      });
+      if (feedRes.status < 200 || feedRes.status >= 300) throw new Error(`Feed HTTP ${feedRes.status}`);
+      const data = feedRes.data;
       const entries2 = Array.isArray(data?.entries) ? data.entries : [];
       if (entries2.length === 0) {
         opts.onStatus(`Feed page ${page} empty. Stopping.`);
+        logEvent("feed_stop", { page, reason: "empty_page" }, "info");
         break;
       }
       const nextPaginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : void 0;
       const pageRows = [];
-      for (const entry of entries2) {
+      let pageEvents = 0;
+      let pageWithGameId = 0;
+      let pageDroppedNoGameId = 0;
+      for (let entryIndex = 0; entryIndex < entries2.length; entryIndex++) {
+        const entry = entries2[entryIndex];
         const evs = extractEvents(entry);
-        for (const ev of evs) {
-          const { gameId } = extractGameIdWithSource(ev);
-          if (!gameId) continue;
+        pageEvents += evs.length;
+        for (let eventIndex = 0; eventIndex < evs.length; eventIndex++) {
+          const ev = evs[eventIndex];
+          const extracted = extractGameIdWithSource(ev);
+          const gameId = extracted.gameId;
+          if (!gameId) {
+            pageDroppedNoGameId++;
+            droppedNoGameIdTotal++;
+            if (droppedEventSamples.length < 80) {
+              const candidate = (path) => {
+                const v = getByPath2(ev, path);
+                if (typeof v === "string") return v.slice(0, 160);
+                if (v === void 0 || v === null) return "";
+                return String(v).slice(0, 160);
+              };
+              const timeCandidate = String(pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time ?? "").slice(0, 64);
+              droppedEventSamples.push({
+                page,
+                entryIndex,
+                eventIndex,
+                typeHint: typeHint(ev),
+                gameModeHint: String(extractGameMode(ev, entry) || "").slice(0, 64),
+                idCandidate_payloadGameId: candidate("payload.gameId"),
+                idCandidate_gameId: candidate("gameId"),
+                idCandidate_id: candidate("id"),
+                idCandidate_payloadId: candidate("payload.id"),
+                timeCandidate
+              });
+            }
+            continue;
+          }
+          pageWithGameId++;
+          idSourceCounts.set(extracted.source, (idSourceCounts.get(extracted.source) || 0) + 1);
           const playedAt = extractEventTimeMs(ev, entry);
           const gameMode = extractGameMode(ev, entry);
           const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
@@ -11585,6 +11734,19 @@ ${shapes}`.trim();
         await db.games.bulkPut(dedupedFiltered);
         feedUpserted += dedupedFiltered.length;
       }
+      logEvent("feed_page", {
+        page,
+        entries: entries2.length,
+        events: pageEvents,
+        withGameId: pageWithGameId,
+        droppedNoGameId: pageDroppedNoGameId,
+        deduped: deduped.length,
+        filteredOut: deduped.length - dedupedFiltered.length,
+        upserted: dedupedFiltered.length,
+        totalUpserted: feedUpserted,
+        nextPaginationToken: shortToken(nextPaginationToken),
+        sampleGameIds: sampleList(dedupedFiltered.map((g) => g.gameId), 8, 8)
+      });
       const newestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
       const oldestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
       const elapsed = Date.now() - startedAt;
@@ -11700,6 +11862,13 @@ ${shapes}`.trim();
         }
         const res = await fetchDetailsForGames({
           onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
+          onLog: opts.onLog ? (ev) => {
+            try {
+              const data2 = ev.data && typeof ev.data === "object" ? { ...ev.data, page } : { page };
+              opts.onLog?.({ ...ev, data: data2 });
+            } catch {
+            }
+          } : void 0,
           games: detailCandidates,
           concurrency: detailConcurrency,
           verifyCompleteness,
@@ -11710,6 +11879,7 @@ ${shapes}`.trim();
         detailsOk += res.ok;
         detailsFail += res.fail;
         detailsSkipped += res.skipped;
+        logEvent("details_batch", { page, candidates: detailCandidates.length, ...res });
       }
       let spanEtaText = "ETA unknown";
       if (lastSeen && Number.isFinite(oldestOnPage) && newestOnPage > 0) {
@@ -11739,15 +11909,18 @@ ${shapes}`.trim();
       paginationToken = nextPaginationToken;
       if (!paginationToken) {
         opts.onStatus("Feed has no pagination token. Stopping.");
+        logEvent("feed_stop", { page, reason: "no_pagination_token" }, "warn");
         break;
       }
       if (seenPaginationTokens.has(paginationToken)) {
         opts.onStatus("Stopped sync due to repeated pagination token (loop protection).");
+        logEvent("feed_stop", { page, reason: "repeated_pagination_token", token: shortToken(paginationToken) }, "warn");
         break;
       }
       seenPaginationTokens.add(paginationToken);
       if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
         opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
+        logEvent("feed_stop", { page, reason: "reached_last_seen", lastSeen }, "info");
         break;
       }
       await new Promise((r) => setTimeout(r, delayMs));
@@ -11778,6 +11951,7 @@ ${shapes}`.trim();
         const games = (await db.games.bulkGet(needIds)).filter((g) => !!g);
         const res = await fetchDetailsForGames({
           onStatus: (m) => opts.onStatus(`Enrich | ${m}`),
+          onLog: opts.onLog,
           games,
           concurrency: detailConcurrency,
           verifyCompleteness: false,
@@ -11793,6 +11967,21 @@ ${shapes}`.trim();
       }
     }
     opts.onStatus("Update complete.");
+    logEvent("fetch_complete", {
+      feedPages,
+      feedUpserted,
+      detailsQueued,
+      detailsOk,
+      detailsFail,
+      detailsSkipped,
+      enrichedQueued,
+      enrichedOk,
+      enrichedFail,
+      enrichedSkipped,
+      idSourceCounts: Object.fromEntries([...idSourceCounts.entries()].sort((a, b) => b[1] - a[1])),
+      droppedNoGameIdTotal,
+      droppedEventSamples
+    });
     return {
       feedPages,
       feedUpserted,
@@ -19053,6 +19242,8 @@ ${shapes}`.trim();
       --ga-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       --ga-topbar-h: 0px;
       --ga-filters-h: 0px;
+      --ga-readable-max-w: 72rem;
+      --ga-stat-table-max-w: var(--ga-readable-max-w);
       --ga-bg: #0f1115;
       --ga-surface: #15181e;
       --ga-surface-2: #171b22;
@@ -19599,20 +19790,32 @@ ${shapes}`.trim();
       border:1px solid var(--ga-border);
       border-radius:12px;
       padding:10px;
+      max-width: min(100%, var(--ga-stat-table-max-w));
+      margin-inline: auto;
     }
     .ga-recordlist-box {
       background: var(--ga-card-2);
       border:1px solid var(--ga-border);
       border-radius:12px;
       padding:10px;
+      max-width: min(100%, var(--ga-stat-table-max-w));
+      margin-inline: auto;
     }
     .ga-statrow {
       display:flex;
+      align-items:center;
       justify-content:space-between;
-      padding:6px 2px;
+      gap: 14px;
+      padding:8px 8px;
+      margin: 0 -2px;
+      border-radius: 10px;
       border-bottom:1px dashed color-mix(in srgb, var(--ga-text) 12%, transparent);
     }
+    .ga-statrow:nth-child(even) { background: color-mix(in srgb, var(--ga-text) 4%, transparent); }
+    .ga-statrow:hover { background: color-mix(in srgb, var(--ga-accent2) 12%, transparent); }
     .ga-statrow:last-child { border-bottom:none; }
+    .ga-statrow-label { min-width: 0; }
+    .ga-statrow-value { text-align:right; font-variant-numeric: tabular-nums; }
     .ga-chart-box {
       background: var(--ga-card-2);
       border:1px solid var(--ga-border);
@@ -44148,7 +44351,7 @@ ${describeError(err2)}` : message;
       if (typeof structuredClone === "function") return structuredClone(value);
       return JSON.parse(JSON.stringify(value));
     };
-    const downloadJson = (filename, value) => {
+    const downloadJson2 = (filename, value) => {
       const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = doc.createElement("a");
@@ -44791,7 +44994,7 @@ ${describeError(err2)}` : message;
       };
       sectionLayoutDownload.addEventListener("click", () => {
         const cur = getDashboard();
-        downloadJson("geoanalyzr.sections.json", cur?.dashboard?.sections ?? []);
+        downloadJson2("geoanalyzr.sections.json", cur?.dashboard?.sections ?? []);
       });
       sectionLayoutUpload.addEventListener("click", () => sectionLayoutUploadInput.click());
       sectionLayoutUploadInput.addEventListener("change", () => {
@@ -44838,7 +45041,7 @@ ${describeError(err2)}` : message;
       });
       globalFiltersDownload.addEventListener("click", () => {
         const cur = getDashboard();
-        downloadJson("geoanalyzr.globalFilters.json", cur?.dashboard?.globalFilters ?? {});
+        downloadJson2("geoanalyzr.globalFilters.json", cur?.dashboard?.globalFilters ?? {});
       });
       globalFiltersUpload.addEventListener("click", () => globalFiltersUploadInput.click());
       globalFiltersUploadInput.addEventListener("change", () => {
@@ -44885,7 +45088,7 @@ ${describeError(err2)}` : message;
       });
       drilldownsDownload.addEventListener("click", () => {
         const cur = getDashboard();
-        downloadJson("geoanalyzr.drilldownPresets.json", cur?.dashboard?.drilldownPresets ?? {});
+        downloadJson2("geoanalyzr.drilldownPresets.json", cur?.dashboard?.drilldownPresets ?? {});
       });
       drilldownsUpload.addEventListener("click", () => drilldownsUploadInput.click());
       drilldownsUploadInput.addEventListener("change", () => {
@@ -54962,6 +55165,56 @@ ${describe(error)}`;
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
   }
+  function downloadJson(filename, value) {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchorDownload = () => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      (document.body ?? document.documentElement).appendChild(a);
+      a.click();
+      a.remove();
+    };
+    const gmDownload = () => {
+      const gm = globalThis?.GM_download;
+      if (typeof gm !== "function") return false;
+      try {
+        gm({
+          url,
+          name: filename,
+          saveAs: false,
+          onerror: () => {
+            try {
+              anchorDownload();
+            } catch {
+            }
+          }
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const gmOk = gmDownload();
+    if (!gmOk) {
+      try {
+        anchorDownload();
+      } catch (e) {
+        try {
+          const ok = confirm(
+            `Fetch log is ready, but your browser blocked the automatic download.
+
+Open it in a new tab instead?`
+          );
+          if (ok) window.open(url, "_blank");
+        } catch {
+        }
+        console.error("Failed to trigger JSON download", e);
+      }
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 3e4);
+  }
   async function ensureFetchDataHasRunOnce() {
     const metaKey = "fetch_data_ran_v1";
     try {
@@ -55068,7 +55321,7 @@ ${describe(error)}`;
     ui.setCounts({ games, rounds, detailsOk, detailsError, detailsMissing });
   }
   function registerUiActions(ui) {
-    ui.onUpdateClick(async () => {
+    ui.onUpdateClick(async (ev) => {
       if (isViewerMode()) {
         const name = getActiveDbName();
         ui.setStatus("Viewer mode: updates are disabled.");
@@ -55082,13 +55335,48 @@ Go to Settings \u2192 Data and click "Switch to my data" (${MAIN_DB_NAME}) to re
         return;
       }
       const status = createThrottledStatus(ui.setStatus);
+      const wantLog = Boolean(ev?.shiftKey);
+      const fetchLog = wantLog ? {
+        schemaVersion: 1,
+        phase: "fetch",
+        startedAt: Date.now(),
+        pageUrl: typeof location !== "undefined" ? String(location.href || "") : "",
+        userAgent: typeof navigator !== "undefined" ? String(navigator.userAgent || "") : "",
+        events: []
+      } : null;
+      let droppedLogEvents = 0;
+      const appendLogEvent = (x) => {
+        if (!fetchLog) return;
+        if (fetchLog.events.length > 25e4) {
+          droppedLogEvents++;
+          return;
+        }
+        fetchLog.events.push(x);
+      };
+      const pushLog = (kind, data, level = "info", msg) => {
+        const x = { ts: Date.now(), kind };
+        if (level && level !== "info") x.level = level;
+        if (msg) x.msg = msg;
+        if (data !== void 0) x.data = data;
+        appendLogEvent(x);
+      };
+      const onStatus = (m) => {
+        status.push(m);
+        pushLog("status", void 0, "info", m);
+      };
+      const onStatusNow = (m) => {
+        status.flushNow(m);
+        pushLog("status_now", void 0, "info", m);
+      };
       try {
-        status.flushNow("Update started...");
+        onStatusNow("Update started...");
+        if (wantLog) onStatus("Fetch log enabled (Shift+Click). JSON will download after completion.");
         try {
-          status.push("Checking login/session...");
+          onStatus("Checking login/session...");
           const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private");
+          pushLog("http_probe_feed", { url: "https://www.geoguessr.com/api/v4/feed/private", status: probe.status });
           if (probe.status === 401 || probe.status === 403) {
-            status.flushNow("Error: Not authenticated. Please log in on geoguessr.com first.");
+            onStatusNow("Error: Not authenticated. Please log in on geoguessr.com first.");
             alert(
               `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).
 
@@ -55101,7 +55389,8 @@ If this persists in your setup, please report it in the Discord.`
         } catch {
         }
         const res = await updateData({
-          onStatus: (m) => status.push(m),
+          onStatus: (m) => onStatus(m),
+          onLog: fetchLog ? (x) => appendLogEvent(x) : void 0,
           maxPages: 5e3,
           delayMs: 200,
           detailConcurrency: 4,
@@ -55110,25 +55399,49 @@ If this persists in your setup, please report it in the Discord.`
           enrichLimit: 2e3,
           gameFilter: loadFetchGameFilter()
         });
-        const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
-        const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
+        const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
+        const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
         try {
           await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
         } catch {
         }
         invalidateRoundsCache();
-        status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
+        onStatusNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
         if (norm.updated > 0 || backfilled.updated > 0) {
-          status.flushNow(
+          onStatusNow(
             `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}.`
           );
         }
+        if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled };
         await refreshUI(ui);
       } catch (e) {
-        status.flushNow("Error: " + errorText(e));
+        const se = safeError(e);
+        onStatusNow("Error: " + se.message);
+        pushLog("handler_error", se, "error");
         console.error(e);
       } finally {
         status.dispose();
+        if (fetchLog) {
+          fetchLog.endedAt = Date.now();
+          fetchLog.summary = {
+            ...fetchLog.summary || {},
+            droppedLogEvents: droppedLogEvents > 0 ? droppedLogEvents : 0
+          };
+          const stamp = new Date(fetchLog.startedAt).toISOString().replace(/[:.]/g, "-");
+          try {
+            onStatusNow("Downloading fetch log (JSON)...");
+          } catch {
+          }
+          try {
+            downloadJson(`geoanalyzr_fetch_log_${stamp}.json`, fetchLog);
+          } catch (downloadErr) {
+            console.error("Failed to download fetch log JSON", downloadErr);
+            try {
+              alert(`Failed to download fetch log JSON: ${errorText(downloadErr)}`);
+            } catch {
+            }
+          }
+        }
       }
     });
     ui.onResetClick(async () => {
