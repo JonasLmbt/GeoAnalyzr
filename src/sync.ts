@@ -2,6 +2,8 @@ import { db, FeedGameRow, ModeFamily } from "./db";
 import { httpGetJsonWithRetry } from "./http";
 import { fetchDetailsForGames } from "./details";
 import type { FetchGameFilter } from "./fetchGameFilter";
+import type { FetchLogEvent } from "./fetchLog";
+import { sampleList, shortToken } from "./fetchLog";
 
 function etaLabel(ms: number): string {
   const sec = Math.max(0, Math.round(ms / 1e3));
@@ -128,11 +130,18 @@ function extractGameMode(ev: any, entry: any): string | undefined {
 }
 
 async function fetchFeedPage(paginationToken?: string): Promise<any> {
+  const res = await fetchFeedPageWithMeta(paginationToken);
+  if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
+  return res.data;
+}
+
+async function fetchFeedPageWithMeta(
+  paginationToken?: string
+): Promise<{ url: string; status: number; data: any; headers: Record<string, string>; text?: string }> {
   const base = "https://www.geoguessr.com/api/v4/feed/private";
   const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
   const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15000 });
-  if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
-  return res.data;
+  return { url, ...res };
 }
 
 export async function syncFeed(opts: {
@@ -383,6 +392,7 @@ export async function syncFeed(opts: {
 
 export async function updateData(opts: {
   onStatus: (msg: string) => void;
+  onLog?: (ev: FetchLogEvent) => void;
   maxPages?: number;
   delayMs?: number;
   detailConcurrency?: number;
@@ -438,27 +448,121 @@ export async function updateData(opts: {
 
   const seenPaginationTokens = new Set<string>();
 
+  const log = opts.onLog;
+  const logEvent = (kind: string, data?: any, level: "info" | "warn" | "error" = "info", msg?: string) => {
+    if (!log) return;
+    try {
+      const ev: FetchLogEvent = { ts: Date.now(), kind };
+      if (level && level !== "info") ev.level = level;
+      if (msg) ev.msg = msg;
+      if (data !== undefined) ev.data = data;
+      log(ev);
+    } catch {
+      // ignore
+    }
+  };
+
+  const idSourceCounts = new Map<string, number>();
+  let droppedNoGameIdTotal = 0;
+  const droppedEventSamples: Array<{
+    page: number;
+    entryIndex: number;
+    eventIndex: number;
+    typeHint: string;
+    gameModeHint: string;
+    idCandidate_payloadGameId: string;
+    idCandidate_gameId: string;
+    idCandidate_id: string;
+    idCandidate_payloadId: string;
+    timeCandidate: string;
+  }> = [];
+
   opts.onStatus("Update started (feed + details)...");
+  logEvent("fetch_start", {
+    maxPages,
+    delayMs,
+    detailConcurrency,
+    verifyCompleteness,
+    retryErrors,
+    enrichLimit,
+    lastSeen,
+    filter: {
+      modeFamily: filterModeFamily,
+      fromMs: filterFromMs || 0,
+      toMs: filterToMs || 0,
+      movementAnyOf: filterMovementAnyOf,
+      rated: filterRated
+    }
+  });
 
   for (let page = 0; page < maxPages; page++) {
     feedPages = page + 1;
     opts.onStatus(`Fetching feed page ${page}...`);
 
-    const data = await fetchFeedPage(paginationToken);
+    const pageReqStartedAt = Date.now();
+    const feedRes = await fetchFeedPageWithMeta(paginationToken);
+    logEvent("http_feed_page", {
+      page,
+      url: feedRes.url,
+      status: feedRes.status,
+      retryAfter: feedRes.headers?.["retry-after"] ? String(feedRes.headers["retry-after"]) : undefined,
+      elapsedMs: Date.now() - pageReqStartedAt,
+      paginationToken: shortToken(paginationToken)
+    });
+    if (feedRes.status < 200 || feedRes.status >= 300) throw new Error(`Feed HTTP ${feedRes.status}`);
+
+    const data = feedRes.data;
     const entries = Array.isArray(data?.entries) ? data.entries : [];
     if (entries.length === 0) {
       opts.onStatus(`Feed page ${page} empty. Stopping.`);
+      logEvent("feed_stop", { page, reason: "empty_page" }, "info");
       break;
     }
 
     const nextPaginationToken = typeof data?.paginationToken === "string" && data.paginationToken ? data.paginationToken : undefined;
 
     const pageRows: FeedGameRow[] = [];
-    for (const entry of entries) {
+    let pageEvents = 0;
+    let pageWithGameId = 0;
+    let pageDroppedNoGameId = 0;
+
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+      const entry = entries[entryIndex];
       const evs = extractEvents(entry);
-      for (const ev of evs) {
-        const { gameId } = extractGameIdWithSource(ev);
-        if (!gameId) continue;
+      pageEvents += evs.length;
+      for (let eventIndex = 0; eventIndex < evs.length; eventIndex++) {
+        const ev = evs[eventIndex];
+        const extracted = extractGameIdWithSource(ev);
+        const gameId = extracted.gameId;
+        if (!gameId) {
+          pageDroppedNoGameId++;
+          droppedNoGameIdTotal++;
+          if (droppedEventSamples.length < 80) {
+            const candidate = (path: string) => {
+              const v = getByPath(ev, path);
+              if (typeof v === "string") return v.slice(0, 160);
+              if (v === undefined || v === null) return "";
+              return String(v).slice(0, 160);
+            };
+            const timeCandidate = String(pickFirst(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time ?? "").slice(0, 64);
+            droppedEventSamples.push({
+              page,
+              entryIndex,
+              eventIndex,
+              typeHint: typeHint(ev),
+              gameModeHint: String(extractGameMode(ev, entry) || "").slice(0, 64),
+              idCandidate_payloadGameId: candidate("payload.gameId"),
+              idCandidate_gameId: candidate("gameId"),
+              idCandidate_id: candidate("id"),
+              idCandidate_payloadId: candidate("payload.id"),
+              timeCandidate
+            });
+          }
+          continue;
+        }
+
+        pageWithGameId++;
+        idSourceCounts.set(extracted.source, (idSourceCounts.get(extracted.source) || 0) + 1);
         const playedAt = extractEventTimeMs(ev, entry);
         const gameMode = extractGameMode(ev, entry);
         const modeFamily = classifyModeFamilyFromEvent(ev, gameMode);
@@ -493,6 +597,20 @@ export async function updateData(opts: {
       await db.games.bulkPut(dedupedFiltered);
       feedUpserted += dedupedFiltered.length;
     }
+
+    logEvent("feed_page", {
+      page,
+      entries: entries.length,
+      events: pageEvents,
+      withGameId: pageWithGameId,
+      droppedNoGameId: pageDroppedNoGameId,
+      deduped: deduped.length,
+      filteredOut: deduped.length - dedupedFiltered.length,
+      upserted: dedupedFiltered.length,
+      totalUpserted: feedUpserted,
+      nextPaginationToken: shortToken(nextPaginationToken),
+      sampleGameIds: sampleList(dedupedFiltered.map((g) => g.gameId), 8, 8)
+    });
 
     const newestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
     const oldestOnPage = deduped.length > 0 ? deduped.reduce((m, g) => Math.min(m, g.playedAt), Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
@@ -627,6 +745,16 @@ export async function updateData(opts: {
 
       const res = await fetchDetailsForGames({
         onStatus: (m) => opts.onStatus(`Page ${page} | ${m}`),
+        onLog: opts.onLog
+          ? (ev) => {
+              try {
+                const data = ev.data && typeof ev.data === "object" ? { ...ev.data, page } : { page };
+                opts.onLog?.({ ...ev, data });
+              } catch {
+                // ignore
+              }
+            }
+          : undefined,
         games: detailCandidates,
         concurrency: detailConcurrency,
         verifyCompleteness,
@@ -637,6 +765,7 @@ export async function updateData(opts: {
       detailsOk += res.ok;
       detailsFail += res.fail;
       detailsSkipped += res.skipped;
+      logEvent("details_batch", { page, candidates: detailCandidates.length, ...res });
     }
 
     // Progress: time-span based (stable across shifting pages) + optional page-count based ETA (if probe finished).
@@ -673,10 +802,12 @@ export async function updateData(opts: {
     paginationToken = nextPaginationToken;
     if (!paginationToken) {
       opts.onStatus("Feed has no pagination token. Stopping.");
+      logEvent("feed_stop", { page, reason: "no_pagination_token" }, "warn");
       break;
     }
     if (seenPaginationTokens.has(paginationToken)) {
       opts.onStatus("Stopped sync due to repeated pagination token (loop protection).");
+      logEvent("feed_stop", { page, reason: "repeated_pagination_token", token: shortToken(paginationToken) }, "warn");
       break;
     }
     seenPaginationTokens.add(paginationToken);
@@ -684,6 +815,7 @@ export async function updateData(opts: {
     // Stop once this page has no data newer than lastSeen.
     if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
       opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
+      logEvent("feed_stop", { page, reason: "reached_last_seen", lastSeen }, "info");
       break;
     }
 
@@ -722,6 +854,7 @@ export async function updateData(opts: {
       const games = (await db.games.bulkGet(needIds)).filter((g): g is FeedGameRow => !!g);
       const res = await fetchDetailsForGames({
         onStatus: (m) => opts.onStatus(`Enrich | ${m}`),
+        onLog: opts.onLog,
         games,
         concurrency: detailConcurrency,
         verifyCompleteness: false,
@@ -738,6 +871,21 @@ export async function updateData(opts: {
   }
 
   opts.onStatus("Update complete.");
+  logEvent("fetch_complete", {
+    feedPages,
+    feedUpserted,
+    detailsQueued,
+    detailsOk,
+    detailsFail,
+    detailsSkipped,
+    enrichedQueued,
+    enrichedOk,
+    enrichedFail,
+    enrichedSkipped,
+    idSourceCounts: Object.fromEntries([...idSourceCounts.entries()].sort((a, b) => b[1] - a[1])),
+    droppedNoGameIdTotal,
+    droppedEventSamples
+  });
   return {
     feedPages,
     feedUpserted,

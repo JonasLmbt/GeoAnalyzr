@@ -329,7 +329,12 @@ export function createUIOverlay(): UIOverlay {
     return b;
   };
 
-  const fetchBtn = mkBtn({ label: "Fetch Data", bg: "rgba(255,255,255,0.10)", icon: iconSvg("download") });
+  const fetchBtn = mkBtn({
+    label: "Fetch Data",
+    bg: "rgba(255,255,255,0.10)",
+    icon: iconSvg("download"),
+    title: "Shift+Click: download fetch log (JSON) after completion"
+  });
   const fetchGearBtn = mkIconBtn({ icon: iconSvg("gear"), title: "Fetch filters" });
   const fetchTrashBtn = mkIconBtn({ icon: iconSvg("trash"), title: "Reset local database", danger: true });
 
@@ -386,7 +391,7 @@ export function createUIOverlay(): UIOverlay {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount, { once: true });
   else mount();
 
-  let updateHandler: (() => void | Promise<void>) | null = null;
+  let updateHandler: ((ev: MouseEvent) => void | Promise<void>) | null = null;
   let resetHandler: (() => void | Promise<void>) | null = null;
   let openAnalysisHandler: (() => void | Promise<void>) | null = null;
 
@@ -452,7 +457,7 @@ export function createUIOverlay(): UIOverlay {
     (document.body ?? document.documentElement).appendChild(modal);
   };
 
-  fetchBtn.addEventListener("click", () => void updateHandler?.());
+  fetchBtn.addEventListener("click", (ev) => void updateHandler?.(ev));
   fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
   fetchGearBtn.addEventListener("click", () => {
     const cur = loadFetchGameFilter();

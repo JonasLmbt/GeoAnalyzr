@@ -6,6 +6,8 @@ import { invalidateRoundsCache } from "../engine/queryEngine";
 import { initAnalysisWindow } from "../ui";
 import { httpGetJson } from "../http";
 import { loadFetchGameFilter } from "../fetchGameFilter";
+import type { FetchLogDoc, FetchLogEvent } from "../fetchLog";
+import { safeError } from "../fetchLog";
 
 type DashboardFilter = {
   fromTs?: number;
@@ -25,13 +27,71 @@ type UI = {
     detailsError: number;
     detailsMissing: number;
   }) => void;
-  onUpdateClick: (handler: () => void | Promise<void>) => void;
+  onUpdateClick: (handler: (ev: MouseEvent) => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
 };
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+function downloadJson(filename: string, value: unknown): void {
+  // Note: downloads triggered after long async work often lose the browser "user gesture" and may be blocked.
+  // We try GM_download first (userscript environments), then fall back to an <a download> click.
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const anchorDownload = () => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    (document.body ?? document.documentElement).appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const gmDownload = () => {
+    const gm = (globalThis as any)?.GM_download;
+    if (typeof gm !== "function") return false;
+    try {
+      gm({
+        url,
+        name: filename,
+        saveAs: false,
+        onerror: () => {
+          try {
+            anchorDownload();
+          } catch {
+            // ignore
+          }
+        }
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const gmOk = gmDownload();
+  if (!gmOk) {
+    try {
+      anchorDownload();
+    } catch (e) {
+      // Last resort: open the blob URL so the user can save manually.
+      try {
+        const ok = confirm(
+          `Fetch log is ready, but your browser blocked the automatic download.\n\nOpen it in a new tab instead?`
+        );
+        if (ok) window.open(url, "_blank");
+      } catch {
+        // ignore
+      }
+      console.error("Failed to trigger JSON download", e);
+    }
+  }
+
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 async function ensureFetchDataHasRunOnce(): Promise<boolean> {
@@ -169,7 +229,7 @@ export async function refreshUI(ui: UI): Promise<void> {
 }
 
 export function registerUiActions(ui: UI): void {
-  ui.onUpdateClick(async () => {
+  ui.onUpdateClick(async (ev) => {
     if (isViewerMode()) {
       const name = getActiveDbName();
       ui.setStatus("Viewer mode: updates are disabled.");
@@ -181,16 +241,57 @@ export function registerUiActions(ui: UI): void {
       return;
     }
     const status = createThrottledStatus(ui.setStatus);
+    const wantLog = Boolean((ev as any)?.shiftKey);
+    const fetchLog: FetchLogDoc | null = wantLog
+      ? {
+          schemaVersion: 1,
+          phase: "fetch",
+          startedAt: Date.now(),
+          pageUrl: typeof location !== "undefined" ? String(location.href || "") : "",
+          userAgent: typeof navigator !== "undefined" ? String(navigator.userAgent || "") : "",
+          events: []
+        }
+      : null;
+    let droppedLogEvents = 0;
+
+    const appendLogEvent = (x: FetchLogEvent) => {
+      if (!fetchLog) return;
+      if (fetchLog.events.length > 250_000) {
+        droppedLogEvents++;
+        return;
+      }
+      fetchLog.events.push(x);
+    };
+
+    const pushLog = (kind: string, data?: any, level: "info" | "warn" | "error" = "info", msg?: string) => {
+      const x: FetchLogEvent = { ts: Date.now(), kind };
+      if (level && level !== "info") x.level = level;
+      if (msg) x.msg = msg;
+      if (data !== undefined) x.data = data;
+      appendLogEvent(x);
+    };
+
+    const onStatus = (m: string) => {
+      status.push(m);
+      pushLog("status", undefined, "info", m);
+    };
+
+    const onStatusNow = (m: string) => {
+      status.flushNow(m);
+      pushLog("status_now", undefined, "info", m);
+    };
     try {
-      status.flushNow("Update started...");
+      onStatusNow("Update started...");
+      if (wantLog) onStatus("Fetch log enabled (Shift+Click). JSON will download after completion.");
 
       // Verify we can fetch with the current browser session (no manual _ncfa paste required).
       // If the user is logged out, show a clear hint instead of failing deep inside the sync loop.
       try {
-        status.push("Checking login/session...");
+        onStatus("Checking login/session...");
         const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private");
+        pushLog("http_probe_feed", { url: "https://www.geoguessr.com/api/v4/feed/private", status: probe.status });
         if (probe.status === 401 || probe.status === 403) {
-          status.flushNow("Error: Not authenticated. Please log in on geoguessr.com first.");
+          onStatusNow("Error: Not authenticated. Please log in on geoguessr.com first.");
           alert(
             `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).\n\n` +
               `Please make sure you're logged in on geoguessr.com, then try again.\n\n` +
@@ -203,7 +304,8 @@ export function registerUiActions(ui: UI): void {
       }
 
       const res = await updateData({
-        onStatus: (m) => status.push(m),
+        onStatus: (m) => onStatus(m),
+        onLog: fetchLog ? (x) => appendLogEvent(x) : undefined,
         maxPages: 5000,
         delayMs: 200,
         detailConcurrency: 4,
@@ -212,26 +314,52 @@ export function registerUiActions(ui: UI): void {
         enrichLimit: 2000,
         gameFilter: loadFetchGameFilter()
       });
-      const norm = await normalizeLegacyRounds({ onStatus: (m) => status.push(m) });
-      const backfilled = await backfillGuessCountries({ onStatus: (m) => status.push(m) });
+      const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
+      const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
       try {
         await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
       } catch {
         // ignore
       }
       invalidateRoundsCache();
-      status.flushNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
+      onStatusNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
       if (norm.updated > 0 || backfilled.updated > 0) {
-        status.flushNow(
+        onStatusNow(
           `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}.`
         );
       }
+      if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled };
       await refreshUI(ui);
     } catch (e) {
-      status.flushNow("Error: " + errorText(e));
+      const se = safeError(e);
+      onStatusNow("Error: " + se.message);
+      pushLog("handler_error", se, "error");
       console.error(e);
     } finally {
       status.dispose();
+      if (fetchLog) {
+        fetchLog.endedAt = Date.now();
+        fetchLog.summary = {
+          ...(fetchLog.summary || {}),
+          droppedLogEvents: droppedLogEvents > 0 ? droppedLogEvents : 0
+        };
+        const stamp = new Date(fetchLog.startedAt).toISOString().replace(/[:.]/g, "-");
+        try {
+          onStatusNow("Downloading fetch log (JSON)...");
+        } catch {
+          // ignore
+        }
+        try {
+          downloadJson(`geoanalyzr_fetch_log_${stamp}.json`, fetchLog);
+        } catch (downloadErr) {
+          console.error("Failed to download fetch log JSON", downloadErr);
+          try {
+            alert(`Failed to download fetch log JSON: ${errorText(downloadErr)}`);
+          } catch {
+            // ignore
+          }
+        }
+      }
     }
   });
 

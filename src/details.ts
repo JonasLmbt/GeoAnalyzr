@@ -12,6 +12,8 @@ import {
 import { httpGetJsonWithRetry } from "./http";
 import { resolveCountryCodeByLatLng } from "./countries";
 import { computeGameAggFromRounds } from "./engine/gameAgg";
+import type { FetchLogEvent } from "./fetchLog";
+import { safeError, sampleList } from "./fetchLog";
 
 let cachedOwnPlayerId: string | null | undefined;
 const profileCache = new Map<string, { nick?: string; countryCode?: string; countryName?: string }>();
@@ -711,6 +713,7 @@ export async function fetchMissingDuelsDetails(opts: {
 
 export async function fetchDetailsForGames(opts: {
   onStatus: (msg: string) => void;
+  onLog?: (ev: FetchLogEvent) => void;
   games: FeedGameRow[];
   concurrency?: number;
   retryErrors?: boolean;
@@ -722,8 +725,23 @@ export async function fetchDetailsForGames(opts: {
   const verifyCompleteness = opts.verifyCompleteness ?? true;
   const reason = opts.reason ? ` (${opts.reason})` : "";
 
+  const log = opts.onLog;
+  const logEvent = (kind: string, data?: any, level: "info" | "warn" | "error" = "info", msg?: string) => {
+    if (!log) return;
+    try {
+      const ev: FetchLogEvent = { ts: Date.now(), kind };
+      if (level && level !== "info") ev.level = level;
+      if (msg) ev.msg = msg;
+      if (data !== undefined) ev.data = data;
+      log(ev);
+    } catch {
+      // ignore
+    }
+  };
+
   const ownPlayerId = await getOwnPlayerId();
   opts.onStatus(`Detected own playerId: ${ownPlayerId ?? "not found"}${reason}`);
+  logEvent("details_start", { ownPlayerId: ownPlayerId ?? null, concurrency, retryErrors, verifyCompleteness, reason: opts.reason || "" });
 
   const missingRetryAfterMs = 7 * 24 * 60 * 60 * 1000;
   const enrichmentRetryAfterMs = 30 * 24 * 60 * 60 * 1000;
@@ -737,10 +755,28 @@ export async function fetchDetailsForGames(opts: {
 
   if (candidates.length === 0) {
     opts.onStatus(`No duel candidates to fetch.${reason}`);
+    logEvent("details_no_candidates", { reason: opts.reason || "" });
     return { queued: 0, ok: 0, fail: 0, skipped: 0 };
   }
 
   const existing = await db.details.bulkGet(candidates.map((g) => g.gameId));
+  try {
+    const counts = { none: 0, ok: 0, missing: 0, error: 0, other: 0 };
+    for (const d of existing as any[]) {
+      if (!d) {
+        counts.none++;
+        continue;
+      }
+      const st = String(d?.status || "");
+      if (st === "ok") counts.ok++;
+      else if (st === "missing") counts.missing++;
+      else if (st === "error") counts.error++;
+      else counts.other++;
+    }
+    logEvent("details_existing_summary", { candidates: candidates.length, ...counts, reason: opts.reason || "" });
+  } catch {
+    // ignore
+  }
 
   let roundCountByGame: Map<string, number> | null = null;
   if (verifyCompleteness) {
@@ -819,6 +855,7 @@ export async function fetchDetailsForGames(opts: {
   if (markMissing.length > 0) await db.details.bulkPut(markMissing);
   if (queue.length === 0) {
     opts.onStatus(`No detail fetch needed (skipped ${skipped}).${reason}`);
+    logEvent("details_nothing_to_do", { candidates: candidates.length, skipped, reason: opts.reason || "" });
     return { queued: 0, ok: 0, fail: 0, skipped };
   }
 
@@ -843,6 +880,7 @@ export async function fetchDetailsForGames(opts: {
   }
 
   opts.onStatus(`Fetching details for ${queue.length} duel games...${reason}`);
+  logEvent("details_queue", { queued: queue.length, candidates: candidates.length, skipped, reason: opts.reason || "", sampleGameIds: sampleList(queue.map((g) => g.gameId), 10, 10) });
   const total = queue.length;
 
   let done = 0;
@@ -870,7 +908,8 @@ export async function fetchDetailsForGames(opts: {
 
         ok++;
       } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
+        const se = safeError(e);
+        const message = se.message;
         const likelyUnavailable = /HTTP (403|404|410)\b/.test(message);
         await db.details.put({
           gameId: game.gameId,
@@ -881,6 +920,11 @@ export async function fetchDetailsForGames(opts: {
           error: message
         });
         if (!likelyUnavailable) fail++;
+        logEvent(
+          "detail_fetch_error",
+          { gameId: game.gameId, status: likelyUnavailable ? "missing" : "error", error: se, gameMode: game.gameMode || game.mode, modeFamily: classifyFamily(game), reason: opts.reason || "" },
+          likelyUnavailable ? "warn" : "error"
+        );
       } finally {
         done++;
         const elapsed = Date.now() - startedAt;
@@ -893,5 +937,6 @@ export async function fetchDetailsForGames(opts: {
 
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
   opts.onStatus(`Details done. ok=${ok}, fail=${fail}, skipped=${skipped}${reason}`);
+  logEvent("details_done", { queued: total, ok, fail, skipped, reason: opts.reason || "" });
   return { queued: total, ok, fail, skipped };
 }
