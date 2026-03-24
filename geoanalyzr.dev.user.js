@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.10-dev
+// @version      2.4.11-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -10804,6 +10804,8 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
+    const variant = true ? "dev" : "local";
+    const analysisEnabled = variant !== "sync";
     const isDevBuild = () => {
       const info = globalThis?.GM_info;
       const ns = String(info?.script?.namespace || "");
@@ -10939,11 +10941,13 @@ ${shapes}`.trim();
     syncRow.appendChild(syncGearBtn);
     syncRow.appendChild(syncTrashBtn);
     actions.appendChild(syncRow);
-    const analysisRow = el("div");
-    analysisRow.className = "ga-ui-row";
-    analysisRow.style.gridTemplateColumns = "1fr";
-    analysisRow.appendChild(analysisBtn);
-    actions.appendChild(analysisRow);
+    if (analysisEnabled) {
+      const analysisRow = el("div");
+      analysisRow.className = "ga-ui-row";
+      analysisRow.style.gridTemplateColumns = "1fr";
+      analysisRow.appendChild(analysisBtn);
+      actions.appendChild(analysisRow);
+    }
     panel.appendChild(header);
     panel.appendChild(status);
     panel.appendChild(actions);
@@ -11420,7 +11424,7 @@ ${shapes}`.trim();
         }
       });
     });
-    analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
+    if (analysisEnabled) analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
     return {
       setVisible(visible) {
         iconBtn.style.display = visible ? "flex" : "none";
