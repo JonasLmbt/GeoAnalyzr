@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.9-dev
+// @version      2.4.10-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -7997,7 +7997,7 @@ ${shapes}`.trim();
       }
     };
     const readFetch = async () => {
-      const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+      const res = await fetch(url, { credentials: "include", headers: { Accept: "application/json", ...opts?.headers || {} } });
       const headers = {};
       try {
         res.headers.forEach((v, k) => {
@@ -11563,8 +11563,14 @@ ${shapes}`.trim();
   async function fetchFeedPageWithMeta(paginationToken) {
     const base = "https://www.geoguessr.com/api/v4/feed/private";
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-    const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3 });
-    return { url, ...res };
+    const headers = { Accept: "application/json" };
+    const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3, headers });
+    if (res.status === 401 || res.status === 403 || res.status === 0) {
+      const gmRes = await httpGetJsonWithRetry(url, { retries: 2, baseDelayMs: 400, maxDelayMs: 5e3, forceGm: true, headers });
+      if (gmRes.status && gmRes.status !== res.status) return { url, ...gmRes, via: "gm" };
+      if (gmRes.status >= 200 && gmRes.status < 300) return { url, ...gmRes, via: "gm" };
+    }
+    return { url, ...res, via: "fetch" };
   }
   async function updateData(opts) {
     const maxPages = opts.maxPages ?? 5e3;
@@ -11635,6 +11641,7 @@ ${shapes}`.trim();
       logEvent("http_feed_page", {
         page,
         url: feedRes.url,
+        via: feedRes.via,
         status: feedRes.status,
         retryAfter: feedRes.headers?.["retry-after"] ? String(feedRes.headers["retry-after"]) : void 0,
         elapsedMs: Date.now() - pageReqStartedAt,
@@ -55383,16 +55390,39 @@ Go to Settings \u2192 Data and click "Switch to my data" (${MAIN_DB_NAME}) to re
         if (wantLog) onStatus("Fetch log enabled (Shift+Click). JSON will download after completion.");
         try {
           onStatus("Checking login/session...");
-          const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private");
-          pushLog("http_probe_feed", { url: "https://www.geoguessr.com/api/v4/feed/private", status: probe.status });
+          const url = "https://www.geoguessr.com/api/v4/feed/private";
+          const headers = { Accept: "application/json" };
+          const probeOnce = async (forceGm) => {
+            const p = await httpGetJson(url, { forceGm, headers });
+            const ct = typeof p?.headers?.["content-type"] === "string" ? String(p.headers["content-type"]) : "";
+            const snippet = typeof p?.text === "string" ? p.text.slice(0, 300) : "";
+            pushLog("http_probe_feed", {
+              url,
+              status: p.status,
+              via: forceGm ? "gm" : "fetch",
+              contentType: ct || void 0,
+              textSnippet: snippet || void 0
+            });
+            return p;
+          };
+          let probe = await probeOnce(false);
+          if (probe.status === 401 || probe.status === 403 || probe.status === 0) {
+            const gmProbe = await probeOnce(true);
+            if (gmProbe.status >= 200 && gmProbe.status < 300) probe = gmProbe;
+            else if (gmProbe.status && gmProbe.status !== probe.status) probe = gmProbe;
+          }
           if (probe.status === 401 || probe.status === 403) {
-            onStatusNow("Error: Not authenticated. Please log in on geoguessr.com first.");
+            onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in / disable blockers and try again.`);
             alert(
               `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).
 
-Please make sure you're logged in on geoguessr.com, then try again.
+Common causes:
+- Not logged in / expired session
+- Tracking protection / adblocker blocking cookies or requests
+- Temporary GeoGuessr / Cloudflare restriction
 
-If this persists in your setup, please report it in the Discord.`
+Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.
+Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
             );
             return;
           }

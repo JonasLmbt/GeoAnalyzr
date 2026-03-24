@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.4.8
+// @version      2.4.9
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
@@ -7608,7 +7608,7 @@
       }
     };
     const readFetch = async () => {
-      const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+      const res = await fetch(url, { credentials: "include", headers: { Accept: "application/json", ...opts?.headers || {} } });
       const headers = {};
       try {
         res.headers.forEach((v, k) => {
@@ -10506,8 +10506,14 @@ ${shapes}`.trim();
   async function fetchFeedPageWithMeta(paginationToken) {
     const base = "https://www.geoguessr.com/api/v4/feed/private";
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-    const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3 });
-    return { url, ...res };
+    const headers = { Accept: "application/json" };
+    const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15e3, headers });
+    if (res.status === 401 || res.status === 403 || res.status === 0) {
+      const gmRes = await httpGetJsonWithRetry(url, { retries: 2, baseDelayMs: 400, maxDelayMs: 5e3, forceGm: true, headers });
+      if (gmRes.status && gmRes.status !== res.status) return { url, ...gmRes, via: "gm" };
+      if (gmRes.status >= 200 && gmRes.status < 300) return { url, ...gmRes, via: "gm" };
+    }
+    return { url, ...res, via: "fetch" };
   }
   async function updateData(opts) {
     const maxPages = opts.maxPages ?? 5e3;
@@ -10578,6 +10584,7 @@ ${shapes}`.trim();
       logEvent("http_feed_page", {
         page,
         url: feedRes.url,
+        via: feedRes.via,
         status: feedRes.status,
         retryAfter: feedRes.headers?.["retry-after"] ? String(feedRes.headers["retry-after"]) : void 0,
         elapsedMs: Date.now() - pageReqStartedAt,
