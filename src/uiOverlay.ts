@@ -16,7 +16,7 @@ export type UIOverlay = {
   setStatus: (message: string) => void;
   setCounts: (counts: Counts) => void;
 
-  onUpdateClick: (handler: () => void | Promise<void>) => void;
+  onUpdateClick: (handler: (ev: MouseEvent) => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
 };
@@ -212,6 +212,9 @@ function cssOnce(): void {
 }
 
 export function createUIOverlay(): UIOverlay {
+  const variant = typeof __GA_VARIANT__ === "string" ? __GA_VARIANT__ : "local";
+  const analysisEnabled = variant !== "sync";
+
   const isDevBuild = (): boolean => {
     const info = (globalThis as any)?.GM_info;
     const ns = String(info?.script?.namespace || "");
@@ -369,11 +372,13 @@ export function createUIOverlay(): UIOverlay {
   syncRow.appendChild(syncTrashBtn);
   actions.appendChild(syncRow);
 
-  const analysisRow = el("div");
-  analysisRow.className = "ga-ui-row";
-  analysisRow.style.gridTemplateColumns = "1fr";
-  analysisRow.appendChild(analysisBtn);
-  actions.appendChild(analysisRow);
+  if (analysisEnabled) {
+    const analysisRow = el("div");
+    analysisRow.className = "ga-ui-row";
+    analysisRow.style.gridTemplateColumns = "1fr";
+    analysisRow.appendChild(analysisBtn);
+    actions.appendChild(analysisRow);
+  }
 
   panel.appendChild(header);
   panel.appendChild(status);
@@ -926,7 +931,7 @@ export function createUIOverlay(): UIOverlay {
     });
   });
 
-  analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
+  if (analysisEnabled) analysisBtn.addEventListener("click", () => void openAnalysisHandler?.());
 
   return {
     setVisible(visible) {

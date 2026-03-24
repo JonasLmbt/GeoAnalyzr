@@ -34,7 +34,7 @@ GeoAnalyzr is available in three variants:
 1. Open this file in your browser:
    - [Minimal](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js)
 2. Install it in Tampermonkey.
-3. Open GeoGuessr and click the small GeoAnalyzr icon (bottom-left). It runs **Fetch + Sync**.
+3. Open GeoGuessr and click the GeoAnalyzr icon (bottom-left). It shows the same panel as the stable script (Fetch + Sync + filters), but **without** the local Analysis Window.
 
 ### 3) Dev (testing)
 

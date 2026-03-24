@@ -27,3 +27,6 @@ declare const GM_getValue:
 declare const GM_setValue:
   | undefined
   | ((key: string, value: any) => void);
+
+// Bundler-defined build variant (see scripts/build-release.cjs).
+declare const __GA_VARIANT__: "dev" | "sync" | "local";

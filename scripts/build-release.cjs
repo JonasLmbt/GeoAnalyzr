@@ -51,7 +51,9 @@ ${syncExtraConnect}
 
 esbuild
   .build({
-    entryPoints: [isSyncOnly ? "src/mainSyncOnly.ts" : "src/main.ts"],
+    // Minimal should be a copy of stable UI, just without the analysis tab.
+    // (Feature is disabled via __GA_VARIANT__ === "sync" inside the UI.)
+    entryPoints: ["src/main.ts"],
     bundle: true,
     format: "iife",
     outfile: outFile,
