@@ -85,7 +85,7 @@ export async function httpGetJson(
   };
 
   const readFetch = async () => {
-    const res = await fetch(url, { credentials: "include", headers: opts?.headers });
+    const res = await fetch(url, { credentials: "include", headers: { Accept: "application/json", ...(opts?.headers || {}) } });
     const headers: Record<string, string> = {};
     try {
       res.headers.forEach((v, k) => {

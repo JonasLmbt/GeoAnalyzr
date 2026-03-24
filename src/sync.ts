@@ -137,11 +137,21 @@ async function fetchFeedPage(paginationToken?: string): Promise<any> {
 
 async function fetchFeedPageWithMeta(
   paginationToken?: string
-): Promise<{ url: string; status: number; data: any; headers: Record<string, string>; text?: string }> {
+): Promise<{ url: string; status: number; data: any; headers: Record<string, string>; text?: string; via?: "fetch" | "gm" }> {
   const base = "https://www.geoguessr.com/api/v4/feed/private";
   const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
-  const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15000 });
-  return { url, ...res };
+  const headers = { Accept: "application/json" };
+  const res = await httpGetJsonWithRetry(url, { retries: 6, baseDelayMs: 500, maxDelayMs: 15000, headers });
+
+  // Some setups (privacy/adblock settings) break `fetch` but still allow GM_xmlhttpRequest.
+  // If the feed returns 401/403, retry once with GM to reduce false negatives.
+  if (res.status === 401 || res.status === 403 || res.status === 0) {
+    const gmRes = await httpGetJsonWithRetry(url, { retries: 2, baseDelayMs: 400, maxDelayMs: 5000, forceGm: true, headers });
+    if (gmRes.status && gmRes.status !== res.status) return { url, ...gmRes, via: "gm" };
+    if (gmRes.status >= 200 && gmRes.status < 300) return { url, ...gmRes, via: "gm" };
+  }
+
+  return { url, ...res, via: "fetch" };
 }
 
 export async function syncFeed(opts: {
@@ -504,6 +514,7 @@ export async function updateData(opts: {
     logEvent("http_feed_page", {
       page,
       url: feedRes.url,
+      via: feedRes.via,
       status: feedRes.status,
       retryAfter: feedRes.headers?.["retry-after"] ? String(feedRes.headers["retry-after"]) : undefined,
       elapsedMs: Date.now() - pageReqStartedAt,

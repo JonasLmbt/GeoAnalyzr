@@ -288,14 +288,41 @@ export function registerUiActions(ui: UI): void {
       // If the user is logged out, show a clear hint instead of failing deep inside the sync loop.
       try {
         onStatus("Checking login/session...");
-        const probe = await httpGetJson("https://www.geoguessr.com/api/v4/feed/private");
-        pushLog("http_probe_feed", { url: "https://www.geoguessr.com/api/v4/feed/private", status: probe.status });
+        const url = "https://www.geoguessr.com/api/v4/feed/private";
+        const headers = { Accept: "application/json" };
+
+        const probeOnce = async (forceGm: boolean) => {
+          const p = await httpGetJson(url, { forceGm, headers });
+          const ct = typeof p?.headers?.["content-type"] === "string" ? String(p.headers["content-type"]) : "";
+          const snippet = typeof p?.text === "string" ? p.text.slice(0, 300) : "";
+          pushLog("http_probe_feed", {
+            url,
+            status: p.status,
+            via: forceGm ? "gm" : "fetch",
+            contentType: ct || undefined,
+            textSnippet: snippet || undefined
+          });
+          return p;
+        };
+
+        let probe = await probeOnce(false);
+        if (probe.status === 401 || probe.status === 403 || probe.status === 0) {
+          // Retry once via GM to avoid false negatives (fetch blocked by privacy/adblock setups).
+          const gmProbe = await probeOnce(true);
+          if (gmProbe.status >= 200 && gmProbe.status < 300) probe = gmProbe;
+          else if (gmProbe.status && gmProbe.status !== probe.status) probe = gmProbe;
+        }
+
         if (probe.status === 401 || probe.status === 403) {
-          onStatusNow("Error: Not authenticated. Please log in on geoguessr.com first.");
+          onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in / disable blockers and try again.`);
           alert(
             `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).\n\n` +
-              `Please make sure you're logged in on geoguessr.com, then try again.\n\n` +
-              `If this persists in your setup, please report it in the Discord.`
+              `Common causes:\n` +
+              `- Not logged in / expired session\n` +
+              `- Tracking protection / adblocker blocking cookies or requests\n` +
+              `- Temporary GeoGuessr / Cloudflare restriction\n\n` +
+              `Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.\n` +
+              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           );
           return;
         }
