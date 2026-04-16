@@ -5,8 +5,8 @@ const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 const isSyncOnly = /(^|[\\/])geoanalyzr\.sync\.user\.js$/i.test(outFile);
 const isLocal = !isDev && !isSyncOnly;
 
-const stableVersion = "2.4.11";
-const devVersion = "2.4.12-dev";
+const stableVersion = "2.4.12";
+const devVersion = "2.4.13-dev";
 const version = isDev ? devVersion : stableVersion;
 
 // GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,
@@ -31,7 +31,7 @@ const banner = `// ==UserScript==
 // @version      ${version}
 // @updateURL    ${isDev ? `${rawBase}/geoanalyzr.dev.user.js` : isSyncOnly ? `${rawBase}/geoanalyzr.sync.user.js` : `${rawBase}/geoanalyzr.user.js`}
 // @downloadURL  ${isDev ? `${rawBase}/geoanalyzr.dev.user.js` : isSyncOnly ? `${rawBase}/geoanalyzr.sync.user.js` : `${rawBase}/geoanalyzr.user.js`}
-// @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo.svg
+// @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
 // @grant        GM_xmlhttpRequest
