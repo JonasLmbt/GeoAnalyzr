@@ -9,14 +9,14 @@ type LogoSvgMarkupOptions = {
 const LOGO_SVG_DEFS = `
   <defs>
     <radialGradient id="bg" cx="30%" cy="20%" r="80%">
-      <stop offset="0" stop-color="#7c5cff" stop-opacity="0.38"/>
+      <stop offset="0" stop-color="#22C98C" stop-opacity="0.20"/>
       <stop offset="55%" stop-color="#0b1020" stop-opacity="1"/>
       <stop offset="100%" stop-color="#060a14" stop-opacity="1"/>
     </radialGradient>
     <linearGradient id="g" x1="70" y1="70" x2="200" y2="200" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#7950E5"/>
-      <stop offset="0.55" stop-color="#00A2FE"/>
-      <stop offset="1" stop-color="#3AE8BD"/>
+      <stop offset="0" stop-color="#1D9E75"/>
+      <stop offset="0.55" stop-color="#22C98C"/>
+      <stop offset="1" stop-color="#5DDDAA"/>
     </linearGradient>
     <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
       <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000" flood-opacity="0.45"/>
@@ -43,11 +43,11 @@ const LOGO_SVG_SHAPES = `
         fill="none" stroke="url(#g)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="80"  cy="118" r="6.5" fill="#7950E5"/>
-    <circle cx="108" cy="82"  r="6.5" fill="#5f7ff0"/>
-    <circle cx="130" cy="108" r="6.5" fill="#00A2FE"/>
-    <circle cx="154" cy="68"  r="6.5" fill="#22cfe0"/>
-    <circle cx="188" cy="94"  r="6.5" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="6.5" fill="#1D9E75"/>
+    <circle cx="108" cy="82"  r="6.5" fill="#1ab882"/>
+    <circle cx="130" cy="108" r="6.5" fill="#22C98C"/>
+    <circle cx="154" cy="68"  r="6.5" fill="#3dd49a"/>
+    <circle cx="188" cy="94"  r="6.5" fill="#5DDDAA"/>
   </g>
 `;
 
@@ -63,21 +63,20 @@ const LOGO_SVG_SHAPES_MARK = `
         fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
 
   <g filter="url(#glow)">
-    <circle cx="80"  cy="118" r="7.5" fill="#7950E5"/>
-    <circle cx="108" cy="82"  r="7.5" fill="#5f7ff0"/>
-    <circle cx="130" cy="108" r="7.5" fill="#00A2FE"/>
-    <circle cx="154" cy="68"  r="7.5" fill="#22cfe0"/>
-    <circle cx="188" cy="94"  r="7.5" fill="#3AE8BD"/>
+    <circle cx="80"  cy="118" r="7.5" fill="#1D9E75"/>
+    <circle cx="108" cy="82"  r="7.5" fill="#1ab882"/>
+    <circle cx="130" cy="108" r="7.5" fill="#22C98C"/>
+    <circle cx="154" cy="68"  r="7.5" fill="#3dd49a"/>
+    <circle cx="188" cy="94"  r="7.5" fill="#5DDDAA"/>
   </g>
 `;
 
 const LOGO_LIGHT_DEFS = `
   <defs>
     <linearGradient id="neon" x1="64" y1="64" x2="196" y2="196" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="0.35" stop-color="#AFA2FF"/>
-      <stop offset="0.7" stop-color="#00C8FF"/>
-      <stop offset="1" stop-color="#3AE8BD"/>
+      <stop offset="0" stop-color="#1D9E75"/>
+      <stop offset="0.55" stop-color="#22C98C"/>
+      <stop offset="1" stop-color="#5DDDAA"/>
     </linearGradient>
     <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
       <feGaussianBlur stdDeviation="7" result="b"/>
