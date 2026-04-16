@@ -182,6 +182,58 @@ function cssOnce(): void {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       font-size: 12px;
     }
+    .ga-ui-modal-input:focus { outline: none; border-color: rgba(0,162,254,0.55); box-shadow: 0 0 0 3px rgba(0,162,254,0.18); }
+
+    .ga-ui-modal-body { display:flex; flex-direction: column; gap: 12px; }
+    .ga-ui-modal-summary {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+      opacity: 0.95;
+      display:flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .ga-ui-modal-summary strong { font-weight: 700; }
+    .ga-ui-modal-linkbtn {
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      cursor: pointer;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .ga-ui-modal-linkbtn:active { transform: translateY(1px); }
+
+    .ga-ui-modal-section {
+      background: rgba(0,0,0,0.16);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .ga-ui-modal-section-title { font-weight: 800; letter-spacing: 0.02em; margin-bottom: 8px; opacity: 0.98; }
+    .ga-ui-modal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .ga-ui-modal-span2 { grid-column: 1 / -1; }
+    .ga-ui-modal-field { display:flex; flex-direction: column; gap: 6px; }
+    .ga-ui-modal-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.85; }
+    .ga-ui-modal-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .ga-ui-modal-presets { display:flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .ga-ui-modal-preset {
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: white;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .ga-ui-modal-preset:active { transform: translateY(1px); }
     .ga-ui-modal-box {
       width: 100%;
       box-sizing: border-box;
@@ -206,6 +258,11 @@ function cssOnce(): void {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
       margin-top: 12px;
+    }
+
+    @media (max-width: 520px) {
+      .ga-ui-modal-grid { grid-template-columns: 1fr; }
+      .ga-ui-modal-row { grid-template-columns: 1fr; }
     }
   `;
   (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style as any);
@@ -464,100 +521,134 @@ export function createUIOverlay(): UIOverlay {
 
   fetchBtn.addEventListener("click", (ev) => void updateHandler?.(ev));
   fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
-  fetchGearBtn.addEventListener("click", () => {
-    const cur = loadFetchGameFilter();
-    const wrap = el("div");
-    const mkHelp = (t: string) => {
-      const d = el("div");
-      d.className = "ga-ui-modal-help";
-      d.textContent = t;
-      return d;
+
+  const mkHelp = (t: string) => {
+    const d = el("div");
+    d.className = "ga-ui-modal-help";
+    d.textContent = t;
+    return d;
+  };
+
+  const mkSelect = (html: string, value: string) => {
+    const s = el("select");
+    s.className = "ga-ui-modal-input";
+    s.innerHTML = html;
+    (s as any).value = value;
+    return s;
+  };
+
+  const mkInput = (value: string, placeholder: string) => {
+    const i = el("input");
+    i.className = "ga-ui-modal-input";
+    i.type = "text";
+    i.placeholder = placeholder;
+    i.value = value;
+    return i;
+  };
+
+  const mkDateInput = (value: string, placeholder: string) => {
+    const i = mkInput(value, placeholder);
+    i.type = "date";
+    return i;
+  };
+
+  const mkField = (labelText: string, control: HTMLElement) => {
+    const field = el("div");
+    field.className = "ga-ui-modal-field";
+    const label = el("div");
+    label.className = "ga-ui-modal-label";
+    label.textContent = labelText;
+    field.appendChild(label);
+    field.appendChild(control);
+    return field;
+  };
+
+  const mkSection = (title: string) => {
+    const sec = el("div");
+    sec.className = "ga-ui-modal-section";
+    const t = el("div");
+    t.className = "ga-ui-modal-section-title";
+    t.textContent = title;
+    sec.appendChild(t);
+    return sec;
+  };
+
+  const mkMovementMulti = (selectedAnyOf: unknown) => {
+    const box = el("div");
+    box.className = "ga-ui-modal-box";
+
+    const title = el("div");
+    title.className = "ga-ui-modal-box-title";
+    title.textContent = "Movement";
+    box.appendChild(title);
+
+    const allWrap = el("label");
+    allWrap.className = "ga-ui-modal-check";
+    const all = el("input") as HTMLInputElement;
+    all.type = "checkbox";
+    const selectedList = Array.isArray(selectedAnyOf) ? selectedAnyOf : [];
+    all.checked = selectedList.length === 0;
+    const allText = el("span");
+    allText.textContent = "All";
+    allWrap.appendChild(all);
+    allWrap.appendChild(allText);
+    box.appendChild(allWrap);
+
+    const opts: Array<{ value: "moving" | "no_move" | "nmpz" | "unknown"; label: string }> = [
+      { value: "moving", label: "Moving" },
+      { value: "no_move", label: "No move" },
+      { value: "nmpz", label: "NMPZ" },
+      { value: "unknown", label: "Unknown" }
+    ];
+
+    const normalize = (value: unknown) => {
+      const s = String(value || "").trim().toLowerCase();
+      if (s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown") return s as any;
+      return "";
     };
-    const mkSelect = (html: string, value: string) => {
-      const s = el("select");
-      s.className = "ga-ui-modal-input";
-      s.innerHTML = html;
-      (s as any).value = value;
-      return s;
+
+    const curSet = new Set(selectedList.map(normalize).filter(Boolean));
+
+    const optionInputs: Array<{ input: HTMLInputElement; value: "moving" | "no_move" | "nmpz" | "unknown" }> = [];
+    for (const o of opts) {
+      const wrap = el("label");
+      wrap.className = "ga-ui-modal-check";
+      const input = el("input") as HTMLInputElement;
+      input.type = "checkbox";
+      input.checked = curSet.has(o.value) && !all.checked;
+      const text = el("span");
+      text.textContent = o.label;
+      wrap.appendChild(input);
+      wrap.appendChild(text);
+      box.appendChild(wrap);
+      optionInputs.push({ input, value: o.value });
+    }
+
+    const syncAll = () => {
+      const anyChecked = optionInputs.some((x) => x.input.checked);
+      all.checked = !anyChecked;
     };
-    const mkInput = (value: string, placeholder: string) => {
-      const i = el("input");
-      i.className = "ga-ui-modal-input";
-      i.type = "text";
-      i.placeholder = placeholder;
-      i.value = value;
-      return i;
+
+    const setSelectedAnyOf = (values: unknown) => {
+      const next = Array.isArray(values) ? values.map(normalize).filter(Boolean) : [];
+      const nextSet = new Set(next);
+      const wantAll = nextSet.size === 0;
+      all.checked = wantAll;
+      for (const x of optionInputs) x.input.checked = wantAll ? false : nextSet.has(x.value);
+      syncAll();
     };
-    const mkDateInput = (value: string, placeholder: string) => {
-      const i = mkInput(value, placeholder);
-      i.type = "date";
-      return i;
-    };
-    const mkMovementMulti = (selectedAnyOf: unknown) => {
-      const box = el("div");
-      box.className = "ga-ui-modal-box";
 
-      const title = el("div");
-      title.className = "ga-ui-modal-box-title";
-      title.textContent = "Movement:";
-      box.appendChild(title);
+    all.addEventListener("change", () => {
+      if (all.checked) for (const x of optionInputs) x.input.checked = false;
+    });
+    for (const x of optionInputs) x.input.addEventListener("change", () => syncAll());
 
-      const allWrap = el("label");
-      allWrap.className = "ga-ui-modal-check";
-      const all = el("input") as HTMLInputElement;
-      all.type = "checkbox";
-      const selectedList = Array.isArray(selectedAnyOf) ? selectedAnyOf : [];
-      all.checked = selectedList.length === 0;
-      const allText = el("span");
-      allText.textContent = "All";
-      allWrap.appendChild(all);
-      allWrap.appendChild(allText);
-      box.appendChild(allWrap);
+    const getSelectedAnyOf = () => optionInputs.filter((x) => x.input.checked).map((x) => x.value);
 
-      const opts: Array<{ value: "moving" | "no_move" | "nmpz" | "unknown"; label: string }> = [
-        { value: "moving", label: "Moving" },
-        { value: "no_move", label: "No move" },
-        { value: "nmpz", label: "NMPZ" },
-        { value: "unknown", label: "Unknown" }
-      ];
+    return { box, getSelectedAnyOf, setSelectedAnyOf };
+  };
 
-      const curSet = new Set(
-        selectedList
-          .map((s) => String(s || "").trim().toLowerCase())
-          .filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown")
-      );
-
-      const optionInputs: Array<{ input: HTMLInputElement; value: "moving" | "no_move" | "nmpz" | "unknown" }> = [];
-      for (const o of opts) {
-        const wrap = el("label");
-        wrap.className = "ga-ui-modal-check";
-        const input = el("input") as HTMLInputElement;
-        input.type = "checkbox";
-        input.checked = curSet.has(o.value) && !all.checked;
-        const text = el("span");
-        text.textContent = o.label;
-        wrap.appendChild(input);
-        wrap.appendChild(text);
-        box.appendChild(wrap);
-        optionInputs.push({ input, value: o.value });
-      }
-
-      const syncAll = () => {
-        const anyChecked = optionInputs.some((x) => x.input.checked);
-        all.checked = !anyChecked;
-      };
-
-      all.addEventListener("change", () => {
-        if (all.checked) for (const x of optionInputs) x.input.checked = false;
-      });
-      for (const x of optionInputs) x.input.addEventListener("change", () => syncAll());
-
-      const getSelectedAnyOf = () =>
-        optionInputs.filter((x) => x.input.checked).map((x) => x.value);
-
-      return { box, getSelectedAnyOf };
-    };
-    const fmtDate = (ms: number) => {
+  const fmtDate = (ms: number) => {
       if (!ms || !Number.isFinite(ms)) return "";
       try {
         return new Date(ms).toISOString().slice(0, 10);
@@ -565,52 +656,163 @@ export function createUIOverlay(): UIOverlay {
         return "";
       }
     };
-    const parseDateStartMs = (s: string): number => {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
-      if (!m) return 0;
-      const y = Number(m[1]);
-      const mo = Number(m[2]);
-      const d = Number(m[3]);
-      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
-      return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
-    };
-    const parseDateEndMs = (s: string): number => {
-      const start = parseDateStartMs(s);
-      if (!start) return 0;
-      return start + 24 * 60 * 60 * 1000 - 1;
-    };
 
-    wrap.appendChild(mkHelp("Fetch filters (always game-level; never partial rounds):"));
+  const parseDateStartMs = (s: string): number => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
+    if (!m) return 0;
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
+    return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
+  };
+
+  const parseDateEndMs = (s: string): number => {
+    const start = parseDateStartMs(s);
+    if (!start) return 0;
+    return start + 24 * 60 * 60 * 1000 - 1;
+  };
+
+  const openGameFiltersModal = (opts: {
+    title: string;
+    intro: string;
+    note?: string;
+    cur: {
+      modeFamily: "all" | "duels" | "teamduels";
+      movementAnyOf: Array<"moving" | "no_move" | "nmpz" | "unknown">;
+      rated: "all" | "rated" | "unrated" | "unknown";
+      fromMs: number;
+      toMs: number;
+    };
+    onSave: (next: {
+      modeFamily: "all" | "duels" | "teamduels";
+      movementAnyOf: Array<"moving" | "no_move" | "nmpz" | "unknown">;
+      rated: "all" | "rated" | "unrated" | "unknown";
+      fromMs: number;
+      toMs: number;
+    }) => void;
+    savedMessage: string;
+  }) => {
+    const wrap = el("div");
+    wrap.className = "ga-ui-modal-body";
+
+    wrap.appendChild(mkHelp(opts.intro));
+
+    const summary = el("div");
+    summary.className = "ga-ui-modal-summary";
+    const summaryText = el("div");
+    const summaryBtn = el("button");
+    summaryBtn.className = "ga-ui-modal-linkbtn";
+    summaryBtn.type = "button";
+    summaryBtn.textContent = "Reset";
+    summary.appendChild(summaryText);
+    summary.appendChild(summaryBtn);
+    wrap.appendChild(summary);
 
     const selFamily = mkSelect(
-      `<option value="all">Mode family: All</option>` +
-        `<option value="duels">Mode family: Duels only</option>` +
-        `<option value="teamduels">Mode family: Team Duels only</option>`,
-      cur.modeFamily
+      `<option value="all">All</option>` +
+        `<option value="duels">Duels only</option>` +
+        `<option value="teamduels">Team Duels only</option>`,
+      opts.cur.modeFamily
     );
-    const movementMulti = mkMovementMulti(cur.movementAnyOf);
     const selRated = mkSelect(
-      `<option value="all">Rated: All</option>` +
-        `<option value="rated">Rated: Rated only</option>` +
-        `<option value="unrated">Rated: Unrated only</option>` +
-        `<option value="unknown">Rated: Unknown only</option>`,
-      cur.rated
+      `<option value="all">All</option>` +
+        `<option value="rated">Rated only</option>` +
+        `<option value="unrated">Unrated only</option>` +
+        `<option value="unknown">Unknown only</option>`,
+      opts.cur.rated
     );
-    const fromInput = mkDateInput(fmtDate(cur.fromMs), "From date (YYYY-MM-DD)");
-    const toInput = mkDateInput(fmtDate(cur.toMs), "To date (YYYY-MM-DD)");
+    const movementMulti = mkMovementMulti(opts.cur.movementAnyOf);
+    const fromInput = mkDateInput(fmtDate(opts.cur.fromMs), "YYYY-MM-DD");
+    const toInput = mkDateInput(fmtDate(opts.cur.toMs), "YYYY-MM-DD");
 
-    wrap.appendChild(selFamily);
-    wrap.appendChild(movementMulti.box);
-    wrap.appendChild(selRated);
-    wrap.appendChild(fromInput);
-    wrap.appendChild(toInput);
-    wrap.appendChild(
-      mkHelp(
-        "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps."
-      )
+    const applySummary = () => {
+      const parts: string[] = [];
+      const fam = String((selFamily as any).value || "all");
+      const rated = String((selRated as any).value || "all");
+      const mv = movementMulti.getSelectedAnyOf();
+      const from = String(fromInput.value || "");
+      const to = String(toInput.value || "");
+      if (fam !== "all") parts.push(`Mode family: ${fam}`);
+      if (rated !== "all") parts.push(`Rated: ${rated}`);
+      if (mv.length) parts.push(`Movement: ${mv.join(", ")}`);
+      if (from || to) parts.push(`Date: ${from || "…"} → ${to || "…"}`);
+      summaryText.innerHTML = parts.length ? `<strong>Active:</strong> ${parts.join(" • ")}` : "<strong>Active:</strong> All games";
+    };
+
+    selFamily.addEventListener("change", applySummary);
+    selRated.addEventListener("change", applySummary);
+    fromInput.addEventListener("change", applySummary);
+    toInput.addEventListener("change", applySummary);
+    movementMulti.box.addEventListener("change", applySummary);
+
+    const secBasics = mkSection("Scope");
+    const basicsGrid = el("div");
+    basicsGrid.className = "ga-ui-modal-grid";
+    basicsGrid.appendChild(mkField("Mode family", selFamily));
+    basicsGrid.appendChild(mkField("Rated", selRated));
+    secBasics.appendChild(basicsGrid);
+    wrap.appendChild(secBasics);
+
+    const secMovement = mkSection("Movement");
+    secMovement.appendChild(movementMulti.box);
+    wrap.appendChild(secMovement);
+
+    const secDate = mkSection("Date range");
+    const row = el("div");
+    row.className = "ga-ui-modal-row";
+    row.appendChild(mkField("From", fromInput));
+    row.appendChild(mkField("To", toInput));
+    secDate.appendChild(row);
+
+    const presets = el("div");
+    presets.className = "ga-ui-modal-presets";
+    const mkPreset = (label: string, onClick: () => void) => {
+      const b = el("button");
+      b.className = "ga-ui-modal-preset";
+      b.type = "button";
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        onClick();
+        applySummary();
+      });
+      return b;
+    };
+    const setLastDays = (days: number) => {
+      const end = new Date();
+      const start = new Date(end.getTime());
+      start.setDate(start.getDate() - Math.max(0, days - 1));
+      fromInput.value = start.toISOString().slice(0, 10);
+      toInput.value = end.toISOString().slice(0, 10);
+    };
+    presets.appendChild(mkPreset("7d", () => setLastDays(7)));
+    presets.appendChild(mkPreset("30d", () => setLastDays(30)));
+    presets.appendChild(mkPreset("90d", () => setLastDays(90)));
+    presets.appendChild(
+      mkPreset("All time", () => {
+        fromInput.value = "";
+        toInput.value = "";
+      })
     );
+    secDate.appendChild(presets);
+    wrap.appendChild(secDate);
+
+    if (opts.note) wrap.appendChild(mkHelp(opts.note));
+
+    const resetAll = () => {
+      (selFamily as any).value = "all";
+      (selRated as any).value = "all";
+      fromInput.value = "";
+      toInput.value = "";
+      movementMulti.setSelectedAnyOf([]);
+      applySummary();
+    };
+    summaryBtn.addEventListener("click", resetAll);
+
+    applySummary();
+
     openModal({
-      title: "Fetch filters",
+      title: opts.title,
       body: wrap,
       onSave: () => {
         const familyRaw = String((selFamily as any).value || "");
@@ -620,9 +822,21 @@ export function createUIOverlay(): UIOverlay {
         const rated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
         const fromMs = parseDateStartMs(fromInput.value);
         const toMs = parseDateEndMs(toInput.value);
-        saveFetchGameFilter({ modeFamily, movementAnyOf, rated, fromMs, toMs });
-        status.textContent = "Fetch filters saved.";
+        opts.onSave({ modeFamily, movementAnyOf, rated, fromMs, toMs });
+        status.textContent = opts.savedMessage;
       }
+    });
+  };
+
+  fetchGearBtn.addEventListener("click", () => {
+    const cur = loadFetchGameFilter();
+    openGameFiltersModal({
+      title: "Fetch filters",
+      intro: "Fetch filters (always game-level; never partial rounds):",
+      note: "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps.",
+      cur,
+      onSave: (next) => saveFetchGameFilter(next),
+      savedMessage: "Fetch filters saved."
     });
   });
 
@@ -770,164 +984,26 @@ export function createUIOverlay(): UIOverlay {
 
   syncGearBtn.addEventListener("click", () => {
     const cur = loadServerSyncSettings();
-    const wrap = el("div");
-    const mkHelp = (t: string) => {
-      const d = el("div");
-      d.className = "ga-ui-modal-help";
-      d.textContent = t;
-      return d;
-    };
-    const mkSelect = (html: string, value: string) => {
-      const s = el("select");
-      s.className = "ga-ui-modal-input";
-      s.innerHTML = html;
-      (s as any).value = value;
-      return s;
-    };
-    const mkInput = (value: string, placeholder: string) => {
-      const i = el("input");
-      i.className = "ga-ui-modal-input";
-      i.type = "text";
-      i.placeholder = placeholder;
-      i.value = value;
-      return i;
-    };
-    const mkDateInput = (value: string, placeholder: string) => {
-      const i = mkInput(value, placeholder);
-      i.type = "date";
-      return i;
-    };
-    const mkMovementMulti = (selectedAnyOf: unknown) => {
-      const box = el("div");
-      box.className = "ga-ui-modal-box";
-
-      const title = el("div");
-      title.className = "ga-ui-modal-box-title";
-      title.textContent = "Movement:";
-      box.appendChild(title);
-
-      const allWrap = el("label");
-      allWrap.className = "ga-ui-modal-check";
-      const all = el("input") as HTMLInputElement;
-      all.type = "checkbox";
-      const selectedList = Array.isArray(selectedAnyOf) ? selectedAnyOf : [];
-      all.checked = selectedList.length === 0;
-      const allText = el("span");
-      allText.textContent = "All";
-      allWrap.appendChild(all);
-      allWrap.appendChild(allText);
-      box.appendChild(allWrap);
-
-      const opts: Array<{ value: "moving" | "no_move" | "nmpz" | "unknown"; label: string }> = [
-        { value: "moving", label: "Moving" },
-        { value: "no_move", label: "No move" },
-        { value: "nmpz", label: "NMPZ" },
-        { value: "unknown", label: "Unknown" }
-      ];
-
-      const curSet = new Set(
-        selectedList
-          .map((s) => String(s || "").trim().toLowerCase())
-          .filter((s) => s === "moving" || s === "no_move" || s === "nmpz" || s === "unknown")
-      );
-
-      const optionInputs: Array<{ input: HTMLInputElement; value: "moving" | "no_move" | "nmpz" | "unknown" }> = [];
-      for (const o of opts) {
-        const wrap = el("label");
-        wrap.className = "ga-ui-modal-check";
-        const input = el("input") as HTMLInputElement;
-        input.type = "checkbox";
-        input.checked = curSet.has(o.value) && !all.checked;
-        const text = el("span");
-        text.textContent = o.label;
-        wrap.appendChild(input);
-        wrap.appendChild(text);
-        box.appendChild(wrap);
-        optionInputs.push({ input, value: o.value });
-      }
-
-      const syncAll = () => {
-        const anyChecked = optionInputs.some((x) => x.input.checked);
-        all.checked = !anyChecked;
-      };
-
-      all.addEventListener("change", () => {
-        if (all.checked) for (const x of optionInputs) x.input.checked = false;
-      });
-      for (const x of optionInputs) x.input.addEventListener("change", () => syncAll());
-
-      const getSelectedAnyOf = () =>
-        optionInputs.filter((x) => x.input.checked).map((x) => x.value);
-
-      return { box, getSelectedAnyOf };
-    };
-    const fmtDate = (ms: number) => {
-      if (!ms || !Number.isFinite(ms)) return "";
-      try {
-        return new Date(ms).toISOString().slice(0, 10);
-      } catch {
-        return "";
-      }
-    };
-    const parseDateStartMs = (s: string): number => {
-      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || "").trim());
-      if (!m) return 0;
-      const y = Number(m[1]);
-      const mo = Number(m[2]);
-      const d = Number(m[3]);
-      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return 0;
-      return new Date(y, mo - 1, d, 0, 0, 0, 0).getTime();
-    };
-    const parseDateEndMs = (s: string): number => {
-      const start = parseDateStartMs(s);
-      if (!start) return 0;
-      return start + 24 * 60 * 60 * 1000 - 1;
-    };
-
-    wrap.appendChild(mkHelp("Sync filters (always game-level; never partial rounds):"));
-
-    const selFamily = mkSelect(
-      `<option value="all">Mode family: All</option>` +
-        `<option value="duels">Mode family: Duels only</option>` +
-        `<option value="teamduels">Mode family: Team Duels only</option>`,
-      cur.filterModeFamily
-    );
-    const movementMulti = mkMovementMulti(cur.filterMovementAnyOf);
-    const selRated = mkSelect(
-      `<option value="all">Rated: All</option>` +
-        `<option value="rated">Rated: Rated only</option>` +
-        `<option value="unrated">Rated: Unrated only</option>` +
-        `<option value="unknown">Rated: Unknown only</option>`,
-      cur.filterRated
-    );
-    const fromInput = mkDateInput(fmtDate(cur.filterFromMs), "From date (YYYY-MM-DD)");
-    const toInput = mkDateInput(fmtDate(cur.filterToMs), "To date (YYYY-MM-DD)");
-
-    wrap.appendChild(selFamily);
-    wrap.appendChild(movementMulti.box);
-    wrap.appendChild(selRated);
-    wrap.appendChild(fromInput);
-    wrap.appendChild(toInput);
-    wrap.appendChild(
-      mkHelp(
-        "Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games. Cursor still advances even for excluded games."
-      )
-    );
-
-    openModal({
+    openGameFiltersModal({
       title: "Sync filters",
-      body: wrap,
-      onSave: () => {
-        const familyRaw = String((selFamily as any).value || "");
-        const ratedRaw = String((selRated as any).value || "");
-        const filterModeFamily = familyRaw === "duels" || familyRaw === "teamduels" ? (familyRaw as any) : "all";
-        const filterMovementAnyOf = movementMulti.getSelectedAnyOf();
-        const filterRated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
-        const filterFromMs = parseDateStartMs(fromInput.value);
-        const filterToMs = parseDateEndMs(toInput.value);
-        saveServerSyncSettings({ filterModeFamily, filterMovementAnyOf, filterRated, filterFromMs, filterToMs });
-        status.textContent = "Sync filters saved.";
-      }
+      intro: "Sync filters (always game-level; never partial rounds):",
+      note: "Changing filters later may require a full sync (Shift+Sync) to backfill older excluded games. Cursor still advances even for excluded games.",
+      cur: {
+        modeFamily: cur.filterModeFamily,
+        movementAnyOf: cur.filterMovementAnyOf,
+        rated: cur.filterRated,
+        fromMs: cur.filterFromMs,
+        toMs: cur.filterToMs
+      },
+      onSave: (next) =>
+        saveServerSyncSettings({
+          filterModeFamily: next.modeFamily,
+          filterMovementAnyOf: next.movementAnyOf,
+          filterRated: next.rated,
+          filterFromMs: next.fromMs,
+          filterToMs: next.toMs
+        }),
+      savedMessage: "Sync filters saved."
     });
   });
 
