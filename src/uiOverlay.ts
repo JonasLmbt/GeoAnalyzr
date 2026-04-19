@@ -19,6 +19,9 @@ export type UIOverlay = {
   onUpdateClick: (handler: (ev: MouseEvent) => void | Promise<void>) => void;
   onResetClick: (handler: () => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
+
+  // Sync-variant convenience: runs fetch + sync as a single action.
+  runFetchAndSync?: (opts?: { auto?: boolean; forceFull?: boolean }) => Promise<void>;
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K): HTMLElementTagNameMap[K] {
@@ -117,6 +120,7 @@ function cssOnce(): void {
     .ga-ui-btn-icon { display: inline-flex; width: 16px; height: 16px; opacity: 0.95; }
     .ga-ui-btn-icon svg { width: 16px; height: 16px; display: block; }
     .ga-ui-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 8px; align-items: stretch; }
+    .ga-ui-row5 { display: grid; grid-template-columns: 1fr 36px 36px 36px 36px; gap: 8px; align-items: stretch; }
     .ga-ui-iconbtn {
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.22);
@@ -271,6 +275,7 @@ function cssOnce(): void {
 export function createUIOverlay(): UIOverlay {
   const variant = typeof __GA_VARIANT__ === "string" ? __GA_VARIANT__ : "local";
   const analysisEnabled = variant !== "sync";
+  const isSyncVariant = variant === "sync";
 
   const isDevBuild = (): boolean => {
     const info = (globalThis as any)?.GM_info;
@@ -407,6 +412,15 @@ export function createUIOverlay(): UIOverlay {
   const syncGearBtn = mkIconBtn({ icon: iconSvg("gear"), title: "Sync filters" });
   const syncTrashBtn = mkIconBtn({ icon: iconSvg("trash"), title: "Unsync (delete server data)", danger: true });
 
+  const fetchSyncBtn = isSyncVariant
+    ? mkBtn({
+        label: "Fetch + Sync",
+        bg: "rgba(0,162,254,0.18)",
+        icon: iconSvg("refresh"),
+        title: "Fetch new data, then sync it (Shift = full snapshot + fetch log)"
+      })
+    : null;
+
   const analysisBtn = mkBtn({ label: "Open Analysis Window", bg: "rgba(35,95,160,0.28)", icon: iconSvg("chart") });
 
   const counts = el("div");
@@ -415,19 +429,31 @@ export function createUIOverlay(): UIOverlay {
 
   const actions = el("div");
   actions.className = "ga-ui-actions";
-  const fetchRow = el("div");
-  fetchRow.className = "ga-ui-row";
-  fetchRow.appendChild(fetchBtn);
-  fetchRow.appendChild(fetchGearBtn);
-  fetchRow.appendChild(fetchTrashBtn);
-  actions.appendChild(fetchRow);
 
-  const syncRow = el("div");
-  syncRow.className = "ga-ui-row";
-  syncRow.appendChild(syncBtn);
-  syncRow.appendChild(syncGearBtn);
-  syncRow.appendChild(syncTrashBtn);
-  actions.appendChild(syncRow);
+  if (isSyncVariant) {
+    const row = el("div");
+    row.className = "ga-ui-row5";
+    row.appendChild(fetchSyncBtn!);
+    row.appendChild(fetchGearBtn);
+    row.appendChild(syncGearBtn);
+    row.appendChild(fetchTrashBtn);
+    row.appendChild(syncTrashBtn);
+    actions.appendChild(row);
+  } else {
+    const fetchRow = el("div");
+    fetchRow.className = "ga-ui-row";
+    fetchRow.appendChild(fetchBtn);
+    fetchRow.appendChild(fetchGearBtn);
+    fetchRow.appendChild(fetchTrashBtn);
+    actions.appendChild(fetchRow);
+
+    const syncRow = el("div");
+    syncRow.className = "ga-ui-row";
+    syncRow.appendChild(syncBtn);
+    syncRow.appendChild(syncGearBtn);
+    syncRow.appendChild(syncTrashBtn);
+    actions.appendChild(syncRow);
+  }
 
   if (analysisEnabled) {
     const analysisRow = el("div");
@@ -519,7 +545,140 @@ export function createUIOverlay(): UIOverlay {
     (document.body ?? document.documentElement).appendChild(modal);
   };
 
+  async function runSyncOnce(opts: { forceFull: boolean; allowLinking: boolean }): Promise<void> {
+    const forceFull = !!opts.forceFull;
+    status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+    try {
+      let settings = loadServerSyncSettings();
+      if (!settings.token) {
+        if (!opts.allowLinking) {
+          status.textContent = "Not linked. Click Fetch + Sync once to link your device.";
+          return;
+        }
+
+        const gm = getGmXmlhttpRequest();
+        if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+
+        status.textContent = "Linking device...";
+        const linkOrigin = "https://geoanalyzr.lmbt.app";
+        const pairStartUrl = `${linkOrigin}/pair/start`;
+
+        const pair = await new Promise<{ linkUrl: string }>((resolve, reject) => {
+          gm({
+            method: "GET",
+            url: pairStartUrl,
+            headers: { Accept: "application/json" },
+            onload: (res: any) => {
+              const text = typeof res?.responseText === "string" ? res.responseText : "";
+              try {
+                const parsed = JSON.parse(text);
+                if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                  return reject(new Error("Pairing failed (invalid response)."));
+                }
+                resolve({ linkUrl: String(parsed.linkUrl) });
+              } catch {
+                reject(new Error("Pairing failed (invalid JSON)."));
+              }
+            },
+            onerror: (err: any) => reject(err instanceof Error ? err : new Error("Pairing failed")),
+            ontimeout: () => reject(new Error("Pairing timeout"))
+          });
+        });
+
+        const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+        if (!linkWin) {
+          status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+          return;
+        }
+
+        const token = await new Promise<string>((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error("Link timeout"));
+          }, 2 * 60 * 1000);
+
+          const onMsg = (ev2: MessageEvent) => {
+            if (ev2.origin !== linkOrigin) return;
+            const d: any = ev2.data;
+            if (!d || d.type !== "geoanalyzr_sync_token") return;
+            const t = typeof d.token === "string" ? d.token.trim() : "";
+            const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+            if (!t) return;
+            cleanup();
+            if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+            resolve(t);
+          };
+
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            window.removeEventListener("message", onMsg as any);
+            try {
+              linkWin.close();
+            } catch {
+              // ignore
+            }
+          };
+
+          window.addEventListener("message", onMsg as any);
+        });
+
+        saveServerSyncSettings({ token });
+        settings = loadServerSyncSettings();
+      }
+      const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+      const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+      const modeLabel = forceFull ? "Synced full" : "Synced";
+      const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
+      if (res.ok) {
+        status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
+      } else {
+        const size = formatBytes(res.bytesGzip);
+        if (res.status === 413) {
+          status.textContent =
+            `Sync failed (HTTP 413) - payload ${size}. ` +
+            `${forceFull ? "Full snapshot is likely too large. " : ""}` +
+            `Try Compact mode, disable aggregates, narrow Sync filters, and use normal Sync (no Shift).`;
+        } else if (res.status === 401 || res.status === 403) {
+          status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+        } else {
+          status.textContent = `Sync failed (HTTP ${res.status})`;
+        }
+      }
+    } catch (e: any) {
+      status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+    }
+  }
+
+  const runFetchAndSyncImpl = async (opts: { forceFull: boolean; auto: boolean; ev?: MouseEvent }): Promise<void> => {
+    if (!isSyncVariant) return;
+
+    const btns = [fetchSyncBtn, fetchGearBtn, syncGearBtn, fetchTrashBtn, syncTrashBtn].filter(
+      (b): b is HTMLButtonElement => !!b
+    );
+    if (btns.some((b) => b.disabled)) return;
+
+    btns.forEach((b) => (b.disabled = true));
+    try {
+      const ev = opts.ev ?? new MouseEvent("click");
+      if (!updateHandler) {
+        status.textContent = "Fetch handler not ready yet. Try again in a moment.";
+        return;
+      }
+      // Fetch (updates local DB)
+      await updateHandler(ev);
+      // Sync (uploads to server). Auto-run must not open popups.
+      await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto });
+    } finally {
+      btns.forEach((b) => (b.disabled = false));
+    }
+  };
+
   fetchBtn.addEventListener("click", (ev) => void updateHandler?.(ev));
+  if (fetchSyncBtn) {
+    fetchSyncBtn.addEventListener("click", (ev) =>
+      void runFetchAndSyncImpl({ forceFull: !!(ev && (ev as any).shiftKey), auto: false, ev })
+    );
+  }
   fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
 
   const mkHelp = (t: string) => {
@@ -841,106 +1000,13 @@ export function createUIOverlay(): UIOverlay {
   });
 
   syncBtn.addEventListener("click", async (ev) => {
-    syncBtn.disabled = true;
-    syncTrashBtn.disabled = true;
-    const forceFull = !!(ev && (ev as any).shiftKey);
-    status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+    const btns = [syncBtn, syncGearBtn, syncTrashBtn];
+    btns.forEach((b) => (b.disabled = true));
     try {
-      let settings = loadServerSyncSettings();
-      if (!settings.token) {
-        const gm = getGmXmlhttpRequest();
-        if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
-
-        status.textContent = "Linking device...";
-        const linkOrigin = "https://geoanalyzr.lmbt.app";
-        const pairStartUrl = `${linkOrigin}/pair/start`;
-
-        const pair = await new Promise<{ linkUrl: string }>((resolve, reject) => {
-          gm({
-            method: "GET",
-            url: pairStartUrl,
-            headers: { Accept: "application/json" },
-            onload: (res: any) => {
-              const text = typeof res?.responseText === "string" ? res.responseText : "";
-              try {
-                const parsed = JSON.parse(text);
-                if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                  return reject(new Error("Pairing failed (invalid response)."));
-                }
-                resolve({ linkUrl: String(parsed.linkUrl) });
-              } catch {
-                reject(new Error("Pairing failed (invalid JSON)."));
-              }
-            },
-            onerror: (err: any) => reject(err instanceof Error ? err : new Error("Pairing failed")),
-            ontimeout: () => reject(new Error("Pairing timeout"))
-          });
-        });
-
-        const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-        if (!linkWin) {
-          status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
-          return;
-        }
-
-        const token = await new Promise<string>((resolve, reject) => {
-          const timeout = window.setTimeout(() => {
-            cleanup();
-            reject(new Error("Link timeout"));
-          }, 2 * 60 * 1000);
-
-          const onMsg = (ev2: MessageEvent) => {
-            if (ev2.origin !== linkOrigin) return;
-            const d: any = ev2.data;
-            if (!d || d.type !== "geoanalyzr_sync_token") return;
-            const t = typeof d.token === "string" ? d.token.trim() : "";
-            const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-            if (!t) return;
-            cleanup();
-            if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-            resolve(t);
-          };
-
-          const cleanup = () => {
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMsg as any);
-            try {
-              linkWin.close();
-            } catch {
-              // ignore
-            }
-          };
-
-          window.addEventListener("message", onMsg as any);
-        });
-
-        saveServerSyncSettings({ token });
-        settings = loadServerSyncSettings();
-      }
-      const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-      const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-      const modeLabel = forceFull ? "Synced full" : "Synced";
-      const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-      if (res.ok) {
-        status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
-      } else {
-        const size = formatBytes(res.bytesGzip);
-        if (res.status === 413) {
-          status.textContent =
-            `Sync failed (HTTP 413) - payload ${size}. ` +
-            `${forceFull ? "Full snapshot is likely too large. " : ""}` +
-            `Try Compact mode, disable aggregates, narrow Sync filters, and use normal Sync (no Shift).`;
-        } else if (res.status === 401 || res.status === 403) {
-          status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
-        } else {
-          status.textContent = `Sync failed (HTTP ${res.status})`;
-        }
-      }
-    } catch (e: any) {
-      status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+      const forceFull = !!(ev && (ev as any).shiftKey);
+      await runSyncOnce({ forceFull, allowLinking: true });
     } finally {
-      syncBtn.disabled = false;
-      syncTrashBtn.disabled = false;
+      btns.forEach((b) => (b.disabled = false));
     }
   });
 
@@ -1029,5 +1095,8 @@ export function createUIOverlay(): UIOverlay {
     onOpenAnalysisClick(fn) {
       openAnalysisHandler = fn;
     },
+    async runFetchAndSync(opts) {
+      await runFetchAndSyncImpl({ forceFull: Boolean(opts?.forceFull), auto: Boolean(opts?.auto) });
+    }
   };
 }

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.4.13
+// @version      2.4.14
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10709,6 +10709,7 @@ ${shapes}`.trim();
     .ga-ui-btn-icon { display: inline-flex; width: 16px; height: 16px; opacity: 0.95; }
     .ga-ui-btn-icon svg { width: 16px; height: 16px; display: block; }
     .ga-ui-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 8px; align-items: stretch; }
+    .ga-ui-row5 { display: grid; grid-template-columns: 1fr 36px 36px 36px 36px; gap: 8px; align-items: stretch; }
     .ga-ui-iconbtn {
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.22);
@@ -10862,6 +10863,7 @@ ${shapes}`.trim();
   function createUIOverlay() {
     const variant = true ? "local" : "local";
     const analysisEnabled = variant !== "sync";
+    const isSyncVariant = variant === "sync";
     const isDevBuild = () => {
       const info = globalThis?.GM_info;
       const ns = String(info?.script?.namespace || "");
@@ -10979,24 +10981,41 @@ ${shapes}`.trim();
     });
     const syncGearBtn = mkIconBtn2({ icon: iconSvg("gear"), title: "Sync filters" });
     const syncTrashBtn = mkIconBtn2({ icon: iconSvg("trash"), title: "Unsync (delete server data)", danger: true });
+    const fetchSyncBtn = isSyncVariant ? mkBtn2({
+      label: "Fetch + Sync",
+      bg: "rgba(0,162,254,0.18)",
+      icon: iconSvg("refresh"),
+      title: "Fetch new data, then sync it (Shift = full snapshot + fetch log)"
+    }) : null;
     const analysisBtn = mkBtn2({ label: "Open Analysis Window", bg: "rgba(35,95,160,0.28)", icon: iconSvg("chart") });
     const counts = el("div");
     counts.className = "ga-ui-counts";
     counts.textContent = "Data: 0 games, 0 rounds.";
     const actions = el("div");
     actions.className = "ga-ui-actions";
-    const fetchRow = el("div");
-    fetchRow.className = "ga-ui-row";
-    fetchRow.appendChild(fetchBtn);
-    fetchRow.appendChild(fetchGearBtn);
-    fetchRow.appendChild(fetchTrashBtn);
-    actions.appendChild(fetchRow);
-    const syncRow = el("div");
-    syncRow.className = "ga-ui-row";
-    syncRow.appendChild(syncBtn);
-    syncRow.appendChild(syncGearBtn);
-    syncRow.appendChild(syncTrashBtn);
-    actions.appendChild(syncRow);
+    if (isSyncVariant) {
+      const row = el("div");
+      row.className = "ga-ui-row5";
+      row.appendChild(fetchSyncBtn);
+      row.appendChild(fetchGearBtn);
+      row.appendChild(syncGearBtn);
+      row.appendChild(fetchTrashBtn);
+      row.appendChild(syncTrashBtn);
+      actions.appendChild(row);
+    } else {
+      const fetchRow = el("div");
+      fetchRow.className = "ga-ui-row";
+      fetchRow.appendChild(fetchBtn);
+      fetchRow.appendChild(fetchGearBtn);
+      fetchRow.appendChild(fetchTrashBtn);
+      actions.appendChild(fetchRow);
+      const syncRow = el("div");
+      syncRow.className = "ga-ui-row";
+      syncRow.appendChild(syncBtn);
+      syncRow.appendChild(syncGearBtn);
+      syncRow.appendChild(syncTrashBtn);
+      actions.appendChild(syncRow);
+    }
     if (analysisEnabled) {
       const analysisRow = el("div");
       analysisRow.className = "ga-ui-row";
@@ -11074,7 +11093,122 @@ ${shapes}`.trim();
       modal.appendChild(card);
       (document.body ?? document.documentElement).appendChild(modal);
     };
+    async function runSyncOnce(opts) {
+      const forceFull = !!opts.forceFull;
+      status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+      try {
+        let settings = loadServerSyncSettings();
+        if (!settings.token) {
+          if (!opts.allowLinking) {
+            status.textContent = "Not linked. Click Fetch + Sync once to link your device.";
+            return;
+          }
+          const gm = getGmXmlhttpRequest();
+          if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+          status.textContent = "Linking device...";
+          const linkOrigin = "https://geoanalyzr.lmbt.app";
+          const pairStartUrl = `${linkOrigin}/pair/start`;
+          const pair = await new Promise((resolve, reject) => {
+            gm({
+              method: "GET",
+              url: pairStartUrl,
+              headers: { Accept: "application/json" },
+              onload: (res2) => {
+                const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+                try {
+                  const parsed = JSON.parse(text);
+                  if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+                    return reject(new Error("Pairing failed (invalid response)."));
+                  }
+                  resolve({ linkUrl: String(parsed.linkUrl) });
+                } catch {
+                  reject(new Error("Pairing failed (invalid JSON)."));
+                }
+              },
+              onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
+              ontimeout: () => reject(new Error("Pairing timeout"))
+            });
+          });
+          const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+          if (!linkWin) {
+            status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+            return;
+          }
+          const token = await new Promise((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              cleanup();
+              reject(new Error("Link timeout"));
+            }, 2 * 60 * 1e3);
+            const onMsg = (ev2) => {
+              if (ev2.origin !== linkOrigin) return;
+              const d = ev2.data;
+              if (!d || d.type !== "geoanalyzr_sync_token") return;
+              const t = typeof d.token === "string" ? d.token.trim() : "";
+              const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+              if (!t) return;
+              cleanup();
+              if (endpointUrl) saveServerSyncSettings({ endpointUrl });
+              resolve(t);
+            };
+            const cleanup = () => {
+              window.clearTimeout(timeout);
+              window.removeEventListener("message", onMsg);
+              try {
+                linkWin.close();
+              } catch {
+              }
+            };
+            window.addEventListener("message", onMsg);
+          });
+          saveServerSyncSettings({ token });
+          settings = loadServerSyncSettings();
+        }
+        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+        const modeLabel = forceFull ? "Synced full" : "Synced";
+        const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
+        if (res.ok) {
+          status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
+        } else {
+          const size = formatBytes(res.bytesGzip);
+          if (res.status === 413) {
+            status.textContent = `Sync failed (HTTP 413) - payload ${size}. ${forceFull ? "Full snapshot is likely too large. " : ""}Try Compact mode, disable aggregates, narrow Sync filters, and use normal Sync (no Shift).`;
+          } else if (res.status === 401 || res.status === 403) {
+            status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+          } else {
+            status.textContent = `Sync failed (HTTP ${res.status})`;
+          }
+        }
+      } catch (e) {
+        status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+      }
+    }
+    const runFetchAndSyncImpl = async (opts) => {
+      if (!isSyncVariant) return;
+      const btns = [fetchSyncBtn, fetchGearBtn, syncGearBtn, fetchTrashBtn, syncTrashBtn].filter(
+        (b) => !!b
+      );
+      if (btns.some((b) => b.disabled)) return;
+      btns.forEach((b) => b.disabled = true);
+      try {
+        const ev = opts.ev ?? new MouseEvent("click");
+        if (!updateHandler) {
+          status.textContent = "Fetch handler not ready yet. Try again in a moment.";
+          return;
+        }
+        await updateHandler(ev);
+        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto });
+      } finally {
+        btns.forEach((b) => b.disabled = false);
+      }
+    };
     fetchBtn.addEventListener("click", (ev) => void updateHandler?.(ev));
+    if (fetchSyncBtn) {
+      fetchSyncBtn.addEventListener(
+        "click",
+        (ev) => void runFetchAndSyncImpl({ forceFull: !!(ev && ev.shiftKey), auto: false, ev })
+      );
+    }
     fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
     const mkHelp = (t) => {
       const d = el("div");
@@ -11335,94 +11469,13 @@ ${shapes}`.trim();
       });
     });
     syncBtn.addEventListener("click", async (ev) => {
-      syncBtn.disabled = true;
-      syncTrashBtn.disabled = true;
-      const forceFull = !!(ev && ev.shiftKey);
-      status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+      const btns = [syncBtn, syncGearBtn, syncTrashBtn];
+      btns.forEach((b) => b.disabled = true);
       try {
-        let settings = loadServerSyncSettings();
-        if (!settings.token) {
-          const gm = getGmXmlhttpRequest();
-          if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
-          status.textContent = "Linking device...";
-          const linkOrigin = "https://geoanalyzr.lmbt.app";
-          const pairStartUrl = `${linkOrigin}/pair/start`;
-          const pair = await new Promise((resolve, reject) => {
-            gm({
-              method: "GET",
-              url: pairStartUrl,
-              headers: { Accept: "application/json" },
-              onload: (res2) => {
-                const text = typeof res2?.responseText === "string" ? res2.responseText : "";
-                try {
-                  const parsed = JSON.parse(text);
-                  if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                    return reject(new Error("Pairing failed (invalid response)."));
-                  }
-                  resolve({ linkUrl: String(parsed.linkUrl) });
-                } catch {
-                  reject(new Error("Pairing failed (invalid JSON)."));
-                }
-              },
-              onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
-              ontimeout: () => reject(new Error("Pairing timeout"))
-            });
-          });
-          const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-          if (!linkWin) {
-            status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
-            return;
-          }
-          const token = await new Promise((resolve, reject) => {
-            const timeout = window.setTimeout(() => {
-              cleanup();
-              reject(new Error("Link timeout"));
-            }, 2 * 60 * 1e3);
-            const onMsg = (ev2) => {
-              if (ev2.origin !== linkOrigin) return;
-              const d = ev2.data;
-              if (!d || d.type !== "geoanalyzr_sync_token") return;
-              const t = typeof d.token === "string" ? d.token.trim() : "";
-              const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-              if (!t) return;
-              cleanup();
-              if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-              resolve(t);
-            };
-            const cleanup = () => {
-              window.clearTimeout(timeout);
-              window.removeEventListener("message", onMsg);
-              try {
-                linkWin.close();
-              } catch {
-              }
-            };
-            window.addEventListener("message", onMsg);
-          });
-          saveServerSyncSettings({ token });
-          settings = loadServerSyncSettings();
-        }
-        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-        const modeLabel = forceFull ? "Synced full" : "Synced";
-        const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-        if (res.ok) {
-          status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
-        } else {
-          const size = formatBytes(res.bytesGzip);
-          if (res.status === 413) {
-            status.textContent = `Sync failed (HTTP 413) - payload ${size}. ${forceFull ? "Full snapshot is likely too large. " : ""}Try Compact mode, disable aggregates, narrow Sync filters, and use normal Sync (no Shift).`;
-          } else if (res.status === 401 || res.status === 403) {
-            status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
-          } else {
-            status.textContent = `Sync failed (HTTP ${res.status})`;
-          }
-        }
-      } catch (e) {
-        status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        const forceFull = !!(ev && ev.shiftKey);
+        await runSyncOnce({ forceFull, allowLinking: true });
       } finally {
-        syncBtn.disabled = false;
-        syncTrashBtn.disabled = false;
+        btns.forEach((b) => b.disabled = false);
       }
     });
     syncTrashBtn.addEventListener("click", async () => {
@@ -11499,6 +11552,9 @@ ${shapes}`.trim();
       },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;
+      },
+      async runFetchAndSync(opts) {
+        await runFetchAndSyncImpl({ forceFull: Boolean(opts?.forceFull), auto: Boolean(opts?.auto) });
       }
     };
   }
@@ -55653,6 +55709,22 @@ After it finishes, open the dashboard again.`
     watchRoutes(() => {
       ui.setVisible(true);
     });
+    if (false) {
+      window.setTimeout(() => {
+        try {
+          const key = "geoanalyzr_sync_autorun_v1";
+          if (globalThis?.sessionStorage?.getItem(key) === "1") return;
+          globalThis?.sessionStorage?.setItem(key, "1");
+          const settings = loadServerSyncSettings2();
+          if (!settings.token) {
+            ui.setStatus("Not linked. Click Fetch + Sync to link your device.");
+            return;
+          }
+          void ui.runFetchAndSync?.({ auto: true, forceFull: false });
+        } catch {
+        }
+      }, 2500);
+    }
   }
 
   // src/main.ts
