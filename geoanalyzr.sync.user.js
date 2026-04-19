@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.4.14
+// @version      2.4.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10408,11 +10408,11 @@ ${shapes}`.trim();
       compact: effectiveCompact,
       includeAggregates: settings.includeAggregates,
       forceFull,
-      filterModeFamily: settings.filterModeFamily,
-      filterMovementAnyOf: settings.filterMovementAnyOf,
-      filterRated: settings.filterRated,
-      filterFromMs: settings.filterFromMs,
-      filterToMs: settings.filterToMs
+      filterModeFamily: opts.filterModeFamily ?? settings.filterModeFamily,
+      filterMovementAnyOf: opts.filterMovementAnyOf ?? settings.filterMovementAnyOf,
+      filterRated: opts.filterRated ?? settings.filterRated,
+      filterFromMs: opts.filterFromMs ?? settings.filterFromMs,
+      filterToMs: opts.filterToMs ?? settings.filterToMs
     };
     const buildHeaders = (d) => ({
       "Content-Type": "application/json",
@@ -10709,7 +10709,7 @@ ${shapes}`.trim();
     .ga-ui-btn-icon { display: inline-flex; width: 16px; height: 16px; opacity: 0.95; }
     .ga-ui-btn-icon svg { width: 16px; height: 16px; display: block; }
     .ga-ui-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 8px; align-items: stretch; }
-    .ga-ui-row5 { display: grid; grid-template-columns: 1fr 36px 36px 36px 36px; gap: 8px; align-items: stretch; }
+    .ga-ui-row3 { display: grid; grid-template-columns: 1fr 36px 36px; gap: 8px; align-items: stretch; }
     .ga-ui-iconbtn {
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.22);
@@ -10971,7 +10971,10 @@ ${shapes}`.trim();
       icon: iconSvg("download"),
       title: "Shift+Click: download fetch log (JSON) after completion"
     });
-    const fetchGearBtn = mkIconBtn2({ icon: iconSvg("gear"), title: "Fetch filters" });
+    const fetchGearBtn = mkIconBtn2({
+      icon: iconSvg("gear"),
+      title: isSyncVariant ? "Filters (applies to fetch + sync)" : "Fetch filters"
+    });
     const fetchTrashBtn = mkIconBtn2({ icon: iconSvg("trash"), title: "Reset local database", danger: true });
     const syncBtn = mkBtn2({
       label: "Sync",
@@ -10987,6 +10990,7 @@ ${shapes}`.trim();
       icon: iconSvg("refresh"),
       title: "Fetch new data, then sync it (Shift = full snapshot + fetch log)"
     }) : null;
+    const deleteBtn = isSyncVariant ? mkIconBtn2({ icon: iconSvg("trash"), title: "Delete data (local/server)", danger: true }) : null;
     const analysisBtn = mkBtn2({ label: "Open Analysis Window", bg: "rgba(35,95,160,0.28)", icon: iconSvg("chart") });
     const counts = el("div");
     counts.className = "ga-ui-counts";
@@ -10995,12 +10999,10 @@ ${shapes}`.trim();
     actions.className = "ga-ui-actions";
     if (isSyncVariant) {
       const row = el("div");
-      row.className = "ga-ui-row5";
+      row.className = "ga-ui-row3";
       row.appendChild(fetchSyncBtn);
       row.appendChild(fetchGearBtn);
-      row.appendChild(syncGearBtn);
-      row.appendChild(fetchTrashBtn);
-      row.appendChild(syncTrashBtn);
+      row.appendChild(deleteBtn);
       actions.appendChild(row);
     } else {
       const fetchRow = el("div");
@@ -11061,13 +11063,13 @@ ${shapes}`.trim();
       cancelBtn.className = "ga-ui-btn";
       cancelBtn.type = "button";
       cancelBtn.style.background = "rgba(255,255,255,0.10)";
-      cancelBtn.textContent = "Cancel";
+      cancelBtn.textContent = opts.cancelLabel || "Cancel";
       actions2.appendChild(cancelBtn);
       const saveBtn = el("button");
       saveBtn.className = "ga-ui-btn";
       saveBtn.type = "button";
-      saveBtn.style.background = "rgba(0,162,254,0.18)";
-      saveBtn.textContent = "Save";
+      saveBtn.style.background = opts.saveKind === "danger" ? "rgba(160,35,35,0.28)" : "rgba(0,162,254,0.18)";
+      saveBtn.textContent = opts.saveLabel || "Save";
       actions2.appendChild(saveBtn);
       const close = () => {
         try {
@@ -11163,7 +11165,20 @@ ${shapes}`.trim();
           saveServerSyncSettings({ token });
           settings = loadServerSyncSettings();
         }
-        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+        const res = await runServerSyncOnceWithOptions(
+          settings,
+          isSyncVariant ? (() => {
+            const f = loadFetchGameFilter();
+            return {
+              forceFull,
+              filterModeFamily: f.modeFamily,
+              filterMovementAnyOf: f.movementAnyOf,
+              filterRated: f.rated,
+              filterFromMs: f.fromMs,
+              filterToMs: f.toMs
+            };
+          })() : { forceFull }
+        );
         const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
         const modeLabel = forceFull ? "Synced full" : "Synced";
         const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
@@ -11172,7 +11187,7 @@ ${shapes}`.trim();
         } else {
           const size = formatBytes(res.bytesGzip);
           if (res.status === 413) {
-            status.textContent = `Sync failed (HTTP 413) - payload ${size}. ${forceFull ? "Full snapshot is likely too large. " : ""}Try Compact mode, disable aggregates, narrow Sync filters, and use normal Sync (no Shift).`;
+            status.textContent = `Sync failed (HTTP 413) - payload ${size}. ${forceFull ? "Full snapshot is likely too large. " : ""}Try Compact mode, disable aggregates, narrow ${isSyncVariant ? "Filters" : "Sync filters"}, and use normal Sync (no Shift).`;
           } else if (res.status === 401 || res.status === 403) {
             status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
           } else {
@@ -11185,9 +11200,7 @@ ${shapes}`.trim();
     }
     const runFetchAndSyncImpl = async (opts) => {
       if (!isSyncVariant) return;
-      const btns = [fetchSyncBtn, fetchGearBtn, syncGearBtn, fetchTrashBtn, syncTrashBtn].filter(
-        (b) => !!b
-      );
+      const btns = [fetchSyncBtn, fetchGearBtn, deleteBtn].filter((b) => !!b);
       if (btns.some((b) => b.disabled)) return;
       btns.forEach((b) => b.disabled = true);
       try {
@@ -11209,7 +11222,7 @@ ${shapes}`.trim();
         (ev) => void runFetchAndSyncImpl({ forceFull: !!(ev && ev.shiftKey), auto: false, ev })
       );
     }
-    fetchTrashBtn.addEventListener("click", () => void resetHandler?.());
+    fetchTrashBtn.addEventListener("click", () => void resetHandler?.({ confirm: true }));
     const mkHelp = (t) => {
       const d = el("div");
       d.className = "ga-ui-modal-help";
@@ -11460,14 +11473,118 @@ ${shapes}`.trim();
     fetchGearBtn.addEventListener("click", () => {
       const cur = loadFetchGameFilter();
       openGameFiltersModal({
-        title: "Fetch filters",
-        intro: "Fetch filters (always game-level; never partial rounds):",
-        note: "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps.",
+        title: isSyncVariant ? "Filters" : "Fetch filters",
+        intro: isSyncVariant ? "Filters applied to both fetch and sync (always game-level; never partial rounds):" : "Fetch filters (always game-level; never partial rounds):",
+        note: isSyncVariant ? "Tip: This minimal build syncs only the data you fetch. Adjust these filters to control what is stored and uploaded." : "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps.",
         cur,
         onSave: (next) => saveFetchGameFilter(next),
-        savedMessage: "Fetch filters saved."
+        savedMessage: isSyncVariant ? "Filters saved." : "Fetch filters saved."
       });
     });
+    async function deleteServerDataNoPrompt() {
+      const settings = loadServerSyncSettings();
+      if (!settings.token) {
+        status.textContent = "Not linked. No server data to delete.";
+        return;
+      }
+      status.textContent = "Deleting server data...";
+      const res = await runServerUnsync(settings, { deleteUploads: true });
+      if (!res.ok) {
+        status.textContent = `Delete failed (HTTP ${res.status})`;
+        return;
+      }
+      saveServerSyncSettings({ token: "" });
+      status.textContent = "Server data deleted. Device unlinked.";
+    }
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", () => {
+        const wrap = el("div");
+        wrap.style.padding = "0 6px";
+        wrap.appendChild(
+          mkHelp(
+            "This will permanently delete your data.\n\nImportant: some games older than ~1 year may no longer be retrievable from GeoGuessr, so you might not be able to fetch them again later."
+          )
+        );
+        const box = el("div");
+        box.className = "ga-ui-modal-section";
+        const title2 = el("div");
+        title2.className = "ga-ui-modal-section-title";
+        title2.textContent = "What do you want to delete?";
+        box.appendChild(title2);
+        const mkChoice = (id, head, sub) => {
+          const row = el("label");
+          row.style.display = "grid";
+          row.style.gridTemplateColumns = "18px 1fr";
+          row.style.gap = "10px";
+          row.style.alignItems = "start";
+          row.style.padding = "10px 10px";
+          row.style.borderRadius = "12px";
+          row.style.border = "1px solid rgba(255,255,255,0.16)";
+          row.style.background = "rgba(255,255,255,0.06)";
+          row.style.cursor = "pointer";
+          const radio = el("input");
+          radio.type = "radio";
+          radio.name = "ga_delete_choice_v1";
+          radio.value = id;
+          radio.style.marginTop = "3px";
+          const text = el("div");
+          const h = el("div");
+          h.textContent = head;
+          h.style.fontWeight = "700";
+          const s = el("div");
+          s.textContent = sub;
+          s.style.opacity = "0.9";
+          s.style.fontSize = "12px";
+          s.style.marginTop = "4px";
+          text.appendChild(h);
+          text.appendChild(s);
+          row.appendChild(radio);
+          row.appendChild(text);
+          return { row, radio };
+        };
+        const cLocal = mkChoice("local", "Local data only", "Deletes the data stored in this browser.");
+        const cServer = mkChoice("server", "Server data only", "Deletes your uploaded server data and unlinks this device.");
+        const cBoth = mkChoice("both", "Both local + server", "Deletes browser data and server data (and unlinks this device).");
+        cLocal.radio.checked = true;
+        const choices = el("div");
+        choices.style.display = "grid";
+        choices.style.gap = "10px";
+        choices.style.marginTop = "10px";
+        choices.appendChild(cLocal.row);
+        choices.appendChild(cServer.row);
+        choices.appendChild(cBoth.row);
+        box.appendChild(choices);
+        wrap.appendChild(box);
+        openModal({
+          title: "Delete data",
+          body: wrap,
+          saveLabel: "Delete",
+          saveKind: "danger",
+          onSave: () => {
+            const selected = wrap.querySelector('input[name="ga_delete_choice_v1"]:checked')?.value || "local";
+            void (async () => {
+              const btns = [fetchSyncBtn, fetchGearBtn, deleteBtn].filter((b) => !!b);
+              if (btns.some((b) => b.disabled)) return;
+              btns.forEach((b) => b.disabled = true);
+              try {
+                if (selected === "local" || selected === "both") {
+                  status.textContent = "Deleting local data...";
+                  await resetHandler?.({ confirm: false });
+                }
+                if (selected === "server" || selected === "both") {
+                  await deleteServerDataNoPrompt();
+                }
+                status.textContent = "Delete complete.";
+              } catch (e) {
+                status.textContent = e instanceof Error ? e.message : String(e || "Delete failed");
+              } finally {
+                btns.forEach((b) => b.disabled = false);
+              }
+            })();
+          }
+        });
+      });
+    }
     syncBtn.addEventListener("click", async (ev) => {
       const btns = [syncBtn, syncGearBtn, syncTrashBtn];
       btns.forEach((b) => b.disabled = true);
@@ -55620,8 +55737,9 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
         }
       }
     });
-    ui.onResetClick(async () => {
-      if (!confirm(
+    ui.onResetClick(async (opts) => {
+      const ask = opts?.confirm !== false;
+      if (ask && !confirm(
         "WARNING:\n- This permanently deletes ALL GeoAnalyzr data stored locally in this browser.\n- This does NOT delete any data on the server.\n\nReset local database?"
       ))
         return;

@@ -622,7 +622,14 @@ export async function runServerSyncOnce(settings: ServerSyncSettings): Promise<S
 
 export async function runServerSyncOnceWithOptions(
   settings: ServerSyncSettings,
-  opts: { forceFull?: boolean } = {}
+  opts: {
+    forceFull?: boolean;
+    filterModeFamily?: "all" | "duels" | "teamduels";
+    filterMovementAnyOf?: Array<"moving" | "no_move" | "nmpz" | "unknown">;
+    filterRated?: "all" | "rated" | "unrated" | "unknown";
+    filterFromMs?: number;
+    filterToMs?: number;
+  } = {}
 ): Promise<ServerSyncStatus> {
   const endpointUrl = (settings.endpointUrl || "").trim();
   if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
@@ -643,11 +650,11 @@ export async function runServerSyncOnceWithOptions(
     compact: effectiveCompact,
     includeAggregates: settings.includeAggregates,
     forceFull,
-    filterModeFamily: settings.filterModeFamily,
-    filterMovementAnyOf: settings.filterMovementAnyOf,
-    filterRated: settings.filterRated,
-    filterFromMs: settings.filterFromMs,
-    filterToMs: settings.filterToMs
+    filterModeFamily: opts.filterModeFamily ?? settings.filterModeFamily,
+    filterMovementAnyOf: opts.filterMovementAnyOf ?? settings.filterMovementAnyOf,
+    filterRated: opts.filterRated ?? settings.filterRated,
+    filterFromMs: opts.filterFromMs ?? settings.filterFromMs,
+    filterToMs: opts.filterToMs ?? settings.filterToMs
   };
 
   const buildHeaders = (d: { cursorFrom: number; cursorTo: number }) =>

@@ -28,7 +28,7 @@ type UI = {
     detailsMissing: number;
   }) => void;
   onUpdateClick: (handler: (ev: MouseEvent) => void | Promise<void>) => void;
-  onResetClick: (handler: () => void | Promise<void>) => void;
+  onResetClick: (handler: (opts?: { confirm?: boolean }) => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
 };
 
@@ -413,8 +413,10 @@ export function registerUiActions(ui: UI): void {
     }
   });
 
-  ui.onResetClick(async () => {
+  ui.onResetClick(async (opts) => {
+    const ask = opts?.confirm !== false;
     if (
+      ask &&
       !confirm(
         "WARNING:\n" +
           "- This permanently deletes ALL GeoAnalyzr data stored locally in this browser.\n" +
