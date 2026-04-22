@@ -1,5 +1,6 @@
 import { createUIOverlay } from "../uiOverlay";
-import { loadServerSyncSettings } from "../serverSync";
+import { loadServerSyncSettings, runServerSyncOnceWithOptions } from "../serverSync";
+import { loadFetchGameFilter } from "../fetchGameFilter";
 import { registerUiActions, refreshUI } from "./uiActions";
 import { watchRoutes } from "./routing";
 
@@ -14,23 +15,54 @@ export async function bootApp(): Promise<void> {
     ui.setVisible(true);
   });
 
-  // Sync build: auto-run fetch + sync on page reload.
-  if (__GA_VARIANT__ === "sync") {
-    window.setTimeout(() => {
-      try {
-        const key = "geoanalyzr_sync_autorun_v1";
-        if (globalThis?.sessionStorage?.getItem(key) === "1") return;
-        globalThis?.sessionStorage?.setItem(key, "1");
+  // Auto-fetch latest rounds on full page reload. If linked, auto-sync as well.
+  window.setTimeout(() => {
+    try {
+      const g: any = globalThis as any;
+      const onceKey = "__ga_autofetch_and_sync_v1";
+      if (g[onceKey]) return;
+      g[onceKey] = 1;
 
-        const settings = loadServerSyncSettings();
-        if (!settings.token) {
-          ui.setStatus("Not linked. Click Fetch + Sync to link your device.");
-          return;
+      void (async () => {
+        try {
+          await ui.runFetch?.({ auto: true });
+        } catch {
+          // ignore
         }
-        void ui.runFetchAndSync?.({ auto: true, forceFull: false });
-      } catch {
-        // ignore
-      }
-    }, 2500);
-  }
+
+        try {
+          const settings = loadServerSyncSettings();
+          if (!settings.token) return; // not linked => do not sync
+
+          ui.setStatus("Auto-syncing...");
+          const isSyncVariant = __GA_VARIANT__ === "sync";
+          const f = isSyncVariant ? loadFetchGameFilter() : null;
+          const res = await runServerSyncOnceWithOptions(
+            settings,
+            isSyncVariant
+              ? {
+                  forceFull: false,
+                  filterModeFamily: f?.modeFamily,
+                  filterMovementAnyOf: f?.movementAnyOf,
+                  filterRated: f?.rated,
+                  filterFromMs: f?.fromMs,
+                  filterToMs: f?.toMs
+                }
+              : { forceFull: false }
+          );
+
+          if (res.ok) {
+            const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+            ui.setStatus(`Auto-sync OK - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB (gz)`);
+          } else {
+            ui.setStatus(`Auto-sync failed (HTTP ${res.status})`);
+          }
+        } catch {
+          // ignore (never block the UI on auto-run)
+        }
+      })();
+    } catch {
+      // ignore
+    }
+  }, 2500);
 }

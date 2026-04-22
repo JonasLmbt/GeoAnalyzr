@@ -20,6 +20,9 @@ export type UIOverlay = {
   onResetClick: (handler: (opts?: { confirm?: boolean }) => void | Promise<void>) => void;
   onOpenAnalysisClick: (handler: () => void | Promise<void>) => void;
 
+  // Convenience for programmatic auto-fetch on page reload (no user gesture).
+  runFetch?: (opts?: { auto?: boolean }) => Promise<void>;
+
   // Sync-variant convenience: runs fetch + sync as a single action.
   runFetchAndSync?: (opts?: { auto?: boolean; forceFull?: boolean }) => Promise<void>;
 };
@@ -683,6 +686,11 @@ export function createUIOverlay(): UIOverlay {
     btns.forEach((b) => (b.disabled = true));
     try {
       const ev = opts.ev ?? new MouseEvent("click");
+      try {
+        (ev as any).__gaAuto = !!opts.auto;
+      } catch {
+        // ignore
+      }
       if (!updateHandler) {
         status.textContent = "Fetch handler not ready yet. Try again in a moment.";
         return;
@@ -1239,6 +1247,19 @@ export function createUIOverlay(): UIOverlay {
     },
     onOpenAnalysisClick(fn) {
       openAnalysisHandler = fn;
+    },
+    async runFetch(opts) {
+      if (!updateHandler) {
+        status.textContent = "Fetch handler not ready yet. Try again in a moment.";
+        return;
+      }
+      const ev = new MouseEvent("click");
+      try {
+        (ev as any).__gaAuto = Boolean(opts?.auto);
+      } catch {
+        // ignore
+      }
+      await updateHandler(ev);
     },
     async runFetchAndSync(opts) {
       await runFetchAndSyncImpl({ forceFull: Boolean(opts?.forceFull), auto: Boolean(opts?.auto) });

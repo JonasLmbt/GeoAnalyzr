@@ -1,4 +1,4 @@
-import { db, isViewerMode, MAIN_DB_NAME, getActiveDbName } from "../db";
+﻿import { db, isViewerMode, MAIN_DB_NAME, getActiveDbName } from "../db";
 import { updateData } from "../sync";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
 import { backfillGuessCountries } from "../migrations/backfillGuessCountries";
@@ -230,13 +230,14 @@ export async function refreshUI(ui: UI): Promise<void> {
 
 export function registerUiActions(ui: UI): void {
   ui.onUpdateClick(async (ev) => {
+    const isAuto = Boolean((ev as any)?.__gaAuto);
     if (isViewerMode()) {
       const name = getActiveDbName();
       ui.setStatus("Viewer mode: updates are disabled.");
-      alert(
+      if (!isAuto) alert(
         `GeoAnalyzr is currently in Viewer mode (${name}).\n\n` +
           `Fetching/updating data is disabled to avoid mixing datasets.\n\n` +
-          `Go to Settings → Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
+          `Go to Settings â†’ Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
       );
       return;
     }
@@ -315,7 +316,7 @@ export function registerUiActions(ui: UI): void {
 
         if (probe.status === 401 || probe.status === 403) {
           onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in / disable blockers and try again.`);
-          alert(
+          if (!isAuto) alert(
             `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).\n\n` +
               `Common causes:\n` +
               `- Not logged in / expired session\n` +
@@ -368,7 +369,7 @@ export function registerUiActions(ui: UI): void {
             : "GeoGuessr returned an unexpected response for your private feed.";
         onStatusNow(`Error: Feed HTTP ${code}. ${hint}`);
         try {
-          alert(
+          if (!isAuto) alert(
             `GeoAnalyzr can't access your private feed (HTTP ${code}).\n\n` +
               `Common causes:\n` +
               `- Not logged in / expired session\n` +
@@ -484,3 +485,5 @@ export function registerUiActions(ui: UI): void {
   });
 
 }
+
+

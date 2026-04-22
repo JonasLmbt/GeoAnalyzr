@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.4.15
+// @version      2.4.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11205,6 +11205,10 @@ ${shapes}`.trim();
       btns.forEach((b) => b.disabled = true);
       try {
         const ev = opts.ev ?? new MouseEvent("click");
+        try {
+          ev.__gaAuto = !!opts.auto;
+        } catch {
+        }
         if (!updateHandler) {
           status.textContent = "Fetch handler not ready yet. Try again in a moment.";
           return;
@@ -11669,6 +11673,18 @@ ${shapes}`.trim();
       },
       onOpenAnalysisClick(fn) {
         openAnalysisHandler = fn;
+      },
+      async runFetch(opts) {
+        if (!updateHandler) {
+          status.textContent = "Fetch handler not ready yet. Try again in a moment.";
+          return;
+        }
+        const ev = new MouseEvent("click");
+        try {
+          ev.__gaAuto = Boolean(opts?.auto);
+        } catch {
+        }
+        await updateHandler(ev);
       },
       async runFetchAndSync(opts) {
         await runFetchAndSyncImpl({ forceFull: Boolean(opts?.forceFull), auto: Boolean(opts?.auto) });
@@ -55571,15 +55587,16 @@ Open it in a new tab instead?`
   }
   function registerUiActions(ui) {
     ui.onUpdateClick(async (ev) => {
+      const isAuto = Boolean(ev?.__gaAuto);
       if (isViewerMode()) {
         const name = getActiveDbName();
         ui.setStatus("Viewer mode: updates are disabled.");
-        alert(
+        if (!isAuto) alert(
           `GeoAnalyzr is currently in Viewer mode (${name}).
 
 Fetching/updating data is disabled to avoid mixing datasets.
 
-Go to Settings \u2192 Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
+Go to Settings \xE2\u2020\u2019 Data and click "Switch to my data" (${MAIN_DB_NAME}) to resume syncing.`
         );
         return;
       }
@@ -55645,7 +55662,7 @@ Go to Settings \u2192 Data and click "Switch to my data" (${MAIN_DB_NAME}) to re
           }
           if (probe.status === 401 || probe.status === 403) {
             onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in / disable blockers and try again.`);
-            alert(
+            if (!isAuto) alert(
               `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).
 
 Common causes:
@@ -55694,7 +55711,7 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           const hint = code === 401 || code === 403 ? "You are likely logged out, blocked by a privacy/adblock setting, or GeoGuessr denied access for this session." : "GeoGuessr returned an unexpected response for your private feed.";
           onStatusNow(`Error: Feed HTTP ${code}. ${hint}`);
           try {
-            alert(
+            if (!isAuto) alert(
               `GeoAnalyzr can't access your private feed (HTTP ${code}).
 
 Common causes:
@@ -55827,22 +55844,46 @@ After it finishes, open the dashboard again.`
     watchRoutes(() => {
       ui.setVisible(true);
     });
-    if (true) {
-      window.setTimeout(() => {
-        try {
-          const key = "geoanalyzr_sync_autorun_v1";
-          if (globalThis?.sessionStorage?.getItem(key) === "1") return;
-          globalThis?.sessionStorage?.setItem(key, "1");
-          const settings = loadServerSyncSettings();
-          if (!settings.token) {
-            ui.setStatus("Not linked. Click Fetch + Sync to link your device.");
-            return;
+    window.setTimeout(() => {
+      try {
+        const g = globalThis;
+        const onceKey = "__ga_autofetch_and_sync_v1";
+        if (g[onceKey]) return;
+        g[onceKey] = 1;
+        void (async () => {
+          try {
+            await ui.runFetch?.({ auto: true });
+          } catch {
           }
-          void ui.runFetchAndSync?.({ auto: true, forceFull: false });
-        } catch {
-        }
-      }, 2500);
-    }
+          try {
+            const settings = loadServerSyncSettings();
+            if (!settings.token) return;
+            ui.setStatus("Auto-syncing...");
+            const isSyncVariant = true;
+            const f = isSyncVariant ? loadFetchGameFilter() : null;
+            const res = await runServerSyncOnceWithOptions(
+              settings,
+              isSyncVariant ? {
+                forceFull: false,
+                filterModeFamily: f?.modeFamily,
+                filterMovementAnyOf: f?.movementAnyOf,
+                filterRated: f?.rated,
+                filterFromMs: f?.fromMs,
+                filterToMs: f?.toMs
+              } : { forceFull: false }
+            );
+            if (res.ok) {
+              const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+              ui.setStatus(`Auto-sync OK - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB (gz)`);
+            } else {
+              ui.setStatus(`Auto-sync failed (HTTP ${res.status})`);
+            }
+          } catch {
+          }
+        })();
+      } catch {
+      }
+    }, 2500);
   }
 
   // src/main.ts

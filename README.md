@@ -47,6 +47,8 @@ GeoAnalyzr is available in three variants:
 1. Open GeoGuessr and log in.
 2. Click the GeoAnalyzr icon in the bottom-left corner to open the panel.
 3. Run **Fetch Data** to sync new games and fetch missing details.
+   - On a full page reload (refresh) GeoAnalyzr also auto-fetches the latest rounds.
+   - If a server sync token is configured, it will auto-sync after the auto-fetch.
 4. Open analysis or export to Excel.
 
 ![GeoAnalyzr panel entry point](images/geoanalyzr.png)
@@ -70,7 +72,7 @@ Tampermonkey can therefore detect and install updates automatically.
 ### GeoAnalyzr (recommended)
 
 - GeoAnalyzr stores data locally in your browser (IndexedDB).
-- It does **not** sync your dataset to the GeoAnalyzr website.
+- It does **not** sync your dataset to the GeoAnalyzr website unless you configure server sync.
 - You can remove local data at any time using **Reset Database**.
 - You can export your analysis to Excel anytime.
 
