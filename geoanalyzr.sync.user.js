@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.4.16
+// @version      2.4.17
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -9344,8 +9344,8 @@ ${shapes}`.trim();
     const fz = movementOptions.forbidZooming === true;
     const fr = movementOptions.forbidRotating === true;
     if (!fm && !fz && !fr) return "moving";
-    if (fm && !fz && !fr) return "no move";
     if (fm && fz && fr) return "nmpz";
+    if (fm) return "no move";
     return void 0;
   }
   function normalizeMovementType2(raw) {
@@ -9356,6 +9356,13 @@ ${shapes}`.trim();
     if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
     if (s.includes("moving")) return "moving";
     return "unknown";
+  }
+  function pickMovementOptions(gameData) {
+    return pickFirst2(gameData, [
+      "movementOptions",
+      "options.movementOptions",
+      "options.duelRoundOptions.movementOptions"
+    ]);
   }
   function extractTrueHeadingDeg(roundRaw) {
     const pano = roundRaw?.panorama;
@@ -9381,6 +9388,36 @@ ${shapes}`.trim();
       if (before !== void 0 || after !== void 0) return { before, after };
     }
     return {};
+  }
+  function extractGameModeRatingChange(player) {
+    const paths = [
+      "progressChange.rankedSystemProgress",
+      "progressChange.rankedTeamDuelsProgress",
+      "progressChange.rankedProgress",
+      "progressChange.ratingProgress"
+    ];
+    for (const p of paths) {
+      const obj = getByPath(player, p);
+      const before = asNum(obj?.gameModeRatingBefore);
+      const after = asNum(obj?.gameModeRatingAfter);
+      const gameMode = typeof obj?.gameMode === "string" ? obj.gameMode : void 0;
+      if (before !== void 0 || after !== void 0 || gameMode) return { gameMode, before, after };
+    }
+    return {};
+  }
+  function extractWinStreak(player) {
+    const paths = [
+      "progressChange.rankedSystemProgress",
+      "progressChange.rankedTeamDuelsProgress",
+      "progressChange.rankedProgress",
+      "progressChange.ratingProgress"
+    ];
+    for (const p of paths) {
+      const obj = getByPath(player, p);
+      const v = asNum(obj?.winStreak);
+      if (v !== void 0) return v;
+    }
+    return void 0;
   }
   async function fetchDetailJson(game) {
     const family = classifyFamily(game);
@@ -9408,6 +9445,16 @@ ${shapes}`.trim();
       if (rn === void 0) continue;
       const health = asNum(r?.healthAfter);
       if (health !== void 0) map.set(rn, health);
+    }
+    return map;
+  }
+  function teamRoundResultByRound(team) {
+    const map = /* @__PURE__ */ new Map();
+    const rows = Array.isArray(team?.roundResults) ? team.roundResults : [];
+    for (const r of rows) {
+      const rn = asNum(r?.roundNumber);
+      if (rn === void 0) continue;
+      map.set(rn, r);
     }
     return map;
   }
@@ -9475,6 +9522,7 @@ ${shapes}`.trim();
     const startTime = toTs(rounds[0]?.startTime);
     const family = classifyFamily(game);
     const winningTeamId = String(gameData?.result?.winningTeamId || "");
+    const movementType = normalizeMovementType2(detectSimpleGameMode(pickMovementOptions(gameData)));
     const damageMultiplierRounds = rounds.filter((r) => (asNum(r?.damageMultiplier) || 1) > 1).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
     const healingRounds = rounds.filter((r) => Boolean(r?.isHealingRound)).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
     const mapName = pickFirst2(gameData, ["options.map.name"]);
@@ -9491,6 +9539,7 @@ ${shapes}`.trim();
       endpoint,
       gameMode: game.gameMode || game.mode,
       modeFamily: family,
+      movementType,
       mapName: typeof mapName === "string" ? mapName : void 0,
       mapSlug: typeof mapSlug === "string" ? mapSlug : void 0,
       isRated,
@@ -9534,11 +9583,21 @@ ${shapes}`.trim();
     const p2Rc = extractRatingChange(p2);
     const p3Rc = extractRatingChange(p3);
     const p4Rc = extractRatingChange(p4);
+    const p1GmRc = extractGameModeRatingChange(p1);
+    const p2GmRc = extractGameModeRatingChange(p2);
+    const p3GmRc = extractGameModeRatingChange(p3);
+    const p4GmRc = extractGameModeRatingChange(p4);
+    const p1Ws = extractWinStreak(p1);
+    const p2Ws = extractWinStreak(p2);
+    const p3Ws = extractWinStreak(p3);
+    const p4Ws = extractWinStreak(p4);
+    const ownTeamId = players[0]?.teamId || String(teams[0]?.id || "");
+    const teamOne = teams.find((t) => String(t?.id || "") === ownTeamId) || teams[0];
+    const teamTwo = teams.find((t) => String(t?.id || "") !== String(teamOne?.id || "")) || teams[1];
+    const teamOneRoundResults = teamRoundResultByRound(teamOne);
+    const teamTwoRoundResults = teamRoundResultByRound(teamTwo);
     let detail;
     if (family === "teamduels" && teams.length >= 2) {
-      const ownTeamId = players[0]?.teamId || String(teams[0]?.id || "");
-      const teamOne = teams.find((t) => String(t?.id || "") === ownTeamId) || teams[0];
-      const teamTwo = teams.find((t) => String(t?.id || "") !== String(teamOne?.id || "")) || teams[1];
       const teamOnePlayers = Array.isArray(teamOne?.players) ? teamOne.players : [];
       const teamTwoPlayers = Array.isArray(teamTwo?.players) ? teamTwo.players : [];
       const teamDetail = {
@@ -9546,28 +9605,44 @@ ${shapes}`.trim();
         modeFamily: "teamduels",
         date: toIsoDate(startTime),
         time: toIsoTime(startTime),
-        gameModeSimple: detectSimpleGameMode(gameData?.movementOptions),
+        gameModeSimple: detectSimpleGameMode(pickMovementOptions(gameData)),
         // role-based aliases
         player_self_id: p1Id,
         player_self_name: (p1Id ? profiles.get(p1Id)?.nick : void 0) ?? (typeof p1?.nick === "string" ? p1.nick : void 0),
         player_self_country: p1Id ? profiles.get(p1Id)?.countryName : void 0,
         player_self_startRating: p1Rc.before,
         player_self_endRating: p1Rc.after,
+        player_self_gameMode: p1GmRc.gameMode,
+        player_self_gameModeRatingBefore: p1GmRc.before,
+        player_self_gameModeRatingAfter: p1GmRc.after,
+        player_self_winStreak: p1Ws,
         player_mate_id: p2Id,
         player_mate_name: (p2Id ? profiles.get(p2Id)?.nick : void 0) ?? (typeof p2?.nick === "string" ? p2.nick : void 0),
         player_mate_country: p2Id ? profiles.get(p2Id)?.countryName : void 0,
         player_mate_startRating: p2Rc.before,
         player_mate_endRating: p2Rc.after,
+        player_mate_gameMode: p2GmRc.gameMode,
+        player_mate_gameModeRatingBefore: p2GmRc.before,
+        player_mate_gameModeRatingAfter: p2GmRc.after,
+        player_mate_winStreak: p2Ws,
         player_opponent_id: p3Id,
         player_opponent_name: (p3Id ? profiles.get(p3Id)?.nick : void 0) ?? (typeof p3?.nick === "string" ? p3.nick : void 0),
         player_opponent_country: p3Id ? profiles.get(p3Id)?.countryName : void 0,
         player_opponent_startRating: p3Rc.before,
         player_opponent_endRating: p3Rc.after,
+        player_opponent_gameMode: p3GmRc.gameMode,
+        player_opponent_gameModeRatingBefore: p3GmRc.before,
+        player_opponent_gameModeRatingAfter: p3GmRc.after,
+        player_opponent_winStreak: p3Ws,
         player_opponent_mate_id: p4Id,
         player_opponent_mate_name: (p4Id ? profiles.get(p4Id)?.nick : void 0) ?? (typeof p4?.nick === "string" ? p4.nick : void 0),
         player_opponent_mate_country: p4Id ? profiles.get(p4Id)?.countryName : void 0,
         player_opponent_mate_startRating: p4Rc.before,
         player_opponent_mate_endRating: p4Rc.after,
+        player_opponent_mate_gameMode: p4GmRc.gameMode,
+        player_opponent_mate_gameModeRatingBefore: p4GmRc.before,
+        player_opponent_mate_gameModeRatingAfter: p4GmRc.after,
+        player_opponent_mate_winStreak: p4Ws,
         teamOneId: String(teamOne?.id || ""),
         teamOneVictory: winningTeamId ? String(teamOne?.id || "") === winningTeamId : void 0,
         teamOneFinalHealth: asNum(teamOne?.health),
@@ -9593,15 +9668,12 @@ ${shapes}`.trim();
       };
       detail = teamDetail;
     } else {
-      const ownTeamId = players[0]?.teamId || String(teams[0]?.id || "");
-      const teamOne = teams.find((t) => String(t?.id || "") === ownTeamId) || teams[0];
-      const teamTwo = teams.find((t) => String(t?.id || "") !== String(teamOne?.id || "")) || teams[1];
       const duelDetail = {
         ...commonBase,
         modeFamily: "duels",
         date: toIsoDate(startTime),
         time: toIsoTime(startTime),
-        gameModeSimple: detectSimpleGameMode(gameData?.movementOptions),
+        gameModeSimple: detectSimpleGameMode(pickMovementOptions(gameData)),
         // role-based aliases
         player_self_id: p1Id,
         player_self_name: (p1Id ? profiles.get(p1Id)?.nick : void 0) ?? (typeof p1?.nick === "string" ? p1.nick : void 0),
@@ -9610,6 +9682,10 @@ ${shapes}`.trim();
         player_self_finalHealth: asNum(teamOne?.health),
         player_self_startRating: p1Rc.before,
         player_self_endRating: p1Rc.after,
+        player_self_gameMode: p1GmRc.gameMode,
+        player_self_gameModeRatingBefore: p1GmRc.before,
+        player_self_gameModeRatingAfter: p1GmRc.after,
+        player_self_winStreak: p1Ws,
         player_opponent_id: p2Id,
         player_opponent_name: (p2Id ? profiles.get(p2Id)?.nick : void 0) ?? (typeof p2?.nick === "string" ? p2.nick : void 0),
         player_opponent_country: p2Id ? profiles.get(p2Id)?.countryName : void 0,
@@ -9617,6 +9693,10 @@ ${shapes}`.trim();
         player_opponent_finalHealth: asNum(teamTwo?.health),
         player_opponent_startRating: p2Rc.before,
         player_opponent_endRating: p2Rc.after,
+        player_opponent_gameMode: p2GmRc.gameMode,
+        player_opponent_gameModeRatingBefore: p2GmRc.before,
+        player_opponent_gameModeRatingAfter: p2GmRc.after,
+        player_opponent_winStreak: p2Ws,
         playerOneId: p1Id,
         playerOneName: (p1Id ? profiles.get(p1Id)?.nick : void 0) ?? (typeof p1?.nick === "string" ? p1.nick : void 0),
         playerOneCountry: p1Id ? profiles.get(p1Id)?.countryName : void 0,
@@ -9634,7 +9714,6 @@ ${shapes}`.trim();
       };
       detail = duelDetail;
     }
-    const movementType = normalizeMovementType2(detectSimpleGameMode(gameData?.movementOptions));
     const normalizedRounds = [];
     for (let i = 0; i < rounds.length; i++) {
       const r = rounds[i];
@@ -9643,6 +9722,8 @@ ${shapes}`.trim();
       const endTs = toTs(r?.endTime);
       const hasAnyGuess = guessMaps.some((m) => m.has(rn) && m.get(rn) != null);
       if (startTs === void 0 && endTs === void 0 && !hasAnyGuess) continue;
+      const rrSelf = teamOneRoundResults.get(rn);
+      const rrOpp = teamTwoRoundResults.get(rn);
       const roundBase = {
         id: roundId(game.gameId, rn),
         gameId: game.gameId,
@@ -9651,6 +9732,18 @@ ${shapes}`.trim();
         mapSlug: commonBase.mapSlug,
         isRated: commonBase.isRated,
         movementType,
+        team_self_score: asNum(rrSelf?.score),
+        team_self_healthBefore: asNum(rrSelf?.healthBefore),
+        team_self_healthAfter: asNum(rrSelf?.healthAfter),
+        team_self_damageDealt: asNum(rrSelf?.damageDealt),
+        team_self_multiplier: asNum(rrSelf?.multiplier),
+        team_self_activeMultiplier: asBool(rrSelf?.activeMultiplier),
+        team_opponent_score: asNum(rrOpp?.score),
+        team_opponent_healthBefore: asNum(rrOpp?.healthBefore),
+        team_opponent_healthAfter: asNum(rrOpp?.healthAfter),
+        team_opponent_damageDealt: asNum(rrOpp?.damageDealt),
+        team_opponent_multiplier: asNum(rrOpp?.multiplier),
+        team_opponent_activeMultiplier: asBool(rrOpp?.activeMultiplier),
         trueLat: asNum(r?.panorama?.lat),
         trueLng: asNum(r?.panorama?.lng),
         trueCountry: normalizeIso22(r?.panorama?.countryCode),

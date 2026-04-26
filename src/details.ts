@@ -236,8 +236,13 @@ function detectSimpleGameMode(movementOptions: any): string | undefined {
   const fz = movementOptions.forbidZooming === true;
   const fr = movementOptions.forbidRotating === true;
   if (!fm && !fz && !fr) return "moving";
-  if (fm && !fz && !fr) return "no move";
+  // GeoGuessr can mix forbid flags in more combinations than just the canonical presets.
+  // For our analytics, we primarily care about:
+  // - "moving" (all allowed)
+  // - "no move" (no moving, regardless of other flags)
+  // - "nmpz" (no moving + no pan/rotate + no zoom)
   if (fm && fz && fr) return "nmpz";
+  if (fm) return "no move";
   return undefined;
 }
 
@@ -249,6 +254,14 @@ function normalizeMovementType(raw: unknown): "moving" | "no_move" | "nmpz" | "u
   if (s.includes("no move") || s.includes("no_move") || s.includes("nomove") || s.includes("no moving")) return "no_move";
   if (s.includes("moving")) return "moving";
   return "unknown";
+}
+
+function pickMovementOptions(gameData: any): any {
+  return pickFirst(gameData, [
+    "movementOptions",
+    "options.movementOptions",
+    "options.duelRoundOptions.movementOptions"
+  ]);
 }
 
 function extractTrueHeadingDeg(roundRaw: any): number | undefined {
@@ -276,6 +289,42 @@ function extractRatingChange(player: any): { before?: number; after?: number } {
     if (before !== undefined || after !== undefined) return { before, after };
   }
   return {};
+}
+
+function extractGameModeRatingChange(player: any): {
+  gameMode?: string;
+  before?: number;
+  after?: number;
+} {
+  const paths = [
+    "progressChange.rankedSystemProgress",
+    "progressChange.rankedTeamDuelsProgress",
+    "progressChange.rankedProgress",
+    "progressChange.ratingProgress"
+  ];
+  for (const p of paths) {
+    const obj = getByPath(player, p);
+    const before = asNum(obj?.gameModeRatingBefore);
+    const after = asNum(obj?.gameModeRatingAfter);
+    const gameMode = typeof obj?.gameMode === "string" ? obj.gameMode : undefined;
+    if (before !== undefined || after !== undefined || gameMode) return { gameMode, before, after };
+  }
+  return {};
+}
+
+function extractWinStreak(player: any): number | undefined {
+  const paths = [
+    "progressChange.rankedSystemProgress",
+    "progressChange.rankedTeamDuelsProgress",
+    "progressChange.rankedProgress",
+    "progressChange.ratingProgress"
+  ];
+  for (const p of paths) {
+    const obj = getByPath(player, p);
+    const v = asNum(obj?.winStreak);
+    if (v !== undefined) return v;
+  }
+  return undefined;
 }
 
 async function fetchDetailJson(game: FeedGameRow): Promise<{ data: any; endpoint: string }> {
@@ -307,6 +356,17 @@ function healthByRound(team: any): Map<number, number> {
     if (rn === undefined) continue;
     const health = asNum(r?.healthAfter);
     if (health !== undefined) map.set(rn, health);
+  }
+  return map;
+}
+
+function teamRoundResultByRound(team: any): Map<number, any> {
+  const map = new Map<number, any>();
+  const rows = Array.isArray(team?.roundResults) ? team.roundResults : [];
+  for (const r of rows) {
+    const rn = asNum(r?.roundNumber);
+    if (rn === undefined) continue;
+    map.set(rn, r);
   }
   return map;
 }
@@ -390,6 +450,7 @@ async function normalizeGameAndRounds(
   const startTime = toTs(rounds[0]?.startTime);
   const family = classifyFamily(game);
   const winningTeamId = String(gameData?.result?.winningTeamId || "");
+  const movementType = normalizeMovementType(detectSimpleGameMode(pickMovementOptions(gameData)));
 
   const damageMultiplierRounds = rounds
     .filter((r: any) => (asNum(r?.damageMultiplier) || 1) > 1)
@@ -416,6 +477,7 @@ async function normalizeGameAndRounds(
     endpoint,
     gameMode: game.gameMode || game.mode,
     modeFamily: family,
+    movementType,
     mapName: typeof mapName === "string" ? mapName : undefined,
     mapSlug: typeof mapSlug === "string" ? mapSlug : undefined,
     isRated,
@@ -464,11 +526,24 @@ async function normalizeGameAndRounds(
   const p3Rc = extractRatingChange(p3);
   const p4Rc = extractRatingChange(p4);
 
+  const p1GmRc = extractGameModeRatingChange(p1);
+  const p2GmRc = extractGameModeRatingChange(p2);
+  const p3GmRc = extractGameModeRatingChange(p3);
+  const p4GmRc = extractGameModeRatingChange(p4);
+
+  const p1Ws = extractWinStreak(p1);
+  const p2Ws = extractWinStreak(p2);
+  const p3Ws = extractWinStreak(p3);
+  const p4Ws = extractWinStreak(p4);
+
+  const ownTeamId = players[0]?.teamId || String(teams[0]?.id || "");
+  const teamOne = teams.find((t: any) => String(t?.id || "") === ownTeamId) || teams[0];
+  const teamTwo = teams.find((t: any) => String(t?.id || "") !== String(teamOne?.id || "")) || teams[1];
+  const teamOneRoundResults = teamRoundResultByRound(teamOne);
+  const teamTwoRoundResults = teamRoundResultByRound(teamTwo);
+
   let detail: GameRow;
   if (family === "teamduels" && teams.length >= 2) {
-    const ownTeamId = players[0]?.teamId || String(teams[0]?.id || "");
-    const teamOne = teams.find((t: any) => String(t?.id || "") === ownTeamId) || teams[0];
-    const teamTwo = teams.find((t: any) => String(t?.id || "") !== String(teamOne?.id || "")) || teams[1];
     const teamOnePlayers = Array.isArray(teamOne?.players) ? teamOne.players : [];
     const teamTwoPlayers = Array.isArray(teamTwo?.players) ? teamTwo.players : [];
 
@@ -477,28 +552,44 @@ async function normalizeGameAndRounds(
       modeFamily: "teamduels",
       date: toIsoDate(startTime),
       time: toIsoTime(startTime),
-      gameModeSimple: detectSimpleGameMode(gameData?.movementOptions),
+      gameModeSimple: detectSimpleGameMode(pickMovementOptions(gameData)),
       // role-based aliases
       player_self_id: p1Id,
       player_self_name: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
       player_self_country: p1Id ? profiles.get(p1Id)?.countryName : undefined,
       player_self_startRating: p1Rc.before,
       player_self_endRating: p1Rc.after,
+      player_self_gameMode: p1GmRc.gameMode,
+      player_self_gameModeRatingBefore: p1GmRc.before,
+      player_self_gameModeRatingAfter: p1GmRc.after,
+      player_self_winStreak: p1Ws,
       player_mate_id: p2Id,
       player_mate_name: (p2Id ? profiles.get(p2Id)?.nick : undefined) ?? (typeof p2?.nick === "string" ? p2.nick : undefined),
       player_mate_country: p2Id ? profiles.get(p2Id)?.countryName : undefined,
       player_mate_startRating: p2Rc.before,
       player_mate_endRating: p2Rc.after,
+      player_mate_gameMode: p2GmRc.gameMode,
+      player_mate_gameModeRatingBefore: p2GmRc.before,
+      player_mate_gameModeRatingAfter: p2GmRc.after,
+      player_mate_winStreak: p2Ws,
       player_opponent_id: p3Id,
       player_opponent_name: (p3Id ? profiles.get(p3Id)?.nick : undefined) ?? (typeof p3?.nick === "string" ? p3.nick : undefined),
       player_opponent_country: p3Id ? profiles.get(p3Id)?.countryName : undefined,
       player_opponent_startRating: p3Rc.before,
       player_opponent_endRating: p3Rc.after,
+      player_opponent_gameMode: p3GmRc.gameMode,
+      player_opponent_gameModeRatingBefore: p3GmRc.before,
+      player_opponent_gameModeRatingAfter: p3GmRc.after,
+      player_opponent_winStreak: p3Ws,
       player_opponent_mate_id: p4Id,
       player_opponent_mate_name: (p4Id ? profiles.get(p4Id)?.nick : undefined) ?? (typeof p4?.nick === "string" ? p4.nick : undefined),
       player_opponent_mate_country: p4Id ? profiles.get(p4Id)?.countryName : undefined,
       player_opponent_mate_startRating: p4Rc.before,
       player_opponent_mate_endRating: p4Rc.after,
+      player_opponent_mate_gameMode: p4GmRc.gameMode,
+      player_opponent_mate_gameModeRatingBefore: p4GmRc.before,
+      player_opponent_mate_gameModeRatingAfter: p4GmRc.after,
+      player_opponent_mate_winStreak: p4Ws,
       teamOneId: String(teamOne?.id || ""),
       teamOneVictory: winningTeamId ? String(teamOne?.id || "") === winningTeamId : undefined,
       teamOneFinalHealth: asNum(teamOne?.health),
@@ -536,16 +627,12 @@ async function normalizeGameAndRounds(
     };
     detail = teamDetail;
   } else {
-    const ownTeamId = players[0]?.teamId || String(teams[0]?.id || "");
-    const teamOne = teams.find((t: any) => String(t?.id || "") === ownTeamId) || teams[0];
-    const teamTwo = teams.find((t: any) => String(t?.id || "") !== String(teamOne?.id || "")) || teams[1];
-
     const duelDetail: GameRowDuel = {
       ...commonBase,
       modeFamily: "duels",
       date: toIsoDate(startTime),
       time: toIsoTime(startTime),
-      gameModeSimple: detectSimpleGameMode(gameData?.movementOptions),
+      gameModeSimple: detectSimpleGameMode(pickMovementOptions(gameData)),
       // role-based aliases
       player_self_id: p1Id,
       player_self_name: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
@@ -554,6 +641,10 @@ async function normalizeGameAndRounds(
       player_self_finalHealth: asNum(teamOne?.health),
       player_self_startRating: p1Rc.before,
       player_self_endRating: p1Rc.after,
+      player_self_gameMode: p1GmRc.gameMode,
+      player_self_gameModeRatingBefore: p1GmRc.before,
+      player_self_gameModeRatingAfter: p1GmRc.after,
+      player_self_winStreak: p1Ws,
       player_opponent_id: p2Id,
       player_opponent_name: (p2Id ? profiles.get(p2Id)?.nick : undefined) ?? (typeof p2?.nick === "string" ? p2.nick : undefined),
       player_opponent_country: p2Id ? profiles.get(p2Id)?.countryName : undefined,
@@ -561,6 +652,10 @@ async function normalizeGameAndRounds(
       player_opponent_finalHealth: asNum(teamTwo?.health),
       player_opponent_startRating: p2Rc.before,
       player_opponent_endRating: p2Rc.after,
+      player_opponent_gameMode: p2GmRc.gameMode,
+      player_opponent_gameModeRatingBefore: p2GmRc.before,
+      player_opponent_gameModeRatingAfter: p2GmRc.after,
+      player_opponent_winStreak: p2Ws,
       playerOneId: p1Id,
       playerOneName: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
       playerOneCountry: p1Id ? profiles.get(p1Id)?.countryName : undefined,
@@ -579,8 +674,6 @@ async function normalizeGameAndRounds(
     detail = duelDetail;
   }
 
-  const movementType = normalizeMovementType(detectSimpleGameMode(gameData?.movementOptions));
-
   const normalizedRounds: RoundRow[] = [];
   for (let i = 0; i < rounds.length; i++) {
     const r = rounds[i];
@@ -594,6 +687,9 @@ async function normalizeGameAndRounds(
     // become incomplete and drilldowns show impossible round counts.
     if (startTs === undefined && endTs === undefined && !hasAnyGuess) continue;
 
+    const rrSelf = teamOneRoundResults.get(rn);
+    const rrOpp = teamTwoRoundResults.get(rn);
+
     const roundBase = {
       id: roundId(game.gameId, rn),
       gameId: game.gameId,
@@ -602,6 +698,18 @@ async function normalizeGameAndRounds(
       mapSlug: commonBase.mapSlug,
       isRated: commonBase.isRated,
       movementType,
+      team_self_score: asNum(rrSelf?.score),
+      team_self_healthBefore: asNum(rrSelf?.healthBefore),
+      team_self_healthAfter: asNum(rrSelf?.healthAfter),
+      team_self_damageDealt: asNum(rrSelf?.damageDealt),
+      team_self_multiplier: asNum(rrSelf?.multiplier),
+      team_self_activeMultiplier: asBool(rrSelf?.activeMultiplier),
+      team_opponent_score: asNum(rrOpp?.score),
+      team_opponent_healthBefore: asNum(rrOpp?.healthBefore),
+      team_opponent_healthAfter: asNum(rrOpp?.healthAfter),
+      team_opponent_damageDealt: asNum(rrOpp?.damageDealt),
+      team_opponent_multiplier: asNum(rrOpp?.multiplier),
+      team_opponent_activeMultiplier: asBool(rrOpp?.activeMultiplier),
       trueLat: asNum(r?.panorama?.lat),
       trueLng: asNum(r?.panorama?.lng),
       trueCountry: normalizeIso2(r?.panorama?.countryCode),

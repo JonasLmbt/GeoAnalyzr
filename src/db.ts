@@ -84,6 +84,20 @@ interface RoundRowBase {
 
 export interface RoundRowDuel extends RoundRowBase {
   modeFamily?: "duels";
+  // Team-level (from `teams[].roundResults[]`) for the self/opponent teams.
+  team_self_score?: number;
+  team_self_healthBefore?: number;
+  team_self_healthAfter?: number;
+  team_self_damageDealt?: number;
+  team_self_multiplier?: number;
+  team_self_activeMultiplier?: boolean;
+  team_opponent_score?: number;
+  team_opponent_healthBefore?: number;
+  team_opponent_healthAfter?: number;
+  team_opponent_damageDealt?: number;
+  team_opponent_multiplier?: number;
+  team_opponent_activeMultiplier?: boolean;
+
   player_self_playerId?: string;
   player_self_guessLat?: number;
   player_self_guessLng?: number;
@@ -105,6 +119,20 @@ export interface RoundRowDuel extends RoundRowBase {
 
 export interface RoundRowTeamDuel extends RoundRowBase {
   modeFamily?: "teamduels";
+  // Team-level (from `teams[].roundResults[]`) for the self/opponent teams.
+  team_self_score?: number;
+  team_self_healthBefore?: number;
+  team_self_healthAfter?: number;
+  team_self_damageDealt?: number;
+  team_self_multiplier?: number;
+  team_self_activeMultiplier?: boolean;
+  team_opponent_score?: number;
+  team_opponent_healthBefore?: number;
+  team_opponent_healthAfter?: number;
+  team_opponent_damageDealt?: number;
+  team_opponent_multiplier?: number;
+  team_opponent_activeMultiplier?: boolean;
+
   player_self_playerId?: string;
   player_self_teamId?: string;
   player_self_guessLat?: number;
@@ -160,6 +188,7 @@ interface GameRowBase {
   endpoint?: string;
   modeFamily?: ModeFamily;
   gameMode?: string;
+  movementType?: "moving" | "no_move" | "nmpz" | "unknown";
   mapName?: string;
   mapSlug?: string;
   isRated?: boolean;
@@ -187,6 +216,10 @@ export interface GameRowDuel extends GameRowBase {
   player_self_finalHealth?: number;
   player_self_startRating?: number;
   player_self_endRating?: number;
+  player_self_gameMode?: string;
+  player_self_gameModeRatingBefore?: number;
+  player_self_gameModeRatingAfter?: number;
+  player_self_winStreak?: number;
   player_opponent_id?: string;
   player_opponent_name?: string;
   player_opponent_country?: string;
@@ -194,6 +227,10 @@ export interface GameRowDuel extends GameRowBase {
   player_opponent_finalHealth?: number;
   player_opponent_startRating?: number;
   player_opponent_endRating?: number;
+  player_opponent_gameMode?: string;
+  player_opponent_gameModeRatingBefore?: number;
+  player_opponent_gameModeRatingAfter?: number;
+  player_opponent_winStreak?: number;
 
   playerOneId?: string;
   playerOneName?: string;
@@ -224,21 +261,37 @@ export interface GameRowTeamDuel extends GameRowBase {
   player_self_country?: string;
   player_self_startRating?: number;
   player_self_endRating?: number;
+  player_self_gameMode?: string;
+  player_self_gameModeRatingBefore?: number;
+  player_self_gameModeRatingAfter?: number;
+  player_self_winStreak?: number;
   player_mate_id?: string;
   player_mate_name?: string;
   player_mate_country?: string;
   player_mate_startRating?: number;
   player_mate_endRating?: number;
+  player_mate_gameMode?: string;
+  player_mate_gameModeRatingBefore?: number;
+  player_mate_gameModeRatingAfter?: number;
+  player_mate_winStreak?: number;
   player_opponent_id?: string;
   player_opponent_name?: string;
   player_opponent_country?: string;
   player_opponent_startRating?: number;
   player_opponent_endRating?: number;
+  player_opponent_gameMode?: string;
+  player_opponent_gameModeRatingBefore?: number;
+  player_opponent_gameModeRatingAfter?: number;
+  player_opponent_winStreak?: number;
   player_opponent_mate_id?: string;
   player_opponent_mate_name?: string;
   player_opponent_mate_country?: string;
   player_opponent_mate_startRating?: number;
   player_opponent_mate_endRating?: number;
+  player_opponent_mate_gameMode?: string;
+  player_opponent_mate_gameModeRatingBefore?: number;
+  player_opponent_mate_gameModeRatingAfter?: number;
+  player_opponent_mate_winStreak?: number;
 
   teamOneId?: string;
   teamOneVictory?: boolean;
