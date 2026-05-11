@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.4.20
+// @version      2.4.21
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10216,15 +10216,15 @@ ${shapes}`.trim();
       });
     });
   }
-  async function ensureSyncDetailCoverage(forceFull) {
-    const games = forceFull ? await db.games.toArray() : await db.games.orderBy("playedAt").reverse().limit(500).toArray();
+  async function ensureSyncDetailCoverage() {
+    const games = await db.games.orderBy("playedAt").reverse().limit(500).toArray();
     if (!games.length) return;
     await fetchDetailsForGames({
       games,
       concurrency: 4,
       retryErrors: true,
       verifyCompleteness: true,
-      reason: forceFull ? "pre-sync-full" : "pre-sync",
+      reason: "pre-sync",
       onStatus: () => {
       }
     });
@@ -10521,7 +10521,7 @@ ${shapes}`.trim();
     if (!token) throw new Error("Missing sync token.");
     const forceFull = opts.forceFull === true;
     const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
-    await ensureSyncDetailCoverage(forceFull);
+    await ensureSyncDetailCoverage();
     const effectiveCompact = settings.compact === true;
     const MAX_GZIP_BYTES = 4.5 * 1024 * 1024;
     const MAX_CHUNKS = 60;
@@ -12585,23 +12585,34 @@ ${shapes}`.trim();
   async function backfillMovementRatings(opts) {
     const onStatus = opts.onStatus ?? (() => {
     });
-    const batchSize = opts.batchSize ?? 200;
-    const metaKey = "migration_movement_ratings_v2";
-    if (!opts.force) {
-      const meta = await db.meta.get(metaKey);
-      if (meta?.value?.doneAt) {
-        return { scanned: 0, updated: 0 };
-      }
+    const batchSize = opts.batchSize ?? 300;
+    const cooldownMs = opts.cooldownMs ?? 60 * 60 * 1e3;
+    const metaKey = "backfill_movement_ratings_v3";
+    const meta = await db.meta.get(metaKey);
+    const state = meta?.value ?? {};
+    if (typeof state.lastRunAt === "number" && Date.now() - state.lastRunAt < cooldownMs) {
+      return { scanned: 0, updated: 0 };
     }
-    const total = await db.details.count();
+    const processedUpTo = typeof state.processedUpTo === "number" ? state.processedUpTo : 0;
+    const unprocessed = await db.details.where("fetchedAt").above(processedUpTo).toArray();
+    if (unprocessed.length === 0) {
+      await db.meta.put({
+        key: metaKey,
+        value: { ...state, lastRunAt: Date.now() },
+        updatedAt: Date.now()
+      });
+      return { scanned: 0, updated: 0 };
+    }
     let scanned = 0;
+    let newMaxFetchedAt = processedUpTo;
     const toDelete = [];
-    onStatus(`Checking movement ratings... (0/${total})`);
-    for (let offset = 0; offset < total; offset += batchSize) {
-      const chunk = await db.details.offset(offset).limit(batchSize).toArray();
+    for (let i = 0; i < unprocessed.length; i += batchSize) {
+      const chunk = unprocessed.slice(i, i + batchSize);
       scanned += chunk.length;
       for (const row of chunk) {
         if (!row || typeof row !== "object") continue;
+        const fetchedAt = typeof row.fetchedAt === "number" ? row.fetchedAt : 0;
+        if (fetchedAt > newMaxFetchedAt) newMaxFetchedAt = fetchedAt;
         const mt = detectMovementType(row.movementType) ?? detectMovementType(row.gameModeSimple);
         if (!mt) continue;
         if (row.player_self_movingRatingAfter != null || row.player_self_noMoveRatingAfter != null || row.player_self_nmpzRatingAfter != null) continue;
@@ -12609,8 +12620,8 @@ ${shapes}`.trim();
           toDelete.push(row.gameId);
         }
       }
-      if (scanned % (batchSize * 10) === 0 || scanned >= total) {
-        onStatus(`Checking movement ratings... (${scanned}/${total})`);
+      if (scanned % (batchSize * 5) === 0 || i + batchSize >= unprocessed.length) {
+        onStatus(`Checking movement ratings... (${scanned}/${unprocessed.length})`);
       }
     }
     if (toDelete.length > 0) {
@@ -12619,7 +12630,11 @@ ${shapes}`.trim();
     }
     await db.meta.put({
       key: metaKey,
-      value: { doneAt: Date.now(), scanned, requeued: toDelete.length },
+      value: {
+        processedUpTo: newMaxFetchedAt,
+        lastRunAt: Date.now(),
+        totalDeleted: (state.totalDeleted ?? 0) + toDelete.length
+      },
       updatedAt: Date.now()
     });
     return { scanned, updated: toDelete.length };

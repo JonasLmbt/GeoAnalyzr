@@ -14,37 +14,62 @@ function detectMovementType(v: unknown): "moving" | "no_move" | "nmpz" | null {
   return null;
 }
 
-// Deletes detail records for rated movement games that lack movement-specific
-// rating fields so they get re-fetched (with current extraction logic) on the
-// next updateData() call. Runs exactly once per install (meta key v2).
+// Runs on every update, but only scans records not yet processed.
+// Uses a fetchedAt cursor so already-checked records are never re-scanned.
+// Records with a movement type but missing movement-specific ratings are deleted
+// so updateData() re-fetches them with the current extraction logic.
 export async function backfillMovementRatings(opts: {
   onStatus?: (msg: string) => void;
   batchSize?: number;
-  force?: boolean;
+  cooldownMs?: number;
 }): Promise<BackfillMovementRatingsResult> {
   const onStatus = opts.onStatus ?? (() => {});
-  const batchSize = opts.batchSize ?? 200;
+  const batchSize = opts.batchSize ?? 300;
+  const cooldownMs = opts.cooldownMs ?? 60 * 60 * 1000; // 1 hour
 
-  const metaKey = "migration_movement_ratings_v2";
-  if (!opts.force) {
-    const meta = await db.meta.get(metaKey);
-    if ((meta?.value as any)?.doneAt) {
-      return { scanned: 0, updated: 0 };
-    }
+  const metaKey = "backfill_movement_ratings_v3";
+  const meta = await db.meta.get(metaKey);
+  const state: { processedUpTo?: number; lastRunAt?: number; totalDeleted?: number } =
+    (meta?.value as any) ?? {};
+
+  // Skip if we ran recently.
+  if (
+    typeof state.lastRunAt === "number" &&
+    Date.now() - state.lastRunAt < cooldownMs
+  ) {
+    return { scanned: 0, updated: 0 };
   }
 
-  const total = await db.details.count();
+  const processedUpTo = typeof state.processedUpTo === "number" ? state.processedUpTo : 0;
+
+  // Only look at records we haven't processed yet (new or re-fetched since last run).
+  const unprocessed = await db.details
+    .where("fetchedAt")
+    .above(processedUpTo)
+    .toArray();
+
+  if (unprocessed.length === 0) {
+    await db.meta.put({
+      key: metaKey,
+      value: { ...state, lastRunAt: Date.now() },
+      updatedAt: Date.now(),
+    });
+    return { scanned: 0, updated: 0 };
+  }
+
   let scanned = 0;
+  let newMaxFetchedAt = processedUpTo;
   const toDelete: string[] = [];
 
-  onStatus(`Checking movement ratings... (0/${total})`);
-
-  for (let offset = 0; offset < total; offset += batchSize) {
-    const chunk = await db.details.offset(offset).limit(batchSize).toArray();
+  for (let i = 0; i < unprocessed.length; i += batchSize) {
+    const chunk = unprocessed.slice(i, i + batchSize) as any[];
     scanned += chunk.length;
 
-    for (const row of chunk as any[]) {
+    for (const row of chunk) {
       if (!row || typeof row !== "object") continue;
+
+      const fetchedAt = typeof row.fetchedAt === "number" ? row.fetchedAt : 0;
+      if (fetchedAt > newMaxFetchedAt) newMaxFetchedAt = fetchedAt;
 
       const mt = detectMovementType(row.movementType) ?? detectMovementType(row.gameModeSimple);
       if (!mt) continue;
@@ -62,8 +87,8 @@ export async function backfillMovementRatings(opts: {
       }
     }
 
-    if (scanned % (batchSize * 10) === 0 || scanned >= total) {
-      onStatus(`Checking movement ratings... (${scanned}/${total})`);
+    if (scanned % (batchSize * 5) === 0 || i + batchSize >= unprocessed.length) {
+      onStatus(`Checking movement ratings... (${scanned}/${unprocessed.length})`);
     }
   }
 
@@ -74,7 +99,11 @@ export async function backfillMovementRatings(opts: {
 
   await db.meta.put({
     key: metaKey,
-    value: { doneAt: Date.now(), scanned, requeued: toDelete.length },
+    value: {
+      processedUpTo: newMaxFetchedAt,
+      lastRunAt: Date.now(),
+      totalDeleted: (state.totalDeleted ?? 0) + toDelete.length,
+    },
     updatedAt: Date.now(),
   });
 

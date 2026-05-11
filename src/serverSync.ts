@@ -239,10 +239,10 @@ async function gzipJson(json: string): Promise<Uint8Array> {
   });
 }
 
-async function ensureSyncDetailCoverage(forceFull: boolean): Promise<void> {
-  const games = forceFull
-    ? await db.games.toArray()
-    : await db.games.orderBy("playedAt").reverse().limit(500).toArray();
+async function ensureSyncDetailCoverage(): Promise<void> {
+  // Only cover the most recent games — fetching all historical games would block
+  // the sync for minutes and is unnecessary (we send whatever is locally cached).
+  const games = await db.games.orderBy("playedAt").reverse().limit(500).toArray();
   if (!games.length) return;
 
   await fetchDetailsForGames({
@@ -250,7 +250,7 @@ async function ensureSyncDetailCoverage(forceFull: boolean): Promise<void> {
     concurrency: 4,
     retryErrors: true,
     verifyCompleteness: true,
-    reason: forceFull ? "pre-sync-full" : "pre-sync",
+    reason: "pre-sync",
     onStatus: () => {
       // Keep sync preflight silent in the generic API. UI callers only get the final sync status.
     }
@@ -638,7 +638,7 @@ export async function runServerSyncOnceWithOptions(
 
   const forceFull = opts.forceFull === true;
   const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
-  await ensureSyncDetailCoverage(forceFull);
+  await ensureSyncDetailCoverage();
 
   // "Compact" only drops bulky raw payloads, never analytical fields.
   const effectiveCompact = settings.compact === true;
