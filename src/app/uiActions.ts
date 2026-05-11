@@ -2,6 +2,7 @@
 import { updateData } from "../sync";
 import { normalizeLegacyRounds } from "../migrations/normalizeLegacyRounds";
 import { backfillGuessCountries } from "../migrations/backfillGuessCountries";
+import { backfillMovementRatings } from "../migrations/backfillMovementRatings";
 import { invalidateRoundsCache } from "../engine/queryEngine";
 import { initAnalysisWindow } from "../ui";
 import { httpGetJson } from "../http";
@@ -344,6 +345,7 @@ export function registerUiActions(ui: UI): void {
       });
       const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
       const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
+      const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
       try {
         await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
       } catch {
@@ -351,12 +353,12 @@ export function registerUiActions(ui: UI): void {
       }
       invalidateRoundsCache();
       onStatusNow(`Update complete. Feed upserted: ${res.feedUpserted}. Details ok: ${res.detailsOk}, fail: ${res.detailsFail}.`);
-      if (norm.updated > 0 || backfilled.updated > 0) {
+      if (norm.updated > 0 || backfilled.updated > 0 || mvBackfilled.updated > 0) {
         onStatusNow(
-          `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}.`
+          `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}. Backfilled movement ratings: ${mvBackfilled.updated}.`
         );
       }
-      if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled };
+      if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled, backfillMovementRatings: mvBackfilled };
       await refreshUI(ui);
     } catch (e) {
       const se = safeError(e);
