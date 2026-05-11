@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.20-dev
+// @version      2.4.21-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -12574,11 +12574,6 @@ ${shapes}`.trim();
   }
 
   // src/migrations/backfillMovementRatings.ts
-  var MOVEMENT_SUFFIX = {
-    moving: "movingRating",
-    no_move: "noMoveRating",
-    nmpz: "nmpzRating"
-  };
   function detectMovementType(v) {
     const s = String(v ?? "").toLowerCase().trim();
     if (!s || s === "unknown") return null;
@@ -12587,12 +12582,11 @@ ${shapes}`.trim();
     if (s === "nmpz") return "nmpz";
     return null;
   }
-  var ROLES = ["player_self", "player_opponent", "player_mate", "player_opponent_mate"];
   async function backfillMovementRatings(opts) {
     const onStatus = opts.onStatus ?? (() => {
     });
     const batchSize = opts.batchSize ?? 200;
-    const metaKey = "migration_movement_ratings_v1";
+    const metaKey = "migration_movement_ratings_v2";
     if (!opts.force) {
       const meta = await db.meta.get(metaKey);
       if (meta?.value?.doneAt) {
@@ -12601,45 +12595,34 @@ ${shapes}`.trim();
     }
     const total = await db.details.count();
     let scanned = 0;
-    let updated = 0;
-    onStatus(`Backfilling movement ratings... (0/${total})`);
+    const toDelete = [];
+    onStatus(`Checking movement ratings... (0/${total})`);
     for (let offset = 0; offset < total; offset += batchSize) {
       const chunk = await db.details.offset(offset).limit(batchSize).toArray();
       scanned += chunk.length;
-      const patch = [];
       for (const row of chunk) {
         if (!row || typeof row !== "object") continue;
         const mt = detectMovementType(row.movementType) ?? detectMovementType(row.gameModeSimple);
         if (!mt) continue;
-        const suffix = MOVEMENT_SUFFIX[mt];
-        let changed = false;
-        for (const prefix of ROLES) {
-          const oldAfter = row[`${prefix}_gameModeRatingAfter`];
-          const oldBefore = row[`${prefix}_gameModeRatingBefore`];
-          if (oldAfter == null || !Number.isFinite(Number(oldAfter)) || Number(oldAfter) <= 0) continue;
-          if (row[`${prefix}_movingRatingAfter`] != null || row[`${prefix}_noMoveRatingAfter`] != null || row[`${prefix}_nmpzRatingAfter`] != null) continue;
-          row[`${prefix}_${suffix}After`] = Number(oldAfter);
-          if (oldBefore != null && Number.isFinite(Number(oldBefore))) {
-            row[`${prefix}_${suffix}Before`] = Number(oldBefore);
-          }
-          changed = true;
+        if (row.player_self_movingRatingAfter != null || row.player_self_noMoveRatingAfter != null || row.player_self_nmpzRatingAfter != null) continue;
+        if (typeof row.gameId === "string" && row.gameId) {
+          toDelete.push(row.gameId);
         }
-        if (changed) patch.push(row);
-      }
-      if (patch.length > 0) {
-        await db.details.bulkPut(patch);
-        updated += patch.length;
       }
       if (scanned % (batchSize * 10) === 0 || scanned >= total) {
-        onStatus(`Backfilling movement ratings... (${scanned}/${total}, updated ${updated})`);
+        onStatus(`Checking movement ratings... (${scanned}/${total})`);
       }
+    }
+    if (toDelete.length > 0) {
+      onStatus(`Re-queuing ${toDelete.length} games for movement rating fetch...`);
+      await db.details.bulkDelete(toDelete);
     }
     await db.meta.put({
       key: metaKey,
-      value: { doneAt: Date.now(), scanned, updated },
+      value: { doneAt: Date.now(), scanned, requeued: toDelete.length },
       updatedAt: Date.now()
     });
-    return { scanned, updated };
+    return { scanned, updated: toDelete.length };
   }
 
   // src/engine/fieldAccess.ts
@@ -55867,6 +55850,7 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           }
         } catch {
         }
+        const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
         const res = await updateData({
           onStatus: (m) => onStatus(m),
           onLog: fetchLog ? (x) => appendLogEvent(x) : void 0,
@@ -55880,7 +55864,6 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
         });
         const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
         const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
-        const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
         try {
           await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
         } catch {

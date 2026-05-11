@@ -332,6 +332,7 @@ export function registerUiActions(ui: UI): void {
         // Best-effort: continue, but avoid hard-failing here (network quirks / temporary errors).
       }
 
+      const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
       const res = await updateData({
         onStatus: (m) => onStatus(m),
         onLog: fetchLog ? (x) => appendLogEvent(x) : undefined,
@@ -345,7 +346,6 @@ export function registerUiActions(ui: UI): void {
       });
       const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
       const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
-      const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
       try {
         await db.meta.put({ key: "fetch_data_ran_v1", value: { doneAt: Date.now(), inferred: false }, updatedAt: Date.now() });
       } catch {
