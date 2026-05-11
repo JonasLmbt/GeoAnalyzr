@@ -401,7 +401,7 @@ export function createUIOverlay(): UIOverlay {
     label: "Fetch Data",
     bg: "rgba(255,255,255,0.10)",
     icon: iconSvg("download"),
-    title: "Shift+Click: download fetch log (JSON) after completion"
+    title: "Shift+Click: re-fetch all games from the last 365 days + download fetch log"
   });
   const fetchGearBtn = mkIconBtn({
     icon: iconSvg("gear"),
@@ -423,7 +423,7 @@ export function createUIOverlay(): UIOverlay {
         label: "Fetch + Sync",
         bg: "rgba(0,162,254,0.18)",
         icon: iconSvg("refresh"),
-        title: "Fetch new data, then sync it (Shift = full snapshot + fetch log)"
+        title: "Fetch new data, then sync it (Shift = re-fetch last 365 days + full sync)"
       })
     : null;
 

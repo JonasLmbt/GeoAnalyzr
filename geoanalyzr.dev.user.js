@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.5.1-dev
+// @version      2.5.2-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11090,7 +11090,7 @@ ${shapes}`.trim();
       label: "Fetch Data",
       bg: "rgba(255,255,255,0.10)",
       icon: iconSvg("download"),
-      title: "Shift+Click: download fetch log (JSON) after completion"
+      title: "Shift+Click: re-fetch all games from the last 365 days + download fetch log"
     });
     const fetchGearBtn = mkIconBtn2({
       icon: iconSvg("gear"),
@@ -11109,7 +11109,7 @@ ${shapes}`.trim();
       label: "Fetch + Sync",
       bg: "rgba(0,162,254,0.18)",
       icon: iconSvg("refresh"),
-      title: "Fetch new data, then sync it (Shift = full snapshot + fetch log)"
+      title: "Fetch new data, then sync it (Shift = re-fetch last 365 days + full sync)"
     }) : null;
     const deleteBtn = isSyncVariant ? mkIconBtn2({ icon: iconSvg("trash"), title: "Delete data (local/server)", danger: true }) : null;
     const analysisBtn = mkBtn2({ label: "Open Analysis Window", bg: "rgba(35,95,160,0.28)", icon: iconSvg("chart") });
@@ -55882,7 +55882,7 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           });
         }
         const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
-        const isPendingFullRefetch = fullRefetchMeta?.value?.pending === true;
+        const isPendingFullRefetch = wantLog || fullRefetchMeta?.value?.pending === true;
         const DAYS_365_MS = 365 * 24 * 60 * 60 * 1e3;
         if (isPendingFullRefetch) {
           onStatus("Full 365-day refetch scheduled \u2014 fetching all games from the last year...");

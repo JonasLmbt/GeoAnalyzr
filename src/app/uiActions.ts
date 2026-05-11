@@ -345,9 +345,9 @@ export function registerUiActions(ui: UI): void {
         });
       }
 
-      // Check for pending full-refetch (set on 2.5.0 upgrade, runs once).
+      // Check for pending full-refetch: Shift+click always triggers it, or once on 2.5.0 upgrade.
       const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
-      const isPendingFullRefetch = (fullRefetchMeta?.value as any)?.pending === true;
+      const isPendingFullRefetch = wantLog || (fullRefetchMeta?.value as any)?.pending === true;
       const DAYS_365_MS = 365 * 24 * 60 * 60 * 1000;
 
       if (isPendingFullRefetch) {
