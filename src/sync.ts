@@ -403,6 +403,7 @@ export async function syncFeed(opts: {
 export async function updateData(opts: {
   onStatus: (msg: string) => void;
   onLog?: (ev: FetchLogEvent) => void;
+  overrideLastSeen?: number | null;
   maxPages?: number;
   delayMs?: number;
   detailConcurrency?: number;
@@ -431,7 +432,10 @@ export async function updateData(opts: {
 
   const startedAt = Date.now();
   const meta = await db.meta.get("sync");
-  const lastSeen = (meta?.value as any)?.lastSeenTime ? Number((meta?.value as any)?.lastSeenTime) : null;
+  const storedLastSeen = (meta?.value as any)?.lastSeenTime ? Number((meta?.value as any)?.lastSeenTime) : null;
+  const lastSeen = opts.overrideLastSeen !== undefined
+    ? (typeof opts.overrideLastSeen === "number" && opts.overrideLastSeen > 0 ? opts.overrideLastSeen : null)
+    : storedLastSeen;
   const filter = opts?.gameFilter;
   const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
   const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
@@ -855,6 +859,13 @@ export async function updateData(opts: {
     if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
       opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
       logEvent("feed_stop", { page, reason: "reached_last_seen", lastSeen }, "info");
+      break;
+    }
+
+    // Stop once the page's oldest game is older than our desired cutoff — no need to fetch further.
+    if (filterFromMs > 0 && Number.isFinite(oldestOnPage) && oldestOnPage < filterFromMs) {
+      opts.onStatus(`Reached cutoff date (${new Date(filterFromMs).toLocaleDateString()}). Stopping.`);
+      logEvent("feed_stop", { page, reason: "reached_from_ms_cutoff", filterFromMs, oldestOnPage }, "info");
       break;
     }
 

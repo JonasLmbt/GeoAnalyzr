@@ -333,17 +333,52 @@ export function registerUiActions(ui: UI): void {
       }
 
       const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
+
+      // Schedule a full 365-day refetch on first run of 2.5.0 (runs once per install).
+      const FULL_REFETCH_KEY = "full_refetch_365d_v1";
+      const existingRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
+      if (!existingRefetchMeta) {
+        await db.meta.put({
+          key: FULL_REFETCH_KEY,
+          value: { pending: true, scheduledAt: Date.now() },
+          updatedAt: Date.now(),
+        });
+      }
+
+      // Check for pending full-refetch (set on 2.5.0 upgrade, runs once).
+      const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
+      const isPendingFullRefetch = (fullRefetchMeta?.value as any)?.pending === true;
+      const DAYS_365_MS = 365 * 24 * 60 * 60 * 1000;
+
+      if (isPendingFullRefetch) {
+        onStatus("Full 365-day refetch scheduled — fetching all games from the last year...");
+      }
+
+      const gameFilter = isPendingFullRefetch
+        ? { ...loadFetchGameFilter(), fromMs: Date.now() - DAYS_365_MS }
+        : loadFetchGameFilter();
+
       const res = await updateData({
         onStatus: (m) => onStatus(m),
         onLog: fetchLog ? (x) => appendLogEvent(x) : undefined,
-        maxPages: 5000,
+        overrideLastSeen: isPendingFullRefetch ? 0 : undefined,
+        maxPages: isPendingFullRefetch ? 5000 : 5000,
         delayMs: 200,
         detailConcurrency: 4,
         retryErrors: true,
         verifyCompleteness: true,
         enrichLimit: 2000,
-        gameFilter: loadFetchGameFilter()
+        gameFilter,
       });
+
+      if (isPendingFullRefetch) {
+        await db.meta.put({
+          key: FULL_REFETCH_KEY,
+          value: { pending: false, completedAt: Date.now(), feedUpserted: res.feedUpserted },
+          updatedAt: Date.now(),
+        });
+        onStatus(`Full refetch complete. ${res.feedUpserted} games processed.`);
+      }
       const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
       const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
       try {

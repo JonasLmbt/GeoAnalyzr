@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.4.22-dev
+// @version      2.5.1-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11950,7 +11950,8 @@ ${shapes}`.trim();
     const enrichLimit = opts.enrichLimit ?? 1500;
     const startedAt = Date.now();
     const meta = await db.meta.get("sync");
-    const lastSeen = meta?.value?.lastSeenTime ? Number(meta?.value?.lastSeenTime) : null;
+    const storedLastSeen = meta?.value?.lastSeenTime ? Number(meta?.value?.lastSeenTime) : null;
+    const lastSeen = opts.overrideLastSeen !== void 0 ? typeof opts.overrideLastSeen === "number" && opts.overrideLastSeen > 0 ? opts.overrideLastSeen : null : storedLastSeen;
     const filter = opts?.gameFilter;
     const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
     const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
@@ -12306,6 +12307,11 @@ ${shapes}`.trim();
       if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
         opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
         logEvent("feed_stop", { page, reason: "reached_last_seen", lastSeen }, "info");
+        break;
+      }
+      if (filterFromMs > 0 && Number.isFinite(oldestOnPage) && oldestOnPage < filterFromMs) {
+        opts.onStatus(`Reached cutoff date (${new Date(filterFromMs).toLocaleDateString()}). Stopping.`);
+        logEvent("feed_stop", { page, reason: "reached_from_ms_cutoff", filterFromMs, oldestOnPage }, "info");
         break;
       }
       await new Promise((r) => setTimeout(r, delayMs));
@@ -55866,17 +55872,42 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
         } catch {
         }
         const mvBackfilled = await backfillMovementRatings({ onStatus: (m) => onStatus(m) });
+        const FULL_REFETCH_KEY = "full_refetch_365d_v1";
+        const existingRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
+        if (!existingRefetchMeta) {
+          await db.meta.put({
+            key: FULL_REFETCH_KEY,
+            value: { pending: true, scheduledAt: Date.now() },
+            updatedAt: Date.now()
+          });
+        }
+        const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
+        const isPendingFullRefetch = fullRefetchMeta?.value?.pending === true;
+        const DAYS_365_MS = 365 * 24 * 60 * 60 * 1e3;
+        if (isPendingFullRefetch) {
+          onStatus("Full 365-day refetch scheduled \u2014 fetching all games from the last year...");
+        }
+        const gameFilter = isPendingFullRefetch ? { ...loadFetchGameFilter(), fromMs: Date.now() - DAYS_365_MS } : loadFetchGameFilter();
         const res = await updateData({
           onStatus: (m) => onStatus(m),
           onLog: fetchLog ? (x) => appendLogEvent(x) : void 0,
-          maxPages: 5e3,
+          overrideLastSeen: isPendingFullRefetch ? 0 : void 0,
+          maxPages: isPendingFullRefetch ? 5e3 : 5e3,
           delayMs: 200,
           detailConcurrency: 4,
           retryErrors: true,
           verifyCompleteness: true,
           enrichLimit: 2e3,
-          gameFilter: loadFetchGameFilter()
+          gameFilter
         });
+        if (isPendingFullRefetch) {
+          await db.meta.put({
+            key: FULL_REFETCH_KEY,
+            value: { pending: false, completedAt: Date.now(), feedUpserted: res.feedUpserted },
+            updatedAt: Date.now()
+          });
+          onStatus(`Full refetch complete. ${res.feedUpserted} games processed.`);
+        }
         const norm = await normalizeLegacyRounds({ onStatus: (m) => onStatus(m) });
         const backfilled = await backfillGuessCountries({ onStatus: (m) => onStatus(m) });
         try {
