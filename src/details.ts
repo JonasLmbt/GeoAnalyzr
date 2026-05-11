@@ -312,6 +312,34 @@ function extractGameModeRatingChange(player: any): {
   return {};
 }
 
+function movementTypeFromGameMode(raw: unknown): "moving" | "no_move" | "nmpz" | "unknown" {
+  return normalizeMovementType(raw);
+}
+
+function applyMovementRatingFields(
+  target: Record<string, unknown>,
+  prefix: string,
+  movementType: "moving" | "no_move" | "nmpz" | "unknown",
+  before?: number,
+  after?: number
+): void {
+  if (movementType === "moving") {
+    (target as any)[`${prefix}_movingRatingBefore`] = before;
+    (target as any)[`${prefix}_movingRatingAfter`] = after;
+    return;
+  }
+  if (movementType === "no_move") {
+    (target as any)[`${prefix}_noMoveRatingBefore`] = before;
+    (target as any)[`${prefix}_noMoveRatingAfter`] = after;
+    return;
+  }
+  if (movementType === "nmpz") {
+    (target as any)[`${prefix}_nmpzRatingBefore`] = before;
+    (target as any)[`${prefix}_nmpzRatingAfter`] = after;
+    return;
+  }
+}
+
 function extractWinStreak(player: any): number | undefined {
   const paths = [
     "progressChange.rankedSystemProgress",
@@ -544,12 +572,19 @@ async function normalizeGameAndRounds(
 
   let detail: GameRow;
   if (family === "teamduels" && teams.length >= 2) {
+    const duelMovementType = (() => {
+      const fromProgress = movementTypeFromGameMode(p1GmRc.gameMode);
+      if (fromProgress !== "unknown") return fromProgress;
+      const fromOpts = detectSimpleGameMode(pickMovementOptions(gameData));
+      return movementTypeFromGameMode(fromOpts);
+    })();
     const teamOnePlayers = Array.isArray(teamOne?.players) ? teamOne.players : [];
     const teamTwoPlayers = Array.isArray(teamTwo?.players) ? teamTwo.players : [];
 
     const teamDetail: GameRowTeamDuel = {
       ...commonBase,
       modeFamily: "teamduels",
+      movementType: duelMovementType,
       date: toIsoDate(startTime),
       time: toIsoTime(startTime),
       gameModeSimple: detectSimpleGameMode(pickMovementOptions(gameData)),
@@ -560,8 +595,6 @@ async function normalizeGameAndRounds(
       player_self_startRating: p1Rc.before,
       player_self_endRating: p1Rc.after,
       player_self_gameMode: p1GmRc.gameMode,
-      player_self_gameModeRatingBefore: p1GmRc.before,
-      player_self_gameModeRatingAfter: p1GmRc.after,
       player_self_winStreak: p1Ws,
       player_mate_id: p2Id,
       player_mate_name: (p2Id ? profiles.get(p2Id)?.nick : undefined) ?? (typeof p2?.nick === "string" ? p2.nick : undefined),
@@ -569,8 +602,6 @@ async function normalizeGameAndRounds(
       player_mate_startRating: p2Rc.before,
       player_mate_endRating: p2Rc.after,
       player_mate_gameMode: p2GmRc.gameMode,
-      player_mate_gameModeRatingBefore: p2GmRc.before,
-      player_mate_gameModeRatingAfter: p2GmRc.after,
       player_mate_winStreak: p2Ws,
       player_opponent_id: p3Id,
       player_opponent_name: (p3Id ? profiles.get(p3Id)?.nick : undefined) ?? (typeof p3?.nick === "string" ? p3.nick : undefined),
@@ -578,8 +609,6 @@ async function normalizeGameAndRounds(
       player_opponent_startRating: p3Rc.before,
       player_opponent_endRating: p3Rc.after,
       player_opponent_gameMode: p3GmRc.gameMode,
-      player_opponent_gameModeRatingBefore: p3GmRc.before,
-      player_opponent_gameModeRatingAfter: p3GmRc.after,
       player_opponent_winStreak: p3Ws,
       player_opponent_mate_id: p4Id,
       player_opponent_mate_name: (p4Id ? profiles.get(p4Id)?.nick : undefined) ?? (typeof p4?.nick === "string" ? p4.nick : undefined),
@@ -587,8 +616,6 @@ async function normalizeGameAndRounds(
       player_opponent_mate_startRating: p4Rc.before,
       player_opponent_mate_endRating: p4Rc.after,
       player_opponent_mate_gameMode: p4GmRc.gameMode,
-      player_opponent_mate_gameModeRatingBefore: p4GmRc.before,
-      player_opponent_mate_gameModeRatingAfter: p4GmRc.after,
       player_opponent_mate_winStreak: p4Ws,
       teamOneId: String(teamOne?.id || ""),
       teamOneVictory: winningTeamId ? String(teamOne?.id || "") === winningTeamId : undefined,
@@ -625,11 +652,23 @@ async function normalizeGameAndRounds(
       teamTwoPlayerTwoCountry:
         typeof teamTwoPlayers[1]?.playerId === "string" ? profiles.get(teamTwoPlayers[1].playerId)?.countryName : undefined
     };
+
+    applyMovementRatingFields(teamDetail as any, "player_self", duelMovementType, p1GmRc.before, p1GmRc.after);
+    applyMovementRatingFields(teamDetail as any, "player_mate", duelMovementType, p2GmRc.before, p2GmRc.after);
+    applyMovementRatingFields(teamDetail as any, "player_opponent", duelMovementType, p3GmRc.before, p3GmRc.after);
+    applyMovementRatingFields(teamDetail as any, "player_opponent_mate", duelMovementType, p4GmRc.before, p4GmRc.after);
     detail = teamDetail;
   } else {
+    const duelMovementType = (() => {
+      const fromProgress = movementTypeFromGameMode(p1GmRc.gameMode);
+      if (fromProgress !== "unknown") return fromProgress;
+      const fromOpts = detectSimpleGameMode(pickMovementOptions(gameData));
+      return movementTypeFromGameMode(fromOpts);
+    })();
     const duelDetail: GameRowDuel = {
       ...commonBase,
       modeFamily: "duels",
+      movementType: duelMovementType,
       date: toIsoDate(startTime),
       time: toIsoTime(startTime),
       gameModeSimple: detectSimpleGameMode(pickMovementOptions(gameData)),
@@ -642,8 +681,6 @@ async function normalizeGameAndRounds(
       player_self_startRating: p1Rc.before,
       player_self_endRating: p1Rc.after,
       player_self_gameMode: p1GmRc.gameMode,
-      player_self_gameModeRatingBefore: p1GmRc.before,
-      player_self_gameModeRatingAfter: p1GmRc.after,
       player_self_winStreak: p1Ws,
       player_opponent_id: p2Id,
       player_opponent_name: (p2Id ? profiles.get(p2Id)?.nick : undefined) ?? (typeof p2?.nick === "string" ? p2.nick : undefined),
@@ -653,8 +690,6 @@ async function normalizeGameAndRounds(
       player_opponent_startRating: p2Rc.before,
       player_opponent_endRating: p2Rc.after,
       player_opponent_gameMode: p2GmRc.gameMode,
-      player_opponent_gameModeRatingBefore: p2GmRc.before,
-      player_opponent_gameModeRatingAfter: p2GmRc.after,
       player_opponent_winStreak: p2Ws,
       playerOneId: p1Id,
       playerOneName: (p1Id ? profiles.get(p1Id)?.nick : undefined) ?? (typeof p1?.nick === "string" ? p1.nick : undefined),
@@ -671,6 +706,8 @@ async function normalizeGameAndRounds(
       playerTwoStartRating: p2Rc.before,
       playerTwoEndRating: p2Rc.after
     };
+    applyMovementRatingFields(duelDetail as any, "player_self", duelMovementType, p1GmRc.before, p1GmRc.after);
+    applyMovementRatingFields(duelDetail as any, "player_opponent", duelMovementType, p2GmRc.before, p2GmRc.after);
     detail = duelDetail;
   }
 
