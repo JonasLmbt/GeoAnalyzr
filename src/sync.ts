@@ -436,6 +436,9 @@ export async function updateData(opts: {
   const lastSeen = opts.overrideLastSeen !== undefined
     ? (typeof opts.overrideLastSeen === "number" && opts.overrideLastSeen > 0 ? opts.overrideLastSeen : null)
     : storedLastSeen;
+  // Tracks the maximum timestamp seen this session — always increases, regardless of lastSeen override.
+  // Used for lastSeenTime DB writes so overrideLastSeen=0 doesn't cause regression.
+  let runningMaxSeen = storedLastSeen ? Math.max(0, storedLastSeen) : 0;
   const filter = opts?.gameFilter;
   const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
   const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
@@ -728,8 +731,9 @@ export async function updateData(opts: {
     }
 
     // Keep the "lastSeen" pointer at the newest known timestamp (head of feed).
-    const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
-    await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
+    // Use runningMaxSeen (not lastSeen) so overrideLastSeen=0 doesn't regress the stored value.
+    if (newestOnPage > 0) runningMaxSeen = Math.max(runningMaxSeen, newestOnPage);
+    await db.meta.put({ key: "sync", value: { lastSeenTime: runningMaxSeen }, updatedAt: Date.now() });
 
     // Fetch/enrich details for games we just saw, so the update proceeds step-by-step.
     if (dedupedFiltered.length > 0) {

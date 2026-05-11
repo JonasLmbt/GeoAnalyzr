@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.5.1
+// @version      2.5.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11952,6 +11952,7 @@ ${shapes}`.trim();
     const meta = await db.meta.get("sync");
     const storedLastSeen = meta?.value?.lastSeenTime ? Number(meta?.value?.lastSeenTime) : null;
     const lastSeen = opts.overrideLastSeen !== void 0 ? typeof opts.overrideLastSeen === "number" && opts.overrideLastSeen > 0 ? opts.overrideLastSeen : null : storedLastSeen;
+    let runningMaxSeen = storedLastSeen ? Math.max(0, storedLastSeen) : 0;
     const filter = opts?.gameFilter;
     const filterModeFamily = filter?.modeFamily === "duels" || filter?.modeFamily === "teamduels" ? filter.modeFamily : "all";
     const filterFromMs = typeof filter?.fromMs === "number" && Number.isFinite(filter.fromMs) ? Math.max(0, Math.floor(filter.fromMs)) : 0;
@@ -12178,11 +12179,11 @@ ${shapes}`.trim();
               const ded = [...byId2.values()];
               games += ded.length;
               pages += 1;
-              const newest2 = ded.length > 0 ? ded.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
+              const newest = ded.length > 0 ? ded.reduce((m, g) => Math.max(m, g.playedAt), 0) : 0;
               const next = typeof d?.paginationToken === "string" && d.paginationToken ? d.paginationToken : void 0;
               token = next;
               if (!token) break;
-              if (lastSeen && newest2 > 0 && newest2 <= lastSeen) break;
+              if (lastSeen && newest > 0 && newest <= lastSeen) break;
             }
             estimatedTotalPages = pages;
             estimatedTotalGames = games;
@@ -12194,8 +12195,8 @@ ${shapes}`.trim();
         })();
         void probePromise;
       }
-      const newest = Math.max(Number(lastSeen || 0), newestOnPage || 0);
-      await db.meta.put({ key: "sync", value: { lastSeenTime: newest }, updatedAt: Date.now() });
+      if (newestOnPage > 0) runningMaxSeen = Math.max(runningMaxSeen, newestOnPage);
+      await db.meta.put({ key: "sync", value: { lastSeenTime: runningMaxSeen }, updatedAt: Date.now() });
       if (dedupedFiltered.length > 0) {
         let detailCandidates = dedupedFiltered;
         if (filterMovementAnyOf.length > 0 || filterRated !== "all") {
