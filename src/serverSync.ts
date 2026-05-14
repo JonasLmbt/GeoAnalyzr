@@ -36,7 +36,7 @@ export type ServerSyncStatus = {
 const SYNC_META_KEY = "server_sync_v1";
 const GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
 
-const DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
+const DEFAULT_ENDPOINT = "https://geoanalyzr.lmbt.app/api/sync";
 
 // Compact mode is optional. It should NEVER drop core analytical fields (like guess countries).
 // Keep it conservative: only drop the huge raw payloads.

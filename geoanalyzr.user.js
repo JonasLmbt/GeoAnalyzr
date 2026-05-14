@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.5.2
+// @version      2.5.3
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -13,7 +13,6 @@
 // @grant        GM_setValue
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
-// @connect      sync.geoanalyzr.lmbt.app
 // @connect      geoanalyzr.lmbt.app
 // @connect      github.com
 // @connect      raw.githubusercontent.com
@@ -10044,7 +10043,7 @@ ${shapes}`.trim();
   // src/serverSync.ts
   var SYNC_META_KEY = "server_sync_v1";
   var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
-  var DEFAULT_ENDPOINT = "https://sync.geoanalyzr.lmbt.app/api/sync";
+  var DEFAULT_ENDPOINT = "https://geoanalyzr.lmbt.app/api/sync";
   var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
   function compactRecord(row) {
     const out = {};
@@ -45024,7 +45023,7 @@ ${describeError(err2)}` : message;
       syncEndpointLabel.textContent = "Sync endpoint";
       const syncEndpointInput = doc.createElement("input");
       syncEndpointInput.type = "text";
-      syncEndpointInput.placeholder = "https://sync.geoanalyzr.lmbt.app/api/sync";
+      syncEndpointInput.placeholder = "https://geoanalyzr.lmbt.app/api/sync";
       syncEndpointField.appendChild(syncEndpointLabel);
       syncEndpointField.appendChild(syncEndpointInput);
       const syncTokenField = doc.createElement("div");

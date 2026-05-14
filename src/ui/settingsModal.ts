@@ -299,7 +299,7 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     syncEndpointLabel.textContent = "Sync endpoint";
     const syncEndpointInput = doc.createElement("input");
     syncEndpointInput.type = "text";
-    syncEndpointInput.placeholder = "https://sync.geoanalyzr.lmbt.app/api/sync";
+    syncEndpointInput.placeholder = "https://geoanalyzr.lmbt.app/api/sync";
     syncEndpointField.appendChild(syncEndpointLabel);
     syncEndpointField.appendChild(syncEndpointInput);
 
