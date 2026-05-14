@@ -37,6 +37,48 @@ const SYNC_META_KEY = "server_sync_v1";
 const GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
 
 const DEFAULT_ENDPOINT = "https://geoanalyzr.lmbt.app/api/sync";
+const LEGACY_ENDPOINT_HOST_MAP: Record<string, string> = {
+  "sync.geoanalyzr.lmbt.app": "geoanalyzr.lmbt.app"
+};
+
+function normalizeSyncEndpointUrl(raw: string): { endpointUrl: string; migrated: boolean } {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return { endpointUrl: DEFAULT_ENDPOINT, migrated: false };
+
+  // Accept bare hostnames and normalize legacy hosts.
+  const ensureScheme = (s: string) => (/^https?:\/\//i.test(s) ? s : `https://${s}`);
+
+  try {
+    const u = new URL(ensureScheme(trimmed));
+    const hostLower = (u.hostname || "").trim().toLowerCase();
+    const mapped = LEGACY_ENDPOINT_HOST_MAP[hostLower];
+    if (mapped) u.hostname = mapped;
+
+    const pathname = (u.pathname || "/").trim() || "/";
+    if (pathname === "/" || pathname === "") u.pathname = "/api/sync";
+
+    // Keep the path flexible, but normalize common variants.
+    if (/\/api\/sync$/i.test(u.pathname)) {
+      // ok
+    } else if (/\/api\/sync\/+$/i.test(u.pathname)) {
+      u.pathname = u.pathname.replace(/\/+$/g, "");
+    }
+
+    const endpointUrl = u.toString();
+    const migrated = Boolean(mapped) || endpointUrl !== trimmed;
+    return { endpointUrl, migrated };
+  } catch {
+    // Very defensive fallback for malformed URLs.
+    const lower = trimmed.toLowerCase();
+    for (const [legacyHost, newHost] of Object.entries(LEGACY_ENDPOINT_HOST_MAP)) {
+      if (lower.includes(legacyHost)) {
+        const replaced = trimmed.replace(new RegExp(legacyHost, "ig"), newHost);
+        return { endpointUrl: replaced, migrated: replaced !== trimmed };
+      }
+    }
+    return { endpointUrl: trimmed, migrated: false };
+  }
+}
 
 // Compact mode is optional. It should NEVER drop core analytical fields (like guess countries).
 // Keep it conservative: only drop the huge raw payloads.
@@ -129,7 +171,10 @@ export function loadServerSyncSettings(): ServerSyncSettings {
   const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
   const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
 
-  const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
+  const endpointUrlRead = typeof endpointUrlRaw === "string" ? endpointUrlRaw : "";
+  const endpointNorm = normalizeSyncEndpointUrl(endpointUrlRead);
+  if (endpointNorm.migrated) writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, endpointNorm.endpointUrl);
+  const endpointUrl = endpointNorm.endpointUrl;
   const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
   const compact =
     typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
@@ -177,7 +222,7 @@ export function loadServerSyncSettings(): ServerSyncSettings {
   })();
 
   return {
-    endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
+    endpointUrl,
     token,
     compact,
     includeAggregates,

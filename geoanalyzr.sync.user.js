@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.5.3
+// @version      2.5.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -14,6 +14,7 @@
 // @connect      www.geoguessr.com
 // @connect      game-server.geoguessr.com
 // @connect      geoanalyzr.lmbt.app
+// @connect      sync.geoanalyzr.lmbt.app
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      media.githubusercontent.com
@@ -10044,6 +10045,38 @@ ${shapes}`.trim();
   var SYNC_META_KEY = "server_sync_v1";
   var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
   var DEFAULT_ENDPOINT = "https://geoanalyzr.lmbt.app/api/sync";
+  var LEGACY_ENDPOINT_HOST_MAP = {
+    "sync.geoanalyzr.lmbt.app": "geoanalyzr.lmbt.app"
+  };
+  function normalizeSyncEndpointUrl(raw) {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) return { endpointUrl: DEFAULT_ENDPOINT, migrated: false };
+    const ensureScheme = (s) => /^https?:\/\//i.test(s) ? s : `https://${s}`;
+    try {
+      const u = new URL(ensureScheme(trimmed));
+      const hostLower = (u.hostname || "").trim().toLowerCase();
+      const mapped = LEGACY_ENDPOINT_HOST_MAP[hostLower];
+      if (mapped) u.hostname = mapped;
+      const pathname = (u.pathname || "/").trim() || "/";
+      if (pathname === "/" || pathname === "") u.pathname = "/api/sync";
+      if (/\/api\/sync$/i.test(u.pathname)) {
+      } else if (/\/api\/sync\/+$/i.test(u.pathname)) {
+        u.pathname = u.pathname.replace(/\/+$/g, "");
+      }
+      const endpointUrl = u.toString();
+      const migrated = Boolean(mapped) || endpointUrl !== trimmed;
+      return { endpointUrl, migrated };
+    } catch {
+      const lower = trimmed.toLowerCase();
+      for (const [legacyHost, newHost] of Object.entries(LEGACY_ENDPOINT_HOST_MAP)) {
+        if (lower.includes(legacyHost)) {
+          const replaced = trimmed.replace(new RegExp(legacyHost, "ig"), newHost);
+          return { endpointUrl: replaced, migrated: replaced !== trimmed };
+        }
+      }
+      return { endpointUrl: trimmed, migrated: false };
+    }
+  }
   var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
   function compactRecord(row) {
     const out = {};
@@ -10118,7 +10151,10 @@ ${shapes}`.trim();
     const tokenRaw = readGmValue(`${GM_VALUE_PREFIX}token`);
     const compactRaw = readGmValue(`${GM_VALUE_PREFIX}compact`);
     const includeAggRaw = readGmValue(`${GM_VALUE_PREFIX}include_agg`);
-    const endpointUrl = typeof endpointUrlRaw === "string" ? endpointUrlRaw.trim() : "";
+    const endpointUrlRead = typeof endpointUrlRaw === "string" ? endpointUrlRaw : "";
+    const endpointNorm = normalizeSyncEndpointUrl(endpointUrlRead);
+    if (endpointNorm.migrated) writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, endpointNorm.endpointUrl);
+    const endpointUrl = endpointNorm.endpointUrl;
     const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
     const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
     const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
@@ -10160,7 +10196,7 @@ ${shapes}`.trim();
       return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
     })();
     return {
-      endpointUrl: endpointUrl || DEFAULT_ENDPOINT,
+      endpointUrl,
       token,
       compact,
       includeAggregates,
