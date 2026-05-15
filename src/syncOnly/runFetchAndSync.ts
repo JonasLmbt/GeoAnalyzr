@@ -23,13 +23,20 @@ function writeLocalNumber(key: string, value: number): void {
 
 const AUTO_KEY = "geoanalyzr_sync_only_last_auto_ms";
 
+const DAYS_365_MS = 365 * 24 * 60 * 60 * 1000;
+
 export async function runFetchAndSync(opts: {
   forceFull: boolean;
   setStatus: (msg: string) => void;
   ensureLinked: boolean;
 }): Promise<{ ok: boolean; message: string; hint?: string }> {
-  opts.setStatus("Fetching feed + details...");
-  await updateData({
+  const baseFilter = loadFetchGameFilter();
+  const gameFilter = opts.forceFull
+    ? { ...baseFilter, fromMs: Date.now() - DAYS_365_MS }
+    : baseFilter;
+
+  opts.setStatus(opts.forceFull ? "Fetching full history (last 365 days)..." : "Fetching feed + details...");
+  const fetchRes = await updateData({
     onStatus: (m) => opts.setStatus(m),
     maxPages: 5000,
     delayMs: 150,
@@ -37,7 +44,8 @@ export async function runFetchAndSync(opts: {
     verifyCompleteness: true,
     retryErrors: true,
     enrichLimit: 1500,
-    gameFilter: loadFetchGameFilter()
+    overrideLastSeen: opts.forceFull ? 0 : undefined,
+    gameFilter
   });
 
   let settings = loadServerSyncSettings();
@@ -56,12 +64,21 @@ export async function runFetchAndSync(opts: {
   try {
     await postSyncLog(settings, {
       at: Date.now(),
+      fullRefetch: opts.forceFull,
       ok: res.ok,
       status: res.status ?? null,
       rows: res.counts ? res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg : null,
       bytesGzip: res.bytesGzip ?? null,
       chunks: res.chunks ?? null,
       forceFull: opts.forceFull,
+      feedPages: fetchRes.feedUpserted != null ? fetchRes.feedPages : null,
+      feedUpserted: fetchRes.feedUpserted ?? null,
+      detailsOk: fetchRes.detailsOk ?? null,
+      detailsFail: fetchRes.detailsFail ?? null,
+      oldestFetchedAt: fetchRes.oldestFetchedAt ?? null,
+      newestFetchedAt: fetchRes.newestFetchedAt ?? null,
+      cursorFrom: res.cursorFrom ?? null,
+      cursorTo: res.cursorTo ?? null,
     });
   } catch { /* fire-and-forget */ }
   const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;

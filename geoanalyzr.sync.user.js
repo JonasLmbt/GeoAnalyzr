@@ -12035,6 +12035,8 @@ ${shapes}`.trim();
     let detailsOk = 0;
     let detailsFail = 0;
     let detailsSkipped = 0;
+    let overallOldestFetchedAt = Number.POSITIVE_INFINITY;
+    let overallNewestFetchedAt = 0;
     const seenPaginationTokens = /* @__PURE__ */ new Set();
     const log = opts.onLog;
     const logEvent = (kind, data, level = "info", msg) => {
@@ -12260,6 +12262,8 @@ ${shapes}`.trim();
         void probePromise;
       }
       if (newestOnPage > 0) runningMaxSeen = Math.max(runningMaxSeen, newestOnPage);
+      if (newestOnPage > 0) overallNewestFetchedAt = Math.max(overallNewestFetchedAt, newestOnPage);
+      if (Number.isFinite(oldestOnPage)) overallOldestFetchedAt = Math.min(overallOldestFetchedAt, oldestOnPage);
       await db.meta.put({ key: "sync", value: { lastSeenTime: runningMaxSeen }, updatedAt: Date.now() });
       if (dedupedFiltered.length > 0) {
         let detailCandidates = dedupedFiltered;
@@ -12448,7 +12452,9 @@ ${shapes}`.trim();
       enrichedQueued,
       enrichedOk,
       enrichedFail,
-      enrichedSkipped
+      enrichedSkipped,
+      oldestFetchedAt: Number.isFinite(overallOldestFetchedAt) ? overallOldestFetchedAt : null,
+      newestFetchedAt: overallNewestFetchedAt > 0 ? overallNewestFetchedAt : null
     };
   }
 
@@ -44874,7 +44880,7 @@ ${describeError(err2)}` : message;
       if (typeof structuredClone === "function") return structuredClone(value);
       return JSON.parse(JSON.stringify(value));
     };
-    const downloadJson2 = (filename, value) => {
+    const downloadJson = (filename, value) => {
       const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = doc.createElement("a");
@@ -45518,7 +45524,7 @@ ${describeError(err2)}` : message;
       };
       sectionLayoutDownload.addEventListener("click", () => {
         const cur = getDashboard();
-        downloadJson2("geoanalyzr.sections.json", cur?.dashboard?.sections ?? []);
+        downloadJson("geoanalyzr.sections.json", cur?.dashboard?.sections ?? []);
       });
       sectionLayoutUpload.addEventListener("click", () => sectionLayoutUploadInput.click());
       sectionLayoutUploadInput.addEventListener("change", () => {
@@ -45565,7 +45571,7 @@ ${describeError(err2)}` : message;
       });
       globalFiltersDownload.addEventListener("click", () => {
         const cur = getDashboard();
-        downloadJson2("geoanalyzr.globalFilters.json", cur?.dashboard?.globalFilters ?? {});
+        downloadJson("geoanalyzr.globalFilters.json", cur?.dashboard?.globalFilters ?? {});
       });
       globalFiltersUpload.addEventListener("click", () => globalFiltersUploadInput.click());
       globalFiltersUploadInput.addEventListener("change", () => {
@@ -45612,7 +45618,7 @@ ${describeError(err2)}` : message;
       });
       drilldownsDownload.addEventListener("click", () => {
         const cur = getDashboard();
-        downloadJson2("geoanalyzr.drilldownPresets.json", cur?.dashboard?.drilldownPresets ?? {});
+        downloadJson("geoanalyzr.drilldownPresets.json", cur?.dashboard?.drilldownPresets ?? {});
       });
       drilldownsUpload.addEventListener("click", () => drilldownsUploadInput.click());
       drilldownsUploadInput.addEventListener("change", () => {
@@ -55689,56 +55695,6 @@ ${describe(error)}`;
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
   }
-  function downloadJson(filename, value) {
-    const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchorDownload = () => {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      (document.body ?? document.documentElement).appendChild(a);
-      a.click();
-      a.remove();
-    };
-    const gmDownload = () => {
-      const gm = globalThis?.GM_download;
-      if (typeof gm !== "function") return false;
-      try {
-        gm({
-          url,
-          name: filename,
-          saveAs: false,
-          onerror: () => {
-            try {
-              anchorDownload();
-            } catch {
-            }
-          }
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    const gmOk = gmDownload();
-    if (!gmOk) {
-      try {
-        anchorDownload();
-      } catch (e) {
-        try {
-          const ok = confirm(
-            `Fetch log is ready, but your browser blocked the automatic download.
-
-Open it in a new tab instead?`
-          );
-          if (ok) window.open(url, "_blank");
-        } catch {
-        }
-        console.error("Failed to trigger JSON download", e);
-      }
-    }
-    setTimeout(() => URL.revokeObjectURL(url), 3e4);
-  }
   async function ensureFetchDataHasRunOnce() {
     const metaKey = "fetch_data_ran_v1";
     try {
@@ -55847,6 +55803,8 @@ Open it in a new tab instead?`
         feedUpserted: opts.res?.feedUpserted ?? null,
         detailsOk: opts.res?.detailsOk ?? null,
         detailsFail: opts.res?.detailsFail ?? null,
+        oldestFetchedAt: opts.res?.oldestFetchedAt ?? null,
+        newestFetchedAt: opts.res?.newestFetchedAt ?? null,
         stopReasons: stopEvents.map((e) => e.data?.reason ?? "unknown"),
         stopPage: stopEvents[0] ? stopEvents[0].data?.page ?? null : null,
         error: opts.error ? opts.error.message?.slice(0, 200) : null,
@@ -55882,16 +55840,7 @@ Go to Settings \xE2\u2020\u2019 Data and click "Switch to my data" (${MAIN_DB_NA
         return;
       }
       const status = createThrottledStatus(ui.setStatus);
-      const wantLog = Boolean(ev?.shiftKey);
-      const fetchLog = wantLog ? {
-        schemaVersion: 1,
-        phase: "fetch",
-        startedAt: Date.now(),
-        pageUrl: typeof location !== "undefined" ? String(location.href || "") : "",
-        userAgent: typeof navigator !== "undefined" ? String(navigator.userAgent || "") : "",
-        events: []
-      } : null;
-      let droppedLogEvents = 0;
+      const wantFullRefetch = Boolean(ev?.shiftKey);
       const compactEvents = [];
       const captureCompact = (x) => {
         if (compactEvents.length >= 60) return;
@@ -55899,21 +55848,12 @@ Go to Settings \xE2\u2020\u2019 Data and click "Switch to my data" (${MAIN_DB_NA
           compactEvents.push(x);
         }
       };
-      const appendLogEvent = (x) => {
-        captureCompact(x);
-        if (!fetchLog) return;
-        if (fetchLog.events.length > 25e4) {
-          droppedLogEvents++;
-          return;
-        }
-        fetchLog.events.push(x);
-      };
       const pushLog = (kind, data, level = "info", msg) => {
         const x = { ts: Date.now(), kind };
         if (level && level !== "info") x.level = level;
         if (msg) x.msg = msg;
         if (data !== void 0) x.data = data;
-        appendLogEvent(x);
+        captureCompact(x);
       };
       const onStatus = (m) => {
         status.push(m);
@@ -55923,9 +55863,9 @@ Go to Settings \xE2\u2020\u2019 Data and click "Switch to my data" (${MAIN_DB_NA
         status.flushNow(m);
         pushLog("status_now", void 0, "info", m);
       };
+      let isPendingFullRefetch = false;
       try {
         onStatusNow("Update started...");
-        if (wantLog) onStatus("Fetch log enabled (Shift+Click). JSON will download after completion.");
         try {
           onStatus("Checking login/session...");
           const url = "https://www.geoguessr.com/api/v4/feed/private";
@@ -55963,8 +55903,7 @@ Most likely cause: you are not logged in to GeoGuessr, or your session expired.
 
 Fix: reload geoguessr.com, log in, then retry.
 
-If you are logged in: GeoGuessr may be temporarily blocking requests (Cloudflare). Wait a few minutes and retry.
-Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+If you are logged in: GeoGuessr may be temporarily blocking requests (Cloudflare). Wait a few minutes and retry.`;
             } else if (fetchBlocked && bothFailed) {
               msg = `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).
 
@@ -55973,13 +55912,11 @@ Your browser blocked the request (status 0), and the fallback method also return
 Most likely: not logged in to GeoGuessr, or session expired.
 Fix: reload geoguessr.com, log in, then retry.
 
-If logged in: disable tracking protection / adblocker for geoguessr.com and retry.
-Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+If logged in: disable tracking protection / adblocker for geoguessr.com and retry.`;
             } else {
               msg = `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).
 
-Fix: reload geoguessr.com, ensure you're logged in, then retry.
-Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+Fix: reload geoguessr.com, ensure you're logged in, then retry.`;
             }
             onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in and retry.`);
             if (!isAuto) alert(msg);
@@ -55998,17 +55935,17 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
           });
         }
         const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
-        const isPendingFullRefetch2 = wantLog || fullRefetchMeta?.value?.pending === true;
+        isPendingFullRefetch = wantFullRefetch || fullRefetchMeta?.value?.pending === true;
         const DAYS_365_MS = 365 * 24 * 60 * 60 * 1e3;
-        if (isPendingFullRefetch2) {
+        if (isPendingFullRefetch) {
           onStatus("Full 365-day refetch scheduled \u2014 fetching all games from the last year...");
         }
-        const gameFilter = isPendingFullRefetch2 ? { ...loadFetchGameFilter(), fromMs: Date.now() - DAYS_365_MS } : loadFetchGameFilter();
+        const gameFilter = isPendingFullRefetch ? { ...loadFetchGameFilter(), fromMs: Date.now() - DAYS_365_MS } : loadFetchGameFilter();
         const res = await updateData({
           onStatus: (m) => onStatus(m),
-          onLog: (x) => appendLogEvent(x),
-          overrideLastSeen: isPendingFullRefetch2 ? 0 : void 0,
-          maxPages: isPendingFullRefetch2 ? 5e3 : 5e3,
+          onLog: (x) => captureCompact(x),
+          overrideLastSeen: isPendingFullRefetch ? 0 : void 0,
+          maxPages: 5e3,
           delayMs: 200,
           detailConcurrency: 4,
           retryErrors: true,
@@ -56016,7 +55953,7 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
           enrichLimit: 2e3,
           gameFilter
         });
-        if (isPendingFullRefetch2) {
+        if (isPendingFullRefetch) {
           await db.meta.put({
             key: FULL_REFETCH_KEY,
             value: { pending: false, completedAt: Date.now(), feedUpserted: res.feedUpserted },
@@ -56037,13 +55974,12 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
             `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}. Backfilled movement ratings: ${mvBackfilled.updated}.`
           );
         }
-        if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled, backfillMovementRatings: mvBackfilled };
-        void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch2, res, error: null, compactEvents });
+        void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch, res, error: null, compactEvents });
         await refreshUI(ui);
       } catch (e) {
         const se = safeError(e);
         pushLog("handler_error", se, "error");
-        void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch ?? false, res: null, error: se, compactEvents });
+        void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch, res: null, error: se, compactEvents });
         const feedHttp = /^Feed HTTP (\d{3})\b/.exec(se.message || "");
         if (feedHttp) {
           const code = Number(feedHttp[1]) || 0;
@@ -56056,8 +55992,7 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
 Your session was working at the start, so this is most likely a temporary Cloudflare/GeoGuessr restriction, not a login issue.
 
 Fix: wait a few minutes, then click Fetch again.
-If this keeps happening: reload geoguessr.com, ensure you're logged in, disable tracking protection / adblockers for geoguessr.com.
-Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
+If this keeps happening: reload geoguessr.com, ensure you're logged in, disable tracking protection / adblockers for geoguessr.com.`
               );
             } catch {
             }
@@ -56070,27 +56005,6 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
         console.error(e);
       } finally {
         status.dispose();
-        if (fetchLog) {
-          fetchLog.endedAt = Date.now();
-          fetchLog.summary = {
-            ...fetchLog.summary || {},
-            droppedLogEvents: droppedLogEvents > 0 ? droppedLogEvents : 0
-          };
-          const stamp = new Date(fetchLog.startedAt).toISOString().replace(/[:.]/g, "-");
-          try {
-            onStatusNow("Downloading fetch log (JSON)...");
-          } catch {
-          }
-          try {
-            downloadJson(`geoanalyzr_fetch_log_${stamp}.json`, fetchLog);
-          } catch (downloadErr) {
-            console.error("Failed to download fetch log JSON", downloadErr);
-            try {
-              alert(`Failed to download fetch log JSON: ${errorText(downloadErr)}`);
-            } catch {
-            }
-          }
-        }
       }
     });
     ui.onResetClick(async (opts) => {

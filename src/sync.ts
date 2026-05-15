@@ -422,6 +422,8 @@ export async function updateData(opts: {
   enrichedOk: number;
   enrichedFail: number;
   enrichedSkipped: number;
+  oldestFetchedAt: number | null;
+  newestFetchedAt: number | null;
 }> {
   const maxPages = opts.maxPages ?? 5000;
   const delayMs = opts.delayMs ?? 150;
@@ -462,6 +464,9 @@ export async function updateData(opts: {
   let detailsOk = 0;
   let detailsFail = 0;
   let detailsSkipped = 0;
+
+  let overallOldestFetchedAt = Number.POSITIVE_INFINITY;
+  let overallNewestFetchedAt = 0;
 
   const seenPaginationTokens = new Set<string>();
 
@@ -733,6 +738,8 @@ export async function updateData(opts: {
     // Keep the "lastSeen" pointer at the newest known timestamp (head of feed).
     // Use runningMaxSeen (not lastSeen) so overrideLastSeen=0 doesn't regress the stored value.
     if (newestOnPage > 0) runningMaxSeen = Math.max(runningMaxSeen, newestOnPage);
+    if (newestOnPage > 0) overallNewestFetchedAt = Math.max(overallNewestFetchedAt, newestOnPage);
+    if (Number.isFinite(oldestOnPage)) overallOldestFetchedAt = Math.min(overallOldestFetchedAt, oldestOnPage);
     await db.meta.put({ key: "sync", value: { lastSeenTime: runningMaxSeen }, updatedAt: Date.now() });
 
     // Fetch/enrich details for games we just saw, so the update proceeds step-by-step.
@@ -950,7 +957,9 @@ export async function updateData(opts: {
     enrichedQueued,
     enrichedOk,
     enrichedFail,
-    enrichedSkipped
+    enrichedSkipped,
+    oldestFetchedAt: Number.isFinite(overallOldestFetchedAt) ? overallOldestFetchedAt : null,
+    newestFetchedAt: overallNewestFetchedAt > 0 ? overallNewestFetchedAt : null
   };
 }
 

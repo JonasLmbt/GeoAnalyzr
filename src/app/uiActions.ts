@@ -7,7 +7,7 @@ import { invalidateRoundsCache } from "../engine/queryEngine";
 import { initAnalysisWindow } from "../ui";
 import { httpGetJson } from "../http";
 import { loadFetchGameFilter } from "../fetchGameFilter";
-import type { FetchLogDoc, FetchLogEvent } from "../fetchLog";
+import type { FetchLogEvent } from "../fetchLog";
 import { safeError } from "../fetchLog";
 import { loadServerSyncSettings, postSyncLog } from "../serverSync";
 
@@ -38,63 +38,6 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-function downloadJson(filename: string, value: unknown): void {
-  // Note: downloads triggered after long async work often lose the browser "user gesture" and may be blocked.
-  // We try GM_download first (userscript environments), then fall back to an <a download> click.
-  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-
-  const anchorDownload = () => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    (document.body ?? document.documentElement).appendChild(a);
-    a.click();
-    a.remove();
-  };
-
-  const gmDownload = () => {
-    const gm = (globalThis as any)?.GM_download;
-    if (typeof gm !== "function") return false;
-    try {
-      gm({
-        url,
-        name: filename,
-        saveAs: false,
-        onerror: () => {
-          try {
-            anchorDownload();
-          } catch {
-            // ignore
-          }
-        }
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const gmOk = gmDownload();
-  if (!gmOk) {
-    try {
-      anchorDownload();
-    } catch (e) {
-      // Last resort: open the blob URL so the user can save manually.
-      try {
-        const ok = confirm(
-          `Fetch log is ready, but your browser blocked the automatic download.\n\nOpen it in a new tab instead?`
-        );
-        if (ok) window.open(url, "_blank");
-      } catch {
-        // ignore
-      }
-      console.error("Failed to trigger JSON download", e);
-    }
-  }
-
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-}
 
 async function ensureFetchDataHasRunOnce(): Promise<boolean> {
   const metaKey = "fetch_data_ran_v1";
@@ -221,7 +164,7 @@ function createThrottledStatus(setStatus: (message: string) => void): {
 
 async function sendCompactSyncLog(opts: {
   fullRefetch: boolean;
-  res: { feedPages: number; feedUpserted: number; detailsOk: number; detailsFail: number } | null;
+  res: { feedPages: number; feedUpserted: number; detailsOk: number; detailsFail: number; oldestFetchedAt: number | null; newestFetchedAt: number | null } | null;
   error: { message: string; name?: string } | null;
   compactEvents: FetchLogEvent[];
 }): Promise<void> {
@@ -237,6 +180,8 @@ async function sendCompactSyncLog(opts: {
       feedUpserted: opts.res?.feedUpserted ?? null,
       detailsOk: opts.res?.detailsOk ?? null,
       detailsFail: opts.res?.detailsFail ?? null,
+      oldestFetchedAt: opts.res?.oldestFetchedAt ?? null,
+      newestFetchedAt: opts.res?.newestFetchedAt ?? null,
       stopReasons: stopEvents.map((e) => (e.data as any)?.reason ?? "unknown"),
       stopPage: stopEvents[0] ? (stopEvents[0].data as any)?.page ?? null : null,
       error: opts.error ? opts.error.message?.slice(0, 200) : null,
@@ -273,18 +218,7 @@ export function registerUiActions(ui: UI): void {
       return;
     }
     const status = createThrottledStatus(ui.setStatus);
-    const wantLog = Boolean((ev as any)?.shiftKey);
-    const fetchLog: FetchLogDoc | null = wantLog
-      ? {
-          schemaVersion: 1,
-          phase: "fetch",
-          startedAt: Date.now(),
-          pageUrl: typeof location !== "undefined" ? String(location.href || "") : "",
-          userAgent: typeof navigator !== "undefined" ? String(navigator.userAgent || "") : "",
-          events: []
-        }
-      : null;
-    let droppedLogEvents = 0;
+    const wantFullRefetch = Boolean((ev as any)?.shiftKey);
 
     // Compact log: always-on, captures only key events for server-side diagnostics.
     const compactEvents: FetchLogEvent[] = [];
@@ -295,22 +229,12 @@ export function registerUiActions(ui: UI): void {
       }
     };
 
-    const appendLogEvent = (x: FetchLogEvent) => {
-      captureCompact(x);
-      if (!fetchLog) return;
-      if (fetchLog.events.length > 250_000) {
-        droppedLogEvents++;
-        return;
-      }
-      fetchLog.events.push(x);
-    };
-
     const pushLog = (kind: string, data?: any, level: "info" | "warn" | "error" = "info", msg?: string) => {
       const x: FetchLogEvent = { ts: Date.now(), kind };
       if (level && level !== "info") x.level = level;
       if (msg) x.msg = msg;
       if (data !== undefined) x.data = data;
-      appendLogEvent(x);
+      captureCompact(x);
     };
 
     const onStatus = (m: string) => {
@@ -322,9 +246,9 @@ export function registerUiActions(ui: UI): void {
       status.flushNow(m);
       pushLog("status_now", undefined, "info", m);
     };
+    let isPendingFullRefetch = false;
     try {
       onStatusNow("Update started...");
-      if (wantLog) onStatus("Fetch log enabled (Shift+Click). JSON will download after completion.");
 
       // Verify we can fetch with the current browser session (no manual _ncfa paste required).
       // If the user is logged out, show a clear hint instead of failing deep inside the sync loop.
@@ -370,21 +294,18 @@ export function registerUiActions(ui: UI): void {
               `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).\n\n` +
               `Most likely cause: you are not logged in to GeoGuessr, or your session expired.\n\n` +
               `Fix: reload geoguessr.com, log in, then retry.\n\n` +
-              `If you are logged in: GeoGuessr may be temporarily blocking requests (Cloudflare). Wait a few minutes and retry.\n` +
-              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+              `If you are logged in: GeoGuessr may be temporarily blocking requests (Cloudflare). Wait a few minutes and retry.`;
           } else if (fetchBlocked && bothFailed) {
             msg =
               `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).\n\n` +
               `Your browser blocked the request (status 0), and the fallback method also returned ${probe.status}.\n\n` +
               `Most likely: not logged in to GeoGuessr, or session expired.\n` +
               `Fix: reload geoguessr.com, log in, then retry.\n\n` +
-              `If logged in: disable tracking protection / adblocker for geoguessr.com and retry.\n` +
-              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+              `If logged in: disable tracking protection / adblocker for geoguessr.com and retry.`;
           } else {
             msg =
               `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).\n\n` +
-              `Fix: reload geoguessr.com, ensure you're logged in, then retry.\n` +
-              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+              `Fix: reload geoguessr.com, ensure you're logged in, then retry.`;
           }
 
           onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in and retry.`);
@@ -410,7 +331,7 @@ export function registerUiActions(ui: UI): void {
 
       // Check for pending full-refetch: Shift+click always triggers it, or once on 2.5.0 upgrade.
       const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
-      const isPendingFullRefetch = wantLog || (fullRefetchMeta?.value as any)?.pending === true;
+      isPendingFullRefetch = wantFullRefetch || (fullRefetchMeta?.value as any)?.pending === true;
       const DAYS_365_MS = 365 * 24 * 60 * 60 * 1000;
 
       if (isPendingFullRefetch) {
@@ -423,9 +344,9 @@ export function registerUiActions(ui: UI): void {
 
       const res = await updateData({
         onStatus: (m) => onStatus(m),
-        onLog: (x) => appendLogEvent(x),
+        onLog: (x) => captureCompact(x),
         overrideLastSeen: isPendingFullRefetch ? 0 : undefined,
-        maxPages: isPendingFullRefetch ? 5000 : 5000,
+        maxPages: 5000,
         delayMs: 200,
         detailConcurrency: 4,
         retryErrors: true,
@@ -456,8 +377,6 @@ export function registerUiActions(ui: UI): void {
           `Update complete. Feed upserted: ${res.feedUpserted}. Normalized legacy rounds: ${norm.updated}. Backfilled guessCountry: ${backfilled.updated}. Backfilled movement ratings: ${mvBackfilled.updated}.`
         );
       }
-      if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled, backfillMovementRatings: mvBackfilled };
-
       // Send compact diagnostic log to server (fire-and-forget).
       void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch, res, error: null, compactEvents });
 
@@ -467,7 +386,7 @@ export function registerUiActions(ui: UI): void {
       pushLog("handler_error", se, "error");
 
       // Send compact diagnostic log even on error (fire-and-forget).
-      void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch ?? false, res: null, error: se, compactEvents });
+      void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch, res: null, error: se, compactEvents });
 
       const feedHttp = /^Feed HTTP (\d{3})\b/.exec(se.message || "");
       if (feedHttp) {
@@ -479,8 +398,7 @@ export function registerUiActions(ui: UI): void {
               `GeoAnalyzr lost access to your GeoGuessr feed mid-sync (HTTP ${code}).\n\n` +
                 `Your session was working at the start, so this is most likely a temporary Cloudflare/GeoGuessr restriction, not a login issue.\n\n` +
                 `Fix: wait a few minutes, then click Fetch again.\n` +
-                `If this keeps happening: reload geoguessr.com, ensure you're logged in, disable tracking protection / adblockers for geoguessr.com.\n` +
-                `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
+                `If this keeps happening: reload geoguessr.com, ensure you're logged in, disable tracking protection / adblockers for geoguessr.com.`
             );
           } catch {
             // ignore
@@ -494,29 +412,6 @@ export function registerUiActions(ui: UI): void {
       console.error(e);
     } finally {
       status.dispose();
-      if (fetchLog) {
-        fetchLog.endedAt = Date.now();
-        fetchLog.summary = {
-          ...(fetchLog.summary || {}),
-          droppedLogEvents: droppedLogEvents > 0 ? droppedLogEvents : 0
-        };
-        const stamp = new Date(fetchLog.startedAt).toISOString().replace(/[:.]/g, "-");
-        try {
-          onStatusNow("Downloading fetch log (JSON)...");
-        } catch {
-          // ignore
-        }
-        try {
-          downloadJson(`geoanalyzr_fetch_log_${stamp}.json`, fetchLog);
-        } catch (downloadErr) {
-          console.error("Failed to download fetch log JSON", downloadErr);
-          try {
-            alert(`Failed to download fetch log JSON: ${errorText(downloadErr)}`);
-          } catch {
-            // ignore
-          }
-        }
-      }
     }
   });
 
