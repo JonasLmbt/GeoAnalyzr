@@ -39,7 +39,7 @@ function cssOnce(): void {
   style.textContent = `
     .ga-ui-icon {
       position: fixed;
-      left: 16px;
+      right: 16px;
       bottom: 16px;
       z-index: 999999;
       width: 44px;
@@ -58,7 +58,7 @@ function cssOnce(): void {
 
     .ga-ui-panel {
       position: fixed;
-      left: 16px;
+      right: 16px;
       bottom: 68px;
       z-index: 999999;
       width: 360px;

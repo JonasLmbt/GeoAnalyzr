@@ -1,5 +1,5 @@
 import { updateData } from "../sync";
-import { loadServerSyncSettings, runServerSyncOnceWithOptions } from "../serverSync";
+import { loadServerSyncSettings, postSyncLog, runServerSyncOnceWithOptions } from "../serverSync";
 import { loadFetchGameFilter } from "../fetchGameFilter";
 import { linkDeviceViaDiscord } from "./linkDevice";
 
@@ -53,6 +53,17 @@ export async function runFetchAndSync(opts: {
 
   opts.setStatus(opts.forceFull ? "Syncing full snapshot..." : "Syncing...");
   const res = await runServerSyncOnceWithOptions(settings, { forceFull: opts.forceFull });
+  try {
+    await postSyncLog(settings, {
+      at: Date.now(),
+      ok: res.ok,
+      status: res.status ?? null,
+      rows: res.counts ? res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg : null,
+      bytesGzip: res.bytesGzip ?? null,
+      chunks: res.chunks ?? null,
+      forceFull: opts.forceFull,
+    });
+  } catch { /* fire-and-forget */ }
   const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
   const modeLabel = opts.forceFull ? "Synced full" : "Synced";
   const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
