@@ -590,6 +590,38 @@ function gmRequestText(opts: {
   });
 }
 
+function deriveSyncLogUrl(endpointUrl: string): string {
+  try {
+    const u = new URL(endpointUrl);
+    const p = u.pathname || "/";
+    if (/\/api\/sync\/?$/i.test(p)) u.pathname = p.replace(/\/api\/sync\/?$/i, "/api/sync-log");
+    else u.pathname = "/api/sync-log";
+    return u.toString();
+  } catch {
+    if (/\/api\/sync\/?$/i.test(endpointUrl)) return endpointUrl.replace(/\/api\/sync\/?$/i, "/api/sync-log");
+    return `${endpointUrl.replace(/\/+$/, "")}/api/sync-log`;
+  }
+}
+
+export async function postSyncLog(settings: ServerSyncSettings, data: Record<string, unknown>): Promise<void> {
+  const endpointUrl = (settings.endpointUrl || "").trim();
+  const token = (settings.token || "").trim();
+  if (!endpointUrl || !token) return;
+
+  const url = deriveSyncLogUrl(endpointUrl);
+  const body = JSON.stringify({ ...data, sv: getUserscriptVersion() });
+  await gmRequestText({
+    method: "POST",
+    url,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body,
+    timeoutMs: 10000,
+  });
+}
+
 function deriveUnsyncUrl(endpointUrl: string): string {
   try {
     const u = new URL(endpointUrl);

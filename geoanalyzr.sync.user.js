@@ -10488,6 +10488,35 @@ ${shapes}`.trim();
       });
     });
   }
+  function deriveSyncLogUrl(endpointUrl) {
+    try {
+      const u = new URL(endpointUrl);
+      const p = u.pathname || "/";
+      if (/\/api\/sync\/?$/i.test(p)) u.pathname = p.replace(/\/api\/sync\/?$/i, "/api/sync-log");
+      else u.pathname = "/api/sync-log";
+      return u.toString();
+    } catch {
+      if (/\/api\/sync\/?$/i.test(endpointUrl)) return endpointUrl.replace(/\/api\/sync\/?$/i, "/api/sync-log");
+      return `${endpointUrl.replace(/\/+$/, "")}/api/sync-log`;
+    }
+  }
+  async function postSyncLog(settings, data) {
+    const endpointUrl = (settings.endpointUrl || "").trim();
+    const token = (settings.token || "").trim();
+    if (!endpointUrl || !token) return;
+    const url = deriveSyncLogUrl(endpointUrl);
+    const body = JSON.stringify({ ...data, sv: getUserscriptVersion() });
+    await gmRequestText({
+      method: "POST",
+      url,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body,
+      timeoutMs: 1e4
+    });
+  }
   function deriveUnsyncUrl(endpointUrl) {
     try {
       const u = new URL(endpointUrl);
@@ -55805,6 +55834,28 @@ Open it in a new tab instead?`
       }
     };
   }
+  async function sendCompactSyncLog(opts) {
+    try {
+      const settings = loadServerSyncSettings();
+      if (!settings.token) return;
+      const stopEvents = opts.compactEvents.filter((e) => e.kind === "feed_stop");
+      const errorEvents = opts.compactEvents.filter((e) => e.level === "error" || e.level === "warn");
+      const payload = {
+        at: Date.now(),
+        fullRefetch: opts.fullRefetch,
+        feedPages: opts.res?.feedPages ?? null,
+        feedUpserted: opts.res?.feedUpserted ?? null,
+        detailsOk: opts.res?.detailsOk ?? null,
+        detailsFail: opts.res?.detailsFail ?? null,
+        stopReasons: stopEvents.map((e) => e.data?.reason ?? "unknown"),
+        stopPage: stopEvents[0] ? stopEvents[0].data?.page ?? null : null,
+        error: opts.error ? opts.error.message?.slice(0, 200) : null,
+        warns: errorEvents.slice(0, 5).map((e) => ({ kind: e.kind, msg: e.msg?.slice(0, 100) }))
+      };
+      await postSyncLog(settings, payload);
+    } catch {
+    }
+  }
   async function refreshUI(ui) {
     const [games, rounds, detailsOk, detailsError, detailsMissing] = await Promise.all([
       db.games.count(),
@@ -55841,7 +55892,15 @@ Go to Settings \xE2\u2020\u2019 Data and click "Switch to my data" (${MAIN_DB_NA
         events: []
       } : null;
       let droppedLogEvents = 0;
+      const compactEvents = [];
+      const captureCompact = (x) => {
+        if (compactEvents.length >= 60) return;
+        if (x.kind === "feed_stop" || x.kind === "feed_http_error" || x.level === "warn" || x.level === "error") {
+          compactEvents.push(x);
+        }
+      };
       const appendLogEvent = (x) => {
+        captureCompact(x);
         if (!fetchLog) return;
         if (fetchLog.events.length > 25e4) {
           droppedLogEvents++;
@@ -55885,24 +55944,45 @@ Go to Settings \xE2\u2020\u2019 Data and click "Switch to my data" (${MAIN_DB_NA
             return p;
           };
           let probe = await probeOnce(false);
+          const fetchStatus = probe.status;
+          let gmStatus;
           if (probe.status === 401 || probe.status === 403 || probe.status === 0) {
             const gmProbe = await probeOnce(true);
+            gmStatus = gmProbe.status;
             if (gmProbe.status >= 200 && gmProbe.status < 300) probe = gmProbe;
             else if (gmProbe.status && gmProbe.status !== probe.status) probe = gmProbe;
           }
           if (probe.status === 401 || probe.status === 403) {
-            onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in / disable blockers and try again.`);
-            if (!isAuto) alert(
-              `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).
+            const bothFailed = gmStatus !== void 0;
+            const fetchBlocked = fetchStatus === 0;
+            let msg;
+            if (bothFailed && !fetchBlocked) {
+              msg = `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).
 
-Common causes:
-- Not logged in / expired session
-- Tracking protection / adblocker blocking cookies or requests
-- Temporary GeoGuessr / Cloudflare restriction
+Most likely cause: you are not logged in to GeoGuessr, or your session expired.
 
-Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.
-Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
-            );
+Fix: reload geoguessr.com, log in, then retry.
+
+If you are logged in: GeoGuessr may be temporarily blocking requests (Cloudflare). Wait a few minutes and retry.
+Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+            } else if (fetchBlocked && bothFailed) {
+              msg = `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).
+
+Your browser blocked the request (status 0), and the fallback method also returned ${probe.status}.
+
+Most likely: not logged in to GeoGuessr, or session expired.
+Fix: reload geoguessr.com, log in, then retry.
+
+If logged in: disable tracking protection / adblocker for geoguessr.com and retry.
+Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+            } else {
+              msg = `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).
+
+Fix: reload geoguessr.com, ensure you're logged in, then retry.
+Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+            }
+            onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in and retry.`);
+            if (!isAuto) alert(msg);
             return;
           }
         } catch {
@@ -55918,17 +55998,17 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           });
         }
         const fullRefetchMeta = await db.meta.get(FULL_REFETCH_KEY);
-        const isPendingFullRefetch = wantLog || fullRefetchMeta?.value?.pending === true;
+        const isPendingFullRefetch2 = wantLog || fullRefetchMeta?.value?.pending === true;
         const DAYS_365_MS = 365 * 24 * 60 * 60 * 1e3;
-        if (isPendingFullRefetch) {
+        if (isPendingFullRefetch2) {
           onStatus("Full 365-day refetch scheduled \u2014 fetching all games from the last year...");
         }
-        const gameFilter = isPendingFullRefetch ? { ...loadFetchGameFilter(), fromMs: Date.now() - DAYS_365_MS } : loadFetchGameFilter();
+        const gameFilter = isPendingFullRefetch2 ? { ...loadFetchGameFilter(), fromMs: Date.now() - DAYS_365_MS } : loadFetchGameFilter();
         const res = await updateData({
           onStatus: (m) => onStatus(m),
-          onLog: fetchLog ? (x) => appendLogEvent(x) : void 0,
-          overrideLastSeen: isPendingFullRefetch ? 0 : void 0,
-          maxPages: isPendingFullRefetch ? 5e3 : 5e3,
+          onLog: (x) => appendLogEvent(x),
+          overrideLastSeen: isPendingFullRefetch2 ? 0 : void 0,
+          maxPages: isPendingFullRefetch2 ? 5e3 : 5e3,
           delayMs: 200,
           detailConcurrency: 4,
           retryErrors: true,
@@ -55936,7 +56016,7 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           enrichLimit: 2e3,
           gameFilter
         });
-        if (isPendingFullRefetch) {
+        if (isPendingFullRefetch2) {
           await db.meta.put({
             key: FULL_REFETCH_KEY,
             value: { pending: false, completedAt: Date.now(), feedUpserted: res.feedUpserted },
@@ -55958,32 +56038,35 @@ Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
           );
         }
         if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled, backfillMovementRatings: mvBackfilled };
+        void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch2, res, error: null, compactEvents });
         await refreshUI(ui);
       } catch (e) {
         const se = safeError(e);
+        pushLog("handler_error", se, "error");
+        void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch ?? false, res: null, error: se, compactEvents });
         const feedHttp = /^Feed HTTP (\d{3})\b/.exec(se.message || "");
         if (feedHttp) {
           const code = Number(feedHttp[1]) || 0;
-          const hint = code === 401 || code === 403 ? "You are likely logged out, blocked by a privacy/adblock setting, or GeoGuessr denied access for this session." : "GeoGuessr returned an unexpected response for your private feed.";
-          onStatusNow(`Error: Feed HTTP ${code}. ${hint}`);
-          try {
-            if (!isAuto) alert(
-              `GeoAnalyzr can't access your private feed (HTTP ${code}).
+          if (code === 401 || code === 403) {
+            onStatusNow(`Error: Feed HTTP ${code}. GeoGuessr blocked access mid-sync \u2014 likely a temporary Cloudflare restriction. Wait a few minutes and retry.`);
+            try {
+              if (!isAuto) alert(
+                `GeoAnalyzr lost access to your GeoGuessr feed mid-sync (HTTP ${code}).
 
-Common causes:
-- Not logged in / expired session
-- Tracking protection / adblocker blocking cookies or requests
-- Temporary GeoGuessr / Cloudflare restriction
+Your session was working at the start, so this is most likely a temporary Cloudflare/GeoGuessr restriction, not a login issue.
 
-Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.
+Fix: wait a few minutes, then click Fetch again.
+If this keeps happening: reload geoguessr.com, ensure you're logged in, disable tracking protection / adblockers for geoguessr.com.
 Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
-            );
-          } catch {
+              );
+            } catch {
+            }
+          } else {
+            onStatusNow(`Error: Feed HTTP ${code}. GeoGuessr returned an unexpected response.`);
           }
         } else {
           onStatusNow("Error: " + se.message);
         }
-        pushLog("handler_error", se, "error");
         console.error(e);
       } finally {
         status.dispose();

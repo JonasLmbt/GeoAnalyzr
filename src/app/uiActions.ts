@@ -9,6 +9,7 @@ import { httpGetJson } from "../http";
 import { loadFetchGameFilter } from "../fetchGameFilter";
 import type { FetchLogDoc, FetchLogEvent } from "../fetchLog";
 import { safeError } from "../fetchLog";
+import { loadServerSyncSettings, postSyncLog } from "../serverSync";
 
 type DashboardFilter = {
   fromTs?: number;
@@ -218,6 +219,35 @@ function createThrottledStatus(setStatus: (message: string) => void): {
   };
 }
 
+async function sendCompactSyncLog(opts: {
+  fullRefetch: boolean;
+  res: { feedPages: number; feedUpserted: number; detailsOk: number; detailsFail: number } | null;
+  error: { message: string; name?: string } | null;
+  compactEvents: FetchLogEvent[];
+}): Promise<void> {
+  try {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) return;
+    const stopEvents = opts.compactEvents.filter((e) => e.kind === "feed_stop");
+    const errorEvents = opts.compactEvents.filter((e) => e.level === "error" || e.level === "warn");
+    const payload: Record<string, unknown> = {
+      at: Date.now(),
+      fullRefetch: opts.fullRefetch,
+      feedPages: opts.res?.feedPages ?? null,
+      feedUpserted: opts.res?.feedUpserted ?? null,
+      detailsOk: opts.res?.detailsOk ?? null,
+      detailsFail: opts.res?.detailsFail ?? null,
+      stopReasons: stopEvents.map((e) => (e.data as any)?.reason ?? "unknown"),
+      stopPage: stopEvents[0] ? (stopEvents[0].data as any)?.page ?? null : null,
+      error: opts.error ? opts.error.message?.slice(0, 200) : null,
+      warns: errorEvents.slice(0, 5).map((e) => ({ kind: e.kind, msg: e.msg?.slice(0, 100) })),
+    };
+    await postSyncLog(settings, payload);
+  } catch {
+    // fire-and-forget, never throw
+  }
+}
+
 export async function refreshUI(ui: UI): Promise<void> {
   const [games, rounds, detailsOk, detailsError, detailsMissing] = await Promise.all([
     db.games.count(),
@@ -256,7 +286,17 @@ export function registerUiActions(ui: UI): void {
       : null;
     let droppedLogEvents = 0;
 
+    // Compact log: always-on, captures only key events for server-side diagnostics.
+    const compactEvents: FetchLogEvent[] = [];
+    const captureCompact = (x: FetchLogEvent) => {
+      if (compactEvents.length >= 60) return;
+      if (x.kind === "feed_stop" || x.kind === "feed_http_error" || x.level === "warn" || x.level === "error") {
+        compactEvents.push(x);
+      }
+    };
+
     const appendLogEvent = (x: FetchLogEvent) => {
+      captureCompact(x);
       if (!fetchLog) return;
       if (fetchLog.events.length > 250_000) {
         droppedLogEvents++;
@@ -308,24 +348,47 @@ export function registerUiActions(ui: UI): void {
         };
 
         let probe = await probeOnce(false);
+        const fetchStatus = probe.status;
+        let gmStatus: number | undefined;
         if (probe.status === 401 || probe.status === 403 || probe.status === 0) {
           // Retry once via GM to avoid false negatives (fetch blocked by privacy/adblock setups).
           const gmProbe = await probeOnce(true);
+          gmStatus = gmProbe.status;
           if (gmProbe.status >= 200 && gmProbe.status < 300) probe = gmProbe;
           else if (gmProbe.status && gmProbe.status !== probe.status) probe = gmProbe;
         }
 
         if (probe.status === 401 || probe.status === 403) {
-          onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in / disable blockers and try again.`);
-          if (!isAuto) alert(
-            `GeoAnalyzr can't access your private feed (HTTP ${probe.status}).\n\n` +
-              `Common causes:\n` +
-              `- Not logged in / expired session\n` +
-              `- Tracking protection / adblocker blocking cookies or requests\n` +
-              `- Temporary GeoGuessr / Cloudflare restriction\n\n` +
-              `Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.\n` +
-              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
-          );
+          // Both fetch and GM failed → session is the most likely cause.
+          // fetch blocked (status 0) but GM also failed → not an adblocker issue.
+          const bothFailed = gmStatus !== undefined;
+          const fetchBlocked = fetchStatus === 0;
+
+          let msg: string;
+          if (bothFailed && !fetchBlocked) {
+            msg =
+              `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).\n\n` +
+              `Most likely cause: you are not logged in to GeoGuessr, or your session expired.\n\n` +
+              `Fix: reload geoguessr.com, log in, then retry.\n\n` +
+              `If you are logged in: GeoGuessr may be temporarily blocking requests (Cloudflare). Wait a few minutes and retry.\n` +
+              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+          } else if (fetchBlocked && bothFailed) {
+            msg =
+              `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).\n\n` +
+              `Your browser blocked the request (status 0), and the fallback method also returned ${probe.status}.\n\n` +
+              `Most likely: not logged in to GeoGuessr, or session expired.\n` +
+              `Fix: reload geoguessr.com, log in, then retry.\n\n` +
+              `If logged in: disable tracking protection / adblocker for geoguessr.com and retry.\n` +
+              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+          } else {
+            msg =
+              `GeoAnalyzr can't access your GeoGuessr feed (HTTP ${probe.status}).\n\n` +
+              `Fix: reload geoguessr.com, ensure you're logged in, then retry.\n` +
+              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`;
+          }
+
+          onStatusNow(`Error: Feed HTTP ${probe.status}. Please log in and retry.`);
+          if (!isAuto) alert(msg);
           return;
         }
       } catch {
@@ -360,7 +423,7 @@ export function registerUiActions(ui: UI): void {
 
       const res = await updateData({
         onStatus: (m) => onStatus(m),
-        onLog: fetchLog ? (x) => appendLogEvent(x) : undefined,
+        onLog: (x) => appendLogEvent(x),
         overrideLastSeen: isPendingFullRefetch ? 0 : undefined,
         maxPages: isPendingFullRefetch ? 5000 : 5000,
         delayMs: 200,
@@ -394,34 +457,40 @@ export function registerUiActions(ui: UI): void {
         );
       }
       if (fetchLog) fetchLog.summary = { updateData: res, normalizeLegacyRounds: norm, backfillGuessCountries: backfilled, backfillMovementRatings: mvBackfilled };
+
+      // Send compact diagnostic log to server (fire-and-forget).
+      void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch, res, error: null, compactEvents });
+
       await refreshUI(ui);
     } catch (e) {
       const se = safeError(e);
+      pushLog("handler_error", se, "error");
+
+      // Send compact diagnostic log even on error (fire-and-forget).
+      void sendCompactSyncLog({ fullRefetch: isPendingFullRefetch ?? false, res: null, error: se, compactEvents });
+
       const feedHttp = /^Feed HTTP (\d{3})\b/.exec(se.message || "");
       if (feedHttp) {
         const code = Number(feedHttp[1]) || 0;
-        const hint =
-          code === 401 || code === 403
-            ? "You are likely logged out, blocked by a privacy/adblock setting, or GeoGuessr denied access for this session."
-            : "GeoGuessr returned an unexpected response for your private feed.";
-        onStatusNow(`Error: Feed HTTP ${code}. ${hint}`);
-        try {
-          if (!isAuto) alert(
-            `GeoAnalyzr can't access your private feed (HTTP ${code}).\n\n` +
-              `Common causes:\n` +
-              `- Not logged in / expired session\n` +
-              `- Tracking protection / adblocker blocking cookies or requests\n` +
-              `- Temporary GeoGuessr / Cloudflare restriction\n\n` +
-              `Try: reload geoguessr.com, ensure you're logged in, disable blockers for geoguessr.com, then retry.\n` +
-              `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
-          );
-        } catch {
-          // ignore
+        if (code === 401 || code === 403) {
+          onStatusNow(`Error: Feed HTTP ${code}. GeoGuessr blocked access mid-sync — likely a temporary Cloudflare restriction. Wait a few minutes and retry.`);
+          try {
+            if (!isAuto) alert(
+              `GeoAnalyzr lost access to your GeoGuessr feed mid-sync (HTTP ${code}).\n\n` +
+                `Your session was working at the start, so this is most likely a temporary Cloudflare/GeoGuessr restriction, not a login issue.\n\n` +
+                `Fix: wait a few minutes, then click Fetch again.\n` +
+                `If this keeps happening: reload geoguessr.com, ensure you're logged in, disable tracking protection / adblockers for geoguessr.com.\n` +
+                `Tip: Shift+Fetch downloads a JSON log you can share for debugging.`
+            );
+          } catch {
+            // ignore
+          }
+        } else {
+          onStatusNow(`Error: Feed HTTP ${code}. GeoGuessr returned an unexpected response.`);
         }
       } else {
         onStatusNow("Error: " + se.message);
       }
-      pushLog("handler_error", se, "error");
       console.error(e);
     } finally {
       status.dispose();
