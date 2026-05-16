@@ -1,5 +1,9 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
+import { syncToServerV2 } from "./serverSync_v2";
+import { fetchFeed } from "./feedFetcher_v2";
+import { fetchDetails } from "./detailFetcher_v2";
+import { isMigrationNeeded, migrateV1ToV2 } from "./migration_v1_to_v2";
 import { getGmXmlhttpRequest } from "./gm";
 import { loadFetchGameFilter, saveFetchGameFilter } from "./fetchGameFilter";
 
@@ -638,38 +642,39 @@ export function createUIOverlay(): UIOverlay {
         saveServerSyncSettings({ token });
         settings = loadServerSyncSettings();
       }
-      const res = await runServerSyncOnceWithOptions(
-        settings,
-        isSyncVariant
-          ? (() => {
-              const f = loadFetchGameFilter();
-              return {
-                forceFull,
-                filterModeFamily: f.modeFamily,
-                filterMovementAnyOf: f.movementAnyOf,
-                filterRated: f.rated,
-                filterFromMs: f.fromMs,
-                filterToMs: f.toMs
-              };
-            })()
-          : { forceFull }
-      );
-      const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-      const modeLabel = forceFull ? "Synced full" : "Synced";
-      const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-      if (res.ok) {
-        status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
-      } else {
-        const size = formatBytes(res.bytesGzip);
-        if (res.status === 413) {
-          status.textContent =
-            `Sync failed (HTTP 413) - payload ${size}. ` +
-            `${forceFull ? "Full snapshot is likely too large. " : ""}` +
-            `Try Compact mode, disable aggregates, narrow ${isSyncVariant ? "Filters" : "Sync filters"}, and use normal Sync (no Shift).`;
-        } else if (res.status === 401 || res.status === 403) {
-          status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+      if (isSyncVariant) {
+        const modeLabel = forceFull ? "Synced full" : "Synced";
+        const v2res = await syncToServerV2({
+          full: forceFull,
+          onProgress: (p) => {
+            if (p.phase === "upload") status.textContent = `Syncing batch ${p.batch}/${p.totalBatches}...`;
+          },
+        });
+        if (v2res.ok) {
+          status.textContent = `${modeLabel} — new: ${v2res.gamesNew}, uploaded: ${v2res.gamesUploaded}`;
         } else {
-          status.textContent = `Sync failed (HTTP ${res.status})`;
+          const errMap: Record<string, string> = {
+            no_token: "Not linked. Click Fetch + Sync to link your device.",
+            no_player_id: "Could not determine player ID. Ensure you are logged in to GeoGuessr.",
+          };
+          status.textContent = errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`;
+        }
+      } else {
+        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+        const modeLabel = forceFull ? "Synced full" : "Synced";
+        const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
+        if (res.ok) {
+          status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
+        } else {
+          const size = formatBytes(res.bytesGzip);
+          if (res.status === 413) {
+            status.textContent = `Sync failed (HTTP 413) - payload ${size}. Try Compact mode or narrow Sync filters.`;
+          } else if (res.status === 401 || res.status === 403) {
+            status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+          } else {
+            status.textContent = `Sync failed (HTTP ${res.status})`;
+          }
         }
       }
     } catch (e: any) {
@@ -695,9 +700,39 @@ export function createUIOverlay(): UIOverlay {
         status.textContent = "Fetch handler not ready yet. Try again in a moment.";
         return;
       }
-      // Fetch (updates local DB)
-      await updateHandler(ev);
-      // Sync (uploads to server). Auto-run must not open popups.
+      // v2 pipeline: feed → details → server sync
+      try {
+        if (await isMigrationNeeded()) {
+          status.textContent = "Migrating local data to v2 format...";
+          await migrateV1ToV2();
+        }
+      } catch { /* non-fatal */ }
+
+      status.textContent = opts.forceFull ? "Fetching full history..." : "Fetching feed...";
+      try {
+        await fetchFeed({
+          full: opts.forceFull,
+          maxPages: 5000,
+          delayMs: 150,
+          overlapThreshold: 5,
+          onProgress: (p) => { status.textContent = `Feed page ${p.page} — ${p.newGames} new games...`; },
+        });
+      } catch (e: any) {
+        status.textContent = `Feed error: ${e instanceof Error ? e.message : String(e)}`;
+        return;
+      }
+
+      status.textContent = "Fetching game details...";
+      try {
+        await fetchDetails({
+          concurrency: 3,
+          delayMs: 400,
+          retryFailed: true,
+          onProgress: (p) => { status.textContent = `Details ${p.processed}/${p.total} — ok: ${p.succeeded}...`; },
+        });
+      } catch { /* non-fatal */ }
+
+      // Server sync
       await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto });
     } finally {
       btns.forEach((b) => (b.disabled = false));

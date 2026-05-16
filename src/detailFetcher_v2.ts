@@ -435,7 +435,7 @@ function extractGameUpdates(
     typeof gameData?.map?.slug === "string" ? gameData.map.slug : undefined;
   const isRated = asBool(gameData?.options?.isRated ?? gameData?.isRated);
   const rounds: any[] = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
-  const totalRounds = asNum(gameData?.currentRoundNumber) ?? rounds.length || undefined;
+  const totalRounds = asNum(gameData?.currentRoundNumber) ?? (rounds.length || undefined);
   const movementType = detectMovementType(gameData);
 
   const updates: Partial<GameRow> = {

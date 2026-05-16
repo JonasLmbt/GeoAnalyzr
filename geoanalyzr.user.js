@@ -250,9 +250,9 @@
         function flatten(a) {
           return concat.apply([], a);
         }
-        var intrinsicTypeNames = "BigUint64Array,BigInt64Array,Array,Boolean,String,Date,RegExp,Blob,File,FileList,FileSystemFileHandle,FileSystemDirectoryHandle,ArrayBuffer,DataView,Uint8ClampedArray,ImageBitmap,ImageData,Map,Set,CryptoKey".split(",").concat(flatten([8, 16, 32, 64].map(function(num) {
+        var intrinsicTypeNames = "BigUint64Array,BigInt64Array,Array,Boolean,String,Date,RegExp,Blob,File,FileList,FileSystemFileHandle,FileSystemDirectoryHandle,ArrayBuffer,DataView,Uint8ClampedArray,ImageBitmap,ImageData,Map,Set,CryptoKey".split(",").concat(flatten([8, 16, 32, 64].map(function(num2) {
           return ["Int", "Uint", "Float"].map(function(t) {
-            return t + num + "Array";
+            return t + num2 + "Array";
           });
         }))).filter(function(t) {
           return _global[t];
@@ -1393,10 +1393,10 @@
           }
           return anythingModified;
         }
-        var Table2 = (function() {
-          function Table3() {
+        var Table3 = (function() {
+          function Table4() {
           }
-          Table3.prototype._trans = function(mode, fn, writeLocked) {
+          Table4.prototype._trans = function(mode, fn, writeLocked) {
             var trans = this._tx || PSD.trans;
             var tableName = this.name;
             var task2 = debug && typeof console !== "undefined" && console.createTask && console.createTask("Dexie: ".concat(mode === "readonly" ? "read" : "write", " ").concat(this.name));
@@ -1423,7 +1423,7 @@
                 endMicroTickScope();
             }
           };
-          Table3.prototype.get = function(keyOrCrit, cb) {
+          Table4.prototype.get = function(keyOrCrit, cb) {
             var _this = this;
             if (keyOrCrit && keyOrCrit.constructor === Object)
               return this.where(keyOrCrit).first(cb);
@@ -1435,7 +1435,7 @@
               });
             }).then(cb);
           };
-          Table3.prototype.where = function(indexOrCrit) {
+          Table4.prototype.where = function(indexOrCrit) {
             if (typeof indexOrCrit === "string")
               return new this.db.WhereClause(this, indexOrCrit);
             if (isArray(indexOrCrit))
@@ -1487,34 +1487,34 @@
             }, [null, null]), idx = _a3[0], filterFunction = _a3[1];
             return idx ? this.where(idx.name).equals(indexOrCrit[idx.keyPath]).filter(filterFunction) : compoundIndex ? this.filter(filterFunction) : this.where(keyPaths).equals("");
           };
-          Table3.prototype.filter = function(filterFunction) {
+          Table4.prototype.filter = function(filterFunction) {
             return this.toCollection().and(filterFunction);
           };
-          Table3.prototype.count = function(thenShortcut) {
+          Table4.prototype.count = function(thenShortcut) {
             return this.toCollection().count(thenShortcut);
           };
-          Table3.prototype.offset = function(offset) {
+          Table4.prototype.offset = function(offset) {
             return this.toCollection().offset(offset);
           };
-          Table3.prototype.limit = function(numRows) {
+          Table4.prototype.limit = function(numRows) {
             return this.toCollection().limit(numRows);
           };
-          Table3.prototype.each = function(callback) {
+          Table4.prototype.each = function(callback) {
             return this.toCollection().each(callback);
           };
-          Table3.prototype.toArray = function(thenShortcut) {
+          Table4.prototype.toArray = function(thenShortcut) {
             return this.toCollection().toArray(thenShortcut);
           };
-          Table3.prototype.toCollection = function() {
+          Table4.prototype.toCollection = function() {
             return new this.db.Collection(new this.db.WhereClause(this));
           };
-          Table3.prototype.orderBy = function(index) {
+          Table4.prototype.orderBy = function(index) {
             return new this.db.Collection(new this.db.WhereClause(this, isArray(index) ? "[".concat(index.join("+"), "]") : index));
           };
-          Table3.prototype.reverse = function() {
+          Table4.prototype.reverse = function() {
             return this.toCollection().reverse();
           };
-          Table3.prototype.mapToClass = function(constructor) {
+          Table4.prototype.mapToClass = function(constructor) {
             var _a3 = this, db2 = _a3.db, tableName = _a3.name;
             this.schema.mappedClass = constructor;
             if (constructor.prototype instanceof Entity2) {
@@ -1561,13 +1561,13 @@
             this.hook("reading", readHook);
             return constructor;
           };
-          Table3.prototype.defineClass = function() {
+          Table4.prototype.defineClass = function() {
             function Class(content) {
               extend(this, content);
             }
             return this.mapToClass(Class);
           };
-          Table3.prototype.add = function(obj, key) {
+          Table4.prototype.add = function(obj, key) {
             var _this = this;
             var _a3 = this.schema.primKey, auto = _a3.auto, keyPath = _a3.keyPath;
             var objToAdd = obj;
@@ -1588,7 +1588,7 @@
               return lastResult;
             });
           };
-          Table3.prototype.upsert = function(key, modifications) {
+          Table4.prototype.upsert = function(key, modifications) {
             var _this = this;
             var keyPath = this.schema.primKey.keyPath;
             return this._trans("readwrite", function(trans) {
@@ -1610,7 +1610,7 @@
               });
             });
           };
-          Table3.prototype.update = function(keyOrObject, modifications) {
+          Table4.prototype.update = function(keyOrObject, modifications) {
             if (typeof keyOrObject === "object" && !isArray(keyOrObject)) {
               var key = getByKeyPath(keyOrObject, this.schema.primKey.keyPath);
               if (key === void 0)
@@ -1620,7 +1620,7 @@
               return this.where(":id").equals(keyOrObject).modify(modifications);
             }
           };
-          Table3.prototype.put = function(obj, key) {
+          Table4.prototype.put = function(obj, key) {
             var _this = this;
             var _a3 = this.schema.primKey, auto = _a3.auto, keyPath = _a3.keyPath;
             var objToAdd = obj;
@@ -1641,7 +1641,7 @@
               return lastResult;
             });
           };
-          Table3.prototype.delete = function(key) {
+          Table4.prototype.delete = function(key) {
             var _this = this;
             return this._trans("readwrite", function(trans) {
               return _this.core.mutate({ trans, type: "delete", keys: [key] }).then(function(res) {
@@ -1651,7 +1651,7 @@
               });
             });
           };
-          Table3.prototype.clear = function() {
+          Table4.prototype.clear = function() {
             var _this = this;
             return this._trans("readwrite", function(trans) {
               return _this.core.mutate({ trans, type: "deleteRange", range: AnyRange }).then(function(res) {
@@ -1661,7 +1661,7 @@
               return res.numFailures ? DexiePromise.reject(res.failures[0]) : void 0;
             });
           };
-          Table3.prototype.bulkGet = function(keys3) {
+          Table4.prototype.bulkGet = function(keys3) {
             var _this = this;
             return this._trans("readonly", function(trans) {
               return _this.core.getMany({
@@ -1674,7 +1674,7 @@
               });
             });
           };
-          Table3.prototype.bulkAdd = function(objects, keysOrOptions, options) {
+          Table4.prototype.bulkAdd = function(objects, keysOrOptions, options) {
             var _this = this;
             var keys3 = Array.isArray(keysOrOptions) ? keysOrOptions : void 0;
             options = options || (keys3 ? void 0 : keysOrOptions);
@@ -1696,7 +1696,7 @@
               });
             });
           };
-          Table3.prototype.bulkPut = function(objects, keysOrOptions, options) {
+          Table4.prototype.bulkPut = function(objects, keysOrOptions, options) {
             var _this = this;
             var keys3 = Array.isArray(keysOrOptions) ? keysOrOptions : void 0;
             options = options || (keys3 ? void 0 : keysOrOptions);
@@ -1718,7 +1718,7 @@
               });
             });
           };
-          Table3.prototype.bulkUpdate = function(keysAndChanges) {
+          Table4.prototype.bulkUpdate = function(keysAndChanges) {
             var _this = this;
             var coreTable = this.core;
             var keys3 = keysAndChanges.map(function(entry) {
@@ -1780,7 +1780,7 @@
               });
             });
           };
-          Table3.prototype.bulkDelete = function(keys3) {
+          Table4.prototype.bulkDelete = function(keys3) {
             var _this = this;
             var numKeys = keys3.length;
             return this._trans("readwrite", function(trans) {
@@ -1794,7 +1794,7 @@
               throw new BulkError("".concat(_this.name, ".bulkDelete(): ").concat(numFailures, " of ").concat(numKeys, " operations failed"), failures);
             });
           };
-          return Table3;
+          return Table4;
         })();
         function Events(ctx) {
           var evs = {};
@@ -1866,7 +1866,7 @@
           return constructor;
         }
         function createTableConstructor(db2) {
-          return makeClassConstructor(Table2.prototype, function Table3(name, tableSchema, trans) {
+          return makeClassConstructor(Table3.prototype, function Table4(name, tableSchema, trans) {
             this.db = db2;
             this._tx = trans;
             this.name = name;
@@ -2605,22 +2605,22 @@
               return createRange(void 0, value);
             });
           };
-          WhereClause2.prototype.startsWith = function(str) {
-            if (typeof str !== "string")
+          WhereClause2.prototype.startsWith = function(str2) {
+            if (typeof str2 !== "string")
               return fail(this, STRING_EXPECTED);
-            return this.between(str, str + maxString, true, true);
+            return this.between(str2, str2 + maxString, true, true);
           };
-          WhereClause2.prototype.startsWithIgnoreCase = function(str) {
-            if (str === "")
-              return this.startsWith(str);
+          WhereClause2.prototype.startsWithIgnoreCase = function(str2) {
+            if (str2 === "")
+              return this.startsWith(str2);
             return addIgnoreCaseAlgorithm(this, function(x, a) {
               return x.indexOf(a[0]) === 0;
-            }, [str], maxString);
+            }, [str2], maxString);
           };
-          WhereClause2.prototype.equalsIgnoreCase = function(str) {
+          WhereClause2.prototype.equalsIgnoreCase = function(str2) {
             return addIgnoreCaseAlgorithm(this, function(x, a) {
               return x === a[0];
-            }, [str], "");
+            }, [str2], "");
           };
           WhereClause2.prototype.anyOfIgnoreCase = function() {
             var set = getArrayOf.apply(NO_CHAR_ARRAY, arguments);
@@ -2796,8 +2796,8 @@
             }
             if (set.length === 0)
               return emptyCollection(this);
-            return this.inAnyRange(set.map(function(str) {
-              return [str, str + maxString];
+            return this.inAnyRange(set.map(function(str2) {
+              return [str2, str2 + maxString];
             }));
           };
           return WhereClause2;
@@ -5504,7 +5504,7 @@
                     return vipify(_this.table(tableName), vipDB);
                   };
                 var rv = Reflect.get(_, prop, receiver);
-                if (rv instanceof Table2)
+                if (rv instanceof Table3)
                   return vipify(rv, vipDB);
                 if (prop === "tables")
                   return rv.map(function(t) {
@@ -7682,17 +7682,17 @@ ${shapes}`.trim();
         r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
     }
   };
-  function strToU8(str, latin1) {
+  function strToU8(str2, latin1) {
     if (latin1) {
-      var ar_1 = new u8(str.length);
-      for (var i = 0; i < str.length; ++i)
-        ar_1[i] = str.charCodeAt(i);
+      var ar_1 = new u8(str2.length);
+      for (var i = 0; i < str2.length; ++i)
+        ar_1[i] = str2.charCodeAt(i);
       return ar_1;
     }
     if (te)
-      return te.encode(str);
-    var l = str.length;
-    var ar = new u8(str.length + (str.length >> 1));
+      return te.encode(str2);
+    var l = str2.length;
+    var ar = new u8(str2.length + (str2.length >> 1));
     var ai = 0;
     var w = function(v) {
       ar[ai++] = v;
@@ -7703,13 +7703,13 @@ ${shapes}`.trim();
         n.set(ar);
         ar = n;
       }
-      var c = str.charCodeAt(i);
+      var c = str2.charCodeAt(i);
       if (c < 128 || latin1)
         w(c);
       else if (c < 2048)
         w(192 | c >> 6), w(128 | c & 63);
       else if (c > 55295 && c < 57344)
-        c = 65536 + (c & 1023 << 10) | str.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
+        c = 65536 + (c & 1023 << 10) | str2.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
       else
         w(224 | c >> 12), w(128 | c >> 6 & 63), w(128 | c & 63);
     }
@@ -10713,6 +10713,1081 @@ ${shapes}`.trim();
     return meta?.value ?? null;
   }
 
+  // src/db_v2.ts
+  var DB_V2_NAME = "gg_analyzer_v2";
+  var GGDB_V2 = class extends import_wrapper_default {
+    games;
+    rounds;
+    rawFeedEntries;
+    rawGameDetails;
+    detailFetchLog;
+    syncState;
+    constructor(name = DB_V2_NAME) {
+      super(name);
+      this.version(1).stores({
+        games: [
+          "gameId",
+          "playedAt",
+          "modeFamily",
+          "[modeFamily+playedAt]",
+          "selfVictory",
+          "selfId",
+          "oppId",
+          "detailFetchedAt"
+        ].join(", "),
+        rounds: [
+          "[gameId+roundNumber]",
+          "gameId",
+          "startTime",
+          "trueCountry",
+          "selfGuessCountry",
+          "movementType"
+        ].join(", "),
+        rawFeedEntries: "gameId, fetchedAt",
+        rawGameDetails: "gameId, fetchedAt",
+        detailFetchLog: [
+          "gameId",
+          "lastAttemptAt",
+          "lastStatus"
+        ].join(", "),
+        syncState: "key"
+      });
+    }
+  };
+  var dbV2 = new GGDB_V2();
+  async function getSyncState(key) {
+    const row = await dbV2.syncState.get(key);
+    return row?.value;
+  }
+  async function setSyncState(key, value) {
+    await dbV2.syncState.put({ key, value, updatedAt: Date.now() });
+  }
+
+  // src/serverSync_v2.ts
+  function getUserscriptVersion2() {
+    const info = globalThis?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function v2BatchEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v2/sync/batch";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/batch");
+    }
+  }
+  function v2StateEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v2/sync/state";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/state");
+    }
+  }
+  async function httpPost(url, token, body) {
+    const json = JSON.stringify(body);
+    const gm = globalThis?.GM_xmlhttpRequest ?? globalThis?.GM?.xmlHttpRequest;
+    if (typeof gm === "function") {
+      return new Promise((resolve) => {
+        gm({
+          method: "POST",
+          url,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json"
+          },
+          data: json,
+          responseType: "text",
+          timeout: 6e4,
+          withCredentials: false,
+          onload: (res2) => {
+            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+            let data2 = null;
+            try {
+              data2 = JSON.parse(text);
+            } catch {
+            }
+            resolve({ status: Number(res2?.status) || 0, data: data2 });
+          },
+          onerror: () => resolve({ status: 0, data: null }),
+          ontimeout: () => resolve({ status: 0, data: null })
+        });
+      });
+    }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json"
+      },
+      body: json
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+    }
+    return { status: res.status, data };
+  }
+  async function httpGet(url, token) {
+    const gm = globalThis?.GM_xmlhttpRequest ?? globalThis?.GM?.xmlHttpRequest;
+    if (typeof gm === "function") {
+      return new Promise((resolve) => {
+        gm({
+          method: "GET",
+          url,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json"
+          },
+          responseType: "text",
+          timeout: 3e4,
+          withCredentials: false,
+          onload: (res2) => {
+            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+            let data2 = null;
+            try {
+              data2 = JSON.parse(text);
+            } catch {
+            }
+            resolve({ status: Number(res2?.status) || 0, data: data2 });
+          },
+          onerror: () => resolve({ status: 0, data: null }),
+          ontimeout: () => resolve({ status: 0, data: null })
+        });
+      });
+    }
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+    }
+    return { status: res.status, data };
+  }
+  async function fetchServerState(stateUrl, token, playerId) {
+    const url = `${stateUrl}?playerId=${encodeURIComponent(playerId)}`;
+    const res = await httpGet(url, token);
+    if (res.status !== 200 || !res.data?.ok) return null;
+    return {
+      gameCount: Number(res.data.gameCount) || 0,
+      roundCount: Number(res.data.roundCount) || 0,
+      oldestAt: res.data.oldestAt ?? null,
+      newestAt: res.data.newestAt ?? null
+    };
+  }
+  var BATCH_SIZE = 200;
+  async function syncToServerV2(opts) {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) {
+      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const playerId = await getCurrentPlayerId();
+    if (!playerId) {
+      return { ok: false, error: "no_player_id", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const batchUrl = v2BatchEndpoint(settings.endpointUrl);
+    const stateUrl = v2StateEndpoint(settings.endpointUrl);
+    const clientVersion = getUserscriptVersion2();
+    opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0 });
+    const serverBefore = await fetchServerState(stateUrl, settings.token, playerId);
+    const localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
+    const localGameCount = localGames.length;
+    const serverCount = serverBefore?.gameCount ?? 0;
+    if (!opts.full && serverCount >= localGameCount * 0.99 && serverCount > 0) {
+      return {
+        ok: true,
+        gamesUploaded: 0,
+        gamesNew: 0,
+        gamesSkipped: localGameCount,
+        roundsNew: 0,
+        batches: 0,
+        serverGameCount: serverCount
+      };
+    }
+    const allRounds = await dbV2.rounds.toArray();
+    const roundsByGameId = /* @__PURE__ */ new Map();
+    for (const r of allRounds) {
+      const list = roundsByGameId.get(r.gameId);
+      if (list) list.push(r);
+      else roundsByGameId.set(r.gameId, [r]);
+    }
+    const totalBatches = Math.ceil(localGameCount / BATCH_SIZE);
+    let totalGamesUploaded = 0;
+    let totalGamesNew = 0;
+    let totalGamesSkipped = 0;
+    let totalRoundsNew = 0;
+    let batchIndex = 0;
+    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+      batchIndex++;
+      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
+      const roundBatch = [];
+      for (const g of gameBatch) {
+        const rounds = roundsByGameId.get(g.gameId);
+        if (rounds) roundBatch.push(...rounds);
+      }
+      opts.onProgress?.({
+        phase: "upload",
+        batch: batchIndex,
+        totalBatches,
+        gamesUploaded: totalGamesUploaded,
+        gamesNew: totalGamesNew,
+        gamesSkipped: totalGamesSkipped,
+        roundsNew: totalRoundsNew
+      });
+      const batchId = `v2_${playerId}_${Date.now()}_${batchIndex}`;
+      const body = {
+        batchId,
+        playerId,
+        clientVersion: clientVersion ?? void 0,
+        games: gameBatch,
+        rounds: roundBatch
+      };
+      let res;
+      try {
+        res = await httpPost(batchUrl, settings.token, body);
+      } catch (e) {
+        return {
+          ok: false,
+          status: 0,
+          error: e instanceof Error ? e.message : String(e),
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return {
+          ok: false,
+          status: res.status,
+          error: "unauthorized",
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        return {
+          ok: false,
+          status: res.status,
+          error: res.data?.error ?? `HTTP ${res.status}`,
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      totalGamesUploaded += gameBatch.length;
+      totalGamesNew += Number(res.data?.gamesNew) || 0;
+      totalGamesSkipped += Number(res.data?.gamesSkipped) || 0;
+      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    }
+    opts.onProgress?.({ phase: "verify", batch: batchIndex, totalBatches, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew });
+    const serverAfter = await fetchServerState(stateUrl, settings.token, playerId);
+    return {
+      ok: true,
+      gamesUploaded: totalGamesUploaded,
+      gamesNew: totalGamesNew,
+      gamesSkipped: totalGamesSkipped,
+      roundsNew: totalRoundsNew,
+      batches: batchIndex,
+      serverGameCount: serverAfter?.gameCount
+    };
+  }
+
+  // src/feedFetcher_v2.ts
+  function getByPath2(obj, path) {
+    const parts = path.split(".");
+    let cur = obj;
+    for (const p of parts) {
+      if (!cur || typeof cur !== "object" || !(p in cur)) return void 0;
+      cur = cur[p];
+    }
+    return cur;
+  }
+  function pickFirst3(obj, paths) {
+    for (const p of paths) {
+      const v = getByPath2(obj, p);
+      if (v !== void 0 && v !== null) return v;
+    }
+    return void 0;
+  }
+  function classifyModeFamily(ev, entry) {
+    const raw = String(
+      pickFirst3(ev, [
+        "payload.gameMode",
+        "payload.competitiveGameMode",
+        "payload.mode",
+        "gameMode",
+        "competitiveGameMode",
+        "mode",
+        "type",
+        "__typename",
+        "payload.type",
+        "payload.__typename",
+        "payload.gameType",
+        "payload.slug"
+      ]) ?? pickFirst3(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"]) ?? ""
+    ).toLowerCase();
+    if (raw.includes("teamduel") || raw.includes("team_duel") || raw.includes("team-duel")) return "teamduels";
+    if (raw.includes("duel")) return "duels";
+    if (raw.includes("streak")) return "streak";
+    if (raw.includes("standard") || raw.includes("singleplayer") || raw.includes("classic")) return "standard";
+    return "other";
+  }
+  function extractEvents(entry) {
+    if (Array.isArray(entry?.payload)) return entry.payload;
+    if (typeof entry?.payload === "string") {
+      try {
+        const parsed = JSON.parse(entry.payload);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+      }
+    }
+    return [entry];
+  }
+  function extractGameId(ev) {
+    for (const path of ["payload.gameId", "gameId", "id", "payload.id"]) {
+      const v = getByPath2(ev, path);
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return void 0;
+  }
+  function extractPlayedAt(ev, entry) {
+    const raw = pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
+    const parsed = typeof raw === "string" ? Date.parse(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }
+  async function fetchFeedPage(paginationToken) {
+    const base = "https://www.geoguessr.com/api/v4/feed/private";
+    const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
+    const res = await httpGetJsonWithRetry(url, {
+      retries: 6,
+      baseDelayMs: 500,
+      maxDelayMs: 15e3,
+      headers: { Accept: "application/json" }
+    });
+    if (res.status === 401 || res.status === 403 || res.status === 0) {
+      const gm = await httpGetJsonWithRetry(url, {
+        retries: 2,
+        baseDelayMs: 400,
+        maxDelayMs: 5e3,
+        forceGm: true,
+        headers: { Accept: "application/json" }
+      });
+      if (gm.status >= 200 && gm.status < 300) return gm;
+    }
+    return res;
+  }
+  async function fetchFeed(opts) {
+    const maxPages = opts.maxPages ?? 5e3;
+    const delayMs = opts.delayMs ?? 150;
+    const overlapThreshold = opts.overlapThreshold ?? 5;
+    const savedCursor = opts.full ? void 0 : await getSyncState("feedCursor");
+    let paginationToken = savedCursor ?? void 0;
+    const seenTokens = /* @__PURE__ */ new Set();
+    let totalNew = 0;
+    let totalSkipped = 0;
+    let consecutiveKnown = 0;
+    let stopped = "exhausted";
+    for (let page = 1; page <= maxPages; page++) {
+      let res;
+      try {
+        res = await fetchFeedPage(paginationToken);
+      } catch (e) {
+        stopped = "error";
+        break;
+      }
+      if (res.status < 200 || res.status >= 300) {
+        stopped = "error";
+        break;
+      }
+      const entries2 = Array.isArray(res.data?.entries) ? res.data.entries : [];
+      if (entries2.length === 0) {
+        stopped = "exhausted";
+        break;
+      }
+      const candidates = /* @__PURE__ */ new Map();
+      const rawEntries = [];
+      for (const entry of entries2) {
+        for (const ev of extractEvents(entry)) {
+          const gameId = extractGameId(ev);
+          if (!gameId) continue;
+          const playedAt = extractPlayedAt(ev, entry);
+          const modeFamily = classifyModeFamily(ev, entry);
+          if (!candidates.has(gameId) || candidates.get(gameId).playedAt < playedAt) {
+            candidates.set(gameId, { gameId, playedAt, modeFamily });
+          }
+          rawEntries.push({ gameId, fetchedAt: Date.now(), json: entry });
+        }
+      }
+      const gameIds = [...candidates.keys()];
+      const existing = await dbV2.games.bulkGet(gameIds);
+      const existingSet = new Set(existing.filter(Boolean).map((g) => g.gameId));
+      const newGames = gameIds.filter((id) => !existingSet.has(id)).map((id) => candidates.get(id));
+      const pageKnown = gameIds.length - newGames.length;
+      if (newGames.length > 0) {
+        await dbV2.games.bulkPut(newGames);
+      }
+      await dbV2.rawFeedEntries.bulkPut(rawEntries);
+      totalNew += newGames.length;
+      totalSkipped += pageKnown;
+      consecutiveKnown = newGames.length === 0 ? consecutiveKnown + pageKnown : 0;
+      opts.onProgress?.({ page, newGames: totalNew, skipped: totalSkipped });
+      const nextToken = typeof res.data?.paginationToken === "string" && res.data.paginationToken ? res.data.paginationToken : void 0;
+      if (nextToken) {
+        await setSyncState("feedCursor", nextToken);
+      }
+      if (!opts.full && consecutiveKnown >= overlapThreshold) {
+        stopped = "overlap";
+        break;
+      }
+      if (!nextToken || seenTokens.has(nextToken)) {
+        stopped = "exhausted";
+        break;
+      }
+      seenTokens.add(nextToken);
+      paginationToken = nextToken;
+      if (page < maxPages && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+      if (page >= maxPages) {
+        stopped = "max_pages";
+      }
+    }
+    return { newGames: totalNew, pages: 0, stopped };
+  }
+
+  // src/detailFetcher_v2.ts
+  function asNum2(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n;
+    }
+    return void 0;
+  }
+  function asBool2(v) {
+    if (v === true || v === 1) return true;
+    if (v === false || v === 0) return false;
+    return void 0;
+  }
+  function normalizeIso23(v) {
+    if (typeof v !== "string") return void 0;
+    const x = v.trim().toLowerCase();
+    return /^[a-z]{2}$/.test(x) ? x : void 0;
+  }
+  function toTs2(v) {
+    if (typeof v !== "string") return void 0;
+    const t = Date.parse(v);
+    return Number.isFinite(t) ? t : void 0;
+  }
+  function getByPath3(obj, path) {
+    const parts = path.split(".");
+    let cur = obj;
+    for (const p of parts) {
+      if (!cur || typeof cur !== "object" || !(p in cur)) return void 0;
+      cur = cur[p];
+    }
+    return cur;
+  }
+  function pickFirst4(obj, paths) {
+    for (const p of paths) {
+      const v = getByPath3(obj, p);
+      if (v !== void 0 && v !== null) return v;
+    }
+    return void 0;
+  }
+  function readPlayerId2(player) {
+    const v = player?.playerId ?? player?.id ?? player?.userId ?? player?.user?.id;
+    return typeof v === "string" && v.trim() ? v.trim() : void 0;
+  }
+  function detectMovementType(gameData) {
+    const opts = pickFirst4(gameData, [
+      "movementOptions",
+      "options.movementOptions",
+      "options.duelRoundOptions.movementOptions"
+    ]);
+    if (!opts || typeof opts !== "object") {
+      const fm2 = gameData?.forbidMoving;
+      const fz2 = gameData?.forbidZooming;
+      const fr2 = gameData?.forbidRotating;
+      if (fm2 === void 0 && fz2 === void 0 && fr2 === void 0) return void 0;
+      if (fm2 === false && fz2 === false && fr2 === false) return "moving";
+      if (fm2 && fz2 && fr2) return "nmpz";
+      if (fm2) return "no_move";
+      return void 0;
+    }
+    const fm = opts.forbidMoving === true;
+    const fz = opts.forbidZooming === true;
+    const fr = opts.forbidRotating === true;
+    if (!fm && !fz && !fr) return "moving";
+    if (fm && fz && fr) return "nmpz";
+    if (fm) return "no_move";
+    return void 0;
+  }
+  function extractRatingChange2(player) {
+    const paths = [
+      "progressChange.rankedSystemProgress",
+      "progressChange.rankedTeamDuelsProgress",
+      "progressChange.rankedProgress",
+      "progressChange.ratingProgress"
+    ];
+    for (const p of paths) {
+      const obj = getByPath3(player, p);
+      const before = asNum2(obj?.ratingBefore);
+      const after = asNum2(obj?.ratingAfter);
+      if (before !== void 0 || after !== void 0) return { before, after };
+    }
+    return {};
+  }
+  async function resolveGuessCountry(guess, lat, lng) {
+    const fromApi = normalizeIso23(
+      guess?.countryCode ?? guess?.country_code ?? guess?.country
+    );
+    if (fromApi) return fromApi;
+    return resolveCountryCodeByLatLng(lat, lng).catch(() => void 0);
+  }
+  function buildEndpoints(gameId, modeFamily) {
+    const gameServer = `https://game-server.geoguessr.com/api/duels/${gameId}`;
+    const duelsEndpoints = [
+      gameServer,
+      `https://www.geoguessr.com/api/duels/${gameId}`,
+      `https://www.geoguessr.com/api/v4/competitive-games/${gameId}`
+    ];
+    const teamDuelsEndpoints = [
+      gameServer,
+      `https://www.geoguessr.com/api/team-duels/${gameId}`,
+      `https://www.geoguessr.com/api/v4/competitive-games/${gameId}`
+    ];
+    const soloEndpoints = [
+      `https://www.geoguessr.com/api/v3/games/${gameId}`,
+      `https://www.geoguessr.com/api/v4/games/${gameId}`
+    ];
+    switch (modeFamily) {
+      case "teamduels":
+        return [...teamDuelsEndpoints, ...duelsEndpoints, ...soloEndpoints];
+      case "duels":
+        return [...duelsEndpoints, ...teamDuelsEndpoints, ...soloEndpoints];
+      default:
+        return [...soloEndpoints, ...duelsEndpoints];
+    }
+  }
+  async function tryFetch(gameId, endpoints) {
+    for (const endpoint of endpoints) {
+      try {
+        const res = await httpGetJsonWithRetry(endpoint, {
+          retries: 4,
+          baseDelayMs: 600,
+          maxDelayMs: 15e3
+        });
+        if (res.status >= 200 && res.status < 300 && res.data) {
+          return { data: res.data, endpoint };
+        }
+        if (res.status === 404) continue;
+      } catch {
+      }
+    }
+    return null;
+  }
+  function guessByRound2(player) {
+    const map = /* @__PURE__ */ new Map();
+    for (const g of Array.isArray(player?.guesses) ? player.guesses : []) {
+      const rn = asNum2(g?.roundNumber);
+      if (rn !== void 0) map.set(rn, g);
+    }
+    return map;
+  }
+  function healthByRound2(team) {
+    const map = /* @__PURE__ */ new Map();
+    for (const r of Array.isArray(team?.roundResults) ? team.roundResults : []) {
+      const rn = asNum2(r?.roundNumber);
+      const h = asNum2(r?.healthAfter);
+      if (rn !== void 0 && h !== void 0) map.set(rn, h);
+    }
+    return map;
+  }
+  function orderedPlayers2(gameData, selfId) {
+    const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
+    if (teams.length === 0) return [];
+    let ownTeamIndex = 0;
+    if (selfId) {
+      const found = teams.findIndex(
+        (t) => Array.isArray(t?.players) && t.players.some((p) => readPlayerId2(p) === selfId)
+      );
+      if (found >= 0) ownTeamIndex = found;
+    }
+    const ownTeam = teams[ownTeamIndex];
+    const otherTeams = teams.filter((_, i) => i !== ownTeamIndex);
+    const ownPlayers = Array.isArray(ownTeam?.players) ? [...ownTeam.players] : [];
+    const ownHealth = healthByRound2(ownTeam);
+    if (selfId) {
+      ownPlayers.sort((a, b) => {
+        if (readPlayerId2(a) === selfId) return -1;
+        if (readPlayerId2(b) === selfId) return 1;
+        return 0;
+      });
+    }
+    const result = [];
+    for (const p of ownPlayers) result.push({ player: p, healthMap: ownHealth });
+    for (const t of otherTeams) {
+      const h = healthByRound2(t);
+      for (const p of Array.isArray(t?.players) ? t.players : []) {
+        result.push({ player: p, healthMap: h });
+      }
+    }
+    return result.slice(0, 4);
+  }
+  async function normalizeDuelsRounds(gameId, gameData, selfId) {
+    const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+    const players = orderedPlayers2(gameData, selfId);
+    const guessMaps = players.map((x) => guessByRound2(x.player));
+    const roles = [
+      "self",
+      "mate",
+      "opp",
+      "oppMate"
+    ];
+    const result = [];
+    for (let i = 0; i < rounds.length; i++) {
+      const r = rounds[i];
+      const rn = asNum2(r?.roundNumber) ?? i + 1;
+      const startTs = toTs2(r?.startTime);
+      const endTs = toTs2(r?.endTime);
+      const hasAnyGuess = guessMaps.some((m) => m.has(rn));
+      if (startTs === void 0 && endTs === void 0 && !hasAnyGuess) continue;
+      const durationSec = startTs !== void 0 && endTs !== void 0 && endTs >= startTs ? (endTs - startTs) / 1e3 : void 0;
+      const trueLat = asNum2(r?.panorama?.lat);
+      const trueLng = asNum2(r?.panorama?.lng);
+      const trueCountry = normalizeIso23(r?.panorama?.countryCode);
+      const guessData = [];
+      for (let p = 0; p < 4; p++) {
+        const entry = players[p];
+        if (!entry) {
+          guessData.push({});
+          continue;
+        }
+        const guess = guessMaps[p].get(rn);
+        const guessLat = asNum2(guess?.lat ?? guess?.latitude);
+        const guessLng = asNum2(guess?.lng ?? guess?.lon ?? guess?.longitude);
+        const distanceMeters = asNum2(guess?.distance ?? guess?.distanceInMeters);
+        const guessCountry = await resolveGuessCountry(guess, guessLat, guessLng);
+        guessData.push({
+          lat: guessLat,
+          lng: guessLng,
+          country: guessCountry,
+          score: asNum2(guess?.score),
+          distanceKm: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
+          healthAfter: entry.healthMap.get(rn)
+        });
+      }
+      const [self2, mate, opp, oppMate] = guessData;
+      const row = {
+        gameId,
+        roundNumber: rn,
+        startTime: startTs,
+        durationSec,
+        trueLat,
+        trueLng,
+        trueCountry,
+        selfGuessLat: self2.lat,
+        selfGuessLng: self2.lng,
+        selfGuessCountry: self2.country,
+        selfScore: self2.score,
+        selfDistanceKm: self2.distanceKm,
+        selfHealthAfter: self2.healthAfter,
+        oppGuessLat: opp.lat,
+        oppGuessLng: opp.lng,
+        oppGuessCountry: opp.country,
+        oppScore: opp.score,
+        oppDistanceKm: opp.distanceKm,
+        oppHealthAfter: opp.healthAfter,
+        mateGuessLat: mate.lat,
+        mateGuessLng: mate.lng,
+        mateGuessCountry: mate.country,
+        mateScore: mate.score,
+        mateDistanceKm: mate.distanceKm,
+        oppMateGuessLat: oppMate.lat,
+        oppMateGuessLng: oppMate.lng,
+        oppMateGuessCountry: oppMate.country,
+        oppMateScore: oppMate.score,
+        oppMateDistanceKm: oppMate.distanceKm
+      };
+      for (const k of Object.keys(row)) {
+        if (row[k] === void 0) delete row[k];
+      }
+      result.push(row);
+    }
+    return result;
+  }
+  async function normalizeSoloRounds(gameId, gameData) {
+    const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+    const playerGuesses = Array.isArray(gameData?.player?.guesses) ? gameData.player.guesses : [];
+    const guessMap = /* @__PURE__ */ new Map();
+    for (const g of playerGuesses) {
+      const rn = asNum2(g?.roundNumber);
+      if (rn !== void 0) guessMap.set(rn, g);
+    }
+    const result = [];
+    for (let i = 0; i < rounds.length; i++) {
+      const r = rounds[i];
+      const rn = asNum2(r?.roundNumber) ?? i + 1;
+      const startTs = toTs2(r?.startTime);
+      const endTs = toTs2(r?.endTime);
+      const guess = guessMap.get(rn);
+      if (startTs === void 0 && endTs === void 0 && !guess) continue;
+      const durationSec = startTs !== void 0 && endTs !== void 0 && endTs >= startTs ? (endTs - startTs) / 1e3 : asNum2(r?.roundDuration);
+      const trueLat = asNum2(r?.lat ?? r?.latitude);
+      const trueLng = asNum2(r?.lng ?? r?.longitude);
+      const trueCountry = normalizeIso23(r?.streakLocationCode ?? r?.countryCode);
+      const guessLat = asNum2(guess?.lat ?? guess?.latitude);
+      const guessLng = asNum2(guess?.lng ?? guess?.longitude);
+      const distanceMeters = asNum2(guess?.distanceInMeters ?? guess?.distance);
+      const guessCountry = await resolveGuessCountry(guess, guessLat, guessLng);
+      const row = {
+        gameId,
+        roundNumber: rn,
+        startTime: startTs,
+        durationSec,
+        trueLat,
+        trueLng,
+        trueCountry,
+        selfGuessLat: guessLat,
+        selfGuessLng: guessLng,
+        selfGuessCountry: guessCountry,
+        selfScore: asNum2(guess?.roundScore?.amount ?? guess?.score),
+        selfDistanceKm: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0
+      };
+      for (const k of Object.keys(row)) {
+        if (row[k] === void 0) delete row[k];
+      }
+      result.push(row);
+    }
+    return result;
+  }
+  function extractGameUpdates(gameData, modeFamily, selfId) {
+    const isDuelType = modeFamily === "duels" || modeFamily === "teamduels";
+    const mapName = typeof gameData?.options?.map?.name === "string" ? gameData.options.map.name : typeof gameData?.map?.name === "string" ? gameData.map.name : void 0;
+    const mapSlug = typeof gameData?.options?.map?.slug === "string" ? gameData.options.map.slug : typeof gameData?.map?.slug === "string" ? gameData.map.slug : void 0;
+    const isRated = asBool2(gameData?.options?.isRated ?? gameData?.isRated);
+    const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+    const totalRounds = asNum2(gameData?.currentRoundNumber) ?? (rounds.length || void 0);
+    const movementType = detectMovementType(gameData);
+    const updates = {
+      detailFetchedAt: Date.now(),
+      mapName,
+      mapSlug,
+      isRated,
+      totalRounds,
+      movementType: movementType ?? void 0
+    };
+    if (isDuelType) {
+      const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
+      const winningTeamId = String(gameData?.result?.winningTeamId || "");
+      const players = orderedPlayers2(gameData, selfId);
+      const p = [0, 1, 2, 3].map((i) => players[i]?.player);
+      const p0Id = readPlayerId2(p[0]) ?? selfId;
+      const p1Id = readPlayerId2(p[1]);
+      const p2Id = readPlayerId2(p[2]);
+      const p3Id = readPlayerId2(p[3]);
+      const rc = p.map(extractRatingChange2);
+      let ownTeamIndex = 0;
+      if (selfId) {
+        const found = teams.findIndex(
+          (t) => Array.isArray(t?.players) && t.players.some((pl) => readPlayerId2(pl) === selfId)
+        );
+        if (found >= 0) ownTeamIndex = found;
+      }
+      const ownTeam = teams[ownTeamIndex];
+      const otherTeam = teams.find((_, i) => i !== ownTeamIndex) ?? teams[1];
+      const selfVictory = winningTeamId ? String(ownTeam?.id || "") === winningTeamId : void 0;
+      const selfScore = asNum2(ownTeam?.health);
+      Object.assign(updates, {
+        selfId: p0Id,
+        selfName: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
+        selfScore,
+        selfVictory,
+        selfRatingBefore: rc[0].before,
+        selfRatingAfter: rc[0].after,
+        oppId: p2Id,
+        oppName: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
+        oppRatingBefore: rc[2].before,
+        oppRatingAfter: rc[2].after,
+        mateId: p1Id,
+        mateName: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
+        mateRatingBefore: rc[1].before,
+        mateRatingAfter: rc[1].after,
+        oppMateId: p3Id,
+        oppMateName: typeof p[3]?.nick === "string" ? p[3].nick : void 0,
+        oppMateRatingBefore: rc[3].before,
+        oppMateRatingAfter: rc[3].after
+      });
+    } else {
+      const player = gameData?.player;
+      const totalScore = asNum2(
+        player?.totalScore?.amount ?? player?.totalScore ?? gameData?.totalScore?.amount
+      );
+      Object.assign(updates, {
+        selfId: readPlayerId2(player),
+        selfName: typeof player?.nick === "string" ? player.nick : void 0,
+        selfScore: totalScore
+      });
+    }
+    return updates;
+  }
+  async function fetchDetails(opts) {
+    const concurrency = Math.max(1, opts.concurrency ?? 2);
+    const delayMs = opts.delayMs ?? 500;
+    let games;
+    if (opts.games) {
+      games = opts.games;
+    } else {
+      const all = await dbV2.games.toArray();
+      const failed2 = opts.retryFailed ? (await dbV2.detailFetchLog.toArray()).filter((l) => l.lastStatus !== "ok").map((l) => l.gameId) : [];
+      const failedSet = new Set(failed2);
+      games = all.filter((g) => g.detailFetchedAt === void 0 || failedSet.has(g.gameId));
+    }
+    const total = games.length;
+    let processed = 0;
+    let succeeded = 0;
+    let failed = 0;
+    for (let i = 0; i < games.length; i += concurrency) {
+      const batch = games.slice(i, i + concurrency);
+      await Promise.all(
+        batch.map(async (game) => {
+          const endpoints = buildEndpoints(game.gameId, game.modeFamily);
+          const attemptedAt = Date.now();
+          const result = await tryFetch(game.gameId, endpoints);
+          if (!result) {
+            failed++;
+            await dbV2.detailFetchLog.put({
+              gameId: game.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
+              lastAttemptAt: attemptedAt,
+              lastStatus: "not_found",
+              lastError: "All endpoints failed or returned 404"
+            });
+            return;
+          }
+          const { data, endpoint } = result;
+          try {
+            await dbV2.rawGameDetails.put({
+              gameId: game.gameId,
+              fetchedAt: attemptedAt,
+              endpoint,
+              json: data
+            });
+            const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+            const rounds = isDuelType ? await normalizeDuelsRounds(game.gameId, data, game.selfId) : await normalizeSoloRounds(game.gameId, data);
+            if (rounds.length > 0) {
+              await dbV2.rounds.bulkPut(rounds);
+            }
+            const updates = extractGameUpdates(data, game.modeFamily, game.selfId);
+            await dbV2.games.update(game.gameId, updates);
+            await dbV2.detailFetchLog.put({
+              gameId: game.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
+              lastAttemptAt: attemptedAt,
+              lastStatus: "ok",
+              endpoint
+            });
+            succeeded++;
+          } catch (e) {
+            failed++;
+            await dbV2.detailFetchLog.put({
+              gameId: game.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
+              lastAttemptAt: attemptedAt,
+              lastStatus: "error",
+              lastError: e instanceof Error ? e.message : String(e),
+              endpoint
+            });
+          }
+        })
+      );
+      processed += batch.length;
+      opts.onProgress?.({ processed, total, succeeded, failed });
+      if (i + concurrency < games.length && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+    return { succeeded, failed };
+  }
+
+  // src/migration_v1_to_v2.ts
+  function toModeFamily(raw, isTeamDuels) {
+    if (isTeamDuels) return "teamduels";
+    const m = String(raw || "").toLowerCase();
+    if (m === "duels") return "duels";
+    if (m === "teamduels") return "teamduels";
+    if (m === "standard") return "standard";
+    if (m === "streak") return "streak";
+    return "other";
+  }
+  function toMovementType(raw) {
+    if (raw === "moving" || raw === "no_move" || raw === "nmpz" || raw === "mixed") return raw;
+    return void 0;
+  }
+  function bool(v) {
+    if (typeof v === "boolean") return v;
+    if (v === 1) return true;
+    if (v === 0) return false;
+    return void 0;
+  }
+  function num(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : void 0;
+  }
+  function str(v) {
+    return typeof v === "string" && v.trim() ? v.trim() : void 0;
+  }
+  async function migrateV1ToV2(onProgress) {
+    const oldDb = new GGDB(MAIN_DB_NAME);
+    await oldDb.open();
+    let totalErrors = 0;
+    const [oldGames, oldDetails] = await Promise.all([
+      oldDb.games.toArray(),
+      oldDb.details.toArray()
+    ]);
+    const detailsByGameId = new Map(oldDetails.map((d) => [d.gameId, d]));
+    const total = oldGames.length;
+    let processed = 0;
+    const GAME_CHUNK = 200;
+    for (let i = 0; i < oldGames.length; i += GAME_CHUNK) {
+      const chunk = oldGames.slice(i, i + GAME_CHUNK);
+      const mapped = [];
+      for (const feed of chunk) {
+        try {
+          const det = detailsByGameId.get(feed.gameId);
+          const modeFamily = toModeFamily(feed.modeFamily ?? det?.modeFamily, feed.isTeamDuels ?? det?.isTeamDuels);
+          const row = {
+            gameId: feed.gameId,
+            playedAt: feed.playedAt,
+            modeFamily,
+            mapSlug: str(det?.mapSlug),
+            mapName: str(det?.mapName),
+            movementType: toMovementType(det?.movementType),
+            isRated: bool(det?.isRated),
+            totalRounds: num(det?.totalRounds),
+            detailFetchedAt: num(det?.fetchedAt),
+            selfId: str(det?.player_self_id),
+            selfName: str(det?.player_self_name),
+            selfCountry: str(det?.player_self_country),
+            selfVictory: bool(det?.player_self_victory),
+            selfScore: num(det?.player_self_finalHealth ?? det?.points),
+            selfRatingBefore: num(det?.player_self_startRating ?? det?.player_self_movingRatingBefore),
+            selfRatingAfter: num(det?.player_self_endRating ?? det?.player_self_movingRatingAfter),
+            oppId: str(det?.player_opponent_id),
+            oppName: str(det?.player_opponent_name),
+            oppCountry: str(det?.player_opponent_country),
+            oppRatingBefore: num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore),
+            oppRatingAfter: num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter),
+            mateId: str(det?.player_mate_id),
+            mateName: str(det?.player_mate_name),
+            mateCountry: str(det?.player_mate_country),
+            mateRatingBefore: num(det?.player_mate_startRating),
+            mateRatingAfter: num(det?.player_mate_endRating),
+            oppMateId: str(det?.player_opponent_mate_id),
+            oppMateName: str(det?.player_opponent_mate_name),
+            oppMateCountry: str(det?.player_opponent_mate_country),
+            oppMateRatingBefore: num(det?.player_opponent_mate_startRating),
+            oppMateRatingAfter: num(det?.player_opponent_mate_endRating)
+          };
+          for (const k of Object.keys(row)) {
+            if (row[k] === void 0) delete row[k];
+          }
+          mapped.push(row);
+        } catch {
+          totalErrors++;
+        }
+      }
+      await dbV2.games.bulkPut(mapped);
+      processed += chunk.length;
+      onProgress?.({ phase: "games", processed, total, errors: totalErrors });
+    }
+    const oldRounds = await oldDb.rounds.toArray();
+    const roundTotal = oldRounds.length;
+    let roundProcessed = 0;
+    const ROUND_CHUNK = 500;
+    for (let i = 0; i < oldRounds.length; i += ROUND_CHUNK) {
+      const chunk = oldRounds.slice(i, i + ROUND_CHUNK);
+      const mapped = [];
+      for (const r of chunk) {
+        try {
+          const startTime = num(r.startTime);
+          const endTime = num(r.endTime);
+          const durationSec = startTime && endTime && endTime > startTime ? (endTime - startTime) / 1e3 : num(r.durationSeconds);
+          const row = {
+            gameId: String(r.gameId || ""),
+            roundNumber: Number(r.roundNumber ?? 0),
+            startTime,
+            durationSec,
+            movementType: toMovementType(r.movementType),
+            trueLat: num(r.trueLat),
+            trueLng: num(r.trueLng),
+            trueCountry: str(r.trueCountry),
+            selfGuessLat: num(r.player_self_guessLat),
+            selfGuessLng: num(r.player_self_guessLng),
+            selfGuessCountry: str(r.player_self_guessCountry),
+            selfScore: num(r.player_self_score),
+            selfDistanceKm: num(r.player_self_distanceKm),
+            oppGuessLat: num(r.player_opponent_guessLat),
+            oppGuessLng: num(r.player_opponent_guessLng),
+            oppGuessCountry: str(r.player_opponent_guessCountry),
+            oppScore: num(r.player_opponent_score),
+            oppDistanceKm: num(r.player_opponent_distanceKm),
+            mateGuessLat: num(r.player_mate_guessLat),
+            mateGuessLng: num(r.player_mate_guessLng),
+            mateGuessCountry: str(r.player_mate_guessCountry),
+            mateScore: num(r.player_mate_score),
+            mateDistanceKm: num(r.player_mate_distanceKm),
+            oppMateGuessLat: num(r.player_opponent_mate_guessLat),
+            oppMateGuessLng: num(r.player_opponent_mate_guessLng),
+            oppMateGuessCountry: str(r.player_opponent_mate_guessCountry),
+            oppMateScore: num(r.player_opponent_mate_score),
+            oppMateDistanceKm: num(r.player_opponent_mate_distanceKm),
+            selfHealthAfter: num(r.team_self_healthAfter ?? r.player_self_healthAfter),
+            oppHealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter)
+          };
+          if (!row.gameId || row.roundNumber == null) continue;
+          for (const k of Object.keys(row)) {
+            if (row[k] === void 0) delete row[k];
+          }
+          mapped.push(row);
+        } catch {
+          totalErrors++;
+        }
+      }
+      await dbV2.rounds.bulkPut(mapped);
+      roundProcessed += chunk.length;
+      onProgress?.({ phase: "rounds", processed: roundProcessed, total: roundTotal, errors: totalErrors });
+    }
+    oldDb.close();
+    onProgress?.({ phase: "done", processed: roundTotal, total: roundTotal, errors: totalErrors });
+    return { games: processed, rounds: roundProcessed, errors: totalErrors };
+  }
+  async function isMigrationNeeded() {
+    const [oldCount, newCount] = await Promise.all([
+      new GGDB(MAIN_DB_NAME).games.count().catch(() => 0),
+      dbV2.games.count().catch(() => 0)
+    ]);
+    return oldCount > 0 && newCount < oldCount * 0.9;
+  }
+
   // src/fetchGameFilter.ts
   var GM_VALUE_PREFIX2 = "geoanalyzr_fetch_filter_v1_";
   function readGmValue2(key) {
@@ -11300,8 +12375,8 @@ ${shapes}`.trim();
               method: "GET",
               url: pairStartUrl,
               headers: { Accept: "application/json" },
-              onload: (res2) => {
-                const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+              onload: (res) => {
+                const text = typeof res?.responseText === "string" ? res.responseText : "";
                 try {
                   const parsed = JSON.parse(text);
                   if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
@@ -11350,33 +12425,39 @@ ${shapes}`.trim();
           saveServerSyncSettings({ token });
           settings = loadServerSyncSettings();
         }
-        const res = await runServerSyncOnceWithOptions(
-          settings,
-          isSyncVariant ? (() => {
-            const f = loadFetchGameFilter();
-            return {
-              forceFull,
-              filterModeFamily: f.modeFamily,
-              filterMovementAnyOf: f.movementAnyOf,
-              filterRated: f.rated,
-              filterFromMs: f.fromMs,
-              filterToMs: f.toMs
-            };
-          })() : { forceFull }
-        );
-        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-        const modeLabel = forceFull ? "Synced full" : "Synced";
-        const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-        if (res.ok) {
-          status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
-        } else {
-          const size = formatBytes(res.bytesGzip);
-          if (res.status === 413) {
-            status.textContent = `Sync failed (HTTP 413) - payload ${size}. ${forceFull ? "Full snapshot is likely too large. " : ""}Try Compact mode, disable aggregates, narrow ${isSyncVariant ? "Filters" : "Sync filters"}, and use normal Sync (no Shift).`;
-          } else if (res.status === 401 || res.status === 403) {
-            status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+        if (isSyncVariant) {
+          const modeLabel = forceFull ? "Synced full" : "Synced";
+          const v2res = await syncToServerV2({
+            full: forceFull,
+            onProgress: (p) => {
+              if (p.phase === "upload") status.textContent = `Syncing batch ${p.batch}/${p.totalBatches}...`;
+            }
+          });
+          if (v2res.ok) {
+            status.textContent = `${modeLabel} \u2014 new: ${v2res.gamesNew}, uploaded: ${v2res.gamesUploaded}`;
           } else {
-            status.textContent = `Sync failed (HTTP ${res.status})`;
+            const errMap = {
+              no_token: "Not linked. Click Fetch + Sync to link your device.",
+              no_player_id: "Could not determine player ID. Ensure you are logged in to GeoGuessr."
+            };
+            status.textContent = errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`;
+          }
+        } else {
+          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
+          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
+          const modeLabel = forceFull ? "Synced full" : "Synced";
+          const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
+          if (res.ok) {
+            status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
+          } else {
+            const size = formatBytes(res.bytesGzip);
+            if (res.status === 413) {
+              status.textContent = `Sync failed (HTTP 413) - payload ${size}. Try Compact mode or narrow Sync filters.`;
+            } else if (res.status === 401 || res.status === 403) {
+              status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+            } else {
+              status.textContent = `Sync failed (HTTP ${res.status})`;
+            }
           }
         }
       } catch (e) {
@@ -11398,7 +12479,40 @@ ${shapes}`.trim();
           status.textContent = "Fetch handler not ready yet. Try again in a moment.";
           return;
         }
-        await updateHandler(ev);
+        try {
+          if (await isMigrationNeeded()) {
+            status.textContent = "Migrating local data to v2 format...";
+            await migrateV1ToV2();
+          }
+        } catch {
+        }
+        status.textContent = opts.forceFull ? "Fetching full history..." : "Fetching feed...";
+        try {
+          await fetchFeed({
+            full: opts.forceFull,
+            maxPages: 5e3,
+            delayMs: 150,
+            overlapThreshold: 5,
+            onProgress: (p) => {
+              status.textContent = `Feed page ${p.page} \u2014 ${p.newGames} new games...`;
+            }
+          });
+        } catch (e) {
+          status.textContent = `Feed error: ${e instanceof Error ? e.message : String(e)}`;
+          return;
+        }
+        status.textContent = "Fetching game details...";
+        try {
+          await fetchDetails({
+            concurrency: 3,
+            delayMs: 400,
+            retryFailed: true,
+            onProgress: (p) => {
+              status.textContent = `Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`;
+            }
+          });
+        } catch {
+        }
         await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto });
       } finally {
         btns.forEach((b) => b.disabled = false);
@@ -11885,7 +12999,7 @@ ${shapes}`.trim();
     if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
     return `${s}s`;
   }
-  function getByPath2(obj, path) {
+  function getByPath4(obj, path) {
     const parts = path.split(".");
     let cur = obj;
     for (const part of parts) {
@@ -11894,9 +13008,9 @@ ${shapes}`.trim();
     }
     return cur;
   }
-  function pickFirst3(obj, paths) {
+  function pickFirst5(obj, paths) {
     for (const p of paths) {
-      const v = getByPath2(obj, p);
+      const v = getByPath4(obj, p);
       if (v !== void 0 && v !== null) return v;
     }
     return void 0;
@@ -11918,7 +13032,7 @@ ${shapes}`.trim();
     const trimmed = modeRaw.trim();
     return trimmed.length > 0 ? trimmed : void 0;
   }
-  function classifyModeFamily(gameMode) {
+  function classifyModeFamily2(gameMode) {
     const m = String(gameMode || "").toLowerCase();
     if (m.includes("teamduels") || m.includes("team_duels") || m.includes("team-duels")) return "teamduels";
     if (m.includes("duels") || m.includes("duel")) return "duels";
@@ -11927,9 +13041,9 @@ ${shapes}`.trim();
     return "other";
   }
   function classifyModeFamilyFromEvent(ev, gameMode) {
-    const byMode = classifyModeFamily(gameMode);
+    const byMode = classifyModeFamily2(gameMode);
     if (byMode !== "other") return byMode;
-    const hintRaw = pickFirst3(ev, [
+    const hintRaw = pickFirst5(ev, [
       "type",
       "__typename",
       "payload.type",
@@ -11951,7 +13065,7 @@ ${shapes}`.trim();
     if (family === "standard" || family === "streak") return "classic";
     return "other";
   }
-  function extractEvents(entry) {
+  function extractEvents2(entry) {
     const payloadEvents = parsePayloadArray(entry?.payload);
     if (payloadEvents.length > 0) return payloadEvents;
     if (entry && typeof entry === "object") return [entry];
@@ -11960,7 +13074,7 @@ ${shapes}`.trim();
   var GAME_ID_PATHS = ["payload.gameId", "gameId", "id", "payload.id"];
   function extractGameIdWithSource(ev) {
     for (const path of GAME_ID_PATHS) {
-      const id = getByPath2(ev, path);
+      const id = getByPath4(ev, path);
       if (typeof id === "string" && id.trim()) {
         return { gameId: id.trim(), source: path };
       }
@@ -11968,27 +13082,27 @@ ${shapes}`.trim();
     return { source: "none" };
   }
   function typeHint(ev) {
-    const hintRaw = pickFirst3(ev, ["type", "__typename", "payload.type", "payload.__typename", "payload.gameType", "payload.mode"]);
+    const hintRaw = pickFirst5(ev, ["type", "__typename", "payload.type", "payload.__typename", "payload.gameType", "payload.mode"]);
     const hint = String(hintRaw || "").trim();
     return hint || "unknown";
   }
   function extractEventTimeMs(ev, entry) {
-    const timeCandidate = pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
+    const timeCandidate = pickFirst5(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time;
     const parsed = typeof timeCandidate === "string" ? Date.parse(timeCandidate) : NaN;
     return Number.isFinite(parsed) ? parsed : Date.now();
   }
   function extractGameMode(ev, entry) {
     return normalizeGameMode(
-      pickFirst3(ev, [
+      pickFirst5(ev, [
         "payload.gameMode",
         "payload.competitiveGameMode",
         "gameMode",
         "competitiveGameMode",
         "mode"
-      ]) ?? pickFirst3(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
+      ]) ?? pickFirst5(entry, ["payload.gameMode", "payload.competitiveGameMode", "gameMode"])
     );
   }
-  async function fetchFeedPage(paginationToken) {
+  async function fetchFeedPage2(paginationToken) {
     const res = await fetchFeedPageWithMeta(paginationToken);
     if (res.status < 200 || res.status >= 300) throw new Error(`Feed HTTP ${res.status}`);
     return res.data;
@@ -12122,7 +13236,7 @@ ${shapes}`.trim();
       let pageDroppedNoGameId = 0;
       for (let entryIndex = 0; entryIndex < entries2.length; entryIndex++) {
         const entry = entries2[entryIndex];
-        const evs = extractEvents(entry);
+        const evs = extractEvents2(entry);
         pageEvents += evs.length;
         for (let eventIndex = 0; eventIndex < evs.length; eventIndex++) {
           const ev = evs[eventIndex];
@@ -12133,12 +13247,12 @@ ${shapes}`.trim();
             droppedNoGameIdTotal++;
             if (droppedEventSamples.length < 80) {
               const candidate = (path) => {
-                const v = getByPath2(ev, path);
+                const v = getByPath4(ev, path);
                 if (typeof v === "string") return v.slice(0, 160);
                 if (v === void 0 || v === null) return "";
                 return String(v).slice(0, 160);
               };
-              const timeCandidate = String(pickFirst3(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time ?? "").slice(0, 64);
+              const timeCandidate = String(pickFirst5(ev, ["time", "createdAt", "payload.time"]) ?? entry?.time ?? "").slice(0, 64);
               droppedEventSamples.push({
                 page,
                 entryIndex,
@@ -12213,12 +13327,12 @@ ${shapes}`.trim();
             while (token && pages < maxPages) {
               if (seenTokensProbe.has(token)) break;
               seenTokensProbe.add(token);
-              const d = await fetchFeedPage(token);
+              const d = await fetchFeedPage2(token);
               const ents = Array.isArray(d?.entries) ? d.entries : [];
               if (ents.length === 0) break;
               const rows = [];
               for (const entry of ents) {
-                const evs = extractEvents(entry);
+                const evs = extractEvents2(entry);
                 for (const ev of evs) {
                   const { gameId } = extractGameIdWithSource(ev);
                   if (!gameId) continue;
@@ -12571,7 +13685,7 @@ ${shapes}`.trim();
   }
 
   // src/migrations/backfillGuessCountries.ts
-  function normalizeIso23(v) {
+  function normalizeIso24(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : void 0;
@@ -12586,7 +13700,7 @@ ${shapes}`.trim();
     return typeof id === "string" && id.trim().length > 0 || isFiniteNumber2(lat) && isFiniteNumber2(lng);
   }
   function maybeFillRole(out, role) {
-    const existing = normalizeIso23(out?.[`${role}_guessCountry`]);
+    const existing = normalizeIso24(out?.[`${role}_guessCountry`]);
     if (existing) return false;
     const lat = out?.[`${role}_guessLat`];
     const lng = out?.[`${role}_guessLng`];
@@ -12651,7 +13765,7 @@ ${shapes}`.trim();
   }
 
   // src/migrations/backfillMovementRatings.ts
-  function detectMovementType(v) {
+  function detectMovementType2(v) {
     const s = String(v ?? "").toLowerCase().trim();
     if (!s || s === "unknown") return null;
     if (s === "moving" || s === "move" || s === "standard") return "moving";
@@ -12690,7 +13804,7 @@ ${shapes}`.trim();
         if (!row || typeof row !== "object") continue;
         const fetchedAt = typeof row.fetchedAt === "number" ? row.fetchedAt : 0;
         if (fetchedAt > newMaxFetchedAt) newMaxFetchedAt = fetchedAt;
-        const mt = detectMovementType(row.movementType) ?? detectMovementType(row.gameModeSimple);
+        const mt = detectMovementType2(row.movementType) ?? detectMovementType2(row.gameModeSimple);
         if (!mt) continue;
         if (row.player_self_movingRatingAfter != null || row.player_self_noMoveRatingAfter != null || row.player_self_nmpzRatingAfter != null) continue;
         if (typeof row.gameId === "string" && row.gameId) {
@@ -13331,7 +14445,7 @@ ${shapes}`.trim();
     const s = typeof v === "string" ? v.trim() : "";
     return s ? s : void 0;
   }
-  function pickFirst4(obj, keys2) {
+  function pickFirst6(obj, keys2) {
     for (const k of keys2) {
       if (!obj) continue;
       const v = obj[k];
@@ -13486,7 +14600,7 @@ ${shapes}`.trim();
     const mf = mfRaw.toLowerCase();
     const isTeam = g?.isTeamDuels === true || mf === "teamduels" || mf.includes("team") && mf.includes("duel");
     const pickNum = (keys2) => {
-      const v = pickFirst4(g, keys2);
+      const v = pickFirst6(g, keys2);
       return typeof v === "number" && Number.isFinite(v) ? v : void 0;
     };
     if (isTeam) {
@@ -13597,9 +14711,9 @@ ${shapes}`.trim();
     let rows = raw;
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
-      const toTs2 = applied.date.toTs ?? null;
+      const toTs3 = applied.date.toTs ?? null;
       if (fromTs !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs >= fromTs);
-      if (toTs2 !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs <= toTs2);
+      if (toTs3 !== null) rows = rows.filter((r) => typeof r.sessionStartTs === "number" && r.sessionStartTs <= toTs3);
     }
     rows = applyFilters(rows, applied.clauses, "session");
     if (!fromProvidedRounds) sessionsFilteredCache.set(key, rows);
@@ -13802,9 +14916,9 @@ ${shapes}`.trim();
       if (String(out.modeFamily ?? "").toLowerCase() === "teamduels") {
         const hasMate = typeof out.teammateName === "string" && out.teammateName.trim().length > 0;
         if (!hasMate) {
-          const mateNameRaw = pickFirst4(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
+          const mateNameRaw = pickFirst6(out, ["player_mate_name", "player_mateName", "teamOnePlayerTwoName"]);
           let mateName = asTrimmedString3(mateNameRaw);
-          const selfName = asTrimmedString3(pickFirst4(out, ["player_self_name", "playerOneName"]));
+          const selfName = asTrimmedString3(pickFirst6(out, ["player_self_name", "playerOneName"]));
           if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
@@ -13964,7 +15078,7 @@ ${shapes}`.trim();
     let rows = rowsAll;
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
-      const toTs2 = applied.date.toTs ?? null;
+      const toTs3 = applied.date.toTs ?? null;
       const tsOf = (r) => {
         const a = r?.playedAt;
         if (typeof a === "number" && Number.isFinite(a)) return a;
@@ -13984,9 +15098,9 @@ ${shapes}`.trim();
         const ts = tsOf(r);
         return ts !== null && ts >= fromTs;
       });
-      if (toTs2 !== null) rows = rows.filter((r) => {
+      if (toTs3 !== null) rows = rows.filter((r) => {
         const ts = tsOf(r);
-        return ts !== null && ts <= toTs2;
+        return ts !== null && ts <= toTs3;
       });
     }
     rows = applyFilters(rows, applied.clauses, "round");
@@ -14172,7 +15286,7 @@ ${shapes}`.trim();
           else if (selfId && selfId === t2id) mateName = t1name;
           else if (selfId && selfId === u1id) mateName = u2name;
           else if (selfId && selfId === u2id) mateName = u1name;
-          else mateName = asTrimmedString3(pickFirst4(out, ["player_mate_name", "teamOnePlayerTwoName"]));
+          else mateName = asTrimmedString3(pickFirst6(out, ["player_mate_name", "teamOnePlayerTwoName"]));
           if (mateName && selfName && mateName.trim() === selfName.trim()) mateName = void 0;
           if (mateName) out.teammateName = mateName;
         }
@@ -14206,7 +15320,7 @@ ${shapes}`.trim();
     let rows = rowsAll;
     if (applied.date) {
       const fromTs = applied.date.fromTs ?? null;
-      const toTs2 = applied.date.toTs ?? null;
+      const toTs3 = applied.date.toTs ?? null;
       const tsOf = (g) => {
         const a = g?.playedAt;
         if (typeof a === "number" && Number.isFinite(a)) return a;
@@ -14226,9 +15340,9 @@ ${shapes}`.trim();
         const ts = tsOf(g);
         return ts !== null && ts >= fromTs;
       });
-      if (toTs2 !== null) rows = rows.filter((g) => {
+      if (toTs3 !== null) rows = rows.filter((g) => {
         const ts = tsOf(g);
-        return ts !== null && ts <= toTs2;
+        return ts !== null && ts <= toTs3;
       });
     }
     rows = applyFilters(rows, applied.clauses, "game");
@@ -14275,9 +15389,9 @@ ${shapes}`.trim();
       if (c.type === "date_range") {
         assert(!!c.default && typeof c.default === "object", "E_BAD_SPEC", `date_range '${c.id}' default must be an object`);
         const fromTs = c.default.fromTs;
-        const toTs2 = c.default.toTs;
+        const toTs3 = c.default.toTs;
         assert(fromTs === null || typeof fromTs === "number", "E_BAD_SPEC", `date_range '${c.id}' default.fromTs must be number|null`);
-        assert(toTs2 === null || typeof toTs2 === "number", "E_BAD_SPEC", `date_range '${c.id}' default.toTs must be number|null`);
+        assert(toTs3 === null || typeof toTs3 === "number", "E_BAD_SPEC", `date_range '${c.id}' default.toTs must be number|null`);
         continue;
       }
       if (c.type === "select") {
@@ -24558,9 +25672,9 @@ ${describeError(err2)}` : message;
   var dec1 = /^#*0*\.([0#]+)/;
   var closeparen = /\).*[0#]/;
   var phone = /\(###\) ###\\?-####/;
-  function hashq(str) {
+  function hashq(str2) {
     var o = "", cc;
-    for (var i = 0; i != str.length; ++i) switch (cc = str.charCodeAt(i)) {
+    for (var i = 0; i != str2.length; ++i) switch (cc = str2.charCodeAt(i)) {
       case 35:
         break;
       case 63:
@@ -25422,7 +26536,7 @@ ${describeError(err2)}` : message;
     fmt = fmt.replace(dateNFregex, "(\\d+)");
     return new RegExp("^" + fmt + "$");
   }
-  function dateNF_fix(str, dateNF, match) {
+  function dateNF_fix(str2, dateNF, match) {
     var Y = -1, m = -1, d = -1, H = -1, M = -1, S = -1;
     (dateNF.match(dateNFregex) || []).forEach(function(n, i) {
       var v = parseInt(match[i + 1], 10);
@@ -25504,10 +26618,10 @@ ${describeError(err2)}` : message;
       while (i < L) C = C >>> 8 ^ T0[(C ^ B[i++]) & 255];
       return ~C;
     }
-    function crc32_str(str, seed) {
+    function crc32_str(str2, seed) {
       var C = seed ^ -1;
-      for (var i = 0, L = str.length, c = 0, d = 0; i < L; ) {
-        c = str.charCodeAt(i++);
+      for (var i = 0, L = str2.length, c = 0, d = 0; i < L; ) {
+        c = str2.charCodeAt(i++);
         if (c < 128) {
           C = C >>> 8 ^ T0[(C ^ c) & 255];
         } else if (c < 2048) {
@@ -25515,7 +26629,7 @@ ${describeError(err2)}` : message;
           C = C >>> 8 ^ T0[(C ^ (128 | c & 63)) & 255];
         } else if (c >= 55296 && c < 57344) {
           c = (c & 1023) + 64;
-          d = str.charCodeAt(i++) & 1023;
+          d = str2.charCodeAt(i++) & 1023;
           C = C >>> 8 ^ T0[(C ^ (240 | c >> 8 & 7)) & 255];
           C = C >>> 8 ^ T0[(C ^ (128 | c >> 2 & 63)) & 255];
           C = C >>> 8 ^ T0[(C ^ (128 | d >> 6 & 15 | (c & 3) << 4)) & 255];
@@ -26922,20 +28036,20 @@ ${describeError(err2)}` : message;
       encoded = encoded.replace(/\r(?!\n)/mg, "=0D").replace(/\n\n/mg, "\n=0A").replace(/([^\r\n])\n/mg, "$1=0A");
       var o = [], split = encoded.split("\r\n");
       for (var si = 0; si < split.length; ++si) {
-        var str = split[si];
-        if (str.length == 0) {
+        var str2 = split[si];
+        if (str2.length == 0) {
           o.push("");
           continue;
         }
-        for (var i2 = 0; i2 < str.length; ) {
+        for (var i2 = 0; i2 < str2.length; ) {
           var end = 76;
-          var tmp = str.slice(i2, i2 + end);
+          var tmp = str2.slice(i2, i2 + end);
           if (tmp.charAt(end - 1) == "=") end--;
           else if (tmp.charAt(end - 2) == "=") end -= 2;
           else if (tmp.charAt(end - 3) == "=") end -= 3;
-          tmp = str.slice(i2, i2 + end);
+          tmp = str2.slice(i2, i2 + end);
           i2 += end;
-          if (i2 < str.length) tmp += "=";
+          if (i2 < str2.length) tmp += "=";
           o.push(tmp);
         }
       }
@@ -27248,23 +28362,23 @@ ${describeError(err2)}` : message;
   var good_pd_date_1 = /* @__PURE__ */ new Date("2017-02-19T19:06:09.000Z");
   var good_pd_date = /* @__PURE__ */ isNaN(/* @__PURE__ */ good_pd_date_1.getFullYear()) ? /* @__PURE__ */ new Date("2/19/17") : good_pd_date_1;
   var good_pd = /* @__PURE__ */ good_pd_date.getFullYear() == 2017;
-  function parseDate(str, fixdate) {
-    var d = new Date(str);
+  function parseDate(str2, fixdate) {
+    var d = new Date(str2);
     if (good_pd) {
       if (fixdate > 0) d.setTime(d.getTime() + d.getTimezoneOffset() * 60 * 1e3);
       else if (fixdate < 0) d.setTime(d.getTime() - d.getTimezoneOffset() * 60 * 1e3);
       return d;
     }
-    if (str instanceof Date) return str;
+    if (str2 instanceof Date) return str2;
     if (good_pd_date.getFullYear() == 1917 && !isNaN(d.getFullYear())) {
       var s = d.getFullYear();
-      if (str.indexOf("" + s) > -1) return d;
+      if (str2.indexOf("" + s) > -1) return d;
       d.setFullYear(d.getFullYear() + 100);
       return d;
     }
-    var n = str.match(/\d+/g) || ["2017", "2", "19", "0", "0", "0"];
+    var n = str2.match(/\d+/g) || ["2017", "2", "19", "0", "0", "0"];
     var out = new Date(+n[0], +n[1] - 1, +n[2], +n[3] || 0, +n[4] || 0, +n[5] || 0);
-    if (str.indexOf("Z") > -1) out = new Date(out.getTime() - out.getTimezoneOffset() * 60 * 1e3);
+    if (str2.indexOf("Z") > -1) out = new Date(out.getTime() - out.getTimezoneOffset() * 60 * 1e3);
     return out;
   }
   function cc2str(arr, debomit) {
@@ -27417,8 +28531,8 @@ ${describeError(err2)}` : message;
       return "&#x" + s2.charCodeAt(0).toString(16).toUpperCase() + ";";
     });
   }
-  function xlml_unfixstr(str) {
-    return str.replace(/(\r\n|[\r\n])/g, "&#10;");
+  function xlml_unfixstr(str2) {
+    return str2.replace(/(\r\n|[\r\n])/g, "&#10;");
   }
   function parsexmlbool(value) {
     switch (value) {
@@ -27535,8 +28649,8 @@ ${describeError(err2)}` : message;
     ].map(function(x) {
       return [new RegExp("&" + x[0] + ";", "ig"), x[1]];
     });
-    return function htmldecode2(str) {
-      var o = str.replace(/^[\t\n\r ]+/, "").replace(/[\t\n\r ]+$/, "").replace(/>\s+/g, ">").replace(/\s+</g, "<").replace(/[\t\n\r ]+/g, " ").replace(/<\s*[bB][rR]\s*\/?>/g, "\n").replace(/<[^>]*>/g, "");
+    return function htmldecode2(str2) {
+      var o = str2.replace(/^[\t\n\r ]+/, "").replace(/[\t\n\r ]+$/, "").replace(/>\s+/g, ">").replace(/\s+</g, "<").replace(/[\t\n\r ]+/g, " ").replace(/<\s*[bB][rR]\s*\/?>/g, "\n").replace(/<[^>]*>/g, "");
       for (var i = 0; i < entities.length; ++i) o = o.replace(entities[i][0], entities[i][1]);
       return o;
     };
@@ -28379,9 +29493,9 @@ ${describeError(err2)}` : message;
   function parse_RichStr(data, length) {
     var start = data.l;
     var flags = data.read_shift(1);
-    var str = parse_XLWideString(data);
+    var str2 = parse_XLWideString(data);
     var rgsStrRun = [];
-    var z = { t: str, h: str };
+    var z = { t: str2, h: str2 };
     if ((flags & 1) !== 0) {
       var dwSizeStrRun = data.read_shift(4);
       for (var i = 0; i != dwSizeStrRun; ++i) rgsStrRun.push(parse_StrRun(data));
@@ -28390,25 +29504,25 @@ ${describeError(err2)}` : message;
     data.l = start + length;
     return z;
   }
-  function write_RichStr(str, o) {
+  function write_RichStr(str2, o) {
     var _null = false;
     if (o == null) {
       _null = true;
-      o = new_buf(15 + 4 * str.t.length);
+      o = new_buf(15 + 4 * str2.t.length);
     }
     o.write_shift(1, 0);
-    write_XLWideString(str.t, o);
+    write_XLWideString(str2.t, o);
     return _null ? o.slice(0, o.l) : o;
   }
   var parse_BrtCommentText = parse_RichStr;
-  function write_BrtCommentText(str, o) {
+  function write_BrtCommentText(str2, o) {
     var _null = false;
     if (o == null) {
       _null = true;
-      o = new_buf(23 + 4 * str.t.length);
+      o = new_buf(23 + 4 * str2.t.length);
     }
     o.write_shift(1, 1);
-    write_XLWideString(str.t, o);
+    write_XLWideString(str2.t, o);
     o.write_shift(4, 1);
     write_StrRun({ ich: 0, ifnt: 0 }, o);
     return _null ? o.slice(0, o.l) : o;
@@ -29646,13 +30760,13 @@ ${describeError(err2)}` : message;
     return o;
   }
   function write_XLUnicodeRichExtendedString(xlstr) {
-    var str = xlstr.t || "", nfmts = 1;
+    var str2 = xlstr.t || "", nfmts = 1;
     var hdr = new_buf(3 + (nfmts > 1 ? 2 : 0));
-    hdr.write_shift(2, str.length);
+    hdr.write_shift(2, str2.length);
     hdr.write_shift(1, (nfmts > 1 ? 8 : 0) | 1);
     if (nfmts > 1) hdr.write_shift(2, nfmts);
-    var otext = new_buf(2 * str.length);
-    otext.write_shift(2 * str.length, str, "utf16le");
+    var otext = new_buf(2 * str2.length);
+    otext.write_shift(2 * str2.length, str2, "utf16le");
     var out = [hdr, otext];
     return bconcat(out);
   }
@@ -29687,17 +30801,17 @@ ${describeError(err2)}` : message;
     }
     return blob.read_shift(cch, opts.biff <= 4 || !blob.lens ? "cpstr" : "sbcs-cont");
   }
-  function write_XLUnicodeString(str, opts, o) {
-    if (!o) o = new_buf(3 + 2 * str.length);
-    o.write_shift(2, str.length);
+  function write_XLUnicodeString(str2, opts, o) {
+    if (!o) o = new_buf(3 + 2 * str2.length);
+    o.write_shift(2, str2.length);
     o.write_shift(1, 1);
-    o.write_shift(31, str, "utf16le");
+    o.write_shift(31, str2, "utf16le");
     return o;
   }
-  function write_HyperlinkString(str, o) {
-    if (!o) o = new_buf(6 + str.length * 2);
-    o.write_shift(4, 1 + str.length);
-    for (var i = 0; i < str.length; ++i) o.write_shift(2, str.charCodeAt(i));
+  function write_HyperlinkString(str2, o) {
+    if (!o) o = new_buf(6 + str2.length * 2);
+    o.write_shift(4, 1 + str2.length);
+    for (var i = 0; i < str2.length; ++i) o.write_shift(2, str2.charCodeAt(i));
     o.write_shift(2, 0);
     return o;
   }
@@ -29841,8 +30955,8 @@ ${describeError(err2)}` : message;
     var strs = [];
     for (var j = 0; j < sst.length; ++j) strs[j] = write_XLUnicodeRichExtendedString(sst[j], opts);
     var o = bconcat([header].concat(strs));
-    o.parts = [header.length].concat(strs.map(function(str) {
-      return str.length;
+    o.parts = [header.length].concat(strs.map(function(str2) {
+      return str2.length;
     }));
     return o;
   }
@@ -30759,8 +31873,8 @@ ${describeError(err2)}` : message;
       }
       throw new Error("Unrecognized type " + opts.type);
     }
-    function sylk_to_aoa_str(str, opts) {
-      var records = str.split(/[\n\r]+/), R = -1, C = -1, ri = 0, rj = 0, arr = [];
+    function sylk_to_aoa_str(str2, opts) {
+      var records = str2.split(/[\n\r]+/), R = -1, C = -1, ri = 0, rj = 0, arr = [];
       var formats = [];
       var next_cell_format = null;
       var sht = {}, rowinfo = [], colinfo = [], cw = [];
@@ -31016,8 +32130,8 @@ ${describeError(err2)}` : message;
       }
       throw new Error("Unrecognized type " + opts.type);
     }
-    function dif_to_aoa_str(str, opts) {
-      var records = str.split("\n"), R = -1, C = -1, ri = 0, arr = [];
+    function dif_to_aoa_str(str2, opts) {
+      var records = str2.split("\n"), R = -1, C = -1, ri = 0, arr = [];
       for (; ri !== records.length; ++ri) {
         if (records[ri].trim() === "BOT") {
           arr[++R] = [];
@@ -31059,11 +32173,11 @@ ${describeError(err2)}` : message;
       if (opts && opts.sheetRows) arr = arr.slice(0, opts.sheetRows);
       return arr;
     }
-    function dif_to_sheet(str, opts) {
-      return aoa_to_sheet(dif_to_aoa(str, opts), opts);
+    function dif_to_sheet(str2, opts) {
+      return aoa_to_sheet(dif_to_aoa(str2, opts), opts);
     }
-    function dif_to_workbook(str, opts) {
-      return sheet_to_workbook(dif_to_sheet(str, opts), opts);
+    function dif_to_workbook(str2, opts) {
+      return sheet_to_workbook(dif_to_sheet(str2, opts), opts);
     }
     var sheet_to_dif = /* @__PURE__ */ (function() {
       var push_field = function pf(o, topic, v, n, s) {
@@ -31136,8 +32250,8 @@ ${describeError(err2)}` : message;
     function encode(s) {
       return s.replace(/\\/g, "\\b").replace(/:/g, "\\c").replace(/\n/g, "\\n");
     }
-    function eth_to_aoa(str, opts) {
-      var records = str.split("\n"), R = -1, C = -1, ri = 0, arr = [];
+    function eth_to_aoa(str2, opts) {
+      var records = str2.split("\n"), R = -1, C = -1, ri = 0, arr = [];
       for (; ri !== records.length; ++ri) {
         var record = records[ri].trim().split(":");
         if (record[0] !== "cell") continue;
@@ -31306,10 +32420,10 @@ ${describeError(err2)}` : message;
       /*::[*/
       124: 0
     };
-    function guess_sep(str) {
+    function guess_sep(str2) {
       var cnt = {}, instr = false, end = 0, cc = 0;
-      for (; end < str.length; ++end) {
-        if ((cc = str.charCodeAt(end)) == 34) instr = !instr;
+      for (; end < str2.length; ++end) {
+        if ((cc = str2.charCodeAt(end)) == 34) instr = !instr;
         else if (!instr && cc in guess_seps) cnt[cc] = (cnt[cc] || 0) + 1;
       }
       cc = [];
@@ -31327,28 +32441,28 @@ ${describeError(err2)}` : message;
       });
       return guess_seps[cc.pop()[1]] || 44;
     }
-    function dsv_to_sheet_str(str, opts) {
+    function dsv_to_sheet_str(str2, opts) {
       var o = opts || {};
       var sep = "";
       if (DENSE != null && o.dense == null) o.dense = DENSE;
       var ws = o.dense ? [] : {};
       var range = { s: { c: 0, r: 0 }, e: { c: 0, r: 0 } };
-      if (str.slice(0, 4) == "sep=") {
-        if (str.charCodeAt(5) == 13 && str.charCodeAt(6) == 10) {
-          sep = str.charAt(4);
-          str = str.slice(7);
-        } else if (str.charCodeAt(5) == 13 || str.charCodeAt(5) == 10) {
-          sep = str.charAt(4);
-          str = str.slice(6);
-        } else sep = guess_sep(str.slice(0, 1024));
+      if (str2.slice(0, 4) == "sep=") {
+        if (str2.charCodeAt(5) == 13 && str2.charCodeAt(6) == 10) {
+          sep = str2.charAt(4);
+          str2 = str2.slice(7);
+        } else if (str2.charCodeAt(5) == 13 || str2.charCodeAt(5) == 10) {
+          sep = str2.charAt(4);
+          str2 = str2.slice(6);
+        } else sep = guess_sep(str2.slice(0, 1024));
       } else if (o && o.FS) sep = o.FS;
-      else sep = guess_sep(str.slice(0, 1024));
+      else sep = guess_sep(str2.slice(0, 1024));
       var R = 0, C = 0, v = 0;
-      var start = 0, end = 0, sepcc = sep.charCodeAt(0), instr = false, cc = 0, startcc = str.charCodeAt(0);
-      str = str.replace(/\r\n/mg, "\n");
+      var start = 0, end = 0, sepcc = sep.charCodeAt(0), instr = false, cc = 0, startcc = str2.charCodeAt(0);
+      str2 = str2.replace(/\r\n/mg, "\n");
       var _re = o.dateNF != null ? dateNF_regex(o.dateNF) : null;
       function finish_cell() {
-        var s = str.slice(start, end);
+        var s = str2.slice(start, end);
         var cell = {};
         if (s.charAt(0) == '"' && s.charAt(s.length - 1) == '"') s = s.slice(1, -1).replace(/""/g, '"');
         if (s.length === 0) cell.t = "z";
@@ -31405,7 +32519,7 @@ ${describeError(err2)}` : message;
           ws[R][C] = cell;
         } else ws[encode_cell({ c: C, r: R })] = cell;
         start = end + 1;
-        startcc = str.charCodeAt(start);
+        startcc = str2.charCodeAt(start);
         if (range.e.c < C) range.e.c = C;
         if (range.e.r < R) range.e.r = R;
         if (cc == sepcc) ++C;
@@ -31415,7 +32529,7 @@ ${describeError(err2)}` : message;
           if (o.sheetRows && o.sheetRows <= R) return true;
         }
       }
-      outer: for (; end < str.length; ++end) switch (cc = str.charCodeAt(end)) {
+      outer: for (; end < str2.length; ++end) switch (cc = str2.charCodeAt(end)) {
         case 34:
           if (startcc === 34) instr = !instr;
           break;
@@ -31431,41 +32545,41 @@ ${describeError(err2)}` : message;
       ws["!ref"] = encode_range(range);
       return ws;
     }
-    function prn_to_sheet_str(str, opts) {
-      if (!(opts && opts.PRN)) return dsv_to_sheet_str(str, opts);
-      if (opts.FS) return dsv_to_sheet_str(str, opts);
-      if (str.slice(0, 4) == "sep=") return dsv_to_sheet_str(str, opts);
-      if (str.indexOf("	") >= 0 || str.indexOf(",") >= 0 || str.indexOf(";") >= 0) return dsv_to_sheet_str(str, opts);
-      return aoa_to_sheet(prn_to_aoa_str(str, opts), opts);
+    function prn_to_sheet_str(str2, opts) {
+      if (!(opts && opts.PRN)) return dsv_to_sheet_str(str2, opts);
+      if (opts.FS) return dsv_to_sheet_str(str2, opts);
+      if (str2.slice(0, 4) == "sep=") return dsv_to_sheet_str(str2, opts);
+      if (str2.indexOf("	") >= 0 || str2.indexOf(",") >= 0 || str2.indexOf(";") >= 0) return dsv_to_sheet_str(str2, opts);
+      return aoa_to_sheet(prn_to_aoa_str(str2, opts), opts);
     }
     function prn_to_sheet(d, opts) {
-      var str = "", bytes = opts.type == "string" ? [0, 0, 0, 0] : firstbyte(d, opts);
+      var str2 = "", bytes = opts.type == "string" ? [0, 0, 0, 0] : firstbyte(d, opts);
       switch (opts.type) {
         case "base64":
-          str = Base64_decode(d);
+          str2 = Base64_decode(d);
           break;
         case "binary":
-          str = d;
+          str2 = d;
           break;
         case "buffer":
-          if (opts.codepage == 65001) str = d.toString("utf8");
-          else if (opts.codepage && typeof $cptable !== "undefined") str = $cptable.utils.decode(opts.codepage, d);
-          else str = has_buf && Buffer.isBuffer(d) ? d.toString("binary") : a2s(d);
+          if (opts.codepage == 65001) str2 = d.toString("utf8");
+          else if (opts.codepage && typeof $cptable !== "undefined") str2 = $cptable.utils.decode(opts.codepage, d);
+          else str2 = has_buf && Buffer.isBuffer(d) ? d.toString("binary") : a2s(d);
           break;
         case "array":
-          str = cc2str(d);
+          str2 = cc2str(d);
           break;
         case "string":
-          str = d;
+          str2 = d;
           break;
         default:
           throw new Error("Unrecognized type " + opts.type);
       }
-      if (bytes[0] == 239 && bytes[1] == 187 && bytes[2] == 191) str = utf8read(str.slice(3));
-      else if (opts.type != "string" && opts.type != "buffer" && opts.codepage == 65001) str = utf8read(str);
-      else if (opts.type == "binary" && typeof $cptable !== "undefined" && opts.codepage) str = $cptable.utils.decode(opts.codepage, $cptable.utils.encode(28591, str));
-      if (str.slice(0, 19) == "socialcalc:version:") return ETH.to_sheet(opts.type == "string" ? str : utf8read(str), opts);
-      return prn_to_sheet_str(str, opts);
+      if (bytes[0] == 239 && bytes[1] == 187 && bytes[2] == 191) str2 = utf8read(str2.slice(3));
+      else if (opts.type != "string" && opts.type != "buffer" && opts.codepage == 65001) str2 = utf8read(str2);
+      else if (opts.type == "binary" && typeof $cptable !== "undefined" && opts.codepage) str2 = $cptable.utils.decode(opts.codepage, $cptable.utils.encode(28591, str2));
+      if (str2.slice(0, 19) == "socialcalc:version:") return ETH.to_sheet(opts.type == "string" ? str2 : utf8read(str2), opts);
+      return prn_to_sheet_str(str2, opts);
     }
     function prn_to_workbook(d, opts) {
       return sheet_to_workbook(prn_to_sheet(d, opts), opts);
@@ -31693,8 +32807,8 @@ ${describeError(err2)}` : message;
             if ((cell.v | 0) == cell.v && cell.v >= -32768 && cell.v <= 32767) write_biff_rec(ba, 13, write_INTEGER(R, C, cell.v));
             else write_biff_rec(ba, 14, write_NUMBER(R, C, cell.v));
           } else {
-            var str = format_cell(cell);
-            write_biff_rec(ba, 15, write_LABEL(R, C, str.slice(0, 239)));
+            var str2 = format_cell(cell);
+            write_biff_rec(ba, 15, write_LABEL(R, C, str2.slice(0, 239)));
           }
         }
       }
@@ -31726,8 +32840,8 @@ ${describeError(err2)}` : message;
             if (cell.t == "n") {
               write_biff_rec(ba, 23, write_NUMBER_17(R, C, wsidx, cell.v));
             } else {
-              var str = format_cell(cell);
-              write_biff_rec(ba, 22, write_LABEL_16(R, C, wsidx, str.slice(0, 239)));
+              var str2 = format_cell(cell);
+              write_biff_rec(ba, 22, write_LABEL_16(R, C, wsidx, str2.slice(0, 239)));
             }
           }
         }
@@ -32634,9 +33748,9 @@ ${describeError(err2)}` : message;
     );
     return ba.end();
   }
-  function _JS2ANSI(str) {
-    if (typeof $cptable !== "undefined") return $cptable.utils.encode(current_ansi, str);
-    var o = [], oo = str.split("");
+  function _JS2ANSI(str2) {
+    if (typeof $cptable !== "undefined") return $cptable.utils.encode(current_ansi, str2);
+    var o = [], oo = str2.split("");
     for (var i = 0; i < oo.length; ++i) o[i] = oo[i].charCodeAt(0);
     return o;
   }
@@ -32671,10 +33785,10 @@ ${describeError(err2)}` : message;
       }
       throw new Error("Unrecognized type " + opts.type);
     }
-    function rtf_to_sheet_str(str, opts) {
+    function rtf_to_sheet_str(str2, opts) {
       var o = opts || {};
       var ws = o.dense ? [] : {};
-      var rows = str.match(/\\trowd.*?\\row\b/g);
+      var rows = str2.match(/\\trowd.*?\\row\b/g);
       if (!rows.length) throw new Error("RTF missing table");
       var range = { s: { c: 0, r: 0 }, e: { c: 0, r: rows.length - 1 } };
       rows.forEach(function(rowtf, R) {
@@ -36019,34 +37133,34 @@ ${describeError(err2)}` : message;
     return r.replace(/\./, "!");
   }
   var browser_has_Map = typeof Map !== "undefined";
-  function get_sst_id(sst, str, rev2) {
+  function get_sst_id(sst, str2, rev2) {
     var i = 0, len = sst.length;
     if (rev2) {
-      if (browser_has_Map ? rev2.has(str) : Object.prototype.hasOwnProperty.call(rev2, str)) {
-        var revarr = browser_has_Map ? rev2.get(str) : rev2[str];
+      if (browser_has_Map ? rev2.has(str2) : Object.prototype.hasOwnProperty.call(rev2, str2)) {
+        var revarr = browser_has_Map ? rev2.get(str2) : rev2[str2];
         for (; i < revarr.length; ++i) {
-          if (sst[revarr[i]].t === str) {
+          if (sst[revarr[i]].t === str2) {
             sst.Count++;
             return revarr[i];
           }
         }
       }
     } else for (; i < len; ++i) {
-      if (sst[i].t === str) {
+      if (sst[i].t === str2) {
         sst.Count++;
         return i;
       }
     }
-    sst[len] = { t: str };
+    sst[len] = { t: str2 };
     sst.Count++;
     sst.Unique++;
     if (rev2) {
       if (browser_has_Map) {
-        if (!rev2.has(str)) rev2.set(str, []);
-        rev2.get(str).push(len);
+        if (!rev2.has(str2)) rev2.set(str2, []);
+        rev2.get(str2).push(len);
       } else {
-        if (!Object.prototype.hasOwnProperty.call(rev2, str)) rev2[str] = [];
-        rev2[str].push(len);
+        if (!Object.prototype.hasOwnProperty.call(rev2, str2)) rev2[str2] = [];
+        rev2[str2].push(len);
       }
     }
     return len;
@@ -36473,8 +37587,8 @@ ${describeError(err2)}` : message;
     z.name = parse_XLSBCodeName(data, length - 19);
     return z;
   }
-  function write_BrtWsProp(str, outl, o) {
-    if (o == null) o = new_buf(84 + 4 * str.length);
+  function write_BrtWsProp(str2, outl, o) {
+    if (o == null) o = new_buf(84 + 4 * str2.length);
     var f = 192;
     if (outl) {
       if (outl.above) f &= ~64;
@@ -36485,7 +37599,7 @@ ${describeError(err2)}` : message;
     write_BrtColor({ auto: 1 }, o);
     o.write_shift(-4, -1);
     o.write_shift(-4, -1);
-    write_XLSBCodeName(str, o);
+    write_XLSBCodeName(str2, o);
     return o.slice(0, o.l);
   }
   function parse_BrtCellBlank(data) {
@@ -42621,8 +43735,8 @@ ${describeError(err2)}` : message;
   function u8_to_dataview(array) {
     return new DataView(array.buffer, array.byteOffset, array.byteLength);
   }
-  function stru8(str) {
-    return typeof TextEncoder != "undefined" ? new TextEncoder().encode(str) : s2a(utf8write(str));
+  function stru8(str2) {
+    return typeof TextEncoder != "undefined" ? new TextEncoder().encode(str2) : s2a(utf8write(str2));
   }
   function u8contains(body, search) {
     outer:
@@ -42744,12 +43858,12 @@ ${describeError(err2)}` : message;
     var out = [], ptr = [0];
     while (ptr[0] < buf.length) {
       var off = ptr[0];
-      var num = parse_varint49(buf, ptr);
-      var type = num & 7;
-      num = Math.floor(num / 8);
+      var num2 = parse_varint49(buf, ptr);
+      var type = num2 & 7;
+      num2 = Math.floor(num2 / 8);
       var len = 0;
       var res;
-      if (num == 0)
+      if (num2 == 0)
         break;
       switch (type) {
         case 0:
@@ -42778,13 +43892,13 @@ ${describeError(err2)}` : message;
         case 3:
         case 4:
         default:
-          throw new Error("PB Type ".concat(type, " for Field ").concat(num, " at offset ").concat(off));
+          throw new Error("PB Type ".concat(type, " for Field ").concat(num2, " at offset ").concat(off));
       }
       var v = { data: res, type };
-      if (out[num] == null)
-        out[num] = [v];
+      if (out[num2] == null)
+        out[num2] = [v];
       else
-        out[num].push(v);
+        out[num2].push(v);
     }
     return out;
   }
@@ -43281,10 +44395,10 @@ ${describeError(err2)}` : message;
           {
             sstdata[3] = [];
             var newsst = [];
-            SST.forEach(function(str, i) {
+            SST.forEach(function(str2, i) {
               newsst[1] = [{ type: 0, data: write_varint49(i) }];
               newsst[2] = [{ type: 0, data: write_varint49(1) }];
-              newsst[3] = [{ type: 2, data: stru8(str) }];
+              newsst[3] = [{ type: 2, data: stru8(str2) }];
               sstdata[3].push({ type: 2, data: write_shallow(newsst) });
             });
           }
@@ -44359,7 +45473,7 @@ ${describeError(err2)}` : message;
     }
     return void 0;
   }
-  function getByPath3(obj, path) {
+  function getByPath5(obj, path) {
     const parts = path.split(".");
     let cur = obj;
     for (const p of parts) {
@@ -44368,9 +45482,9 @@ ${describeError(err2)}` : message;
     }
     return cur;
   }
-  function pickFirst5(obj, paths) {
+  function pickFirst7(obj, paths) {
     for (const p of paths) {
-      const v = getByPath3(obj, p);
+      const v = getByPath5(obj, p);
       if (v !== void 0 && v !== null) return v;
     }
     return void 0;
@@ -44387,7 +45501,7 @@ ${describeError(err2)}` : message;
     if (!counterLike || typeof counterLike !== "object") return [];
     return Object.entries(counterLike).map(([key, value]) => ({ category, key, count: Number(value) || 0 })).sort((a, b) => b.count - a.count);
   }
-  function normalizeIso24(v) {
+  function normalizeIso25(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : void 0;
@@ -44433,7 +45547,7 @@ ${describeError(err2)}` : message;
     return m.includes("duel");
   }
   function resolveGuessCountryForExport(existing) {
-    return normalizeIso24(existing) ?? "";
+    return normalizeIso25(existing) ?? "";
   }
   async function downloadWorkbook(wb, filename) {
     const arrayBuffer = writeSync(wb, { type: "array", bookType: "xlsx" });
@@ -44487,10 +45601,10 @@ ${describeError(err2)}` : message;
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst5(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            mapName: pickFirst5(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
-            points: pickFirst5(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst5(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst7(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            mapName: pickFirst7(raw, ["payload.mapName", "payload.map.name", "mapName", "map.name"]) || "",
+            points: pickFirst7(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst7(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -44499,9 +45613,9 @@ ${describeError(err2)}` : message;
             gameNumber: "",
             date,
             clock: time,
-            mapSlug: pickFirst5(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
-            points: pickFirst5(raw, ["payload.points", "payload.score", "points", "score"]) || "",
-            gameToken: pickFirst5(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
+            mapSlug: pickFirst7(raw, ["payload.mapSlug", "payload.map.slug", "mapSlug", "map.slug"]) || "",
+            points: pickFirst7(raw, ["payload.points", "payload.score", "points", "score"]) || "",
+            gameToken: pickFirst7(raw, ["payload.gameToken", "payload.token", "payload.gameId", "gameToken", "token", "id"]) || g.gameId,
             gameMode: mode || "",
             __playedAt: g.playedAt
           });
@@ -46445,15 +47559,15 @@ ${describeError(err2)}` : message;
   }
   function rateStringFieldEq(rows, trueKey, guessKey) {
     let denom = 0;
-    let num = 0;
+    let num2 = 0;
     for (const r of rows) {
       const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
       if (!t) continue;
       denom++;
       const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
-      if (g && g === t) num++;
+      if (g && g === t) num2++;
     }
-    return denom ? num / denom : 0;
+    return denom ? num2 / denom : 0;
   }
   function countStringFieldEq(rows, trueKey, guessKey) {
     let n = 0;
@@ -48891,11 +50005,11 @@ ${describeError(err2)}` : message;
       return [];
     }
   }
-  function dayKeysBetween(fromTs, toTs2) {
+  function dayKeysBetween(fromTs, toTs3) {
     const out = [];
     const start = new Date(fromTs);
     start.setHours(0, 0, 0, 0);
-    const end = new Date(toTs2);
+    const end = new Date(toTs3);
     end.setHours(0, 0, 0, 0);
     for (let t = start.getTime(); t <= end.getTime(); t += 24 * 60 * 60 * 1e3) {
       out.push(toDayKey(t));
@@ -49552,14 +50666,14 @@ ${describeError(err2)}` : message;
         const dataMinTs = tsValues.length ? Math.min(...tsValues) : null;
         const dataMaxTs = tsValues.length ? Math.max(...tsValues) : null;
         let fromTs = context?.dateRange?.fromTs ?? null;
-        let toTs2 = context?.dateRange?.toTs ?? null;
+        let toTs3 = context?.dateRange?.toTs ?? null;
         if (fromTs === null) fromTs = dataMinTs;
-        if (toTs2 === null) toTs2 = dataMaxTs;
+        if (toTs3 === null) toTs3 = dataMaxTs;
         if (dataMinTs !== null && fromTs !== null) fromTs = Math.max(fromTs, dataMinTs);
-        if (dataMaxTs !== null && toTs2 !== null) toTs2 = Math.min(toTs2, dataMaxTs);
-        if (fromTs !== null && toTs2 !== null && fromTs > toTs2) fromTs = toTs2;
+        if (dataMaxTs !== null && toTs3 !== null) toTs3 = Math.min(toTs3, dataMaxTs);
+        if (fromTs !== null && toTs3 !== null && fromTs > toTs3) fromTs = toTs3;
         const grouped2 = groupByKey(rows, keyFn);
-        const keys3 = fromTs !== null && toTs2 !== null ? dayKeysBetween(fromTs, toTs2) : sortKeysChronological(Array.from(grouped2.keys()));
+        const keys3 = fromTs !== null && toTs3 !== null ? dayKeysBetween(fromTs, toTs3) : sortKeysChronological(Array.from(grouped2.keys()));
         const maxPoints = typeof spec.maxPoints === "number" && Number.isFinite(spec.maxPoints) ? Math.floor(spec.maxPoints) : typeof limitOverride === "number" && Number.isFinite(limitOverride) ? Math.floor(limitOverride) : 0;
         const buckets = maxPoints > 1 ? chunkKeys(keys3, maxPoints, "start") : keys3.map((k) => ({ label: k, keys: [k] }));
         if (activeAcc === "to_date") {
@@ -51016,7 +52130,7 @@ ${describeError(err2)}` : message;
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
     return res.json();
   }
-  function normalizeIso25(v) {
+  function normalizeIso26(v) {
     if (typeof v !== "string") return null;
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : null;
@@ -51086,7 +52200,7 @@ ${describeError(err2)}` : message;
     const selectableMap = /* @__PURE__ */ new Map();
     if (Array.isArray(args.selectableValues)) {
       for (const v of args.selectableValues) {
-        const norm = normalizeIso25(v);
+        const norm = normalizeIso26(v);
         if (!norm) continue;
         if (!selectableMap.has(norm)) selectableMap.set(norm, String(v));
       }
@@ -51159,7 +52273,7 @@ ${describeError(err2)}` : message;
       list.push(p);
       pathsByIso2.set(iso2, list);
     }
-    let selected = normalizeIso25(value);
+    let selected = normalizeIso26(value);
     const refreshActive = () => {
       for (const [iso2, list] of pathsByIso2.entries()) {
         const active = !!selected && iso2 === selected;
@@ -51215,7 +52329,7 @@ ${describeError(err2)}` : message;
       const { x, y } = rectPoint(ev.clientX, ev.clientY);
       const target = ev.target;
       const hit = target?.closest?.("path.ga-country-shape");
-      const hitIso2 = normalizeIso25(hit?.dataset?.iso2) ?? null;
+      const hitIso2 = normalizeIso26(hit?.dataset?.iso2) ?? null;
       const isSelectable = !hasSelectableFilter || (hitIso2 ? selectableMap.has(hitIso2) : false);
       dragStart = { x, y, tx: vp.tx, ty: vp.ty, hitIso2: isSelectable ? hitIso2 : null };
     });
@@ -52206,7 +53320,7 @@ ${describeError(err2)}` : message;
     const txt = value.toFixed(decimals);
     return unit.showSign && value > 0 ? `+${txt}` : txt;
   }
-  function getByPath4(obj, path) {
+  function getByPath6(obj, path) {
     const raw = typeof path === "string" ? path.trim() : "";
     if (!raw) return void 0;
     if (!raw.includes(".")) return obj?.[raw];
@@ -52435,7 +53549,7 @@ ${describeError(err2)}` : message;
       const precision = typeof spec.keyPrecision === "number" && Number.isFinite(spec.keyPrecision) ? Math.max(0, Math.min(10, Math.round(spec.keyPrecision))) : 6;
       const keyFor = (lat, lng) => `${lat.toFixed(precision)},${lng.toFixed(precision)}`;
       const rowsBase = rangeEnabled ? rowsAll.filter((r) => {
-        const vRaw = getByPath4(r, rangeField);
+        const vRaw = getByPath6(r, rangeField);
         const v = typeof vRaw === "number" && Number.isFinite(vRaw) ? vRaw : null;
         if (v === null) return false;
         return v >= rangeMin && v <= rangeMax;
@@ -52446,8 +53560,8 @@ ${describeError(err2)}` : message;
       const grouped = /* @__PURE__ */ new Map();
       for (const base of rowsBase) {
         for (const src of sourcesUsed) {
-          const latRaw = getByPath4(base, src.latField);
-          const lngRaw = getByPath4(base, src.lngField);
+          const latRaw = getByPath6(base, src.latField);
+          const lngRaw = getByPath6(base, src.lngField);
           const lat = typeof latRaw === "number" && Number.isFinite(latRaw) ? latRaw : null;
           const lng = typeof lngRaw === "number" && Number.isFinite(lngRaw) ? lngRaw : null;
           if (lat === null || lng === null) continue;
@@ -54643,10 +55757,10 @@ ${describeError(err2)}` : message;
     if (!value || typeof value !== "object") return fallback;
     const v = value;
     const fromTs = v.fromTs === null ? null : Number(v.fromTs);
-    const toTs2 = v.toTs === null ? null : Number(v.toTs);
+    const toTs3 = v.toTs === null ? null : Number(v.toTs);
     return {
       fromTs: Number.isFinite(fromTs) ? fromTs : null,
-      toTs: Number.isFinite(toTs2) ? toTs2 : null
+      toTs: Number.isFinite(toTs3) ? toTs3 : null
     };
   }
   function createGlobalFilterStore(spec) {
@@ -55325,8 +56439,8 @@ ${describeError(err2)}` : message;
           const hasDate = !controlIds || controlIds.includes("dateRange");
           const dateVal = state["dateRange"];
           const fromTs = hasDate && dateVal && typeof dateVal === "object" ? dateVal.fromTs ?? null : null;
-          const toTs2 = hasDate && dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
-          contextBySection[section.id] = { dateRange: { fromTs, toTs: toTs2 } };
+          const toTs3 = hasDate && dateVal && typeof dateVal === "object" ? dateVal.toTs ?? null : null;
+          contextBySection[section.id] = { dateRange: { fromTs, toTs: toTs3 } };
         };
         const desired = typeof targetWindow.__gaActiveSectionId === "string" ? targetWindow.__gaActiveSectionId : "";
         const initialActive = (desired && sections.some((s) => s.id === desired) ? desired : sections[0]?.id) ?? "";
