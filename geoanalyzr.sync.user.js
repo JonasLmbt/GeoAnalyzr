@@ -10810,7 +10810,7 @@ ${shapes}`.trim();
     style.textContent = `
     .ga-ui-icon {
       position: fixed;
-      right: 16px;
+      left: 16px;
       bottom: 16px;
       z-index: 999999;
       width: 44px;
@@ -10829,7 +10829,7 @@ ${shapes}`.trim();
 
     .ga-ui-panel {
       position: fixed;
-      right: 16px;
+      left: 16px;
       bottom: 68px;
       z-index: 999999;
       width: 360px;
