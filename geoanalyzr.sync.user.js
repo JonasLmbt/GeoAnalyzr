@@ -11552,12 +11552,13 @@ ${shapes}`.trim();
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
     const delayMs = opts.delayMs ?? 500;
+    const maxRetries = opts.maxRetries ?? 3;
     let games;
     if (opts.games) {
       games = opts.games;
     } else {
       const all = await dbV2.games.toArray();
-      const failed2 = opts.retryFailed ? (await dbV2.detailFetchLog.toArray()).filter((l) => l.lastStatus !== "ok").map((l) => l.gameId) : [];
+      const failed2 = opts.retryFailed ? (await dbV2.detailFetchLog.toArray()).filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries).map((l) => l.gameId) : [];
       const failedSet = new Set(failed2);
       games = all.filter((g) => g.detailFetchedAt === void 0 || failedSet.has(g.gameId));
     }

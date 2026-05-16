@@ -524,11 +524,14 @@ export async function fetchDetails(opts: {
   onProgress?: (p: DetailFetchProgress) => void;
   concurrency?: number;
   delayMs?: number;
-  /** Retry previously-failed games (lastStatus !== 'ok') */
+  /** Retry previously-failed games (lastStatus !== 'ok'), up to maxRetries attempts */
   retryFailed?: boolean;
+  /** Max attempts before a game is considered permanently unfetchable (default: 3) */
+  maxRetries?: number;
 }): Promise<DetailFetchResult> {
   const concurrency = Math.max(1, opts.concurrency ?? 2);
   const delayMs = opts.delayMs ?? 500;
+  const maxRetries = opts.maxRetries ?? 3;
 
   let games: GameRow[];
   if (opts.games) {
@@ -538,7 +541,7 @@ export async function fetchDetails(opts: {
     const all = await dbV2.games.toArray();
     const failed = opts.retryFailed
       ? (await dbV2.detailFetchLog.toArray())
-          .filter((l) => l.lastStatus !== "ok")
+          .filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries)
           .map((l) => l.gameId)
       : [];
     const failedSet = new Set(failed);
