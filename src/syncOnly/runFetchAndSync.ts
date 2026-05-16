@@ -1,6 +1,8 @@
-import { updateData } from "../sync";
-import { loadServerSyncSettings, postSyncLog, runServerSyncOnceWithOptions } from "../serverSync";
-import { loadFetchGameFilter } from "../fetchGameFilter";
+import { fetchFeed } from "../feedFetcher_v2";
+import { fetchDetails } from "../detailFetcher_v2";
+import { syncToServerV2 } from "../serverSync_v2";
+import { loadServerSyncSettings } from "../serverSync";
+import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
 import { linkDeviceViaDiscord } from "./linkDevice";
 
 function readLocalNumber(key: string): number {
@@ -23,31 +25,66 @@ function writeLocalNumber(key: string, value: number): void {
 
 const AUTO_KEY = "geoanalyzr_sync_only_last_auto_ms";
 
-const DAYS_365_MS = 365 * 24 * 60 * 60 * 1000;
-
 export async function runFetchAndSync(opts: {
   forceFull: boolean;
   setStatus: (msg: string) => void;
   ensureLinked: boolean;
 }): Promise<{ ok: boolean; message: string; hint?: string }> {
-  const baseFilter = loadFetchGameFilter();
-  const gameFilter = opts.forceFull
-    ? { ...baseFilter, fromMs: Date.now() - DAYS_365_MS }
-    : baseFilter;
 
-  opts.setStatus(opts.forceFull ? "Fetching full history (last 365 days)..." : "Fetching feed + details...");
-  const fetchRes = await updateData({
-    onStatus: (m) => opts.setStatus(m),
-    maxPages: 5000,
-    delayMs: 150,
-    detailConcurrency: 4,
-    verifyCompleteness: true,
-    retryErrors: true,
-    enrichLimit: 1500,
-    overrideLastSeen: opts.forceFull ? 0 : undefined,
-    gameFilter
-  });
+  // One-time migration from v1 IndexedDB to v2
+  try {
+    if (await isMigrationNeeded()) {
+      opts.setStatus("Migrating local data to v2 format...");
+      await migrateV1ToV2((p) => {
+        if (p.phase === "games") opts.setStatus(`Migrating games: ${p.processed}/${p.total}...`);
+        else if (p.phase === "rounds") opts.setStatus(`Migrating rounds: ${p.processed}/${p.total}...`);
+      });
+    }
+  } catch {
+    // Non-fatal: migration failure means we start fresh with v2
+  }
 
+  // Phase 1: Feed
+  opts.setStatus(opts.forceFull ? "Fetching full history (last 365 days)..." : "Fetching feed...");
+  let feedResult;
+  try {
+    feedResult = await fetchFeed({
+      full: opts.forceFull,
+      maxPages: 5000,
+      delayMs: 150,
+      overlapThreshold: 5,
+      onProgress: (p) => {
+        opts.setStatus(`Feed page ${p.page} — ${p.newGames} new games...`);
+      },
+    });
+  } catch (e: any) {
+    const msg = e instanceof Error ? e.message : String(e || "Feed fetch failed");
+    const http = msg.match(/HTTP\s*(\d{3})/i);
+    const status = http ? Number(http[1]) : NaN;
+    if (status === 401 || status === 403) {
+      return { ok: false, message: `Feed HTTP ${status} — please log in to GeoGuessr and retry.`, hint: "Reload geoguessr.com, log in, then try again." };
+    }
+    return { ok: false, message: msg };
+  }
+
+  // Phase 2: Details
+  opts.setStatus("Fetching game details...");
+  let detailResult;
+  try {
+    detailResult = await fetchDetails({
+      concurrency: 3,
+      delayMs: 400,
+      retryFailed: true,
+      onProgress: (p) => {
+        opts.setStatus(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}, fail: ${p.failed}...`);
+      },
+    });
+  } catch (e: any) {
+    // Non-fatal: continue to sync with what we have
+    detailResult = { succeeded: 0, failed: 0 };
+  }
+
+  // Phase 3: Server sync
   let settings = loadServerSyncSettings();
   if (!settings.token) {
     if (!opts.ensureLinked) {
@@ -57,53 +94,48 @@ export async function runFetchAndSync(opts: {
     await linkDeviceViaDiscord();
     settings = loadServerSyncSettings();
   }
-  if (!settings.token) return { ok: false, message: "Missing sync token. Link failed.", hint: "Try linking again. If it keeps failing, disable popup blockers and retry." };
+  if (!settings.token) {
+    return { ok: false, message: "Missing sync token. Link failed.", hint: "Try linking again. If it keeps failing, disable popup blockers and retry." };
+  }
 
-  opts.setStatus(opts.forceFull ? "Syncing full snapshot..." : "Syncing...");
-  const res = await runServerSyncOnceWithOptions(settings, { forceFull: opts.forceFull });
+  opts.setStatus(opts.forceFull ? "Syncing full snapshot to server..." : "Syncing to server...");
+  let syncResult;
   try {
-    await postSyncLog(settings, {
-      at: Date.now(),
-      fullRefetch: opts.forceFull,
-      ok: res.ok,
-      status: res.status ?? null,
-      rows: res.counts ? res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg : null,
-      bytesGzip: res.bytesGzip ?? null,
-      chunks: res.chunks ?? null,
-      forceFull: opts.forceFull,
-      feedPages: fetchRes.feedUpserted != null ? fetchRes.feedPages : null,
-      feedUpserted: fetchRes.feedUpserted ?? null,
-      detailsOk: fetchRes.detailsOk ?? null,
-      detailsFail: fetchRes.detailsFail ?? null,
-      oldestFetchedAt: fetchRes.oldestFetchedAt ?? null,
-      newestFetchedAt: fetchRes.newestFetchedAt ?? null,
-      cursorFrom: res.cursorFrom ?? null,
-      cursorTo: res.cursorTo ?? null,
+    syncResult = await syncToServerV2({
+      full: opts.forceFull,
+      detailsOnly: false,
+      onProgress: (p) => {
+        if (p.phase === "upload") {
+          opts.setStatus(`Syncing batch ${p.batch}/${p.totalBatches} — ${p.gamesUploaded} games...`);
+        }
+      },
     });
-  } catch { /* fire-and-forget */ }
-  const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-  const modeLabel = opts.forceFull ? "Synced full" : "Synced";
-  const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-  return res.ok
-    ? { ok: true, message: `${modeLabel} - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB${chunkText}` }
-    : (() => {
-        const base = `Sync failed (HTTP ${res.status})`;
-        if (res.status === 401 || res.status === 403) {
-          return { ok: false, message: base, hint: "Token invalid/expired. Click to re-link your device, then retry." };
-        }
-        if (res.status === 413) {
-          return {
-            ok: false,
-            message: base,
-            hint:
-              "Payload too large. Avoid Shift (full snapshot), enable Compact mode, disable aggregates, and narrow Sync filters to reduce upload size."
-          };
-        }
-        if (res.status >= 500) {
-          return { ok: false, message: base, hint: "Server error. Retry in a few minutes." };
-        }
-        return { ok: false, message: base };
-      })();
+  } catch (e: any) {
+    const msg = e instanceof Error ? e.message : String(e || "Sync failed");
+    return { ok: false, message: msg };
+  }
+
+  if (!syncResult.ok) {
+    const errMap: Record<string, { msg: string; hint: string }> = {
+      no_token: { msg: "Missing sync token. Click to link device.", hint: "Click the button to link your device (Discord), then try again." },
+      no_player_id: { msg: "Could not determine player ID. Make sure you are logged in to GeoGuessr.", hint: "Reload geoguessr.com, log in, then retry." },
+    };
+    if (syncResult.error && errMap[syncResult.error]) {
+      return { ok: false, ...errMap[syncResult.error] };
+    }
+    const http = String(syncResult.error || "").match(/(\d{3})/);
+    const status = http ? Number(http[1]) : NaN;
+    if (status === 401 || status === 403) return { ok: false, message: `Sync failed (HTTP ${status})`, hint: "Token invalid/expired. Click to re-link your device, then retry." };
+    if (status === 413) return { ok: false, message: `Sync failed (HTTP 413)`, hint: "Payload too large. Try without Shift key (incremental sync)." };
+    if (status >= 500) return { ok: false, message: `Sync failed (HTTP ${status})`, hint: "Server error. Retry in a few minutes." };
+    return { ok: false, message: `Sync failed: ${syncResult.error ?? "unknown"}` };
+  }
+
+  const label = opts.forceFull ? "Full sync" : "Synced";
+  return {
+    ok: true,
+    message: `${label} — feed: ${feedResult.newGames}, details ok: ${detailResult.succeeded}, server new: ${syncResult.gamesNew}`,
+  };
 }
 
 export function shouldAutoRun(nowMs: number, minIntervalMs: number): boolean {
