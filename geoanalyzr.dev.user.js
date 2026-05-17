@@ -10989,6 +10989,7 @@ ${shapes}`.trim();
     const localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
     const localGameCount = localGames.length;
     const serverCount = serverBefore?.gameCount ?? 0;
+    opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, serverCount, localCount: localGameCount });
     if (!opts.full && serverCount >= localGameCount && serverCount > 0) {
       return {
         ok: true,
@@ -12625,11 +12626,23 @@ ${shapes}`.trim();
           const v2res = await syncToServerV2({
             full: forceFull,
             onProgress: (p) => {
-              if (p.phase === "upload") setMsg(`Syncing batch ${p.batch}/${p.totalBatches}...`);
+              if (p.phase === "reconcile" && p.serverCount !== void 0) {
+                setMsg(`Server: ${p.serverCount} games \u2014 local: ${p.localCount} games`);
+              } else if (p.phase === "reconcile") {
+                setMsg("Checking server state...");
+              } else if (p.phase === "upload") {
+                setMsg(`Uploading batch ${p.batch}/${p.totalBatches} \u2014 ${p.gamesUploaded} games sent...`);
+              } else if (p.phase === "verify") {
+                setMsg("Verifying...");
+              }
             }
           });
           if (v2res.ok) {
-            setMsg(`${modeLabel} \u2014 new: ${v2res.gamesNew}, uploaded: ${v2res.gamesUploaded}`);
+            if (v2res.gamesUploaded === 0) {
+              setMsg(`Server already up to date \u2014 ${v2res.gamesSkipped} games skipped`);
+            } else {
+              setMsg(`${modeLabel} \u2014 ${v2res.gamesNew} new games, ${v2res.roundsNew} new rounds (${v2res.batches} batch${v2res.batches !== 1 ? "es" : ""})`);
+            }
           } else {
             const errMap = {
               no_token: "Not linked. Click Fetch + Sync to link your device.",

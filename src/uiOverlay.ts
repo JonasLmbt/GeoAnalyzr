@@ -648,11 +648,23 @@ export function createUIOverlay(): UIOverlay {
         const v2res = await syncToServerV2({
           full: forceFull,
           onProgress: (p) => {
-            if (p.phase === "upload") setMsg(`Syncing batch ${p.batch}/${p.totalBatches}...`);
+            if (p.phase === "reconcile" && p.serverCount !== undefined) {
+              setMsg(`Server: ${p.serverCount} games — local: ${p.localCount} games`);
+            } else if (p.phase === "reconcile") {
+              setMsg("Checking server state...");
+            } else if (p.phase === "upload") {
+              setMsg(`Uploading batch ${p.batch}/${p.totalBatches} — ${p.gamesUploaded} games sent...`);
+            } else if (p.phase === "verify") {
+              setMsg("Verifying...");
+            }
           },
         });
         if (v2res.ok) {
-          setMsg(`${modeLabel} — new: ${v2res.gamesNew}, uploaded: ${v2res.gamesUploaded}`);
+          if (v2res.gamesUploaded === 0) {
+            setMsg(`Server already up to date — ${v2res.gamesSkipped} games skipped`);
+          } else {
+            setMsg(`${modeLabel} — ${v2res.gamesNew} new games, ${v2res.roundsNew} new rounds (${v2res.batches} batch${v2res.batches !== 1 ? "es" : ""})`);
+          }
         } else {
           const errMap: Record<string, string> = {
             no_token: "Not linked. Click Fetch + Sync to link your device.",

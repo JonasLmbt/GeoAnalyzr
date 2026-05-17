@@ -10,6 +10,9 @@ export interface SyncV2Progress {
   gamesNew: number;
   gamesSkipped: number;
   roundsNew: number;
+  /** Set on the second reconcile event after server state is fetched */
+  serverCount?: number;
+  localCount?: number;
 }
 
 export interface SyncV2Result {
@@ -212,8 +215,10 @@ export async function syncToServerV2(opts: {
     .toArray();
   const localGameCount = localGames.length;
 
-  // Skip upload if server already has at least as many games as local
   const serverCount = serverBefore?.gameCount ?? 0;
+  opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, serverCount, localCount: localGameCount });
+
+  // Skip upload if server already has at least as many games as local
   if (!opts.full && serverCount >= localGameCount && serverCount > 0) {
     return {
       ok: true,
