@@ -12661,8 +12661,10 @@ ${shapes}`.trim();
                 setMsg("Checking server state...");
               } else if (p.phase === "upload") {
                 setMsg(`Uploading batch ${p.batch}/${p.totalBatches} \u2014 ${p.gamesUploaded} games sent...`);
+                opts.setProgress?.(67 + Math.round(p.batch / Math.max(1, p.totalBatches) * 26));
               } else if (p.phase === "verify") {
                 setMsg("Verifying...");
+                opts.setProgress?.(94);
               }
             }
           });
@@ -12718,8 +12720,13 @@ ${shapes}`.trim();
       headX.textContent = "x";
       head.appendChild(headTitle);
       head.appendChild(headX);
+      const progressTrack = el("div");
+      progressTrack.style.cssText = "height:4px;background:rgba(255,255,255,0.08);margin:0 14px;border-radius:2px;overflow:hidden;";
+      const progressFill = el("div");
+      progressFill.style.cssText = "height:100%;width:0%;background:#00a2fe;border-radius:2px;transition:width 0.35s ease;";
+      progressTrack.appendChild(progressFill);
       const logArea = el("div");
-      logArea.style.cssText = "font-family:monospace;font-size:11px;line-height:1.5;padding:10px 12px;max-height:320px;overflow-y:auto;background:rgba(0,0,0,0.35);border-radius:4px;margin:10px 14px;white-space:pre-wrap;word-break:break-all;";
+      logArea.style.cssText = "font-family:monospace;font-size:11px;line-height:1.5;padding:10px 12px;max-height:320px;overflow-y:auto;background:rgba(0,0,0,0.35);border-radius:4px;margin:8px 14px 10px;white-space:pre-wrap;word-break:break-all;";
       const actions2 = el("div");
       actions2.className = "ga-ui-modal-actions";
       const closeBtn2 = el("button");
@@ -12736,6 +12743,7 @@ ${shapes}`.trim();
       actions2.appendChild(closeBtn2);
       actions2.appendChild(dlBtn);
       card.appendChild(head);
+      card.appendChild(progressTrack);
       card.appendChild(logArea);
       card.appendChild(actions2);
       const modal = el("div");
@@ -12762,7 +12770,13 @@ ${shapes}`.trim();
         logArea.appendChild(span);
         logArea.scrollTop = logArea.scrollHeight;
       };
+      const setProgress = (pct) => {
+        progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        if (pct >= 100) progressFill.style.background = "#22c55e";
+      };
       const finish = (ok) => {
+        setProgress(ok ? 100 : 100);
+        progressFill.style.background = ok ? "#22c55e" : "#ef4444";
         const marker = ok ? "\u2713 Done" : "\u2717 Failed";
         appendLine(marker);
         dlBtn.style.display = "";
@@ -12776,7 +12790,7 @@ ${shapes}`.trim();
           URL.revokeObjectURL(url);
         }, { once: true });
       };
-      return { log: appendLine, finish };
+      return { log: appendLine, finish, setProgress };
     };
     const runFetchAndSyncImpl = async (opts) => {
       if (!isSyncVariant) return;
@@ -12806,6 +12820,7 @@ ${shapes}`.trim();
           }
         } catch {
         }
+        logModal?.setProgress(2);
         setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
         let feedNewGameIds = [];
         try {
@@ -12816,6 +12831,7 @@ ${shapes}`.trim();
             delayMs: 150,
             overlapThreshold: 5,
             onProgress: (p) => {
+              logModal?.setProgress(2 + Math.min(26, p.page * 4));
               if (logModal) {
                 const pageNew = p.newGames - prevNewGames;
                 prevNewGames = p.newGames;
@@ -12826,12 +12842,14 @@ ${shapes}`.trim();
             }
           });
           feedNewGameIds = feedResult.newGameIds;
+          logModal?.setProgress(30);
           if (logModal) setMsg(`Feed done \u2014 ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
         } catch (e) {
           setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
           logModal?.finish(false);
           return;
         }
+        logModal?.setProgress(32);
         setMsg("Fetching game details...");
         let detailUpdatedGameIds = [];
         try {
@@ -12850,12 +12868,14 @@ ${shapes}`.trim();
             concurrency: logModal ? 1 : 3,
             delayMs: 400,
             force: opts.forceFull,
-            onProgress: logModal ? void 0 : (p) => {
-              setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
+            onProgress: (p) => {
+              if (logModal) logModal.setProgress(32 + Math.round(p.processed / Math.max(1, p.total) * 33));
+              else setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
             },
             onGameEvent
           });
           detailUpdatedGameIds = detailResult.updatedGameIds;
+          logModal?.setProgress(65);
           if (logModal) setMsg(`Details done \u2014 ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
         } catch {
         }
@@ -12865,8 +12885,9 @@ ${shapes}`.trim();
           logModal?.finish(true);
           return;
         }
+        logModal?.setProgress(67);
         if (logModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
-        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds });
+        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds, setProgress: logModal ? (p) => logModal.setProgress(p) : void 0 });
         logModal?.finish(true);
       } catch (e) {
         setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
