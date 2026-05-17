@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GeoAnalyzr (Minimal)
+// @name         GeoAnalyzr Sync
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.6.4
+// @version      2.6.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg

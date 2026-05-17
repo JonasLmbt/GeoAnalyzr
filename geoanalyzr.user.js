@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GeoAnalyzr
+// @name         GeoAnalyzr Full
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.6.4
+// @version      2.6.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg

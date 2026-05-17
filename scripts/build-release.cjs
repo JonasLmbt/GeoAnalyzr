@@ -5,8 +5,8 @@ const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 const isSyncOnly = /(^|[\\/])geoanalyzr\.sync\.user\.js$/i.test(outFile);
 const isLocal = !isDev && !isSyncOnly;
 
-const stableVersion = "2.6.4";
-const devVersion = "2.6.5-dev";
+const stableVersion = "2.6.5";
+const devVersion = "2.6.6-dev";
 const version = isDev ? devVersion : stableVersion;
 
 // GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,
@@ -25,7 +25,7 @@ const syncExtraConnect = isDev || isSyncOnly || isLocal
   : "";
 
 const banner = `// ==UserScript==
-// @name         ${isDev ? "GeoAnalyzr (Dev)" : isSyncOnly ? "GeoAnalyzr (Minimal)" : "GeoAnalyzr"}
+// @name         ${isDev ? "GeoAnalyzr Dev" : isSyncOnly ? "GeoAnalyzr Sync" : "GeoAnalyzr Full"}
 // @namespace    ${isDev ? "geoanalyzr-dev" : isSyncOnly ? "geoanalyzr-sync" : "geoanalyzr"}
 // @author       JonasLmbt
 // @version      ${version}
