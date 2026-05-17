@@ -537,15 +537,19 @@ export async function fetchDetails(opts: {
   if (opts.games) {
     games = opts.games;
   } else {
-    // Query all games without detailFetchedAt
     const all = await dbV2.games.toArray();
+    const logEntries = await dbV2.detailFetchLog.toArray();
     const failed = opts.retryFailed
-      ? (await dbV2.detailFetchLog.toArray())
-          .filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries)
-          .map((l) => l.gameId)
+      ? logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries).map((l) => l.gameId)
       : [];
     const failedSet = new Set(failed);
-    games = all.filter((g) => g.detailFetchedAt === undefined || failedSet.has(g.gameId));
+    // Games that have exhausted all retries — don't include in either bucket
+    const permanentFailSet = new Set(
+      logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts >= maxRetries).map((l) => l.gameId)
+    );
+    games = all.filter(
+      (g) => (g.detailFetchedAt === undefined && !permanentFailSet.has(g.gameId)) || failedSet.has(g.gameId)
+    );
   }
 
   const total = games.length;

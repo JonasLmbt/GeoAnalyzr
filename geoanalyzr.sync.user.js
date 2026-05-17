@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.6.0
+// @version      2.6.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11558,9 +11558,15 @@ ${shapes}`.trim();
       games = opts.games;
     } else {
       const all = await dbV2.games.toArray();
-      const failed2 = opts.retryFailed ? (await dbV2.detailFetchLog.toArray()).filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries).map((l) => l.gameId) : [];
+      const logEntries = await dbV2.detailFetchLog.toArray();
+      const failed2 = opts.retryFailed ? logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries).map((l) => l.gameId) : [];
       const failedSet = new Set(failed2);
-      games = all.filter((g) => g.detailFetchedAt === void 0 || failedSet.has(g.gameId));
+      const permanentFailSet = new Set(
+        logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts >= maxRetries).map((l) => l.gameId)
+      );
+      games = all.filter(
+        (g) => g.detailFetchedAt === void 0 && !permanentFailSet.has(g.gameId) || failedSet.has(g.gameId)
+      );
     }
     const total = games.length;
     let processed = 0;
