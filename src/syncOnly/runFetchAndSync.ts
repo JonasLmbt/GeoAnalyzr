@@ -100,7 +100,7 @@ export async function runFetchAndSync(opts: {
     const detailResult = await fetchDetails({
       concurrency: 3,
       delayMs: 400,
-      retryFailed: true,
+      force: opts.forceFull,
       onProgress: (p) => {
         opts.setStatus(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}, fail: ${p.failed}...`);
       },

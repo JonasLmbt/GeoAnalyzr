@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.6.11
+// @version      2.7.0
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11710,6 +11710,21 @@ ${shapes}`.trim();
     }
     return updates;
   }
+  function isDetailIncomplete(game) {
+    if (game.detailFetchedAt === void 0) return true;
+    if (game.totalRounds === void 0) return true;
+    if (game.movementType === void 0) return true;
+    const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+    if (isDuelType) {
+      if (game.selfVictory === void 0) return true;
+      if (game.oppId === void 0) return true;
+      if (game.isRated && game.selfRatingBefore === void 0) return true;
+    }
+    if (game.modeFamily === "teamduels") {
+      if (game.mateId === void 0) return true;
+    }
+    return false;
+  }
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
     const delayMs = opts.delayMs ?? 500;
@@ -11721,15 +11736,12 @@ ${shapes}`.trim();
     } else {
       const all = await dbV2.games.toArray();
       const logEntries = await dbV2.detailFetchLog.toArray();
-      const failed2 = opts.retryFailed ? logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries).map((l) => l.gameId) : [];
-      const failedSet = new Set(failed2);
-      const permanentFailSet = new Set(
-        logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts >= maxRetries).map((l) => l.gameId)
-      );
-      permanentlySkipped = permanentFailSet.size;
-      games = all.filter(
-        (g) => g.detailFetchedAt === void 0 && !permanentFailSet.has(g.gameId) || failedSet.has(g.gameId)
-      );
+      const attemptsByGame = new Map(logEntries.map((l) => [l.gameId, l.attempts]));
+      permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
+      games = all.filter((g) => {
+        if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
+        return isDetailIncomplete(g);
+      });
     }
     const total = games.length;
     let processed = 0;
@@ -12676,7 +12688,7 @@ ${shapes}`.trim();
           await fetchDetails({
             concurrency: 3,
             delayMs: 400,
-            retryFailed: true,
+            force: opts.forceFull,
             onProgress: (p) => {
               status.textContent = `Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`;
             }

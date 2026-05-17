@@ -594,10 +594,41 @@ function extractGameUpdates(
   return updates;
 }
 
+// ─── Completeness check ───────────────────────────────────────────────────────
+
+/**
+ * Returns true if a game is missing fields that should always be populated
+ * after a successful detail fetch. Extend this when new required fields are
+ * added — incomplete games are automatically re-fetched on the next sync
+ * (up to maxRetries times, then only on force/shift+click).
+ */
+function isDetailIncomplete(game: GameRow): boolean {
+  if (game.detailFetchedAt === undefined) return true;
+
+  // Universal fields — present for every game type
+  if (game.totalRounds === undefined) return true;
+  if (game.movementType === undefined) return true;
+
+  // Duels + TeamDuels
+  const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+  if (isDuelType) {
+    if (game.selfVictory === undefined) return true;
+    if (game.oppId === undefined) return true;
+    if (game.isRated && game.selfRatingBefore === undefined) return true;
+  }
+
+  // TeamDuels only
+  if (game.modeFamily === "teamduels") {
+    if (game.mateId === undefined) return true;
+  }
+
+  return false;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Fetch game details for games in dbV2 that don't yet have details.
+ * Fetch game details for games in dbV2 that are missing details or incomplete.
  * Updates `games`, writes `rawGameDetails`, `detailFetchLog`, and `rounds`.
  */
 export async function fetchDetails(opts: {
@@ -606,10 +637,10 @@ export async function fetchDetails(opts: {
   onProgress?: (p: DetailFetchProgress) => void;
   concurrency?: number;
   delayMs?: number;
-  /** Retry previously-failed games (lastStatus !== 'ok'), up to maxRetries attempts */
-  retryFailed?: boolean;
-  /** Max attempts before a game is considered permanently unfetchable (default: 3) */
+  /** Max attempts per game before it is skipped on normal syncs (default: 3) */
   maxRetries?: number;
+  /** If true, retry even games that have exhausted maxRetries (shift+click) */
+  force?: boolean;
 }): Promise<DetailFetchResult> {
   const concurrency = Math.max(1, opts.concurrency ?? 2);
   const delayMs = opts.delayMs ?? 500;
@@ -622,18 +653,12 @@ export async function fetchDetails(opts: {
   } else {
     const all = await dbV2.games.toArray();
     const logEntries = await dbV2.detailFetchLog.toArray();
-    const failed = opts.retryFailed
-      ? logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts < maxRetries).map((l) => l.gameId)
-      : [];
-    const failedSet = new Set(failed);
-    // Games that have exhausted all retries — don't include in either bucket
-    const permanentFailSet = new Set(
-      logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts >= maxRetries).map((l) => l.gameId)
-    );
-    permanentlySkipped = permanentFailSet.size;
-    games = all.filter(
-      (g) => (g.detailFetchedAt === undefined && !permanentFailSet.has(g.gameId)) || failedSet.has(g.gameId)
-    );
+    const attemptsByGame = new Map(logEntries.map((l) => [l.gameId, l.attempts]));
+    permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
+    games = all.filter((g) => {
+      if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
+      return isDetailIncomplete(g);
+    });
   }
 
   const total = games.length;

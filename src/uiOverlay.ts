@@ -727,7 +727,7 @@ export function createUIOverlay(): UIOverlay {
         await fetchDetails({
           concurrency: 3,
           delayMs: 400,
-          retryFailed: true,
+          force: opts.forceFull,
           onProgress: (p) => { status.textContent = `Details ${p.processed}/${p.total} — ok: ${p.succeeded}...`; },
         });
       } catch { /* non-fatal */ }
