@@ -4,14 +4,14 @@ import { markAutoRun, runFetchAndSync, shouldAutoRun, SyncLog } from "./syncOnly
 
 function downloadLog(log: SyncLog): void {
   const filename = `geoanalyzr-sync-${log.timestamp.replace(/[:.]/g, "-")}.json`;
-  const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  const json = JSON.stringify(log, null, 2);
+  // data: URL works outside the user-gesture context (blob URLs don't after async gaps)
   const a = document.createElement("a");
-  a.href = url;
+  a.href = `data:application/json;charset=utf-8,${encodeURIComponent(json)}`;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  setTimeout(() => document.body.removeChild(a), 1000);
 }
 
 let running: Promise<void> | null = null;
@@ -83,7 +83,7 @@ async function runOnce(
 const ui = createSyncMiniButton({
   onClick: async (ev) => {
     const forceFull = !!(ev && (ev as any).shiftKey);
-    const wantLog = !!(ev && (ev as any).ctrlKey);
+    const wantLog = !!(ev && ((ev as any).ctrlKey || (ev as any).metaKey));
     const wantUnsync = !!(ev && (ev as any).shiftKey && (ev as any).altKey);
 
     if (wantUnsync) {
