@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr Full
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.6.5
+// @version      2.6.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -13496,7 +13496,8 @@ ${shapes}`.trim();
         break;
       }
       seenPaginationTokens.add(paginationToken);
-      if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
+      const lastSeenCutoff = lastSeen ? lastSeen - 2 * 60 * 60 * 1e3 : 0;
+      if (lastSeenCutoff > 0 && newestOnPage > 0 && newestOnPage <= lastSeenCutoff) {
         opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
         logEvent("feed_stop", { page, reason: "reached_last_seen", lastSeen }, "info");
         break;

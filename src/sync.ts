@@ -867,8 +867,11 @@ export async function updateData(opts: {
     seenPaginationTokens.add(paginationToken);
 
     // Stop once this page has no data newer than lastSeen.
-    if (lastSeen && newestOnPage > 0 && newestOnPage <= lastSeen) {
-      opts.onStatus(`Reached previously synced period (${new Date(lastSeen).toLocaleString()}).`);
+    // Grace period of 2h: games can appear in the feed with a slightly older
+    // timestamp (API delay, long match), so don't cut off too aggressively.
+    const lastSeenCutoff = lastSeen ? lastSeen - 2 * 60 * 60 * 1000 : 0;
+    if (lastSeenCutoff > 0 && newestOnPage > 0 && newestOnPage <= lastSeenCutoff) {
+      opts.onStatus(`Reached previously synced period (${new Date(lastSeen!).toLocaleString()}).`);
       logEvent("feed_stop", { page, reason: "reached_last_seen", lastSeen }, "info");
       break;
     }
