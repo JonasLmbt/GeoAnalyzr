@@ -11770,8 +11770,23 @@ ${shapes}`.trim();
         batch.map(async (game) => {
           const missing = getMissingFields(game);
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
-          const endpoints = buildEndpoints(game.gameId, game.modeFamily);
           const attemptedAt = Date.now();
+          const cached = await dbV2.rawGameDetails.get(game.gameId);
+          if (cached?.json) {
+            try {
+              const updates = extractGameUpdates(cached.json, game.modeFamily, game.selfId);
+              const hypothetical = { ...game, ...updates };
+              if (getMissingFields(hypothetical).length === 0) {
+                await dbV2.games.update(game.gameId, updates);
+                opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
+                updatedGameIds.push(game.gameId);
+                succeeded++;
+                return;
+              }
+            } catch {
+            }
+          }
+          const endpoints = buildEndpoints(game.gameId, game.modeFamily);
           const result = await tryFetch(game.gameId, endpoints);
           if (!result) {
             failed++;
@@ -11807,7 +11822,7 @@ ${shapes}`.trim();
               lastStatus: "ok",
               endpoint
             });
-            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "api" });
             updatedGameIds.push(game.gameId);
             succeeded++;
           } catch (e) {
@@ -12826,7 +12841,7 @@ ${shapes}`.trim();
             if (e.status === "checking") {
               setMsg(`${fmtId(e.gameId)} (${e.mode}, ${fmtDate2(e.playedAt)}): missing ${e.missing.join(", ")}`);
             } else if (e.status === "ok") {
-              setMsg(`  \u2192 ok`);
+              setMsg(`  \u2192 ok${e.source === "cache" ? " (from cache)" : ""}`);
             } else {
               setMsg(`  \u2192 failed: ${e.error ?? "unknown"}`);
             }

@@ -850,7 +850,7 @@ export function createUIOverlay(): UIOverlay {
           if (e.status === "checking") {
             setMsg(`${fmtId(e.gameId)} (${e.mode}, ${fmtDate(e.playedAt)}): missing ${e.missing.join(", ")}`);
           } else if (e.status === "ok") {
-            setMsg(`  → ok`);
+            setMsg(`  → ok${e.source === "cache" ? " (from cache)" : ""}`);
           } else {
             setMsg(`  → failed: ${e.error ?? "unknown"}`);
           }

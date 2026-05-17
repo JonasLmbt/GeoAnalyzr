@@ -23,6 +23,7 @@ export interface DetailGameEvent {
   mode: ModeFamily;
   missing: string[];
   status: "checking" | "ok" | "failed";
+  source?: "cache" | "api";
   error?: string;
 }
 
@@ -679,9 +680,26 @@ export async function fetchDetails(opts: {
         const missing = getMissingFields(game);
         opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
 
-        const endpoints = buildEndpoints(game.gameId, game.modeFamily);
         const attemptedAt = Date.now();
 
+        // ── Cache-first: try to re-parse stored raw response before hitting the API ──
+        const cached = await dbV2.rawGameDetails.get(game.gameId);
+        if (cached?.json) {
+          try {
+            const updates = extractGameUpdates(cached.json, game.modeFamily, game.selfId);
+            const hypothetical = { ...game, ...updates } as GameRow;
+            if (getMissingFields(hypothetical).length === 0) {
+              await dbV2.games.update(game.gameId, updates);
+              opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
+              updatedGameIds.push(game.gameId);
+              succeeded++;
+              return;
+            }
+          } catch { /* ignore, fall through to API */ }
+        }
+
+        // ── API fetch ──────────────────────────────────────────────────────────────
+        const endpoints = buildEndpoints(game.gameId, game.modeFamily);
         const result = await tryFetch(game.gameId, endpoints);
 
         if (!result) {
@@ -732,7 +750,7 @@ export async function fetchDetails(opts: {
             endpoint,
           });
 
-          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "api" });
           updatedGameIds.push(game.gameId);
           succeeded++;
         } catch (e) {
