@@ -137,10 +137,12 @@ export async function fetchFeed(opts: {
   const delayMs = opts.delayMs ?? 150;
   const overlapThreshold = opts.overlapThreshold ?? 5;
 
-  // Load cursor from last run
+  // For full re-fetch: resume from saved cursor if interrupted mid-way.
+  // For incremental: always start from the top (newest games), the overlap
+  // threshold will stop early once we've caught up.
   const savedCursor = opts.full
-    ? undefined
-    : await getSyncState<string>("feedCursor");
+    ? await getSyncState<string>("feedCursor")
+    : undefined;
 
   let paginationToken: string | undefined = savedCursor ?? undefined;
   const seenTokens = new Set<string>();
@@ -212,8 +214,9 @@ export async function fetchFeed(opts: {
         ? res.data.paginationToken
         : undefined;
 
-    // Save cursor at the start of each page so we can resume
-    if (nextToken) {
+    // Only persist the cursor during full syncs so interrupted runs can resume.
+    // Incremental syncs always start from the top (savedCursor is ignored).
+    if (opts.full && nextToken) {
       await setSyncState("feedCursor", nextToken);
     }
 
