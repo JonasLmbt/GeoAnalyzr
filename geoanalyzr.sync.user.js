@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.6.2
+// @version      2.6.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11097,7 +11097,7 @@ ${shapes}`.trim();
     const maxPages = opts.maxPages ?? 5e3;
     const delayMs = opts.delayMs ?? 150;
     const overlapThreshold = opts.overlapThreshold ?? 5;
-    const savedCursor = opts.full ? void 0 : await getSyncState("feedCursor");
+    const savedCursor = opts.full ? await getSyncState("feedCursor") : void 0;
     let paginationToken = savedCursor ?? void 0;
     const seenTokens = /* @__PURE__ */ new Set();
     let totalNew = 0;
@@ -11149,7 +11149,7 @@ ${shapes}`.trim();
       consecutiveKnown = newGames.length === 0 ? consecutiveKnown + pageKnown : 0;
       opts.onProgress?.({ page, newGames: totalNew, skipped: totalSkipped });
       const nextToken = typeof res.data?.paginationToken === "string" && res.data.paginationToken ? res.data.paginationToken : void 0;
-      if (nextToken) {
+      if (opts.full && nextToken) {
         await setSyncState("feedCursor", nextToken);
       }
       if (!opts.full && consecutiveKnown >= overlapThreshold) {
