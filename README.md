@@ -18,23 +18,23 @@ For development:
 
 GeoAnalyzr is available in three variants:
 
-1) **GeoAnalyzr (recommended)** — full dashboard + analysis stored locally in your browser  
-2) **Minimal** — minimal: only a small button to *Fetch + Sync* to the GeoAnalyzr website  
+1) **GeoAnalyzr Sync (recommended)** — a small button that syncs your games to the GeoAnalyzr website  
+2) **GeoAnalyzr Full** — full local dashboard + analysis stored in your browser (no account required)  
 3) **Dev** — testing build that tracks `master`
 
-### 1) GeoAnalyzr (recommended)
+### 1) GeoAnalyzr Sync (recommended)
 
 1. Open this file in your browser:
-   - [GeoAnalyzr](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js)
+   - [GeoAnalyzr Sync](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js)
+2. Install it in Tampermonkey.
+3. Open GeoGuessr and click the GeoAnalyzr icon (bottom-left) to fetch and sync your games.
+
+### 2) GeoAnalyzr Full
+
+1. Open this file in your browser:
+   - [GeoAnalyzr Full](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js)
 2. Tampermonkey will show the install dialog.
 3. Click install.
-
-### 2) Minimal
-
-1. Open this file in your browser:
-   - [Minimal](https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js)
-2. Install it in Tampermonkey.
-3. Open GeoGuessr and click the GeoAnalyzr icon (bottom-left). It shows the same panel as the stable script (Fetch + Sync + filters), but **without** the local Analysis Window.
 
 ### 3) Dev (testing)
 
@@ -69,18 +69,18 @@ Tampermonkey can therefore detect and install updates automatically.
 
 ## Security and Privacy
 
-### GeoAnalyzr (recommended)
+### GeoAnalyzr Sync / Dev (opt-in sync)
 
-- GeoAnalyzr stores data locally in your browser (IndexedDB).
+- These variants sync data to the GeoAnalyzr server, but only after your device is linked (Discord OAuth).
+- A per-device sync token is stored locally in your browser and sent as `Authorization: Bearer …` over HTTPS.
+- You can re-link at any time to issue a new token.
+
+### GeoAnalyzr Full
+
+- GeoAnalyzr Full stores data locally in your browser (IndexedDB).
 - It does **not** sync your dataset to the GeoAnalyzr website unless you configure server sync.
 - You can remove local data at any time using **Reset Database**.
 - You can export your analysis to Excel anytime.
-
-### Minimal / Dev (opt-in sync)
-
-- These variants can sync data to the GeoAnalyzr server, but only after your device is linked (Discord OAuth).
-- A per-device sync token is stored locally in your browser and sent as `Authorization: Bearer …` over HTTPS.
-- You can re-link at any time to issue a new token.
 
 ## Development
 
