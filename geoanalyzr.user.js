@@ -10986,11 +10986,20 @@ ${shapes}`.trim();
     const clientVersion = getUserscriptVersion2();
     opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0 });
     const serverBefore = await fetchServerState(stateUrl, settings.token, playerId);
-    const localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
+    let localGames;
+    if (opts.gameIds) {
+      const gameIdSet = new Set(opts.gameIds);
+      localGames = await dbV2.games.filter((g) => gameIdSet.has(g.gameId)).toArray();
+    } else {
+      localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
+    }
     const localGameCount = localGames.length;
     const serverCount = serverBefore?.gameCount ?? 0;
     opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, serverCount, localCount: localGameCount });
-    if (!opts.full && serverCount >= localGameCount && serverCount > 0) {
+    if (localGameCount === 0) {
+      return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0, serverGameCount: serverCount };
+    }
+    if (!opts.gameIds && !opts.full && serverCount >= localGameCount && serverCount > 0) {
       return {
         ok: true,
         gamesUploaded: 0,
@@ -11191,6 +11200,7 @@ ${shapes}`.trim();
     let totalSkipped = 0;
     let consecutiveKnown = 0;
     let stopped = "exhausted";
+    const allNewGameIds = [];
     for (let page = 1; page <= maxPages; page++) {
       let res;
       try {
@@ -11229,6 +11239,7 @@ ${shapes}`.trim();
       const pageKnown = gameIds.length - newGames.length;
       if (newGames.length > 0) {
         await dbV2.games.bulkPut(newGames);
+        allNewGameIds.push(...newGames.map((g) => g.gameId));
       }
       await dbV2.rawFeedEntries.bulkPut(rawEntries);
       totalNew += newGames.length;
@@ -11259,7 +11270,7 @@ ${shapes}`.trim();
     if (opts.full && stopped === "exhausted") {
       await dbV2.syncState.delete("feedCursor");
     }
-    return { newGames: totalNew, pages: 0, stopped };
+    return { newGames: totalNew, newGameIds: allNewGameIds, pages: 0, stopped };
   }
 
   // src/detailFetcher_v2.ts
@@ -11751,6 +11762,7 @@ ${shapes}`.trim();
     const total = games.length;
     let processed = 0;
     let succeeded = 0;
+    const updatedGameIds = [];
     let failed = 0;
     for (let i = 0; i < games.length; i += concurrency) {
       const batch = games.slice(i, i + concurrency);
@@ -11796,6 +11808,7 @@ ${shapes}`.trim();
               endpoint
             });
             opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+            updatedGameIds.push(game.gameId);
             succeeded++;
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
@@ -11818,7 +11831,7 @@ ${shapes}`.trim();
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
-    return { queued: total, succeeded, failed, permanentlySkipped };
+    return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped };
   }
 
   // src/migration_v1_to_v2.ts
@@ -12625,6 +12638,7 @@ ${shapes}`.trim();
           const modeLabel = forceFull ? "Synced full" : "Synced";
           const v2res = await syncToServerV2({
             full: forceFull,
+            gameIds: opts.gameIds,
             onProgress: (p) => {
               if (p.phase === "reconcile" && p.serverCount !== void 0) {
                 setMsg(`Server: ${p.serverCount} games \u2014 local: ${p.localCount} games`);
@@ -12778,6 +12792,7 @@ ${shapes}`.trim();
         } catch {
         }
         setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
+        let feedNewGameIds = [];
         try {
           let prevNewGames = 0;
           const feedResult = await fetchFeed({
@@ -12795,6 +12810,7 @@ ${shapes}`.trim();
               }
             }
           });
+          feedNewGameIds = feedResult.newGameIds;
           if (logModal) setMsg(`Feed done \u2014 ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
         } catch (e) {
           setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
@@ -12802,7 +12818,7 @@ ${shapes}`.trim();
           return;
         }
         setMsg("Fetching game details...");
-        let detailsSucceeded = 0;
+        let detailUpdatedGameIds = [];
         try {
           const fmtDate2 = (ts) => ts ? new Date(ts).toISOString().slice(0, 10) : "?";
           const fmtId = (id) => id.length > 8 ? id.slice(0, 6) + ".." : id;
@@ -12824,11 +12840,18 @@ ${shapes}`.trim();
             },
             onGameEvent
           });
-          detailsSucceeded = detailResult.succeeded;
+          detailUpdatedGameIds = detailResult.updatedGameIds;
           if (logModal) setMsg(`Details done \u2014 ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
         } catch {
         }
-        await runSyncOnce({ forceFull: opts.forceFull || detailsSucceeded > 0, allowLinking: !opts.auto, setMsg });
+        const touchedIds = opts.forceFull ? void 0 : [.../* @__PURE__ */ new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
+        if (!opts.forceFull && touchedIds.length === 0) {
+          setMsg("Nothing to sync \u2014 no new or updated games");
+          logModal?.finish(true);
+          return;
+        }
+        if (logModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
+        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds });
         logModal?.finish(true);
       } catch (e) {
         setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);

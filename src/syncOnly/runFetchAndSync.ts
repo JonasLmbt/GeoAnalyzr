@@ -71,6 +71,7 @@ export async function runFetchAndSync(opts: {
 
   // Phase 1: Feed
   opts.setStatus(opts.forceFull ? "Fetching full history (last 365 days)..." : "Fetching feed...");
+  let feedNewGameIds: string[] = [];
   try {
     const feedResult = await fetchFeed({
       full: opts.forceFull,
@@ -83,6 +84,7 @@ export async function runFetchAndSync(opts: {
     });
     log.feed.newGames = feedResult.newGames;
     log.feed.stopped = feedResult.stopped;
+    feedNewGameIds = feedResult.newGameIds;
   } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e || "Feed fetch failed");
     log.feed.error = msg;
@@ -96,7 +98,7 @@ export async function runFetchAndSync(opts: {
 
   // Phase 2: Details
   opts.setStatus("Fetching game details...");
-  let detailsSucceeded = 0;
+  let detailUpdatedGameIds: string[] = [];
   try {
     const detailResult = await fetchDetails({
       concurrency: 3,
@@ -112,14 +114,21 @@ export async function runFetchAndSync(opts: {
       failed: detailResult.failed,
       permanentlySkipped: detailResult.permanentlySkipped,
     };
-    detailsSucceeded = detailResult.succeeded;
+    detailUpdatedGameIds = detailResult.updatedGameIds;
   } catch (e: any) {
     log.details.error = e instanceof Error ? e.message : String(e || "Details fetch failed");
     // Non-fatal: continue to sync with what we have
   }
 
-  // Phase 3: Server sync — force full if any games had fields updated
-  const syncFull = opts.forceFull || detailsSucceeded > 0;
+  // Phase 3: Server sync — only upload games touched in this cycle
+  const touchedIds = opts.forceFull ? undefined : [...new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
+  if (!opts.forceFull && touchedIds!.length === 0) {
+    log.sync = { gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    log.result = "ok";
+    log.message = "Nothing to sync — no new or updated games";
+    return { ok: true, message: log.message, log };
+  }
+
   let settings = loadServerSyncSettings();
   if (!settings.token) {
     if (!opts.ensureLinked) {
@@ -133,10 +142,11 @@ export async function runFetchAndSync(opts: {
     return fail("Missing sync token. Link failed.", "Try linking again. If it keeps failing, disable popup blockers and retry.");
   }
 
-  opts.setStatus(syncFull ? "Syncing full snapshot to server..." : "Syncing to server...");
+  opts.setStatus(opts.forceFull ? "Syncing full snapshot to server..." : `Syncing ${touchedIds?.length ?? 0} games to server...`);
   try {
     const syncResult = await syncToServerV2({
-      full: syncFull,
+      full: opts.forceFull,
+      gameIds: touchedIds,
       detailsOnly: false,
       onProgress: (p) => {
         if (p.phase === "upload") {

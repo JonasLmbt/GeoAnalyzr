@@ -562,7 +562,7 @@ export function createUIOverlay(): UIOverlay {
     (document.body ?? document.documentElement).appendChild(modal);
   };
 
-  async function runSyncOnce(opts: { forceFull: boolean; allowLinking: boolean; setMsg?: (msg: string) => void }): Promise<void> {
+  async function runSyncOnce(opts: { forceFull: boolean; allowLinking: boolean; setMsg?: (msg: string) => void; gameIds?: string[] }): Promise<void> {
     const forceFull = !!opts.forceFull;
     const setMsg = opts.setMsg ?? ((msg: string) => { status.textContent = msg; });
     setMsg(forceFull ? "Syncing full snapshot..." : "Syncing...");
@@ -647,6 +647,7 @@ export function createUIOverlay(): UIOverlay {
         const modeLabel = forceFull ? "Synced full" : "Synced";
         const v2res = await syncToServerV2({
           full: forceFull,
+          gameIds: opts.gameIds,
           onProgress: (p) => {
             if (p.phase === "reconcile" && p.serverCount !== undefined) {
               setMsg(`Server: ${p.serverCount} games — local: ${p.localCount} games`);
@@ -814,6 +815,7 @@ export function createUIOverlay(): UIOverlay {
       } catch { /* non-fatal */ }
 
       setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
+      let feedNewGameIds: string[] = [];
       try {
         let prevNewGames = 0;
         const feedResult = await fetchFeed({
@@ -831,6 +833,7 @@ export function createUIOverlay(): UIOverlay {
             }
           },
         });
+        feedNewGameIds = feedResult.newGameIds;
         if (logModal) setMsg(`Feed done — ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
       } catch (e: any) {
         setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
@@ -839,7 +842,7 @@ export function createUIOverlay(): UIOverlay {
       }
 
       setMsg("Fetching game details...");
-      let detailsSucceeded = 0;
+      let detailUpdatedGameIds: string[] = [];
       try {
         const fmtDate = (ts?: number) => ts ? new Date(ts).toISOString().slice(0, 10) : "?";
         const fmtId = (id: string) => id.length > 8 ? id.slice(0, 6) + ".." : id;
@@ -859,12 +862,20 @@ export function createUIOverlay(): UIOverlay {
           onProgress: logModal ? undefined : (p) => { setMsg(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}...`); },
           onGameEvent,
         });
-        detailsSucceeded = detailResult.succeeded;
+        detailUpdatedGameIds = detailResult.updatedGameIds;
         if (logModal) setMsg(`Details done — ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
       } catch { /* non-fatal */ }
 
-      // Server sync — force full if any games had fields updated, so the server gets the new data
-      await runSyncOnce({ forceFull: opts.forceFull || detailsSucceeded > 0, allowLinking: !opts.auto, setMsg });
+      // Collect all game IDs touched this cycle; pass to sync so only those are uploaded
+      const touchedIds = opts.forceFull ? undefined : [...new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
+      if (!opts.forceFull && touchedIds!.length === 0) {
+        setMsg("Nothing to sync — no new or updated games");
+        logModal?.finish(true);
+        return;
+      }
+      if (logModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
+
+      await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds });
       logModal?.finish(true);
     } catch (e: any) {
       setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);

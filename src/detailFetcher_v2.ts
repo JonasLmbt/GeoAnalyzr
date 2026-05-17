@@ -12,6 +12,7 @@ export interface DetailFetchProgress {
 export interface DetailFetchResult {
   queued: number;
   succeeded: number;
+  updatedGameIds: string[];
   failed: number;
   permanentlySkipped: number;
 }
@@ -666,6 +667,7 @@ export async function fetchDetails(opts: {
   const total = games.length;
   let processed = 0;
   let succeeded = 0;
+  const updatedGameIds: string[] = [];
   let failed = 0;
 
   // Process in batches of `concurrency`
@@ -731,6 +733,7 @@ export async function fetchDetails(opts: {
           });
 
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+          updatedGameIds.push(game.gameId);
           succeeded++;
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
@@ -756,5 +759,5 @@ export async function fetchDetails(opts: {
     }
   }
 
-  return { queued: total, succeeded, failed, permanentlySkipped };
+  return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped };
 }

@@ -191,6 +191,8 @@ export async function syncToServerV2(opts: {
   full?: boolean;
   /** Only upload games that have detail data (detailFetchedAt set) */
   detailsOnly?: boolean;
+  /** If provided, only upload these specific game IDs (skips count-based reconciliation) */
+  gameIds?: string[];
 }): Promise<SyncV2Result> {
   const settings = loadServerSyncSettings();
   if (!settings.token) {
@@ -210,16 +212,27 @@ export async function syncToServerV2(opts: {
   opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0 });
 
   const serverBefore = await fetchServerState(stateUrl, settings.token, playerId);
-  const localGames = await dbV2.games
-    .filter((g) => !opts.detailsOnly || g.detailFetchedAt !== undefined)
-    .toArray();
+
+  let localGames: GameRow[];
+  if (opts.gameIds) {
+    const gameIdSet = new Set(opts.gameIds);
+    localGames = await dbV2.games.filter((g) => gameIdSet.has(g.gameId)).toArray();
+  } else {
+    localGames = await dbV2.games
+      .filter((g) => !opts.detailsOnly || g.detailFetchedAt !== undefined)
+      .toArray();
+  }
   const localGameCount = localGames.length;
 
   const serverCount = serverBefore?.gameCount ?? 0;
   opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, serverCount, localCount: localGameCount });
 
-  // Skip upload if server already has at least as many games as local
-  if (!opts.full && serverCount >= localGameCount && serverCount > 0) {
+  if (localGameCount === 0) {
+    return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0, serverGameCount: serverCount };
+  }
+
+  // Count-based skip only when syncing everything (no gameIds filter, not forced)
+  if (!opts.gameIds && !opts.full && serverCount >= localGameCount && serverCount > 0) {
     return {
       ok: true,
       gamesUploaded: 0,

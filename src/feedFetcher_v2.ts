@@ -9,6 +9,7 @@ export interface FeedFetchProgress {
 
 export interface FeedFetchResult {
   newGames: number;
+  newGameIds: string[];
   pages: number;
   stopped: "exhausted" | "overlap" | "max_pages" | "error";
 }
@@ -150,6 +151,7 @@ export async function fetchFeed(opts: {
   let totalSkipped = 0;
   let consecutiveKnown = 0;
   let stopped: FeedFetchResult["stopped"] = "exhausted";
+  const allNewGameIds: string[] = [];
 
   for (let page = 1; page <= maxPages; page++) {
     let res: { data: any; status: number };
@@ -199,6 +201,7 @@ export async function fetchFeed(opts: {
 
     if (newGames.length > 0) {
       await dbV2.games.bulkPut(newGames);
+      allNewGameIds.push(...newGames.map((g) => g.gameId));
     }
     await dbV2.rawFeedEntries.bulkPut(rawEntries);
 
@@ -249,5 +252,5 @@ export async function fetchFeed(opts: {
     await dbV2.syncState.delete("feedCursor");
   }
 
-  return { newGames: totalNew, pages: 0, stopped };
+  return { newGames: totalNew, newGameIds: allNewGameIds, pages: 0, stopped };
 }
