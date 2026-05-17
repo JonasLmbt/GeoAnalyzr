@@ -110,6 +110,43 @@ function extractRatingChange(player: any): { before?: number; after?: number } {
   return {};
 }
 
+function extractMovementRatings(player: any): {
+  movingBefore?: number; movingAfter?: number;
+  noMoveBefore?: number; noMoveAfter?: number;
+  nmpzBefore?: number; nmpzAfter?: number;
+} {
+  const paths = [
+    "progressChange.rankedSystemProgress",
+    "progressChange.rankedTeamDuelsProgress",
+    "progressChange.rankedProgress",
+    "progressChange.ratingProgress",
+  ];
+  for (const p of paths) {
+    const obj = getByPath(player, p);
+    if (!obj) continue;
+    const movingBefore = asNum(obj?.movingRatingBefore);
+    const movingAfter = asNum(obj?.movingRatingAfter);
+    const noMoveBefore = asNum(obj?.noMoveRatingBefore);
+    const noMoveAfter = asNum(obj?.noMoveRatingAfter);
+    const nmpzBefore = asNum(obj?.nmpzRatingBefore);
+    const nmpzAfter = asNum(obj?.nmpzRatingAfter);
+    if (
+      movingBefore !== undefined || movingAfter !== undefined ||
+      noMoveBefore !== undefined || noMoveAfter !== undefined ||
+      nmpzBefore !== undefined || nmpzAfter !== undefined
+    ) {
+      return { movingBefore, movingAfter, noMoveBefore, noMoveAfter, nmpzBefore, nmpzAfter };
+    }
+  }
+  return {};
+}
+
+function extractCountry(player: any): string | undefined {
+  return normalizeIso2(
+    player?.countryCode ?? player?.country ?? player?.user?.countryCode ?? player?.user?.country
+  );
+}
+
 async function resolveGuessCountry(
   guess: any,
   lat?: number,
@@ -461,6 +498,7 @@ function extractGameUpdates(
     const p3Id = readPlayerId(p[3]);
 
     const rc = p.map(extractRatingChange);
+    const mc = p.map(extractMovementRatings);
 
     let ownTeamIndex = 0;
     if (selfId) {
@@ -481,20 +519,36 @@ function extractGameUpdates(
     Object.assign(updates, {
       selfId: p0Id,
       selfName: typeof p[0]?.nick === "string" ? p[0].nick : undefined,
+      selfCountry: extractCountry(p[0]),
       selfScore,
       selfVictory,
       selfRatingBefore: rc[0].before,
       selfRatingAfter: rc[0].after,
+      selfMovingRatingBefore: mc[0].movingBefore,
+      selfMovingRatingAfter: mc[0].movingAfter,
+      selfNoMoveRatingBefore: mc[0].noMoveBefore,
+      selfNoMoveRatingAfter: mc[0].noMoveAfter,
+      selfNmpzRatingBefore: mc[0].nmpzBefore,
+      selfNmpzRatingAfter: mc[0].nmpzAfter,
       oppId: p2Id,
       oppName: typeof p[2]?.nick === "string" ? p[2].nick : undefined,
+      oppCountry: extractCountry(p[2]),
       oppRatingBefore: rc[2].before,
       oppRatingAfter: rc[2].after,
+      oppMovingRatingBefore: mc[2].movingBefore,
+      oppMovingRatingAfter: mc[2].movingAfter,
+      oppNoMoveRatingBefore: mc[2].noMoveBefore,
+      oppNoMoveRatingAfter: mc[2].noMoveAfter,
+      oppNmpzRatingBefore: mc[2].nmpzBefore,
+      oppNmpzRatingAfter: mc[2].nmpzAfter,
       mateId: p1Id,
       mateName: typeof p[1]?.nick === "string" ? p[1].nick : undefined,
+      mateCountry: extractCountry(p[1]),
       mateRatingBefore: rc[1].before,
       mateRatingAfter: rc[1].after,
       oppMateId: p3Id,
       oppMateName: typeof p[3]?.nick === "string" ? p[3].nick : undefined,
+      oppMateCountry: extractCountry(p[3]),
       oppMateRatingBefore: rc[3].before,
       oppMateRatingAfter: rc[3].after,
     } satisfies Partial<GameRow>);

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.6.9-dev
+// @version      2.6.10-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11258,6 +11258,33 @@ ${shapes}`.trim();
     }
     return {};
   }
+  function extractMovementRatings(player) {
+    const paths = [
+      "progressChange.rankedSystemProgress",
+      "progressChange.rankedTeamDuelsProgress",
+      "progressChange.rankedProgress",
+      "progressChange.ratingProgress"
+    ];
+    for (const p of paths) {
+      const obj = getByPath3(player, p);
+      if (!obj) continue;
+      const movingBefore = asNum2(obj?.movingRatingBefore);
+      const movingAfter = asNum2(obj?.movingRatingAfter);
+      const noMoveBefore = asNum2(obj?.noMoveRatingBefore);
+      const noMoveAfter = asNum2(obj?.noMoveRatingAfter);
+      const nmpzBefore = asNum2(obj?.nmpzRatingBefore);
+      const nmpzAfter = asNum2(obj?.nmpzRatingAfter);
+      if (movingBefore !== void 0 || movingAfter !== void 0 || noMoveBefore !== void 0 || noMoveAfter !== void 0 || nmpzBefore !== void 0 || nmpzAfter !== void 0) {
+        return { movingBefore, movingAfter, noMoveBefore, noMoveAfter, nmpzBefore, nmpzAfter };
+      }
+    }
+    return {};
+  }
+  function extractCountry(player) {
+    return normalizeIso23(
+      player?.countryCode ?? player?.country ?? player?.user?.countryCode ?? player?.user?.country
+    );
+  }
   async function resolveGuessCountry(guess, lat, lng) {
     const fromApi = normalizeIso23(
       guess?.countryCode ?? guess?.country_code ?? guess?.country
@@ -11508,6 +11535,7 @@ ${shapes}`.trim();
       const p2Id = readPlayerId2(p[2]);
       const p3Id = readPlayerId2(p[3]);
       const rc = p.map(extractRatingChange2);
+      const mc = p.map(extractMovementRatings);
       let ownTeamIndex = 0;
       if (selfId) {
         const found = teams.findIndex(
@@ -11522,20 +11550,36 @@ ${shapes}`.trim();
       Object.assign(updates, {
         selfId: p0Id,
         selfName: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
+        selfCountry: extractCountry(p[0]),
         selfScore,
         selfVictory,
         selfRatingBefore: rc[0].before,
         selfRatingAfter: rc[0].after,
+        selfMovingRatingBefore: mc[0].movingBefore,
+        selfMovingRatingAfter: mc[0].movingAfter,
+        selfNoMoveRatingBefore: mc[0].noMoveBefore,
+        selfNoMoveRatingAfter: mc[0].noMoveAfter,
+        selfNmpzRatingBefore: mc[0].nmpzBefore,
+        selfNmpzRatingAfter: mc[0].nmpzAfter,
         oppId: p2Id,
         oppName: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
+        oppCountry: extractCountry(p[2]),
         oppRatingBefore: rc[2].before,
         oppRatingAfter: rc[2].after,
+        oppMovingRatingBefore: mc[2].movingBefore,
+        oppMovingRatingAfter: mc[2].movingAfter,
+        oppNoMoveRatingBefore: mc[2].noMoveBefore,
+        oppNoMoveRatingAfter: mc[2].noMoveAfter,
+        oppNmpzRatingBefore: mc[2].nmpzBefore,
+        oppNmpzRatingAfter: mc[2].nmpzAfter,
         mateId: p1Id,
         mateName: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
+        mateCountry: extractCountry(p[1]),
         mateRatingBefore: rc[1].before,
         mateRatingAfter: rc[1].after,
         oppMateId: p3Id,
         oppMateName: typeof p[3]?.nick === "string" ? p[3].nick : void 0,
+        oppMateCountry: extractCountry(p[3]),
         oppMateRatingBefore: rc[3].before,
         oppMateRatingAfter: rc[3].after
       });

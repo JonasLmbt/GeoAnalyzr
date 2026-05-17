@@ -29,6 +29,12 @@ export interface GameRow {
   // Ratings (duels / teamduels)
   selfRatingBefore?: number;
   selfRatingAfter?: number;
+  selfMovingRatingBefore?: number;
+  selfMovingRatingAfter?: number;
+  selfNoMoveRatingBefore?: number;
+  selfNoMoveRatingAfter?: number;
+  selfNmpzRatingBefore?: number;
+  selfNmpzRatingAfter?: number;
 
   // Opponent (duels / teamduels)
   oppId?: string;
@@ -36,6 +42,12 @@ export interface GameRow {
   oppCountry?: string;
   oppRatingBefore?: number;
   oppRatingAfter?: number;
+  oppMovingRatingBefore?: number;
+  oppMovingRatingAfter?: number;
+  oppNoMoveRatingBefore?: number;
+  oppNoMoveRatingAfter?: number;
+  oppNmpzRatingBefore?: number;
+  oppNmpzRatingAfter?: number;
 
   // Teammate (teamduels only)
   mateId?: string;
