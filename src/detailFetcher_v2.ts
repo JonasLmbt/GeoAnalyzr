@@ -10,8 +10,10 @@ export interface DetailFetchProgress {
 }
 
 export interface DetailFetchResult {
+  queued: number;
   succeeded: number;
   failed: number;
+  permanentlySkipped: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -534,6 +536,7 @@ export async function fetchDetails(opts: {
   const maxRetries = opts.maxRetries ?? 3;
 
   let games: GameRow[];
+  let permanentlySkipped = 0;
   if (opts.games) {
     games = opts.games;
   } else {
@@ -547,6 +550,7 @@ export async function fetchDetails(opts: {
     const permanentFailSet = new Set(
       logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts >= maxRetries).map((l) => l.gameId)
     );
+    permanentlySkipped = permanentFailSet.size;
     games = all.filter(
       (g) => (g.detailFetchedAt === undefined && !permanentFailSet.has(g.gameId)) || failedSet.has(g.gameId)
     );
@@ -638,5 +642,5 @@ export async function fetchDetails(opts: {
     }
   }
 
-  return { succeeded, failed };
+  return { queued: total, succeeded, failed, permanentlySkipped };
 }

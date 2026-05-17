@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.6.1
+// @version      2.6.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11554,6 +11554,7 @@ ${shapes}`.trim();
     const delayMs = opts.delayMs ?? 500;
     const maxRetries = opts.maxRetries ?? 3;
     let games;
+    let permanentlySkipped = 0;
     if (opts.games) {
       games = opts.games;
     } else {
@@ -11564,6 +11565,7 @@ ${shapes}`.trim();
       const permanentFailSet = new Set(
         logEntries.filter((l) => l.lastStatus !== "ok" && l.attempts >= maxRetries).map((l) => l.gameId)
       );
+      permanentlySkipped = permanentFailSet.size;
       games = all.filter(
         (g) => g.detailFetchedAt === void 0 && !permanentFailSet.has(g.gameId) || failedSet.has(g.gameId)
       );
@@ -11632,7 +11634,7 @@ ${shapes}`.trim();
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
-    return { succeeded, failed };
+    return { queued: total, succeeded, failed, permanentlySkipped };
   }
 
   // src/migration_v1_to_v2.ts

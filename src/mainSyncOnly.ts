@@ -1,6 +1,18 @@
 import { loadServerSyncSettings, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { createSyncMiniButton } from "./syncOnly/miniButton";
-import { markAutoRun, runFetchAndSync, shouldAutoRun } from "./syncOnly/runFetchAndSync";
+import { markAutoRun, runFetchAndSync, shouldAutoRun, SyncLog } from "./syncOnly/runFetchAndSync";
+
+function downloadLog(log: SyncLog): void {
+  const filename = `geoanalyzr-sync-${log.timestamp.replace(/[:.]/g, "-")}.json`;
+  const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
 
 let running: Promise<void> | null = null;
 
@@ -31,7 +43,7 @@ function buildHintFromMessage(message: string): string | undefined {
 
 async function runOnce(
   ui: ReturnType<typeof createSyncMiniButton>,
-  opts: { forceFull: boolean; ensureLinked: boolean; showHints: boolean }
+  opts: { forceFull: boolean; ensureLinked: boolean; showHints: boolean; downloadLog?: boolean }
 ) {
   if (running) return running;
   running = (async () => {
@@ -43,6 +55,7 @@ async function runOnce(
         setStatus: (m) => ui.setTitle(`GeoAnalyzr Sync - ${m}`)
       });
       ui.setTitle(`GeoAnalyzr Sync - ${res.message}`);
+      if (opts.downloadLog) downloadLog(res.log);
       if (res.ok) setTransientState(ui, "ok");
       else {
         const tokenMissing = /missing sync token/i.test(res.message);
@@ -70,6 +83,7 @@ async function runOnce(
 const ui = createSyncMiniButton({
   onClick: async (ev) => {
     const forceFull = !!(ev && (ev as any).shiftKey);
+    const wantLog = !!(ev && (ev as any).ctrlKey);
     const wantUnsync = !!(ev && (ev as any).shiftKey && (ev as any).altKey);
 
     if (wantUnsync) {
@@ -108,7 +122,7 @@ const ui = createSyncMiniButton({
 
     const settings = loadServerSyncSettings();
     const ensureLinked = !settings.token; // click can open linking tab when token missing
-    await runOnce(ui, { forceFull, ensureLinked, showHints: true });
+    await runOnce(ui, { forceFull, ensureLinked, showHints: true, downloadLog: wantLog });
   }
 });
 
