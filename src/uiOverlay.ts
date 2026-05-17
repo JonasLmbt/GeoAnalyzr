@@ -2,7 +2,7 @@ import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { syncToServerV2 } from "./serverSync_v2";
 import { fetchFeed } from "./feedFetcher_v2";
-import { fetchDetails } from "./detailFetcher_v2";
+import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { isMigrationNeeded, migrateV1ToV2 } from "./migration_v1_to_v2";
 import { getGmXmlhttpRequest } from "./gm";
 import { loadFetchGameFilter, saveFetchGameFilter } from "./fetchGameFilter";
@@ -803,13 +803,23 @@ export function createUIOverlay(): UIOverlay {
 
       setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
       try {
-        await fetchFeed({
+        let prevNewGames = 0;
+        const feedResult = await fetchFeed({
           full: opts.forceFull,
           maxPages: 5000,
           delayMs: 150,
           overlapThreshold: 5,
-          onProgress: (p) => { setMsg(`Feed page ${p.page} — ${p.newGames} new games...`); },
+          onProgress: (p) => {
+            if (logModal) {
+              const pageNew = p.newGames - prevNewGames;
+              prevNewGames = p.newGames;
+              setMsg(`Page ${p.page}: ${pageNew > 0 ? `+${pageNew} new` : "0 new"} (total: ${p.newGames})`);
+            } else {
+              setMsg(`Feed page ${p.page} — ${p.newGames} new games...`);
+            }
+          },
         });
+        if (logModal) setMsg(`Feed done — ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
       } catch (e: any) {
         setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
         logModal?.finish(false);
@@ -819,13 +829,26 @@ export function createUIOverlay(): UIOverlay {
       setMsg("Fetching game details...");
       let detailsSucceeded = 0;
       try {
+        const fmtDate = (ts?: number) => ts ? new Date(ts).toISOString().slice(0, 10) : "?";
+        const fmtId = (id: string) => id.length > 8 ? id.slice(0, 6) + ".." : id;
+        const onGameEvent = logModal ? (e: DetailGameEvent) => {
+          if (e.status === "checking") {
+            setMsg(`${fmtId(e.gameId)} (${e.mode}, ${fmtDate(e.playedAt)}): missing ${e.missing.join(", ")}`);
+          } else if (e.status === "ok") {
+            setMsg(`  → ok`);
+          } else {
+            setMsg(`  → failed: ${e.error ?? "unknown"}`);
+          }
+        } : undefined;
         const detailResult = await fetchDetails({
-          concurrency: 3,
+          concurrency: logModal ? 1 : 3,
           delayMs: 400,
           force: opts.forceFull,
-          onProgress: (p) => { setMsg(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}...`); },
+          onProgress: logModal ? undefined : (p) => { setMsg(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}...`); },
+          onGameEvent,
         });
         detailsSucceeded = detailResult.succeeded;
+        if (logModal) setMsg(`Details done — ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
       } catch { /* non-fatal */ }
 
       // Server sync — force full if any games had fields updated, so the server gets the new data

@@ -11710,20 +11710,24 @@ ${shapes}`.trim();
     }
     return updates;
   }
-  function isDetailIncomplete(game) {
-    if (game.detailFetchedAt === void 0) return true;
-    if (game.totalRounds === void 0) return true;
-    if (game.movementType === void 0) return true;
+  function getMissingFields(game) {
+    const m = [];
+    if (game.detailFetchedAt === void 0) m.push("never fetched");
+    if (game.totalRounds === void 0) m.push("totalRounds");
+    if (game.movementType === void 0) m.push("movementType");
     const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
     if (isDuelType) {
-      if (game.selfVictory === void 0) return true;
-      if (game.oppId === void 0) return true;
-      if (game.isRated && game.selfRatingBefore === void 0) return true;
+      if (game.selfVictory === void 0) m.push("selfVictory");
+      if (game.oppId === void 0) m.push("oppId");
+      if (game.isRated && game.selfRatingBefore === void 0) m.push("selfRatingBefore");
     }
     if (game.modeFamily === "teamduels") {
-      if (game.mateId === void 0) return true;
+      if (game.mateId === void 0) m.push("mateId");
     }
-    return false;
+    return m;
+  }
+  function isDetailIncomplete(game) {
+    return getMissingFields(game).length > 0;
   }
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
@@ -11751,11 +11755,14 @@ ${shapes}`.trim();
       const batch = games.slice(i, i + concurrency);
       await Promise.all(
         batch.map(async (game) => {
+          const missing = getMissingFields(game);
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
           const endpoints = buildEndpoints(game.gameId, game.modeFamily);
           const attemptedAt = Date.now();
           const result = await tryFetch(game.gameId, endpoints);
           if (!result) {
             failed++;
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: "All endpoints 404" });
             await dbV2.detailFetchLog.put({
               gameId: game.gameId,
               attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
@@ -11787,15 +11794,18 @@ ${shapes}`.trim();
               lastStatus: "ok",
               endpoint
             });
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
             succeeded++;
           } catch (e) {
+            const errMsg = e instanceof Error ? e.message : String(e);
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
             failed++;
             await dbV2.detailFetchLog.put({
               gameId: game.gameId,
               attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "error",
-              lastError: e instanceof Error ? e.message : String(e),
+              lastError: errMsg,
               endpoint
             });
           }
@@ -12756,15 +12766,23 @@ ${shapes}`.trim();
         }
         setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
         try {
-          await fetchFeed({
+          let prevNewGames = 0;
+          const feedResult = await fetchFeed({
             full: opts.forceFull,
             maxPages: 5e3,
             delayMs: 150,
             overlapThreshold: 5,
             onProgress: (p) => {
-              setMsg(`Feed page ${p.page} \u2014 ${p.newGames} new games...`);
+              if (logModal) {
+                const pageNew = p.newGames - prevNewGames;
+                prevNewGames = p.newGames;
+                setMsg(`Page ${p.page}: ${pageNew > 0 ? `+${pageNew} new` : "0 new"} (total: ${p.newGames})`);
+              } else {
+                setMsg(`Feed page ${p.page} \u2014 ${p.newGames} new games...`);
+              }
             }
           });
+          if (logModal) setMsg(`Feed done \u2014 ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
         } catch (e) {
           setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
           logModal?.finish(false);
@@ -12773,15 +12791,28 @@ ${shapes}`.trim();
         setMsg("Fetching game details...");
         let detailsSucceeded = 0;
         try {
+          const fmtDate2 = (ts) => ts ? new Date(ts).toISOString().slice(0, 10) : "?";
+          const fmtId = (id) => id.length > 8 ? id.slice(0, 6) + ".." : id;
+          const onGameEvent = logModal ? (e) => {
+            if (e.status === "checking") {
+              setMsg(`${fmtId(e.gameId)} (${e.mode}, ${fmtDate2(e.playedAt)}): missing ${e.missing.join(", ")}`);
+            } else if (e.status === "ok") {
+              setMsg(`  \u2192 ok`);
+            } else {
+              setMsg(`  \u2192 failed: ${e.error ?? "unknown"}`);
+            }
+          } : void 0;
           const detailResult = await fetchDetails({
-            concurrency: 3,
+            concurrency: logModal ? 1 : 3,
             delayMs: 400,
             force: opts.forceFull,
-            onProgress: (p) => {
+            onProgress: logModal ? void 0 : (p) => {
               setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
-            }
+            },
+            onGameEvent
           });
           detailsSucceeded = detailResult.succeeded;
+          if (logModal) setMsg(`Details done \u2014 ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
         } catch {
         }
         await runSyncOnce({ forceFull: opts.forceFull || detailsSucceeded > 0, allowLinking: !opts.auto, setMsg });

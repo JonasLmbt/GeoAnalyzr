@@ -16,6 +16,15 @@ export interface DetailFetchResult {
   permanentlySkipped: number;
 }
 
+export interface DetailGameEvent {
+  gameId: string;
+  playedAt?: number;
+  mode: ModeFamily;
+  missing: string[];
+  status: "checking" | "ok" | "failed";
+  error?: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function asNum(v: unknown): number | undefined {
@@ -596,33 +605,25 @@ function extractGameUpdates(
 
 // ─── Completeness check ───────────────────────────────────────────────────────
 
-/**
- * Returns true if a game is missing fields that should always be populated
- * after a successful detail fetch. Extend this when new required fields are
- * added — incomplete games are automatically re-fetched on the next sync
- * (up to maxRetries times, then only on force/shift+click).
- */
-function isDetailIncomplete(game: GameRow): boolean {
-  if (game.detailFetchedAt === undefined) return true;
-
-  // Universal fields — present for every game type
-  if (game.totalRounds === undefined) return true;
-  if (game.movementType === undefined) return true;
-
-  // Duels + TeamDuels
+export function getMissingFields(game: GameRow): string[] {
+  const m: string[] = [];
+  if (game.detailFetchedAt === undefined) m.push("never fetched");
+  if (game.totalRounds === undefined) m.push("totalRounds");
+  if (game.movementType === undefined) m.push("movementType");
   const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
   if (isDuelType) {
-    if (game.selfVictory === undefined) return true;
-    if (game.oppId === undefined) return true;
-    if (game.isRated && game.selfRatingBefore === undefined) return true;
+    if (game.selfVictory === undefined) m.push("selfVictory");
+    if (game.oppId === undefined) m.push("oppId");
+    if (game.isRated && game.selfRatingBefore === undefined) m.push("selfRatingBefore");
   }
-
-  // TeamDuels only
   if (game.modeFamily === "teamduels") {
-    if (game.mateId === undefined) return true;
+    if (game.mateId === undefined) m.push("mateId");
   }
+  return m;
+}
 
-  return false;
+function isDetailIncomplete(game: GameRow): boolean {
+  return getMissingFields(game).length > 0;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -635,6 +636,7 @@ export async function fetchDetails(opts: {
   /** If provided, only fetch details for these games (otherwise queries DB). */
   games?: GameRow[];
   onProgress?: (p: DetailFetchProgress) => void;
+  onGameEvent?: (e: DetailGameEvent) => void;
   concurrency?: number;
   delayMs?: number;
   /** Max attempts per game before it is skipped on normal syncs (default: 3) */
@@ -672,6 +674,9 @@ export async function fetchDetails(opts: {
 
     await Promise.all(
       batch.map(async (game) => {
+        const missing = getMissingFields(game);
+        opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
+
         const endpoints = buildEndpoints(game.gameId, game.modeFamily);
         const attemptedAt = Date.now();
 
@@ -679,6 +684,7 @@ export async function fetchDetails(opts: {
 
         if (!result) {
           failed++;
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: "All endpoints 404" });
           await dbV2.detailFetchLog.put({
             gameId: game.gameId,
             attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
@@ -724,15 +730,18 @@ export async function fetchDetails(opts: {
             endpoint,
           });
 
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
           succeeded++;
         } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
           failed++;
           await dbV2.detailFetchLog.put({
             gameId: game.gameId,
             attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
             lastAttemptAt: attemptedAt,
             lastStatus: "error",
-            lastError: e instanceof Error ? e.message : String(e),
+            lastError: errMsg,
             endpoint,
           });
         }
