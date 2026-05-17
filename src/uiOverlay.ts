@@ -790,8 +790,8 @@ export function createUIOverlay(): UIOverlay {
 
     const logModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
     const setMsg = (msg: string) => {
-      if (logModal) logModal.log(msg);
-      else status.textContent = msg;
+      status.textContent = msg;
+      logModal?.log(msg);
     };
 
     try {

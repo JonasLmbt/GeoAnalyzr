@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.7.1
+// @version      2.7.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -12785,8 +12785,8 @@ ${shapes}`.trim();
       btns.forEach((b) => b.disabled = true);
       const logModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
       const setMsg = (msg) => {
-        if (logModal) logModal.log(msg);
-        else status.textContent = msg;
+        status.textContent = msg;
+        logModal?.log(msg);
       };
       try {
         const ev = opts.ev ?? new MouseEvent("click");
