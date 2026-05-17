@@ -243,5 +243,11 @@ export async function fetchFeed(opts: {
     }
   }
 
+  // Clear saved cursor once a full fetch completes so the next full fetch
+  // starts from the top of the feed (not from a stale end-of-feed position).
+  if (opts.full && stopped === "exhausted") {
+    await dbV2.syncState.delete("feedCursor");
+  }
+
   return { newGames: totalNew, pages: 0, stopped };
 }

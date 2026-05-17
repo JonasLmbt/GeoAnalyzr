@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.6.7
+// @version      2.6.8
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10903,7 +10903,7 @@ ${shapes}`.trim();
     const localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
     const localGameCount = localGames.length;
     const serverCount = serverBefore?.gameCount ?? 0;
-    if (!opts.full && serverCount >= localGameCount * 0.99 && serverCount > 0) {
+    if (!opts.full && serverCount >= localGameCount && serverCount > 0) {
       return {
         ok: true,
         gamesUploaded: 0,
@@ -11168,6 +11168,9 @@ ${shapes}`.trim();
       if (page >= maxPages) {
         stopped = "max_pages";
       }
+    }
+    if (opts.full && stopped === "exhausted") {
+      await dbV2.syncState.delete("feedCursor");
     }
     return { newGames: totalNew, pages: 0, stopped };
   }

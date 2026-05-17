@@ -212,9 +212,9 @@ export async function syncToServerV2(opts: {
     .toArray();
   const localGameCount = localGames.length;
 
-  // Skip upload if server already has all local games (within 1% tolerance)
+  // Skip upload if server already has at least as many games as local
   const serverCount = serverBefore?.gameCount ?? 0;
-  if (!opts.full && serverCount >= localGameCount * 0.99 && serverCount > 0) {
+  if (!opts.full && serverCount >= localGameCount && serverCount > 0) {
     return {
       ok: true,
       gamesUploaded: 0,
