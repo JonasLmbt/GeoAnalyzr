@@ -817,17 +817,19 @@ export function createUIOverlay(): UIOverlay {
       }
 
       setMsg("Fetching game details...");
+      let detailsSucceeded = 0;
       try {
-        await fetchDetails({
+        const detailResult = await fetchDetails({
           concurrency: 3,
           delayMs: 400,
           force: opts.forceFull,
           onProgress: (p) => { setMsg(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}...`); },
         });
+        detailsSucceeded = detailResult.succeeded;
       } catch { /* non-fatal */ }
 
-      // Server sync
-      await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg });
+      // Server sync — force full if any games had fields updated, so the server gets the new data
+      await runSyncOnce({ forceFull: opts.forceFull || detailsSucceeded > 0, allowLinking: !opts.auto, setMsg });
       logModal?.finish(true);
     } catch (e: any) {
       setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);

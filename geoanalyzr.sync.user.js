@@ -12771,8 +12771,9 @@ ${shapes}`.trim();
           return;
         }
         setMsg("Fetching game details...");
+        let detailsSucceeded = 0;
         try {
-          await fetchDetails({
+          const detailResult = await fetchDetails({
             concurrency: 3,
             delayMs: 400,
             force: opts.forceFull,
@@ -12780,9 +12781,10 @@ ${shapes}`.trim();
               setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
             }
           });
+          detailsSucceeded = detailResult.succeeded;
         } catch {
         }
-        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg });
+        await runSyncOnce({ forceFull: opts.forceFull || detailsSucceeded > 0, allowLinking: !opts.auto, setMsg });
         logModal?.finish(true);
       } catch (e) {
         setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
