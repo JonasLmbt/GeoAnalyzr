@@ -110,11 +110,8 @@ function extractRatingChange(player: any): { before?: number; after?: number } {
   return {};
 }
 
-function extractMovementRatings(player: any): {
-  movingBefore?: number; movingAfter?: number;
-  noMoveBefore?: number; noMoveAfter?: number;
-  nmpzBefore?: number; nmpzAfter?: number;
-} {
+/** Extracts the movement-mode–specific rating change for this game. */
+function extractGameModeRating(player: any): { before?: number; after?: number } {
   const paths = [
     "progressChange.rankedSystemProgress",
     "progressChange.rankedTeamDuelsProgress",
@@ -123,20 +120,9 @@ function extractMovementRatings(player: any): {
   ];
   for (const p of paths) {
     const obj = getByPath(player, p);
-    if (!obj) continue;
-    const movingBefore = asNum(obj?.movingRatingBefore);
-    const movingAfter = asNum(obj?.movingRatingAfter);
-    const noMoveBefore = asNum(obj?.noMoveRatingBefore);
-    const noMoveAfter = asNum(obj?.noMoveRatingAfter);
-    const nmpzBefore = asNum(obj?.nmpzRatingBefore);
-    const nmpzAfter = asNum(obj?.nmpzRatingAfter);
-    if (
-      movingBefore !== undefined || movingAfter !== undefined ||
-      noMoveBefore !== undefined || noMoveAfter !== undefined ||
-      nmpzBefore !== undefined || nmpzAfter !== undefined
-    ) {
-      return { movingBefore, movingAfter, noMoveBefore, noMoveAfter, nmpzBefore, nmpzAfter };
-    }
+    const before = asNum(obj?.gameModeRatingBefore);
+    const after = asNum(obj?.gameModeRatingAfter);
+    if (before !== undefined || after !== undefined) return { before, after };
   }
   return {};
 }
@@ -498,7 +484,7 @@ function extractGameUpdates(
     const p3Id = readPlayerId(p[3]);
 
     const rc = p.map(extractRatingChange);
-    const mc = p.map(extractMovementRatings);
+    const gm = p.map(extractGameModeRating);
 
     let ownTeamIndex = 0;
     if (selfId) {
@@ -511,10 +497,34 @@ function extractGameUpdates(
     }
     const ownTeam = teams[ownTeamIndex];
     const otherTeam = teams.find((_: any, i: number) => i !== ownTeamIndex) ?? teams[1];
-    const selfVictory = winningTeamId
-      ? String(ownTeam?.id || "") === winningTeamId
-      : undefined;
     const selfScore = asNum(ownTeam?.health);
+    const otherScore = asNum(otherTeam?.health);
+
+    // Primary: winningTeamId from result; fallback: team with higher health wins
+    let selfVictory: boolean | undefined;
+    if (winningTeamId) {
+      selfVictory = String(ownTeam?.id || "") === winningTeamId;
+    } else if (selfScore !== undefined && otherScore !== undefined) {
+      selfVictory = selfScore > otherScore;
+    }
+
+    // Movement ratings: API returns one gameModeRating per player; which column
+    // it maps to depends on the movementType of this game.
+    const mt = movementType; // already extracted above
+    const selfGm = gm[0];
+    const oppGm = gm[2];
+    const selfMovingRatingBefore  = mt === "moving"  ? selfGm.before : undefined;
+    const selfMovingRatingAfter   = mt === "moving"  ? selfGm.after  : undefined;
+    const selfNoMoveRatingBefore  = mt === "no_move" ? selfGm.before : undefined;
+    const selfNoMoveRatingAfter   = mt === "no_move" ? selfGm.after  : undefined;
+    const selfNmpzRatingBefore    = mt === "nmpz"    ? selfGm.before : undefined;
+    const selfNmpzRatingAfter     = mt === "nmpz"    ? selfGm.after  : undefined;
+    const oppMovingRatingBefore   = mt === "moving"  ? oppGm.before  : undefined;
+    const oppMovingRatingAfter    = mt === "moving"  ? oppGm.after   : undefined;
+    const oppNoMoveRatingBefore   = mt === "no_move" ? oppGm.before  : undefined;
+    const oppNoMoveRatingAfter    = mt === "no_move" ? oppGm.after   : undefined;
+    const oppNmpzRatingBefore     = mt === "nmpz"    ? oppGm.before  : undefined;
+    const oppNmpzRatingAfter      = mt === "nmpz"    ? oppGm.after   : undefined;
 
     Object.assign(updates, {
       selfId: p0Id,
@@ -524,23 +534,23 @@ function extractGameUpdates(
       selfVictory,
       selfRatingBefore: rc[0].before,
       selfRatingAfter: rc[0].after,
-      selfMovingRatingBefore: mc[0].movingBefore,
-      selfMovingRatingAfter: mc[0].movingAfter,
-      selfNoMoveRatingBefore: mc[0].noMoveBefore,
-      selfNoMoveRatingAfter: mc[0].noMoveAfter,
-      selfNmpzRatingBefore: mc[0].nmpzBefore,
-      selfNmpzRatingAfter: mc[0].nmpzAfter,
+      selfMovingRatingBefore,
+      selfMovingRatingAfter,
+      selfNoMoveRatingBefore,
+      selfNoMoveRatingAfter,
+      selfNmpzRatingBefore,
+      selfNmpzRatingAfter,
       oppId: p2Id,
       oppName: typeof p[2]?.nick === "string" ? p[2].nick : undefined,
       oppCountry: extractCountry(p[2]),
       oppRatingBefore: rc[2].before,
       oppRatingAfter: rc[2].after,
-      oppMovingRatingBefore: mc[2].movingBefore,
-      oppMovingRatingAfter: mc[2].movingAfter,
-      oppNoMoveRatingBefore: mc[2].noMoveBefore,
-      oppNoMoveRatingAfter: mc[2].noMoveAfter,
-      oppNmpzRatingBefore: mc[2].nmpzBefore,
-      oppNmpzRatingAfter: mc[2].nmpzAfter,
+      oppMovingRatingBefore,
+      oppMovingRatingAfter,
+      oppNoMoveRatingBefore,
+      oppNoMoveRatingAfter,
+      oppNmpzRatingBefore,
+      oppNmpzRatingAfter,
       mateId: p1Id,
       mateName: typeof p[1]?.nick === "string" ? p[1].nick : undefined,
       mateCountry: extractCountry(p[1]),

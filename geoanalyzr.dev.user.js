@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.6.10-dev
+// @version      2.6.11-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11258,7 +11258,7 @@ ${shapes}`.trim();
     }
     return {};
   }
-  function extractMovementRatings(player) {
+  function extractGameModeRating(player) {
     const paths = [
       "progressChange.rankedSystemProgress",
       "progressChange.rankedTeamDuelsProgress",
@@ -11267,16 +11267,9 @@ ${shapes}`.trim();
     ];
     for (const p of paths) {
       const obj = getByPath3(player, p);
-      if (!obj) continue;
-      const movingBefore = asNum2(obj?.movingRatingBefore);
-      const movingAfter = asNum2(obj?.movingRatingAfter);
-      const noMoveBefore = asNum2(obj?.noMoveRatingBefore);
-      const noMoveAfter = asNum2(obj?.noMoveRatingAfter);
-      const nmpzBefore = asNum2(obj?.nmpzRatingBefore);
-      const nmpzAfter = asNum2(obj?.nmpzRatingAfter);
-      if (movingBefore !== void 0 || movingAfter !== void 0 || noMoveBefore !== void 0 || noMoveAfter !== void 0 || nmpzBefore !== void 0 || nmpzAfter !== void 0) {
-        return { movingBefore, movingAfter, noMoveBefore, noMoveAfter, nmpzBefore, nmpzAfter };
-      }
+      const before = asNum2(obj?.gameModeRatingBefore);
+      const after = asNum2(obj?.gameModeRatingAfter);
+      if (before !== void 0 || after !== void 0) return { before, after };
     }
     return {};
   }
@@ -11535,7 +11528,7 @@ ${shapes}`.trim();
       const p2Id = readPlayerId2(p[2]);
       const p3Id = readPlayerId2(p[3]);
       const rc = p.map(extractRatingChange2);
-      const mc = p.map(extractMovementRatings);
+      const gm = p.map(extractGameModeRating);
       let ownTeamIndex = 0;
       if (selfId) {
         const found = teams.findIndex(
@@ -11545,8 +11538,29 @@ ${shapes}`.trim();
       }
       const ownTeam = teams[ownTeamIndex];
       const otherTeam = teams.find((_, i) => i !== ownTeamIndex) ?? teams[1];
-      const selfVictory = winningTeamId ? String(ownTeam?.id || "") === winningTeamId : void 0;
       const selfScore = asNum2(ownTeam?.health);
+      const otherScore = asNum2(otherTeam?.health);
+      let selfVictory;
+      if (winningTeamId) {
+        selfVictory = String(ownTeam?.id || "") === winningTeamId;
+      } else if (selfScore !== void 0 && otherScore !== void 0) {
+        selfVictory = selfScore > otherScore;
+      }
+      const mt = movementType;
+      const selfGm = gm[0];
+      const oppGm = gm[2];
+      const selfMovingRatingBefore = mt === "moving" ? selfGm.before : void 0;
+      const selfMovingRatingAfter = mt === "moving" ? selfGm.after : void 0;
+      const selfNoMoveRatingBefore = mt === "no_move" ? selfGm.before : void 0;
+      const selfNoMoveRatingAfter = mt === "no_move" ? selfGm.after : void 0;
+      const selfNmpzRatingBefore = mt === "nmpz" ? selfGm.before : void 0;
+      const selfNmpzRatingAfter = mt === "nmpz" ? selfGm.after : void 0;
+      const oppMovingRatingBefore = mt === "moving" ? oppGm.before : void 0;
+      const oppMovingRatingAfter = mt === "moving" ? oppGm.after : void 0;
+      const oppNoMoveRatingBefore = mt === "no_move" ? oppGm.before : void 0;
+      const oppNoMoveRatingAfter = mt === "no_move" ? oppGm.after : void 0;
+      const oppNmpzRatingBefore = mt === "nmpz" ? oppGm.before : void 0;
+      const oppNmpzRatingAfter = mt === "nmpz" ? oppGm.after : void 0;
       Object.assign(updates, {
         selfId: p0Id,
         selfName: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
@@ -11555,23 +11569,23 @@ ${shapes}`.trim();
         selfVictory,
         selfRatingBefore: rc[0].before,
         selfRatingAfter: rc[0].after,
-        selfMovingRatingBefore: mc[0].movingBefore,
-        selfMovingRatingAfter: mc[0].movingAfter,
-        selfNoMoveRatingBefore: mc[0].noMoveBefore,
-        selfNoMoveRatingAfter: mc[0].noMoveAfter,
-        selfNmpzRatingBefore: mc[0].nmpzBefore,
-        selfNmpzRatingAfter: mc[0].nmpzAfter,
+        selfMovingRatingBefore,
+        selfMovingRatingAfter,
+        selfNoMoveRatingBefore,
+        selfNoMoveRatingAfter,
+        selfNmpzRatingBefore,
+        selfNmpzRatingAfter,
         oppId: p2Id,
         oppName: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
         oppCountry: extractCountry(p[2]),
         oppRatingBefore: rc[2].before,
         oppRatingAfter: rc[2].after,
-        oppMovingRatingBefore: mc[2].movingBefore,
-        oppMovingRatingAfter: mc[2].movingAfter,
-        oppNoMoveRatingBefore: mc[2].noMoveBefore,
-        oppNoMoveRatingAfter: mc[2].noMoveAfter,
-        oppNmpzRatingBefore: mc[2].nmpzBefore,
-        oppNmpzRatingAfter: mc[2].nmpzAfter,
+        oppMovingRatingBefore,
+        oppMovingRatingAfter,
+        oppNoMoveRatingBefore,
+        oppNoMoveRatingAfter,
+        oppNmpzRatingBefore,
+        oppNmpzRatingAfter,
         mateId: p1Id,
         mateName: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
         mateCountry: extractCountry(p[1]),
