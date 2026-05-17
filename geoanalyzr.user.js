@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.7.0
+// @version      2.7.1
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -12539,17 +12539,20 @@ ${shapes}`.trim();
     };
     async function runSyncOnce(opts) {
       const forceFull = !!opts.forceFull;
-      status.textContent = forceFull ? "Syncing full snapshot..." : "Syncing...";
+      const setMsg = opts.setMsg ?? ((msg) => {
+        status.textContent = msg;
+      });
+      setMsg(forceFull ? "Syncing full snapshot..." : "Syncing...");
       try {
         let settings = loadServerSyncSettings();
         if (!settings.token) {
           if (!opts.allowLinking) {
-            status.textContent = "Not linked. Click Fetch + Sync once to link your device.";
+            setMsg("Not linked. Click Fetch + Sync once to link your device.");
             return;
           }
           const gm = getGmXmlhttpRequest();
           if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
-          status.textContent = "Linking device...";
+          setMsg("Linking device...");
           const linkOrigin = "https://geoanalyzr.lmbt.app";
           const pairStartUrl = `${linkOrigin}/pair/start`;
           const pair = await new Promise((resolve, reject) => {
@@ -12575,7 +12578,7 @@ ${shapes}`.trim();
           });
           const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
           if (!linkWin) {
-            status.textContent = "Popup blocked. Allow popups for geoanalyzr.lmbt.app.";
+            setMsg("Popup blocked. Allow popups for geoanalyzr.lmbt.app.");
             return;
           }
           const token = await new Promise((resolve, reject) => {
@@ -12612,17 +12615,17 @@ ${shapes}`.trim();
           const v2res = await syncToServerV2({
             full: forceFull,
             onProgress: (p) => {
-              if (p.phase === "upload") status.textContent = `Syncing batch ${p.batch}/${p.totalBatches}...`;
+              if (p.phase === "upload") setMsg(`Syncing batch ${p.batch}/${p.totalBatches}...`);
             }
           });
           if (v2res.ok) {
-            status.textContent = `${modeLabel} \u2014 new: ${v2res.gamesNew}, uploaded: ${v2res.gamesUploaded}`;
+            setMsg(`${modeLabel} \u2014 new: ${v2res.gamesNew}, uploaded: ${v2res.gamesUploaded}`);
           } else {
             const errMap = {
               no_token: "Not linked. Click Fetch + Sync to link your device.",
               no_player_id: "Could not determine player ID. Ensure you are logged in to GeoGuessr."
             };
-            status.textContent = errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`;
+            setMsg(errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`);
           }
         } else {
           const res = await runServerSyncOnceWithOptions(settings, { forceFull });
@@ -12630,27 +12633,109 @@ ${shapes}`.trim();
           const modeLabel = forceFull ? "Synced full" : "Synced";
           const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
           if (res.ok) {
-            status.textContent = `${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`;
+            setMsg(`${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`);
           } else {
             const size = formatBytes(res.bytesGzip);
             if (res.status === 413) {
-              status.textContent = `Sync failed (HTTP 413) - payload ${size}. Try Compact mode or narrow Sync filters.`;
+              setMsg(`Sync failed (HTTP 413) - payload ${size}. Try Compact mode or narrow Sync filters.`);
             } else if (res.status === 401 || res.status === 403) {
-              status.textContent = `Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`;
+              setMsg(`Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`);
             } else {
-              status.textContent = `Sync failed (HTTP ${res.status})`;
+              setMsg(`Sync failed (HTTP ${res.status})`);
             }
           }
         }
       } catch (e) {
-        status.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
+        setMsg(e instanceof Error ? e.message : String(e || "Sync failed"));
       }
     }
+    const openSyncLogModal = (forceFull) => {
+      const logLines = [];
+      const card = el("div");
+      card.className = "ga-ui-modal-card";
+      card.style.width = "520px";
+      card.style.maxWidth = "90vw";
+      const head = el("div");
+      head.className = "ga-ui-modal-head";
+      const headTitle = el("div");
+      headTitle.className = "ga-ui-modal-head-title";
+      headTitle.textContent = forceFull ? "Sync Log (Full)" : "Sync Log";
+      const headX = el("button");
+      headX.className = "ga-ui-modal-x";
+      headX.type = "button";
+      headX.textContent = "x";
+      head.appendChild(headTitle);
+      head.appendChild(headX);
+      const logArea = el("div");
+      logArea.style.cssText = "font-family:monospace;font-size:11px;line-height:1.5;padding:10px 12px;max-height:320px;overflow-y:auto;background:rgba(0,0,0,0.35);border-radius:4px;margin:10px 14px;white-space:pre-wrap;word-break:break-all;";
+      const actions2 = el("div");
+      actions2.className = "ga-ui-modal-actions";
+      const closeBtn2 = el("button");
+      closeBtn2.className = "ga-ui-btn";
+      closeBtn2.type = "button";
+      closeBtn2.style.background = "rgba(255,255,255,0.10)";
+      closeBtn2.textContent = "Close";
+      const dlBtn = el("button");
+      dlBtn.className = "ga-ui-btn";
+      dlBtn.type = "button";
+      dlBtn.style.background = "rgba(0,162,254,0.18)";
+      dlBtn.style.display = "none";
+      dlBtn.textContent = "Download";
+      actions2.appendChild(closeBtn2);
+      actions2.appendChild(dlBtn);
+      card.appendChild(head);
+      card.appendChild(logArea);
+      card.appendChild(actions2);
+      const modal = el("div");
+      modal.className = "ga-ui-modal";
+      modal.appendChild(card);
+      const close = () => {
+        try {
+          modal.remove();
+        } catch {
+        }
+      };
+      headX.addEventListener("click", close);
+      closeBtn2.addEventListener("click", close);
+      modal.addEventListener("click", (ev) => {
+        if (ev.target === modal) close();
+      });
+      (document.body ?? document.documentElement).appendChild(modal);
+      const appendLine = (msg) => {
+        const ts = (/* @__PURE__ */ new Date()).toISOString().slice(11, 19);
+        const line = `[${ts}] ${msg}`;
+        logLines.push(line);
+        const span = el("span");
+        span.textContent = line + "\n";
+        logArea.appendChild(span);
+        logArea.scrollTop = logArea.scrollHeight;
+      };
+      const finish = (ok) => {
+        const marker = ok ? "\u2713 Done" : "\u2717 Failed";
+        appendLine(marker);
+        dlBtn.style.display = "";
+        dlBtn.addEventListener("click", () => {
+          const blob = new Blob([logLines.join("\n")], { type: "text/plain" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `geoanalyzr-sync-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }, { once: true });
+      };
+      return { log: appendLine, finish };
+    };
     const runFetchAndSyncImpl = async (opts) => {
       if (!isSyncVariant) return;
       const btns = [fetchSyncBtn, fetchGearBtn, deleteBtn].filter((b) => !!b);
       if (btns.some((b) => b.disabled)) return;
       btns.forEach((b) => b.disabled = true);
+      const logModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
+      const setMsg = (msg) => {
+        if (logModal) logModal.log(msg);
+        else status.textContent = msg;
+      };
       try {
         const ev = opts.ev ?? new MouseEvent("click");
         try {
@@ -12658,17 +12743,18 @@ ${shapes}`.trim();
         } catch {
         }
         if (!updateHandler) {
-          status.textContent = "Fetch handler not ready yet. Try again in a moment.";
+          setMsg("Fetch handler not ready yet. Try again in a moment.");
+          logModal?.finish(false);
           return;
         }
         try {
           if (await isMigrationNeeded()) {
-            status.textContent = "Migrating local data to v2 format...";
+            setMsg("Migrating local data to v2 format...");
             await migrateV1ToV2();
           }
         } catch {
         }
-        status.textContent = opts.forceFull ? "Fetching full history..." : "Fetching feed...";
+        setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
         try {
           await fetchFeed({
             full: opts.forceFull,
@@ -12676,26 +12762,31 @@ ${shapes}`.trim();
             delayMs: 150,
             overlapThreshold: 5,
             onProgress: (p) => {
-              status.textContent = `Feed page ${p.page} \u2014 ${p.newGames} new games...`;
+              setMsg(`Feed page ${p.page} \u2014 ${p.newGames} new games...`);
             }
           });
         } catch (e) {
-          status.textContent = `Feed error: ${e instanceof Error ? e.message : String(e)}`;
+          setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
+          logModal?.finish(false);
           return;
         }
-        status.textContent = "Fetching game details...";
+        setMsg("Fetching game details...");
         try {
           await fetchDetails({
             concurrency: 3,
             delayMs: 400,
             force: opts.forceFull,
             onProgress: (p) => {
-              status.textContent = `Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`;
+              setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
             }
           });
         } catch {
         }
-        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto });
+        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg });
+        logModal?.finish(true);
+      } catch (e) {
+        setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
+        logModal?.finish(false);
       } finally {
         btns.forEach((b) => b.disabled = false);
       }
@@ -12704,7 +12795,12 @@ ${shapes}`.trim();
     if (fetchSyncBtn) {
       fetchSyncBtn.addEventListener(
         "click",
-        (ev) => void runFetchAndSyncImpl({ forceFull: !!(ev && ev.shiftKey), auto: false, ev })
+        (ev) => void runFetchAndSyncImpl({
+          forceFull: !!(ev && ev.shiftKey),
+          auto: false,
+          showLog: !!(ev && ev.ctrlKey),
+          ev
+        })
       );
     }
     fetchTrashBtn.addEventListener("click", () => void resetHandler?.({ confirm: true }));
