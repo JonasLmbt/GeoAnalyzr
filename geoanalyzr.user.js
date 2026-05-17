@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.6.10
+// @version      2.6.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10724,33 +10724,119 @@ ${shapes}`.trim();
     syncState;
     constructor(name = DB_V2_NAME) {
       super(name);
+      const GAMES_SCHEMA = [
+        "gameId",
+        "playedAt",
+        "modeFamily",
+        "[modeFamily+playedAt]",
+        "selfVictory",
+        "selfId",
+        "oppId",
+        "detailFetchedAt"
+      ].join(", ");
+      const ROUNDS_SCHEMA_V1 = [
+        "[gameId+roundNumber]",
+        "gameId",
+        "startTime",
+        "trueCountry",
+        "selfGuessCountry",
+        "movementType"
+      ].join(", ");
+      const ROUNDS_SCHEMA_V2 = [
+        "[gameId+roundNumber]",
+        "gameId",
+        "startTime",
+        "trueCountry",
+        "selfCountry",
+        "movementType"
+      ].join(", ");
+      const DETAIL_LOG_SCHEMA = ["gameId", "lastAttemptAt", "lastStatus"].join(", ");
       this.version(1).stores({
-        games: [
-          "gameId",
-          "playedAt",
-          "modeFamily",
-          "[modeFamily+playedAt]",
-          "selfVictory",
-          "selfId",
-          "oppId",
-          "detailFetchedAt"
-        ].join(", "),
-        rounds: [
-          "[gameId+roundNumber]",
-          "gameId",
-          "startTime",
-          "trueCountry",
-          "selfGuessCountry",
-          "movementType"
-        ].join(", "),
+        games: GAMES_SCHEMA,
+        rounds: ROUNDS_SCHEMA_V1,
         rawFeedEntries: "gameId, fetchedAt",
         rawGameDetails: "gameId, fetchedAt",
-        detailFetchLog: [
-          "gameId",
-          "lastAttemptAt",
-          "lastStatus"
-        ].join(", "),
+        detailFetchLog: DETAIL_LOG_SCHEMA,
         syncState: "key"
+      });
+      this.version(2).stores({
+        games: GAMES_SCHEMA,
+        rounds: ROUNDS_SCHEMA_V2,
+        rawFeedEntries: "gameId, fetchedAt",
+        rawGameDetails: "gameId, fetchedAt",
+        detailFetchLog: DETAIL_LOG_SCHEMA,
+        syncState: "key"
+      }).upgrade((tx) => {
+        return tx.table("rounds").toCollection().modify((r) => {
+          if ("selfGuessLat" in r) {
+            r.selfLat = r.selfGuessLat;
+            delete r.selfGuessLat;
+          }
+          if ("selfGuessLng" in r) {
+            r.selfLng = r.selfGuessLng;
+            delete r.selfGuessLng;
+          }
+          if ("selfGuessCountry" in r) {
+            r.selfCountry = r.selfGuessCountry;
+            delete r.selfGuessCountry;
+          }
+          if ("selfDistanceKm" in r) {
+            r.selfDistance = r.selfDistanceKm;
+            delete r.selfDistanceKm;
+          }
+          if ("oppGuessLat" in r) {
+            r.oppLat = r.oppGuessLat;
+            delete r.oppGuessLat;
+          }
+          if ("oppGuessLng" in r) {
+            r.oppLng = r.oppGuessLng;
+            delete r.oppGuessLng;
+          }
+          if ("oppGuessCountry" in r) {
+            r.oppCountry = r.oppGuessCountry;
+            delete r.oppGuessCountry;
+          }
+          if ("oppDistanceKm" in r) {
+            r.oppDistance = r.oppDistanceKm;
+            delete r.oppDistanceKm;
+          }
+          if ("mateGuessLat" in r) {
+            r.mateLat = r.mateGuessLat;
+            delete r.mateGuessLat;
+          }
+          if ("mateGuessLng" in r) {
+            r.mateLng = r.mateGuessLng;
+            delete r.mateGuessLng;
+          }
+          if ("mateGuessCountry" in r) {
+            r.mateCountry = r.mateGuessCountry;
+            delete r.mateGuessCountry;
+          }
+          if ("mateDistanceKm" in r) {
+            r.mateDistance = r.mateDistanceKm;
+            delete r.mateDistanceKm;
+          }
+          if ("oppMateGuessLat" in r) {
+            r.oppMateLat = r.oppMateGuessLat;
+            delete r.oppMateGuessLat;
+          }
+          if ("oppMateGuessLng" in r) {
+            r.oppMateLng = r.oppMateGuessLng;
+            delete r.oppMateGuessLng;
+          }
+          if ("oppMateGuessCountry" in r) {
+            r.oppMateCountry = r.oppMateGuessCountry;
+            delete r.oppMateGuessCountry;
+          }
+          if ("oppMateDistanceKm" in r) {
+            r.oppMateDistance = r.oppMateDistanceKm;
+            delete r.oppMateDistanceKm;
+          }
+          if ("isHealingRound" in r) {
+            r.isHealing = r.isHealingRound;
+            delete r.isHealingRound;
+          }
+        });
       });
     }
   };
@@ -11396,7 +11482,12 @@ ${shapes}`.trim();
       const durationSec = startTs !== void 0 && endTs !== void 0 && endTs >= startTs ? (endTs - startTs) / 1e3 : void 0;
       const trueLat = asNum2(r?.panorama?.lat);
       const trueLng = asNum2(r?.panorama?.lng);
+      const trueHeadingDeg = asNum2(
+        r?.panorama?.heading ?? r?.panorama?.panoHeading ?? r?.panorama?.initialHeading
+      );
       const trueCountry = normalizeIso23(r?.panorama?.countryCode);
+      const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || void 0;
+      const damageMultiplier = asNum2(r?.damageMultiplier);
       const guessData = [];
       for (let p = 0; p < 4; p++) {
         const entry = players[p];
@@ -11405,20 +11496,24 @@ ${shapes}`.trim();
           continue;
         }
         const guess = guessMaps[p].get(rn);
-        const guessLat = asNum2(guess?.lat ?? guess?.latitude);
-        const guessLng = asNum2(guess?.lng ?? guess?.lon ?? guess?.longitude);
+        const lat = asNum2(guess?.lat ?? guess?.latitude);
+        const lng = asNum2(guess?.lng ?? guess?.lon ?? guess?.longitude);
         const distanceMeters = asNum2(guess?.distance ?? guess?.distanceInMeters);
-        const guessCountry = await resolveGuessCountry(guess, guessLat, guessLng);
+        const country = await resolveGuessCountry(guess, lat, lng);
         guessData.push({
-          lat: guessLat,
-          lng: guessLng,
-          country: guessCountry,
+          lat,
+          lng,
+          country,
           score: asNum2(guess?.score),
-          distanceKm: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
+          distance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
           healthAfter: entry.healthMap.get(rn)
         });
       }
       const [self2, mate, opp, oppMate] = guessData;
+      const hasMate = mate.score !== void 0 || mate.lat !== void 0;
+      const selfIsBetterGuess = hasMate ? (self2.score ?? -1) >= (mate.score ?? -1) : void 0;
+      const hasOppMate = oppMate.score !== void 0 || oppMate.lat !== void 0;
+      const oppIsBetterGuess = hasOppMate ? (opp.score ?? -1) >= (oppMate.score ?? -1) : void 0;
       const row = {
         gameId,
         roundNumber: rn,
@@ -11426,29 +11521,34 @@ ${shapes}`.trim();
         durationSec,
         trueLat,
         trueLng,
+        trueHeadingDeg,
         trueCountry,
-        selfGuessLat: self2.lat,
-        selfGuessLng: self2.lng,
-        selfGuessCountry: self2.country,
+        isHealing,
+        damageMultiplier,
+        selfLat: self2.lat,
+        selfLng: self2.lng,
+        selfCountry: self2.country,
         selfScore: self2.score,
-        selfDistanceKm: self2.distanceKm,
+        selfDistance: self2.distance,
         selfHealthAfter: self2.healthAfter,
-        oppGuessLat: opp.lat,
-        oppGuessLng: opp.lng,
-        oppGuessCountry: opp.country,
+        selfIsBetterGuess,
+        oppLat: opp.lat,
+        oppLng: opp.lng,
+        oppCountry: opp.country,
         oppScore: opp.score,
-        oppDistanceKm: opp.distanceKm,
+        oppDistance: opp.distance,
         oppHealthAfter: opp.healthAfter,
-        mateGuessLat: mate.lat,
-        mateGuessLng: mate.lng,
-        mateGuessCountry: mate.country,
+        oppIsBetterGuess,
+        mateLat: mate.lat,
+        mateLng: mate.lng,
+        mateCountry: mate.country,
         mateScore: mate.score,
-        mateDistanceKm: mate.distanceKm,
-        oppMateGuessLat: oppMate.lat,
-        oppMateGuessLng: oppMate.lng,
-        oppMateGuessCountry: oppMate.country,
+        mateDistance: mate.distance,
+        oppMateLat: oppMate.lat,
+        oppMateLng: oppMate.lng,
+        oppMateCountry: oppMate.country,
         oppMateScore: oppMate.score,
-        oppMateDistanceKm: oppMate.distanceKm
+        oppMateDistance: oppMate.distance
       };
       for (const k of Object.keys(row)) {
         if (row[k] === void 0) delete row[k];
@@ -11489,11 +11589,11 @@ ${shapes}`.trim();
         trueLat,
         trueLng,
         trueCountry,
-        selfGuessLat: guessLat,
-        selfGuessLng: guessLng,
-        selfGuessCountry: guessCountry,
+        selfLat: guessLat,
+        selfLng: guessLng,
+        selfCountry: guessCountry,
         selfScore: asNum2(guess?.roundScore?.amount ?? guess?.score),
-        selfDistanceKm: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0
+        selfDistance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0
       };
       for (const k of Object.keys(row)) {
         if (row[k] === void 0) delete row[k];

@@ -72,44 +72,46 @@ export interface RoundRow {
   startTime?: number;   // unix ms, when this round began
   durationSec?: number;
   movementType?: MovementType;
+  damageMultiplier?: number;
+  isHealing?: boolean;
 
   // True location
   trueLat?: number;
   trueLng?: number;
+  trueHeadingDeg?: number;
   trueCountry?: string; // ISO2, from API
 
-  // Self guess
-  selfGuessLat?: number;
-  selfGuessLng?: number;
-  selfGuessCountry?: string; // ISO2, derived from coordinates client-side
+  // Self
+  selfLat?: number;
+  selfLng?: number;
+  selfCountry?: string; // ISO2, derived from coordinates client-side
   selfScore?: number;
-  selfDistanceKm?: number;
-  selfTimeSec?: number;
+  selfDistance?: number; // km
+  selfHealthAfter?: number;      // duels: own health; teamduels: team health
+  selfIsBetterGuess?: boolean;   // teamduels: self's guess counted for team score
 
   // Opponent (duels / teamduels)
-  oppGuessLat?: number;
-  oppGuessLng?: number;
-  oppGuessCountry?: string;
+  oppLat?: number;
+  oppLng?: number;
+  oppCountry?: string;
   oppScore?: number;
-  oppDistanceKm?: number;
+  oppDistance?: number; // km
+  oppHealthAfter?: number;
+  oppIsBetterGuess?: boolean;    // teamduels: opp's guess counted for opp-team score
 
   // Teammate (teamduels)
-  mateGuessLat?: number;
-  mateGuessLng?: number;
-  mateGuessCountry?: string;
+  mateLat?: number;
+  mateLng?: number;
+  mateCountry?: string;
   mateScore?: number;
-  mateDistanceKm?: number;
+  mateDistance?: number; // km
 
   // Opponent's teammate (teamduels)
-  oppMateGuessLat?: number;
-  oppMateGuessLng?: number;
-  oppMateGuessCountry?: string;
+  oppMateLat?: number;
+  oppMateLng?: number;
+  oppMateCountry?: string;
   oppMateScore?: number;
-  oppMateDistanceKm?: number;
-
-  // Duel health progression
-  selfHealthAfter?: number;
-  oppHealthAfter?: number;
+  oppMateDistance?: number; // km
 }
 
 // ─── Raw storage (never modified after write) ─────────────────────────────────
@@ -159,37 +161,57 @@ export class GGDB_V2 extends Dexie {
   constructor(name: string = DB_V2_NAME) {
     super(name);
 
+    const GAMES_SCHEMA = [
+      "gameId", "playedAt", "modeFamily", "[modeFamily+playedAt]",
+      "selfVictory", "selfId", "oppId", "detailFetchedAt",
+    ].join(", ");
+
+    const ROUNDS_SCHEMA_V1 = [
+      "[gameId+roundNumber]", "gameId", "startTime", "trueCountry", "selfGuessCountry", "movementType",
+    ].join(", ");
+
+    const ROUNDS_SCHEMA_V2 = [
+      "[gameId+roundNumber]", "gameId", "startTime", "trueCountry", "selfCountry", "movementType",
+    ].join(", ");
+
+    const DETAIL_LOG_SCHEMA = ["gameId", "lastAttemptAt", "lastStatus"].join(", ");
+
     this.version(1).stores({
-      games: [
-        "gameId",
-        "playedAt",
-        "modeFamily",
-        "[modeFamily+playedAt]",
-        "selfVictory",
-        "selfId",
-        "oppId",
-        "detailFetchedAt",
-      ].join(", "),
-
-      rounds: [
-        "[gameId+roundNumber]",
-        "gameId",
-        "startTime",
-        "trueCountry",
-        "selfGuessCountry",
-        "movementType",
-      ].join(", "),
-
+      games: GAMES_SCHEMA,
+      rounds: ROUNDS_SCHEMA_V1,
       rawFeedEntries: "gameId, fetchedAt",
       rawGameDetails: "gameId, fetchedAt",
-
-      detailFetchLog: [
-        "gameId",
-        "lastAttemptAt",
-        "lastStatus",
-      ].join(", "),
-
+      detailFetchLog: DETAIL_LOG_SCHEMA,
       syncState: "key",
+    });
+
+    this.version(2).stores({
+      games: GAMES_SCHEMA,
+      rounds: ROUNDS_SCHEMA_V2,
+      rawFeedEntries: "gameId, fetchedAt",
+      rawGameDetails: "gameId, fetchedAt",
+      detailFetchLog: DETAIL_LOG_SCHEMA,
+      syncState: "key",
+    }).upgrade((tx) => {
+      return tx.table("rounds").toCollection().modify((r) => {
+        if ("selfGuessLat"       in r) { r.selfLat       = r.selfGuessLat;       delete r.selfGuessLat; }
+        if ("selfGuessLng"       in r) { r.selfLng       = r.selfGuessLng;       delete r.selfGuessLng; }
+        if ("selfGuessCountry"   in r) { r.selfCountry   = r.selfGuessCountry;   delete r.selfGuessCountry; }
+        if ("selfDistanceKm"     in r) { r.selfDistance  = r.selfDistanceKm;     delete r.selfDistanceKm; }
+        if ("oppGuessLat"        in r) { r.oppLat        = r.oppGuessLat;        delete r.oppGuessLat; }
+        if ("oppGuessLng"        in r) { r.oppLng        = r.oppGuessLng;        delete r.oppGuessLng; }
+        if ("oppGuessCountry"    in r) { r.oppCountry    = r.oppGuessCountry;    delete r.oppGuessCountry; }
+        if ("oppDistanceKm"      in r) { r.oppDistance   = r.oppDistanceKm;      delete r.oppDistanceKm; }
+        if ("mateGuessLat"       in r) { r.mateLat       = r.mateGuessLat;       delete r.mateGuessLat; }
+        if ("mateGuessLng"       in r) { r.mateLng       = r.mateGuessLng;       delete r.mateGuessLng; }
+        if ("mateGuessCountry"   in r) { r.mateCountry   = r.mateGuessCountry;   delete r.mateGuessCountry; }
+        if ("mateDistanceKm"     in r) { r.mateDistance  = r.mateDistanceKm;     delete r.mateDistanceKm; }
+        if ("oppMateGuessLat"    in r) { r.oppMateLat    = r.oppMateGuessLat;    delete r.oppMateGuessLat; }
+        if ("oppMateGuessLng"    in r) { r.oppMateLng    = r.oppMateGuessLng;    delete r.oppMateGuessLng; }
+        if ("oppMateGuessCountry" in r) { r.oppMateCountry = r.oppMateGuessCountry; delete r.oppMateGuessCountry; }
+        if ("oppMateDistanceKm"  in r) { r.oppMateDistance = r.oppMateDistanceKm; delete r.oppMateDistanceKm; }
+        if ("isHealingRound"     in r) { r.isHealing     = r.isHealingRound;     delete r.isHealingRound; }
+      });
     });
   }
 }

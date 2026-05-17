@@ -300,7 +300,12 @@ async function normalizeDuelsRounds(
 
     const trueLat = asNum(r?.panorama?.lat);
     const trueLng = asNum(r?.panorama?.lng);
+    const trueHeadingDeg = asNum(
+      r?.panorama?.heading ?? r?.panorama?.panoHeading ?? r?.panorama?.initialHeading
+    );
     const trueCountry = normalizeIso2(r?.panorama?.countryCode);
+    const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || undefined;
+    const damageMultiplier = asNum(r?.damageMultiplier);
 
     // Build per-player guess data
     const guessData: Array<{
@@ -308,7 +313,7 @@ async function normalizeDuelsRounds(
       lng?: number;
       country?: string;
       score?: number;
-      distanceKm?: number;
+      distance?: number; // km
       healthAfter?: number;
     }> = [];
 
@@ -319,21 +324,27 @@ async function normalizeDuelsRounds(
         continue;
       }
       const guess = guessMaps[p].get(rn);
-      const guessLat = asNum(guess?.lat ?? guess?.latitude);
-      const guessLng = asNum(guess?.lng ?? guess?.lon ?? guess?.longitude);
+      const lat = asNum(guess?.lat ?? guess?.latitude);
+      const lng = asNum(guess?.lng ?? guess?.lon ?? guess?.longitude);
       const distanceMeters = asNum(guess?.distance ?? guess?.distanceInMeters);
-      const guessCountry = await resolveGuessCountry(guess, guessLat, guessLng);
+      const country = await resolveGuessCountry(guess, lat, lng);
       guessData.push({
-        lat: guessLat,
-        lng: guessLng,
-        country: guessCountry,
+        lat,
+        lng,
+        country,
         score: asNum(guess?.score),
-        distanceKm: distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
+        distance: distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
         healthAfter: entry.healthMap.get(rn),
       });
     }
 
     const [self, mate, opp, oppMate] = guessData;
+
+    // In TeamDuels the team uses the better of the two guesses
+    const hasMate = mate.score !== undefined || mate.lat !== undefined;
+    const selfIsBetterGuess = hasMate ? ((self.score ?? -1) >= (mate.score ?? -1)) : undefined;
+    const hasOppMate = oppMate.score !== undefined || oppMate.lat !== undefined;
+    const oppIsBetterGuess = hasOppMate ? ((opp.score ?? -1) >= (oppMate.score ?? -1)) : undefined;
 
     const row: RoundRow = {
       gameId,
@@ -342,29 +353,34 @@ async function normalizeDuelsRounds(
       durationSec,
       trueLat,
       trueLng,
+      trueHeadingDeg,
       trueCountry,
-      selfGuessLat: self.lat,
-      selfGuessLng: self.lng,
-      selfGuessCountry: self.country,
+      isHealing: isHealing as boolean | undefined,
+      damageMultiplier,
+      selfLat: self.lat,
+      selfLng: self.lng,
+      selfCountry: self.country,
       selfScore: self.score,
-      selfDistanceKm: self.distanceKm,
+      selfDistance: self.distance,
       selfHealthAfter: self.healthAfter,
-      oppGuessLat: opp.lat,
-      oppGuessLng: opp.lng,
-      oppGuessCountry: opp.country,
+      selfIsBetterGuess,
+      oppLat: opp.lat,
+      oppLng: opp.lng,
+      oppCountry: opp.country,
       oppScore: opp.score,
-      oppDistanceKm: opp.distanceKm,
+      oppDistance: opp.distance,
       oppHealthAfter: opp.healthAfter,
-      mateGuessLat: mate.lat,
-      mateGuessLng: mate.lng,
-      mateGuessCountry: mate.country,
+      oppIsBetterGuess,
+      mateLat: mate.lat,
+      mateLng: mate.lng,
+      mateCountry: mate.country,
       mateScore: mate.score,
-      mateDistanceKm: mate.distanceKm,
-      oppMateGuessLat: oppMate.lat,
-      oppMateGuessLng: oppMate.lng,
-      oppMateGuessCountry: oppMate.country,
+      mateDistance: mate.distance,
+      oppMateLat: oppMate.lat,
+      oppMateLng: oppMate.lng,
+      oppMateCountry: oppMate.country,
       oppMateScore: oppMate.score,
-      oppMateDistanceKm: oppMate.distanceKm,
+      oppMateDistance: oppMate.distance,
     };
 
     // Strip undefined fields
@@ -427,11 +443,11 @@ async function normalizeSoloRounds(
       trueLat,
       trueLng,
       trueCountry,
-      selfGuessLat: guessLat,
-      selfGuessLng: guessLng,
-      selfGuessCountry: guessCountry,
+      selfLat: guessLat,
+      selfLng: guessLng,
+      selfCountry: guessCountry,
       selfScore: asNum(guess?.roundScore?.amount ?? guess?.score),
-      selfDistanceKm: distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
+      selfDistance: distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
     };
 
     for (const k of Object.keys(row) as (keyof RoundRow)[]) {
