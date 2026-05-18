@@ -114,6 +114,44 @@ export interface RoundRow {
   oppMateDistance?: number; // km
 }
 
+// ─── Processed: Classic games ────────────────────────────────────────────────
+
+export interface ClassicGameRow {
+  gameId: string;          // PK (= token)
+  playerId: string;
+  playedAt?: number;       // unix ms, from rounds[0].startTime
+  mapId?: string;          // game.map (opaque ID)
+  mapName?: string;
+  movement?: MovementType;
+  timeLimit?: number;      // seconds, 0 = no limit
+  roundCount?: number;
+  totalScore?: number;
+  totalDistanceM?: number;
+  totalTimeSec?: number;
+  totalSteps?: number;
+  detailFetchedAt?: number;
+}
+
+export interface ClassicRoundRow {
+  gameId: string;          // composite PK part 1
+  roundNumber: number;     // composite PK part 2 (1-based)
+  playedAt?: number;       // startTime of this round, unix ms
+  trueLat?: number;
+  trueLng?: number;
+  trueHeadingDeg?: number;
+  trueCountry?: string;    // ISO2
+  panoId?: string;         // Street View panorama ID
+  selfLat?: number;
+  selfLng?: number;
+  selfCountry?: string;    // ISO2, reverse-geocoded from selfLat/selfLng
+  selfScore?: number;
+  selfDistance?: number;   // km
+  selfTimeSec?: number;
+  selfSteps?: number;
+  timedOut?: boolean;
+  skippedRound?: boolean;
+}
+
 // ─── Raw storage (never modified after write) ─────────────────────────────────
 
 export interface RawFeedEntry {
@@ -153,6 +191,8 @@ export interface SyncStateRow {
 export class GGDB_V2 extends Dexie {
   games!: Table<GameRow, string>;
   rounds!: Table<RoundRow, [string, number]>;
+  classicGames!: Table<ClassicGameRow, string>;
+  classicRounds!: Table<ClassicRoundRow, [string, number]>;
   rawFeedEntries!: Table<RawFeedEntry, string>;
   rawGameDetails!: Table<RawGameDetail, string>;
   detailFetchLog!: Table<DetailFetchLog, string>;
@@ -185,6 +225,9 @@ export class GGDB_V2 extends Dexie {
       syncState: "key",
     });
 
+    const CLASSIC_GAMES_SCHEMA = ["gameId", "playerId", "playedAt", "[playerId+playedAt]"].join(", ");
+    const CLASSIC_ROUNDS_SCHEMA = ["[gameId+roundNumber]", "gameId"].join(", ");
+
     this.version(2).stores({
       games: GAMES_SCHEMA,
       rounds: ROUNDS_SCHEMA_V2,
@@ -212,6 +255,17 @@ export class GGDB_V2 extends Dexie {
         if ("oppMateDistanceKm"  in r) { r.oppMateDistance = r.oppMateDistanceKm; delete r.oppMateDistanceKm; }
         if ("isHealingRound"     in r) { r.isHealing     = r.isHealingRound;     delete r.isHealingRound; }
       });
+    });
+
+    this.version(3).stores({
+      games: GAMES_SCHEMA,
+      rounds: ROUNDS_SCHEMA_V2,
+      classicGames: CLASSIC_GAMES_SCHEMA,
+      classicRounds: CLASSIC_ROUNDS_SCHEMA,
+      rawFeedEntries: "gameId, fetchedAt",
+      rawGameDetails: "gameId, fetchedAt",
+      detailFetchLog: DETAIL_LOG_SCHEMA,
+      syncState: "key",
     });
   }
 }

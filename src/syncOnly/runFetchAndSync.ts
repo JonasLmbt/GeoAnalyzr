@@ -1,6 +1,6 @@
 import { fetchFeed } from "../feedFetcher_v2";
 import { fetchDetails } from "../detailFetcher_v2";
-import { syncToServerV2 } from "../serverSync_v2";
+import { syncToServerV2, syncClassicToServer } from "../serverSync_v2";
 import { loadServerSyncSettings } from "../serverSync";
 import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
 import { linkDeviceViaDiscord } from "./linkDevice";
@@ -177,6 +177,11 @@ export async function runFetchAndSync(opts: {
       if (status >= 500) return fail(`Sync failed (HTTP ${status})`, "Server error. Retry in a few minutes.");
       return fail(`Sync failed: ${syncResult.error ?? "unknown"}`);
     }
+
+    // Classic games sync (non-fatal on failure)
+    try {
+      await syncClassicToServer();
+    } catch { /* ignore — classic sync failure doesn't block the main result */ }
   } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e || "Sync failed");
     log.sync.error = msg;

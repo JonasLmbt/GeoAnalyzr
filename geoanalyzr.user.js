@@ -10718,6 +10718,8 @@ ${shapes}`.trim();
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
+    classicGames;
+    classicRounds;
     rawFeedEntries;
     rawGameDetails;
     detailFetchLog;
@@ -10759,6 +10761,8 @@ ${shapes}`.trim();
         detailFetchLog: DETAIL_LOG_SCHEMA,
         syncState: "key"
       });
+      const CLASSIC_GAMES_SCHEMA = ["gameId", "playerId", "playedAt", "[playerId+playedAt]"].join(", ");
+      const CLASSIC_ROUNDS_SCHEMA = ["[gameId+roundNumber]", "gameId"].join(", ");
       this.version(2).stores({
         games: GAMES_SCHEMA,
         rounds: ROUNDS_SCHEMA_V2,
@@ -10838,6 +10842,16 @@ ${shapes}`.trim();
           }
         });
       });
+      this.version(3).stores({
+        games: GAMES_SCHEMA,
+        rounds: ROUNDS_SCHEMA_V2,
+        classicGames: CLASSIC_GAMES_SCHEMA,
+        classicRounds: CLASSIC_ROUNDS_SCHEMA,
+        rawFeedEntries: "gameId, fetchedAt",
+        rawGameDetails: "gameId, fetchedAt",
+        detailFetchLog: DETAIL_LOG_SCHEMA,
+        syncState: "key"
+      });
     }
   };
   var dbV2 = new GGDB_V2();
@@ -10863,6 +10877,16 @@ ${shapes}`.trim();
       return u.toString();
     } catch {
       return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/batch");
+    }
+  }
+  function classicBatchEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v2/sync/classic-batch";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/classic-batch");
     }
   }
   function v2StateEndpoint(syncEndpointUrl) {
@@ -11103,6 +11127,64 @@ ${shapes}`.trim();
       batches: batchIndex,
       serverGameCount: serverAfter?.gameCount
     };
+  }
+  async function syncClassicToServer() {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) {
+      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    }
+    const localGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt !== void 0).toArray();
+    if (localGames.length === 0) {
+      return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    }
+    const allRounds = await dbV2.classicRounds.toArray();
+    const roundsByGameId = /* @__PURE__ */ new Map();
+    for (const r of allRounds) {
+      const list = roundsByGameId.get(r.gameId);
+      if (list) list.push(r);
+      else roundsByGameId.set(r.gameId, [r]);
+    }
+    const batchUrl = classicBatchEndpoint(settings.endpointUrl);
+    const clientVersion = getUserscriptVersion2();
+    const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
+    let totalGamesUploaded = 0;
+    let totalGamesNew = 0;
+    let totalRoundsNew = 0;
+    let batchIndex = 0;
+    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+      batchIndex++;
+      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
+      const roundBatch = [];
+      for (const g of gameBatch) {
+        const rounds = roundsByGameId.get(g.gameId);
+        if (rounds) roundBatch.push(...rounds);
+      }
+      const batchId = `classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
+      const body = { batchId, clientVersion: clientVersion ?? void 0, games: gameBatch, rounds: roundBatch };
+      let res;
+      try {
+        res = await httpPost(batchUrl, settings.token, body);
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      totalGamesUploaded += gameBatch.length;
+      totalGamesNew += Number(res.data?.gamesNew) || 0;
+      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    }
+    return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
   }
 
   // src/feedFetcher_v2.ts
@@ -11465,6 +11547,12 @@ ${shapes}`.trim();
     }
     const result = [];
     for (const p of ownPlayers) result.push({ player: p, healthMap: ownHealth });
+    const hasOtherPlayers = otherTeams.some(
+      (t) => Array.isArray(t?.players) && t.players.length > 0
+    );
+    if (ownPlayers.length === 1 && hasOtherPlayers) {
+      result.push({ player: null, healthMap: /* @__PURE__ */ new Map() });
+    }
     for (const t of otherTeams) {
       const h = healthByRound2(t);
       for (const p of Array.isArray(t?.players) ? t.players : []) {
@@ -11614,6 +11702,67 @@ ${shapes}`.trim();
     }
     return result;
   }
+  function normalizeClassicGame(gameId, playerId, gameData) {
+    const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+    const player = gameData?.player;
+    const movement = detectMovementType(gameData);
+    const row = {
+      gameId,
+      playerId,
+      playedAt: toTs2(rounds[0]?.startTime),
+      mapId: typeof gameData?.map === "string" ? gameData.map : void 0,
+      mapName: typeof gameData?.mapName === "string" ? gameData.mapName : void 0,
+      movement: movement === "mixed" ? void 0 : movement ?? void 0,
+      timeLimit: asNum2(gameData?.timeLimit),
+      roundCount: asNum2(gameData?.roundCount) ?? (rounds.length || void 0),
+      totalScore: asNum2(player?.totalScore?.amount ?? player?.totalScore),
+      totalDistanceM: asNum2(player?.totalDistanceInMeters),
+      totalTimeSec: asNum2(player?.totalTime),
+      totalSteps: asNum2(player?.totalStepsCount),
+      detailFetchedAt: Date.now()
+    };
+    for (const k of Object.keys(row)) {
+      if (row[k] === void 0) delete row[k];
+    }
+    return row;
+  }
+  async function normalizeClassicRounds(gameId, gameData) {
+    const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+    const guesses = Array.isArray(gameData?.player?.guesses) ? gameData.player.guesses : [];
+    const result = [];
+    for (let i = 0; i < rounds.length; i++) {
+      const r = rounds[i];
+      const g = guesses[i];
+      const guessLat = asNum2(g?.lat ?? g?.latitude);
+      const guessLng = asNum2(g?.lng ?? g?.longitude);
+      const selfCountry = await resolveGuessCountry(g, guessLat, guessLng);
+      const distM = asNum2(g?.distanceInMeters);
+      const row = {
+        gameId,
+        roundNumber: i + 1,
+        playedAt: toTs2(r?.startTime),
+        trueLat: asNum2(r?.lat ?? r?.latitude),
+        trueLng: asNum2(r?.lng ?? r?.longitude),
+        trueHeadingDeg: asNum2(r?.heading),
+        trueCountry: normalizeIso23(r?.streakLocationCode ?? r?.countryCode),
+        panoId: typeof r?.panoId === "string" ? r.panoId : void 0,
+        selfLat: guessLat,
+        selfLng: guessLng,
+        selfCountry,
+        selfScore: asNum2(g?.roundScoreInPoints ?? g?.roundScore?.amount),
+        selfDistance: distM !== void 0 ? distM / 1e3 : void 0,
+        selfTimeSec: asNum2(g?.time),
+        selfSteps: asNum2(g?.stepsCount),
+        timedOut: asBool2(g?.timedOut),
+        skippedRound: asBool2(g?.skippedRound)
+      };
+      for (const k of Object.keys(row)) {
+        if (row[k] === void 0) delete row[k];
+      }
+      result.push(row);
+    }
+    return result;
+  }
   function extractGameUpdates(gameData, modeFamily, selfId) {
     const isDuelType = modeFamily === "duels" || modeFamily === "teamduels";
     const mapName = typeof gameData?.options?.map?.name === "string" ? gameData.options.map.name : typeof gameData?.map?.name === "string" ? gameData.map.name : void 0;
@@ -11731,7 +11880,7 @@ ${shapes}`.trim();
     if (isDuelType) {
       if (game.selfVictory === void 0) m.push("selfVictory");
       if (game.oppId === void 0) m.push("oppId");
-      if (game.isRated && game.selfRatingBefore === void 0) m.push("selfRatingBefore");
+      if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
     }
     if (game.modeFamily === "teamduels") {
       if (game.mateId === void 0) m.push("mateId");
@@ -11778,6 +11927,11 @@ ${shapes}`.trim();
               const hypothetical = { ...game, ...updates };
               if (getMissingFields(hypothetical).length === 0) {
                 await dbV2.games.update(game.gameId, updates);
+                const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+                if (isDuelType) {
+                  const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId);
+                  if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
+                }
                 opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
                 updatedGameIds.push(game.gameId);
                 succeeded++;
@@ -11812,6 +11966,13 @@ ${shapes}`.trim();
             const rounds = isDuelType ? await normalizeDuelsRounds(game.gameId, data, game.selfId) : await normalizeSoloRounds(game.gameId, data);
             if (rounds.length > 0) {
               await dbV2.rounds.bulkPut(rounds);
+            }
+            if (game.modeFamily === "standard") {
+              const selfId = game.selfId ?? readPlayerId2(data?.player) ?? "";
+              const classicGame = normalizeClassicGame(game.gameId, selfId, data);
+              const classicRounds = await normalizeClassicRounds(game.gameId, data);
+              await dbV2.classicGames.put(classicGame);
+              if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
             }
             const updates = extractGameUpdates(data, game.modeFamily, game.selfId);
             await dbV2.games.update(game.gameId, updates);
@@ -12669,6 +12830,8 @@ ${shapes}`.trim();
             }
           });
           if (v2res.ok) {
+            syncClassicToServer().catch(() => {
+            });
             if (v2res.gamesUploaded === 0) {
               setMsg(`Server already up to date \u2014 ${v2res.gamesSkipped} games skipped`);
             } else {

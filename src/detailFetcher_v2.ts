@@ -1,4 +1,4 @@
-import { dbV2, GameRow, RoundRow, ModeFamily, MovementType } from "./db_v2";
+import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow, ModeFamily, MovementType } from "./db_v2";
 import { httpGetJsonWithRetry } from "./http";
 import { resolveCountryCodeByLatLng } from "./countries";
 
@@ -482,6 +482,79 @@ async function normalizeSoloRounds(
   return result;
 }
 
+// ─── Classic normalization ────────────────────────────────────────────────────
+
+function normalizeClassicGame(gameId: string, playerId: string, gameData: any): ClassicGameRow {
+  const rounds: any[] = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+  const player = gameData?.player;
+  const movement = detectMovementType(gameData);
+
+  const row: ClassicGameRow = {
+    gameId,
+    playerId,
+    playedAt: toTs(rounds[0]?.startTime),
+    mapId: typeof gameData?.map === "string" ? gameData.map : undefined,
+    mapName: typeof gameData?.mapName === "string" ? gameData.mapName : undefined,
+    movement: movement === "mixed" ? undefined : (movement ?? undefined),
+    timeLimit: asNum(gameData?.timeLimit),
+    roundCount: asNum(gameData?.roundCount) ?? (rounds.length || undefined),
+    totalScore: asNum(player?.totalScore?.amount ?? player?.totalScore),
+    totalDistanceM: asNum(player?.totalDistanceInMeters),
+    totalTimeSec: asNum(player?.totalTime),
+    totalSteps: asNum(player?.totalStepsCount),
+    detailFetchedAt: Date.now(),
+  };
+
+  for (const k of Object.keys(row) as (keyof ClassicGameRow)[]) {
+    if (row[k] === undefined) delete row[k];
+  }
+  return row;
+}
+
+async function normalizeClassicRounds(gameId: string, gameData: any): Promise<ClassicRoundRow[]> {
+  const rounds: any[] = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
+  const guesses: any[] = Array.isArray(gameData?.player?.guesses)
+    ? gameData.player.guesses
+    : [];
+
+  const result: ClassicRoundRow[] = [];
+  for (let i = 0; i < rounds.length; i++) {
+    const r = rounds[i];
+    const g = guesses[i];
+
+    const guessLat = asNum(g?.lat ?? g?.latitude);
+    const guessLng = asNum(g?.lng ?? g?.longitude);
+    const selfCountry = await resolveGuessCountry(g, guessLat, guessLng);
+    const distM = asNum(g?.distanceInMeters);
+
+    const row: ClassicRoundRow = {
+      gameId,
+      roundNumber: i + 1,
+      playedAt: toTs(r?.startTime),
+      trueLat: asNum(r?.lat ?? r?.latitude),
+      trueLng: asNum(r?.lng ?? r?.longitude),
+      trueHeadingDeg: asNum(r?.heading),
+      trueCountry: normalizeIso2(r?.streakLocationCode ?? r?.countryCode),
+      panoId: typeof r?.panoId === "string" ? r.panoId : undefined,
+      selfLat: guessLat,
+      selfLng: guessLng,
+      selfCountry,
+      selfScore: asNum(g?.roundScoreInPoints ?? g?.roundScore?.amount),
+      selfDistance: distM !== undefined ? distM / 1e3 : undefined,
+      selfTimeSec: asNum(g?.time),
+      selfSteps: asNum(g?.stepsCount),
+      timedOut: asBool(g?.timedOut),
+      skippedRound: asBool(g?.skippedRound),
+    };
+
+    for (const k of Object.keys(row) as (keyof ClassicRoundRow)[]) {
+      if (row[k] === undefined) delete row[k];
+    }
+    result.push(row);
+  }
+  return result;
+}
+
 // ─── Game-level field extraction ──────────────────────────────────────────────
 
 function extractGameUpdates(
@@ -754,6 +827,15 @@ export async function fetchDetails(opts: {
           // Write rounds
           if (rounds.length > 0) {
             await dbV2.rounds.bulkPut(rounds);
+          }
+
+          // For standard/classic games, also write to dedicated classic tables
+          if (game.modeFamily === "standard") {
+            const selfId = game.selfId ?? readPlayerId(data?.player) ?? "";
+            const classicGame = normalizeClassicGame(game.gameId, selfId, data);
+            const classicRounds = await normalizeClassicRounds(game.gameId, data);
+            await dbV2.classicGames.put(classicGame);
+            if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
           }
 
           // Update game row with extracted fields

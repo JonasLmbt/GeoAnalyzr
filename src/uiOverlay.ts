@@ -1,6 +1,6 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
-import { syncToServerV2 } from "./serverSync_v2";
+import { syncToServerV2, syncClassicToServer } from "./serverSync_v2";
 import { fetchFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { isMigrationNeeded, migrateV1ToV2 } from "./migration_v1_to_v2";
@@ -664,6 +664,8 @@ export function createUIOverlay(): UIOverlay {
           },
         });
         if (v2res.ok) {
+          // Also sync classic games (non-fatal)
+          syncClassicToServer().catch(() => {});
           if (v2res.gamesUploaded === 0) {
             setMsg(`Server already up to date — ${v2res.gamesSkipped} games skipped`);
           } else {

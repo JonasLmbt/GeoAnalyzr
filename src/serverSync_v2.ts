@@ -1,4 +1,4 @@
-import { dbV2, GameRow, RoundRow } from "./db_v2";
+import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow } from "./db_v2";
 import { loadServerSyncSettings } from "./serverSync";
 import { getCurrentPlayerId } from "./app/playerIdentity";
 
@@ -46,6 +46,17 @@ function v2BatchEndpoint(syncEndpointUrl: string): string {
   } catch {
     // Fallback: replace path manually
     return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/batch");
+  }
+}
+
+function classicBatchEndpoint(syncEndpointUrl: string): string {
+  try {
+    const u = new URL(syncEndpointUrl);
+    u.pathname = "/api/v2/sync/classic-batch";
+    u.search = "";
+    return u.toString();
+  } catch {
+    return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/classic-batch");
   }
 }
 
@@ -351,4 +362,87 @@ export async function syncToServerV2(opts: {
     batches: batchIndex,
     serverGameCount: serverAfter?.gameCount,
   };
+}
+
+// ─── Classic sync ─────────────────────────────────────────────────────────────
+
+export interface SyncClassicResult {
+  ok: boolean;
+  error?: string;
+  status?: number;
+  gamesUploaded: number;
+  gamesNew: number;
+  roundsNew: number;
+  batches: number;
+}
+
+export async function syncClassicToServer(): Promise<SyncClassicResult> {
+  const settings = loadServerSyncSettings();
+  if (!settings.token) {
+    return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const localGames = await dbV2.classicGames
+    .filter((g) => g.detailFetchedAt !== undefined)
+    .toArray();
+
+  if (localGames.length === 0) {
+    return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const allRounds = await dbV2.classicRounds.toArray();
+  const roundsByGameId = new Map<string, ClassicRoundRow[]>();
+  for (const r of allRounds) {
+    const list = roundsByGameId.get(r.gameId);
+    if (list) list.push(r);
+    else roundsByGameId.set(r.gameId, [r]);
+  }
+
+  const batchUrl = classicBatchEndpoint(settings.endpointUrl);
+  const clientVersion = getUserscriptVersion();
+  const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
+  let totalGamesUploaded = 0;
+  let totalGamesNew = 0;
+  let totalRoundsNew = 0;
+  let batchIndex = 0;
+
+  for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+    batchIndex++;
+    const gameBatch: ClassicGameRow[] = localGames.slice(i, i + BATCH_SIZE);
+    const roundBatch: ClassicRoundRow[] = [];
+    for (const g of gameBatch) {
+      const rounds = roundsByGameId.get(g.gameId);
+      if (rounds) roundBatch.push(...rounds);
+    }
+
+    const batchId = `classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
+    const body = { batchId, clientVersion: clientVersion ?? undefined, games: gameBatch, rounds: roundBatch };
+
+    let res: { status: number; data: any };
+    try {
+      res = await httpPost(batchUrl, settings.token, body);
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        gamesUploaded: totalGamesUploaded,
+        gamesNew: totalGamesNew,
+        roundsNew: totalRoundsNew,
+        batches: batchIndex - 1,
+      };
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    }
+
+    totalGamesUploaded += gameBatch.length;
+    totalGamesNew += Number(res.data?.gamesNew) || 0;
+    totalRoundsNew += Number(res.data?.roundsNew) || 0;
+  }
+
+  return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
 }
