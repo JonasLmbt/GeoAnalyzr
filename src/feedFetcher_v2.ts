@@ -75,7 +75,7 @@ function extractEvents(entry: any): any[] {
 }
 
 function extractGameId(ev: any): string | undefined {
-  for (const path of ["payload.gameId", "gameId", "id", "payload.id"] as const) {
+  for (const path of ["payload.gameId", "payload.gameToken", "gameId", "id", "payload.id"] as const) {
     const v = getByPath(ev, path);
     if (typeof v === "string" && v.trim()) return v.trim();
   }
@@ -185,7 +185,15 @@ export async function fetchFeed(opts: {
         const modeFamily = classifyModeFamily(ev, entry);
 
         if (!candidates.has(gameId) || candidates.get(gameId)!.playedAt < playedAt) {
-          candidates.set(gameId, { gameId, playedAt, modeFamily } as GameRow);
+          const partial: GameRow = { gameId, playedAt, modeFamily };
+          // Classic games expose extra fields directly in the feed payload
+          const p = ev?.payload;
+          if (modeFamily === "standard" && p) {
+            if (typeof p.mapSlug === "string" && p.mapSlug) partial.mapSlug = p.mapSlug;
+            if (typeof p.mapName === "string" && p.mapName) partial.mapName = p.mapName;
+            if (typeof p.points === "number") partial.selfScore = p.points;
+          }
+          candidates.set(gameId, partial);
         }
         rawEntries.push({ gameId, fetchedAt: Date.now(), json: entry });
       }

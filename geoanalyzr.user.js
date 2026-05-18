@@ -11239,7 +11239,7 @@ ${shapes}`.trim();
     return [entry];
   }
   function extractGameId(ev) {
-    for (const path of ["payload.gameId", "gameId", "id", "payload.id"]) {
+    for (const path of ["payload.gameId", "payload.gameToken", "gameId", "id", "payload.id"]) {
       const v = getByPath2(ev, path);
       if (typeof v === "string" && v.trim()) return v.trim();
     }
@@ -11309,7 +11309,14 @@ ${shapes}`.trim();
           const playedAt = extractPlayedAt(ev, entry);
           const modeFamily = classifyModeFamily(ev, entry);
           if (!candidates.has(gameId) || candidates.get(gameId).playedAt < playedAt) {
-            candidates.set(gameId, { gameId, playedAt, modeFamily });
+            const partial = { gameId, playedAt, modeFamily };
+            const p = ev?.payload;
+            if (modeFamily === "standard" && p) {
+              if (typeof p.mapSlug === "string" && p.mapSlug) partial.mapSlug = p.mapSlug;
+              if (typeof p.mapName === "string" && p.mapName) partial.mapName = p.mapName;
+              if (typeof p.points === "number") partial.selfScore = p.points;
+            }
+            candidates.set(gameId, partial);
           }
           rawEntries.push({ gameId, fetchedAt: Date.now(), json: entry });
         }
