@@ -468,7 +468,7 @@ async function normalizeSoloRounds(
       selfLat: guessLat,
       selfLng: guessLng,
       selfCountry: guessCountry,
-      selfScore: asNum(guess?.roundScore?.amount ?? guess?.score),
+      selfScore: asNum(guess?.roundScoreInPoints ?? guess?.roundScore?.amount ?? guess?.score),
       selfDistance: distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
     };
 
