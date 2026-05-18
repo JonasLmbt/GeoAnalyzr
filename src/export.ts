@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { db } from "./db";
+import { dbV2 } from "./db_v2";
 import { backfillGuessCountries } from "./migrations/backfillGuessCountries";
 
 const LEGACY_KEY_ALIASES: Record<string, string[]> = {
@@ -201,11 +202,13 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
   // Ensure guessCountry columns exist for all players (where guess lat/lng is present).
   await backfillGuessCountries({ onStatus });
 
-  const [games, rounds, details, metaRows] = await Promise.all([
+  const [games, rounds, details, metaRows, classicGames, classicRounds] = await Promise.all([
     db.games.orderBy("playedAt").reverse().toArray(),
     db.rounds.toArray(),
     db.details.toArray(),
-    db.meta.toArray()
+    db.meta.toArray(),
+    dbV2.classicGames.orderBy("playedAt").reverse().toArray().catch(() => []),
+    dbV2.classicRounds.toArray().catch(() => [])
   ]);
 
   if (games.length === 0) {
@@ -597,6 +600,25 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     sanitizeSheetName("Diagnostics_DetailCoverage")
   );
 
+  // ── Classic games sheet ────────────────────────────────────────────────────
+  if (classicGames.length > 0) {
+    const classicGameRows = classicGames.map((g) => ({
+      gameId: g.gameId,
+      date: g.playedAt ? new Date(g.playedAt).toISOString().slice(0, 10) : "",
+      time: g.playedAt ? new Date(g.playedAt).toISOString().slice(11, 23) : "",
+      mapId: g.mapId ?? "",
+      mapName: g.mapName ?? "",
+      movement: g.movement ?? "",
+      timeLimitSec: g.timeLimit ?? "",
+      roundCount: g.roundCount ?? "",
+      totalScore: g.totalScore ?? "",
+      totalDistanceKm: typeof g.totalDistanceM === "number" ? +(g.totalDistanceM / 1000).toFixed(3) : "",
+      totalTimeSec: g.totalTimeSec ?? "",
+      totalSteps: g.totalSteps ?? "",
+    }));
+    XLSX.utils.book_append_sheet(gamesWb, XLSX.utils.json_to_sheet(classicGameRows), "Classic");
+  }
+
   const statsWb = XLSX.utils.book_new();
   for (const [mode, rows] of [...roundsByMode.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const sortedRows = [...rows].sort((a: any, b: any) => {
@@ -637,6 +659,36 @@ export async function exportExcel(onStatus: (msg: string) => void): Promise<void
     XLSX.utils.json_to_sheet(diagnosticsDetailCoverage),
     sanitizeSheetName("Diagnostics_DetailCoverage")
   );
+
+  // ── Classic rounds sheet ───────────────────────────────────────────────────
+  if (classicRounds.length > 0) {
+    const classicRoundRows = [...classicRounds]
+      .sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0) || a.gameId.localeCompare(b.gameId) || a.roundNumber - b.roundNumber)
+      .map((r) => ({
+        gameId: r.gameId,
+        roundNumber: r.roundNumber,
+        date: r.playedAt ? new Date(r.playedAt).toISOString().slice(0, 10) : "",
+        time: r.playedAt ? new Date(r.playedAt).toISOString().slice(11, 23) : "",
+        true_lat: r.trueLat ?? "",
+        true_lng: r.trueLng ?? "",
+        true_heading_deg: r.trueHeadingDeg ?? "",
+        true_country: r.trueCountry ?? "",
+        true_googleMaps_url: buildGoogleMapsUrl(r.trueLat, r.trueLng),
+        true_streetView_url: buildStreetViewUrl(r.trueLat, r.trueLng, r.trueHeadingDeg),
+        panoId: r.panoId ?? "",
+        self_lat: r.selfLat ?? "",
+        self_lng: r.selfLng ?? "",
+        self_country: r.selfCountry ?? "",
+        self_googleMaps_url: buildGoogleMapsUrl(r.selfLat, r.selfLng),
+        self_score: r.selfScore ?? "",
+        self_distance_km: r.selfDistance ?? "",
+        self_time_sec: r.selfTimeSec ?? "",
+        self_steps: r.selfSteps ?? "",
+        timed_out: r.timedOut ? 1 : 0,
+        skipped_round: r.skippedRound ? 1 : 0,
+      }));
+    XLSX.utils.book_append_sheet(statsWb, XLSX.utils.json_to_sheet(classicRoundRows), "Classic");
+  }
 
   const now = new Date();
   const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
