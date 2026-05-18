@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.9.1-dev
+// @version      2.9.2-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11381,6 +11381,23 @@ ${shapes}`.trim();
     const x = v.trim().toLowerCase();
     return /^[a-z]{2}$/.test(x) ? x : void 0;
   }
+  var _regionNames = (() => {
+    try {
+      return new Intl.DisplayNames(["en"], { type: "region" });
+    } catch {
+      return void 0;
+    }
+  })();
+  function iso2ToName(code) {
+    if (!code) return void 0;
+    if (!_regionNames) return code;
+    try {
+      const name = _regionNames.of(code.toUpperCase());
+      return name && name !== code.toUpperCase() ? name : code;
+    } catch {
+      return code;
+    }
+  }
   function toTs2(v) {
     if (typeof v !== "string") return void 0;
     const t = Date.parse(v);
@@ -11461,16 +11478,17 @@ ${shapes}`.trim();
     return {};
   }
   function extractCountry(player) {
-    return normalizeIso23(
+    return iso2ToName(normalizeIso23(
       player?.countryCode ?? player?.country ?? player?.user?.countryCode ?? player?.user?.country
-    );
+    ));
   }
   async function resolveGuessCountry(guess, lat, lng) {
     const fromApi = normalizeIso23(
       guess?.countryCode ?? guess?.country_code ?? guess?.country
     );
-    if (fromApi) return fromApi;
-    return resolveCountryCodeByLatLng(lat, lng).catch(() => void 0);
+    if (fromApi) return iso2ToName(fromApi);
+    const iso = await resolveCountryCodeByLatLng(lat, lng).catch(() => void 0);
+    return iso2ToName(iso);
   }
   function buildEndpoints(gameId, modeFamily) {
     const gameServer = `https://game-server.geoguessr.com/api/duels/${gameId}`;
@@ -11592,7 +11610,7 @@ ${shapes}`.trim();
       const trueHeadingDeg = asNum2(
         r?.panorama?.heading ?? r?.panorama?.panoHeading ?? r?.panorama?.initialHeading
       );
-      const trueCountry = normalizeIso23(r?.panorama?.countryCode);
+      const trueCountry = iso2ToName(normalizeIso23(r?.panorama?.countryCode));
       const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || void 0;
       const damageMultiplier = asNum2(r?.damageMultiplier);
       const guessData = [];
@@ -11683,7 +11701,7 @@ ${shapes}`.trim();
       const durationSec = startTs !== void 0 && endTs !== void 0 && endTs >= startTs ? (endTs - startTs) / 1e3 : asNum2(r?.roundDuration);
       const trueLat = asNum2(r?.lat ?? r?.latitude);
       const trueLng = asNum2(r?.lng ?? r?.longitude);
-      const trueCountry = normalizeIso23(r?.streakLocationCode ?? r?.countryCode);
+      const trueCountry = iso2ToName(normalizeIso23(r?.streakLocationCode ?? r?.countryCode));
       const guessLat = asNum2(guess?.lat ?? guess?.latitude);
       const guessLng = asNum2(guess?.lng ?? guess?.longitude);
       const distanceMeters = asNum2(guess?.distanceInMeters ?? guess?.distance);
@@ -11751,7 +11769,7 @@ ${shapes}`.trim();
         trueLat: asNum2(r?.lat ?? r?.latitude),
         trueLng: asNum2(r?.lng ?? r?.longitude),
         trueHeadingDeg: asNum2(r?.heading),
-        trueCountry: normalizeIso23(r?.streakLocationCode ?? r?.countryCode),
+        trueCountry: iso2ToName(normalizeIso23(r?.streakLocationCode ?? r?.countryCode)),
         panoId: typeof r?.panoId === "string" ? r.panoId : void 0,
         selfLat: guessLat,
         selfLng: guessLng,
@@ -11888,6 +11906,8 @@ ${shapes}`.trim();
       if (game.selfVictory === void 0) m.push("selfVictory");
       if (game.oppId === void 0) m.push("oppId");
       if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
+      if (game.selfName === void 0) m.push("selfName");
+      if (game.selfCountry === void 0) m.push("selfCountry");
     }
     if (game.modeFamily === "teamduels") {
       if (game.mateId === void 0) m.push("mateId");
@@ -11901,6 +11921,7 @@ ${shapes}`.trim();
     const concurrency = Math.max(1, opts.concurrency ?? 2);
     const delayMs = opts.delayMs ?? 500;
     const maxRetries = opts.maxRetries ?? 3;
+    const cutoffMs = opts.force && opts.maxAgeDays != null ? Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1e3 : void 0;
     let games;
     let permanentlySkipped = 0;
     if (opts.games) {
@@ -11911,6 +11932,7 @@ ${shapes}`.trim();
       const attemptsByGame = new Map(logEntries.map((l) => [l.gameId, l.attempts]));
       permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
       games = all.filter((g) => {
+        if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
         if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
         if (isDetailIncomplete(g)) return true;
         if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
@@ -11925,11 +11947,15 @@ ${shapes}`.trim();
     let succeeded = 0;
     const updatedGameIds = [];
     let failed = 0;
+    let selfIdFixed = 0;
     for (let i = 0; i < games.length; i += concurrency) {
       const batch = games.slice(i, i + concurrency);
       await Promise.all(
         batch.map(async (game) => {
           const missing = getMissingFields(game);
+          const isDuelGame = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+          const hasSelfIdMismatch = isDuelGame && opts.currentPlayerId != null && game.selfId != null && game.selfId !== opts.currentPlayerId;
+          if (hasSelfIdMismatch) missing.push("selfId mismatch");
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
           const resolvedSelfId = opts.currentPlayerId ?? game.selfId;
           const attemptedAt = Date.now();
@@ -11948,6 +11974,7 @@ ${shapes}`.trim();
                 opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
                 updatedGameIds.push(game.gameId);
                 succeeded++;
+                if (hasSelfIdMismatch) selfIdFixed++;
                 return;
               }
             } catch {
@@ -11999,6 +12026,7 @@ ${shapes}`.trim();
             opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "api" });
             updatedGameIds.push(game.gameId);
             succeeded++;
+            if (hasSelfIdMismatch) selfIdFixed++;
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
             opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
@@ -12020,7 +12048,7 @@ ${shapes}`.trim();
         await new Promise((r) => setTimeout(r, delayMs));
       }
     }
-    return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped };
+    return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped, selfIdFixed };
   }
 
   // src/migration_v1_to_v2.ts
