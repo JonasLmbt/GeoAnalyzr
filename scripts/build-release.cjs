@@ -5,8 +5,7 @@ const isDev = /(^|[\\/])geoanalyzr\.dev\.user\.js$/i.test(outFile);
 const isSyncOnly = /(^|[\\/])geoanalyzr\.sync\.user\.js$/i.test(outFile);
 const isLocal = !isDev && !isSyncOnly;
 
-const stableVersion = "2.9.0";
-const devVersion = "2.9.1-dev";
+const { stableVersion, devVersion } = require("./version.cjs");
 const version = isDev ? devVersion : stableVersion;
 
 // GitHub "releases/latest/download/..." can point to a release that doesn't include the assets,

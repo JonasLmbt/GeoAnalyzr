@@ -5,6 +5,7 @@
     "build:devfile": "node scripts/build-release.cjs geoanalyzr.dev.user.js",
     "build:release": "node scripts/build-release.cjs",
     "build:sync": "node scripts/build-release.cjs geoanalyzr.sync.user.js",
+    "release": "npm run build && node scripts/release.cjs",
     "watch": "esbuild src/main.ts --bundle --outfile=dist/userscript.user.js --format=iife --watch"
   },
   "dependencies": {
