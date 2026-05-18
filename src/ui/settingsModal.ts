@@ -4,7 +4,6 @@ import { validateDashboardAgainstSemantic } from "../engine/validate";
 import { mergeSemanticWithDashboard } from "../engine/semanticMerge";
 import { renderLayoutEditor } from "./layoutEditor";
 import { analysisConsole, formatConsoleEntry } from "./consoleStore";
-import { exportExcel } from "../export";
 import {
   DEFAULT_SETTINGS,
   normalizeColor,
@@ -21,6 +20,7 @@ import {
   runServerUnsync,
   saveServerSyncSettings
 } from "../serverSync";
+import { getCurrentPlayerId } from "../app/playerIdentity";
 
 type SettingsModalOptions = {
   doc: Document;
@@ -475,33 +475,80 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
 
     const excelNote = doc.createElement("div");
     excelNote.className = "ga-settings-note";
-    excelNote.textContent = "Excel export downloads a spreadsheet built from your local dataset (this never uploads data).";
+    excelNote.textContent = "Excel export downloads a spreadsheet from the sync server (requires an active sync connection).";
     dataPane.appendChild(excelNote);
 
     const excelActions = doc.createElement("div");
     excelActions.className = "ga-settings-actions";
-    const excelBtn = doc.createElement("button");
-    excelBtn.type = "button";
-    excelBtn.className = "ga-filter-btn";
-    excelBtn.textContent = "Export Excel";
-    excelBtn.title = "Download an Excel file from your local dataset";
-    excelActions.appendChild(excelBtn);
+    const excelGamesBtn = doc.createElement("button");
+    excelGamesBtn.type = "button";
+    excelGamesBtn.className = "ga-filter-btn";
+    excelGamesBtn.textContent = "Export Games";
+    excelGamesBtn.title = "Download games.xlsx from the sync server";
+    const excelRoundsBtn = doc.createElement("button");
+    excelRoundsBtn.type = "button";
+    excelRoundsBtn.className = "ga-filter-btn";
+    excelRoundsBtn.textContent = "Export Rounds";
+    excelRoundsBtn.title = "Download rounds.xlsx from the sync server";
+    excelActions.appendChild(excelGamesBtn);
+    excelActions.appendChild(excelRoundsBtn);
     dataPane.appendChild(excelActions);
 
     const excelStatus = doc.createElement("div");
     excelStatus.className = "ga-settings-status";
     dataPane.appendChild(excelStatus);
 
-    excelBtn.addEventListener("click", async () => {
-      excelBtn.disabled = true;
-      excelStatus.textContent = "Preparing export...";
+    async function triggerServerExport(kind: "games.xlsx" | "rounds.xlsx"): Promise<void> {
+      const playerId = await getCurrentPlayerId();
+      if (!playerId) {
+        excelStatus.textContent = "Could not determine your player ID. Make sure you are logged in to GeoGuessr.";
+        return;
+      }
+      const syncSettings = loadServerSyncSettings();
+      const syncUrl = (syncSettings.endpointUrl || "").trim();
+      let serverBase: string;
       try {
-        await exportExcel((m) => (excelStatus.textContent = m));
-        excelStatus.textContent = "Export complete.";
+        const u = new URL(syncUrl || "https://geoanalyzr.lmbt.app/api/sync");
+        serverBase = u.origin;
+      } catch {
+        serverBase = "https://geoanalyzr.lmbt.app";
+      }
+      const url = `${serverBase}/api/player/${encodeURIComponent(playerId)}/export/${kind}`;
+      const a = doc.createElement("a");
+      a.href = url;
+      a.download = `geoanalyzr_${playerId}_${kind}`;
+      a.target = "_blank";
+      doc.body.appendChild(a);
+      a.click();
+      a.remove();
+      excelStatus.textContent = `Download started: ${kind}`;
+    }
+
+    excelGamesBtn.addEventListener("click", async () => {
+      excelGamesBtn.disabled = true;
+      excelRoundsBtn.disabled = true;
+      excelStatus.textContent = "Starting download...";
+      try {
+        await triggerServerExport("games.xlsx");
       } catch (e: any) {
         excelStatus.textContent = e instanceof Error ? e.message : String(e || "Export failed");
       } finally {
-        excelBtn.disabled = false;
+        excelGamesBtn.disabled = false;
+        excelRoundsBtn.disabled = false;
+      }
+    });
+
+    excelRoundsBtn.addEventListener("click", async () => {
+      excelGamesBtn.disabled = true;
+      excelRoundsBtn.disabled = true;
+      excelStatus.textContent = "Starting download...";
+      try {
+        await triggerServerExport("rounds.xlsx");
+      } catch (e: any) {
+        excelStatus.textContent = e instanceof Error ? e.message : String(e || "Export failed");
+      } finally {
+        excelGamesBtn.disabled = false;
+        excelRoundsBtn.disabled = false;
       }
     });
 
