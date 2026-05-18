@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      2.9.1
+// @version      2.9.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11902,39 +11902,67 @@ ${shapes}`.trim();
     if (game.totalRounds === void 0) m.push("totalRounds");
     if (game.movementType === void 0) m.push("movementType");
     const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+    const isTeam = game.modeFamily === "teamduels";
     if (isDuelType) {
+      if (game.selfId === void 0) m.push("selfId");
       if (game.selfVictory === void 0) m.push("selfVictory");
-      if (game.oppId === void 0) m.push("oppId");
-      if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
       if (game.selfName === void 0) m.push("selfName");
       if (game.selfCountry === void 0) m.push("selfCountry");
+      if (game.oppId === void 0) m.push("oppId");
+      if (game.oppName === void 0) m.push("oppName");
+      if (game.oppCountry === void 0) m.push("oppCountry");
+      if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
     }
-    if (game.modeFamily === "teamduels") {
+    if (isTeam) {
       if (game.mateId === void 0) m.push("mateId");
+      if (game.mateName === void 0) m.push("mateName");
+      if (game.mateCountry === void 0) m.push("mateCountry");
+      if (game.oppMateId === void 0) m.push("oppMateId");
+      if (game.oppMateName === void 0) m.push("oppMateName");
+      if (game.oppMateCountry === void 0) m.push("oppMateCountry");
     }
     return m;
   }
-  function isDetailIncomplete(game) {
-    return getMissingFields(game).length > 0;
+  function getMissingRoundInfo(game, roundCounts) {
+    if (!roundCounts) return [];
+    const expected = game.totalRounds;
+    if (expected == null || expected === 0) return [];
+    const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+    const isStandard = game.modeFamily === "standard";
+    if (!isDuelType && !isStandard) return [];
+    const stored = isDuelType ? roundCounts.duelsByGame.get(game.gameId) ?? 0 : roundCounts.classicByGame.get(game.gameId) ?? 0;
+    return stored < expected ? [`rounds: ${stored}/${expected}`] : [];
+  }
+  function isDetailIncomplete(game, roundCounts) {
+    return getMissingFields(game).length > 0 || getMissingRoundInfo(game, roundCounts).length > 0;
   }
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
     const delayMs = opts.delayMs ?? 500;
     const maxRetries = opts.maxRetries ?? 3;
-    const cutoffMs = opts.force && opts.maxAgeDays != null ? Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1e3 : void 0;
     let games;
     let permanentlySkipped = 0;
+    let roundCounts;
     if (opts.games) {
       games = opts.games;
     } else {
-      const all = await dbV2.games.toArray();
-      const logEntries = await dbV2.detailFetchLog.toArray();
+      const [all, logEntries, allRounds, allClassicRounds] = await Promise.all([
+        dbV2.games.toArray(),
+        dbV2.detailFetchLog.toArray(),
+        dbV2.rounds.toArray(),
+        dbV2.classicRounds.toArray()
+      ]);
+      const duelsByGame = /* @__PURE__ */ new Map();
+      for (const r of allRounds) duelsByGame.set(r.gameId, (duelsByGame.get(r.gameId) ?? 0) + 1);
+      const classicByGame = /* @__PURE__ */ new Map();
+      for (const r of allClassicRounds) classicByGame.set(r.gameId, (classicByGame.get(r.gameId) ?? 0) + 1);
+      roundCounts = { duelsByGame, classicByGame };
       const attemptsByGame = new Map(logEntries.map((l) => [l.gameId, l.attempts]));
       permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
       games = all.filter((g) => {
-        if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
+        if (opts.forceVersion && g.shiftFetchVersion === opts.forceVersion) return false;
         if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
-        if (isDetailIncomplete(g)) return true;
+        if (isDetailIncomplete(g, roundCounts)) return true;
         if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
           const isDuelType = g.modeFamily === "duels" || g.modeFamily === "teamduels";
           if (isDuelType) return true;
@@ -11952,7 +11980,10 @@ ${shapes}`.trim();
       const batch = games.slice(i, i + concurrency);
       await Promise.all(
         batch.map(async (game) => {
-          const missing = getMissingFields(game);
+          const missing = [
+            ...getMissingFields(game),
+            ...getMissingRoundInfo(game, roundCounts)
+          ];
           const isDuelGame = game.modeFamily === "duels" || game.modeFamily === "teamduels";
           const hasSelfIdMismatch = isDuelGame && opts.currentPlayerId != null && game.selfId != null && game.selfId !== opts.currentPlayerId;
           if (hasSelfIdMismatch) missing.push("selfId mismatch");
@@ -11975,6 +12006,7 @@ ${shapes}`.trim();
                 updatedGameIds.push(game.gameId);
                 succeeded++;
                 if (hasSelfIdMismatch) selfIdFixed++;
+                if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
                 return;
               }
             } catch {
@@ -11992,6 +12024,7 @@ ${shapes}`.trim();
               lastStatus: "not_found",
               lastError: "All endpoints failed or returned 404"
             });
+            if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
             return;
           }
           const { data, endpoint } = result;
@@ -12027,6 +12060,7 @@ ${shapes}`.trim();
             updatedGameIds.push(game.gameId);
             succeeded++;
             if (hasSelfIdMismatch) selfIdFixed++;
+            if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
             opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
@@ -12039,6 +12073,7 @@ ${shapes}`.trim();
               lastError: errMsg,
               endpoint
             });
+            if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
           }
         })
       );
@@ -13073,6 +13108,7 @@ ${shapes}`.trim();
             delayMs: 400,
             force: opts.forceFull,
             currentPlayerId: await getCurrentPlayerId() ?? void 0,
+            forceVersion: opts.forceFull ? globalThis?.GM_info?.script?.version : void 0,
             onProgress: (p) => {
               if (logModal) logModal.setProgress(32 + Math.round(p.processed / Math.max(1, p.total) * 33));
               else setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
