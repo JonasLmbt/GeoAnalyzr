@@ -266,6 +266,17 @@ function orderedPlayers(
 
   const result: Array<{ player: any; healthMap: Map<number, number> }> = [];
   for (const p of ownPlayers) result.push({ player: p, healthMap: ownHealth });
+
+  // Enforce the [self, mate?, opp, oppMate?] contract: if own team has only one
+  // player (standard 1v1 duel), insert a null placeholder for the mate slot so
+  // that opponents always land at index 2 and index 3, not 1 and 2.
+  const hasOtherPlayers = otherTeams.some(
+    (t: any) => Array.isArray(t?.players) && t.players.length > 0
+  );
+  if (ownPlayers.length === 1 && hasOtherPlayers) {
+    result.push({ player: null, healthMap: new Map() });
+  }
+
   for (const t of otherTeams) {
     const h = healthByRound(t);
     for (const p of Array.isArray(t?.players) ? t.players : []) {
@@ -616,7 +627,9 @@ export function getMissingFields(game: GameRow): string[] {
   if (isDuelType) {
     if (game.selfVictory === undefined) m.push("selfVictory");
     if (game.oppId === undefined) m.push("oppId");
-    if (game.isRated && game.selfRatingBefore === undefined) m.push("selfRatingBefore");
+    // Only require selfRatingBefore on the first fetch; if the game has already been
+    // fetched and the API still didn't return it, accept that as the final state.
+    if (game.isRated && game.selfRatingBefore === undefined && game.detailFetchedAt === undefined) m.push("selfRatingBefore");
   }
   if (game.modeFamily === "teamduels") {
     if (game.mateId === undefined) m.push("mateId");
@@ -690,6 +703,12 @@ export async function fetchDetails(opts: {
             const hypothetical = { ...game, ...updates } as GameRow;
             if (getMissingFields(hypothetical).length === 0) {
               await dbV2.games.update(game.gameId, updates);
+              // Re-normalize rounds so opp/mate slots are correct after the index fix.
+              const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+              if (isDuelType) {
+                const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId);
+                if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
+              }
               opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
               updatedGameIds.push(game.gameId);
               succeeded++;
