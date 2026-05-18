@@ -11490,6 +11490,25 @@ ${shapes}`.trim();
     const iso = await resolveCountryCodeByLatLng(lat, lng).catch(() => void 0);
     return iso2ToName(iso);
   }
+  var _profileCache = /* @__PURE__ */ new Map();
+  async function fetchProfile(playerId) {
+    if (_profileCache.has(playerId)) return _profileCache.get(playerId);
+    try {
+      const res = await httpGetJsonWithRetry(
+        `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`,
+        { retries: 2, baseDelayMs: 400, maxDelayMs: 6e3 }
+      );
+      const profile = res.status >= 200 && res.status < 300 && res.data ? {
+        nick: typeof res.data.nick === "string" ? res.data.nick : void 0,
+        countryCode: typeof res.data.countryCode === "string" ? res.data.countryCode : void 0
+      } : {};
+      _profileCache.set(playerId, profile);
+      return profile;
+    } catch {
+      _profileCache.set(playerId, {});
+      return {};
+    }
+  }
   function buildEndpoints(gameId, modeFamily) {
     const gameServer = `https://game-server.geoguessr.com/api/duels/${gameId}`;
     const duelsEndpoints = [
@@ -11788,7 +11807,7 @@ ${shapes}`.trim();
     }
     return result;
   }
-  function extractGameUpdates(gameData, modeFamily, selfId) {
+  async function extractGameUpdates(gameData, modeFamily, selfId) {
     const isDuelType = modeFamily === "duels" || modeFamily === "teamduels";
     const mapName = typeof gameData?.options?.map?.name === "string" ? gameData.options.map.name : typeof gameData?.map?.name === "string" ? gameData.map.name : void 0;
     const mapSlug = typeof gameData?.options?.map?.slug === "string" ? gameData.options.map.slug : typeof gameData?.map?.slug === "string" ? gameData.map.slug : void 0;
@@ -11847,10 +11866,14 @@ ${shapes}`.trim();
       const oppNoMoveRatingAfter = mt === "no_move" ? oppGm.after : void 0;
       const oppNmpzRatingBefore = mt === "nmpz" ? oppGm.before : void 0;
       const oppNmpzRatingAfter = mt === "nmpz" ? oppGm.after : void 0;
+      const ids = [p0Id, p1Id, p2Id, p3Id];
+      const profiles = await Promise.all(ids.map((id) => id ? fetchProfile(id) : Promise.resolve({})));
+      const pName = (i) => profiles[i]?.nick ?? (typeof p[i]?.nick === "string" ? p[i].nick : void 0);
+      const pCountry = (i) => extractCountry(p[i]) ?? iso2ToName(normalizeIso23(profiles[i]?.countryCode));
       Object.assign(updates, {
         selfId: p0Id,
-        selfName: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
-        selfCountry: extractCountry(p[0]),
+        selfName: pName(0),
+        selfCountry: pCountry(0),
         selfScore,
         selfVictory,
         selfRatingBefore: rc[0].before,
@@ -11862,8 +11885,8 @@ ${shapes}`.trim();
         selfNmpzRatingBefore,
         selfNmpzRatingAfter,
         oppId: p2Id,
-        oppName: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
-        oppCountry: extractCountry(p[2]),
+        oppName: pName(2),
+        oppCountry: pCountry(2),
         oppRatingBefore: rc[2].before,
         oppRatingAfter: rc[2].after,
         oppMovingRatingBefore,
@@ -11873,13 +11896,13 @@ ${shapes}`.trim();
         oppNmpzRatingBefore,
         oppNmpzRatingAfter,
         mateId: p1Id,
-        mateName: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
-        mateCountry: extractCountry(p[1]),
+        mateName: pName(1),
+        mateCountry: pCountry(1),
         mateRatingBefore: rc[1].before,
         mateRatingAfter: rc[1].after,
         oppMateId: p3Id,
-        oppMateName: typeof p[3]?.nick === "string" ? p[3].nick : void 0,
-        oppMateCountry: extractCountry(p[3]),
+        oppMateName: pName(3),
+        oppMateCountry: pCountry(3),
         oppMateRatingBefore: rc[3].before,
         oppMateRatingAfter: rc[3].after
       });
@@ -11905,8 +11928,8 @@ ${shapes}`.trim();
     const isTeam = game.modeFamily === "teamduels";
     if (isDuelType) {
       if (game.selfId === void 0) m.push("selfId");
-      if (game.selfVictory === void 0) m.push("selfVictory");
       if (game.selfName === void 0) m.push("selfName");
+      if (game.selfVictory === void 0) m.push("selfVictory");
       if (game.selfCountry === void 0) m.push("selfCountry");
       if (game.oppId === void 0) m.push("oppId");
       if (game.oppName === void 0) m.push("oppName");
@@ -11993,7 +12016,7 @@ ${shapes}`.trim();
           const cached = await dbV2.rawGameDetails.get(game.gameId);
           if (cached?.json) {
             try {
-              const updates = extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
+              const updates = await extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
               const hypothetical = { ...game, ...updates };
               if (getMissingFields(hypothetical).length === 0) {
                 await dbV2.games.update(game.gameId, updates);
@@ -12047,7 +12070,7 @@ ${shapes}`.trim();
               await dbV2.classicGames.put(classicGame);
               if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
             }
-            const updates = extractGameUpdates(data, game.modeFamily, resolvedSelfId);
+            const updates = await extractGameUpdates(data, game.modeFamily, resolvedSelfId);
             await dbV2.games.update(game.gameId, updates);
             await dbV2.detailFetchLog.put({
               gameId: game.gameId,
