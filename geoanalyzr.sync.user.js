@@ -11498,9 +11498,10 @@ ${shapes}`.trim();
         `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`,
         { retries: 2, baseDelayMs: 400, maxDelayMs: 6e3 }
       );
-      const profile = res.status >= 200 && res.status < 300 && res.data ? {
-        nick: typeof res.data.nick === "string" ? res.data.nick : void 0,
-        countryCode: typeof res.data.countryCode === "string" ? res.data.countryCode : void 0
+      const d = res.data?.user ?? res.data;
+      const profile = res.status >= 200 && res.status < 300 && d ? {
+        nick: typeof d.nick === "string" ? d.nick : void 0,
+        countryCode: typeof d.countryCode === "string" ? d.countryCode : void 0
       } : {};
       _profileCache.set(playerId, profile);
       return profile;
