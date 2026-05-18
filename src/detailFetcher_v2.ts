@@ -749,7 +749,14 @@ export async function fetchDetails(opts: {
     permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
     games = all.filter((g) => {
       if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
-      return isDetailIncomplete(g);
+      if (isDetailIncomplete(g)) return true;
+      // During force (shift+click): also re-fetch duel games where selfId is
+      // set but doesn't match the known current player (previously mis-assigned).
+      if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
+        const isDuelType = g.modeFamily === "duels" || g.modeFamily === "teamduels";
+        if (isDuelType) return true;
+      }
+      return false;
     });
   }
 
@@ -768,10 +775,10 @@ export async function fetchDetails(opts: {
         const missing = getMissingFields(game);
         opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
 
-        // Resolve the correct selfId: use stored value first, fall back to the
-        // known current player ID so orderedPlayers() always puts the right
-        // player in slot 0 even for freshly-fetched games.
-        const resolvedSelfId = game.selfId ?? opts.currentPlayerId;
+        // currentPlayerId is the authoritative source — use it whenever available.
+        // game.selfId may be wrong (set when currentPlayerId wasn't known), so
+        // currentPlayerId takes precedence to prevent self/opp swap.
+        const resolvedSelfId = opts.currentPlayerId ?? game.selfId;
 
         const attemptedAt = Date.now();
 

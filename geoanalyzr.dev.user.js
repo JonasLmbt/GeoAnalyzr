@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      2.8.1-dev
+// @version      2.9.1-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11699,7 +11699,7 @@ ${shapes}`.trim();
         selfLat: guessLat,
         selfLng: guessLng,
         selfCountry: guessCountry,
-        selfScore: asNum2(guess?.roundScore?.amount ?? guess?.score),
+        selfScore: asNum2(guess?.roundScoreInPoints ?? guess?.roundScore?.amount ?? guess?.score),
         selfDistance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0
       };
       for (const k of Object.keys(row)) {
@@ -11912,7 +11912,12 @@ ${shapes}`.trim();
       permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
       games = all.filter((g) => {
         if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
-        return isDetailIncomplete(g);
+        if (isDetailIncomplete(g)) return true;
+        if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
+          const isDuelType = g.modeFamily === "duels" || g.modeFamily === "teamduels";
+          if (isDuelType) return true;
+        }
+        return false;
       });
     }
     const total = games.length;
@@ -11926,7 +11931,7 @@ ${shapes}`.trim();
         batch.map(async (game) => {
           const missing = getMissingFields(game);
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
-          const resolvedSelfId = game.selfId ?? opts.currentPlayerId;
+          const resolvedSelfId = opts.currentPlayerId ?? game.selfId;
           const attemptedAt = Date.now();
           const cached = await dbV2.rawGameDetails.get(game.gameId);
           if (cached?.json) {
