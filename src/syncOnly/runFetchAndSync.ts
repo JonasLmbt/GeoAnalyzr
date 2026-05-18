@@ -30,7 +30,7 @@ export interface SyncLog {
   timestamp: string;
   mode: "incremental" | "full";
   feed: { newGames: number; stopped: string; error?: string };
-  details: { queued: number; succeeded: number; failed: number; permanentlySkipped: number; error?: string };
+  details: { queued: number; succeeded: number; failed: number; permanentlySkipped: number; selfIdFixed: number; error?: string };
   sync: { gamesUploaded: number; gamesNew: number; roundsNew: number; batches: number; error?: string };
   result: "ok" | "error";
   message: string;
@@ -45,7 +45,7 @@ export async function runFetchAndSync(opts: {
     timestamp: new Date().toISOString(),
     mode: opts.forceFull ? "full" : "incremental",
     feed: { newGames: 0, stopped: "" },
-    details: { queued: 0, succeeded: 0, failed: 0, permanentlySkipped: 0 },
+    details: { queued: 0, succeeded: 0, failed: 0, permanentlySkipped: 0, selfIdFixed: 0 },
     sync: { gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 },
     result: "error",
     message: "",
@@ -105,6 +105,7 @@ export async function runFetchAndSync(opts: {
       concurrency: 3,
       delayMs: 400,
       force: opts.forceFull,
+      maxAgeDays: opts.forceFull ? 365 : undefined,
       currentPlayerId: (await getCurrentPlayerId()) ?? undefined,
       onProgress: (p) => {
         opts.setStatus(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}, fail: ${p.failed}...`);
@@ -115,6 +116,7 @@ export async function runFetchAndSync(opts: {
       succeeded: detailResult.succeeded,
       failed: detailResult.failed,
       permanentlySkipped: detailResult.permanentlySkipped,
+      selfIdFixed: detailResult.selfIdFixed,
     };
     detailUpdatedGameIds = detailResult.updatedGameIds;
   } catch (e: any) {
@@ -191,7 +193,14 @@ export async function runFetchAndSync(opts: {
   }
 
   const label = opts.forceFull ? "Full sync" : "Synced";
-  const message = `${label} — feed: ${log.feed.newGames}, details ok: ${log.details.succeeded}, server new: ${log.sync.gamesNew}`;
+  const parts = [
+    `feed: ${log.feed.newGames}`,
+    `details ok: ${log.details.succeeded}`,
+    `server new: ${log.sync.gamesNew}`,
+  ];
+  if (log.details.selfIdFixed > 0) parts.push(`selfId fixed: ${log.details.selfIdFixed}`);
+  if (log.details.failed > 0) parts.push(`failed: ${log.details.failed}`);
+  const message = `${label} — ${parts.join(", ")}`;
   log.result = "ok";
   log.message = message;
   return { ok: true, message, log };

@@ -15,6 +15,7 @@ export interface DetailFetchResult {
   updatedGameIds: string[];
   failed: number;
   permanentlySkipped: number;
+  selfIdFixed: number;
 }
 
 export interface DetailGameEvent {
@@ -48,6 +49,21 @@ function normalizeIso2(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const x = v.trim().toLowerCase();
   return /^[a-z]{2}$/.test(x) ? x : undefined;
+}
+
+const _regionNames: Intl.DisplayNames | undefined = (() => {
+  try { return new Intl.DisplayNames(["en"], { type: "region" }); } catch { return undefined; }
+})();
+
+function iso2ToName(code: string | undefined): string | undefined {
+  if (!code) return undefined;
+  if (!_regionNames) return code;
+  try {
+    const name = _regionNames.of(code.toUpperCase());
+    return name && name !== code.toUpperCase() ? name : code;
+  } catch {
+    return code;
+  }
 }
 
 function toTs(v: unknown): number | undefined {
@@ -139,9 +155,9 @@ function extractGameModeRating(player: any): { before?: number; after?: number }
 }
 
 function extractCountry(player: any): string | undefined {
-  return normalizeIso2(
+  return iso2ToName(normalizeIso2(
     player?.countryCode ?? player?.country ?? player?.user?.countryCode ?? player?.user?.country
-  );
+  ));
 }
 
 async function resolveGuessCountry(
@@ -152,8 +168,9 @@ async function resolveGuessCountry(
   const fromApi = normalizeIso2(
     guess?.countryCode ?? guess?.country_code ?? guess?.country
   );
-  if (fromApi) return fromApi;
-  return resolveCountryCodeByLatLng(lat, lng).catch(() => undefined);
+  if (fromApi) return iso2ToName(fromApi);
+  const iso = await resolveCountryCodeByLatLng(lat, lng).catch(() => undefined);
+  return iso2ToName(iso);
 }
 
 // ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -325,7 +342,7 @@ async function normalizeDuelsRounds(
     const trueHeadingDeg = asNum(
       r?.panorama?.heading ?? r?.panorama?.panoHeading ?? r?.panorama?.initialHeading
     );
-    const trueCountry = normalizeIso2(r?.panorama?.countryCode);
+    const trueCountry = iso2ToName(normalizeIso2(r?.panorama?.countryCode));
     const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || undefined;
     const damageMultiplier = asNum(r?.damageMultiplier);
 
@@ -450,7 +467,7 @@ async function normalizeSoloRounds(
 
     const trueLat = asNum(r?.lat ?? r?.latitude);
     const trueLng = asNum(r?.lng ?? r?.longitude);
-    const trueCountry = normalizeIso2(r?.streakLocationCode ?? r?.countryCode);
+    const trueCountry = iso2ToName(normalizeIso2(r?.streakLocationCode ?? r?.countryCode));
 
     const guessLat = asNum(guess?.lat ?? guess?.latitude);
     const guessLng = asNum(guess?.lng ?? guess?.longitude);
@@ -534,7 +551,7 @@ async function normalizeClassicRounds(gameId: string, gameData: any): Promise<Cl
       trueLat: asNum(r?.lat ?? r?.latitude),
       trueLng: asNum(r?.lng ?? r?.longitude),
       trueHeadingDeg: asNum(r?.heading),
-      trueCountry: normalizeIso2(r?.streakLocationCode ?? r?.countryCode),
+      trueCountry: iso2ToName(normalizeIso2(r?.streakLocationCode ?? r?.countryCode)),
       panoId: typeof r?.panoId === "string" ? r.panoId : undefined,
       selfLat: guessLat,
       selfLng: guessLng,
@@ -703,6 +720,8 @@ export function getMissingFields(game: GameRow): string[] {
     // Only require selfRatingBefore on the first fetch; if the game has already been
     // fetched and the API still didn't return it, accept that as the final state.
     if (game.isRated && game.selfRatingBefore === undefined && game.detailFetchedAt === undefined) m.push("selfRatingBefore");
+    if (game.selfName === undefined) m.push("selfName");
+    if (game.selfCountry === undefined) m.push("selfCountry");
   }
   if (game.modeFamily === "teamduels") {
     if (game.mateId === undefined) m.push("mateId");
@@ -733,10 +752,15 @@ export async function fetchDetails(opts: {
   force?: boolean;
   /** The current user's GeoGuessr player ID — used to correctly assign self/opp when game.selfId is missing. */
   currentPlayerId?: string;
+  /** During force, skip games older than this many days (default: no cutoff). */
+  maxAgeDays?: number;
 }): Promise<DetailFetchResult> {
   const concurrency = Math.max(1, opts.concurrency ?? 2);
   const delayMs = opts.delayMs ?? 500;
   const maxRetries = opts.maxRetries ?? 3;
+  const cutoffMs = opts.force && opts.maxAgeDays != null
+    ? Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1000
+    : undefined;
 
   let games: GameRow[];
   let permanentlySkipped = 0;
@@ -748,6 +772,7 @@ export async function fetchDetails(opts: {
     const attemptsByGame = new Map(logEntries.map((l) => [l.gameId, l.attempts]));
     permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
     games = all.filter((g) => {
+      if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
       if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
       if (isDetailIncomplete(g)) return true;
       // During force (shift+click): also re-fetch duel games where selfId is
@@ -765,6 +790,7 @@ export async function fetchDetails(opts: {
   let succeeded = 0;
   const updatedGameIds: string[] = [];
   let failed = 0;
+  let selfIdFixed = 0;
 
   // Process in batches of `concurrency`
   for (let i = 0; i < games.length; i += concurrency) {
@@ -773,6 +799,10 @@ export async function fetchDetails(opts: {
     await Promise.all(
       batch.map(async (game) => {
         const missing = getMissingFields(game);
+        const isDuelGame = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+        const hasSelfIdMismatch = isDuelGame && opts.currentPlayerId != null
+          && game.selfId != null && game.selfId !== opts.currentPlayerId;
+        if (hasSelfIdMismatch) missing.push("selfId mismatch");
         opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
 
         // currentPlayerId is the authoritative source — use it whenever available.
@@ -799,6 +829,7 @@ export async function fetchDetails(opts: {
               opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
               updatedGameIds.push(game.gameId);
               succeeded++;
+              if (hasSelfIdMismatch) selfIdFixed++;
               return;
             }
           } catch { /* ignore, fall through to API */ }
@@ -868,6 +899,7 @@ export async function fetchDetails(opts: {
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "api" });
           updatedGameIds.push(game.gameId);
           succeeded++;
+          if (hasSelfIdMismatch) selfIdFixed++;
         } catch (e) {
           const errMsg = e instanceof Error ? e.message : String(e);
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
@@ -892,5 +924,5 @@ export async function fetchDetails(opts: {
     }
   }
 
-  return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped };
+  return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped, selfIdFixed };
 }
