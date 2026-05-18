@@ -1,5 +1,6 @@
 import { fetchFeed } from "../feedFetcher_v2";
 import { fetchDetails } from "../detailFetcher_v2";
+import { getCurrentPlayerId } from "../app/playerIdentity";
 import { syncToServerV2, syncClassicToServer } from "../serverSync_v2";
 import { loadServerSyncSettings } from "../serverSync";
 import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
@@ -104,6 +105,7 @@ export async function runFetchAndSync(opts: {
       concurrency: 3,
       delayMs: 400,
       force: opts.forceFull,
+      currentPlayerId: (await getCurrentPlayerId()) ?? undefined,
       onProgress: (p) => {
         opts.setStatus(`Details ${p.processed}/${p.total} — ok: ${p.succeeded}, fail: ${p.failed}...`);
       },

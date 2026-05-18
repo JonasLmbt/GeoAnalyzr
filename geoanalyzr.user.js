@@ -11926,17 +11926,18 @@ ${shapes}`.trim();
         batch.map(async (game) => {
           const missing = getMissingFields(game);
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
+          const resolvedSelfId = game.selfId ?? opts.currentPlayerId;
           const attemptedAt = Date.now();
           const cached = await dbV2.rawGameDetails.get(game.gameId);
           if (cached?.json) {
             try {
-              const updates = extractGameUpdates(cached.json, game.modeFamily, game.selfId);
+              const updates = extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
               const hypothetical = { ...game, ...updates };
               if (getMissingFields(hypothetical).length === 0) {
                 await dbV2.games.update(game.gameId, updates);
                 const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
                 if (isDuelType) {
-                  const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId);
+                  const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId ?? resolvedSelfId);
                   if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
                 }
                 opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
@@ -11970,18 +11971,18 @@ ${shapes}`.trim();
               json: data
             });
             const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
-            const rounds = isDuelType ? await normalizeDuelsRounds(game.gameId, data, game.selfId) : await normalizeSoloRounds(game.gameId, data);
+            const rounds = isDuelType ? await normalizeDuelsRounds(game.gameId, data, resolvedSelfId) : await normalizeSoloRounds(game.gameId, data);
             if (rounds.length > 0) {
               await dbV2.rounds.bulkPut(rounds);
             }
             if (game.modeFamily === "standard") {
-              const selfId = game.selfId ?? readPlayerId2(data?.player) ?? "";
+              const selfId = resolvedSelfId ?? readPlayerId2(data?.player) ?? "";
               const classicGame = normalizeClassicGame(game.gameId, selfId, data);
               const classicRounds = await normalizeClassicRounds(game.gameId, data);
               await dbV2.classicGames.put(classicGame);
               if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
             }
-            const updates = extractGameUpdates(data, game.modeFamily, game.selfId);
+            const updates = extractGameUpdates(data, game.modeFamily, resolvedSelfId);
             await dbV2.games.update(game.gameId, updates);
             await dbV2.detailFetchLog.put({
               gameId: game.gameId,
@@ -13038,6 +13039,7 @@ ${shapes}`.trim();
             concurrency: logModal ? 1 : 3,
             delayMs: 400,
             force: opts.forceFull,
+            currentPlayerId: await getCurrentPlayerId() ?? void 0,
             onProgress: (p) => {
               if (logModal) logModal.setProgress(32 + Math.round(p.processed / Math.max(1, p.total) * 33));
               else setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);

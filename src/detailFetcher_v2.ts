@@ -731,6 +731,8 @@ export async function fetchDetails(opts: {
   maxRetries?: number;
   /** If true, retry even games that have exhausted maxRetries (shift+click) */
   force?: boolean;
+  /** The current user's GeoGuessr player ID — used to correctly assign self/opp when game.selfId is missing. */
+  currentPlayerId?: string;
 }): Promise<DetailFetchResult> {
   const concurrency = Math.max(1, opts.concurrency ?? 2);
   const delayMs = opts.delayMs ?? 500;
@@ -766,20 +768,25 @@ export async function fetchDetails(opts: {
         const missing = getMissingFields(game);
         opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
 
+        // Resolve the correct selfId: use stored value first, fall back to the
+        // known current player ID so orderedPlayers() always puts the right
+        // player in slot 0 even for freshly-fetched games.
+        const resolvedSelfId = game.selfId ?? opts.currentPlayerId;
+
         const attemptedAt = Date.now();
 
         // ── Cache-first: try to re-parse stored raw response before hitting the API ──
         const cached = await dbV2.rawGameDetails.get(game.gameId);
         if (cached?.json) {
           try {
-            const updates = extractGameUpdates(cached.json, game.modeFamily, game.selfId);
+            const updates = extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
             const hypothetical = { ...game, ...updates } as GameRow;
             if (getMissingFields(hypothetical).length === 0) {
               await dbV2.games.update(game.gameId, updates);
               // Re-normalize rounds so opp/mate slots are correct after the index fix.
               const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
               if (isDuelType) {
-                const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId);
+                const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId ?? resolvedSelfId);
                 if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
               }
               opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
@@ -821,7 +828,7 @@ export async function fetchDetails(opts: {
           // Normalize rounds
           const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
           const rounds = isDuelType
-            ? await normalizeDuelsRounds(game.gameId, data, game.selfId)
+            ? await normalizeDuelsRounds(game.gameId, data, resolvedSelfId)
             : await normalizeSoloRounds(game.gameId, data);
 
           // Write rounds
@@ -831,7 +838,7 @@ export async function fetchDetails(opts: {
 
           // For standard/classic games, also write to dedicated classic tables
           if (game.modeFamily === "standard") {
-            const selfId = game.selfId ?? readPlayerId(data?.player) ?? "";
+            const selfId = resolvedSelfId ?? readPlayerId(data?.player) ?? "";
             const classicGame = normalizeClassicGame(game.gameId, selfId, data);
             const classicRounds = await normalizeClassicRounds(game.gameId, data);
             await dbV2.classicGames.put(classicGame);
@@ -839,7 +846,7 @@ export async function fetchDetails(opts: {
           }
 
           // Update game row with extracted fields
-          const updates = extractGameUpdates(data, game.modeFamily, game.selfId);
+          const updates = extractGameUpdates(data, game.modeFamily, resolvedSelfId);
           await dbV2.games.update(game.gameId, updates);
 
           // Log success

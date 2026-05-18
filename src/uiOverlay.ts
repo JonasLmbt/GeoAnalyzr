@@ -3,6 +3,7 @@ import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, 
 import { syncToServerV2, syncClassicToServer } from "./serverSync_v2";
 import { fetchFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
+import { getCurrentPlayerId } from "./app/playerIdentity";
 import { isMigrationNeeded, migrateV1ToV2 } from "./migration_v1_to_v2";
 import { getGmXmlhttpRequest } from "./gm";
 import { loadFetchGameFilter, saveFetchGameFilter } from "./fetchGameFilter";
@@ -883,6 +884,7 @@ export function createUIOverlay(): UIOverlay {
           concurrency: logModal ? 1 : 3,
           delayMs: 400,
           force: opts.forceFull,
+          currentPlayerId: (await getCurrentPlayerId()) ?? undefined,
           onProgress: (p) => {
             // details: 32→65%
             if (logModal) logModal.setProgress(32 + Math.round((p.processed / Math.max(1, p.total)) * 33));
