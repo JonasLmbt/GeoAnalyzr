@@ -446,3 +446,241 @@ export async function syncClassicToServer(): Promise<SyncClassicResult> {
 
   return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
 }
+
+// ─── V3 Sync ──────────────────────────────────────────────────────────────────
+//
+// These functions mirror their v2 counterparts but target the v3 player-agnostic
+// endpoints.  They are intentionally simple: no reconciliation, no progress
+// callbacks, just fire-and-forget batches.  Callers should wrap them in
+// try/catch so that v3 failures never surface to the user.
+
+function v3BatchEndpoint(syncEndpointUrl: string): string {
+  try {
+    const u = new URL(syncEndpointUrl);
+    u.pathname = "/api/v3/sync/batch";
+    u.search = "";
+    return u.toString();
+  } catch {
+    return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v3/sync/batch");
+  }
+}
+
+function v3ClassicBatchEndpoint(syncEndpointUrl: string): string {
+  try {
+    const u = new URL(syncEndpointUrl);
+    u.pathname = "/api/v3/sync/classic-batch";
+    u.search = "";
+    return u.toString();
+  } catch {
+    return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v3/sync/classic-batch");
+  }
+}
+
+export interface SyncV3Result {
+  ok: boolean;
+  status?: number;
+  gamesUploaded: number;
+  gamesNew: number;
+  gamesSkipped: number;
+  roundsNew: number;
+  batches: number;
+  error?: string;
+}
+
+/**
+ * Upload duel + team-duel games to the v3 server endpoint.
+ *
+ * No reconciliation — always uploads.  Non-fatal: callers should catch errors.
+ */
+export async function syncToServerV3(opts: {
+  /** Force full re-upload of all games (otherwise only gameIds is used if provided) */
+  full?: boolean;
+  /** If provided, only upload these specific game IDs */
+  gameIds?: string[];
+}): Promise<SyncV3Result> {
+  const settings = loadServerSyncSettings();
+  if (!settings.token) {
+    return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const playerId = await getCurrentPlayerId();
+  if (!playerId) {
+    return { ok: false, error: "no_player_id", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const batchUrl = v3BatchEndpoint(settings.endpointUrl);
+  const clientVersion = getUserscriptVersion();
+
+  // Only duels and teamduels go into v3 via this endpoint
+  let localGames: GameRow[];
+  if (opts.gameIds) {
+    const gameIdSet = new Set(opts.gameIds);
+    localGames = await dbV2.games
+      .filter((g) => gameIdSet.has(g.gameId) && (g.modeFamily === "duels" || g.modeFamily === "teamduels"))
+      .toArray();
+  } else {
+    localGames = await dbV2.games
+      .filter((g) => g.modeFamily === "duels" || g.modeFamily === "teamduels")
+      .toArray();
+  }
+
+  if (localGames.length === 0) {
+    return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const allRounds = await dbV2.rounds.toArray();
+  const roundsByGameId = new Map<string, RoundRow[]>();
+  for (const r of allRounds) {
+    const list = roundsByGameId.get(r.gameId);
+    if (list) list.push(r);
+    else roundsByGameId.set(r.gameId, [r]);
+  }
+
+  const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
+  let totalGamesUploaded = 0;
+  let totalGamesNew = 0;
+  let totalGamesSkipped = 0;
+  let totalRoundsNew = 0;
+  let batchIndex = 0;
+
+  for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+    batchIndex++;
+    const gameBatch: GameRow[] = localGames.slice(i, i + BATCH_SIZE);
+    const roundBatch: RoundRow[] = [];
+    for (const g of gameBatch) {
+      const r = roundsByGameId.get(g.gameId);
+      if (r) roundBatch.push(...r);
+    }
+
+    const batchId = `v3_${playerId}_${Date.now()}_${batchIndex}`;
+    const body = {
+      batchId,
+      playerId,
+      clientVersion: clientVersion ?? undefined,
+      games: gameBatch,
+      rounds: roundBatch,
+    };
+
+    let res: { status: number; data: any };
+    try {
+      res = await httpPost(batchUrl, settings.token, body);
+    } catch (e) {
+      return {
+        ok: false,
+        status: 0,
+        error: e instanceof Error ? e.message : String(e),
+        gamesUploaded: totalGamesUploaded,
+        gamesNew: totalGamesNew,
+        gamesSkipped: totalGamesSkipped,
+        roundsNew: totalRoundsNew,
+        batches: batchIndex - 1,
+      };
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    }
+
+    totalGamesUploaded += gameBatch.length;
+    totalGamesNew += Number(res.data?.gamesNew) || 0;
+    totalGamesSkipped += Number(res.data?.gamesSkipped) || 0;
+    totalRoundsNew += Number(res.data?.roundsNew) || 0;
+  }
+
+  return {
+    ok: true,
+    gamesUploaded: totalGamesUploaded,
+    gamesNew: totalGamesNew,
+    gamesSkipped: totalGamesSkipped,
+    roundsNew: totalRoundsNew,
+    batches: batchIndex,
+  };
+}
+
+export interface SyncV3ClassicResult {
+  ok: boolean;
+  error?: string;
+  status?: number;
+  gamesUploaded: number;
+  gamesNew: number;
+  roundsNew: number;
+  batches: number;
+}
+
+/**
+ * Upload classic/standard games to the v3 server endpoint.
+ *
+ * Non-fatal: callers should catch errors.
+ */
+export async function syncClassicToServerV3(): Promise<SyncV3ClassicResult> {
+  const settings = loadServerSyncSettings();
+  if (!settings.token) {
+    return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const localGames = await dbV2.classicGames
+    .filter((g) => g.detailFetchedAt !== undefined)
+    .toArray();
+
+  if (localGames.length === 0) {
+    return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+  }
+
+  const allRounds = await dbV2.classicRounds.toArray();
+  const roundsByGameId = new Map<string, ClassicRoundRow[]>();
+  for (const r of allRounds) {
+    const list = roundsByGameId.get(r.gameId);
+    if (list) list.push(r);
+    else roundsByGameId.set(r.gameId, [r]);
+  }
+
+  const batchUrl = v3ClassicBatchEndpoint(settings.endpointUrl);
+  const clientVersion = getUserscriptVersion();
+  let totalGamesUploaded = 0;
+  let totalGamesNew = 0;
+  let totalRoundsNew = 0;
+  let batchIndex = 0;
+
+  for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+    batchIndex++;
+    const gameBatch: ClassicGameRow[] = localGames.slice(i, i + BATCH_SIZE);
+    const roundBatch: ClassicRoundRow[] = [];
+    for (const g of gameBatch) {
+      const r = roundsByGameId.get(g.gameId);
+      if (r) roundBatch.push(...r);
+    }
+
+    const batchId = `v3classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
+    const body = { batchId, clientVersion: clientVersion ?? undefined, games: gameBatch, rounds: roundBatch };
+
+    let res: { status: number; data: any };
+    try {
+      res = await httpPost(batchUrl, settings.token, body);
+    } catch (e) {
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        gamesUploaded: totalGamesUploaded,
+        gamesNew: totalGamesNew,
+        roundsNew: totalRoundsNew,
+        batches: batchIndex - 1,
+      };
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    }
+    if (res.status < 200 || res.status >= 300) {
+      return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    }
+
+    totalGamesUploaded += gameBatch.length;
+    totalGamesNew += Number(res.data?.gamesNew) || 0;
+    totalRoundsNew += Number(res.data?.roundsNew) || 0;
+  }
+
+  return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
+}

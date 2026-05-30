@@ -14,8 +14,8 @@ const MACAU_BOX = { minLat: 22.10, maxLat: 22.24, minLng: 113.52, maxLng: 113.61
 
 function normalizeIso2(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
-  const x = v.trim().toLowerCase();
-  return /^[a-z]{2}$/.test(x) ? x : undefined;
+  const x = v.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(x) ? x : undefined;
 }
 
 function isFiniteNumber(x: unknown): x is number {
@@ -68,12 +68,12 @@ function resolveCountryCodeByLatLngLocalSyncInternal(lat?: number, lng?: number,
 
   // Override: HK/MO should remain distinct (not collapsed into CN).
   if (isInBoundingBox(norm.lat, norm.lng, HONG_KONG_BOX)) {
-    guessCountryCache.set(key, "hk");
-    return "hk";
+    guessCountryCache.set(key, "HK");
+    return "HK";
   }
   if (isInBoundingBox(norm.lat, norm.lng, MACAU_BOX)) {
-    guessCountryCache.set(key, "mo");
-    return "mo";
+    guessCountryCache.set(key, "MO");
+    return "MO";
   }
 
   // 1) Fast local lookup (no network)

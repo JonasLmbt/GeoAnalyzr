@@ -1,7 +1,7 @@
 import { fetchFeed } from "../feedFetcher_v2";
 import { fetchDetails } from "../detailFetcher_v2";
 import { getCurrentPlayerId } from "../app/playerIdentity";
-import { syncToServerV2, syncClassicToServer } from "../serverSync_v2";
+import { syncToServerV2, syncClassicToServer, syncToServerV3, syncClassicToServerV3 } from "../serverSync_v2";
 import { loadServerSyncSettings } from "../serverSync";
 import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
 import { linkDeviceViaDiscord } from "./linkDevice";
@@ -186,6 +186,10 @@ export async function runFetchAndSync(opts: {
     try {
       await syncClassicToServer();
     } catch { /* ignore — classic sync failure doesn't block the main result */ }
+
+    // V3 sync — runs in parallel with v2, non-fatal; v2 endpoint is the source of truth
+    try { await syncToServerV3({ gameIds: touchedIds }); } catch { /* v3 non-fatal */ }
+    try { await syncClassicToServerV3(); } catch { /* v3 classic non-fatal */ }
   } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e || "Sync failed");
     log.sync.error = msg;
