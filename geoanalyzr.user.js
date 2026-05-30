@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      2.9.3
+// @version      2.9.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -51,9 +51,9 @@
     mod
   ));
 
-  // node_modules/dexie/dist/dexie.js
+  // ../tools/GeoAnalyzr/node_modules/dexie/dist/dexie.js
   var require_dexie = __commonJS({
-    "node_modules/dexie/dist/dexie.js"(exports, module) {
+    "../tools/GeoAnalyzr/node_modules/dexie/dist/dexie.js"(exports, module) {
       (function(global2, factory) {
         typeof exports === "object" && typeof module !== "undefined" ? module.exports = factory() : typeof define === "function" && define.amd ? define(factory) : (global2 = typeof globalThis !== "undefined" ? globalThis : global2 || self, global2.Dexie = factory());
       })(exports, (function() {
@@ -6077,9 +6077,9 @@
     }
   });
 
-  // node_modules/quickselect/quickselect.js
+  // ../tools/GeoAnalyzr/node_modules/quickselect/quickselect.js
   var require_quickselect = __commonJS({
-    "node_modules/quickselect/quickselect.js"(exports, module) {
+    "../tools/GeoAnalyzr/node_modules/quickselect/quickselect.js"(exports, module) {
       (function(global2, factory) {
         typeof exports === "object" && typeof module !== "undefined" ? module.exports = factory() : typeof define === "function" && define.amd ? define(factory) : global2.quickselect = factory();
       })(exports, (function() {
@@ -6133,9 +6133,9 @@
     }
   });
 
-  // node_modules/rbush/index.js
+  // ../tools/GeoAnalyzr/node_modules/rbush/index.js
   var require_rbush = __commonJS({
-    "node_modules/rbush/index.js"(exports, module) {
+    "../tools/GeoAnalyzr/node_modules/rbush/index.js"(exports, module) {
       "use strict";
       module.exports = rbush;
       module.exports.default = rbush;
@@ -6503,9 +6503,9 @@
     }
   });
 
-  // node_modules/lineclip/index.js
+  // ../tools/GeoAnalyzr/node_modules/lineclip/index.js
   var require_lineclip = __commonJS({
-    "node_modules/lineclip/index.js"(exports, module) {
+    "../tools/GeoAnalyzr/node_modules/lineclip/index.js"(exports, module) {
       "use strict";
       module.exports = lineclip;
       lineclip.polyline = lineclip;
@@ -6590,9 +6590,9 @@
     }
   });
 
-  // node_modules/which-polygon/index.js
+  // ../tools/GeoAnalyzr/node_modules/which-polygon/index.js
   var require_which_polygon = __commonJS({
-    "node_modules/which-polygon/index.js"(exports, module) {
+    "../tools/GeoAnalyzr/node_modules/which-polygon/index.js"(exports, module) {
       "use strict";
       var rbush = require_rbush();
       var lineclip = require_lineclip();
@@ -6692,7 +6692,7 @@
     }
   });
 
-  // src/ui/logo.ts
+  // ../tools/GeoAnalyzr/src/ui/logo.ts
   var LOGO_SVG_DEFS = `
   <defs>
     <radialGradient id="bg" cx="30%" cy="20%" r="80%">
@@ -6818,7 +6818,7 @@ ${shapes}`.trim();
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
   }
 
-  // node_modules/fflate/esm/browser.js
+  // ../tools/GeoAnalyzr/node_modules/fflate/esm/browser.js
   var ch2 = {};
   var wk = (function(c, id, msg, transfer, cb) {
     var w = new Worker(ch2[id] || (ch2[id] = URL.createObjectURL(new Blob([
@@ -7785,7 +7785,7 @@ ${shapes}`.trim();
     return files;
   }
 
-  // node_modules/dexie/import-wrapper.mjs
+  // ../tools/GeoAnalyzr/node_modules/dexie/import-wrapper.mjs
   var import_dexie = __toESM(require_dexie(), 1);
   var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
   var Dexie = globalThis[DexieSymbol] || (globalThis[DexieSymbol] = import_dexie.default);
@@ -7807,7 +7807,7 @@ ${shapes}`.trim();
   } = Dexie;
   var import_wrapper_default = Dexie;
 
-  // src/db.ts
+  // ../tools/GeoAnalyzr/src/db.ts
   var MAIN_DB_NAME = "gg_analyzer_db";
   var ACTIVE_DB_STORAGE_KEY = "geoanalyzr_active_db_v1";
   function readActiveDbNameFromStorage() {
@@ -7903,7 +7903,7 @@ ${shapes}`.trim();
   };
   var db = new GGDB(readActiveDbNameFromStorage());
 
-  // src/gm.ts
+  // ../tools/GeoAnalyzr/src/gm.ts
   function getGlobalGmXmlhttpRequest() {
     const g = globalThis;
     return g?.GM_xmlhttpRequest ?? g?.GM?.xmlHttpRequest;
@@ -7926,7 +7926,7 @@ ${shapes}`.trim();
     return typeof getGmXmlhttpRequest() === "function";
   }
 
-  // src/http.ts
+  // ../tools/GeoAnalyzr/src/http.ts
   function parseRawHeaders(raw) {
     const out = {};
     if (typeof raw !== "string" || !raw.trim()) return out;
@@ -8058,7 +8058,7 @@ ${shapes}`.trim();
     return last ?? { status: 0, data: null, headers: {} };
   }
 
-  // src/app/playerIdentity.ts
+  // ../tools/GeoAnalyzr/src/app/playerIdentity.ts
   var cachedPlayerName;
   var cachedPlayerId;
   function asTrimmedString(v) {
@@ -8192,7 +8192,7 @@ ${shapes}`.trim();
     return fromDb;
   }
 
-  // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
+  // ../tools/GeoAnalyzr/node_modules/@rapideditor/country-coder/dist/country-coder.mjs
   var import_which_polygon = __toESM(require_which_polygon(), 1);
   var borders_default = {
     type: "FeatureCollection",
@@ -8984,7 +8984,7 @@ ${shapes}`.trim();
     return returnFeatures;
   }
 
-  // src/countries.ts
+  // ../tools/GeoAnalyzr/src/countries.ts
   var guessCountryCache = /* @__PURE__ */ new Map();
   function isInBoundingBox(lat, lng, box) {
     return lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng;
@@ -8993,8 +8993,8 @@ ${shapes}`.trim();
   var MACAU_BOX = { minLat: 22.1, maxLat: 22.24, minLng: 113.52, maxLng: 113.61 };
   function normalizeIso2(v) {
     if (typeof v !== "string") return void 0;
-    const x = v.trim().toLowerCase();
-    return /^[a-z]{2}$/.test(x) ? x : void 0;
+    const x = v.trim().toUpperCase();
+    return /^[A-Z]{2}$/.test(x) ? x : void 0;
   }
   function isFiniteNumber(x) {
     return typeof x === "number" && Number.isFinite(x);
@@ -9025,15 +9025,15 @@ ${shapes}`.trim();
     const key = `${norm.lat.toFixed(5)},${norm.lng.toFixed(5)}`;
     if (guessCountryCache.has(key)) return guessCountryCache.get(key);
     if (isInBoundingBox(norm.lat, norm.lng, HONG_KONG_BOX)) {
-      guessCountryCache.set(key, "hk");
-      return "hk";
+      guessCountryCache.set(key, "HK");
+      return "HK";
     }
     if (isInBoundingBox(norm.lat, norm.lng, MACAU_BOX)) {
-      guessCountryCache.set(key, "mo");
-      return "mo";
+      guessCountryCache.set(key, "MO");
+      return "MO";
     }
-    const local = iso1A2Code([norm.lng, norm.lat]);
-    const isoLocal = normalizeIso2(local);
+    const local2 = iso1A2Code([norm.lng, norm.lat]);
+    const isoLocal = normalizeIso2(local2);
     if (isoLocal) {
       guessCountryCache.set(key, isoLocal);
       return isoLocal;
@@ -9042,8 +9042,8 @@ ${shapes}`.trim();
     return void 0;
   }
   async function resolveCountryCodeByLatLngInternal(lat, lng, allowNetworkFallback = true) {
-    const local = resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, false);
-    if (local) return local;
+    const local2 = resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, false);
+    if (local2) return local2;
     if (!allowNetworkFallback) return void 0;
     const norm = normalizeLatLng(lat, lng);
     if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return void 0;
@@ -9063,7 +9063,7 @@ ${shapes}`.trim();
     return resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, true);
   }
 
-  // src/engine/gameAgg.ts
+  // ../tools/GeoAnalyzr/src/engine/gameAgg.ts
   var GAME_AGG_VERSION = 1;
   function normalizeMovementType(raw) {
     if (typeof raw !== "string") return "unknown";
@@ -9135,7 +9135,7 @@ ${shapes}`.trim();
     return agg;
   }
 
-  // src/fetchLog.ts
+  // ../tools/GeoAnalyzr/src/fetchLog.ts
   function safeError(e) {
     if (e instanceof Error) return { name: e.name, message: e.message, stack: e.stack };
     return { message: String(e) };
@@ -9154,7 +9154,7 @@ ${shapes}`.trim();
     return { total, head: h, tail: t };
   }
 
-  // src/details.ts
+  // ../tools/GeoAnalyzr/src/details.ts
   var cachedOwnPlayerId;
   var profileCache = /* @__PURE__ */ new Map();
   var regionDisplay = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
@@ -10041,7 +10041,7 @@ ${shapes}`.trim();
     return { queued: total, ok, fail, skipped };
   }
 
-  // src/serverSync.ts
+  // ../tools/GeoAnalyzr/src/serverSync.ts
   var SYNC_META_KEY = "server_sync_v1";
   var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
   var DEFAULT_ENDPOINT = "https://geoanalyzr.lmbt.app/api/sync";
@@ -10713,8 +10713,9 @@ ${shapes}`.trim();
     return meta?.value ?? null;
   }
 
-  // src/db_v2.ts
+  // ../tools/GeoAnalyzr/src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
+  var CURRENT_NORMALIZE_VERSION = 2;
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
@@ -10863,7 +10864,7 @@ ${shapes}`.trim();
     await dbV2.syncState.put({ key, value, updatedAt: Date.now() });
   }
 
-  // src/serverSync_v2.ts
+  // ../tools/GeoAnalyzr/src/serverSync_v2.ts
   function getUserscriptVersion2() {
     const info = globalThis?.GM_info;
     const v = info?.script?.version;
@@ -11187,7 +11188,7 @@ ${shapes}`.trim();
     return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
   }
 
-  // src/feedFetcher_v2.ts
+  // ../tools/GeoAnalyzr/src/feedFetcher_v2.ts
   function getByPath2(obj, path) {
     const parts = path.split(".");
     let cur = obj;
@@ -11362,7 +11363,7 @@ ${shapes}`.trim();
     return { newGames: totalNew, newGameIds: allNewGameIds, pages: 0, stopped };
   }
 
-  // src/detailFetcher_v2.ts
+  // ../tools/GeoAnalyzr/src/detailFetcher_v2.ts
   function asNum2(v) {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (typeof v === "string") {
@@ -11490,26 +11491,6 @@ ${shapes}`.trim();
     const iso = await resolveCountryCodeByLatLng(lat, lng).catch(() => void 0);
     return iso2ToName(iso);
   }
-  var _profileCache = /* @__PURE__ */ new Map();
-  async function fetchProfile(playerId) {
-    if (_profileCache.has(playerId)) return _profileCache.get(playerId);
-    try {
-      const res = await httpGetJsonWithRetry(
-        `https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`,
-        { retries: 2, baseDelayMs: 400, maxDelayMs: 6e3 }
-      );
-      const d = res.data?.user ?? res.data;
-      const profile = res.status >= 200 && res.status < 300 && d ? {
-        nick: typeof d.nick === "string" ? d.nick : void 0,
-        countryCode: typeof d.countryCode === "string" ? d.countryCode : void 0
-      } : {};
-      _profileCache.set(playerId, profile);
-      return profile;
-    } catch {
-      _profileCache.set(playerId, {});
-      return {};
-    }
-  }
   function buildEndpoints(gameId, modeFamily) {
     const gameServer = `https://game-server.geoguessr.com/api/duels/${gameId}`;
     const duelsEndpoints = [
@@ -11560,12 +11541,19 @@ ${shapes}`.trim();
     }
     return map;
   }
-  function healthByRound2(team) {
+  function teamResultsByRound(team) {
     const map = /* @__PURE__ */ new Map();
     for (const r of Array.isArray(team?.roundResults) ? team.roundResults : []) {
       const rn = asNum2(r?.roundNumber);
-      const h = asNum2(r?.healthAfter);
-      if (rn !== void 0 && h !== void 0) map.set(rn, h);
+      if (rn === void 0) continue;
+      const entry = {};
+      const hb = asNum2(r?.healthBefore);
+      const ha = asNum2(r?.healthAfter);
+      const dd = asNum2(r?.damageDealt);
+      if (hb !== void 0) entry.healthBefore = hb;
+      if (ha !== void 0) entry.healthAfter = ha;
+      if (dd !== void 0) entry.damageDealt = dd;
+      map.set(rn, entry);
     }
     return map;
   }
@@ -11582,7 +11570,7 @@ ${shapes}`.trim();
     const ownTeam = teams[ownTeamIndex];
     const otherTeams = teams.filter((_, i) => i !== ownTeamIndex);
     const ownPlayers = Array.isArray(ownTeam?.players) ? [...ownTeam.players] : [];
-    const ownHealth = healthByRound2(ownTeam);
+    const ownResults = teamResultsByRound(ownTeam);
     if (selfId) {
       ownPlayers.sort((a, b) => {
         if (readPlayerId2(a) === selfId) return -1;
@@ -11591,17 +11579,17 @@ ${shapes}`.trim();
       });
     }
     const result = [];
-    for (const p of ownPlayers) result.push({ player: p, healthMap: ownHealth });
+    for (const p of ownPlayers) result.push({ player: p, teamResults: ownResults });
     const hasOtherPlayers = otherTeams.some(
       (t) => Array.isArray(t?.players) && t.players.length > 0
     );
     if (ownPlayers.length === 1 && hasOtherPlayers) {
-      result.push({ player: null, healthMap: /* @__PURE__ */ new Map() });
+      result.push({ player: null, teamResults: /* @__PURE__ */ new Map() });
     }
     for (const t of otherTeams) {
-      const h = healthByRound2(t);
+      const tr = teamResultsByRound(t);
       for (const p of Array.isArray(t?.players) ? t.players : []) {
-        result.push({ player: p, healthMap: h });
+        result.push({ player: p, teamResults: tr });
       }
     }
     return result.slice(0, 4);
@@ -11631,6 +11619,9 @@ ${shapes}`.trim();
         r?.panorama?.heading ?? r?.panorama?.panoHeading ?? r?.panorama?.initialHeading
       );
       const trueCountry = iso2ToName(normalizeIso23(r?.panorama?.countryCode));
+      const panoId = typeof r?.panorama?.panoId === "string" ? r.panorama.panoId : void 0;
+      const truePitch = asNum2(r?.panorama?.pitch ?? r?.panorama?.initialPitch);
+      const trueZoom = asNum2(r?.panorama?.zoom ?? r?.panorama?.initialZoom);
       const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || void 0;
       const damageMultiplier = asNum2(r?.damageMultiplier);
       const guessData = [];
@@ -11641,6 +11632,7 @@ ${shapes}`.trim();
           continue;
         }
         const guess = guessMaps[p].get(rn);
+        const teamR = entry.teamResults.get(rn);
         const lat = asNum2(guess?.lat ?? guess?.latitude);
         const lng = asNum2(guess?.lng ?? guess?.lon ?? guess?.longitude);
         const distanceMeters = asNum2(guess?.distance ?? guess?.distanceInMeters);
@@ -11651,7 +11643,11 @@ ${shapes}`.trim();
           country,
           score: asNum2(guess?.score),
           distance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
-          healthAfter: entry.healthMap.get(rn)
+          healthAfter: teamR?.healthAfter,
+          healthBefore: teamR?.healthBefore,
+          damageDealt: teamR?.damageDealt,
+          timeSec: asNum2(guess?.time),
+          timedOut: asBool2(guess?.timedOut)
         });
       }
       const [self2, mate, opp, oppMate] = guessData;
@@ -11668,6 +11664,9 @@ ${shapes}`.trim();
         trueLng,
         trueHeadingDeg,
         trueCountry,
+        panoId,
+        truePitch,
+        trueZoom,
         isHealing,
         damageMultiplier,
         selfLat: self2.lat,
@@ -11676,6 +11675,10 @@ ${shapes}`.trim();
         selfScore: self2.score,
         selfDistance: self2.distance,
         selfHealthAfter: self2.healthAfter,
+        selfHealthBefore: self2.healthBefore,
+        selfDamageDealt: self2.damageDealt,
+        selfTimeSec: self2.timeSec,
+        selfTimedOut: self2.timedOut,
         selfIsBetterGuess,
         oppLat: opp.lat,
         oppLng: opp.lng,
@@ -11683,6 +11686,10 @@ ${shapes}`.trim();
         oppScore: opp.score,
         oppDistance: opp.distance,
         oppHealthAfter: opp.healthAfter,
+        oppHealthBefore: opp.healthBefore,
+        oppDamageDealt: opp.damageDealt,
+        oppTimeSec: opp.timeSec,
+        oppTimedOut: opp.timedOut,
         oppIsBetterGuess,
         mateLat: mate.lat,
         mateLng: mate.lng,
@@ -11808,7 +11815,7 @@ ${shapes}`.trim();
     }
     return result;
   }
-  async function extractGameUpdates(gameData, modeFamily, selfId) {
+  function extractGameUpdates(gameData, modeFamily, selfId) {
     const isDuelType = modeFamily === "duels" || modeFamily === "teamduels";
     const mapName = typeof gameData?.options?.map?.name === "string" ? gameData.options.map.name : typeof gameData?.map?.name === "string" ? gameData.map.name : void 0;
     const mapSlug = typeof gameData?.options?.map?.slug === "string" ? gameData.options.map.slug : typeof gameData?.map?.slug === "string" ? gameData.map.slug : void 0;
@@ -11818,6 +11825,7 @@ ${shapes}`.trim();
     const movementType = detectMovementType(gameData);
     const updates = {
       detailFetchedAt: Date.now(),
+      normalizeVersion: CURRENT_NORMALIZE_VERSION,
       mapName,
       mapSlug,
       isRated,
@@ -11825,6 +11833,10 @@ ${shapes}`.trim();
       movementType: movementType ?? void 0
     };
     if (isDuelType) {
+      const initialHealth = asNum2(gameData?.options?.initialHealth);
+      const winnerStyle = typeof gameData?.result?.winnerStyle === "string" ? gameData.result.winnerStyle : void 0;
+      if (initialHealth !== void 0) updates.initialHealth = initialHealth;
+      if (winnerStyle !== void 0) updates.winnerStyle = winnerStyle;
       const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
       const winningTeamId = String(gameData?.result?.winningTeamId || "");
       const players = orderedPlayers2(gameData, selfId);
@@ -11867,14 +11879,10 @@ ${shapes}`.trim();
       const oppNoMoveRatingAfter = mt === "no_move" ? oppGm.after : void 0;
       const oppNmpzRatingBefore = mt === "nmpz" ? oppGm.before : void 0;
       const oppNmpzRatingAfter = mt === "nmpz" ? oppGm.after : void 0;
-      const ids = [p0Id, p1Id, p2Id, p3Id];
-      const profiles = await Promise.all(ids.map((id) => id ? fetchProfile(id) : Promise.resolve({})));
-      const pName = (i) => profiles[i]?.nick ?? (typeof p[i]?.nick === "string" ? p[i].nick : void 0);
-      const pCountry = (i) => extractCountry(p[i]) ?? iso2ToName(normalizeIso23(profiles[i]?.countryCode));
       Object.assign(updates, {
         selfId: p0Id,
-        selfName: pName(0),
-        selfCountry: pCountry(0),
+        selfName: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
+        selfCountry: extractCountry(p[0]),
         selfScore,
         selfVictory,
         selfRatingBefore: rc[0].before,
@@ -11886,8 +11894,8 @@ ${shapes}`.trim();
         selfNmpzRatingBefore,
         selfNmpzRatingAfter,
         oppId: p2Id,
-        oppName: pName(2),
-        oppCountry: pCountry(2),
+        oppName: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
+        oppCountry: extractCountry(p[2]),
         oppRatingBefore: rc[2].before,
         oppRatingAfter: rc[2].after,
         oppMovingRatingBefore,
@@ -11897,13 +11905,13 @@ ${shapes}`.trim();
         oppNmpzRatingBefore,
         oppNmpzRatingAfter,
         mateId: p1Id,
-        mateName: pName(1),
-        mateCountry: pCountry(1),
+        mateName: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
+        mateCountry: extractCountry(p[1]),
         mateRatingBefore: rc[1].before,
         mateRatingAfter: rc[1].after,
         oppMateId: p3Id,
-        oppMateName: pName(3),
-        oppMateCountry: pCountry(3),
+        oppMateName: typeof p[3]?.nick === "string" ? p[3].nick : void 0,
+        oppMateCountry: extractCountry(p[3]),
         oppMateRatingBefore: rc[3].before,
         oppMateRatingAfter: rc[3].after
       });
@@ -11926,67 +11934,45 @@ ${shapes}`.trim();
     if (game.totalRounds === void 0) m.push("totalRounds");
     if (game.movementType === void 0) m.push("movementType");
     const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
-    const isTeam = game.modeFamily === "teamduels";
     if (isDuelType) {
-      if (game.selfId === void 0) m.push("selfId");
-      if (game.selfName === void 0) m.push("selfName");
       if (game.selfVictory === void 0) m.push("selfVictory");
-      if (game.selfCountry === void 0) m.push("selfCountry");
       if (game.oppId === void 0) m.push("oppId");
-      if (game.oppName === void 0) m.push("oppName");
-      if (game.oppCountry === void 0) m.push("oppCountry");
       if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
+      if (game.selfName === void 0) m.push("selfName");
+      if (game.selfCountry === void 0) m.push("selfCountry");
     }
-    if (isTeam) {
+    if (game.modeFamily === "teamduels") {
       if (game.mateId === void 0) m.push("mateId");
-      if (game.mateName === void 0) m.push("mateName");
-      if (game.mateCountry === void 0) m.push("mateCountry");
-      if (game.oppMateId === void 0) m.push("oppMateId");
-      if (game.oppMateName === void 0) m.push("oppMateName");
-      if (game.oppMateCountry === void 0) m.push("oppMateCountry");
     }
     return m;
   }
-  function getMissingRoundInfo(game, roundCounts) {
-    if (!roundCounts) return [];
-    const expected = game.totalRounds;
-    if (expected == null || expected === 0) return [];
-    const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
-    const isStandard = game.modeFamily === "standard";
-    if (!isDuelType && !isStandard) return [];
-    const stored = isDuelType ? roundCounts.duelsByGame.get(game.gameId) ?? 0 : roundCounts.classicByGame.get(game.gameId) ?? 0;
-    return stored < expected ? [`rounds: ${stored}/${expected}`] : [];
+  function isDetailIncomplete(game) {
+    return getMissingFields(game).length > 0;
   }
-  function isDetailIncomplete(game, roundCounts) {
-    return getMissingFields(game).length > 0 || getMissingRoundInfo(game, roundCounts).length > 0;
+  function needsRenormalize(game) {
+    return (game.normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION;
   }
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
     const delayMs = opts.delayMs ?? 500;
     const maxRetries = opts.maxRetries ?? 3;
+    const cutoffMs = opts.force && opts.maxAgeDays != null ? Date.now() - opts.maxAgeDays * 24 * 60 * 60 * 1e3 : void 0;
     let games;
     let permanentlySkipped = 0;
-    let roundCounts;
     if (opts.games) {
       games = opts.games;
     } else {
-      const [all, logEntries, allRounds, allClassicRounds] = await Promise.all([
-        dbV2.games.toArray(),
-        dbV2.detailFetchLog.toArray(),
-        dbV2.rounds.toArray(),
-        dbV2.classicRounds.toArray()
-      ]);
-      const duelsByGame = /* @__PURE__ */ new Map();
-      for (const r of allRounds) duelsByGame.set(r.gameId, (duelsByGame.get(r.gameId) ?? 0) + 1);
-      const classicByGame = /* @__PURE__ */ new Map();
-      for (const r of allClassicRounds) classicByGame.set(r.gameId, (classicByGame.get(r.gameId) ?? 0) + 1);
-      roundCounts = { duelsByGame, classicByGame };
+      const all = await dbV2.games.toArray();
+      const logEntries = await dbV2.detailFetchLog.toArray();
       const attemptsByGame = new Map(logEntries.map((l) => [l.gameId, l.attempts]));
       permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
       games = all.filter((g) => {
-        if (opts.forceVersion && g.shiftFetchVersion === opts.forceVersion) return false;
-        if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
-        if (isDetailIncomplete(g, roundCounts)) return true;
+        if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
+        if (isDetailIncomplete(g)) {
+          if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
+          return true;
+        }
+        if (needsRenormalize(g)) return true;
         if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
           const isDuelType = g.modeFamily === "duels" || g.modeFamily === "teamduels";
           if (isDuelType) return true;
@@ -12004,22 +11990,21 @@ ${shapes}`.trim();
       const batch = games.slice(i, i + concurrency);
       await Promise.all(
         batch.map(async (game) => {
-          const missing = [
-            ...getMissingFields(game),
-            ...getMissingRoundInfo(game, roundCounts)
-          ];
+          const missing = getMissingFields(game);
           const isDuelGame = game.modeFamily === "duels" || game.modeFamily === "teamduels";
           const hasSelfIdMismatch = isDuelGame && opts.currentPlayerId != null && game.selfId != null && game.selfId !== opts.currentPlayerId;
           if (hasSelfIdMismatch) missing.push("selfId mismatch");
+          const gameIsIncomplete = missing.length > 0;
+          const gameNeedsRenorm = needsRenormalize(game);
           opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
           const resolvedSelfId = opts.currentPlayerId ?? game.selfId;
           const attemptedAt = Date.now();
           const cached = await dbV2.rawGameDetails.get(game.gameId);
           if (cached?.json) {
             try {
-              const updates = await extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
+              const updates = extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
               const hypothetical = { ...game, ...updates };
-              if (getMissingFields(hypothetical).length === 0) {
+              if (getMissingFields(hypothetical).length === 0 || gameNeedsRenorm) {
                 await dbV2.games.update(game.gameId, updates);
                 const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
                 if (isDuelType) {
@@ -12030,11 +12015,17 @@ ${shapes}`.trim();
                 updatedGameIds.push(game.gameId);
                 succeeded++;
                 if (hasSelfIdMismatch) selfIdFixed++;
-                if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
                 return;
               }
             } catch {
             }
+          }
+          if (gameNeedsRenorm && !gameIsIncomplete) {
+            await dbV2.games.update(game.gameId, { normalizeVersion: CURRENT_NORMALIZE_VERSION });
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+            succeeded++;
+            updatedGameIds.push(game.gameId);
+            return;
           }
           const endpoints = buildEndpoints(game.gameId, game.modeFamily);
           const result = await tryFetch(game.gameId, endpoints);
@@ -12048,7 +12039,6 @@ ${shapes}`.trim();
               lastStatus: "not_found",
               lastError: "All endpoints failed or returned 404"
             });
-            if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
             return;
           }
           const { data, endpoint } = result;
@@ -12071,7 +12061,7 @@ ${shapes}`.trim();
               await dbV2.classicGames.put(classicGame);
               if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
             }
-            const updates = await extractGameUpdates(data, game.modeFamily, resolvedSelfId);
+            const updates = extractGameUpdates(data, game.modeFamily, resolvedSelfId);
             await dbV2.games.update(game.gameId, updates);
             await dbV2.detailFetchLog.put({
               gameId: game.gameId,
@@ -12084,7 +12074,6 @@ ${shapes}`.trim();
             updatedGameIds.push(game.gameId);
             succeeded++;
             if (hasSelfIdMismatch) selfIdFixed++;
-            if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
             opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
@@ -12097,7 +12086,6 @@ ${shapes}`.trim();
               lastError: errMsg,
               endpoint
             });
-            if (opts.forceVersion) await dbV2.games.update(game.gameId, { shiftFetchVersion: opts.forceVersion });
           }
         })
       );
@@ -12110,7 +12098,7 @@ ${shapes}`.trim();
     return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped, selfIdFixed };
   }
 
-  // src/migration_v1_to_v2.ts
+  // ../tools/GeoAnalyzr/src/migration_v1_to_v2.ts
   function toModeFamily(raw, isTeamDuels) {
     if (isTeamDuels) return "teamduels";
     const m = String(raw || "").toLowerCase();
@@ -12270,7 +12258,7 @@ ${shapes}`.trim();
     return oldCount > 0 && newCount < oldCount * 0.9;
   }
 
-  // src/fetchGameFilter.ts
+  // ../tools/GeoAnalyzr/src/fetchGameFilter.ts
   var GM_VALUE_PREFIX2 = "geoanalyzr_fetch_filter_v1_";
   function readGmValue2(key) {
     const g = globalThis;
@@ -12355,7 +12343,7 @@ ${shapes}`.trim();
     if (typeof next.toMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}to_ms`, String(Math.max(0, Math.floor(next.toMs))));
   }
 
-  // src/uiOverlay.ts
+  // ../tools/GeoAnalyzr/src/uiOverlay.ts
   function el(tag) {
     return document.createElement(tag);
   }
@@ -12603,7 +12591,7 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const variant = true ? "local" : "local";
+    const variant = typeof local === "string" ? local : "local";
     const analysisEnabled = variant !== "sync";
     const isSyncVariant = variant === "sync";
     const isDevBuild = () => {
@@ -13132,7 +13120,6 @@ ${shapes}`.trim();
             delayMs: 400,
             force: opts.forceFull,
             currentPlayerId: await getCurrentPlayerId() ?? void 0,
-            forceVersion: opts.forceFull ? globalThis?.GM_info?.script?.version : void 0,
             onProgress: (p) => {
               if (logModal) logModal.setProgress(32 + Math.round(p.processed / Math.max(1, p.total) * 33));
               else setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
@@ -13639,7 +13626,7 @@ ${shapes}`.trim();
     };
   }
 
-  // src/sync.ts
+  // ../tools/GeoAnalyzr/src/sync.ts
   function etaLabel2(ms) {
     const sec = Math.max(0, Math.round(ms / 1e3));
     const m = Math.floor(sec / 60);
@@ -14221,7 +14208,7 @@ ${shapes}`.trim();
     };
   }
 
-  // src/migrations/normalizeLegacyRounds.ts
+  // ../tools/GeoAnalyzr/src/migrations/normalizeLegacyRounds.ts
   function hasAnyKeyPrefix(obj, prefix) {
     if (!obj || typeof obj !== "object") return false;
     for (const k of Object.keys(obj)) {
@@ -14333,7 +14320,7 @@ ${shapes}`.trim();
     return { scanned, updated };
   }
 
-  // src/migrations/backfillGuessCountries.ts
+  // ../tools/GeoAnalyzr/src/migrations/backfillGuessCountries.ts
   function normalizeIso24(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
@@ -14413,7 +14400,7 @@ ${shapes}`.trim();
     return { scanned, updated };
   }
 
-  // src/migrations/backfillMovementRatings.ts
+  // ../tools/GeoAnalyzr/src/migrations/backfillMovementRatings.ts
   function detectMovementType2(v) {
     const s = String(v ?? "").toLowerCase().trim();
     if (!s || s === "unknown") return null;
@@ -14480,7 +14467,7 @@ ${shapes}`.trim();
     return { scanned, updated: toDelete.length };
   }
 
-  // src/engine/fieldAccess.ts
+  // ../tools/GeoAnalyzr/src/engine/fieldAccess.ts
   function legacy(obj, ...keys) {
     for (const key of keys) {
       if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
@@ -14553,7 +14540,7 @@ ${shapes}`.trim();
     return void 0;
   }
 
-  // src/engine/dimensions.ts
+  // ../tools/GeoAnalyzr/src/engine/dimensions.ts
   function normalizeMovementType3(raw) {
     const v = typeof raw === "string" ? raw.trim() : "";
     if (!v) return null;
@@ -14964,7 +14951,7 @@ ${shapes}`.trim();
   };
   var ROUND_DIMENSION_EXTRACTORS = DIMENSION_EXTRACTORS.round;
 
-  // src/engine/filters.ts
+  // ../tools/GeoAnalyzr/src/engine/filters.ts
   function evalClause(value, clause) {
     if (clause.op === "eq") return value === clause.value;
     if (clause.op === "neq") return value !== clause.value;
@@ -14985,7 +14972,7 @@ ${shapes}`.trim();
     return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause, grain)));
   }
 
-  // src/engine/globalFilters.ts
+  // ../tools/GeoAnalyzr/src/engine/globalFilters.ts
   function normalizeAllString(value) {
     if (value === "all") return null;
     if (typeof value !== "string") return null;
@@ -15048,7 +15035,7 @@ ${shapes}`.trim();
     return `gf:${grain}:${parts.join("|")}`;
   }
 
-  // src/progress.ts
+  // ../tools/GeoAnalyzr/src/progress.ts
   var KEY = "__gaLoadingProgress";
   function setLoadingProgress(p) {
     try {
@@ -15070,7 +15057,7 @@ ${shapes}`.trim();
     }
   }
 
-  // src/engine/queryEngine.ts
+  // ../tools/GeoAnalyzr/src/engine/queryEngine.ts
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
@@ -15999,7 +15986,7 @@ ${shapes}`.trim();
     return rows;
   }
 
-  // src/engine/validate.ts
+  // ../tools/GeoAnalyzr/src/engine/validate.ts
   var ValidationError = class extends Error {
     code;
     constructor(code, message) {
@@ -16309,7 +16296,7 @@ ${shapes}`.trim();
     return result;
   }
 
-  // src/config/semantic.json
+  // ../tools/GeoAnalyzr/src/config/semantic.json
   var semantic_default = {
     $schema: "./semantic.schema.json",
     schemaVersion: "0.1.0",
@@ -17701,7 +17688,7 @@ ${shapes}`.trim();
     }
   };
 
-  // src/config/dashboard.json
+  // ../tools/GeoAnalyzr/src/config/dashboard.json
   var dashboard_default = {
     $schema: "./dashboard.schema.json",
     schemaVersion: "0.1.0",
@@ -21489,7 +21476,7 @@ ${shapes}`.trim();
     }
   };
 
-  // src/ui/semanticDashboardCss.ts
+  // ../tools/GeoAnalyzr/src/ui/semanticDashboardCss.ts
   function injectSemanticDashboardCssOnce(doc) {
     const id = "geoanalyzr-semantic-dashboard-css";
     if (doc.getElementById(id)) return;
@@ -22681,7 +22668,7 @@ ${shapes}`.trim();
     doc.head.appendChild(style);
   }
 
-  // src/ui/settingsStore.ts
+  // ../tools/GeoAnalyzr/src/ui/settingsStore.ts
   var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
   var THEME_KEY = "geoanalyzr.theme";
   var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
@@ -22829,7 +22816,7 @@ ${shapes}`.trim();
     root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
   }
 
-  // src/engine/semanticMerge.ts
+  // ../tools/GeoAnalyzr/src/engine/semanticMerge.ts
   function cloneJson(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -22863,7 +22850,7 @@ ${shapes}`.trim();
     return next;
   }
 
-  // src/ui/layoutEditor.ts
+  // ../tools/GeoAnalyzr/src/ui/layoutEditor.ts
   function cloneJson2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -25505,7 +25492,7 @@ ${shapes}`.trim();
     return box;
   }
 
-  // src/ui/consoleStore.ts
+  // ../tools/GeoAnalyzr/src/ui/consoleStore.ts
   var MAX_ENTRIES = 800;
   var entries = [];
   var listeners = /* @__PURE__ */ new Set();
@@ -25571,7 +25558,7 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // src/ui/settingsModal.ts
+  // ../tools/GeoAnalyzr/src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
       doc,
@@ -26580,7 +26567,7 @@ ${describeError(err2)}` : message;
     });
   }
 
-  // src/ui/drilldownOverlay.ts
+  // ../tools/GeoAnalyzr/src/ui/drilldownOverlay.ts
   var DrilldownOverlay = class {
     root;
     doc;
@@ -27170,7 +27157,7 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // src/engine/measures.ts
+  // ../tools/GeoAnalyzr/src/engine/measures.ts
   function medianOf(values) {
     const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
     if (finite.length === 0) return 0;
@@ -28191,7 +28178,7 @@ ${describeError(err2)}` : message;
     session: SESSION_MEASURES_BY_FORMULA_ID
   };
 
-  // src/geo/geoJsonFetch.ts
+  // ../tools/GeoAnalyzr/src/geo/geoJsonFetch.ts
   function canonicalizeUrl(url) {
     const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/i);
     if (m) {
@@ -28334,7 +28321,7 @@ ${describeError(err2)}` : message;
     return p;
   }
 
-  // src/geo/idRegions.ts
+  // ../tools/GeoAnalyzr/src/geo/idRegions.ts
   var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
   var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
   function bboxForCoords(coords, bbox) {
@@ -28472,7 +28459,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // src/geo/deRegions.ts
+  // ../tools/GeoAnalyzr/src/geo/deRegions.ts
   var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
   var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
   function hasGmXhr2() {
@@ -28636,7 +28623,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // src/geo/naRegions.ts
+  // ../tools/GeoAnalyzr/src/geo/naRegions.ts
   var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
   var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
   function hasGmXhr3() {
@@ -28800,7 +28787,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // src/geo/seaRegions.ts
+  // ../tools/GeoAnalyzr/src/geo/seaRegions.ts
   var PH_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson";
   var VN_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson";
   function bboxForCoords4(coords, bbox) {
@@ -28938,7 +28925,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // src/engine/regionEnrichment.ts
+  // ../tools/GeoAnalyzr/src/engine/regionEnrichment.ts
   var ADMIN_DIM_TO_COUNTRY = {
     true_state: "de",
     guess_state: "de",
@@ -29151,7 +29138,7 @@ ${describeError(err2)}` : message;
     });
   }
 
-  // src/ui/widgets/statListWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/statListWidget.ts
   function readDateFormatMode(doc) {
     const root = doc.querySelector(".ga-root");
     const mode = root?.dataset?.gaDateFormat;
@@ -29418,7 +29405,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/statValueWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/statValueWidget.ts
   function formatValue2(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
@@ -29509,7 +29496,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/engine/aggregate.ts
+  // ../tools/GeoAnalyzr/src/engine/aggregate.ts
   function groupByKey(rows, keyFn) {
     const m = /* @__PURE__ */ new Map();
     for (const r of rows) {
@@ -29522,7 +29509,7 @@ ${describeError(err2)}` : message;
     return m;
   }
 
-  // src/ui/widgets/chartWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/chartWidget.ts
   function getShareKindFromFormulaId(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
     if (formulaId === "share_damage_taken") return "taken";
@@ -30774,7 +30761,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/breakdownWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/breakdownWidget.ts
   function getShareKindFromFormulaId2(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
     if (formulaId === "share_damage_taken") return "taken";
@@ -31184,7 +31171,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/recordListWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/recordListWidget.ts
   function shouldHideTimestampForRoundRecord(rec, grain) {
     if (grain !== "round") return false;
     const click = rec.actions?.click;
@@ -31650,7 +31637,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/leaderListWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/leaderListWidget.ts
   function formatPct01(v) {
     const clamped = Math.max(0, Math.min(1, v));
     return `${(clamped * 100).toFixed(1)}%`;
@@ -31740,7 +31727,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/countryMapPicker.ts
+  // ../tools/GeoAnalyzr/src/ui/countryMapPicker.ts
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
@@ -32003,7 +31990,7 @@ ${describeError(err2)}` : message;
     });
   }
 
-  // src/ui/widgets/countryMetricMapWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/countryMetricMapWidget.ts
   function readCountryFormatMode3(doc) {
     const root = doc.querySelector(".ga-root");
     return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
@@ -32333,7 +32320,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/regionMetricMapWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/regionMetricMapWidget.ts
   function project2(lon, lat, w, h) {
     const x = (lon + 180) / 360 * w;
     const y = (90 - lat) / 180 * h;
@@ -32828,7 +32815,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/pointMapWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/pointMapWidget.ts
   function hasGmXhr5() {
     return hasGmXmlhttpRequest();
   }
@@ -33507,7 +33494,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/multiViewWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/multiViewWidget.ts
   async function renderMultiViewWidget(args) {
     const { widget, overlay, renderChild } = args;
     const spec = widget.spec;
@@ -33588,7 +33575,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // src/ui/widgets/adminEnrichmentWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/adminEnrichmentWidget.ts
   function asIso2(v) {
     const s = typeof v === "string" ? v.trim().toLowerCase() : "";
     return /^[a-z]{2}$/.test(s) ? s : "";
@@ -33839,7 +33826,7 @@ ${describeError(err2)}` : message;
     return el2;
   }
 
-  // src/db/adminCacheDb.ts
+  // ../tools/GeoAnalyzr/src/db/adminCacheDb.ts
   var AdminCacheDB = class extends import_wrapper_default {
     geojson;
     labels;
@@ -33853,7 +33840,7 @@ ${describeError(err2)}` : message;
   };
   var adminCacheDb = new AdminCacheDB();
 
-  // src/ui/widgets/adminAnalysisWidget.ts
+  // ../tools/GeoAnalyzr/src/ui/widgets/adminAnalysisWidget.ts
   var LEVEL_CACHE = /* @__PURE__ */ new Map();
   var ISO3_CACHE = /* @__PURE__ */ new Map();
   var ISO_NAME_CACHE = /* @__PURE__ */ new Map();
@@ -34959,7 +34946,7 @@ ${describeError(err2)}` : message;
     return el2;
   }
 
-  // src/ui/dashboardRenderer.ts
+  // ../tools/GeoAnalyzr/src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
     const doc = root.ownerDocument;
@@ -35380,7 +35367,7 @@ ${describeError(err2)}` : message;
     highlight();
   }
 
-  // src/ui/filterState.ts
+  // ../tools/GeoAnalyzr/src/ui/filterState.ts
   function cloneJson3(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -35442,7 +35429,7 @@ ${describeError(err2)}` : message;
     };
   }
 
-  // src/ui/globalFiltersBar.ts
+  // ../tools/GeoAnalyzr/src/ui/globalFiltersBar.ts
   function toYmd(ts) {
     const d = new Date(ts);
     const y = d.getFullYear();
@@ -35671,7 +35658,7 @@ ${describeError(err2)}` : message;
     }
   }
 
-  // src/engine/selectOptions.ts
+  // ../tools/GeoAnalyzr/src/engine/selectOptions.ts
   var cache = /* @__PURE__ */ new Map();
   function stableKey(spec, state, excludeId) {
     const parts = spec.controls.map((c) => c.id === excludeId ? `${c.id}=<excluded>` : `${c.id}=${JSON.stringify(state[c.id])}`);
@@ -35763,7 +35750,7 @@ ${describeError(err2)}` : message;
     return out;
   }
 
-  // src/ui/analysisRenderer.ts
+  // ../tools/GeoAnalyzr/src/ui/analysisRenderer.ts
   function explodeOpponentsFromGames(games) {
     const out = [];
     for (const g of games) {
@@ -36120,7 +36107,7 @@ ${describeError(err2)}` : message;
     await renderNow();
   }
 
-  // src/ui.ts
+  // ../tools/GeoAnalyzr/src/ui.ts
   function cloneTemplate2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -36445,7 +36432,7 @@ ${describe(error)}`;
     }
   }
 
-  // src/app/uiActions.ts
+  // ../tools/GeoAnalyzr/src/app/uiActions.ts
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
   }
@@ -36826,7 +36813,7 @@ After it finishes, open the dashboard again.`
     });
   }
 
-  // src/app/routing.ts
+  // ../tools/GeoAnalyzr/src/app/routing.ts
   function watchRoutes(onRoute) {
     const origPush = history.pushState;
     const origReplace = history.replaceState;
@@ -36843,7 +36830,7 @@ After it finishes, open the dashboard again.`
     onRoute();
   }
 
-  // src/app/boot.ts
+  // ../tools/GeoAnalyzr/src/app/boot.ts
   async function bootApp() {
     const ui = createUIOverlay();
     registerUiActions(ui);
@@ -36866,7 +36853,7 @@ After it finishes, open the dashboard again.`
             const settings = loadServerSyncSettings();
             if (!settings.token) return;
             ui.setStatus("Auto-syncing...");
-            const isSyncVariant = false;
+            const isSyncVariant = local === "sync";
             const f = isSyncVariant ? loadFetchGameFilter() : null;
             const res = await runServerSyncOnceWithOptions(
               settings,
@@ -36893,6 +36880,6 @@ After it finishes, open the dashboard again.`
     }, 2500);
   }
 
-  // src/main.ts
+  // ../tools/GeoAnalyzr/src/main.ts
   void bootApp();
 })();
