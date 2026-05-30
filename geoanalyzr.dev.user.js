@@ -12591,7 +12591,7 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const variant = typeof dev === "string" ? dev : "local";
+    const variant = true ? "dev" : "local";
     const analysisEnabled = variant !== "sync";
     const isSyncVariant = variant === "sync";
     const isDevBuild = () => {
@@ -36853,7 +36853,7 @@ After it finishes, open the dashboard again.`
             const settings = loadServerSyncSettings();
             if (!settings.token) return;
             ui.setStatus("Auto-syncing...");
-            const isSyncVariant = dev === "sync";
+            const isSyncVariant = false;
             const f = isSyncVariant ? loadFetchGameFilter() : null;
             const res = await runServerSyncOnceWithOptions(
               settings,

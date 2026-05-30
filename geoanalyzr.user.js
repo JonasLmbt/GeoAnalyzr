@@ -9032,8 +9032,8 @@ ${shapes}`.trim();
       guessCountryCache.set(key, "MO");
       return "MO";
     }
-    const local2 = iso1A2Code([norm.lng, norm.lat]);
-    const isoLocal = normalizeIso2(local2);
+    const local = iso1A2Code([norm.lng, norm.lat]);
+    const isoLocal = normalizeIso2(local);
     if (isoLocal) {
       guessCountryCache.set(key, isoLocal);
       return isoLocal;
@@ -9042,8 +9042,8 @@ ${shapes}`.trim();
     return void 0;
   }
   async function resolveCountryCodeByLatLngInternal(lat, lng, allowNetworkFallback = true) {
-    const local2 = resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, false);
-    if (local2) return local2;
+    const local = resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, false);
+    if (local) return local;
     if (!allowNetworkFallback) return void 0;
     const norm = normalizeLatLng(lat, lng);
     if (!isFiniteNumber(norm.lat) || !isFiniteNumber(norm.lng)) return void 0;
@@ -12591,7 +12591,7 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const variant = typeof local === "string" ? local : "local";
+    const variant = true ? "local" : "local";
     const analysisEnabled = variant !== "sync";
     const isSyncVariant = variant === "sync";
     const isDevBuild = () => {
@@ -36853,7 +36853,7 @@ After it finishes, open the dashboard again.`
             const settings = loadServerSyncSettings();
             if (!settings.token) return;
             ui.setStatus("Auto-syncing...");
-            const isSyncVariant = local === "sync";
+            const isSyncVariant = false;
             const f = isSyncVariant ? loadFetchGameFilter() : null;
             const res = await runServerSyncOnceWithOptions(
               settings,

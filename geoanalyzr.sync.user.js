@@ -12591,7 +12591,7 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const variant = typeof sync === "string" ? sync : "local";
+    const variant = true ? "sync" : "local";
     const analysisEnabled = variant !== "sync";
     const isSyncVariant = variant === "sync";
     const isDevBuild = () => {
@@ -33783,15 +33783,15 @@ ${describeError(err2)}` : message;
         try {
           let pct = 0;
           let msg = "";
-          const sync2 = () => setBusy(pct, msg);
+          const sync = () => setBusy(pct, msg);
           await runAdminEnrichment(countryIso2, {
             onPct: (p) => {
               pct = p;
-              sync2();
+              sync();
             },
             onStatus: (m) => {
               msg = m;
-              sync2();
+              sync();
             }
           });
           setBusy(100, "Done. Refreshing view...");
@@ -36853,7 +36853,7 @@ After it finishes, open the dashboard again.`
             const settings = loadServerSyncSettings();
             if (!settings.token) return;
             ui.setStatus("Auto-syncing...");
-            const isSyncVariant = sync === "sync";
+            const isSyncVariant = true;
             const f = isSyncVariant ? loadFetchGameFilter() : null;
             const res = await runServerSyncOnceWithOptions(
               settings,
