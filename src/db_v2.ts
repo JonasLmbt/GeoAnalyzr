@@ -5,6 +5,20 @@ export type ModeFamily = "duels" | "teamduels" | "standard" | "streak" | "other"
 export type MovementType = "moving" | "no_move" | "nmpz";
 export type DetailFetchStatus = "ok" | "not_found" | "error" | "timeout";
 
+/**
+ * Normalization version stamp for GameRow.
+ * Bump this constant whenever new fields are extracted from rawGameDetails.
+ * Games where (normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION are
+ * automatically re-normalized on the next fetch cycle (cache-first, no API).
+ *
+ * History:
+ *  0 (implicit) — original fields only
+ *  1 — initial versioning marker (no new fields, baseline)
+ *  2 — panoId, truePitch/Zoom, timeSec, timedOut, healthBefore, damageDealt,
+ *      initialHealth, winnerStyle
+ */
+export const CURRENT_NORMALIZE_VERSION = 2;
+
 // ─── Processed: Games ────────────────────────────────────────────────────────
 
 export interface GameRow {
@@ -18,6 +32,12 @@ export interface GameRow {
   totalRounds?: number;
   durationSec?: number;
   detailFetchedAt?: number; // null/undefined = details not yet fetched
+  /** Which normalization pass last wrote to this row (undefined = 0 = pre-versioning). */
+  normalizeVersion?: number;
+  /** Duels/teamduels: starting health per player (options.initialHealth). */
+  initialHealth?: number;
+  /** Duels/teamduels: 'Victory' | 'ComebackVictory' from result.winnerStyle. */
+  winnerStyle?: string;
 
   // Self (all game types)
   selfId?: string;
@@ -80,6 +100,12 @@ export interface RoundRow {
   trueLng?: number;
   trueHeadingDeg?: number;
   trueCountry?: string; // ISO2, from API
+  /** Duels: Google Street View panorama ID (r.panorama.panoId). */
+  panoId?: string;
+  /** Duels: initial camera pitch (r.panorama.pitch). */
+  truePitch?: number;
+  /** Duels: initial camera zoom (r.panorama.zoom). */
+  trueZoom?: number;
 
   // Self
   selfLat?: number;
@@ -87,8 +113,16 @@ export interface RoundRow {
   selfCountry?: string; // ISO2, derived from coordinates client-side
   selfScore?: number;
   selfDistance?: number; // km
-  selfHealthAfter?: number;      // duels: own health; teamduels: team health
+  selfHealthAfter?: number;      // duels: own health after round; teamduels: team health
   selfIsBetterGuess?: boolean;   // teamduels: self's guess counted for team score
+  /** Duels: time in seconds self spent on the guess (guess.time). */
+  selfTimeSec?: number;
+  /** Duels: whether self's guess timed out (guess.timedOut). */
+  selfTimedOut?: boolean;
+  /** Duels/teamduels: own team health BEFORE this round (roundResults.healthBefore). */
+  selfHealthBefore?: number;
+  /** Duels/teamduels: damage dealt by own team this round (roundResults.damageDealt). */
+  selfDamageDealt?: number;
 
   // Opponent (duels / teamduels)
   oppLat?: number;
@@ -98,6 +132,14 @@ export interface RoundRow {
   oppDistance?: number; // km
   oppHealthAfter?: number;
   oppIsBetterGuess?: boolean;    // teamduels: opp's guess counted for opp-team score
+  /** Duels: time in seconds opp spent on the guess (guess.time). */
+  oppTimeSec?: number;
+  /** Duels: whether opp's guess timed out (guess.timedOut). */
+  oppTimedOut?: boolean;
+  /** Duels/teamduels: opp team health BEFORE this round. */
+  oppHealthBefore?: number;
+  /** Duels/teamduels: damage dealt by opp team this round. */
+  oppDamageDealt?: number;
 
   // Teammate (teamduels)
   mateLat?: number;

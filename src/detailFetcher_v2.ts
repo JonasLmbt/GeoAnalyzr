@@ -1,4 +1,4 @@
-import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow, ModeFamily, MovementType } from "./db_v2";
+import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow, ModeFamily, MovementType, CURRENT_NORMALIZE_VERSION } from "./db_v2";
 import { httpGetJsonWithRetry } from "./http";
 import { resolveCountryCodeByLatLng } from "./countries";
 
@@ -235,12 +235,25 @@ function guessByRound(player: any): Map<number, any> {
   return map;
 }
 
-function healthByRound(team: any): Map<number, number> {
-  const map = new Map<number, number>();
+interface TeamRoundEntry {
+  healthBefore?: number;
+  healthAfter?: number;
+  damageDealt?: number;
+}
+
+function teamResultsByRound(team: any): Map<number, TeamRoundEntry> {
+  const map = new Map<number, TeamRoundEntry>();
   for (const r of Array.isArray(team?.roundResults) ? team.roundResults : []) {
     const rn = asNum(r?.roundNumber);
-    const h = asNum(r?.healthAfter);
-    if (rn !== undefined && h !== undefined) map.set(rn, h);
+    if (rn === undefined) continue;
+    const entry: TeamRoundEntry = {};
+    const hb = asNum(r?.healthBefore);
+    const ha = asNum(r?.healthAfter);
+    const dd = asNum(r?.damageDealt);
+    if (hb !== undefined) entry.healthBefore = hb;
+    if (ha !== undefined) entry.healthAfter  = ha;
+    if (dd !== undefined) entry.damageDealt  = dd;
+    map.set(rn, entry);
   }
   return map;
 }
@@ -252,7 +265,7 @@ function healthByRound(team: any): Map<number, number> {
 function orderedPlayers(
   gameData: any,
   selfId?: string
-): Array<{ player: any; healthMap: Map<number, number> }> {
+): Array<{ player: any; teamResults: Map<number, TeamRoundEntry> }> {
   const teams: any[] = Array.isArray(gameData?.teams) ? gameData.teams : [];
   if (teams.length === 0) return [];
 
@@ -270,7 +283,7 @@ function orderedPlayers(
   const otherTeams = teams.filter((_: any, i: number) => i !== ownTeamIndex);
 
   const ownPlayers: any[] = Array.isArray(ownTeam?.players) ? [...ownTeam.players] : [];
-  const ownHealth = healthByRound(ownTeam);
+  const ownResults = teamResultsByRound(ownTeam);
 
   // Put self first within own team
   if (selfId) {
@@ -281,8 +294,8 @@ function orderedPlayers(
     });
   }
 
-  const result: Array<{ player: any; healthMap: Map<number, number> }> = [];
-  for (const p of ownPlayers) result.push({ player: p, healthMap: ownHealth });
+  const result: Array<{ player: any; teamResults: Map<number, TeamRoundEntry> }> = [];
+  for (const p of ownPlayers) result.push({ player: p, teamResults: ownResults });
 
   // Enforce the [self, mate?, opp, oppMate?] contract: if own team has only one
   // player (standard 1v1 duel), insert a null placeholder for the mate slot so
@@ -291,13 +304,13 @@ function orderedPlayers(
     (t: any) => Array.isArray(t?.players) && t.players.length > 0
   );
   if (ownPlayers.length === 1 && hasOtherPlayers) {
-    result.push({ player: null, healthMap: new Map() });
+    result.push({ player: null, teamResults: new Map() });
   }
 
   for (const t of otherTeams) {
-    const h = healthByRound(t);
+    const tr = teamResultsByRound(t);
     for (const p of Array.isArray(t?.players) ? t.players : []) {
-      result.push({ player: p, healthMap: h });
+      result.push({ player: p, teamResults: tr });
     }
   }
 
@@ -343,6 +356,9 @@ async function normalizeDuelsRounds(
       r?.panorama?.heading ?? r?.panorama?.panoHeading ?? r?.panorama?.initialHeading
     );
     const trueCountry = iso2ToName(normalizeIso2(r?.panorama?.countryCode));
+    const panoId = typeof r?.panorama?.panoId === "string" ? r.panorama.panoId : undefined;
+    const truePitch = asNum(r?.panorama?.pitch ?? r?.panorama?.initialPitch);
+    const trueZoom  = asNum(r?.panorama?.zoom  ?? r?.panorama?.initialZoom);
     const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || undefined;
     const damageMultiplier = asNum(r?.damageMultiplier);
 
@@ -354,6 +370,10 @@ async function normalizeDuelsRounds(
       score?: number;
       distance?: number; // km
       healthAfter?: number;
+      healthBefore?: number;
+      damageDealt?: number;
+      timeSec?: number;
+      timedOut?: boolean;
     }> = [];
 
     for (let p = 0; p < 4; p++) {
@@ -363,6 +383,7 @@ async function normalizeDuelsRounds(
         continue;
       }
       const guess = guessMaps[p].get(rn);
+      const teamR = entry.teamResults.get(rn);
       const lat = asNum(guess?.lat ?? guess?.latitude);
       const lng = asNum(guess?.lng ?? guess?.lon ?? guess?.longitude);
       const distanceMeters = asNum(guess?.distance ?? guess?.distanceInMeters);
@@ -371,9 +392,13 @@ async function normalizeDuelsRounds(
         lat,
         lng,
         country,
-        score: asNum(guess?.score),
-        distance: distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
-        healthAfter: entry.healthMap.get(rn),
+        score:        asNum(guess?.score),
+        distance:     distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
+        healthAfter:  teamR?.healthAfter,
+        healthBefore: teamR?.healthBefore,
+        damageDealt:  teamR?.damageDealt,
+        timeSec:      asNum(guess?.time),
+        timedOut:     asBool(guess?.timedOut),
       });
     }
 
@@ -394,32 +419,43 @@ async function normalizeDuelsRounds(
       trueLng,
       trueHeadingDeg,
       trueCountry,
+      panoId,
+      truePitch,
+      trueZoom,
       isHealing: isHealing as boolean | undefined,
       damageMultiplier,
-      selfLat: self.lat,
-      selfLng: self.lng,
-      selfCountry: self.country,
-      selfScore: self.score,
-      selfDistance: self.distance,
-      selfHealthAfter: self.healthAfter,
+      selfLat:          self.lat,
+      selfLng:          self.lng,
+      selfCountry:      self.country,
+      selfScore:        self.score,
+      selfDistance:     self.distance,
+      selfHealthAfter:  self.healthAfter,
+      selfHealthBefore: self.healthBefore,
+      selfDamageDealt:  self.damageDealt,
+      selfTimeSec:      self.timeSec,
+      selfTimedOut:     self.timedOut,
       selfIsBetterGuess,
-      oppLat: opp.lat,
-      oppLng: opp.lng,
-      oppCountry: opp.country,
-      oppScore: opp.score,
-      oppDistance: opp.distance,
-      oppHealthAfter: opp.healthAfter,
+      oppLat:           opp.lat,
+      oppLng:           opp.lng,
+      oppCountry:       opp.country,
+      oppScore:         opp.score,
+      oppDistance:      opp.distance,
+      oppHealthAfter:   opp.healthAfter,
+      oppHealthBefore:  opp.healthBefore,
+      oppDamageDealt:   opp.damageDealt,
+      oppTimeSec:       opp.timeSec,
+      oppTimedOut:      opp.timedOut,
       oppIsBetterGuess,
-      mateLat: mate.lat,
-      mateLng: mate.lng,
-      mateCountry: mate.country,
-      mateScore: mate.score,
-      mateDistance: mate.distance,
-      oppMateLat: oppMate.lat,
-      oppMateLng: oppMate.lng,
-      oppMateCountry: oppMate.country,
-      oppMateScore: oppMate.score,
-      oppMateDistance: oppMate.distance,
+      mateLat:          mate.lat,
+      mateLng:          mate.lng,
+      mateCountry:      mate.country,
+      mateScore:        mate.score,
+      mateDistance:     mate.distance,
+      oppMateLat:       oppMate.lat,
+      oppMateLng:       oppMate.lng,
+      oppMateCountry:   oppMate.country,
+      oppMateScore:     oppMate.score,
+      oppMateDistance:  oppMate.distance,
     };
 
     // Strip undefined fields
@@ -593,6 +629,7 @@ function extractGameUpdates(
 
   const updates: Partial<GameRow> = {
     detailFetchedAt: Date.now(),
+    normalizeVersion: CURRENT_NORMALIZE_VERSION,
     mapName,
     mapSlug,
     isRated,
@@ -601,6 +638,12 @@ function extractGameUpdates(
   };
 
   if (isDuelType) {
+    const initialHealth = asNum(gameData?.options?.initialHealth);
+    const winnerStyle = typeof gameData?.result?.winnerStyle === "string"
+      ? gameData.result.winnerStyle
+      : undefined;
+    if (initialHealth !== undefined) updates.initialHealth = initialHealth;
+    if (winnerStyle !== undefined) updates.winnerStyle = winnerStyle;
     const teams: any[] = Array.isArray(gameData?.teams) ? gameData.teams : [];
     const winningTeamId = String(gameData?.result?.winningTeamId || "");
     const players = orderedPlayers(gameData, selfId);
@@ -733,6 +776,15 @@ function isDetailIncomplete(game: GameRow): boolean {
   return getMissingFields(game).length > 0;
 }
 
+/**
+ * Returns true when the game's normalization version is behind
+ * CURRENT_NORMALIZE_VERSION and new fields should be extracted from the
+ * raw cache (no API call needed).
+ */
+export function needsRenormalize(game: GameRow): boolean {
+  return (game.normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
@@ -773,8 +825,14 @@ export async function fetchDetails(opts: {
     permanentlySkipped = [...attemptsByGame.values()].filter((a) => a >= maxRetries).length;
     games = all.filter((g) => {
       if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
-      if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
-      if (isDetailIncomplete(g)) return true;
+      if (isDetailIncomplete(g)) {
+        // Respect maxRetries for normal API fetches to avoid hammering the API.
+        if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
+        return true;
+      }
+      // Re-normalization bypasses maxRetries: it reads only from the local raw
+      // cache (no API calls), so exhausting retries is not a risk.
+      if (needsRenormalize(g)) return true;
       // During force (shift+click): also re-fetch duel games where selfId is
       // set but doesn't match the known current player (previously mis-assigned).
       if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
@@ -803,6 +861,8 @@ export async function fetchDetails(opts: {
         const hasSelfIdMismatch = isDuelGame && opts.currentPlayerId != null
           && game.selfId != null && game.selfId !== opts.currentPlayerId;
         if (hasSelfIdMismatch) missing.push("selfId mismatch");
+        const gameIsIncomplete = missing.length > 0;
+        const gameNeedsRenorm = needsRenormalize(game);
         opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
 
         // currentPlayerId is the authoritative source — use it whenever available.
@@ -813,14 +873,18 @@ export async function fetchDetails(opts: {
         const attemptedAt = Date.now();
 
         // ── Cache-first: try to re-parse stored raw response before hitting the API ──
+        // This path handles two cases:
+        //   1. Game has missing fields → re-extract from raw cache to avoid an API call.
+        //   2. Game needs re-normalization (new fields) → re-extract + re-write rounds.
         const cached = await dbV2.rawGameDetails.get(game.gameId);
         if (cached?.json) {
           try {
             const updates = extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
             const hypothetical = { ...game, ...updates } as GameRow;
-            if (getMissingFields(hypothetical).length === 0) {
+            // Proceed if cache satisfies all required fields OR this is a renorm-only pass.
+            if (getMissingFields(hypothetical).length === 0 || gameNeedsRenorm) {
               await dbV2.games.update(game.gameId, updates);
-              // Re-normalize rounds so opp/mate slots are correct after the index fix.
+              // Re-normalize rounds with the (potentially updated) field set.
               const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
               if (isDuelType) {
                 const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId ?? resolvedSelfId);
@@ -833,6 +897,18 @@ export async function fetchDetails(opts: {
               return;
             }
           } catch { /* ignore, fall through to API */ }
+        }
+
+        // ── Re-normalize only (no cache available) ────────────────────────────────
+        // The game is complete (no missing fields) but its normalizeVersion is
+        // behind CURRENT_NORMALIZE_VERSION.  There is no raw cache to re-extract
+        // from, so just bump the version stamp to prevent repeated retries.
+        if (gameNeedsRenorm && !gameIsIncomplete) {
+          await dbV2.games.update(game.gameId, { normalizeVersion: CURRENT_NORMALIZE_VERSION });
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+          succeeded++;
+          updatedGameIds.push(game.gameId);
+          return;
         }
 
         // ── API fetch ──────────────────────────────────────────────────────────────
