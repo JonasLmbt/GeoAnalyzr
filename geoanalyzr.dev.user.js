@@ -51,9 +51,9 @@
     mod
   ));
 
-  // ../tools/GeoAnalyzr/node_modules/dexie/dist/dexie.js
+  // node_modules/dexie/dist/dexie.js
   var require_dexie = __commonJS({
-    "../tools/GeoAnalyzr/node_modules/dexie/dist/dexie.js"(exports, module) {
+    "node_modules/dexie/dist/dexie.js"(exports, module) {
       (function(global2, factory) {
         typeof exports === "object" && typeof module !== "undefined" ? module.exports = factory() : typeof define === "function" && define.amd ? define(factory) : (global2 = typeof globalThis !== "undefined" ? globalThis : global2 || self, global2.Dexie = factory());
       })(exports, (function() {
@@ -6077,9 +6077,9 @@
     }
   });
 
-  // ../tools/GeoAnalyzr/node_modules/quickselect/quickselect.js
+  // node_modules/quickselect/quickselect.js
   var require_quickselect = __commonJS({
-    "../tools/GeoAnalyzr/node_modules/quickselect/quickselect.js"(exports, module) {
+    "node_modules/quickselect/quickselect.js"(exports, module) {
       (function(global2, factory) {
         typeof exports === "object" && typeof module !== "undefined" ? module.exports = factory() : typeof define === "function" && define.amd ? define(factory) : global2.quickselect = factory();
       })(exports, (function() {
@@ -6133,9 +6133,9 @@
     }
   });
 
-  // ../tools/GeoAnalyzr/node_modules/rbush/index.js
+  // node_modules/rbush/index.js
   var require_rbush = __commonJS({
-    "../tools/GeoAnalyzr/node_modules/rbush/index.js"(exports, module) {
+    "node_modules/rbush/index.js"(exports, module) {
       "use strict";
       module.exports = rbush;
       module.exports.default = rbush;
@@ -6503,9 +6503,9 @@
     }
   });
 
-  // ../tools/GeoAnalyzr/node_modules/lineclip/index.js
+  // node_modules/lineclip/index.js
   var require_lineclip = __commonJS({
-    "../tools/GeoAnalyzr/node_modules/lineclip/index.js"(exports, module) {
+    "node_modules/lineclip/index.js"(exports, module) {
       "use strict";
       module.exports = lineclip;
       lineclip.polyline = lineclip;
@@ -6590,9 +6590,9 @@
     }
   });
 
-  // ../tools/GeoAnalyzr/node_modules/which-polygon/index.js
+  // node_modules/which-polygon/index.js
   var require_which_polygon = __commonJS({
-    "../tools/GeoAnalyzr/node_modules/which-polygon/index.js"(exports, module) {
+    "node_modules/which-polygon/index.js"(exports, module) {
       "use strict";
       var rbush = require_rbush();
       var lineclip = require_lineclip();
@@ -6692,7 +6692,7 @@
     }
   });
 
-  // ../tools/GeoAnalyzr/src/ui/logo.ts
+  // src/ui/logo.ts
   var LOGO_SVG_DEFS = `
   <defs>
     <radialGradient id="bg" cx="30%" cy="20%" r="80%">
@@ -6818,7 +6818,7 @@ ${shapes}`.trim();
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="${size}" height="${size}" focusable="false" ${aria}>${inner}</svg>`;
   }
 
-  // ../tools/GeoAnalyzr/node_modules/fflate/esm/browser.js
+  // node_modules/fflate/esm/browser.js
   var ch2 = {};
   var wk = (function(c, id, msg, transfer, cb) {
     var w = new Worker(ch2[id] || (ch2[id] = URL.createObjectURL(new Blob([
@@ -7785,7 +7785,7 @@ ${shapes}`.trim();
     return files;
   }
 
-  // ../tools/GeoAnalyzr/node_modules/dexie/import-wrapper.mjs
+  // node_modules/dexie/import-wrapper.mjs
   var import_dexie = __toESM(require_dexie(), 1);
   var DexieSymbol = /* @__PURE__ */ Symbol.for("Dexie");
   var Dexie = globalThis[DexieSymbol] || (globalThis[DexieSymbol] = import_dexie.default);
@@ -7807,7 +7807,7 @@ ${shapes}`.trim();
   } = Dexie;
   var import_wrapper_default = Dexie;
 
-  // ../tools/GeoAnalyzr/src/db.ts
+  // src/db.ts
   var MAIN_DB_NAME = "gg_analyzer_db";
   var ACTIVE_DB_STORAGE_KEY = "geoanalyzr_active_db_v1";
   function readActiveDbNameFromStorage() {
@@ -7903,7 +7903,7 @@ ${shapes}`.trim();
   };
   var db = new GGDB(readActiveDbNameFromStorage());
 
-  // ../tools/GeoAnalyzr/src/gm.ts
+  // src/gm.ts
   function getGlobalGmXmlhttpRequest() {
     const g = globalThis;
     return g?.GM_xmlhttpRequest ?? g?.GM?.xmlHttpRequest;
@@ -7926,7 +7926,7 @@ ${shapes}`.trim();
     return typeof getGmXmlhttpRequest() === "function";
   }
 
-  // ../tools/GeoAnalyzr/src/http.ts
+  // src/http.ts
   function parseRawHeaders(raw) {
     const out = {};
     if (typeof raw !== "string" || !raw.trim()) return out;
@@ -8058,7 +8058,7 @@ ${shapes}`.trim();
     return last ?? { status: 0, data: null, headers: {} };
   }
 
-  // ../tools/GeoAnalyzr/src/app/playerIdentity.ts
+  // src/app/playerIdentity.ts
   var cachedPlayerName;
   var cachedPlayerId;
   function asTrimmedString(v) {
@@ -8192,7 +8192,7 @@ ${shapes}`.trim();
     return fromDb;
   }
 
-  // ../tools/GeoAnalyzr/node_modules/@rapideditor/country-coder/dist/country-coder.mjs
+  // node_modules/@rapideditor/country-coder/dist/country-coder.mjs
   var import_which_polygon = __toESM(require_which_polygon(), 1);
   var borders_default = {
     type: "FeatureCollection",
@@ -8984,7 +8984,7 @@ ${shapes}`.trim();
     return returnFeatures;
   }
 
-  // ../tools/GeoAnalyzr/src/countries.ts
+  // src/countries.ts
   var guessCountryCache = /* @__PURE__ */ new Map();
   function isInBoundingBox(lat, lng, box) {
     return lat >= box.minLat && lat <= box.maxLat && lng >= box.minLng && lng <= box.maxLng;
@@ -9063,7 +9063,7 @@ ${shapes}`.trim();
     return resolveCountryCodeByLatLngLocalSyncInternal(lat, lng, true);
   }
 
-  // ../tools/GeoAnalyzr/src/engine/gameAgg.ts
+  // src/engine/gameAgg.ts
   var GAME_AGG_VERSION = 1;
   function normalizeMovementType(raw) {
     if (typeof raw !== "string") return "unknown";
@@ -9135,7 +9135,7 @@ ${shapes}`.trim();
     return agg;
   }
 
-  // ../tools/GeoAnalyzr/src/fetchLog.ts
+  // src/fetchLog.ts
   function safeError(e) {
     if (e instanceof Error) return { name: e.name, message: e.message, stack: e.stack };
     return { message: String(e) };
@@ -9154,7 +9154,7 @@ ${shapes}`.trim();
     return { total, head: h, tail: t };
   }
 
-  // ../tools/GeoAnalyzr/src/details.ts
+  // src/details.ts
   var cachedOwnPlayerId;
   var profileCache = /* @__PURE__ */ new Map();
   var regionDisplay = typeof Intl !== "undefined" && typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
@@ -10041,7 +10041,7 @@ ${shapes}`.trim();
     return { queued: total, ok, fail, skipped };
   }
 
-  // ../tools/GeoAnalyzr/src/serverSync.ts
+  // src/serverSync.ts
   var SYNC_META_KEY = "server_sync_v1";
   var GM_VALUE_PREFIX = "geoanalyzr_server_sync_v1_";
   var DEFAULT_ENDPOINT = "https://geoanalyzr.lmbt.app/api/sync";
@@ -10713,7 +10713,7 @@ ${shapes}`.trim();
     return meta?.value ?? null;
   }
 
-  // ../tools/GeoAnalyzr/src/db_v2.ts
+  // src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
   var CURRENT_NORMALIZE_VERSION = 2;
   var GGDB_V2 = class extends import_wrapper_default {
@@ -10864,7 +10864,7 @@ ${shapes}`.trim();
     await dbV2.syncState.put({ key, value, updatedAt: Date.now() });
   }
 
-  // ../tools/GeoAnalyzr/src/serverSync_v2.ts
+  // src/serverSync_v2.ts
   function getUserscriptVersion2() {
     const info = globalThis?.GM_info;
     const v = info?.script?.version;
@@ -11187,8 +11187,170 @@ ${shapes}`.trim();
     }
     return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
   }
+  function v3BatchEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v3/sync/batch";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v3/sync/batch");
+    }
+  }
+  function v3ClassicBatchEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v3/sync/classic-batch";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v3/sync/classic-batch");
+    }
+  }
+  async function syncToServerV3(opts) {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) {
+      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const playerId = await getCurrentPlayerId();
+    if (!playerId) {
+      return { ok: false, error: "no_player_id", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const batchUrl = v3BatchEndpoint(settings.endpointUrl);
+    const clientVersion = getUserscriptVersion2();
+    let localGames;
+    if (opts.gameIds) {
+      const gameIdSet = new Set(opts.gameIds);
+      localGames = await dbV2.games.filter((g) => gameIdSet.has(g.gameId) && (g.modeFamily === "duels" || g.modeFamily === "teamduels")).toArray();
+    } else {
+      localGames = await dbV2.games.filter((g) => g.modeFamily === "duels" || g.modeFamily === "teamduels").toArray();
+    }
+    if (localGames.length === 0) {
+      return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const allRounds = await dbV2.rounds.toArray();
+    const roundsByGameId = /* @__PURE__ */ new Map();
+    for (const r of allRounds) {
+      const list = roundsByGameId.get(r.gameId);
+      if (list) list.push(r);
+      else roundsByGameId.set(r.gameId, [r]);
+    }
+    const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
+    let totalGamesUploaded = 0;
+    let totalGamesNew = 0;
+    let totalGamesSkipped = 0;
+    let totalRoundsNew = 0;
+    let batchIndex = 0;
+    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+      batchIndex++;
+      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
+      const roundBatch = [];
+      for (const g of gameBatch) {
+        const r = roundsByGameId.get(g.gameId);
+        if (r) roundBatch.push(...r);
+      }
+      const batchId = `v3_${playerId}_${Date.now()}_${batchIndex}`;
+      const body = {
+        batchId,
+        playerId,
+        clientVersion: clientVersion ?? void 0,
+        games: gameBatch,
+        rounds: roundBatch
+      };
+      let res;
+      try {
+        res = await httpPost(batchUrl, settings.token, body);
+      } catch (e) {
+        return {
+          ok: false,
+          status: 0,
+          error: e instanceof Error ? e.message : String(e),
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      totalGamesUploaded += gameBatch.length;
+      totalGamesNew += Number(res.data?.gamesNew) || 0;
+      totalGamesSkipped += Number(res.data?.gamesSkipped) || 0;
+      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    }
+    return {
+      ok: true,
+      gamesUploaded: totalGamesUploaded,
+      gamesNew: totalGamesNew,
+      gamesSkipped: totalGamesSkipped,
+      roundsNew: totalRoundsNew,
+      batches: batchIndex
+    };
+  }
+  async function syncClassicToServerV3() {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) {
+      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    }
+    const localGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt !== void 0).toArray();
+    if (localGames.length === 0) {
+      return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    }
+    const allRounds = await dbV2.classicRounds.toArray();
+    const roundsByGameId = /* @__PURE__ */ new Map();
+    for (const r of allRounds) {
+      const list = roundsByGameId.get(r.gameId);
+      if (list) list.push(r);
+      else roundsByGameId.set(r.gameId, [r]);
+    }
+    const batchUrl = v3ClassicBatchEndpoint(settings.endpointUrl);
+    const clientVersion = getUserscriptVersion2();
+    let totalGamesUploaded = 0;
+    let totalGamesNew = 0;
+    let totalRoundsNew = 0;
+    let batchIndex = 0;
+    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+      batchIndex++;
+      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
+      const roundBatch = [];
+      for (const g of gameBatch) {
+        const r = roundsByGameId.get(g.gameId);
+        if (r) roundBatch.push(...r);
+      }
+      const batchId = `v3classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
+      const body = { batchId, clientVersion: clientVersion ?? void 0, games: gameBatch, rounds: roundBatch };
+      let res;
+      try {
+        res = await httpPost(batchUrl, settings.token, body);
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      totalGamesUploaded += gameBatch.length;
+      totalGamesNew += Number(res.data?.gamesNew) || 0;
+      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    }
+    return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
+  }
 
-  // ../tools/GeoAnalyzr/src/feedFetcher_v2.ts
+  // src/feedFetcher_v2.ts
   function getByPath2(obj, path) {
     const parts = path.split(".");
     let cur = obj;
@@ -11363,7 +11525,7 @@ ${shapes}`.trim();
     return { newGames: totalNew, newGameIds: allNewGameIds, pages: 0, stopped };
   }
 
-  // ../tools/GeoAnalyzr/src/detailFetcher_v2.ts
+  // src/detailFetcher_v2.ts
   function asNum2(v) {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (typeof v === "string") {
@@ -12098,7 +12260,7 @@ ${shapes}`.trim();
     return { queued: total, succeeded, updatedGameIds, failed, permanentlySkipped, selfIdFixed };
   }
 
-  // ../tools/GeoAnalyzr/src/migration_v1_to_v2.ts
+  // src/migration_v1_to_v2.ts
   function toModeFamily(raw, isTeamDuels) {
     if (isTeamDuels) return "teamduels";
     const m = String(raw || "").toLowerCase();
@@ -12258,7 +12420,7 @@ ${shapes}`.trim();
     return oldCount > 0 && newCount < oldCount * 0.9;
   }
 
-  // ../tools/GeoAnalyzr/src/fetchGameFilter.ts
+  // src/fetchGameFilter.ts
   var GM_VALUE_PREFIX2 = "geoanalyzr_fetch_filter_v1_";
   function readGmValue2(key) {
     const g = globalThis;
@@ -12343,7 +12505,7 @@ ${shapes}`.trim();
     if (typeof next.toMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}to_ms`, String(Math.max(0, Math.floor(next.toMs))));
   }
 
-  // ../tools/GeoAnalyzr/src/uiOverlay.ts
+  // src/uiOverlay.ts
   function el(tag) {
     return document.createElement(tag);
   }
@@ -12920,6 +13082,14 @@ ${shapes}`.trim();
           if (v2res.ok) {
             syncClassicToServer().catch(() => {
             });
+            try {
+              await syncToServerV3({ gameIds: opts.gameIds });
+            } catch {
+            }
+            try {
+              await syncClassicToServerV3();
+            } catch {
+            }
             if (v2res.gamesUploaded === 0) {
               setMsg(`Server already up to date \u2014 ${v2res.gamesSkipped} games skipped`);
             } else {
@@ -13626,7 +13796,7 @@ ${shapes}`.trim();
     };
   }
 
-  // ../tools/GeoAnalyzr/src/sync.ts
+  // src/sync.ts
   function etaLabel2(ms) {
     const sec = Math.max(0, Math.round(ms / 1e3));
     const m = Math.floor(sec / 60);
@@ -14208,7 +14378,7 @@ ${shapes}`.trim();
     };
   }
 
-  // ../tools/GeoAnalyzr/src/migrations/normalizeLegacyRounds.ts
+  // src/migrations/normalizeLegacyRounds.ts
   function hasAnyKeyPrefix(obj, prefix) {
     if (!obj || typeof obj !== "object") return false;
     for (const k of Object.keys(obj)) {
@@ -14320,7 +14490,7 @@ ${shapes}`.trim();
     return { scanned, updated };
   }
 
-  // ../tools/GeoAnalyzr/src/migrations/backfillGuessCountries.ts
+  // src/migrations/backfillGuessCountries.ts
   function normalizeIso24(v) {
     if (typeof v !== "string") return void 0;
     const x = v.trim().toLowerCase();
@@ -14400,7 +14570,7 @@ ${shapes}`.trim();
     return { scanned, updated };
   }
 
-  // ../tools/GeoAnalyzr/src/migrations/backfillMovementRatings.ts
+  // src/migrations/backfillMovementRatings.ts
   function detectMovementType2(v) {
     const s = String(v ?? "").toLowerCase().trim();
     if (!s || s === "unknown") return null;
@@ -14467,7 +14637,7 @@ ${shapes}`.trim();
     return { scanned, updated: toDelete.length };
   }
 
-  // ../tools/GeoAnalyzr/src/engine/fieldAccess.ts
+  // src/engine/fieldAccess.ts
   function legacy(obj, ...keys) {
     for (const key of keys) {
       if (obj && obj[key] !== void 0 && obj[key] !== null) return obj[key];
@@ -14540,7 +14710,7 @@ ${shapes}`.trim();
     return void 0;
   }
 
-  // ../tools/GeoAnalyzr/src/engine/dimensions.ts
+  // src/engine/dimensions.ts
   function normalizeMovementType3(raw) {
     const v = typeof raw === "string" ? raw.trim() : "";
     if (!v) return null;
@@ -14951,7 +15121,7 @@ ${shapes}`.trim();
   };
   var ROUND_DIMENSION_EXTRACTORS = DIMENSION_EXTRACTORS.round;
 
-  // ../tools/GeoAnalyzr/src/engine/filters.ts
+  // src/engine/filters.ts
   function evalClause(value, clause) {
     if (clause.op === "eq") return value === clause.value;
     if (clause.op === "neq") return value !== clause.value;
@@ -14972,7 +15142,7 @@ ${shapes}`.trim();
     return rows.filter((row) => clauses.every((clause) => evalRowFilter(row, clause, grain)));
   }
 
-  // ../tools/GeoAnalyzr/src/engine/globalFilters.ts
+  // src/engine/globalFilters.ts
   function normalizeAllString(value) {
     if (value === "all") return null;
     if (typeof value !== "string") return null;
@@ -15035,7 +15205,7 @@ ${shapes}`.trim();
     return `gf:${grain}:${parts.join("|")}`;
   }
 
-  // ../tools/GeoAnalyzr/src/progress.ts
+  // src/progress.ts
   var KEY = "__gaLoadingProgress";
   function setLoadingProgress(p) {
     try {
@@ -15057,7 +15227,7 @@ ${shapes}`.trim();
     }
   }
 
-  // ../tools/GeoAnalyzr/src/engine/queryEngine.ts
+  // src/engine/queryEngine.ts
   async function yieldToEventLoop() {
     await new Promise((r) => setTimeout(r, 0));
   }
@@ -15986,7 +16156,7 @@ ${shapes}`.trim();
     return rows;
   }
 
-  // ../tools/GeoAnalyzr/src/engine/validate.ts
+  // src/engine/validate.ts
   var ValidationError = class extends Error {
     code;
     constructor(code, message) {
@@ -16296,7 +16466,7 @@ ${shapes}`.trim();
     return result;
   }
 
-  // ../tools/GeoAnalyzr/src/config/semantic.json
+  // src/config/semantic.json
   var semantic_default = {
     $schema: "./semantic.schema.json",
     schemaVersion: "0.1.0",
@@ -17688,7 +17858,7 @@ ${shapes}`.trim();
     }
   };
 
-  // ../tools/GeoAnalyzr/src/config/dashboard.json
+  // src/config/dashboard.json
   var dashboard_default = {
     $schema: "./dashboard.schema.json",
     schemaVersion: "0.1.0",
@@ -21476,7 +21646,7 @@ ${shapes}`.trim();
     }
   };
 
-  // ../tools/GeoAnalyzr/src/ui/semanticDashboardCss.ts
+  // src/ui/semanticDashboardCss.ts
   function injectSemanticDashboardCssOnce(doc) {
     const id = "geoanalyzr-semantic-dashboard-css";
     if (doc.getElementById(id)) return;
@@ -22668,7 +22838,7 @@ ${shapes}`.trim();
     doc.head.appendChild(style);
   }
 
-  // ../tools/GeoAnalyzr/src/ui/settingsStore.ts
+  // src/ui/settingsStore.ts
   var SETTINGS_KEY = "geoanalyzr:semantic:settings:v1";
   var THEME_KEY = "geoanalyzr.theme";
   var DASHBOARD_TEMPLATE_KEY = "geoanalyzr:semantic:dashboard-template:v1";
@@ -22816,7 +22986,7 @@ ${shapes}`.trim();
     root.style.setProperty("--ga-graph-color", settings.appearance.theme === "geoguessr" ? "#FECD19" : settings.appearance.graphColor);
   }
 
-  // ../tools/GeoAnalyzr/src/engine/semanticMerge.ts
+  // src/engine/semanticMerge.ts
   function cloneJson(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -22850,7 +23020,7 @@ ${shapes}`.trim();
     return next;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/layoutEditor.ts
+  // src/ui/layoutEditor.ts
   function cloneJson2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -25492,7 +25662,7 @@ ${shapes}`.trim();
     return box;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/consoleStore.ts
+  // src/ui/consoleStore.ts
   var MAX_ENTRIES = 800;
   var entries = [];
   var listeners = /* @__PURE__ */ new Set();
@@ -25558,7 +25728,7 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // ../tools/GeoAnalyzr/src/ui/settingsModal.ts
+  // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
       doc,
@@ -26567,7 +26737,7 @@ ${describeError(err2)}` : message;
     });
   }
 
-  // ../tools/GeoAnalyzr/src/ui/drilldownOverlay.ts
+  // src/ui/drilldownOverlay.ts
   var DrilldownOverlay = class {
     root;
     doc;
@@ -27157,7 +27327,7 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // ../tools/GeoAnalyzr/src/engine/measures.ts
+  // src/engine/measures.ts
   function medianOf(values) {
     const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
     if (finite.length === 0) return 0;
@@ -28178,7 +28348,7 @@ ${describeError(err2)}` : message;
     session: SESSION_MEASURES_BY_FORMULA_ID
   };
 
-  // ../tools/GeoAnalyzr/src/geo/geoJsonFetch.ts
+  // src/geo/geoJsonFetch.ts
   function canonicalizeUrl(url) {
     const m = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/i);
     if (m) {
@@ -28321,7 +28491,7 @@ ${describeError(err2)}` : message;
     return p;
   }
 
-  // ../tools/GeoAnalyzr/src/geo/idRegions.ts
+  // src/geo/idRegions.ts
   var ID_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM1/geoBoundaries-IDN-ADM1_simplified.geojson";
   var ID_KABUPATEN_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/IDN/ADM2/geoBoundaries-IDN-ADM2_simplified.geojson";
   function bboxForCoords(coords, bbox) {
@@ -28459,7 +28629,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // ../tools/GeoAnalyzr/src/geo/deRegions.ts
+  // src/geo/deRegions.ts
   var DE_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/1_sehr_hoch.geo.json";
   var DE_DISTRICTS_GEOJSON_URL = "https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/4_kreise/1_sehr_hoch.geo.json";
   function hasGmXhr2() {
@@ -28623,7 +28793,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // ../tools/GeoAnalyzr/src/geo/naRegions.ts
+  // src/geo/naRegions.ts
   var US_STATES_GEOJSON_URL = "https://raw.githubusercontent.com/datasets/geo-admin1-us/master/data/admin1-us.geojson";
   var CA_PROVINCES_GEOJSON_URL = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canada.geojson";
   function hasGmXhr3() {
@@ -28787,7 +28957,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // ../tools/GeoAnalyzr/src/geo/seaRegions.ts
+  // src/geo/seaRegions.ts
   var PH_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/41af8f1/releaseData/gbOpen/PHL/ADM1/geoBoundaries-PHL-ADM1_simplified.geojson";
   var VN_PROVINCES_GEOJSON_URL = "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/VNM/ADM1/geoBoundaries-VNM-ADM1_simplified.geojson";
   function bboxForCoords4(coords, bbox) {
@@ -28925,7 +29095,7 @@ ${describeError(err2)}` : message;
     return null;
   }
 
-  // ../tools/GeoAnalyzr/src/engine/regionEnrichment.ts
+  // src/engine/regionEnrichment.ts
   var ADMIN_DIM_TO_COUNTRY = {
     true_state: "de",
     guess_state: "de",
@@ -29138,7 +29308,7 @@ ${describeError(err2)}` : message;
     });
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/statListWidget.ts
+  // src/ui/widgets/statListWidget.ts
   function readDateFormatMode(doc) {
     const root = doc.querySelector(".ga-root");
     const mode = root?.dataset?.gaDateFormat;
@@ -29405,7 +29575,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/statValueWidget.ts
+  // src/ui/widgets/statValueWidget.ts
   function formatValue2(doc, semantic, measureId, value) {
     const m = semantic.measures[measureId];
     const unit = m ? semantic.units[m.unit] : void 0;
@@ -29496,7 +29666,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/engine/aggregate.ts
+  // src/engine/aggregate.ts
   function groupByKey(rows, keyFn) {
     const m = /* @__PURE__ */ new Map();
     for (const r of rows) {
@@ -29509,7 +29679,7 @@ ${describeError(err2)}` : message;
     return m;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/chartWidget.ts
+  // src/ui/widgets/chartWidget.ts
   function getShareKindFromFormulaId(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
     if (formulaId === "share_damage_taken") return "taken";
@@ -30761,7 +30931,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/breakdownWidget.ts
+  // src/ui/widgets/breakdownWidget.ts
   function getShareKindFromFormulaId2(formulaId) {
     if (formulaId === "share_damage_dealt") return "dealt";
     if (formulaId === "share_damage_taken") return "taken";
@@ -31171,7 +31341,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/recordListWidget.ts
+  // src/ui/widgets/recordListWidget.ts
   function shouldHideTimestampForRoundRecord(rec, grain) {
     if (grain !== "round") return false;
     const click = rec.actions?.click;
@@ -31637,7 +31807,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/leaderListWidget.ts
+  // src/ui/widgets/leaderListWidget.ts
   function formatPct01(v) {
     const clamped = Math.max(0, Math.min(1, v));
     return `${(clamped * 100).toFixed(1)}%`;
@@ -31727,7 +31897,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/countryMapPicker.ts
+  // src/ui/countryMapPicker.ts
   var WORLD_GEOJSON_URL = "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json";
   var ISO_MAP_URL = "https://cdn.jsdelivr.net/npm/world-countries@5.1.0/countries.json";
   var dataPromise = null;
@@ -31990,7 +32160,7 @@ ${describeError(err2)}` : message;
     });
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/countryMetricMapWidget.ts
+  // src/ui/widgets/countryMetricMapWidget.ts
   function readCountryFormatMode3(doc) {
     const root = doc.querySelector(".ga-root");
     return root?.dataset?.gaCountryFormat === "english" ? "english" : "iso2";
@@ -32320,7 +32490,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/regionMetricMapWidget.ts
+  // src/ui/widgets/regionMetricMapWidget.ts
   function project2(lon, lat, w, h) {
     const x = (lon + 180) / 360 * w;
     const y = (90 - lat) / 180 * h;
@@ -32815,7 +32985,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/pointMapWidget.ts
+  // src/ui/widgets/pointMapWidget.ts
   function hasGmXhr5() {
     return hasGmXmlhttpRequest();
   }
@@ -33494,7 +33664,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/multiViewWidget.ts
+  // src/ui/widgets/multiViewWidget.ts
   async function renderMultiViewWidget(args) {
     const { widget, overlay, renderChild } = args;
     const spec = widget.spec;
@@ -33575,7 +33745,7 @@ ${describeError(err2)}` : message;
     return wrap;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/adminEnrichmentWidget.ts
+  // src/ui/widgets/adminEnrichmentWidget.ts
   function asIso2(v) {
     const s = typeof v === "string" ? v.trim().toLowerCase() : "";
     return /^[a-z]{2}$/.test(s) ? s : "";
@@ -33826,7 +33996,7 @@ ${describeError(err2)}` : message;
     return el2;
   }
 
-  // ../tools/GeoAnalyzr/src/db/adminCacheDb.ts
+  // src/db/adminCacheDb.ts
   var AdminCacheDB = class extends import_wrapper_default {
     geojson;
     labels;
@@ -33840,7 +34010,7 @@ ${describeError(err2)}` : message;
   };
   var adminCacheDb = new AdminCacheDB();
 
-  // ../tools/GeoAnalyzr/src/ui/widgets/adminAnalysisWidget.ts
+  // src/ui/widgets/adminAnalysisWidget.ts
   var LEVEL_CACHE = /* @__PURE__ */ new Map();
   var ISO3_CACHE = /* @__PURE__ */ new Map();
   var ISO_NAME_CACHE = /* @__PURE__ */ new Map();
@@ -34946,7 +35116,7 @@ ${describeError(err2)}` : message;
     return el2;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/dashboardRenderer.ts
+  // src/ui/dashboardRenderer.ts
   async function renderDashboard(root, semantic, dashboard, opts) {
     root.innerHTML = "";
     const doc = root.ownerDocument;
@@ -35367,7 +35537,7 @@ ${describeError(err2)}` : message;
     highlight();
   }
 
-  // ../tools/GeoAnalyzr/src/ui/filterState.ts
+  // src/ui/filterState.ts
   function cloneJson3(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -35429,7 +35599,7 @@ ${describeError(err2)}` : message;
     };
   }
 
-  // ../tools/GeoAnalyzr/src/ui/globalFiltersBar.ts
+  // src/ui/globalFiltersBar.ts
   function toYmd(ts) {
     const d = new Date(ts);
     const y = d.getFullYear();
@@ -35658,7 +35828,7 @@ ${describeError(err2)}` : message;
     }
   }
 
-  // ../tools/GeoAnalyzr/src/engine/selectOptions.ts
+  // src/engine/selectOptions.ts
   var cache = /* @__PURE__ */ new Map();
   function stableKey(spec, state, excludeId) {
     const parts = spec.controls.map((c) => c.id === excludeId ? `${c.id}=<excluded>` : `${c.id}=${JSON.stringify(state[c.id])}`);
@@ -35750,7 +35920,7 @@ ${describeError(err2)}` : message;
     return out;
   }
 
-  // ../tools/GeoAnalyzr/src/ui/analysisRenderer.ts
+  // src/ui/analysisRenderer.ts
   function explodeOpponentsFromGames(games) {
     const out = [];
     for (const g of games) {
@@ -36107,7 +36277,7 @@ ${describeError(err2)}` : message;
     await renderNow();
   }
 
-  // ../tools/GeoAnalyzr/src/ui.ts
+  // src/ui.ts
   function cloneTemplate2(value) {
     if (typeof structuredClone === "function") return structuredClone(value);
     return JSON.parse(JSON.stringify(value));
@@ -36432,7 +36602,7 @@ ${describe(error)}`;
     }
   }
 
-  // ../tools/GeoAnalyzr/src/app/uiActions.ts
+  // src/app/uiActions.ts
   function errorText(e) {
     return e instanceof Error ? e.message : String(e);
   }
@@ -36813,7 +36983,7 @@ After it finishes, open the dashboard again.`
     });
   }
 
-  // ../tools/GeoAnalyzr/src/app/routing.ts
+  // src/app/routing.ts
   function watchRoutes(onRoute) {
     const origPush = history.pushState;
     const origReplace = history.replaceState;
@@ -36830,7 +37000,7 @@ After it finishes, open the dashboard again.`
     onRoute();
   }
 
-  // ../tools/GeoAnalyzr/src/app/boot.ts
+  // src/app/boot.ts
   async function bootApp() {
     const ui = createUIOverlay();
     registerUiActions(ui);
@@ -36880,6 +37050,6 @@ After it finishes, open the dashboard again.`
     }, 2500);
   }
 
-  // ../tools/GeoAnalyzr/src/main.ts
+  // src/main.ts
   void bootApp();
 })();
