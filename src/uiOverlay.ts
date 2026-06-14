@@ -1,6 +1,6 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
-import { syncToServerV2, syncClassicToServer } from "./serverSync_v2";
+import { syncToServerV2, syncClassicToServer, syncToServerV3, syncClassicToServerV3 } from "./serverSync_v2";
 import { fetchFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { getCurrentPlayerId } from "./app/playerIdentity";
@@ -667,6 +667,9 @@ export function createUIOverlay(): UIOverlay {
         if (v2res.ok) {
           // Also sync classic games (non-fatal)
           syncClassicToServer().catch(() => {});
+          // Sync to v3 DB (non-fatal)
+          try { await syncToServerV3({ gameIds: opts.gameIds }); } catch { /* non-fatal */ }
+          try { await syncClassicToServerV3(); } catch { /* non-fatal */ }
           if (v2res.gamesUploaded === 0) {
             setMsg(`Server already up to date — ${v2res.gamesSkipped} games skipped`);
           } else {
