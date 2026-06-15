@@ -346,8 +346,11 @@ export async function syncV3FromDb2(opts: {
         p2_country: uc(r.p2Country),
         p2_score: n(r.p2Score),
         p2_distanceKm: n(r.p2Distance),
+        p2_timeSec: n(r.p2TimeSec),
+        p2_timedOut: r.p2TimedOut ? 1 : 0,
         p2_healthAfter: n(r.team1HealthAfter),
         p2_isBestGuess: 0,
+        playedAt: r.startTime ?? null,
       });
     } else if (tdGameIds.has(r.gameId)) {
       tdRoundRows.push({
@@ -366,18 +369,24 @@ export async function syncV3FromDb2(opts: {
         p1_country: uc(r.p1Country),
         p1_score: n(r.p1Score),
         p1_distanceKm: n(r.p1Distance),
+        p1_timeSec: n(r.p1TimeSec),
+        p1_timedOut: r.p1TimedOut ? 1 : 0,
         p1_isBestGuess: r.p1IsBetterGuess ? 1 : 0,
         p2_lat: n(r.p2Lat),
         p2_lng: n(r.p2Lng),
         p2_country: uc(r.p2Country),
         p2_score: n(r.p2Score),
         p2_distanceKm: n(r.p2Distance),
+        p2_timeSec: n(r.p2TimeSec),
+        p2_timedOut: r.p2TimedOut ? 1 : 0,
         p2_isBestGuess: r.p2IsBetterGuess ? 1 : 0,
         p3_lat: n(r.p3Lat),
         p3_lng: n(r.p3Lng),
         p3_country: uc(r.p3Country),
         p3_score: n(r.p3Score),
         p3_distanceKm: n(r.p3Distance),
+        p3_timeSec: n(r.p3TimeSec),
+        p3_timedOut: r.p3TimedOut ? 1 : 0,
         p3_isBestGuess: r.p3IsBetterGuess ? 1 : 0,
         p4_lat: n(r.p4Lat),
         p4_lng: n(r.p4Lng),
@@ -387,6 +396,7 @@ export async function syncV3FromDb2(opts: {
         p4_isBestGuess: r.p4IsBetterGuess ? 1 : 0,
         blue_healthAfter: n(r.team0HealthAfter),
         red_healthAfter: n(r.team1HealthAfter),
+        playedAt: r.startTime ?? null,
       });
     }
   }
