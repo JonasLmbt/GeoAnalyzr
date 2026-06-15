@@ -646,6 +646,9 @@ export function createUIOverlay(): UIOverlay {
       }
       if (isSyncVariant) {
         const modeLabel = forceFull ? "Synced full" : "Synced";
+        // Start v3 DB sync immediately, don't wait for v2 to finish
+        const v3SyncPromise = syncToServerV3({ gameIds: opts.gameIds }).catch(() => {});
+        const v3ClassicSyncPromise = syncClassicToServerV3().catch(() => {});
         const v2res = await syncToServerV2({
           full: forceFull,
           gameIds: opts.gameIds,
@@ -664,9 +667,8 @@ export function createUIOverlay(): UIOverlay {
             }
           },
         });
-        // Always sync to v3 DB (non-fatal, independent of v2 result)
-        try { await syncToServerV3({ gameIds: opts.gameIds }); } catch { /* non-fatal */ }
-        try { await syncClassicToServerV3(); } catch { /* non-fatal */ }
+        await v3SyncPromise;
+        await v3ClassicSyncPromise;
         if (v2res.ok) {
           // Also sync classic games (non-fatal)
           syncClassicToServer().catch(() => {});

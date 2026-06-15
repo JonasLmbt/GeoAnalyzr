@@ -13380,6 +13380,10 @@ ${shapes}`.trim();
         }
         if (isSyncVariant) {
           const modeLabel = forceFull ? "Synced full" : "Synced";
+          const v3SyncPromise = syncToServerV3({ gameIds: opts.gameIds }).catch(() => {
+          });
+          const v3ClassicSyncPromise = syncClassicToServerV3().catch(() => {
+          });
           const v2res = await syncToServerV2({
             full: forceFull,
             gameIds: opts.gameIds,
@@ -13397,14 +13401,8 @@ ${shapes}`.trim();
               }
             }
           });
-          try {
-            await syncToServerV3({ gameIds: opts.gameIds });
-          } catch {
-          }
-          try {
-            await syncClassicToServerV3();
-          } catch {
-          }
+          await v3SyncPromise;
+          await v3ClassicSyncPromise;
           if (v2res.ok) {
             syncClassicToServer().catch(() => {
             });
