@@ -1,8 +1,9 @@
 import { fetchFeed } from "../feedFetcher_v2";
 import { fetchDetails } from "../detailFetcher_v2";
 import { getCurrentPlayerId } from "../app/playerIdentity";
-import { syncToServerV2, syncClassicToServer, syncToServerV3, syncClassicToServerV3 } from "../serverSync_v2";
+import { syncClassicToServer, syncClassicToServerV3 } from "../serverSync_v2";
 import { loadServerSyncSettings } from "../serverSync";
+import { syncV3FromDb2 } from "../serverSync_v3_db2";
 import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
 import { linkDeviceViaDiscord } from "./linkDevice";
 
@@ -146,30 +147,25 @@ export async function runFetchAndSync(opts: {
     return fail("Missing sync token. Link failed.", "Try linking again. If it keeps failing, disable popup blockers and retry.");
   }
 
-  opts.setStatus(opts.forceFull ? "Syncing full snapshot to server..." : `Syncing ${touchedIds?.length ?? 0} games to server...`);
+  opts.setStatus(opts.forceFull ? "Syncing to server..." : `Syncing ${touchedIds?.length ?? 0} games to server...`);
   try {
-    const syncResult = await syncToServerV2({
-      full: opts.forceFull,
+    const syncResult = await syncV3FromDb2({
+      forceFull: opts.forceFull,
       gameIds: touchedIds,
-      detailsOnly: false,
-      onProgress: (p) => {
-        if (p.phase === "upload") {
-          opts.setStatus(`Syncing batch ${p.batch}/${p.totalBatches} — ${p.gamesUploaded} games...`);
-        }
-      },
     });
 
     log.sync = {
-      gamesUploaded: syncResult.gamesUploaded,
-      gamesNew: syncResult.gamesNew,
-      roundsNew: syncResult.roundsNew,
-      batches: syncResult.batches,
+      gamesUploaded: syncResult.counts?.duel_games ?? 0 + (syncResult.counts?.team_duel_games ?? 0),
+      gamesNew: syncResult.counts?.duel_games ?? 0 + (syncResult.counts?.team_duel_games ?? 0),
+      roundsNew: syncResult.counts?.duel_rounds ?? 0 + (syncResult.counts?.team_duel_rounds ?? 0),
+      batches: 1,
     };
 
     if (!syncResult.ok) {
       const errMap: Record<string, { msg: string; hint: string }> = {
         no_token: { msg: "Missing sync token. Click to link device.", hint: "Click the button to link your device (Discord), then try again." },
         no_player_id: { msg: "Could not determine player ID. Make sure you are logged in to GeoGuessr.", hint: "Reload geoguessr.com, log in, then retry." },
+        no_endpoint: { msg: "Missing sync endpoint URL. Check your settings.", hint: "Configure the sync endpoint in GeoAnalyzr settings." },
       };
       if (syncResult.error && errMap[syncResult.error]) {
         return fail(errMap[syncResult.error].msg, errMap[syncResult.error].hint);
@@ -183,13 +179,8 @@ export async function runFetchAndSync(opts: {
     }
 
     // Classic games sync (non-fatal on failure)
-    try {
-      await syncClassicToServer();
-    } catch { /* ignore — classic sync failure doesn't block the main result */ }
-
-    // V3 sync — runs in parallel with v2, non-fatal; v2 endpoint is the source of truth
-    try { await syncToServerV3({ gameIds: touchedIds }); } catch { /* v3 non-fatal */ }
-    try { await syncClassicToServerV3(); } catch { /* v3 classic non-fatal */ }
+    try { await syncClassicToServer(); } catch { /* ignore */ }
+    try { await syncClassicToServerV3(); } catch { /* ignore */ }
   } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e || "Sync failed");
     log.sync.error = msg;
