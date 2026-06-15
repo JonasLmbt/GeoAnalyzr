@@ -1,17 +1,20 @@
 /**
  * V3 server sync reading from the sync-only IndexedDB (db_v2).
  *
- * Maps self/mate/opp/oppMate fields → p1/p2/p3/p4 and posts to /api/v3/sync.
- * Used by the sync-only script's runFetchAndSync pipeline.
+ * Sends all 7 tables (players, standard_games, standard_rounds,
+ * duel_games, duel_rounds, team_duel_games, team_duel_rounds)
+ * sequentially in batches to /api/v3/sync.
  */
-import { dbV2, GameRow, RoundRow, getSyncState, setSyncState } from "./db_v2";
+import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow, getSyncState, setSyncState } from "./db_v2";
 import { loadServerSyncSettings } from "./serverSync";
 import { getCurrentPlayerId, getCurrentPlayerName } from "./app/playerIdentity";
 import { deriveV3SyncUrl } from "./serverSync_v3";
 import { getGmXmlhttpRequest } from "./gm";
 import { httpGetJson } from "./http";
 
-const CURSOR_KEY = "server_sync_v3";
+const CURSOR_KEY_DUELS    = "server_sync_v3";
+const CURSOR_KEY_STANDARD = "server_sync_v3_standard";
+const BATCH_SIZE = 500;
 
 function n(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -70,11 +73,34 @@ export interface SyncV3Db2Result {
   error?: string;
   counts?: {
     players: number;
+    standard_games: number;
+    standard_rounds: number;
     duel_games: number;
     duel_rounds: number;
     team_duel_games: number;
     team_duel_rounds: number;
   };
+}
+
+async function postBatch(url: string, token: string, payload: Record<string, any[]>): Promise<void> {
+  const body = JSON.stringify({
+    schema: "geoanalyzr-v3-sync",
+    schemaVersion: 1,
+    createdAt: Date.now(),
+    appVersion: getUserscriptVersion(),
+    ...payload,
+  });
+  const res = await gmPost(url, body, token);
+  if (res.status < 200 || res.status >= 300) {
+    const parsed = (() => { try { return JSON.parse(res.text); } catch { return null; } })();
+    throw new Error(parsed?.error ?? `HTTP ${res.status}`);
+  }
+}
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 export async function syncV3FromDb2(opts: {
@@ -88,42 +114,17 @@ export async function syncV3FromDb2(opts: {
   if (!url) return { ok: false, error: "no_endpoint" };
 
   const forceFull = opts.forceFull === true;
-  const cursorFrom: number = forceFull ? 0 : ((await getSyncState<number>(CURSOR_KEY)) ?? 0);
 
   const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
   const ownCountry = ownPlayerId ? await fetchOwnCountryCode(ownPlayerId) : null;
 
-  // Load relevant games from db_v2
-  let games: GameRow[];
-  if (opts.gameIds && !forceFull) {
-    const idSet = new Set(opts.gameIds);
-    games = await dbV2.games
-      .filter((g) =>
-        idSet.has(g.gameId) &&
-        (g.modeFamily === "duels" || g.modeFamily === "teamduels") &&
-        g.detailFetchedAt != null
-      )
-      .toArray();
-  } else {
-    games = await dbV2.games
-      .filter((g) =>
-        (g.modeFamily === "duels" || g.modeFamily === "teamduels") &&
-        g.detailFetchedAt != null &&
-        (forceFull || (g.detailFetchedAt! > cursorFrom))
-      )
-      .toArray();
-  }
+  const totalCounts = {
+    players: 0, standard_games: 0, standard_rounds: 0,
+    duel_games: 0, duel_rounds: 0, team_duel_games: 0, team_duel_rounds: 0,
+  };
 
-  if (games.length === 0 && !forceFull) {
-    return { ok: true, counts: { players: 0, duel_games: 0, duel_rounds: 0, team_duel_games: 0, team_duel_rounds: 0 } };
-  }
+  // ── Players ────────────────────────────────────────────────────────────────
 
-  const gameIdList = games.map((g) => g.gameId);
-  const rounds: RoundRow[] = gameIdList.length > 0
-    ? await dbV2.rounds.where("gameId").anyOf(gameIdList).toArray()
-    : [];
-
-  // Collect players
   type PlayerEntry = { playerId: string; playerName: string | null; countryCode: string | null; fetchedAt: number | null };
   const playerMap = new Map<string, PlayerEntry>();
   const addPlayer = (id: unknown, name: unknown, country: unknown, fetchedAt?: number) => {
@@ -142,8 +143,102 @@ export async function syncV3FromDb2(opts: {
 
   if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry, Date.now());
 
-  const duelGames: any[] = [];
-  const tdGames: any[] = [];
+  // ── Standard games ─────────────────────────────────────────────────────────
+
+  const stdCursorFrom: number = forceFull ? 0 : ((await getSyncState<number>(CURSOR_KEY_STANDARD)) ?? 0);
+  let classicGames: ClassicGameRow[];
+  if (opts.gameIds && !forceFull) {
+    const idSet = new Set(opts.gameIds);
+    classicGames = await dbV2.classicGames
+      .filter((g) => idSet.has(g.gameId) && g.detailFetchedAt != null)
+      .toArray();
+  } else {
+    classicGames = await dbV2.classicGames
+      .filter((g) => g.detailFetchedAt != null && (forceFull || (g.detailFetchedAt! > stdCursorFrom)))
+      .toArray();
+  }
+
+  if (ownPlayerId) {
+    const stdGameRows: any[] = classicGames.map((g) => ({
+      gameId: g.gameId,
+      p1_playerId: ownPlayerId,
+      mapSlug: null,
+      mapName: g.mapName ?? null,
+      movementType: g.movement ?? "moving",
+      timeLimit: g.timeLimit ?? null,
+      roundCount: g.roundCount ?? null,
+      totalScore: g.totalScore ?? null,
+      totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1000 : null,
+      totalTimeSec: g.totalTimeSec ?? null,
+      totalSteps: g.totalSteps ?? null,
+      playedAt: g.playedAt ?? null,
+    }));
+
+    for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
+      await postBatch(url, settings.token, { standard_games: batch });
+      totalCounts.standard_games += batch.length;
+    }
+
+    // Standard rounds
+    if (classicGames.length > 0) {
+      const stdGameIds = classicGames.map((g) => g.gameId);
+      const classicRounds: ClassicRoundRow[] = await dbV2.classicRounds
+        .where("gameId").anyOf(stdGameIds).toArray();
+
+      const stdRoundRows: any[] = classicRounds.map((r) => ({
+        gameId: r.gameId,
+        roundNumber: r.roundNumber,
+        panoId: r.panoId ?? null,
+        trueLat: n(r.trueLat),
+        trueLng: n(r.trueLng),
+        trueCountry: uc(r.trueCountry),
+        trueHeading: n(r.trueHeadingDeg),
+        truePitch: null,
+        trueZoom: null,
+        p1_lat: n(r.selfLat),
+        p1_lng: n(r.selfLng),
+        p1_country: uc(r.selfCountry),
+        p1_score: n(r.selfScore),
+        p1_distanceKm: n(r.selfDistance),
+        p1_timeSec: n(r.selfTimeSec),
+        p1_steps: n(r.selfSteps),
+        timedOut: r.timedOut ? 1 : 0,
+        skippedRound: r.skippedRound ? 1 : 0,
+        playedAt: r.playedAt ?? null,
+      }));
+
+      for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
+        await postBatch(url, settings.token, { standard_rounds: batch });
+        totalCounts.standard_rounds += batch.length;
+      }
+    }
+  }
+
+  // ── Duels & Teamduels ──────────────────────────────────────────────────────
+
+  const duelCursorFrom: number = forceFull ? 0 : ((await getSyncState<number>(CURSOR_KEY_DUELS)) ?? 0);
+  let games: GameRow[];
+  if (opts.gameIds && !forceFull) {
+    const idSet = new Set(opts.gameIds);
+    games = await dbV2.games
+      .filter((g) =>
+        idSet.has(g.gameId) &&
+        (g.modeFamily === "duels" || g.modeFamily === "teamduels") &&
+        g.detailFetchedAt != null
+      )
+      .toArray();
+  } else {
+    games = await dbV2.games
+      .filter((g) =>
+        (g.modeFamily === "duels" || g.modeFamily === "teamduels") &&
+        g.detailFetchedAt != null &&
+        (forceFull || (g.detailFetchedAt! > duelCursorFrom))
+      )
+      .toArray();
+  }
+
+  const duelGameRows: any[] = [];
+  const tdGameRows: any[] = [];
   const duelGameIds = new Set<string>();
   const tdGameIds = new Set<string>();
 
@@ -152,13 +247,10 @@ export async function syncV3FromDb2(opts: {
     if (g.modeFamily === "duels") {
       addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
       addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
-
-      // winnerTeamIdx: 0=team[0](p1) won, 1=team[1](p2) won
       const winnerPlayerId = g.winnerTeamIdx === 0 ? (g.p1Id ?? null)
                            : g.winnerTeamIdx === 1 ? (g.p2Id ?? null)
                            : null;
-
-      duelGames.push({
+      duelGameRows.push({
         gameId: g.gameId,
         p1_playerId: g.p1Id ?? null,
         p2_playerId: g.p2Id ?? null,
@@ -192,11 +284,8 @@ export async function syncV3FromDb2(opts: {
       addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
       addPlayer(g.p3Id, g.p3Name, g.p3Country, fat);
       addPlayer(g.p4Id, g.p4Name, g.p4Country, fat);
-
-      // winnerTeamIdx: 0=team[0](p1+p2) won → "blue"; 1=team[1](p3+p4) won → "red"
       const winnerTeam = g.winnerTeamIdx === 0 ? "blue" : g.winnerTeamIdx === 1 ? "red" : null;
-
-      tdGames.push({
+      tdGameRows.push({
         gameId: g.gameId,
         p1_playerId: g.p1Id ?? null,
         p2_playerId: g.p2Id ?? null,
@@ -222,13 +311,17 @@ export async function syncV3FromDb2(opts: {
     }
   }
 
-  // Build round arrays
-  const duelRounds: any[] = [];
-  const tdRounds: any[] = [];
+  // Load rounds for duels/teamduels
+  const allDuelTdIds = [...duelGameIds, ...tdGameIds];
+  const rounds: RoundRow[] = allDuelTdIds.length > 0
+    ? await dbV2.rounds.where("gameId").anyOf(allDuelTdIds).toArray()
+    : [];
 
+  const duelRoundRows: any[] = [];
+  const tdRoundRows: any[] = [];
   for (const r of rounds) {
     if (duelGameIds.has(r.gameId)) {
-      duelRounds.push({
+      duelRoundRows.push({
         gameId: r.gameId,
         roundNumber: r.roundNumber,
         trueLat: n(r.trueLat),
@@ -257,7 +350,7 @@ export async function syncV3FromDb2(opts: {
         p2_isBestGuess: 0,
       });
     } else if (tdGameIds.has(r.gameId)) {
-      tdRounds.push({
+      tdRoundRows.push({
         gameId: r.gameId,
         roundNumber: r.roundNumber,
         trueLat: n(r.trueLat),
@@ -298,48 +391,46 @@ export async function syncV3FromDb2(opts: {
     }
   }
 
-  const players = Array.from(playerMap.values());
-  const envelope = {
-    schema: "geoanalyzr-v3-sync",
-    schemaVersion: 1,
-    createdAt: Date.now(),
-    appVersion: getUserscriptVersion(),
-    owner: { playerId: ownPlayerId, playerName: ownPlayerName },
-    cursor: { from: cursorFrom },
-    players,
-    duel_games: duelGames,
-    duel_rounds: duelRounds,
-    team_duel_games: tdGames,
-    team_duel_rounds: tdRounds,
-  };
+  // ── Send sequentially: players → duel_games → duel_rounds → td_games → td_rounds
 
-  const jsonBody = JSON.stringify(envelope);
-  let res: { status: number; text: string };
   try {
-    res = await gmPost(url, jsonBody, settings.token);
+    // Players (always send, even if empty, to update lastSyncedAt)
+    const players = Array.from(playerMap.values());
+    for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
+      await postBatch(url, settings.token, { players: batch });
+      totalCounts.players += batch.length;
+    }
+    // Send empty player ping if no players but we still want server to register the sync
+    if (players.length === 0) {
+      await postBatch(url, settings.token, { players: [] });
+    }
+
+    for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
+      await postBatch(url, settings.token, { duel_games: batch });
+      totalCounts.duel_games += batch.length;
+    }
+    for (const batch of chunk(duelRoundRows, BATCH_SIZE)) {
+      await postBatch(url, settings.token, { duel_rounds: batch });
+      totalCounts.duel_rounds += batch.length;
+    }
+    for (const batch of chunk(tdGameRows, BATCH_SIZE)) {
+      await postBatch(url, settings.token, { team_duel_games: batch });
+      totalCounts.team_duel_games += batch.length;
+    }
+    for (const batch of chunk(tdRoundRows, BATCH_SIZE)) {
+      await postBatch(url, settings.token, { team_duel_rounds: batch });
+      totalCounts.team_duel_rounds += batch.length;
+    }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
-  const ok = res.status >= 200 && res.status < 300;
-  if (ok) {
-    // Advance cursor to max detailFetchedAt among synced games
-    const maxFetchedAt = games.reduce((m, g) => Math.max(m, g.detailFetchedAt ?? 0), 0);
-    if (maxFetchedAt > 0) {
-      await setSyncState(CURSOR_KEY, maxFetchedAt);
-    }
-  }
+  // Advance cursors
+  const maxDuelFetchedAt = games.reduce((m, g) => Math.max(m, g.detailFetchedAt ?? 0), 0);
+  if (maxDuelFetchedAt > 0) await setSyncState(CURSOR_KEY_DUELS, maxDuelFetchedAt);
 
-  const parsed = (() => { try { return JSON.parse(res.text); } catch { return null; } })();
-  return {
-    ok,
-    error: ok ? undefined : (parsed?.error ?? `HTTP ${res.status}`),
-    counts: parsed?.counts ?? {
-      players: players.length,
-      duel_games: duelGames.length,
-      duel_rounds: duelRounds.length,
-      team_duel_games: tdGames.length,
-      team_duel_rounds: tdRounds.length,
-    },
-  };
+  const maxStdFetchedAt = classicGames.reduce((m, g) => Math.max(m, g.detailFetchedAt ?? 0), 0);
+  if (maxStdFetchedAt > 0) await setSyncState(CURSOR_KEY_STANDARD, maxStdFetchedAt);
+
+  return { ok: true, counts: totalCounts };
 }
