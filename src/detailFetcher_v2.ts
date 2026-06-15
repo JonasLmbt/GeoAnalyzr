@@ -763,7 +763,8 @@ export function getMissingFields(game: GameRow): string[] {
     // Only require selfRatingBefore on the first fetch; if the game has already been
     // fetched and the API still didn't return it, accept that as the final state.
     if (game.isRated && game.selfRatingBefore === undefined && game.detailFetchedAt === undefined) m.push("selfRatingBefore");
-    if (game.selfName === undefined) m.push("selfName");
+    // teamduels API responses don't include nick on team players, so only require selfName for duels
+    if (game.modeFamily === "duels" && game.selfName === undefined) m.push("selfName");
     if (game.selfCountry === undefined) m.push("selfCountry");
   }
   if (game.modeFamily === "teamduels") {
