@@ -1,4 +1,4 @@
-const stableVersion = "3.0.1";
-const devVersion = "3.0.2-dev";
+const stableVersion = "3.0.2";
+const devVersion = "3.0.3-dev";
 
 module.exports = { stableVersion, devVersion };

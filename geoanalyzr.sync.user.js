@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      3.0.1
+// @version      3.0.2
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -12097,7 +12097,6 @@ ${shapes}`.trim();
       if (game.selfVictory === void 0) m.push("selfVictory");
       if (game.oppId === void 0) m.push("oppId");
       if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
-      if (game.modeFamily === "duels" && game.selfName === void 0) m.push("selfName");
       if (game.selfCountry === void 0) m.push("selfCountry");
     }
     if (game.modeFamily === "teamduels") {
