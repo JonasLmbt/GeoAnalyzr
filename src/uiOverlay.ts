@@ -664,12 +664,12 @@ export function createUIOverlay(): UIOverlay {
             }
           },
         });
+        // Always sync to v3 DB (non-fatal, independent of v2 result)
+        try { await syncToServerV3({ gameIds: opts.gameIds }); } catch { /* non-fatal */ }
+        try { await syncClassicToServerV3(); } catch { /* non-fatal */ }
         if (v2res.ok) {
           // Also sync classic games (non-fatal)
           syncClassicToServer().catch(() => {});
-          // Sync to v3 DB (non-fatal)
-          try { await syncToServerV3({ gameIds: opts.gameIds }); } catch { /* non-fatal */ }
-          try { await syncClassicToServerV3(); } catch { /* non-fatal */ }
           if (v2res.gamesUploaded === 0) {
             setMsg(`Server already up to date — ${v2res.gamesSkipped} games skipped`);
           } else {

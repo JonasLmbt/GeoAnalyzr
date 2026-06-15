@@ -13397,17 +13397,17 @@ ${shapes}`.trim();
               }
             }
           });
+          try {
+            await syncToServerV3({ gameIds: opts.gameIds });
+          } catch {
+          }
+          try {
+            await syncClassicToServerV3();
+          } catch {
+          }
           if (v2res.ok) {
             syncClassicToServer().catch(() => {
             });
-            try {
-              await syncToServerV3({ gameIds: opts.gameIds });
-            } catch {
-            }
-            try {
-              await syncClassicToServerV3();
-            } catch {
-            }
             if (v2res.gamesUploaded === 0) {
               setMsg(`Server already up to date \u2014 ${v2res.gamesSkipped} games skipped`);
             } else {
