@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.4
+// @version      3.0.5
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -9267,9 +9267,9 @@ ${shapes}`.trim();
     if (!ts) return void 0;
     return new Date(ts).toISOString().slice(11, 23);
   }
-  function classifyFamily(game2) {
-    if (game2.modeFamily) return game2.modeFamily;
-    const m = String(game2.gameMode || game2.mode || "").toLowerCase();
+  function classifyFamily(game) {
+    if (game.modeFamily) return game.modeFamily;
+    const m = String(game.gameMode || game.mode || "").toLowerCase();
     if (m.includes("team")) return "teamduels";
     if (m.includes("duel")) return "duels";
     return "other";
@@ -9439,9 +9439,9 @@ ${shapes}`.trim();
     }
     return void 0;
   }
-  async function fetchDetailJson(game2) {
-    const family = classifyFamily(game2);
-    const endpoints = buildDetailCandidates(game2.gameId, family);
+  async function fetchDetailJson(game) {
+    const family = classifyFamily(game);
+    const endpoints = buildDetailCandidates(game.gameId, family);
     const failures = [];
     for (const endpoint of endpoints) {
       try {
@@ -9455,7 +9455,7 @@ ${shapes}`.trim();
         failures.push(`${endpoint} -> ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    throw new Error(`No endpoint worked for ${game2.gameId}: ${failures.join(" | ")}`);
+    throw new Error(`No endpoint worked for ${game.gameId}: ${failures.join(" | ")}`);
   }
   function healthByRound(team) {
     const map = /* @__PURE__ */ new Map();
@@ -9536,11 +9536,11 @@ ${shapes}`.trim();
     if (!nums.length) return void 0;
     return nums.reduce((a, b3) => a + b3, 0) / nums.length;
   }
-  async function normalizeGameAndRounds(game2, gameData, endpoint, ownPlayerId, existingByRoundNumber) {
+  async function normalizeGameAndRounds(game, gameData, endpoint, ownPlayerId, existingByRoundNumber) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
     const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
     const startTime = toTs(rounds[0]?.startTime);
-    const family = classifyFamily(game2);
+    const family = classifyFamily(game);
     const winningTeamId = String(gameData?.result?.winningTeamId || "");
     const movementType = normalizeMovementType2(detectSimpleGameMode(pickMovementOptions(gameData)));
     const damageMultiplierRounds = rounds.filter((r) => (asNum(r?.damageMultiplier) || 1) > 1).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
@@ -9553,11 +9553,11 @@ ${shapes}`.trim();
     if (typeof mapName !== "string" || !mapName.trim()) missingFields.push("mapName");
     if (isRated === void 0) missingFields.push("isRated");
     const commonBase = {
-      gameId: game2.gameId,
+      gameId: game.gameId,
       status: "ok",
       fetchedAt: Date.now(),
       endpoint,
-      gameMode: game2.gameMode || game2.mode,
+      gameMode: game.gameMode || game.mode,
       modeFamily: family,
       movementType,
       mapName: typeof mapName === "string" ? mapName : void 0,
@@ -9575,7 +9575,7 @@ ${shapes}`.trim();
       const p1IdDebug = readPlayerId(players[0]?.player);
       if (p1IdDebug !== ownPlayerId) {
         console.warn("[GeoAnalyzr] TeamDuel ordering mismatch: p1 is not own player.", {
-          gameId: game2.gameId,
+          gameId: game.gameId,
           ownPlayerId,
           p1Id: p1IdDebug,
           orderedIds: players.map((x) => x?.player?.playerId)
@@ -9753,8 +9753,8 @@ ${shapes}`.trim();
       const rrSelf = teamOneRoundResults.get(rn);
       const rrOpp = teamTwoRoundResults.get(rn);
       const roundBase = {
-        id: roundId(game2.gameId, rn),
-        gameId: game2.gameId,
+        id: roundId(game.gameId, rn),
+        gameId: game.gameId,
         roundNumber: rn,
         mapName: commonBase.mapName,
         mapSlug: commonBase.mapSlug,
@@ -9926,25 +9926,25 @@ ${shapes}`.trim();
     const markMissing = [];
     let skipped = 0;
     for (let i = 0; i < candidates.length; i++) {
-      const game2 = candidates[i];
+      const game = candidates[i];
       const detail = existing[i];
       if (!detail) {
-        markMissing.push({ gameId: game2.gameId, status: "missing", modeFamily: classifyFamily(game2), gameMode: game2.gameMode || game2.mode });
-        queue.push(game2);
+        markMissing.push({ gameId: game.gameId, status: "missing", modeFamily: classifyFamily(game), gameMode: game.gameMode || game.mode });
+        queue.push(game);
         continue;
       }
       if (detail.status === "ok") {
         if (verifyCompleteness && roundCountByGame) {
-          const have = roundCountByGame.get(game2.gameId) || 0;
+          const have = roundCountByGame.get(game.gameId) || 0;
           const expected = detail.totalRounds;
           const incomplete = have === 0 || typeof expected === "number" && expected > 0 && have < expected;
           if (incomplete) {
-            queue.push(game2);
+            queue.push(game);
             continue;
           }
         }
         if (shouldRefetchForEnrichment(detail)) {
-          queue.push(game2);
+          queue.push(game);
           continue;
         }
         skipped++;
@@ -9953,12 +9953,12 @@ ${shapes}`.trim();
       if (detail.status === "missing") {
         const lastTry = detail.fetchedAt || 0;
         const shouldRetry = !lastTry || Date.now() - lastTry >= missingRetryAfterMs;
-        if (shouldRetry) queue.push(game2);
+        if (shouldRetry) queue.push(game);
         else skipped++;
         continue;
       }
       if (retryErrors && detail.status === "error") {
-        queue.push(game2);
+        queue.push(game);
         continue;
       }
       skipped++;
@@ -9995,13 +9995,13 @@ ${shapes}`.trim();
     const startedAt = Date.now();
     async function worker() {
       while (queue.length > 0) {
-        const game2 = queue.shift();
-        if (!game2) return;
+        const game = queue.shift();
+        if (!game) return;
         try {
-          const { data, endpoint } = await fetchDetailJson(game2);
-          const prev = existingByGameAndRound.get(game2.gameId);
-          const normalized = await normalizeGameAndRounds(game2, data, endpoint, ownPlayerId, prev);
-          const agg = computeGameAggFromRounds(game2.gameId, normalized.rounds);
+          const { data, endpoint } = await fetchDetailJson(game);
+          const prev = existingByGameAndRound.get(game.gameId);
+          const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, prev);
+          const agg = computeGameAggFromRounds(game.gameId, normalized.rounds);
           await db.transaction("rw", db.details, db.rounds, db.gameAgg, async () => {
             await db.details.put(normalized.detail);
             await db.rounds.bulkPut(normalized.rounds);
@@ -10013,17 +10013,17 @@ ${shapes}`.trim();
           const message = se.message;
           const likelyUnavailable = /HTTP (403|404|410)\b/.test(message);
           await db.details.put({
-            gameId: game2.gameId,
+            gameId: game.gameId,
             status: likelyUnavailable ? "missing" : "error",
             fetchedAt: Date.now(),
-            gameMode: game2.gameMode || game2.mode,
-            modeFamily: classifyFamily(game2),
+            gameMode: game.gameMode || game.mode,
+            modeFamily: classifyFamily(game),
             error: message
           });
           if (!likelyUnavailable) fail++;
           logEvent(
             "detail_fetch_error",
-            { gameId: game2.gameId, status: likelyUnavailable ? "missing" : "error", error: se, gameMode: game2.gameMode || game2.mode, modeFamily: classifyFamily(game2), reason: opts.reason || "" },
+            { gameId: game.gameId, status: likelyUnavailable ? "missing" : "error", error: se, gameMode: game.gameMode || game.mode, modeFamily: classifyFamily(game), reason: opts.reason || "" },
             likelyUnavailable ? "warn" : "error"
           );
         } finally {
@@ -12291,7 +12291,7 @@ ${shapes}`.trim();
     }
     return result;
   }
-  function extractGameUpdates(gameData, modeFamily, selfId) {
+  function extractGameUpdates(gameData, modeFamily) {
     const isDuelType = modeFamily === "duels" || modeFamily === "teamduels";
     const mapName = typeof gameData?.options?.map?.name === "string" ? gameData.options.map.name : typeof gameData?.map?.name === "string" ? gameData.map.name : void 0;
     const mapSlug = typeof gameData?.options?.map?.slug === "string" ? gameData.options.map.slug : typeof gameData?.map?.slug === "string" ? gameData.map.slug : void 0;
@@ -12331,7 +12331,7 @@ ${shapes}`.trim();
           winnerTeamIdx = h0 >= h1 ? 0 : 1;
         }
       }
-      const isDuels = game.modeFamily === "duels";
+      const isDuels = modeFamily === "duels";
       const mt = movementType;
       const p1Gm = gm[0];
       const oppGm = isDuels ? gm[1] : gm[2];
@@ -12402,28 +12402,28 @@ ${shapes}`.trim();
     }
     return updates;
   }
-  function getMissingFields(game2) {
+  function getMissingFields(game) {
     const m = [];
-    if (game2.detailFetchedAt === void 0) m.push("never fetched");
-    if (game2.totalRounds === void 0) m.push("totalRounds");
-    if (game2.movementType === void 0) m.push("movementType");
-    const isDuelType = game2.modeFamily === "duels" || game2.modeFamily === "teamduels";
+    if (game.detailFetchedAt === void 0) m.push("never fetched");
+    if (game.totalRounds === void 0) m.push("totalRounds");
+    if (game.movementType === void 0) m.push("movementType");
+    const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
     if (isDuelType) {
-      if (game2.winnerTeamIdx === void 0) m.push("winnerTeamIdx");
-      if (game2.p1Id === void 0) m.push("p1Id");
-      if (game2.p2Id === void 0) m.push("p2Id");
-      if (game2.isRated && game2.p1RatingBefore === void 0 && game2.detailFetchedAt === void 0) m.push("p1RatingBefore");
+      if (game.winnerTeamIdx === void 0) m.push("winnerTeamIdx");
+      if (game.p1Id === void 0) m.push("p1Id");
+      if (game.p2Id === void 0) m.push("p2Id");
+      if (game.isRated && game.p1RatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("p1RatingBefore");
     }
-    if (game2.modeFamily === "teamduels") {
-      if (game2.p3Id === void 0) m.push("p3Id");
+    if (game.modeFamily === "teamduels") {
+      if (game.p3Id === void 0) m.push("p3Id");
     }
     return m;
   }
-  function isDetailIncomplete(game2) {
-    return getMissingFields(game2).length > 0;
+  function isDetailIncomplete(game) {
+    return getMissingFields(game).length > 0;
   }
-  function needsRenormalize(game2) {
-    return (game2.normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION;
+  function needsRenormalize(game) {
+    return (game.normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION;
   }
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
@@ -12458,26 +12458,26 @@ ${shapes}`.trim();
     for (let i = 0; i < games.length; i += concurrency) {
       const batch = games.slice(i, i + concurrency);
       await Promise.all(
-        batch.map(async (game2) => {
-          const missing = getMissingFields(game2);
+        batch.map(async (game) => {
+          const missing = getMissingFields(game);
           const gameIsIncomplete = missing.length > 0;
-          const gameNeedsRenorm = needsRenormalize(game2);
-          opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "checking" });
+          const gameNeedsRenorm = needsRenormalize(game);
+          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
           const attemptedAt = Date.now();
-          const cached = await dbV2.rawGameDetails.get(game2.gameId);
+          const cached = await dbV2.rawGameDetails.get(game.gameId);
           if (cached?.json) {
             try {
-              const updates = extractGameUpdates(cached.json, game2.modeFamily);
-              const hypothetical = { ...game2, ...updates };
+              const updates = extractGameUpdates(cached.json, game.modeFamily);
+              const hypothetical = { ...game, ...updates };
               if (getMissingFields(hypothetical).length === 0 || gameNeedsRenorm) {
-                await dbV2.games.update(game2.gameId, updates);
-                const isDuelType = game2.modeFamily === "duels" || game2.modeFamily === "teamduels";
+                await dbV2.games.update(game.gameId, updates);
+                const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
                 if (isDuelType) {
-                  const rounds = await normalizeDuelsRounds(game2.gameId, cached.json);
+                  const rounds = await normalizeDuelsRounds(game.gameId, cached.json);
                   if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
                 }
-                opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "ok", source: "cache" });
-                updatedGameIds.push(game2.gameId);
+                opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
+                updatedGameIds.push(game.gameId);
                 succeeded++;
                 return;
               }
@@ -12485,20 +12485,20 @@ ${shapes}`.trim();
             }
           }
           if (gameNeedsRenorm && !gameIsIncomplete) {
-            await dbV2.games.update(game2.gameId, { normalizeVersion: CURRENT_NORMALIZE_VERSION });
-            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "ok" });
+            await dbV2.games.update(game.gameId, { normalizeVersion: CURRENT_NORMALIZE_VERSION });
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
             succeeded++;
-            updatedGameIds.push(game2.gameId);
+            updatedGameIds.push(game.gameId);
             return;
           }
-          const endpoints = buildEndpoints(game2.gameId, game2.modeFamily);
-          const result = await tryFetch(game2.gameId, endpoints);
+          const endpoints = buildEndpoints(game.gameId, game.modeFamily);
+          const result = await tryFetch(game.gameId, endpoints);
           if (!result) {
             failed++;
-            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "failed", error: "All endpoints 404" });
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: "All endpoints 404" });
             await dbV2.detailFetchLog.put({
-              gameId: game2.gameId,
-              attempts: ((await dbV2.detailFetchLog.get(game2.gameId))?.attempts ?? 0) + 1,
+              gameId: game.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "not_found",
               lastError: "All endpoints failed or returned 404"
@@ -12508,42 +12508,42 @@ ${shapes}`.trim();
           const { data, endpoint } = result;
           try {
             await dbV2.rawGameDetails.put({
-              gameId: game2.gameId,
+              gameId: game.gameId,
               fetchedAt: attemptedAt,
               endpoint,
               json: data
             });
-            const isDuelType = game2.modeFamily === "duels" || game2.modeFamily === "teamduels";
-            const rounds = isDuelType ? await normalizeDuelsRounds(game2.gameId, data) : await normalizeSoloRounds(game2.gameId, data);
+            const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+            const rounds = isDuelType ? await normalizeDuelsRounds(game.gameId, data) : await normalizeSoloRounds(game.gameId, data);
             if (rounds.length > 0) {
               await dbV2.rounds.bulkPut(rounds);
             }
-            if (game2.modeFamily === "standard") {
+            if (game.modeFamily === "standard") {
               const selfId = opts.currentPlayerId ?? readPlayerId2(data?.player) ?? "";
-              const classicGame = normalizeClassicGame(game2.gameId, selfId, data);
-              const classicRounds = await normalizeClassicRounds(game2.gameId, data);
+              const classicGame = normalizeClassicGame(game.gameId, selfId, data);
+              const classicRounds = await normalizeClassicRounds(game.gameId, data);
               await dbV2.classicGames.put(classicGame);
               if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
             }
-            const updates = extractGameUpdates(data, game2.modeFamily);
-            await dbV2.games.update(game2.gameId, updates);
+            const updates = extractGameUpdates(data, game.modeFamily);
+            await dbV2.games.update(game.gameId, updates);
             await dbV2.detailFetchLog.put({
-              gameId: game2.gameId,
-              attempts: ((await dbV2.detailFetchLog.get(game2.gameId))?.attempts ?? 0) + 1,
+              gameId: game.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "ok",
               endpoint
             });
-            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "ok", source: "api" });
-            updatedGameIds.push(game2.gameId);
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "api" });
+            updatedGameIds.push(game.gameId);
             succeeded++;
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
-            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "failed", error: errMsg });
+            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
             failed++;
             await dbV2.detailFetchLog.put({
-              gameId: game2.gameId,
-              attempts: ((await dbV2.detailFetchLog.get(game2.gameId))?.attempts ?? 0) + 1,
+              gameId: game.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "error",
               lastError: errMsg,

@@ -544,7 +544,6 @@ async function normalizeClassicRounds(gameId: string, gameData: any): Promise<Cl
 function extractGameUpdates(
   gameData: any,
   modeFamily: ModeFamily,
-  selfId?: string
 ): Partial<GameRow> {
   const isDuelType = modeFamily === "duels" || modeFamily === "teamduels";
   const mapName: string | undefined =
@@ -601,7 +600,7 @@ function extractGameUpdates(
 
     // Movement ratings for p1 (team[0].players[0]) and p3/p2 (opponent)
     // For duels: p1=players[0], opponent=players[1]. For teamduels: p1=players[0], opp=players[2].
-    const isDuels = game.modeFamily === "duels";
+    const isDuels = modeFamily === "duels";
     const mt = movementType;
     const p1Gm = gm[0];
     const oppGm = isDuels ? gm[1] : gm[2]; // opponent slot differs by mode
