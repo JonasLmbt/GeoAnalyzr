@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      3.0.5
+// @version      3.0.6
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -12442,7 +12442,11 @@ ${shapes}`.trim();
       games = all.filter((g) => {
         if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
         if (isDetailIncomplete(g)) {
-          if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
+          const attempts = attemptsByGame.get(g.gameId) ?? 0;
+          if (attempts >= maxRetries) {
+            if (g.modeFamily === "other" || g.modeFamily === "streak") return false;
+            if (!opts.force) return false;
+          }
           return true;
         }
         if (needsRenormalize(g)) return true;

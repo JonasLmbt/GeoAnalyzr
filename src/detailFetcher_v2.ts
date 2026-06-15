@@ -752,8 +752,13 @@ export async function fetchDetails(opts: {
     games = all.filter((g) => {
       if (cutoffMs != null && (g.playedAt ?? 0) < cutoffMs) return false;
       if (isDetailIncomplete(g)) {
-        // Respect maxRetries for normal API fetches to avoid hammering the API.
-        if (!opts.force && (attemptsByGame.get(g.gameId) ?? 0) >= maxRetries) return false;
+        const attempts = attemptsByGame.get(g.gameId) ?? 0;
+        if (attempts >= maxRetries) {
+          // "other" and "streak" games have no public API endpoint — skip them
+          // permanently even on force to avoid wasting time every full sync.
+          if (g.modeFamily === "other" || g.modeFamily === "streak") return false;
+          if (!opts.force) return false;
+        }
         return true;
       }
       // Re-normalization bypasses maxRetries: it reads only from the local raw
