@@ -150,64 +150,72 @@ export async function syncV3FromDb2(opts: {
   for (const g of games) {
     const fat = g.detailFetchedAt;
     if (g.modeFamily === "duels") {
-      addPlayer(g.selfId, g.selfName, g.selfCountry, fat);
-      addPlayer(g.oppId, g.oppName, g.oppCountry, fat);
+      addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
+      addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
+
+      // winnerTeamIdx: 0=team[0](p1) won, 1=team[1](p2) won
+      const winnerPlayerId = g.winnerTeamIdx === 0 ? (g.p1Id ?? null)
+                           : g.winnerTeamIdx === 1 ? (g.p2Id ?? null)
+                           : null;
 
       duelGames.push({
         gameId: g.gameId,
-        p1_playerId: g.selfId ?? null,
-        p2_playerId: g.oppId ?? null,
+        p1_playerId: g.p1Id ?? null,
+        p2_playerId: g.p2Id ?? null,
         mapSlug: g.mapSlug ?? null,
         mapName: g.mapName ?? null,
         movementType: g.movementType ?? null,
         isRated: g.isRated != null ? (g.isRated ? 1 : 0) : null,
         totalRounds: g.totalRounds ?? null,
-        winnerPlayerId: g.selfVictory === true ? (g.selfId ?? null) : g.selfVictory === false ? (g.oppId ?? null) : null,
-        p1_ratingAfter: n(g.selfRatingAfter),
-        p1_ratingDelta: rDelta(g.selfRatingAfter, g.selfRatingBefore),
-        p1_movingRatingAfter: n(g.selfMovingRatingAfter),
-        p1_movingRatingDelta: rDelta(g.selfMovingRatingAfter, g.selfMovingRatingBefore),
-        p1_noMoveRatingAfter: n(g.selfNoMoveRatingAfter),
-        p1_noMoveRatingDelta: rDelta(g.selfNoMoveRatingAfter, g.selfNoMoveRatingBefore),
-        p1_nmpzRatingAfter: n(g.selfNmpzRatingAfter),
-        p1_nmpzRatingDelta: rDelta(g.selfNmpzRatingAfter, g.selfNmpzRatingBefore),
-        p2_ratingAfter: n(g.oppRatingAfter),
-        p2_ratingDelta: rDelta(g.oppRatingAfter, g.oppRatingBefore),
-        p2_movingRatingAfter: n(g.oppMovingRatingAfter),
-        p2_movingRatingDelta: rDelta(g.oppMovingRatingAfter, g.oppMovingRatingBefore),
-        p2_noMoveRatingAfter: n(g.oppNoMoveRatingAfter),
-        p2_noMoveRatingDelta: rDelta(g.oppNoMoveRatingAfter, g.oppNoMoveRatingBefore),
-        p2_nmpzRatingAfter: n(g.oppNmpzRatingAfter),
-        p2_nmpzRatingDelta: rDelta(g.oppNmpzRatingAfter, g.oppNmpzRatingBefore),
+        winnerPlayerId,
+        p1_ratingAfter: n(g.p1RatingAfter),
+        p1_ratingDelta: rDelta(g.p1RatingAfter, g.p1RatingBefore),
+        p1_movingRatingAfter: n(g.p1MovingRatingAfter),
+        p1_movingRatingDelta: rDelta(g.p1MovingRatingAfter, g.p1MovingRatingBefore),
+        p1_noMoveRatingAfter: n(g.p1NoMoveRatingAfter),
+        p1_noMoveRatingDelta: rDelta(g.p1NoMoveRatingAfter, g.p1NoMoveRatingBefore),
+        p1_nmpzRatingAfter: n(g.p1NmpzRatingAfter),
+        p1_nmpzRatingDelta: rDelta(g.p1NmpzRatingAfter, g.p1NmpzRatingBefore),
+        p2_ratingAfter: n(g.p2RatingAfter),
+        p2_ratingDelta: rDelta(g.p2RatingAfter, g.p2RatingBefore),
+        p2_movingRatingAfter: n(g.p2MovingRatingAfter),
+        p2_movingRatingDelta: rDelta(g.p2MovingRatingAfter, g.p2MovingRatingBefore),
+        p2_noMoveRatingAfter: n(g.p2NoMoveRatingAfter),
+        p2_noMoveRatingDelta: rDelta(g.p2NoMoveRatingAfter, g.p2NoMoveRatingBefore),
+        p2_nmpzRatingAfter: n(g.p2NmpzRatingAfter),
+        p2_nmpzRatingDelta: rDelta(g.p2NmpzRatingAfter, g.p2NmpzRatingBefore),
         playedAt: g.playedAt ?? null,
       });
       duelGameIds.add(g.gameId);
     } else if (g.modeFamily === "teamduels") {
-      addPlayer(g.selfId, g.selfName, g.selfCountry, fat);
-      addPlayer(g.mateId, g.mateName, g.mateCountry, fat);
-      addPlayer(g.oppId, g.oppName, g.oppCountry, fat);
-      addPlayer(g.oppMateId, g.oppMateName, g.oppMateCountry, fat);
+      addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
+      addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
+      addPlayer(g.p3Id, g.p3Name, g.p3Country, fat);
+      addPlayer(g.p4Id, g.p4Name, g.p4Country, fat);
+
+      // winnerTeamIdx: 0=team[0](p1+p2) won → "blue"; 1=team[1](p3+p4) won → "red"
+      const winnerTeam = g.winnerTeamIdx === 0 ? "blue" : g.winnerTeamIdx === 1 ? "red" : null;
 
       tdGames.push({
         gameId: g.gameId,
-        p1_playerId: g.selfId ?? null,
-        p2_playerId: g.mateId ?? null,
-        p3_playerId: g.oppId ?? null,
-        p4_playerId: g.oppMateId ?? null,
+        p1_playerId: g.p1Id ?? null,
+        p2_playerId: g.p2Id ?? null,
+        p3_playerId: g.p3Id ?? null,
+        p4_playerId: g.p4Id ?? null,
         mapSlug: g.mapSlug ?? null,
         mapName: g.mapName ?? null,
         movementType: g.movementType ?? null,
         isRated: g.isRated != null ? (g.isRated ? 1 : 0) : null,
         totalRounds: g.totalRounds ?? null,
-        winnerTeam: g.selfVictory === true ? "blue" : g.selfVictory === false ? "red" : null,
-        p1_ratingAfter: n(g.selfRatingAfter),
-        p1_ratingDelta: rDelta(g.selfRatingAfter, g.selfRatingBefore),
-        p2_ratingAfter: n(g.mateRatingAfter),
-        p2_ratingDelta: rDelta(g.mateRatingAfter, g.mateRatingBefore),
-        p3_ratingAfter: n(g.oppRatingAfter),
-        p3_ratingDelta: rDelta(g.oppRatingAfter, g.oppRatingBefore),
-        p4_ratingAfter: n(g.oppMateRatingAfter),
-        p4_ratingDelta: rDelta(g.oppMateRatingAfter, g.oppMateRatingBefore),
+        winnerTeam,
+        p1_ratingAfter: n(g.p1RatingAfter),
+        p1_ratingDelta: rDelta(g.p1RatingAfter, g.p1RatingBefore),
+        p2_ratingAfter: n(g.p2RatingAfter),
+        p2_ratingDelta: rDelta(g.p2RatingAfter, g.p2RatingBefore),
+        p3_ratingAfter: n(g.p3RatingAfter),
+        p3_ratingDelta: rDelta(g.p3RatingAfter, g.p3RatingBefore),
+        p4_ratingAfter: n(g.p4RatingAfter),
+        p4_ratingDelta: rDelta(g.p4RatingAfter, g.p4RatingBefore),
         playedAt: g.playedAt ?? null,
       });
       tdGameIds.add(g.gameId);
@@ -231,21 +239,21 @@ export async function syncV3FromDb2(opts: {
         durationSec: n(r.durationSec),
         isHealingRound: null,
         damageMultiplier: n(r.damageMultiplier),
-        p1_lat: n(r.selfLat),
-        p1_lng: n(r.selfLng),
-        p1_country: uc(r.selfCountry),
-        p1_score: n(r.selfScore),
-        p1_distanceKm: n(r.selfDistance),
-        p1_timeSec: n(r.selfTimeSec),
-        p1_timedOut: r.selfTimedOut ? 1 : 0,
-        p1_healthAfter: n(r.selfHealthAfter),
+        p1_lat: n(r.p1Lat),
+        p1_lng: n(r.p1Lng),
+        p1_country: uc(r.p1Country),
+        p1_score: n(r.p1Score),
+        p1_distanceKm: n(r.p1Distance),
+        p1_timeSec: n(r.p1TimeSec),
+        p1_timedOut: r.p1TimedOut ? 1 : 0,
+        p1_healthAfter: n(r.team0HealthAfter),
         p1_isBestGuess: 0,
-        p2_lat: n(r.oppLat),
-        p2_lng: n(r.oppLng),
-        p2_country: uc(r.oppCountry),
-        p2_score: n(r.oppScore),
-        p2_distanceKm: n(r.oppDistance),
-        p2_healthAfter: n(r.oppHealthAfter),
+        p2_lat: n(r.p2Lat),
+        p2_lng: n(r.p2Lng),
+        p2_country: uc(r.p2Country),
+        p2_score: n(r.p2Score),
+        p2_distanceKm: n(r.p2Distance),
+        p2_healthAfter: n(r.team1HealthAfter),
         p2_isBestGuess: 0,
       });
     } else if (tdGameIds.has(r.gameId)) {
@@ -260,29 +268,32 @@ export async function syncV3FromDb2(opts: {
         durationSec: n(r.durationSec),
         isHealingRound: r.isHealing ? 1 : null,
         damageMultiplier: n(r.damageMultiplier),
-        p1_lat: n(r.selfLat),
-        p1_lng: n(r.selfLng),
-        p1_country: uc(r.selfCountry),
-        p1_score: n(r.selfScore),
-        p1_distanceKm: n(r.selfDistance),
-        p1_isBestGuess: r.selfIsBetterGuess ? 1 : 0,
-        p2_lat: n(r.mateLat),
-        p2_lng: n(r.mateLng),
-        p2_country: uc(r.mateCountry),
-        p2_score: n(r.mateScore),
-        p2_distanceKm: n(r.mateDistance),
-        p3_lat: n(r.oppLat),
-        p3_lng: n(r.oppLng),
-        p3_country: uc(r.oppCountry),
-        p3_score: n(r.oppScore),
-        p3_distanceKm: n(r.oppDistance),
-        p4_lat: n(r.oppMateLat),
-        p4_lng: n(r.oppMateLng),
-        p4_country: uc(r.oppMateCountry),
-        p4_score: n(r.oppMateScore),
-        p4_distanceKm: n(r.oppMateDistance),
-        blue_healthAfter: n(r.selfHealthAfter),
-        red_healthAfter: n(r.oppHealthAfter),
+        p1_lat: n(r.p1Lat),
+        p1_lng: n(r.p1Lng),
+        p1_country: uc(r.p1Country),
+        p1_score: n(r.p1Score),
+        p1_distanceKm: n(r.p1Distance),
+        p1_isBestGuess: r.p1IsBetterGuess ? 1 : 0,
+        p2_lat: n(r.p2Lat),
+        p2_lng: n(r.p2Lng),
+        p2_country: uc(r.p2Country),
+        p2_score: n(r.p2Score),
+        p2_distanceKm: n(r.p2Distance),
+        p2_isBestGuess: r.p2IsBetterGuess ? 1 : 0,
+        p3_lat: n(r.p3Lat),
+        p3_lng: n(r.p3Lng),
+        p3_country: uc(r.p3Country),
+        p3_score: n(r.p3Score),
+        p3_distanceKm: n(r.p3Distance),
+        p3_isBestGuess: r.p3IsBetterGuess ? 1 : 0,
+        p4_lat: n(r.p4Lat),
+        p4_lng: n(r.p4Lng),
+        p4_country: uc(r.p4Country),
+        p4_score: n(r.p4Score),
+        p4_distanceKm: n(r.p4Distance),
+        p4_isBestGuess: r.p4IsBetterGuess ? 1 : 0,
+        blue_healthAfter: n(r.team0HealthAfter),
+        red_healthAfter: n(r.team1HealthAfter),
       });
     }
   }

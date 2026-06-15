@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.3
+// @version      3.0.4
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -9267,9 +9267,9 @@ ${shapes}`.trim();
     if (!ts) return void 0;
     return new Date(ts).toISOString().slice(11, 23);
   }
-  function classifyFamily(game) {
-    if (game.modeFamily) return game.modeFamily;
-    const m = String(game.gameMode || game.mode || "").toLowerCase();
+  function classifyFamily(game2) {
+    if (game2.modeFamily) return game2.modeFamily;
+    const m = String(game2.gameMode || game2.mode || "").toLowerCase();
     if (m.includes("team")) return "teamduels";
     if (m.includes("duel")) return "duels";
     return "other";
@@ -9439,9 +9439,9 @@ ${shapes}`.trim();
     }
     return void 0;
   }
-  async function fetchDetailJson(game) {
-    const family = classifyFamily(game);
-    const endpoints = buildDetailCandidates(game.gameId, family);
+  async function fetchDetailJson(game2) {
+    const family = classifyFamily(game2);
+    const endpoints = buildDetailCandidates(game2.gameId, family);
     const failures = [];
     for (const endpoint of endpoints) {
       try {
@@ -9455,7 +9455,7 @@ ${shapes}`.trim();
         failures.push(`${endpoint} -> ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    throw new Error(`No endpoint worked for ${game.gameId}: ${failures.join(" | ")}`);
+    throw new Error(`No endpoint worked for ${game2.gameId}: ${failures.join(" | ")}`);
   }
   function healthByRound(team) {
     const map = /* @__PURE__ */ new Map();
@@ -9536,11 +9536,11 @@ ${shapes}`.trim();
     if (!nums.length) return void 0;
     return nums.reduce((a, b3) => a + b3, 0) / nums.length;
   }
-  async function normalizeGameAndRounds(game, gameData, endpoint, ownPlayerId, existingByRoundNumber) {
+  async function normalizeGameAndRounds(game2, gameData, endpoint, ownPlayerId, existingByRoundNumber) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
     const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
     const startTime = toTs(rounds[0]?.startTime);
-    const family = classifyFamily(game);
+    const family = classifyFamily(game2);
     const winningTeamId = String(gameData?.result?.winningTeamId || "");
     const movementType = normalizeMovementType2(detectSimpleGameMode(pickMovementOptions(gameData)));
     const damageMultiplierRounds = rounds.filter((r) => (asNum(r?.damageMultiplier) || 1) > 1).map((r) => asNum(r?.roundNumber)).filter((v) => v !== void 0);
@@ -9553,11 +9553,11 @@ ${shapes}`.trim();
     if (typeof mapName !== "string" || !mapName.trim()) missingFields.push("mapName");
     if (isRated === void 0) missingFields.push("isRated");
     const commonBase = {
-      gameId: game.gameId,
+      gameId: game2.gameId,
       status: "ok",
       fetchedAt: Date.now(),
       endpoint,
-      gameMode: game.gameMode || game.mode,
+      gameMode: game2.gameMode || game2.mode,
       modeFamily: family,
       movementType,
       mapName: typeof mapName === "string" ? mapName : void 0,
@@ -9575,7 +9575,7 @@ ${shapes}`.trim();
       const p1IdDebug = readPlayerId(players[0]?.player);
       if (p1IdDebug !== ownPlayerId) {
         console.warn("[GeoAnalyzr] TeamDuel ordering mismatch: p1 is not own player.", {
-          gameId: game.gameId,
+          gameId: game2.gameId,
           ownPlayerId,
           p1Id: p1IdDebug,
           orderedIds: players.map((x) => x?.player?.playerId)
@@ -9753,8 +9753,8 @@ ${shapes}`.trim();
       const rrSelf = teamOneRoundResults.get(rn);
       const rrOpp = teamTwoRoundResults.get(rn);
       const roundBase = {
-        id: roundId(game.gameId, rn),
-        gameId: game.gameId,
+        id: roundId(game2.gameId, rn),
+        gameId: game2.gameId,
         roundNumber: rn,
         mapName: commonBase.mapName,
         mapSlug: commonBase.mapSlug,
@@ -9926,25 +9926,25 @@ ${shapes}`.trim();
     const markMissing = [];
     let skipped = 0;
     for (let i = 0; i < candidates.length; i++) {
-      const game = candidates[i];
+      const game2 = candidates[i];
       const detail = existing[i];
       if (!detail) {
-        markMissing.push({ gameId: game.gameId, status: "missing", modeFamily: classifyFamily(game), gameMode: game.gameMode || game.mode });
-        queue.push(game);
+        markMissing.push({ gameId: game2.gameId, status: "missing", modeFamily: classifyFamily(game2), gameMode: game2.gameMode || game2.mode });
+        queue.push(game2);
         continue;
       }
       if (detail.status === "ok") {
         if (verifyCompleteness && roundCountByGame) {
-          const have = roundCountByGame.get(game.gameId) || 0;
+          const have = roundCountByGame.get(game2.gameId) || 0;
           const expected = detail.totalRounds;
           const incomplete = have === 0 || typeof expected === "number" && expected > 0 && have < expected;
           if (incomplete) {
-            queue.push(game);
+            queue.push(game2);
             continue;
           }
         }
         if (shouldRefetchForEnrichment(detail)) {
-          queue.push(game);
+          queue.push(game2);
           continue;
         }
         skipped++;
@@ -9953,12 +9953,12 @@ ${shapes}`.trim();
       if (detail.status === "missing") {
         const lastTry = detail.fetchedAt || 0;
         const shouldRetry = !lastTry || Date.now() - lastTry >= missingRetryAfterMs;
-        if (shouldRetry) queue.push(game);
+        if (shouldRetry) queue.push(game2);
         else skipped++;
         continue;
       }
       if (retryErrors && detail.status === "error") {
-        queue.push(game);
+        queue.push(game2);
         continue;
       }
       skipped++;
@@ -9995,13 +9995,13 @@ ${shapes}`.trim();
     const startedAt = Date.now();
     async function worker() {
       while (queue.length > 0) {
-        const game = queue.shift();
-        if (!game) return;
+        const game2 = queue.shift();
+        if (!game2) return;
         try {
-          const { data, endpoint } = await fetchDetailJson(game);
-          const prev = existingByGameAndRound.get(game.gameId);
-          const normalized = await normalizeGameAndRounds(game, data, endpoint, ownPlayerId, prev);
-          const agg = computeGameAggFromRounds(game.gameId, normalized.rounds);
+          const { data, endpoint } = await fetchDetailJson(game2);
+          const prev = existingByGameAndRound.get(game2.gameId);
+          const normalized = await normalizeGameAndRounds(game2, data, endpoint, ownPlayerId, prev);
+          const agg = computeGameAggFromRounds(game2.gameId, normalized.rounds);
           await db.transaction("rw", db.details, db.rounds, db.gameAgg, async () => {
             await db.details.put(normalized.detail);
             await db.rounds.bulkPut(normalized.rounds);
@@ -10013,17 +10013,17 @@ ${shapes}`.trim();
           const message = se.message;
           const likelyUnavailable = /HTTP (403|404|410)\b/.test(message);
           await db.details.put({
-            gameId: game.gameId,
+            gameId: game2.gameId,
             status: likelyUnavailable ? "missing" : "error",
             fetchedAt: Date.now(),
-            gameMode: game.gameMode || game.mode,
-            modeFamily: classifyFamily(game),
+            gameMode: game2.gameMode || game2.mode,
+            modeFamily: classifyFamily(game2),
             error: message
           });
           if (!likelyUnavailable) fail++;
           logEvent(
             "detail_fetch_error",
-            { gameId: game.gameId, status: likelyUnavailable ? "missing" : "error", error: se, gameMode: game.gameMode || game.mode, modeFamily: classifyFamily(game), reason: opts.reason || "" },
+            { gameId: game2.gameId, status: likelyUnavailable ? "missing" : "error", error: se, gameMode: game2.gameMode || game2.mode, modeFamily: classifyFamily(game2), reason: opts.reason || "" },
             likelyUnavailable ? "warn" : "error"
           );
         } finally {
@@ -10724,7 +10724,7 @@ ${shapes}`.trim();
     syncState;
     constructor(name = DB_V2_NAME) {
       super(name);
-      const GAMES_SCHEMA = [
+      const GAMES_SCHEMA_V1 = [
         "gameId",
         "playedAt",
         "modeFamily",
@@ -10732,6 +10732,16 @@ ${shapes}`.trim();
         "selfVictory",
         "selfId",
         "oppId",
+        "detailFetchedAt"
+      ].join(", ");
+      const GAMES_SCHEMA_V4 = [
+        "gameId",
+        "playedAt",
+        "modeFamily",
+        "[modeFamily+playedAt]",
+        "p1Id",
+        "p2Id",
+        "winnerTeamIdx",
         "detailFetchedAt"
       ].join(", ");
       const ROUNDS_SCHEMA_V1 = [
@@ -10750,9 +10760,16 @@ ${shapes}`.trim();
         "selfCountry",
         "movementType"
       ].join(", ");
+      const ROUNDS_SCHEMA_V4 = [
+        "[gameId+roundNumber]",
+        "gameId",
+        "startTime",
+        "trueCountry",
+        "movementType"
+      ].join(", ");
       const DETAIL_LOG_SCHEMA = ["gameId", "lastAttemptAt", "lastStatus"].join(", ");
       this.version(1).stores({
-        games: GAMES_SCHEMA,
+        games: GAMES_SCHEMA_V1,
         rounds: ROUNDS_SCHEMA_V1,
         rawFeedEntries: "gameId, fetchedAt",
         rawGameDetails: "gameId, fetchedAt",
@@ -10762,7 +10779,7 @@ ${shapes}`.trim();
       const CLASSIC_GAMES_SCHEMA = ["gameId", "playerId", "playedAt", "[playerId+playedAt]"].join(", ");
       const CLASSIC_ROUNDS_SCHEMA = ["[gameId+roundNumber]", "gameId"].join(", ");
       this.version(2).stores({
-        games: GAMES_SCHEMA,
+        games: GAMES_SCHEMA_V1,
         rounds: ROUNDS_SCHEMA_V2,
         rawFeedEntries: "gameId, fetchedAt",
         rawGameDetails: "gameId, fetchedAt",
@@ -10841,7 +10858,7 @@ ${shapes}`.trim();
         });
       });
       this.version(3).stores({
-        games: GAMES_SCHEMA,
+        games: GAMES_SCHEMA_V1,
         rounds: ROUNDS_SCHEMA_V2,
         classicGames: CLASSIC_GAMES_SCHEMA,
         classicRounds: CLASSIC_ROUNDS_SCHEMA,
@@ -10849,6 +10866,333 @@ ${shapes}`.trim();
         rawGameDetails: "gameId, fetchedAt",
         detailFetchLog: DETAIL_LOG_SCHEMA,
         syncState: "key"
+      });
+      this.version(4).stores({
+        games: GAMES_SCHEMA_V4,
+        rounds: ROUNDS_SCHEMA_V4,
+        classicGames: CLASSIC_GAMES_SCHEMA,
+        classicRounds: CLASSIC_ROUNDS_SCHEMA,
+        rawFeedEntries: "gameId, fetchedAt",
+        rawGameDetails: "gameId, fetchedAt",
+        detailFetchLog: DETAIL_LOG_SCHEMA,
+        syncState: "key"
+      }).upgrade(async (tx) => {
+        await tx.table("games").toCollection().modify((g) => {
+          if ("selfId" in g) {
+            g.p1Id = g.selfId;
+            delete g.selfId;
+          }
+          if ("selfName" in g) {
+            g.p1Name = g.selfName;
+            delete g.selfName;
+          }
+          if ("selfCountry" in g) {
+            g.p1Country = g.selfCountry;
+            delete g.selfCountry;
+          }
+          if ("selfScore" in g) {
+            g.p1Score = g.selfScore;
+            delete g.selfScore;
+          }
+          if ("selfVictory" in g) {
+            if (g.selfVictory === true) g.winnerTeamIdx = 0;
+            if (g.selfVictory === false) g.winnerTeamIdx = 1;
+            delete g.selfVictory;
+          }
+          if ("selfRatingBefore" in g) {
+            g.p1RatingBefore = g.selfRatingBefore;
+            delete g.selfRatingBefore;
+          }
+          if ("selfRatingAfter" in g) {
+            g.p1RatingAfter = g.selfRatingAfter;
+            delete g.selfRatingAfter;
+          }
+          if ("selfMovingRatingBefore" in g) {
+            g.p1MovingRatingBefore = g.selfMovingRatingBefore;
+            delete g.selfMovingRatingBefore;
+          }
+          if ("selfMovingRatingAfter" in g) {
+            g.p1MovingRatingAfter = g.selfMovingRatingAfter;
+            delete g.selfMovingRatingAfter;
+          }
+          if ("selfNoMoveRatingBefore" in g) {
+            g.p1NoMoveRatingBefore = g.selfNoMoveRatingBefore;
+            delete g.selfNoMoveRatingBefore;
+          }
+          if ("selfNoMoveRatingAfter" in g) {
+            g.p1NoMoveRatingAfter = g.selfNoMoveRatingAfter;
+            delete g.selfNoMoveRatingAfter;
+          }
+          if ("selfNmpzRatingBefore" in g) {
+            g.p1NmpzRatingBefore = g.selfNmpzRatingBefore;
+            delete g.selfNmpzRatingBefore;
+          }
+          if ("selfNmpzRatingAfter" in g) {
+            g.p1NmpzRatingAfter = g.selfNmpzRatingAfter;
+            delete g.selfNmpzRatingAfter;
+          }
+          if (g.modeFamily === "duels") {
+            if ("oppId" in g) {
+              g.p2Id = g.oppId;
+              delete g.oppId;
+            }
+            if ("oppName" in g) {
+              g.p2Name = g.oppName;
+              delete g.oppName;
+            }
+            if ("oppCountry" in g) {
+              g.p2Country = g.oppCountry;
+              delete g.oppCountry;
+            }
+            if ("oppRatingBefore" in g) {
+              g.p2RatingBefore = g.oppRatingBefore;
+              delete g.oppRatingBefore;
+            }
+            if ("oppRatingAfter" in g) {
+              g.p2RatingAfter = g.oppRatingAfter;
+              delete g.oppRatingAfter;
+            }
+            if ("oppMovingRatingBefore" in g) {
+              g.p2MovingRatingBefore = g.oppMovingRatingBefore;
+              delete g.oppMovingRatingBefore;
+            }
+            if ("oppMovingRatingAfter" in g) {
+              g.p2MovingRatingAfter = g.oppMovingRatingAfter;
+              delete g.oppMovingRatingAfter;
+            }
+            if ("oppNoMoveRatingBefore" in g) {
+              g.p2NoMoveRatingBefore = g.oppNoMoveRatingBefore;
+              delete g.oppNoMoveRatingBefore;
+            }
+            if ("oppNoMoveRatingAfter" in g) {
+              g.p2NoMoveRatingAfter = g.oppNoMoveRatingAfter;
+              delete g.oppNoMoveRatingAfter;
+            }
+            if ("oppNmpzRatingBefore" in g) {
+              g.p2NmpzRatingBefore = g.oppNmpzRatingBefore;
+              delete g.oppNmpzRatingBefore;
+            }
+            if ("oppNmpzRatingAfter" in g) {
+              g.p2NmpzRatingAfter = g.oppNmpzRatingAfter;
+              delete g.oppNmpzRatingAfter;
+            }
+          } else if (g.modeFamily === "teamduels") {
+            if ("mateId" in g) {
+              g.p2Id = g.mateId;
+              delete g.mateId;
+            }
+            if ("mateName" in g) {
+              g.p2Name = g.mateName;
+              delete g.mateName;
+            }
+            if ("mateCountry" in g) {
+              g.p2Country = g.mateCountry;
+              delete g.mateCountry;
+            }
+            if ("mateRatingBefore" in g) {
+              g.p2RatingBefore = g.mateRatingBefore;
+              delete g.mateRatingBefore;
+            }
+            if ("mateRatingAfter" in g) {
+              g.p2RatingAfter = g.mateRatingAfter;
+              delete g.mateRatingAfter;
+            }
+            if ("oppId" in g) {
+              g.p3Id = g.oppId;
+              delete g.oppId;
+            }
+            if ("oppName" in g) {
+              g.p3Name = g.oppName;
+              delete g.oppName;
+            }
+            if ("oppCountry" in g) {
+              g.p3Country = g.oppCountry;
+              delete g.oppCountry;
+            }
+            if ("oppRatingBefore" in g) {
+              g.p3RatingBefore = g.oppRatingBefore;
+              delete g.oppRatingBefore;
+            }
+            if ("oppRatingAfter" in g) {
+              g.p3RatingAfter = g.oppRatingAfter;
+              delete g.oppRatingAfter;
+            }
+            if ("oppMovingRatingBefore" in g) {
+              g.p3MovingRatingBefore = g.oppMovingRatingBefore;
+              delete g.oppMovingRatingBefore;
+            }
+            if ("oppMovingRatingAfter" in g) {
+              g.p3MovingRatingAfter = g.oppMovingRatingAfter;
+              delete g.oppMovingRatingAfter;
+            }
+            if ("oppNoMoveRatingBefore" in g) {
+              g.p3NoMoveRatingBefore = g.oppNoMoveRatingBefore;
+              delete g.oppNoMoveRatingBefore;
+            }
+            if ("oppNoMoveRatingAfter" in g) {
+              g.p3NoMoveRatingAfter = g.oppNoMoveRatingAfter;
+              delete g.oppNoMoveRatingAfter;
+            }
+            if ("oppNmpzRatingBefore" in g) {
+              g.p3NmpzRatingBefore = g.oppNmpzRatingBefore;
+              delete g.oppNmpzRatingBefore;
+            }
+            if ("oppNmpzRatingAfter" in g) {
+              g.p3NmpzRatingAfter = g.oppNmpzRatingAfter;
+              delete g.oppNmpzRatingAfter;
+            }
+            if ("oppMateId" in g) {
+              g.p4Id = g.oppMateId;
+              delete g.oppMateId;
+            }
+            if ("oppMateName" in g) {
+              g.p4Name = g.oppMateName;
+              delete g.oppMateName;
+            }
+            if ("oppMateCountry" in g) {
+              g.p4Country = g.oppMateCountry;
+              delete g.oppMateCountry;
+            }
+            if ("oppMateRatingBefore" in g) {
+              g.p4RatingBefore = g.oppMateRatingBefore;
+              delete g.oppMateRatingBefore;
+            }
+            if ("oppMateRatingAfter" in g) {
+              g.p4RatingAfter = g.oppMateRatingAfter;
+              delete g.oppMateRatingAfter;
+            }
+          }
+        });
+        await tx.table("rounds").toCollection().modify((r) => {
+          if ("selfLat" in r) {
+            r.p1Lat = r.selfLat;
+            delete r.selfLat;
+          }
+          if ("selfLng" in r) {
+            r.p1Lng = r.selfLng;
+            delete r.selfLng;
+          }
+          if ("selfCountry" in r) {
+            r.p1Country = r.selfCountry;
+            delete r.selfCountry;
+          }
+          if ("selfScore" in r) {
+            r.p1Score = r.selfScore;
+            delete r.selfScore;
+          }
+          if ("selfDistance" in r) {
+            r.p1Distance = r.selfDistance;
+            delete r.selfDistance;
+          }
+          if ("selfTimeSec" in r) {
+            r.p1TimeSec = r.selfTimeSec;
+            delete r.selfTimeSec;
+          }
+          if ("selfTimedOut" in r) {
+            r.p1TimedOut = r.selfTimedOut;
+            delete r.selfTimedOut;
+          }
+          if ("selfIsBetterGuess" in r) {
+            r.p1IsBetterGuess = r.selfIsBetterGuess;
+            delete r.selfIsBetterGuess;
+          }
+          if ("selfHealthAfter" in r) {
+            r.team0HealthAfter = r.selfHealthAfter;
+            delete r.selfHealthAfter;
+          }
+          if ("selfHealthBefore" in r) {
+            r.team0HealthBefore = r.selfHealthBefore;
+            delete r.selfHealthBefore;
+          }
+          if ("selfDamageDealt" in r) {
+            r.team0DamageDealt = r.selfDamageDealt;
+            delete r.selfDamageDealt;
+          }
+          if ("mateLat" in r) {
+            r.p2Lat = r.mateLat;
+            delete r.mateLat;
+          }
+          if ("mateLng" in r) {
+            r.p2Lng = r.mateLng;
+            delete r.mateLng;
+          }
+          if ("mateCountry" in r) {
+            r.p2Country = r.mateCountry;
+            delete r.mateCountry;
+          }
+          if ("mateScore" in r) {
+            r.p2Score = r.mateScore;
+            delete r.mateScore;
+          }
+          if ("mateDistance" in r) {
+            r.p2Distance = r.mateDistance;
+            delete r.mateDistance;
+          }
+          if ("oppLat" in r) {
+            r.p3Lat = r.oppLat;
+            delete r.oppLat;
+          }
+          if ("oppLng" in r) {
+            r.p3Lng = r.oppLng;
+            delete r.oppLng;
+          }
+          if ("oppCountry" in r) {
+            r.p3Country = r.oppCountry;
+            delete r.oppCountry;
+          }
+          if ("oppScore" in r) {
+            r.p3Score = r.oppScore;
+            delete r.oppScore;
+          }
+          if ("oppDistance" in r) {
+            r.p3Distance = r.oppDistance;
+            delete r.oppDistance;
+          }
+          if ("oppTimeSec" in r) {
+            r.p3TimeSec = r.oppTimeSec;
+            delete r.oppTimeSec;
+          }
+          if ("oppTimedOut" in r) {
+            r.p3TimedOut = r.oppTimedOut;
+            delete r.oppTimedOut;
+          }
+          if ("oppIsBetterGuess" in r) {
+            r.p3IsBetterGuess = r.oppIsBetterGuess;
+            delete r.oppIsBetterGuess;
+          }
+          if ("oppHealthAfter" in r) {
+            r.team1HealthAfter = r.oppHealthAfter;
+            delete r.oppHealthAfter;
+          }
+          if ("oppHealthBefore" in r) {
+            r.team1HealthBefore = r.oppHealthBefore;
+            delete r.oppHealthBefore;
+          }
+          if ("oppDamageDealt" in r) {
+            r.team1DamageDealt = r.oppDamageDealt;
+            delete r.oppDamageDealt;
+          }
+          if ("oppMateLat" in r) {
+            r.p4Lat = r.oppMateLat;
+            delete r.oppMateLat;
+          }
+          if ("oppMateLng" in r) {
+            r.p4Lng = r.oppMateLng;
+            delete r.oppMateLng;
+          }
+          if ("oppMateCountry" in r) {
+            r.p4Country = r.oppMateCountry;
+            delete r.oppMateCountry;
+          }
+          if ("oppMateScore" in r) {
+            r.p4Score = r.oppMateScore;
+            delete r.oppMateScore;
+          }
+          if ("oppMateDistance" in r) {
+            r.p4Distance = r.oppMateDistance;
+            delete r.oppMateDistance;
+          }
+        });
       });
     }
   };
@@ -11716,53 +12060,22 @@ ${shapes}`.trim();
     }
     return map;
   }
-  function orderedPlayers2(gameData, selfId) {
+  function rawTeamPlayers(gameData) {
     const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
-    if (teams.length === 0) return [];
-    let ownTeamIndex = 0;
-    if (selfId) {
-      const found = teams.findIndex(
-        (t) => Array.isArray(t?.players) && t.players.some((p) => readPlayerId2(p) === selfId)
-      );
-      if (found >= 0) ownTeamIndex = found;
-    }
-    const ownTeam = teams[ownTeamIndex];
-    const otherTeams = teams.filter((_, i) => i !== ownTeamIndex);
-    const ownPlayers = Array.isArray(ownTeam?.players) ? [...ownTeam.players] : [];
-    const ownResults = teamResultsByRound(ownTeam);
-    if (selfId) {
-      ownPlayers.sort((a, b3) => {
-        if (readPlayerId2(a) === selfId) return -1;
-        if (readPlayerId2(b3) === selfId) return 1;
-        return 0;
-      });
-    }
     const result = [];
-    for (const p of ownPlayers) result.push({ player: p, teamResults: ownResults });
-    const hasOtherPlayers = otherTeams.some(
-      (t) => Array.isArray(t?.players) && t.players.length > 0
-    );
-    if (ownPlayers.length === 1 && hasOtherPlayers) {
-      result.push({ player: null, teamResults: /* @__PURE__ */ new Map() });
-    }
-    for (const t of otherTeams) {
-      const tr = teamResultsByRound(t);
-      for (const p of Array.isArray(t?.players) ? t.players : []) {
-        result.push({ player: p, teamResults: tr });
+    for (let ti = 0; ti < teams.length; ti++) {
+      const team = teams[ti];
+      const tr = teamResultsByRound(team);
+      for (const p of Array.isArray(team?.players) ? team.players : []) {
+        result.push({ player: p, teamResults: tr, teamIdx: ti });
       }
     }
     return result.slice(0, 4);
   }
-  async function normalizeDuelsRounds(gameId, gameData, selfId) {
+  async function normalizeDuelsRounds(gameId, gameData) {
     const rounds = Array.isArray(gameData?.rounds) ? gameData.rounds : [];
-    const players = orderedPlayers2(gameData, selfId);
+    const players = rawTeamPlayers(gameData);
     const guessMaps = players.map((x) => guessByRound2(x.player));
-    const roles = [
-      "self",
-      "mate",
-      "opp",
-      "oppMate"
-    ];
     const result = [];
     for (let i = 0; i < rounds.length; i++) {
       const r = rounds[i];
@@ -11784,12 +12097,8 @@ ${shapes}`.trim();
       const isHealing = r?.isHealRound === true || r?.isHealingRound === true || r?.isHeal === true || void 0;
       const damageMultiplier = asNum2(r?.damageMultiplier);
       const guessData = [];
-      for (let p = 0; p < 4; p++) {
+      for (let p = 0; p < players.length; p++) {
         const entry = players[p];
-        if (!entry) {
-          guessData.push({});
-          continue;
-        }
         const guess = guessMaps[p].get(rn);
         const teamR = entry.teamResults.get(rn);
         const lat = asNum2(guess?.lat ?? guess?.latitude);
@@ -11802,18 +12111,22 @@ ${shapes}`.trim();
           country,
           score: asNum2(guess?.score),
           distance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
-          healthAfter: teamR?.healthAfter,
-          healthBefore: teamR?.healthBefore,
-          damageDealt: teamR?.damageDealt,
           timeSec: asNum2(guess?.time),
-          timedOut: asBool2(guess?.timedOut)
+          timedOut: asBool2(guess?.timedOut),
+          teamHealthAfter: teamR?.healthAfter,
+          teamHealthBefore: teamR?.healthBefore,
+          teamDamageDealt: teamR?.damageDealt
         });
       }
-      const [self2, mate, opp, oppMate] = guessData;
-      const hasMate = mate.score !== void 0 || mate.lat !== void 0;
-      const selfIsBetterGuess = hasMate ? (self2.score ?? -1) >= (mate.score ?? -1) : void 0;
-      const hasOppMate = oppMate.score !== void 0 || oppMate.lat !== void 0;
-      const oppIsBetterGuess = hasOppMate ? (opp.score ?? -1) >= (oppMate.score ?? -1) : void 0;
+      const [p1g, p2g, p3g, p4g] = [guessData[0] ?? {}, guessData[1] ?? {}, guessData[2] ?? {}, guessData[3] ?? {}];
+      const hasP2 = p2g.score !== void 0 || p2g.lat !== void 0;
+      const p1IsBetterGuess = hasP2 ? (p1g.score ?? -1) >= (p2g.score ?? -1) : void 0;
+      const p2IsBetterGuess = hasP2 ? !p1IsBetterGuess : void 0;
+      const hasP4 = p4g.score !== void 0 || p4g.lat !== void 0;
+      const p3IsBetterGuess = hasP4 ? (p3g.score ?? -1) >= (p4g.score ?? -1) : void 0;
+      const p4IsBetterGuess = hasP4 ? !p3IsBetterGuess : void 0;
+      const team0Health = p1g.teamHealthAfter !== void 0 ? p1g : p2g;
+      const team1Health = p3g.teamHealthAfter !== void 0 ? p3g : p4g;
       const row = {
         gameId,
         roundNumber: rn,
@@ -11828,38 +12141,42 @@ ${shapes}`.trim();
         trueZoom,
         isHealing,
         damageMultiplier,
-        selfLat: self2.lat,
-        selfLng: self2.lng,
-        selfCountry: self2.country,
-        selfScore: self2.score,
-        selfDistance: self2.distance,
-        selfHealthAfter: self2.healthAfter,
-        selfHealthBefore: self2.healthBefore,
-        selfDamageDealt: self2.damageDealt,
-        selfTimeSec: self2.timeSec,
-        selfTimedOut: self2.timedOut,
-        selfIsBetterGuess,
-        oppLat: opp.lat,
-        oppLng: opp.lng,
-        oppCountry: opp.country,
-        oppScore: opp.score,
-        oppDistance: opp.distance,
-        oppHealthAfter: opp.healthAfter,
-        oppHealthBefore: opp.healthBefore,
-        oppDamageDealt: opp.damageDealt,
-        oppTimeSec: opp.timeSec,
-        oppTimedOut: opp.timedOut,
-        oppIsBetterGuess,
-        mateLat: mate.lat,
-        mateLng: mate.lng,
-        mateCountry: mate.country,
-        mateScore: mate.score,
-        mateDistance: mate.distance,
-        oppMateLat: oppMate.lat,
-        oppMateLng: oppMate.lng,
-        oppMateCountry: oppMate.country,
-        oppMateScore: oppMate.score,
-        oppMateDistance: oppMate.distance
+        p1Lat: p1g.lat,
+        p1Lng: p1g.lng,
+        p1Country: p1g.country,
+        p1Score: p1g.score,
+        p1Distance: p1g.distance,
+        p1TimeSec: p1g.timeSec,
+        p1TimedOut: p1g.timedOut,
+        p1IsBetterGuess,
+        p2Lat: p2g.lat,
+        p2Lng: p2g.lng,
+        p2Country: p2g.country,
+        p2Score: p2g.score,
+        p2Distance: p2g.distance,
+        p2TimeSec: p2g.timeSec,
+        p2TimedOut: p2g.timedOut,
+        p2IsBetterGuess,
+        p3Lat: p3g.lat,
+        p3Lng: p3g.lng,
+        p3Country: p3g.country,
+        p3Score: p3g.score,
+        p3Distance: p3g.distance,
+        p3TimeSec: p3g.timeSec,
+        p3TimedOut: p3g.timedOut,
+        p3IsBetterGuess,
+        p4Lat: p4g.lat,
+        p4Lng: p4g.lng,
+        p4Country: p4g.country,
+        p4Score: p4g.score,
+        p4Distance: p4g.distance,
+        p4IsBetterGuess,
+        team0HealthAfter: team0Health.teamHealthAfter,
+        team0HealthBefore: team0Health.teamHealthBefore,
+        team0DamageDealt: team0Health.teamDamageDealt,
+        team1HealthAfter: team1Health.teamHealthAfter,
+        team1HealthBefore: team1Health.teamHealthBefore,
+        team1DamageDealt: team1Health.teamDamageDealt
       };
       for (const k of Object.keys(row)) {
         if (row[k] === void 0) delete row[k];
@@ -11900,11 +12217,11 @@ ${shapes}`.trim();
         trueLat,
         trueLng,
         trueCountry,
-        selfLat: guessLat,
-        selfLng: guessLng,
-        selfCountry: guessCountry,
-        selfScore: asNum2(guess?.roundScoreInPoints ?? guess?.roundScore?.amount ?? guess?.score),
-        selfDistance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0
+        p1Lat: guessLat,
+        p1Lng: guessLng,
+        p1Country: guessCountry,
+        p1Score: asNum2(guess?.roundScoreInPoints ?? guess?.roundScore?.amount ?? guess?.score),
+        p1Distance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0
       };
       for (const k of Object.keys(row)) {
         if (row[k] === void 0) delete row[k];
@@ -11998,117 +12315,115 @@ ${shapes}`.trim();
       if (winnerStyle !== void 0) updates.winnerStyle = winnerStyle;
       const teams = Array.isArray(gameData?.teams) ? gameData.teams : [];
       const winningTeamId = String(gameData?.result?.winningTeamId || "");
-      const players = orderedPlayers2(gameData, selfId);
-      const p = [0, 1, 2, 3].map((i) => players[i]?.player);
-      const p0Id = readPlayerId2(p[0]) ?? selfId;
-      const p1Id = readPlayerId2(p[1]);
-      const p2Id = readPlayerId2(p[2]);
-      const p3Id = readPlayerId2(p[3]);
+      const players = rawTeamPlayers(gameData);
+      const p = [0, 1, 2, 3].map((i) => players[i]?.player ?? null);
       const rc = p.map(extractRatingChange2);
       const gm = p.map(extractGameModeRating);
-      let ownTeamIndex = 0;
-      if (selfId) {
-        const found = teams.findIndex(
-          (t) => Array.isArray(t?.players) && t.players.some((pl) => readPlayerId2(pl) === selfId)
-        );
-        if (found >= 0) ownTeamIndex = found;
-      }
-      const ownTeam = teams[ownTeamIndex];
-      const otherTeam = teams.find((_, i) => i !== ownTeamIndex) ?? teams[1];
-      const selfScore = asNum2(ownTeam?.health);
-      const otherScore = asNum2(otherTeam?.health);
-      let selfVictory;
+      let winnerTeamIdx;
       if (winningTeamId) {
-        selfVictory = String(ownTeam?.id || "") === winningTeamId;
-      } else if (selfScore !== void 0 && otherScore !== void 0) {
-        selfVictory = selfScore > otherScore;
+        const winIdx = teams.findIndex((t) => String(t?.id || "") === winningTeamId);
+        if (winIdx >= 0) winnerTeamIdx = winIdx;
       }
+      if (winnerTeamIdx === void 0) {
+        const h0 = asNum2(teams[0]?.health);
+        const h1 = asNum2(teams[1]?.health);
+        if (h0 !== void 0 && h1 !== void 0) {
+          winnerTeamIdx = h0 >= h1 ? 0 : 1;
+        }
+      }
+      const isDuels = game.modeFamily === "duels";
       const mt = movementType;
-      const selfGm = gm[0];
-      const oppGm = gm[2];
-      const selfMovingRatingBefore = mt === "moving" ? selfGm.before : void 0;
-      const selfMovingRatingAfter = mt === "moving" ? selfGm.after : void 0;
-      const selfNoMoveRatingBefore = mt === "no_move" ? selfGm.before : void 0;
-      const selfNoMoveRatingAfter = mt === "no_move" ? selfGm.after : void 0;
-      const selfNmpzRatingBefore = mt === "nmpz" ? selfGm.before : void 0;
-      const selfNmpzRatingAfter = mt === "nmpz" ? selfGm.after : void 0;
-      const oppMovingRatingBefore = mt === "moving" ? oppGm.before : void 0;
-      const oppMovingRatingAfter = mt === "moving" ? oppGm.after : void 0;
-      const oppNoMoveRatingBefore = mt === "no_move" ? oppGm.before : void 0;
-      const oppNoMoveRatingAfter = mt === "no_move" ? oppGm.after : void 0;
-      const oppNmpzRatingBefore = mt === "nmpz" ? oppGm.before : void 0;
-      const oppNmpzRatingAfter = mt === "nmpz" ? oppGm.after : void 0;
+      const p1Gm = gm[0];
+      const oppGm = isDuels ? gm[1] : gm[2];
       Object.assign(updates, {
-        selfId: p0Id,
-        selfName: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
-        selfCountry: extractCountry(p[0]),
-        selfScore,
-        selfVictory,
-        selfRatingBefore: rc[0].before,
-        selfRatingAfter: rc[0].after,
-        selfMovingRatingBefore,
-        selfMovingRatingAfter,
-        selfNoMoveRatingBefore,
-        selfNoMoveRatingAfter,
-        selfNmpzRatingBefore,
-        selfNmpzRatingAfter,
-        oppId: p2Id,
-        oppName: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
-        oppCountry: extractCountry(p[2]),
-        oppRatingBefore: rc[2].before,
-        oppRatingAfter: rc[2].after,
-        oppMovingRatingBefore,
-        oppMovingRatingAfter,
-        oppNoMoveRatingBefore,
-        oppNoMoveRatingAfter,
-        oppNmpzRatingBefore,
-        oppNmpzRatingAfter,
-        mateId: p1Id,
-        mateName: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
-        mateCountry: extractCountry(p[1]),
-        mateRatingBefore: rc[1].before,
-        mateRatingAfter: rc[1].after,
-        oppMateId: p3Id,
-        oppMateName: typeof p[3]?.nick === "string" ? p[3].nick : void 0,
-        oppMateCountry: extractCountry(p[3]),
-        oppMateRatingBefore: rc[3].before,
-        oppMateRatingAfter: rc[3].after
+        p1Id: readPlayerId2(p[0]) ?? void 0,
+        p1Name: typeof p[0]?.nick === "string" ? p[0].nick : void 0,
+        p1Country: extractCountry(p[0]),
+        p1Score: asNum2(teams[0]?.health),
+        winnerTeamIdx,
+        p1RatingBefore: rc[0].before,
+        p1RatingAfter: rc[0].after,
+        p1MovingRatingBefore: mt === "moving" ? p1Gm.before : void 0,
+        p1MovingRatingAfter: mt === "moving" ? p1Gm.after : void 0,
+        p1NoMoveRatingBefore: mt === "no_move" ? p1Gm.before : void 0,
+        p1NoMoveRatingAfter: mt === "no_move" ? p1Gm.after : void 0,
+        p1NmpzRatingBefore: mt === "nmpz" ? p1Gm.before : void 0,
+        p1NmpzRatingAfter: mt === "nmpz" ? p1Gm.after : void 0
       });
+      if (isDuels) {
+        Object.assign(updates, {
+          p2Id: readPlayerId2(p[1]) ?? void 0,
+          p2Name: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
+          p2Country: extractCountry(p[1]),
+          p2RatingBefore: rc[1].before,
+          p2RatingAfter: rc[1].after,
+          p2MovingRatingBefore: mt === "moving" ? oppGm.before : void 0,
+          p2MovingRatingAfter: mt === "moving" ? oppGm.after : void 0,
+          p2NoMoveRatingBefore: mt === "no_move" ? oppGm.before : void 0,
+          p2NoMoveRatingAfter: mt === "no_move" ? oppGm.after : void 0,
+          p2NmpzRatingBefore: mt === "nmpz" ? oppGm.before : void 0,
+          p2NmpzRatingAfter: mt === "nmpz" ? oppGm.after : void 0
+        });
+      } else {
+        Object.assign(updates, {
+          p2Id: readPlayerId2(p[1]) ?? void 0,
+          p2Name: typeof p[1]?.nick === "string" ? p[1].nick : void 0,
+          p2Country: extractCountry(p[1]),
+          p2RatingBefore: rc[1].before,
+          p2RatingAfter: rc[1].after,
+          p3Id: readPlayerId2(p[2]) ?? void 0,
+          p3Name: typeof p[2]?.nick === "string" ? p[2].nick : void 0,
+          p3Country: extractCountry(p[2]),
+          p3RatingBefore: rc[2].before,
+          p3RatingAfter: rc[2].after,
+          p3MovingRatingBefore: mt === "moving" ? oppGm.before : void 0,
+          p3MovingRatingAfter: mt === "moving" ? oppGm.after : void 0,
+          p3NoMoveRatingBefore: mt === "no_move" ? oppGm.before : void 0,
+          p3NoMoveRatingAfter: mt === "no_move" ? oppGm.after : void 0,
+          p3NmpzRatingBefore: mt === "nmpz" ? oppGm.before : void 0,
+          p3NmpzRatingAfter: mt === "nmpz" ? oppGm.after : void 0,
+          p4Id: readPlayerId2(p[3]) ?? void 0,
+          p4Name: typeof p[3]?.nick === "string" ? p[3].nick : void 0,
+          p4Country: extractCountry(p[3]),
+          p4RatingBefore: rc[3].before,
+          p4RatingAfter: rc[3].after
+        });
+      }
     } else {
       const player = gameData?.player;
       const totalScore = asNum2(
         player?.totalScore?.amount ?? player?.totalScore ?? gameData?.totalScore?.amount
       );
       Object.assign(updates, {
-        selfId: readPlayerId2(player),
-        selfName: typeof player?.nick === "string" ? player.nick : void 0,
-        selfScore: totalScore
+        p1Id: readPlayerId2(player) ?? void 0,
+        p1Name: typeof player?.nick === "string" ? player.nick : void 0,
+        p1Score: totalScore
       });
     }
     return updates;
   }
-  function getMissingFields(game) {
+  function getMissingFields(game2) {
     const m = [];
-    if (game.detailFetchedAt === void 0) m.push("never fetched");
-    if (game.totalRounds === void 0) m.push("totalRounds");
-    if (game.movementType === void 0) m.push("movementType");
-    const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+    if (game2.detailFetchedAt === void 0) m.push("never fetched");
+    if (game2.totalRounds === void 0) m.push("totalRounds");
+    if (game2.movementType === void 0) m.push("movementType");
+    const isDuelType = game2.modeFamily === "duels" || game2.modeFamily === "teamduels";
     if (isDuelType) {
-      if (game.selfVictory === void 0) m.push("selfVictory");
-      if (game.oppId === void 0) m.push("oppId");
-      if (game.isRated && game.selfRatingBefore === void 0 && game.detailFetchedAt === void 0) m.push("selfRatingBefore");
-      if (game.selfCountry === void 0) m.push("selfCountry");
+      if (game2.winnerTeamIdx === void 0) m.push("winnerTeamIdx");
+      if (game2.p1Id === void 0) m.push("p1Id");
+      if (game2.p2Id === void 0) m.push("p2Id");
+      if (game2.isRated && game2.p1RatingBefore === void 0 && game2.detailFetchedAt === void 0) m.push("p1RatingBefore");
     }
-    if (game.modeFamily === "teamduels") {
-      if (game.mateId === void 0) m.push("mateId");
+    if (game2.modeFamily === "teamduels") {
+      if (game2.p3Id === void 0) m.push("p3Id");
     }
     return m;
   }
-  function isDetailIncomplete(game) {
-    return getMissingFields(game).length > 0;
+  function isDetailIncomplete(game2) {
+    return getMissingFields(game2).length > 0;
   }
-  function needsRenormalize(game) {
-    return (game.normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION;
+  function needsRenormalize(game2) {
+    return (game2.normalizeVersion ?? 0) < CURRENT_NORMALIZE_VERSION;
   }
   async function fetchDetails(opts) {
     const concurrency = Math.max(1, opts.concurrency ?? 2);
@@ -12131,10 +12446,6 @@ ${shapes}`.trim();
           return true;
         }
         if (needsRenormalize(g)) return true;
-        if (opts.force && opts.currentPlayerId && g.selfId && g.selfId !== opts.currentPlayerId) {
-          const isDuelType = g.modeFamily === "duels" || g.modeFamily === "teamduels";
-          if (isDuelType) return true;
-        }
         return false;
       });
     }
@@ -12143,56 +12454,51 @@ ${shapes}`.trim();
     let succeeded = 0;
     const updatedGameIds = [];
     let failed = 0;
-    let selfIdFixed = 0;
+    const selfIdFixed = 0;
     for (let i = 0; i < games.length; i += concurrency) {
       const batch = games.slice(i, i + concurrency);
       await Promise.all(
-        batch.map(async (game) => {
-          const missing = getMissingFields(game);
-          const isDuelGame = game.modeFamily === "duels" || game.modeFamily === "teamduels";
-          const hasSelfIdMismatch = isDuelGame && opts.currentPlayerId != null && game.selfId != null && game.selfId !== opts.currentPlayerId;
-          if (hasSelfIdMismatch) missing.push("selfId mismatch");
+        batch.map(async (game2) => {
+          const missing = getMissingFields(game2);
           const gameIsIncomplete = missing.length > 0;
-          const gameNeedsRenorm = needsRenormalize(game);
-          opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "checking" });
-          const resolvedSelfId = opts.currentPlayerId ?? game.selfId;
+          const gameNeedsRenorm = needsRenormalize(game2);
+          opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "checking" });
           const attemptedAt = Date.now();
-          const cached = await dbV2.rawGameDetails.get(game.gameId);
+          const cached = await dbV2.rawGameDetails.get(game2.gameId);
           if (cached?.json) {
             try {
-              const updates = extractGameUpdates(cached.json, game.modeFamily, resolvedSelfId);
-              const hypothetical = { ...game, ...updates };
+              const updates = extractGameUpdates(cached.json, game2.modeFamily);
+              const hypothetical = { ...game2, ...updates };
               if (getMissingFields(hypothetical).length === 0 || gameNeedsRenorm) {
-                await dbV2.games.update(game.gameId, updates);
-                const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
+                await dbV2.games.update(game2.gameId, updates);
+                const isDuelType = game2.modeFamily === "duels" || game2.modeFamily === "teamduels";
                 if (isDuelType) {
-                  const rounds = await normalizeDuelsRounds(game.gameId, cached.json, hypothetical.selfId ?? resolvedSelfId);
+                  const rounds = await normalizeDuelsRounds(game2.gameId, cached.json);
                   if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
                 }
-                opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
-                updatedGameIds.push(game.gameId);
+                opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "ok", source: "cache" });
+                updatedGameIds.push(game2.gameId);
                 succeeded++;
-                if (hasSelfIdMismatch) selfIdFixed++;
                 return;
               }
             } catch {
             }
           }
           if (gameNeedsRenorm && !gameIsIncomplete) {
-            await dbV2.games.update(game.gameId, { normalizeVersion: CURRENT_NORMALIZE_VERSION });
-            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok" });
+            await dbV2.games.update(game2.gameId, { normalizeVersion: CURRENT_NORMALIZE_VERSION });
+            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "ok" });
             succeeded++;
-            updatedGameIds.push(game.gameId);
+            updatedGameIds.push(game2.gameId);
             return;
           }
-          const endpoints = buildEndpoints(game.gameId, game.modeFamily);
-          const result = await tryFetch(game.gameId, endpoints);
+          const endpoints = buildEndpoints(game2.gameId, game2.modeFamily);
+          const result = await tryFetch(game2.gameId, endpoints);
           if (!result) {
             failed++;
-            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: "All endpoints 404" });
+            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "failed", error: "All endpoints 404" });
             await dbV2.detailFetchLog.put({
-              gameId: game.gameId,
-              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
+              gameId: game2.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game2.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "not_found",
               lastError: "All endpoints failed or returned 404"
@@ -12202,43 +12508,42 @@ ${shapes}`.trim();
           const { data, endpoint } = result;
           try {
             await dbV2.rawGameDetails.put({
-              gameId: game.gameId,
+              gameId: game2.gameId,
               fetchedAt: attemptedAt,
               endpoint,
               json: data
             });
-            const isDuelType = game.modeFamily === "duels" || game.modeFamily === "teamduels";
-            const rounds = isDuelType ? await normalizeDuelsRounds(game.gameId, data, resolvedSelfId) : await normalizeSoloRounds(game.gameId, data);
+            const isDuelType = game2.modeFamily === "duels" || game2.modeFamily === "teamduels";
+            const rounds = isDuelType ? await normalizeDuelsRounds(game2.gameId, data) : await normalizeSoloRounds(game2.gameId, data);
             if (rounds.length > 0) {
               await dbV2.rounds.bulkPut(rounds);
             }
-            if (game.modeFamily === "standard") {
-              const selfId = resolvedSelfId ?? readPlayerId2(data?.player) ?? "";
-              const classicGame = normalizeClassicGame(game.gameId, selfId, data);
-              const classicRounds = await normalizeClassicRounds(game.gameId, data);
+            if (game2.modeFamily === "standard") {
+              const selfId = opts.currentPlayerId ?? readPlayerId2(data?.player) ?? "";
+              const classicGame = normalizeClassicGame(game2.gameId, selfId, data);
+              const classicRounds = await normalizeClassicRounds(game2.gameId, data);
               await dbV2.classicGames.put(classicGame);
               if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
             }
-            const updates = extractGameUpdates(data, game.modeFamily, resolvedSelfId);
-            await dbV2.games.update(game.gameId, updates);
+            const updates = extractGameUpdates(data, game2.modeFamily);
+            await dbV2.games.update(game2.gameId, updates);
             await dbV2.detailFetchLog.put({
-              gameId: game.gameId,
-              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
+              gameId: game2.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game2.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "ok",
               endpoint
             });
-            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "api" });
-            updatedGameIds.push(game.gameId);
+            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "ok", source: "api" });
+            updatedGameIds.push(game2.gameId);
             succeeded++;
-            if (hasSelfIdMismatch) selfIdFixed++;
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : String(e);
-            opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "failed", error: errMsg });
+            opts.onGameEvent?.({ gameId: game2.gameId, playedAt: game2.playedAt, mode: game2.modeFamily, missing, status: "failed", error: errMsg });
             failed++;
             await dbV2.detailFetchLog.put({
-              gameId: game.gameId,
-              attempts: ((await dbV2.detailFetchLog.get(game.gameId))?.attempts ?? 0) + 1,
+              gameId: game2.gameId,
+              attempts: ((await dbV2.detailFetchLog.get(game2.gameId))?.attempts ?? 0) + 1,
               lastAttemptAt: attemptedAt,
               lastStatus: "error",
               lastError: errMsg,
@@ -12312,28 +12617,30 @@ ${shapes}`.trim();
             isRated: bool(det?.isRated),
             totalRounds: num(det?.totalRounds),
             detailFetchedAt: num(det?.fetchedAt),
-            selfId: str(det?.player_self_id),
-            selfName: str(det?.player_self_name),
-            selfCountry: str(det?.player_self_country),
-            selfVictory: bool(det?.player_self_victory),
-            selfScore: num(det?.player_self_finalHealth ?? det?.points),
-            selfRatingBefore: num(det?.player_self_startRating ?? det?.player_self_movingRatingBefore),
-            selfRatingAfter: num(det?.player_self_endRating ?? det?.player_self_movingRatingAfter),
-            oppId: str(det?.player_opponent_id),
-            oppName: str(det?.player_opponent_name),
-            oppCountry: str(det?.player_opponent_country),
-            oppRatingBefore: num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore),
-            oppRatingAfter: num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter),
-            mateId: str(det?.player_mate_id),
-            mateName: str(det?.player_mate_name),
-            mateCountry: str(det?.player_mate_country),
-            mateRatingBefore: num(det?.player_mate_startRating),
-            mateRatingAfter: num(det?.player_mate_endRating),
-            oppMateId: str(det?.player_opponent_mate_id),
-            oppMateName: str(det?.player_opponent_mate_name),
-            oppMateCountry: str(det?.player_opponent_mate_country),
-            oppMateRatingBefore: num(det?.player_opponent_mate_startRating),
-            oppMateRatingAfter: num(det?.player_opponent_mate_endRating)
+            // v1 data had self-first ordering; map best-effort to p1-p4
+            // Duels: self=p1, opp=p2. Teamduels: self=p1, mate=p2, opp=p3, oppMate=p4
+            p1Id: str(det?.player_self_id),
+            p1Name: str(det?.player_self_name),
+            p1Country: str(det?.player_self_country),
+            winnerTeamIdx: bool(det?.player_self_victory) === true ? 0 : bool(det?.player_self_victory) === false ? 1 : void 0,
+            p1Score: num(det?.player_self_finalHealth ?? det?.points),
+            p1RatingBefore: num(det?.player_self_startRating ?? det?.player_self_movingRatingBefore),
+            p1RatingAfter: num(det?.player_self_endRating ?? det?.player_self_movingRatingAfter),
+            p2Id: modeFamily === "teamduels" ? str(det?.player_mate_id) : str(det?.player_opponent_id),
+            p2Name: modeFamily === "teamduels" ? str(det?.player_mate_name) : str(det?.player_opponent_name),
+            p2Country: modeFamily === "teamduels" ? str(det?.player_mate_country) : str(det?.player_opponent_country),
+            p2RatingBefore: modeFamily === "teamduels" ? num(det?.player_mate_startRating) : num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore),
+            p2RatingAfter: modeFamily === "teamduels" ? num(det?.player_mate_endRating) : num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter),
+            p3Id: modeFamily === "teamduels" ? str(det?.player_opponent_id) : void 0,
+            p3Name: modeFamily === "teamduels" ? str(det?.player_opponent_name) : void 0,
+            p3Country: modeFamily === "teamduels" ? str(det?.player_opponent_country) : void 0,
+            p3RatingBefore: modeFamily === "teamduels" ? num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore) : void 0,
+            p3RatingAfter: modeFamily === "teamduels" ? num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter) : void 0,
+            p4Id: modeFamily === "teamduels" ? str(det?.player_opponent_mate_id) : void 0,
+            p4Name: modeFamily === "teamduels" ? str(det?.player_opponent_mate_name) : void 0,
+            p4Country: modeFamily === "teamduels" ? str(det?.player_opponent_mate_country) : void 0,
+            p4RatingBefore: modeFamily === "teamduels" ? num(det?.player_opponent_mate_startRating) : void 0,
+            p4RatingAfter: modeFamily === "teamduels" ? num(det?.player_opponent_mate_endRating) : void 0
           };
           for (const k of Object.keys(row)) {
             if (row[k] === void 0) delete row[k];
@@ -12359,6 +12666,8 @@ ${shapes}`.trim();
           const startTime = num(r.startTime);
           const endTime = num(r.endTime);
           const durationSec = startTime && endTime && endTime > startTime ? (endTime - startTime) / 1e3 : num(r.durationSeconds);
+          const roundDet = detailsByGameId.get(String(r.gameId || ""));
+          const gameModeFamily = roundDet ? toModeFamily(roundDet.modeFamily, roundDet.isTeamDuels) : "duels";
           const row = {
             gameId: String(r.gameId || ""),
             roundNumber: Number(r.roundNumber ?? 0),
@@ -12368,28 +12677,37 @@ ${shapes}`.trim();
             trueLat: num(r.trueLat),
             trueLng: num(r.trueLng),
             trueCountry: str(r.trueCountry),
-            selfGuessLat: num(r.player_self_guessLat),
-            selfGuessLng: num(r.player_self_guessLng),
-            selfGuessCountry: str(r.player_self_guessCountry),
-            selfScore: num(r.player_self_score),
-            selfDistanceKm: num(r.player_self_distanceKm),
-            oppGuessLat: num(r.player_opponent_guessLat),
-            oppGuessLng: num(r.player_opponent_guessLng),
-            oppGuessCountry: str(r.player_opponent_guessCountry),
-            oppScore: num(r.player_opponent_score),
-            oppDistanceKm: num(r.player_opponent_distanceKm),
-            mateGuessLat: num(r.player_mate_guessLat),
-            mateGuessLng: num(r.player_mate_guessLng),
-            mateGuessCountry: str(r.player_mate_guessCountry),
-            mateScore: num(r.player_mate_score),
-            mateDistanceKm: num(r.player_mate_distanceKm),
-            oppMateGuessLat: num(r.player_opponent_mate_guessLat),
-            oppMateGuessLng: num(r.player_opponent_mate_guessLng),
-            oppMateGuessCountry: str(r.player_opponent_mate_guessCountry),
-            oppMateScore: num(r.player_opponent_mate_score),
-            oppMateDistanceKm: num(r.player_opponent_mate_distanceKm),
-            selfHealthAfter: num(r.team_self_healthAfter ?? r.player_self_healthAfter),
-            oppHealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter)
+            p1Lat: num(r.player_self_guessLat),
+            p1Lng: num(r.player_self_guessLng),
+            p1Country: str(r.player_self_guessCountry),
+            p1Score: num(r.player_self_score),
+            p1Distance: num(r.player_self_distanceKm),
+            team0HealthAfter: num(r.team_self_healthAfter ?? r.player_self_healthAfter),
+            ...gameModeFamily === "teamduels" ? {
+              p2Lat: num(r.player_mate_guessLat),
+              p2Lng: num(r.player_mate_guessLng),
+              p2Country: str(r.player_mate_guessCountry),
+              p2Score: num(r.player_mate_score),
+              p2Distance: num(r.player_mate_distanceKm),
+              p3Lat: num(r.player_opponent_guessLat),
+              p3Lng: num(r.player_opponent_guessLng),
+              p3Country: str(r.player_opponent_guessCountry),
+              p3Score: num(r.player_opponent_score),
+              p3Distance: num(r.player_opponent_distanceKm),
+              p4Lat: num(r.player_opponent_mate_guessLat),
+              p4Lng: num(r.player_opponent_mate_guessLng),
+              p4Country: str(r.player_opponent_mate_guessCountry),
+              p4Score: num(r.player_opponent_mate_score),
+              p4Distance: num(r.player_opponent_mate_distanceKm),
+              team1HealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter)
+            } : {
+              p2Lat: num(r.player_opponent_guessLat),
+              p2Lng: num(r.player_opponent_guessLng),
+              p2Country: str(r.player_opponent_guessCountry),
+              p2Score: num(r.player_opponent_score),
+              p2Distance: num(r.player_opponent_distanceKm),
+              team1HealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter)
+            }
           };
           if (!row.gameId || row.roundNumber == null) continue;
           for (const k of Object.keys(row)) {

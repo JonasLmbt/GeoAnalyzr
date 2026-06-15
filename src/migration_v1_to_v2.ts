@@ -84,31 +84,33 @@ export async function migrateV1ToV2(
           totalRounds: num(det?.totalRounds),
           detailFetchedAt: num(det?.fetchedAt),
 
-          selfId: str(det?.player_self_id),
-          selfName: str(det?.player_self_name),
-          selfCountry: str(det?.player_self_country),
-          selfVictory: bool(det?.player_self_victory),
-          selfScore: num(det?.player_self_finalHealth ?? det?.points),
-          selfRatingBefore: num(det?.player_self_startRating ?? det?.player_self_movingRatingBefore),
-          selfRatingAfter: num(det?.player_self_endRating ?? det?.player_self_movingRatingAfter),
+          // v1 data had self-first ordering; map best-effort to p1-p4
+          // Duels: self=p1, opp=p2. Teamduels: self=p1, mate=p2, opp=p3, oppMate=p4
+          p1Id: str(det?.player_self_id),
+          p1Name: str(det?.player_self_name),
+          p1Country: str(det?.player_self_country),
+          winnerTeamIdx: bool(det?.player_self_victory) === true ? 0 : bool(det?.player_self_victory) === false ? 1 : undefined,
+          p1Score: num(det?.player_self_finalHealth ?? det?.points),
+          p1RatingBefore: num(det?.player_self_startRating ?? det?.player_self_movingRatingBefore),
+          p1RatingAfter: num(det?.player_self_endRating ?? det?.player_self_movingRatingAfter),
 
-          oppId: str(det?.player_opponent_id),
-          oppName: str(det?.player_opponent_name),
-          oppCountry: str(det?.player_opponent_country),
-          oppRatingBefore: num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore),
-          oppRatingAfter: num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter),
+          p2Id: modeFamily === "teamduels" ? str(det?.player_mate_id) : str(det?.player_opponent_id),
+          p2Name: modeFamily === "teamduels" ? str(det?.player_mate_name) : str(det?.player_opponent_name),
+          p2Country: modeFamily === "teamduels" ? str(det?.player_mate_country) : str(det?.player_opponent_country),
+          p2RatingBefore: modeFamily === "teamduels" ? num(det?.player_mate_startRating) : num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore),
+          p2RatingAfter: modeFamily === "teamduels" ? num(det?.player_mate_endRating) : num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter),
 
-          mateId: str(det?.player_mate_id),
-          mateName: str(det?.player_mate_name),
-          mateCountry: str(det?.player_mate_country),
-          mateRatingBefore: num(det?.player_mate_startRating),
-          mateRatingAfter: num(det?.player_mate_endRating),
+          p3Id: modeFamily === "teamduels" ? str(det?.player_opponent_id) : undefined,
+          p3Name: modeFamily === "teamduels" ? str(det?.player_opponent_name) : undefined,
+          p3Country: modeFamily === "teamduels" ? str(det?.player_opponent_country) : undefined,
+          p3RatingBefore: modeFamily === "teamduels" ? num(det?.player_opponent_startRating ?? det?.player_opponent_movingRatingBefore) : undefined,
+          p3RatingAfter: modeFamily === "teamduels" ? num(det?.player_opponent_endRating ?? det?.player_opponent_movingRatingAfter) : undefined,
 
-          oppMateId: str(det?.player_opponent_mate_id),
-          oppMateName: str(det?.player_opponent_mate_name),
-          oppMateCountry: str(det?.player_opponent_mate_country),
-          oppMateRatingBefore: num(det?.player_opponent_mate_startRating),
-          oppMateRatingAfter: num(det?.player_opponent_mate_endRating),
+          p4Id: modeFamily === "teamduels" ? str(det?.player_opponent_mate_id) : undefined,
+          p4Name: modeFamily === "teamduels" ? str(det?.player_opponent_mate_name) : undefined,
+          p4Country: modeFamily === "teamduels" ? str(det?.player_opponent_mate_country) : undefined,
+          p4RatingBefore: modeFamily === "teamduels" ? num(det?.player_opponent_mate_startRating) : undefined,
+          p4RatingAfter: modeFamily === "teamduels" ? num(det?.player_opponent_mate_endRating) : undefined,
         };
 
         // Strip undefined fields to keep IndexedDB storage lean
@@ -147,6 +149,10 @@ export async function migrateV1ToV2(
             ? (endTime - startTime) / 1000
             : num(r.durationSeconds);
 
+        // v1 data had self-first ordering; map best-effort to p1-p4
+        // Duels: self=p1, opp=p2.  Teamduels: self=p1, mate=p2, opp=p3, oppMate=p4
+        const roundDet = detailsByGameId.get(String(r.gameId || "")) as any;
+        const gameModeFamily = roundDet ? toModeFamily(roundDet.modeFamily, roundDet.isTeamDuels) : "duels";
         const row: RoundRow = {
           gameId: String(r.gameId || ""),
           roundNumber: Number(r.roundNumber ?? 0),
@@ -158,32 +164,38 @@ export async function migrateV1ToV2(
           trueLng: num(r.trueLng),
           trueCountry: str(r.trueCountry),
 
-          selfGuessLat: num(r.player_self_guessLat),
-          selfGuessLng: num(r.player_self_guessLng),
-          selfGuessCountry: str(r.player_self_guessCountry),
-          selfScore: num(r.player_self_score),
-          selfDistanceKm: num(r.player_self_distanceKm),
+          p1Lat: num(r.player_self_guessLat),
+          p1Lng: num(r.player_self_guessLng),
+          p1Country: str(r.player_self_guessCountry),
+          p1Score: num(r.player_self_score),
+          p1Distance: num(r.player_self_distanceKm),
+          team0HealthAfter: num(r.team_self_healthAfter ?? r.player_self_healthAfter),
 
-          oppGuessLat: num(r.player_opponent_guessLat),
-          oppGuessLng: num(r.player_opponent_guessLng),
-          oppGuessCountry: str(r.player_opponent_guessCountry),
-          oppScore: num(r.player_opponent_score),
-          oppDistanceKm: num(r.player_opponent_distanceKm),
-
-          mateGuessLat: num(r.player_mate_guessLat),
-          mateGuessLng: num(r.player_mate_guessLng),
-          mateGuessCountry: str(r.player_mate_guessCountry),
-          mateScore: num(r.player_mate_score),
-          mateDistanceKm: num(r.player_mate_distanceKm),
-
-          oppMateGuessLat: num(r.player_opponent_mate_guessLat),
-          oppMateGuessLng: num(r.player_opponent_mate_guessLng),
-          oppMateGuessCountry: str(r.player_opponent_mate_guessCountry),
-          oppMateScore: num(r.player_opponent_mate_score),
-          oppMateDistanceKm: num(r.player_opponent_mate_distanceKm),
-
-          selfHealthAfter: num(r.team_self_healthAfter ?? r.player_self_healthAfter),
-          oppHealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter),
+          ...(gameModeFamily === "teamduels" ? {
+            p2Lat: num(r.player_mate_guessLat),
+            p2Lng: num(r.player_mate_guessLng),
+            p2Country: str(r.player_mate_guessCountry),
+            p2Score: num(r.player_mate_score),
+            p2Distance: num(r.player_mate_distanceKm),
+            p3Lat: num(r.player_opponent_guessLat),
+            p3Lng: num(r.player_opponent_guessLng),
+            p3Country: str(r.player_opponent_guessCountry),
+            p3Score: num(r.player_opponent_score),
+            p3Distance: num(r.player_opponent_distanceKm),
+            p4Lat: num(r.player_opponent_mate_guessLat),
+            p4Lng: num(r.player_opponent_mate_guessLng),
+            p4Country: str(r.player_opponent_mate_guessCountry),
+            p4Score: num(r.player_opponent_mate_score),
+            p4Distance: num(r.player_opponent_mate_distanceKm),
+            team1HealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter),
+          } : {
+            p2Lat: num(r.player_opponent_guessLat),
+            p2Lng: num(r.player_opponent_guessLng),
+            p2Country: str(r.player_opponent_guessCountry),
+            p2Score: num(r.player_opponent_score),
+            p2Distance: num(r.player_opponent_distanceKm),
+            team1HealthAfter: num(r.team_opponent_healthAfter ?? r.player_opponent_healthAfter),
+          }),
         };
 
         if (!row.gameId || row.roundNumber == null) continue;
