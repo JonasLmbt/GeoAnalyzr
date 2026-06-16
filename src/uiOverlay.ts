@@ -1,6 +1,7 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
-import { syncToServerV2, syncClassicToServer, syncToServerV3, syncClassicToServerV3 } from "./serverSync_v2";
+import { syncToServerV2, syncClassicToServer } from "./serverSync_v2";
+import { syncV3FromDb2 } from "./serverSync_v3_db2";
 import { fetchFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { getCurrentPlayerId } from "./app/playerIdentity";
@@ -647,8 +648,8 @@ export function createUIOverlay(): UIOverlay {
       if (isSyncVariant) {
         const modeLabel = forceFull ? "Synced full" : "Synced";
         // Start v3 DB sync immediately, don't wait for v2 to finish
-        const v3SyncPromise = syncToServerV3({ gameIds: opts.gameIds }).catch(() => {});
-        const v3ClassicSyncPromise = syncClassicToServerV3().catch(() => {});
+        const v3SyncPromise = syncV3FromDb2({ gameIds: opts.gameIds }).catch(() => {});
+        const v3ClassicSyncPromise = Promise.resolve();
         const v2res = await syncToServerV2({
           full: forceFull,
           gameIds: opts.gameIds,

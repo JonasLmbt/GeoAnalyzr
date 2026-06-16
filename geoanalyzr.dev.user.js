@@ -77,7 +77,7 @@
         }
         var __assign = function() {
           __assign = Object.assign || function __assign2(t) {
-            for (var s, i = 1, n2 = arguments.length; i < n2; i++) {
+            for (var s, i = 1, n3 = arguments.length; i < n3; i++) {
               s = arguments[i];
               for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
             }
@@ -2635,8 +2635,8 @@
             if (set.length === 0)
               return emptyCollection(this);
             return addIgnoreCaseAlgorithm(this, function(x, a) {
-              return a.some(function(n2) {
-                return x.indexOf(n2) === 0;
+              return a.some(function(n3) {
+                return x.indexOf(n3) === 0;
               });
             }, set, maxString);
           };
@@ -5967,8 +5967,8 @@
           dependencies: domDeps,
           cache: cache2,
           semVer: DEXIE_VERSION,
-          version: DEXIE_VERSION.split(".").map(function(n2) {
-            return parseInt(n2);
+          version: DEXIE_VERSION.split(".").map(function(n3) {
+            return parseInt(n3);
           }).reduce(function(p, c, i) {
             return p + c / Math.pow(10, i * 2);
           })
@@ -6090,13 +6090,13 @@
         function quickselectStep(arr, k, left, right, compare) {
           while (right > left) {
             if (right - left > 600) {
-              var n2 = right - left + 1;
+              var n3 = right - left + 1;
               var m = k - left + 1;
-              var z = Math.log(n2);
+              var z = Math.log(n3);
               var s = 0.5 * Math.exp(2 * z / 3);
-              var sd = 0.5 * Math.sqrt(z * s * (n2 - s) / n2) * (m - n2 / 2 < 0 ? -1 : 1);
-              var newLeft = Math.max(left, Math.floor(k - m * s / n2 + sd));
-              var newRight = Math.min(right, Math.floor(k + (n2 - m) * s / n2 + sd));
+              var sd = 0.5 * Math.sqrt(z * s * (n3 - s) / n3) * (m - n3 / 2 < 0 ? -1 : 1);
+              var newLeft = Math.max(left, Math.floor(k - m * s / n3 + sd));
+              var newRight = Math.min(right, Math.floor(k + (n3 - m) * s / n3 + sd));
               quickselectStep(arr, k, newLeft, newRight, compare);
             }
             var t = arr[k];
@@ -6489,13 +6489,13 @@
           maxY: -Infinity
         };
       }
-      function multiSelect(arr, left, right, n2, compare) {
+      function multiSelect(arr, left, right, n3, compare) {
         var stack = [left, right], mid;
         while (stack.length) {
           right = stack.pop();
           left = stack.pop();
-          if (right - left <= n2) continue;
-          mid = left + Math.ceil((right - left) / n2 / 2) * n2;
+          if (right - left <= n3) continue;
+          mid = left + Math.ceil((right - left) / n3 / 2) * n3;
           quickselect(arr, mid, left, right, compare);
           stack.push(left, mid, mid, right);
         }
@@ -7107,14 +7107,14 @@ ${shapes}`.trim();
             if (s < 16) {
               ldt[i++] = s;
             } else {
-              var c = 0, n2 = 0;
+              var c = 0, n3 = 0;
               if (s == 16)
-                n2 = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
+                n3 = 3 + bits(dat, pos, 3), pos += 2, c = ldt[i - 1];
               else if (s == 17)
-                n2 = 3 + bits(dat, pos, 7), pos += 3;
+                n3 = 3 + bits(dat, pos, 7), pos += 3;
               else if (s == 18)
-                n2 = 11 + bits(dat, pos, 127), pos += 7;
-              while (n2--)
+                n3 = 11 + bits(dat, pos, 127), pos += 7;
+              while (n3--)
                 ldt[i++] = c;
             }
           }
@@ -7270,8 +7270,8 @@ ${shapes}`.trim();
     }
     return { t: new u8(tr), l: mbt };
   };
-  var ln = function(n2, l, d) {
-    return n2.s == -1 ? Math.max(ln(n2.l, l, d + 1), ln(n2.r, l, d + 1)) : l[n2.s] = d;
+  var ln = function(n3, l, d) {
+    return n3.s == -1 ? Math.max(ln(n3.l, l, d + 1), ln(n3.r, l, d + 1)) : l[n3.s] = d;
   };
   var lc = function(c) {
     var s = c.length;
@@ -7401,7 +7401,7 @@ ${shapes}`.trim();
       if (pos)
         w[0] = st.r >> 3;
       var opt = deo[lvl - 1];
-      var n2 = opt >> 13, c = opt & 8191;
+      var n3 = opt >> 13, c = opt & 8191;
       var msk_1 = (1 << plvl) - 1;
       var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
       var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
@@ -7428,7 +7428,7 @@ ${shapes}`.trim();
           }
           var l = 2, d = 0, ch_1 = c, dif = imod - pimod & 32767;
           if (rem > 2 && hv == hsh(i - dif)) {
-            var maxn = Math.min(n2, rem) - 1;
+            var maxn = Math.min(n3, rem) - 1;
             var maxd = Math.min(32767, i);
             var ml = Math.min(258, rem);
             while (dif <= maxd && --ch_1 && imod != pimod) {
@@ -7699,9 +7699,9 @@ ${shapes}`.trim();
     };
     for (var i = 0; i < l; ++i) {
       if (ai + 5 > ar.length) {
-        var n2 = new u8(ai + 8 + (l - i << 1));
-        n2.set(ar);
-        ar = n2;
+        var n3 = new u8(ai + 8 + (l - i << 1));
+        n3.set(ar);
+        ar = n3;
       }
       var c = str2.charCodeAt(i);
       if (c < 128 || latin1)
@@ -8030,8 +8030,8 @@ ${shapes}`.trim();
   function parseRetryAfterMs(h) {
     const ra = h["retry-after"];
     if (!ra) return null;
-    const n2 = Number(ra);
-    if (Number.isFinite(n2) && n2 >= 0) return Math.floor(n2 * 1e3);
+    const n3 = Number(ra);
+    if (Number.isFinite(n3) && n3 >= 0) return Math.floor(n3 * 1e3);
     const t = Date.parse(ra);
     if (Number.isFinite(t)) {
       const ms = t - Date.now();
@@ -9369,8 +9369,8 @@ ${shapes}`.trim();
     const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? roundRaw?.heading ?? roundRaw?.bearing ?? roundRaw?.rotation;
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (typeof v === "string") {
-      const n2 = Number(v);
-      if (Number.isFinite(n2)) return n2;
+      const n3 = Number(v);
+      if (Number.isFinite(n3)) return n3;
     }
     return void 0;
   }
@@ -10188,12 +10188,12 @@ ${shapes}`.trim();
       return s === "rated" || s === "unrated" || s === "unknown" ? s : "all";
     })();
     const filterFromMs = (() => {
-      const n2 = typeof filterFromRaw === "number" ? filterFromRaw : typeof filterFromRaw === "string" ? Number(filterFromRaw) : NaN;
-      return Number.isFinite(n2) ? Math.max(0, Math.floor(n2)) : 0;
+      const n3 = typeof filterFromRaw === "number" ? filterFromRaw : typeof filterFromRaw === "string" ? Number(filterFromRaw) : NaN;
+      return Number.isFinite(n3) ? Math.max(0, Math.floor(n3)) : 0;
     })();
     const filterToMs = (() => {
-      const n2 = typeof filterToRaw === "number" ? filterToRaw : typeof filterToRaw === "string" ? Number(filterToRaw) : NaN;
-      return Number.isFinite(n2) ? Math.max(0, Math.floor(n2)) : 0;
+      const n3 = typeof filterToRaw === "number" ? filterToRaw : typeof filterToRaw === "string" ? Number(filterToRaw) : NaN;
+      return Number.isFinite(n3) ? Math.max(0, Math.floor(n3)) : 0;
     })();
     return {
       endpointUrl,
@@ -10345,9 +10345,9 @@ ${shapes}`.trim();
       }
       for (const [gid, m] of counts.entries()) {
         let best = { k: "unknown", n: 0 };
-        for (const [k, n2] of m.entries()) {
+        for (const [k, n3] of m.entries()) {
           const kk = k;
-          if (typeof n2 === "number" && n2 > best.n) best = { k: kk, n: n2 };
+          if (typeof n3 === "number" && n3 > best.n) best = { k: kk, n: n3 };
         }
         out.set(gid, best.k);
       }
@@ -11528,167 +11528,682 @@ ${shapes}`.trim();
     }
     return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
   }
-  function v3BatchEndpoint(syncEndpointUrl) {
+
+  // src/serverSync_v3.ts
+  var SYNC_META_KEY_V3 = "server_sync_v3";
+  function rDelta(after, before) {
+    if (after != null && before != null) return after - before;
+    return null;
+  }
+  function n(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    return null;
+  }
+  function b(v) {
+    if (v === true) return 1;
+    if (v === false) return 0;
+    return null;
+  }
+  function uc(v) {
+    if (typeof v !== "string") return null;
+    const x = v.trim().toUpperCase();
+    return x || null;
+  }
+  function getUserscriptVersion3() {
+    const anyGlobal = globalThis;
+    const info = anyGlobal?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function gmPostJson(url, body, headers) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
+      gm({
+        method: "POST",
+        url,
+        headers,
+        data: body,
+        responseType: "text",
+        timeout: 12e4,
+        onload: (res) => resolve({ status: typeof res?.status === "number" ? res.status : 0, text: typeof res?.responseText === "string" ? res.responseText : "" }),
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Request failed")),
+        ontimeout: () => reject(new Error("Request timeout"))
+      });
+    });
+  }
+  function deriveV3SyncUrl(endpointUrl) {
+    const trimmed = (endpointUrl || "").trim();
+    if (!trimmed) return "";
     try {
-      const u = new URL(syncEndpointUrl);
-      u.pathname = "/api/v3/sync/batch";
+      const u = new URL(trimmed);
+      u.pathname = "/api/v3/sync";
       u.search = "";
       return u.toString();
     } catch {
-      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v3/sync/batch");
+      if (/\/api\/sync.*$/i.test(trimmed)) return trimmed.replace(/\/api\/sync.*$/i, "/api/v3/sync");
+      return trimmed.replace(/\/+$/, "") + "/api/v3/sync";
     }
   }
-  function v3ClassicBatchEndpoint(syncEndpointUrl) {
+  async function getLastServerSyncV3Cursor() {
+    const meta = await db.meta.get(SYNC_META_KEY_V3);
+    const cursor = meta?.value?.cursorTo;
+    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
+  }
+  async function fetchOwnCountryCode(playerId) {
     try {
-      const u = new URL(syncEndpointUrl);
-      u.pathname = "/api/v3/sync/classic-batch";
-      u.search = "";
-      return u.toString();
+      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+      if (res.status >= 200 && res.status < 300) {
+        const cc = res.data?.countryCode ?? res.data?.user?.countryCode;
+        if (typeof cc === "string" && cc.trim()) return cc.trim().toUpperCase();
+      }
     } catch {
-      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v3/sync/classic-batch");
     }
+    return null;
   }
-  async function syncToServerV3(opts) {
+  async function runServerSyncV3(opts = {}) {
     const settings = loadServerSyncSettings();
-    if (!settings.token) {
-      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    const endpointUrl = deriveV3SyncUrl(settings.endpointUrl);
+    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
+    const token = (settings.token || "").trim();
+    if (!token) throw new Error("Missing sync token.");
+    const forceFull = opts.forceFull === true;
+    const cursorFrom = forceFull ? 0 : await getLastServerSyncV3Cursor();
+    const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const ownCountry = ownPlayerId ? await fetchOwnCountryCode(ownPlayerId) : null;
+    const allDetails = await db.details.where("fetchedAt").above(cursorFrom).toArray();
+    const okDetails = allDetails.filter(
+      (d) => d?.status === "ok" && (d?.modeFamily === "duels" || d?.modeFamily === "teamduels")
+    );
+    const gameIds = okDetails.map((d) => String(d.gameId));
+    const feedGames = gameIds.length > 0 ? await db.games.where("gameId").anyOf(gameIds).toArray() : [];
+    const playedAtByGameId = /* @__PURE__ */ new Map();
+    for (const g of feedGames) {
+      if (typeof g.playedAt === "number") playedAtByGameId.set(g.gameId, g.playedAt);
     }
-    const playerId = await getCurrentPlayerId();
-    if (!playerId) {
-      return { ok: false, error: "no_player_id", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    const allRounds = gameIds.length > 0 ? await db.rounds.where("gameId").anyOf(gameIds).toArray() : [];
+    const playerMap = /* @__PURE__ */ new Map();
+    const addPlayer = (id, name, country, fetchedAt) => {
+      if (typeof id !== "string" || !id) return;
+      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+      const nm = typeof name === "string" && name.trim() ? name.trim() : null;
+      const existing = playerMap.get(id);
+      if (!existing) {
+        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, fetchedAt: fetchedAt ?? null });
+      } else {
+        if (nm && !existing.playerName) existing.playerName = nm;
+        if (cc && !existing.countryCode) existing.countryCode = cc;
+        if (fetchedAt && (!existing.fetchedAt || fetchedAt > existing.fetchedAt)) existing.fetchedAt = fetchedAt;
+      }
+    };
+    if (ownPlayerId) {
+      addPlayer(ownPlayerId, ownPlayerName, ownCountry, Date.now());
     }
-    const batchUrl = v3BatchEndpoint(settings.endpointUrl);
-    const clientVersion = getUserscriptVersion2();
-    let localGames;
-    if (opts.gameIds) {
-      const gameIdSet = new Set(opts.gameIds);
-      localGames = await dbV2.games.filter((g) => gameIdSet.has(g.gameId) && (g.modeFamily === "duels" || g.modeFamily === "teamduels")).toArray();
-    } else {
-      localGames = await dbV2.games.filter((g) => g.modeFamily === "duels" || g.modeFamily === "teamduels").toArray();
+    const duelGames = [];
+    const tdGames = [];
+    const duelGameIds = /* @__PURE__ */ new Set();
+    const tdGameIds = /* @__PURE__ */ new Set();
+    for (const d of okDetails) {
+      const playedAt = playedAtByGameId.get(d.gameId) ?? null;
+      const fetchedAt = typeof d.fetchedAt === "number" ? d.fetchedAt : void 0;
+      if (d.modeFamily === "duels") {
+        addPlayer(d.player_self_id, d.player_self_name, d.player_self_country, fetchedAt);
+        addPlayer(d.player_opponent_id, d.player_opponent_name, d.player_opponent_country, fetchedAt);
+        const winnerPlayerId = d.player_self_victory === true ? d.player_self_id || null : d.player_self_victory === false ? d.player_opponent_id || null : null;
+        duelGames.push({
+          gameId: d.gameId,
+          p1_playerId: d.player_self_id || null,
+          p2_playerId: d.player_opponent_id || null,
+          mapSlug: d.mapSlug || null,
+          mapName: d.mapName || null,
+          movementType: d.movementType || null,
+          isRated: d.isRated != null ? d.isRated ? 1 : 0 : null,
+          totalRounds: d.totalRounds ?? null,
+          winnerPlayerId,
+          p1_ratingAfter: n(d.player_self_endRating),
+          p1_ratingDelta: rDelta(d.player_self_endRating, d.player_self_startRating),
+          p1_movingRatingAfter: n(d.player_self_movingRatingAfter),
+          p1_movingRatingDelta: rDelta(d.player_self_movingRatingAfter, d.player_self_movingRatingBefore),
+          p1_noMoveRatingAfter: n(d.player_self_noMoveRatingAfter),
+          p1_noMoveRatingDelta: rDelta(d.player_self_noMoveRatingAfter, d.player_self_noMoveRatingBefore),
+          p1_nmpzRatingAfter: n(d.player_self_nmpzRatingAfter),
+          p1_nmpzRatingDelta: rDelta(d.player_self_nmpzRatingAfter, d.player_self_nmpzRatingBefore),
+          p2_ratingAfter: n(d.player_opponent_endRating),
+          p2_ratingDelta: rDelta(d.player_opponent_endRating, d.player_opponent_startRating),
+          p2_movingRatingAfter: n(d.player_opponent_movingRatingAfter),
+          p2_movingRatingDelta: rDelta(d.player_opponent_movingRatingAfter, d.player_opponent_movingRatingBefore),
+          p2_noMoveRatingAfter: n(d.player_opponent_noMoveRatingAfter),
+          p2_noMoveRatingDelta: rDelta(d.player_opponent_noMoveRatingAfter, d.player_opponent_noMoveRatingBefore),
+          p2_nmpzRatingAfter: n(d.player_opponent_nmpzRatingAfter),
+          p2_nmpzRatingDelta: rDelta(d.player_opponent_nmpzRatingAfter, d.player_opponent_nmpzRatingBefore),
+          playedAt
+        });
+        duelGameIds.add(d.gameId);
+      } else if (d.modeFamily === "teamduels") {
+        addPlayer(d.player_self_id, d.player_self_name, d.player_self_country, fetchedAt);
+        addPlayer(d.player_mate_id, d.player_mate_name, d.player_mate_country, fetchedAt);
+        addPlayer(d.player_opponent_id, d.player_opponent_name, d.player_opponent_country, fetchedAt);
+        addPlayer(d.player_opponent_mate_id, d.player_opponent_mate_name, d.player_opponent_mate_country, fetchedAt);
+        const winnerTeam = d.player_self_victory === true ? "blue" : d.player_self_victory === false ? "red" : null;
+        tdGames.push({
+          gameId: d.gameId,
+          p1_playerId: d.player_self_id || null,
+          p2_playerId: d.player_mate_id || null,
+          p3_playerId: d.player_opponent_id || null,
+          p4_playerId: d.player_opponent_mate_id || null,
+          mapSlug: d.mapSlug || null,
+          mapName: d.mapName || null,
+          movementType: d.movementType || null,
+          isRated: d.isRated != null ? d.isRated ? 1 : 0 : null,
+          totalRounds: d.totalRounds ?? null,
+          winnerTeam,
+          p1_ratingAfter: n(d.player_self_endRating),
+          p1_ratingDelta: rDelta(d.player_self_endRating, d.player_self_startRating),
+          p2_ratingAfter: n(d.player_mate_endRating),
+          p2_ratingDelta: rDelta(d.player_mate_endRating, d.player_mate_startRating),
+          p3_ratingAfter: n(d.player_opponent_endRating),
+          p3_ratingDelta: rDelta(d.player_opponent_endRating, d.player_opponent_startRating),
+          p4_ratingAfter: n(d.player_opponent_mate_endRating),
+          p4_ratingDelta: rDelta(d.player_opponent_mate_endRating, d.player_opponent_mate_startRating),
+          playedAt
+        });
+        tdGameIds.add(d.gameId);
+      }
     }
-    if (localGames.length === 0) {
-      return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
-    }
-    const allRounds = await dbV2.rounds.toArray();
-    const roundsByGameId = /* @__PURE__ */ new Map();
+    const duelRounds = [];
+    const tdRounds = [];
     for (const r of allRounds) {
-      const list = roundsByGameId.get(r.gameId);
-      if (list) list.push(r);
-      else roundsByGameId.set(r.gameId, [r]);
-    }
-    const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
-    let totalGamesUploaded = 0;
-    let totalGamesNew = 0;
-    let totalGamesSkipped = 0;
-    let totalRoundsNew = 0;
-    let batchIndex = 0;
-    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
-      batchIndex++;
-      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
-      const roundBatch = [];
-      for (const g of gameBatch) {
-        const r = roundsByGameId.get(g.gameId);
-        if (r) roundBatch.push(...r);
+      const playedAt = playedAtByGameId.get(r.gameId) ?? null;
+      if (duelGameIds.has(r.gameId)) {
+        duelRounds.push({
+          gameId: r.gameId,
+          roundNumber: r.roundNumber,
+          trueLat: n(r.trueLat),
+          trueLng: n(r.trueLng),
+          trueCountry: uc(r.trueCountry),
+          trueHeading: n(r.trueHeadingDeg),
+          startTime: n(r.startTime),
+          durationSec: n(r.durationSeconds),
+          isHealingRound: b(r.isHealingRound),
+          damageMultiplier: n(r.damageMultiplier),
+          p1_lat: n(r.player_self_guessLat),
+          p1_lng: n(r.player_self_guessLng),
+          p1_country: uc(r.player_self_guessCountry),
+          p1_score: n(r.player_self_score),
+          p1_distanceKm: n(r.player_self_distanceKm),
+          p1_timeSec: null,
+          p1_timedOut: 0,
+          p1_healthAfter: n(r.player_self_healthAfter),
+          p1_isBestGuess: 0,
+          p2_lat: n(r.player_opponent_guessLat),
+          p2_lng: n(r.player_opponent_guessLng),
+          p2_country: uc(r.player_opponent_guessCountry),
+          p2_score: n(r.player_opponent_score),
+          p2_distanceKm: n(r.player_opponent_distanceKm),
+          p2_healthAfter: n(r.player_opponent_healthAfter),
+          p2_isBestGuess: 0,
+          playedAt
+        });
+      } else if (tdGameIds.has(r.gameId)) {
+        tdRounds.push({
+          gameId: r.gameId,
+          roundNumber: r.roundNumber,
+          trueLat: n(r.trueLat),
+          trueLng: n(r.trueLng),
+          trueCountry: uc(r.trueCountry),
+          trueHeading: n(r.trueHeadingDeg),
+          startTime: n(r.startTime),
+          durationSec: n(r.durationSeconds),
+          isHealingRound: b(r.isHealingRound),
+          damageMultiplier: n(r.damageMultiplier),
+          p1_lat: n(r.player_self_guessLat),
+          p1_lng: n(r.player_self_guessLng),
+          p1_country: uc(r.player_self_guessCountry),
+          p1_score: n(r.player_self_score),
+          p1_distanceKm: n(r.player_self_distanceKm),
+          p1_timeSec: null,
+          p1_isBestGuess: b(r.player_self_isBestGuess),
+          p2_lat: n(r.player_mate_guessLat),
+          p2_lng: n(r.player_mate_guessLng),
+          p2_country: uc(r.player_mate_guessCountry),
+          p2_score: n(r.player_mate_score),
+          p2_distanceKm: n(r.player_mate_distanceKm),
+          p3_lat: n(r.player_opponent_guessLat),
+          p3_lng: n(r.player_opponent_guessLng),
+          p3_country: uc(r.player_opponent_guessCountry),
+          p3_score: n(r.player_opponent_score),
+          p3_distanceKm: n(r.player_opponent_distanceKm),
+          p4_lat: n(r.player_opponent_mate_guessLat),
+          p4_lng: n(r.player_opponent_mate_guessLng),
+          p4_country: uc(r.player_opponent_mate_guessCountry),
+          p4_score: n(r.player_opponent_mate_score),
+          p4_distanceKm: n(r.player_opponent_mate_distanceKm),
+          blue_healthAfter: n(r.team_self_healthAfter),
+          red_healthAfter: n(r.team_opponent_healthAfter),
+          playedAt
+        });
       }
-      const batchId = `v3_${playerId}_${Date.now()}_${batchIndex}`;
-      const body = {
-        batchId,
-        playerId,
-        clientVersion: clientVersion ?? void 0,
-        games: gameBatch,
-        rounds: roundBatch
-      };
-      let res;
+    }
+    const players = Array.from(playerMap.values());
+    const envelope = {
+      schema: "geoanalyzr-v3-sync",
+      schemaVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion3(),
+      owner: { playerId: ownPlayerId, playerName: ownPlayerName },
+      cursor: { from: cursorFrom },
+      players,
+      duel_games: duelGames,
+      duel_rounds: duelRounds,
+      team_duel_games: tdGames,
+      team_duel_rounds: tdRounds
+    };
+    const jsonBody = JSON.stringify(envelope);
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...getUserscriptVersion3() ? { "X-GA-Script-Version": String(getUserscriptVersion3()) } : {}
+    };
+    const res = await gmPostJson(endpointUrl, jsonBody, headers);
+    const httpOk = res.status >= 200 && res.status < 300;
+    const parsed = (() => {
       try {
-        res = await httpPost(batchUrl, settings.token, body);
-      } catch (e) {
-        return {
-          ok: false,
-          status: 0,
-          error: e instanceof Error ? e.message : String(e),
-          gamesUploaded: totalGamesUploaded,
-          gamesNew: totalGamesNew,
-          gamesSkipped: totalGamesSkipped,
-          roundsNew: totalRoundsNew,
-          batches: batchIndex - 1
-        };
+        return JSON.parse(res.text);
+      } catch {
+        return null;
       }
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+    })();
+    if (httpOk) {
+      const maxFetchedAt = okDetails.reduce((m, d) => Math.max(m, Number(d.fetchedAt) || 0), 0);
+      if (maxFetchedAt > 0) {
+        await db.meta.put({
+          key: SYNC_META_KEY_V3,
+          value: { cursorFrom, cursorTo: maxFetchedAt, lastSyncAt: Date.now() },
+          updatedAt: Date.now()
+        });
       }
-      if (res.status < 200 || res.status >= 300) {
-        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
-      }
-      totalGamesUploaded += gameBatch.length;
-      totalGamesNew += Number(res.data?.gamesNew) || 0;
-      totalGamesSkipped += Number(res.data?.gamesSkipped) || 0;
-      totalRoundsNew += Number(res.data?.roundsNew) || 0;
     }
+    const serverCounts = parsed?.counts ?? null;
     return {
-      ok: true,
-      gamesUploaded: totalGamesUploaded,
-      gamesNew: totalGamesNew,
-      gamesSkipped: totalGamesSkipped,
-      roundsNew: totalRoundsNew,
-      batches: batchIndex
+      ok: httpOk,
+      status: res.status,
+      responseText: res.text,
+      counts: serverCounts ?? {
+        players: players.length,
+        duel_games: duelGames.length,
+        duel_rounds: duelRounds.length,
+        team_duel_games: tdGames.length,
+        team_duel_rounds: tdRounds.length
+      },
+      bytesJson: jsonBody.length
     };
   }
-  async function syncClassicToServerV3() {
+
+  // src/serverSync_v3_db2.ts
+  var CURSOR_KEY_DUELS = "server_sync_v3";
+  var CURSOR_KEY_STANDARD = "server_sync_v3_standard";
+  var BATCH_SIZE2 = 500;
+  function n2(v) {
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  }
+  function uc2(v) {
+    if (typeof v !== "string") return null;
+    const x = v.trim().toUpperCase();
+    return x || null;
+  }
+  function rDelta2(after, before) {
+    return after != null && before != null ? after - before : null;
+  }
+  function getUserscriptVersion4() {
+    const v = globalThis?.GM_info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  async function fetchOwnCountryCode2(playerId) {
+    try {
+      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+      if (res.status >= 200 && res.status < 300) {
+        const cc = res.data?.countryCode ?? res.data?.user?.countryCode;
+        if (typeof cc === "string" && cc.trim()) return cc.trim().toUpperCase();
+      }
+    } catch {
+    }
+    return null;
+  }
+  function gmPost(url, body, token) {
+    return new Promise((resolve, reject) => {
+      const gm = getGmXmlhttpRequest();
+      if (!gm) return reject(new Error("GM_xmlhttpRequest not available"));
+      gm({
+        method: "POST",
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          ...getUserscriptVersion4() ? { "X-GA-Script-Version": getUserscriptVersion4() } : {}
+        },
+        data: body,
+        responseType: "text",
+        timeout: 12e4,
+        onload: (r) => resolve({ status: r?.status ?? 0, text: r?.responseText ?? "" }),
+        onerror: (e) => reject(e instanceof Error ? e : new Error("Request failed")),
+        ontimeout: () => reject(new Error("Request timeout"))
+      });
+    });
+  }
+  async function postBatch(url, token, payload) {
+    const body = JSON.stringify({
+      schema: "geoanalyzr-v3-sync",
+      schemaVersion: 1,
+      createdAt: Date.now(),
+      appVersion: getUserscriptVersion4(),
+      ...payload
+    });
+    const res = await gmPost(url, body, token);
+    if (res.status < 200 || res.status >= 300) {
+      const parsed = (() => {
+        try {
+          return JSON.parse(res.text);
+        } catch {
+          return null;
+        }
+      })();
+      throw new Error(parsed?.error ?? `HTTP ${res.status}`);
+    }
+  }
+  function chunk(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+  }
+  async function syncV3FromDb2(opts = {}) {
     const settings = loadServerSyncSettings();
-    if (!settings.token) {
-      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
-    }
-    const localGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt !== void 0).toArray();
-    if (localGames.length === 0) {
-      return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
-    }
-    const allRounds = await dbV2.classicRounds.toArray();
-    const roundsByGameId = /* @__PURE__ */ new Map();
-    for (const r of allRounds) {
-      const list = roundsByGameId.get(r.gameId);
-      if (list) list.push(r);
-      else roundsByGameId.set(r.gameId, [r]);
-    }
-    const batchUrl = v3ClassicBatchEndpoint(settings.endpointUrl);
-    const clientVersion = getUserscriptVersion2();
-    let totalGamesUploaded = 0;
-    let totalGamesNew = 0;
-    let totalRoundsNew = 0;
-    let batchIndex = 0;
-    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
-      batchIndex++;
-      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
-      const roundBatch = [];
-      for (const g of gameBatch) {
-        const r = roundsByGameId.get(g.gameId);
-        if (r) roundBatch.push(...r);
+    if (!settings.token) return { ok: false, error: "no_token" };
+    const url = deriveV3SyncUrl(settings.endpointUrl);
+    if (!url) return { ok: false, error: "no_endpoint" };
+    const forceFull = opts.forceFull === true;
+    const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
+    const ownCountry = ownPlayerId ? await fetchOwnCountryCode2(ownPlayerId) : null;
+    const totalCounts = {
+      players: 0,
+      standard_games: 0,
+      standard_rounds: 0,
+      duel_games: 0,
+      duel_rounds: 0,
+      team_duel_games: 0,
+      team_duel_rounds: 0
+    };
+    const playerMap = /* @__PURE__ */ new Map();
+    const addPlayer = (id, name, country, fetchedAt) => {
+      if (typeof id !== "string" || !id) return;
+      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+      const nm = typeof name === "string" && name.trim() ? name.trim() : null;
+      const existing = playerMap.get(id);
+      if (!existing) {
+        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, fetchedAt: fetchedAt ?? null });
+      } else {
+        if (nm && !existing.playerName) existing.playerName = nm;
+        if (cc && !existing.countryCode) existing.countryCode = cc;
+        if (fetchedAt && (!existing.fetchedAt || fetchedAt > existing.fetchedAt)) existing.fetchedAt = fetchedAt;
       }
-      const batchId = `v3classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
-      const body = { batchId, clientVersion: clientVersion ?? void 0, games: gameBatch, rounds: roundBatch };
-      let res;
-      try {
-        res = await httpPost(batchUrl, settings.token, body);
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-          gamesUploaded: totalGamesUploaded,
-          gamesNew: totalGamesNew,
-          roundsNew: totalRoundsNew,
-          batches: batchIndex - 1
-        };
-      }
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
-      }
-      if (res.status < 200 || res.status >= 300) {
-        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
-      }
-      totalGamesUploaded += gameBatch.length;
-      totalGamesNew += Number(res.data?.gamesNew) || 0;
-      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    };
+    if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry, Date.now());
+    const stdCursorFrom = forceFull ? 0 : await getSyncState(CURSOR_KEY_STANDARD) ?? 0;
+    let classicGames;
+    if (opts.gameIds && !forceFull) {
+      const idSet = new Set(opts.gameIds);
+      classicGames = await dbV2.classicGames.filter((g) => idSet.has(g.gameId) && g.detailFetchedAt != null).toArray();
+    } else {
+      classicGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt != null && (forceFull || g.detailFetchedAt > stdCursorFrom)).toArray();
     }
-    return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
+    if (ownPlayerId) {
+      const stdGameRows = classicGames.map((g) => ({
+        gameId: g.gameId,
+        p1_playerId: ownPlayerId,
+        mapSlug: null,
+        mapName: g.mapName ?? null,
+        movementType: g.movement ?? "moving",
+        timeLimit: g.timeLimit ?? null,
+        roundCount: g.roundCount ?? null,
+        totalScore: g.totalScore ?? null,
+        totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1e3 : null,
+        totalTimeSec: g.totalTimeSec ?? null,
+        totalSteps: g.totalSteps ?? null,
+        playedAt: g.playedAt ?? null
+      }));
+      for (const batch of chunk(stdGameRows, BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { standard_games: batch });
+        totalCounts.standard_games += batch.length;
+      }
+      if (classicGames.length > 0) {
+        const stdGameIds = classicGames.map((g) => g.gameId);
+        const classicRounds = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
+        const stdRoundRows = classicRounds.map((r) => ({
+          gameId: r.gameId,
+          roundNumber: r.roundNumber,
+          panoId: r.panoId ?? null,
+          trueLat: n2(r.trueLat),
+          trueLng: n2(r.trueLng),
+          trueCountry: uc2(r.trueCountry),
+          trueHeading: n2(r.trueHeadingDeg),
+          truePitch: null,
+          trueZoom: null,
+          p1_lat: n2(r.selfLat),
+          p1_lng: n2(r.selfLng),
+          p1_country: uc2(r.selfCountry),
+          p1_score: n2(r.selfScore),
+          p1_distanceKm: n2(r.selfDistance),
+          p1_timeSec: n2(r.selfTimeSec),
+          p1_steps: n2(r.selfSteps),
+          timedOut: r.timedOut ? 1 : 0,
+          skippedRound: r.skippedRound ? 1 : 0,
+          playedAt: r.playedAt ?? null
+        }));
+        for (const batch of chunk(stdRoundRows, BATCH_SIZE2)) {
+          await postBatch(url, settings.token, { standard_rounds: batch });
+          totalCounts.standard_rounds += batch.length;
+        }
+      }
+    }
+    const duelCursorFrom = forceFull ? 0 : await getSyncState(CURSOR_KEY_DUELS) ?? 0;
+    let games;
+    if (opts.gameIds && !forceFull) {
+      const idSet = new Set(opts.gameIds);
+      games = await dbV2.games.filter(
+        (g) => idSet.has(g.gameId) && (g.modeFamily === "duels" || g.modeFamily === "teamduels") && g.detailFetchedAt != null
+      ).toArray();
+    } else {
+      games = await dbV2.games.filter(
+        (g) => (g.modeFamily === "duels" || g.modeFamily === "teamduels") && g.detailFetchedAt != null && (forceFull || g.detailFetchedAt > duelCursorFrom)
+      ).toArray();
+    }
+    const duelGameRows = [];
+    const tdGameRows = [];
+    const duelGameIds = /* @__PURE__ */ new Set();
+    const tdGameIds = /* @__PURE__ */ new Set();
+    for (const g of games) {
+      const fat = g.detailFetchedAt;
+      if (g.modeFamily === "duels") {
+        addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
+        addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
+        const winnerPlayerId = g.winnerTeamIdx === 0 ? g.p1Id ?? null : g.winnerTeamIdx === 1 ? g.p2Id ?? null : null;
+        duelGameRows.push({
+          gameId: g.gameId,
+          p1_playerId: g.p1Id ?? null,
+          p2_playerId: g.p2Id ?? null,
+          mapSlug: g.mapSlug ?? null,
+          mapName: g.mapName ?? null,
+          movementType: g.movementType ?? null,
+          isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
+          totalRounds: g.totalRounds ?? null,
+          winnerPlayerId,
+          p1_ratingAfter: n2(g.p1RatingAfter),
+          p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),
+          p1_movingRatingAfter: n2(g.p1MovingRatingAfter),
+          p1_movingRatingDelta: rDelta2(g.p1MovingRatingAfter, g.p1MovingRatingBefore),
+          p1_noMoveRatingAfter: n2(g.p1NoMoveRatingAfter),
+          p1_noMoveRatingDelta: rDelta2(g.p1NoMoveRatingAfter, g.p1NoMoveRatingBefore),
+          p1_nmpzRatingAfter: n2(g.p1NmpzRatingAfter),
+          p1_nmpzRatingDelta: rDelta2(g.p1NmpzRatingAfter, g.p1NmpzRatingBefore),
+          p2_ratingAfter: n2(g.p2RatingAfter),
+          p2_ratingDelta: rDelta2(g.p2RatingAfter, g.p2RatingBefore),
+          p2_movingRatingAfter: n2(g.p2MovingRatingAfter),
+          p2_movingRatingDelta: rDelta2(g.p2MovingRatingAfter, g.p2MovingRatingBefore),
+          p2_noMoveRatingAfter: n2(g.p2NoMoveRatingAfter),
+          p2_noMoveRatingDelta: rDelta2(g.p2NoMoveRatingAfter, g.p2NoMoveRatingBefore),
+          p2_nmpzRatingAfter: n2(g.p2NmpzRatingAfter),
+          p2_nmpzRatingDelta: rDelta2(g.p2NmpzRatingAfter, g.p2NmpzRatingBefore),
+          playedAt: g.playedAt ?? null
+        });
+        duelGameIds.add(g.gameId);
+      } else if (g.modeFamily === "teamduels") {
+        addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
+        addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
+        addPlayer(g.p3Id, g.p3Name, g.p3Country, fat);
+        addPlayer(g.p4Id, g.p4Name, g.p4Country, fat);
+        const winnerTeam = g.winnerTeamIdx === 0 ? "blue" : g.winnerTeamIdx === 1 ? "red" : null;
+        tdGameRows.push({
+          gameId: g.gameId,
+          p1_playerId: g.p1Id ?? null,
+          p2_playerId: g.p2Id ?? null,
+          p3_playerId: g.p3Id ?? null,
+          p4_playerId: g.p4Id ?? null,
+          mapSlug: g.mapSlug ?? null,
+          mapName: g.mapName ?? null,
+          movementType: g.movementType ?? null,
+          isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
+          totalRounds: g.totalRounds ?? null,
+          winnerTeam,
+          p1_ratingAfter: n2(g.p1RatingAfter),
+          p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),
+          p2_ratingAfter: n2(g.p2RatingAfter),
+          p2_ratingDelta: rDelta2(g.p2RatingAfter, g.p2RatingBefore),
+          p3_ratingAfter: n2(g.p3RatingAfter),
+          p3_ratingDelta: rDelta2(g.p3RatingAfter, g.p3RatingBefore),
+          p4_ratingAfter: n2(g.p4RatingAfter),
+          p4_ratingDelta: rDelta2(g.p4RatingAfter, g.p4RatingBefore),
+          playedAt: g.playedAt ?? null
+        });
+        tdGameIds.add(g.gameId);
+      }
+    }
+    const allDuelTdIds = [...duelGameIds, ...tdGameIds];
+    const rounds = allDuelTdIds.length > 0 ? await dbV2.rounds.where("gameId").anyOf(allDuelTdIds).toArray() : [];
+    const duelRoundRows = [];
+    const tdRoundRows = [];
+    for (const r of rounds) {
+      if (duelGameIds.has(r.gameId)) {
+        duelRoundRows.push({
+          gameId: r.gameId,
+          roundNumber: r.roundNumber,
+          trueLat: n2(r.trueLat),
+          trueLng: n2(r.trueLng),
+          trueCountry: uc2(r.trueCountry),
+          trueHeading: n2(r.trueHeadingDeg),
+          startTime: n2(r.startTime),
+          durationSec: n2(r.durationSec),
+          isHealingRound: null,
+          damageMultiplier: n2(r.damageMultiplier),
+          p1_lat: n2(r.p1Lat),
+          p1_lng: n2(r.p1Lng),
+          p1_country: uc2(r.p1Country),
+          p1_score: n2(r.p1Score),
+          p1_distanceKm: n2(r.p1Distance),
+          p1_timeSec: n2(r.p1TimeSec),
+          p1_timedOut: r.p1TimedOut ? 1 : 0,
+          p1_healthAfter: n2(r.team0HealthAfter),
+          p1_isBestGuess: 0,
+          p2_lat: n2(r.p2Lat),
+          p2_lng: n2(r.p2Lng),
+          p2_country: uc2(r.p2Country),
+          p2_score: n2(r.p2Score),
+          p2_distanceKm: n2(r.p2Distance),
+          p2_timeSec: n2(r.p2TimeSec),
+          p2_timedOut: r.p2TimedOut ? 1 : 0,
+          p2_healthAfter: n2(r.team1HealthAfter),
+          p2_isBestGuess: 0,
+          playedAt: r.startTime ?? null
+        });
+      } else if (tdGameIds.has(r.gameId)) {
+        tdRoundRows.push({
+          gameId: r.gameId,
+          roundNumber: r.roundNumber,
+          trueLat: n2(r.trueLat),
+          trueLng: n2(r.trueLng),
+          trueCountry: uc2(r.trueCountry),
+          trueHeading: n2(r.trueHeadingDeg),
+          startTime: n2(r.startTime),
+          durationSec: n2(r.durationSec),
+          isHealingRound: r.isHealing ? 1 : null,
+          damageMultiplier: n2(r.damageMultiplier),
+          p1_lat: n2(r.p1Lat),
+          p1_lng: n2(r.p1Lng),
+          p1_country: uc2(r.p1Country),
+          p1_score: n2(r.p1Score),
+          p1_distanceKm: n2(r.p1Distance),
+          p1_timeSec: n2(r.p1TimeSec),
+          p1_timedOut: r.p1TimedOut ? 1 : 0,
+          p1_isBestGuess: r.p1IsBetterGuess ? 1 : 0,
+          p2_lat: n2(r.p2Lat),
+          p2_lng: n2(r.p2Lng),
+          p2_country: uc2(r.p2Country),
+          p2_score: n2(r.p2Score),
+          p2_distanceKm: n2(r.p2Distance),
+          p2_timeSec: n2(r.p2TimeSec),
+          p2_timedOut: r.p2TimedOut ? 1 : 0,
+          p2_isBestGuess: r.p2IsBetterGuess ? 1 : 0,
+          p3_lat: n2(r.p3Lat),
+          p3_lng: n2(r.p3Lng),
+          p3_country: uc2(r.p3Country),
+          p3_score: n2(r.p3Score),
+          p3_distanceKm: n2(r.p3Distance),
+          p3_timeSec: n2(r.p3TimeSec),
+          p3_timedOut: r.p3TimedOut ? 1 : 0,
+          p3_isBestGuess: r.p3IsBetterGuess ? 1 : 0,
+          p4_lat: n2(r.p4Lat),
+          p4_lng: n2(r.p4Lng),
+          p4_country: uc2(r.p4Country),
+          p4_score: n2(r.p4Score),
+          p4_distanceKm: n2(r.p4Distance),
+          p4_isBestGuess: r.p4IsBetterGuess ? 1 : 0,
+          blue_healthAfter: n2(r.team0HealthAfter),
+          red_healthAfter: n2(r.team1HealthAfter),
+          playedAt: r.startTime ?? null
+        });
+      }
+    }
+    try {
+      const players = Array.from(playerMap.values());
+      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { players: batch });
+        totalCounts.players += batch.length;
+      }
+      if (players.length === 0) {
+        await postBatch(url, settings.token, { players: [] });
+      }
+      for (const batch of chunk(duelGameRows, BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { duel_games: batch });
+        totalCounts.duel_games += batch.length;
+      }
+      for (const batch of chunk(duelRoundRows, BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { duel_rounds: batch });
+        totalCounts.duel_rounds += batch.length;
+      }
+      for (const batch of chunk(tdGameRows, BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { team_duel_games: batch });
+        totalCounts.team_duel_games += batch.length;
+      }
+      for (const batch of chunk(tdRoundRows, BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { team_duel_rounds: batch });
+        totalCounts.team_duel_rounds += batch.length;
+      }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    const maxDuelFetchedAt = games.reduce((m, g) => Math.max(m, g.detailFetchedAt ?? 0), 0);
+    if (maxDuelFetchedAt > 0) await setSyncState(CURSOR_KEY_DUELS, maxDuelFetchedAt);
+    const maxStdFetchedAt = classicGames.reduce((m, g) => Math.max(m, g.detailFetchedAt ?? 0), 0);
+    if (maxStdFetchedAt > 0) await setSyncState(CURSOR_KEY_STANDARD, maxStdFetchedAt);
+    return { ok: true, counts: totalCounts };
   }
 
   // src/feedFetcher_v2.ts
@@ -11870,8 +12385,8 @@ ${shapes}`.trim();
   function asNum2(v) {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (typeof v === "string") {
-      const n2 = Number(v);
-      if (Number.isFinite(n2)) return n2;
+      const n3 = Number(v);
+      if (Number.isFinite(n3)) return n3;
     }
     return void 0;
   }
@@ -12586,8 +13101,8 @@ ${shapes}`.trim();
     return void 0;
   }
   function num(v) {
-    const n2 = Number(v);
-    return Number.isFinite(n2) ? n2 : void 0;
+    const n3 = Number(v);
+    return Number.isFinite(n3) ? n3 : void 0;
   }
   function str(v) {
     return typeof v === "string" && v.trim() ? v.trim() : void 0;
@@ -12605,9 +13120,9 @@ ${shapes}`.trim();
     let processed = 0;
     const GAME_CHUNK = 200;
     for (let i = 0; i < oldGames.length; i += GAME_CHUNK) {
-      const chunk = oldGames.slice(i, i + GAME_CHUNK);
+      const chunk2 = oldGames.slice(i, i + GAME_CHUNK);
       const mapped = [];
-      for (const feed of chunk) {
+      for (const feed of chunk2) {
         try {
           const det = detailsByGameId.get(feed.gameId);
           const modeFamily = toModeFamily(feed.modeFamily ?? det?.modeFamily, feed.isTeamDuels ?? det?.isTeamDuels);
@@ -12655,7 +13170,7 @@ ${shapes}`.trim();
         }
       }
       await dbV2.games.bulkPut(mapped);
-      processed += chunk.length;
+      processed += chunk2.length;
       onProgress?.({ phase: "games", processed, total, errors: totalErrors });
     }
     const oldRounds = await oldDb.rounds.toArray();
@@ -12663,9 +13178,9 @@ ${shapes}`.trim();
     let roundProcessed = 0;
     const ROUND_CHUNK = 500;
     for (let i = 0; i < oldRounds.length; i += ROUND_CHUNK) {
-      const chunk = oldRounds.slice(i, i + ROUND_CHUNK);
+      const chunk2 = oldRounds.slice(i, i + ROUND_CHUNK);
       const mapped = [];
-      for (const r of chunk) {
+      for (const r of chunk2) {
         try {
           const startTime = num(r.startTime);
           const endTime = num(r.endTime);
@@ -12723,7 +13238,7 @@ ${shapes}`.trim();
         }
       }
       await dbV2.rounds.bulkPut(mapped);
-      roundProcessed += chunk.length;
+      roundProcessed += chunk2.length;
       onProgress?.({ phase: "rounds", processed: roundProcessed, total: roundTotal, errors: totalErrors });
     }
     oldDb.close();
@@ -12792,9 +13307,9 @@ ${shapes}`.trim();
     return "all";
   }
   function normalizeMs(value) {
-    const n2 = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-    if (!Number.isFinite(n2)) return 0;
-    return Math.max(0, Math.floor(n2));
+    const n3 = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isFinite(n3)) return 0;
+    return Math.max(0, Math.floor(n3));
   }
   function loadFetchGameFilter() {
     const modeFamily = normalizeModeFamily(readGmValue2(`${GM_VALUE_PREFIX2}mode_family`));
@@ -13080,10 +13595,10 @@ ${shapes}`.trim();
       const name = String(info?.script?.name || "");
       return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
     };
-    const formatBytes = (n2) => {
-      if (!Number.isFinite(n2) || n2 <= 0) return "0 B";
+    const formatBytes = (n3) => {
+      if (!Number.isFinite(n3) || n3 <= 0) return "0 B";
       const units = ["B", "KB", "MB", "GB"];
-      let v = n2;
+      let v = n3;
       let i = 0;
       while (v >= 1024 && i < units.length - 1) {
         v /= 1024;
@@ -13380,10 +13895,9 @@ ${shapes}`.trim();
         }
         if (isSyncVariant) {
           const modeLabel = forceFull ? "Synced full" : "Synced";
-          const v3SyncPromise = syncToServerV3({ gameIds: opts.gameIds }).catch(() => {
+          const v3SyncPromise = syncV3FromDb2({ gameIds: opts.gameIds }).catch(() => {
           });
-          const v3ClassicSyncPromise = syncClassicToServerV3().catch(() => {
-          });
+          const v3ClassicSyncPromise = Promise.resolve();
           const v2res = await syncToServerV2({
             full: forceFull,
             gameIds: opts.gameIds,
@@ -14531,9 +15045,9 @@ ${shapes}`.trim();
             }
             for (const [gid, m] of counts.entries()) {
               let best = { k: "unknown", n: 0 };
-              for (const [k, n2] of m.entries()) {
+              for (const [k, n3] of m.entries()) {
                 const kk = k;
-                if (typeof n2 === "number" && n2 > best.n) best = { k: kk, n: n2 };
+                if (typeof n3 === "number" && n3 > best.n) best = { k: kk, n: n3 };
               }
               out.set(gid, best.k);
             }
@@ -14774,10 +15288,10 @@ ${shapes}`.trim();
     let mutated = false;
     onStatus(`Normalizing legacy rounds... (0/${total})`);
     for (let offset = 0; offset < total; offset += batchSize) {
-      const chunk = await db.rounds.offset(offset).limit(batchSize).toArray();
-      scanned += chunk.length;
+      const chunk2 = await db.rounds.offset(offset).limit(batchSize).toArray();
+      scanned += chunk2.length;
       const patch = [];
-      for (const r of chunk) {
+      for (const r of chunk2) {
         const normalized = normalizeLegacyRoundRow(r);
         if (normalized) {
           patch.push(normalized);
@@ -14850,10 +15364,10 @@ ${shapes}`.trim();
     let mutated = false;
     onStatus(`Backfilling guessCountry... (0/${total})`);
     for (let offset = 0; offset < total; offset += batchSize) {
-      const chunk = await db.rounds.offset(offset).limit(batchSize).toArray();
-      scanned += chunk.length;
+      const chunk2 = await db.rounds.offset(offset).limit(batchSize).toArray();
+      scanned += chunk2.length;
       const patch = [];
-      for (const r of chunk) {
+      for (const r of chunk2) {
         if (!r || typeof r !== "object") continue;
         const out = r;
         let changed = false;
@@ -14920,9 +15434,9 @@ ${shapes}`.trim();
     let newMaxFetchedAt = processedUpTo;
     const toDelete = [];
     for (let i = 0; i < unprocessed.length; i += batchSize) {
-      const chunk = unprocessed.slice(i, i + batchSize);
-      scanned += chunk.length;
-      for (const row of chunk) {
+      const chunk2 = unprocessed.slice(i, i + batchSize);
+      scanned += chunk2.length;
+      for (const row of chunk2) {
         if (!row || typeof row !== "object") continue;
         const fetchedAt = typeof row.fetchedAt === "number" ? row.fetchedAt : 0;
         if (fetchedAt > newMaxFetchedAt) newMaxFetchedAt = fetchedAt;
@@ -15044,13 +15558,13 @@ ${shapes}`.trim();
       if (typeof v === "string") {
         const s = v.trim();
         if (!s) return void 0;
-        const n2 = Number(s);
-        if (Number.isFinite(n2)) return n2;
+        const n3 = Number(s);
+        if (Number.isFinite(n3)) return n3;
         return void 0;
       }
       if (v instanceof Date) {
-        const n2 = v.getTime();
-        return Number.isFinite(n2) ? n2 : void 0;
+        const n3 = v.getTime();
+        return Number.isFinite(n3) ? n3 : void 0;
       }
       return void 0;
     };
@@ -15159,8 +15673,8 @@ ${shapes}`.trim();
     return ">180 sec";
   }
   function teammateNameKey(r) {
-    const n2 = getTeammateName(r);
-    const v = typeof n2 === "string" ? n2.trim() : "";
+    const n3 = getTeammateName(r);
+    const v = typeof n3 === "string" ? n3.trim() : "";
     return v.length ? v : null;
   }
   function trueStateKey(r) {
@@ -15295,8 +15809,8 @@ ${shapes}`.trim();
     return v.length ? v : null;
   }
   function mateLabel(r) {
-    const n2 = getTeammateName(r);
-    const v = typeof n2 === "string" ? n2.trim() : "";
+    const n3 = getTeammateName(r);
+    const v = typeof n3 === "string" ? n3.trim() : "";
     return v.length ? v : "Mate";
   }
   function winnerLabelForCompare(r, a, b3, prefer) {
@@ -15408,10 +15922,10 @@ ${shapes}`.trim();
       result: resultKeyAny,
       is_flawless_win: isFlawlessWinKeyAny,
       game_length: (g) => {
-        const n2 = g.roundsCount;
-        if (typeof n2 !== "number" || !Number.isFinite(n2)) return null;
-        if (n2 < 2) return null;
-        return String(Math.round(n2));
+        const n3 = g.roundsCount;
+        if (typeof n3 !== "number" || !Number.isFinite(n3)) return null;
+        if (n3 < 2) return null;
+        return String(Math.round(n3));
       }
     },
     session: {
@@ -15897,8 +16411,8 @@ ${shapes}`.trim();
               const v = pano?.heading ?? pano?.bearing ?? pano?.rotation ?? raw?.heading ?? raw?.bearing ?? raw?.rotation;
               if (typeof v === "number" && Number.isFinite(v)) r.trueHeadingDeg = v;
               else if (typeof v === "string") {
-                const n2 = Number(v);
-                if (Number.isFinite(n2)) r.trueHeadingDeg = n2;
+                const n3 = Number(v);
+                if (Number.isFinite(n3)) r.trueHeadingDeg = n3;
               }
             }
             delete r.raw;
@@ -15955,9 +16469,9 @@ ${shapes}`.trim();
             if (!d) continue;
             let changed = false;
             if (typeof r.player_mate_name !== "string" || !String(r.player_mate_name).trim()) {
-              const n2 = asTrimmedString3(d?.player_mate_name);
-              if (n2) {
-                r.player_mate_name = n2;
+              const n3 = asTrimmedString3(d?.player_mate_name);
+              if (n3) {
+                r.player_mate_name = n3;
                 changed = true;
               }
             }
@@ -16137,13 +16651,13 @@ ${shapes}`.trim();
           continue;
         }
         roundMaskByGame.set(gid, prevMask | bit);
-        const n2 = (uniqueRoundCountByGame.get(gid) ?? 0) + 1;
-        uniqueRoundCountByGame.set(gid, n2);
-        if (n2 > 25) invalid.add(gid);
+        const n3 = (uniqueRoundCountByGame.get(gid) ?? 0) + 1;
+        uniqueRoundCountByGame.set(gid, n3);
+        if (n3 > 25) invalid.add(gid);
       }
       setLoadingProgress({ phase: "Validating games (round indices)...", current: outRows.length, total: outRows.length });
-      for (const [gid, n2] of uniqueRoundCountByGame.entries()) {
-        if (n2 < 2) invalid.add(gid);
+      for (const [gid, n3] of uniqueRoundCountByGame.entries()) {
+        if (n3 < 2) invalid.add(gid);
       }
       corruptedGameIdsCache = invalid;
     } catch {
@@ -16205,14 +16719,14 @@ ${shapes}`.trim();
         const a = r?.playedAt;
         if (typeof a === "number" && Number.isFinite(a)) return a;
         if (typeof a === "string") {
-          const n2 = Number(a.trim());
-          if (Number.isFinite(n2)) return n2;
+          const n3 = Number(a.trim());
+          if (Number.isFinite(n3)) return n3;
         }
         const b3 = r?.ts;
         if (typeof b3 === "number" && Number.isFinite(b3)) return b3;
         if (typeof b3 === "string") {
-          const n2 = Number(b3.trim());
-          if (Number.isFinite(n2)) return n2;
+          const n3 = Number(b3.trim());
+          if (Number.isFinite(n3)) return n3;
         }
         return null;
       };
@@ -16447,14 +16961,14 @@ ${shapes}`.trim();
         const a = g?.playedAt;
         if (typeof a === "number" && Number.isFinite(a)) return a;
         if (typeof a === "string") {
-          const n2 = Number(a.trim());
-          if (Number.isFinite(n2)) return n2;
+          const n3 = Number(a.trim());
+          if (Number.isFinite(n3)) return n3;
         }
         const b3 = g?.ts;
         if (typeof b3 === "number" && Number.isFinite(b3)) return b3;
         if (typeof b3 === "string") {
-          const n2 = Number(b3.trim());
-          if (Number.isFinite(n2)) return n2;
+          const n3 = Number(b3.trim());
+          if (Number.isFinite(n3)) return n3;
         }
         return null;
       };
@@ -23351,8 +23865,8 @@ ${shapes}`.trim();
     }
   }
   function asInt(value, fallback) {
-    const n2 = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-    return Number.isFinite(n2) ? Math.round(n2) : fallback;
+    const n3 = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    return Number.isFinite(n3) ? Math.round(n3) : fallback;
   }
   function mkBtn(doc, label, onClick, kind = "ghost") {
     const b3 = doc.createElement("button");
@@ -23591,9 +24105,9 @@ ${shapes}`.trim();
         buttons: { apply: false, reset: true }
       };
       const patch = (next) => {
-        const n2 = cloneJson2(draft);
-        n2.dashboard.globalFilters = next;
-        draft = n2;
+        const n3 = cloneJson2(draft);
+        n3.dashboard.globalFilters = next;
+        draft = n3;
         markDirty();
       };
       const controls = Array.isArray(current.controls) ? current.controls : [];
@@ -23819,7 +24333,7 @@ ${shapes}`.trim();
               )
             );
             item.appendChild(
-              mkNumberInput(doc, "map.height", asInt(map.height, 340), (n2) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n2)) } }), {
+              mkNumberInput(doc, "map.height", asInt(map.height, 340), (n3) => patchCtrl({ ...ctrl, map: { ...map, height: Math.max(160, Math.min(1200, n3)) } }), {
                 min: 160,
                 max: 1200,
                 step: 10
@@ -24458,8 +24972,8 @@ ${shapes}`.trim();
               patchCtrl(next);
               return;
             }
-            const n2 = asInt(raw, ctrl.width ?? 0);
-            const clamped = Math.max(120, Math.min(900, n2));
+            const n3 = asInt(raw, ctrl.width ?? 0);
+            const clamped = Math.max(120, Math.min(900, n3));
             patchCtrl({ ...ctrl, width: clamped });
           });
           widthField.inputHost.appendChild(widthInput);
@@ -24777,7 +25291,7 @@ ${shapes}`.trim();
             doc,
             "layout.columns",
             asInt(sec?.layout?.columns, 12),
-            (n2) => patchSection({ layout: { ...sec.layout ?? {}, columns: Math.max(1, Math.min(24, n2)) } }),
+            (n3) => patchSection({ layout: { ...sec.layout ?? {}, columns: Math.max(1, Math.min(24, n3)) } }),
             { min: 1, max: 24 }
           )
         );
@@ -24870,10 +25384,10 @@ ${shapes}`.trim();
           const p = w.placement ?? { x: 0, y: 0, w: cols, h: 3 };
           const pGrid = doc.createElement("div");
           pGrid.className = "ga-le-grid4";
-          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n2) => patchWidgetAt(wIdx, { ...w, placement: { ...p, x: n2 } })));
-          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n2) => patchWidgetAt(wIdx, { ...w, placement: { ...p, y: n2 } })));
-          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, cols), (n2) => patchWidgetAt(wIdx, { ...w, placement: { ...p, w: n2 } })));
-          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n2) => patchWidgetAt(wIdx, { ...w, placement: { ...p, h: n2 } })));
+          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n3) => patchWidgetAt(wIdx, { ...w, placement: { ...p, x: n3 } })));
+          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n3) => patchWidgetAt(wIdx, { ...w, placement: { ...p, y: n3 } })));
+          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, cols), (n3) => patchWidgetAt(wIdx, { ...w, placement: { ...p, w: n3 } })));
+          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n3) => patchWidgetAt(wIdx, { ...w, placement: { ...p, h: n3 } })));
           wItem.appendChild(pGrid);
           const widgetGrain = String(w.grain ?? grainDefault);
           const spec = w.spec ?? {};
@@ -24922,7 +25436,7 @@ ${shapes}`.trim();
           } else if (w.type === "breakdown") {
             wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, dimension: v } })));
             wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, measure: v } })));
-            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n2) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, limit: n2 } }), { min: 1, max: 500 }));
+            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n3) => patchWidgetAt(wIdx, { ...w, spec: { ...spec, limit: n3 } }), { min: 1, max: 500 }));
             wItem.appendChild(
               renderClickActionEditor(
                 doc,
@@ -25162,7 +25676,7 @@ ${shapes}`.trim();
           doc,
           "layout.columns",
           asInt(section.layout?.columns, 12),
-          (n2) => patchSection({ layout: { ...section.layout, columns: Math.max(1, Math.min(24, n2)) } }),
+          (n3) => patchSection({ layout: { ...section.layout, columns: Math.max(1, Math.min(24, n3)) } }),
           { min: 1, max: 24 }
         )
       );
@@ -25421,10 +25935,10 @@ ${shapes}`.trim();
         cardItem.appendChild(placeNote);
         const grid = doc.createElement("div");
         grid.className = "ga-le-grid4";
-        grid.appendChild(mkNumberInput(doc, "x", asInt(card.x, 0), (n2) => patchCard(cardIdx, { x: n2 })));
-        grid.appendChild(mkNumberInput(doc, "y", asInt(card.y, 0), (n2) => patchCard(cardIdx, { y: n2 })));
-        grid.appendChild(mkNumberInput(doc, "w", asInt(card.w, 12), (n2) => patchCard(cardIdx, { w: n2 })));
-        grid.appendChild(mkNumberInput(doc, "h", asInt(card.h, 10), (n2) => patchCard(cardIdx, { h: n2 })));
+        grid.appendChild(mkNumberInput(doc, "x", asInt(card.x, 0), (n3) => patchCard(cardIdx, { x: n3 })));
+        grid.appendChild(mkNumberInput(doc, "y", asInt(card.y, 0), (n3) => patchCard(cardIdx, { y: n3 })));
+        grid.appendChild(mkNumberInput(doc, "w", asInt(card.w, 12), (n3) => patchCard(cardIdx, { w: n3 })));
+        grid.appendChild(mkNumberInput(doc, "h", asInt(card.h, 10), (n3) => patchCard(cardIdx, { h: n3 })));
         cardItem.appendChild(grid);
         const wBox = doc.createElement("div");
         wBox.className = "ga-le-subbox";
@@ -25516,10 +26030,10 @@ ${shapes}`.trim();
           wItem.appendChild(widgetPlaceNote);
           const pGrid = doc.createElement("div");
           pGrid.className = "ga-le-grid4";
-          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n2) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, x: n2 } })));
-          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n2) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, y: n2 } })));
-          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, 12), (n2) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, w: n2 } })));
-          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n2) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, h: n2 } })));
+          pGrid.appendChild(mkNumberInput(doc, "x", asInt(p.x, 0), (n3) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, x: n3 } })));
+          pGrid.appendChild(mkNumberInput(doc, "y", asInt(p.y, 0), (n3) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, y: n3 } })));
+          pGrid.appendChild(mkNumberInput(doc, "w", asInt(p.w, 12), (n3) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, w: n3 } })));
+          pGrid.appendChild(mkNumberInput(doc, "h", asInt(p.h, 3), (n3) => patchWidget(cardIdx, wIdx, { ...w, placement: { ...p, h: n3 } })));
           wItem.appendChild(pGrid);
           const widgetGrain = String(w.grain ?? grainDefault);
           const spec = w.spec ?? {};
@@ -25573,7 +26087,7 @@ ${shapes}`.trim();
           } else if (w.type === "breakdown") {
             wItem.appendChild(mkSelect(doc, "dimension", String(spec.dimension ?? ""), dims, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, dimension: v } })));
             wItem.appendChild(mkSelect(doc, "measure", String(spec.measure ?? ""), meas, (v) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, measure: v } })));
-            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n2) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, limit: n2 } }), { min: 1, max: 500 }));
+            wItem.appendChild(mkNumberInput(doc, "limit", asInt(spec.limit, 12), (n3) => patchWidget(cardIdx, wIdx, { ...w, spec: { ...spec, limit: n3 } }), { min: 1, max: 500 }));
             wItem.appendChild(
               renderClickActionEditor(
                 doc,
@@ -25982,7 +26496,7 @@ ${shapes}`.trim();
   var MAX_ENTRIES = 800;
   var entries = [];
   var listeners = /* @__PURE__ */ new Set();
-  var pad = (n2, w) => String(n2).padStart(w, "0");
+  var pad = (n3, w) => String(n3).padStart(w, "0");
   function formatConsoleEntry(e) {
     const d = new Date(e.ts);
     const hh = pad(d.getHours(), 2);
@@ -26044,316 +26558,6 @@ ${describeError(err2)}` : message;
     }
   };
 
-  // src/serverSync_v3.ts
-  var SYNC_META_KEY_V3 = "server_sync_v3";
-  function rDelta(after, before) {
-    if (after != null && before != null) return after - before;
-    return null;
-  }
-  function n(v) {
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    return null;
-  }
-  function b(v) {
-    if (v === true) return 1;
-    if (v === false) return 0;
-    return null;
-  }
-  function uc(v) {
-    if (typeof v !== "string") return null;
-    const x = v.trim().toUpperCase();
-    return x || null;
-  }
-  function getUserscriptVersion3() {
-    const anyGlobal = globalThis;
-    const info = anyGlobal?.GM_info;
-    const v = info?.script?.version;
-    return typeof v === "string" ? v : void 0;
-  }
-  function gmPostJson(url, body, headers) {
-    return new Promise((resolve, reject) => {
-      const gm = getGmXmlhttpRequest();
-      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
-      gm({
-        method: "POST",
-        url,
-        headers,
-        data: body,
-        responseType: "text",
-        timeout: 12e4,
-        onload: (res) => resolve({ status: typeof res?.status === "number" ? res.status : 0, text: typeof res?.responseText === "string" ? res.responseText : "" }),
-        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Request failed")),
-        ontimeout: () => reject(new Error("Request timeout"))
-      });
-    });
-  }
-  function deriveV3SyncUrl(endpointUrl) {
-    const trimmed = (endpointUrl || "").trim();
-    if (!trimmed) return "";
-    try {
-      const u = new URL(trimmed);
-      u.pathname = "/api/v3/sync";
-      u.search = "";
-      return u.toString();
-    } catch {
-      if (/\/api\/sync.*$/i.test(trimmed)) return trimmed.replace(/\/api\/sync.*$/i, "/api/v3/sync");
-      return trimmed.replace(/\/+$/, "") + "/api/v3/sync";
-    }
-  }
-  async function getLastServerSyncV3Cursor() {
-    const meta = await db.meta.get(SYNC_META_KEY_V3);
-    const cursor = meta?.value?.cursorTo;
-    return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
-  }
-  async function fetchOwnCountryCode(playerId) {
-    try {
-      const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
-      if (res.status >= 200 && res.status < 300) {
-        const cc = res.data?.countryCode ?? res.data?.user?.countryCode;
-        if (typeof cc === "string" && cc.trim()) return cc.trim().toUpperCase();
-      }
-    } catch {
-    }
-    return null;
-  }
-  async function runServerSyncV3(opts = {}) {
-    const settings = loadServerSyncSettings();
-    const endpointUrl = deriveV3SyncUrl(settings.endpointUrl);
-    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
-    const token = (settings.token || "").trim();
-    if (!token) throw new Error("Missing sync token.");
-    const forceFull = opts.forceFull === true;
-    const cursorFrom = forceFull ? 0 : await getLastServerSyncV3Cursor();
-    const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-    const ownCountry = ownPlayerId ? await fetchOwnCountryCode(ownPlayerId) : null;
-    const allDetails = await db.details.where("fetchedAt").above(cursorFrom).toArray();
-    const okDetails = allDetails.filter(
-      (d) => d?.status === "ok" && (d?.modeFamily === "duels" || d?.modeFamily === "teamduels")
-    );
-    const gameIds = okDetails.map((d) => String(d.gameId));
-    const feedGames = gameIds.length > 0 ? await db.games.where("gameId").anyOf(gameIds).toArray() : [];
-    const playedAtByGameId = /* @__PURE__ */ new Map();
-    for (const g of feedGames) {
-      if (typeof g.playedAt === "number") playedAtByGameId.set(g.gameId, g.playedAt);
-    }
-    const allRounds = gameIds.length > 0 ? await db.rounds.where("gameId").anyOf(gameIds).toArray() : [];
-    const playerMap = /* @__PURE__ */ new Map();
-    const addPlayer = (id, name, country, fetchedAt) => {
-      if (typeof id !== "string" || !id) return;
-      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
-      const nm = typeof name === "string" && name.trim() ? name.trim() : null;
-      const existing = playerMap.get(id);
-      if (!existing) {
-        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, fetchedAt: fetchedAt ?? null });
-      } else {
-        if (nm && !existing.playerName) existing.playerName = nm;
-        if (cc && !existing.countryCode) existing.countryCode = cc;
-        if (fetchedAt && (!existing.fetchedAt || fetchedAt > existing.fetchedAt)) existing.fetchedAt = fetchedAt;
-      }
-    };
-    if (ownPlayerId) {
-      addPlayer(ownPlayerId, ownPlayerName, ownCountry, Date.now());
-    }
-    const duelGames = [];
-    const tdGames = [];
-    const duelGameIds = /* @__PURE__ */ new Set();
-    const tdGameIds = /* @__PURE__ */ new Set();
-    for (const d of okDetails) {
-      const playedAt = playedAtByGameId.get(d.gameId) ?? null;
-      const fetchedAt = typeof d.fetchedAt === "number" ? d.fetchedAt : void 0;
-      if (d.modeFamily === "duels") {
-        addPlayer(d.player_self_id, d.player_self_name, d.player_self_country, fetchedAt);
-        addPlayer(d.player_opponent_id, d.player_opponent_name, d.player_opponent_country, fetchedAt);
-        const winnerPlayerId = d.player_self_victory === true ? d.player_self_id || null : d.player_self_victory === false ? d.player_opponent_id || null : null;
-        duelGames.push({
-          gameId: d.gameId,
-          p1_playerId: d.player_self_id || null,
-          p2_playerId: d.player_opponent_id || null,
-          mapSlug: d.mapSlug || null,
-          mapName: d.mapName || null,
-          movementType: d.movementType || null,
-          isRated: d.isRated != null ? d.isRated ? 1 : 0 : null,
-          totalRounds: d.totalRounds ?? null,
-          winnerPlayerId,
-          p1_ratingAfter: n(d.player_self_endRating),
-          p1_ratingDelta: rDelta(d.player_self_endRating, d.player_self_startRating),
-          p1_movingRatingAfter: n(d.player_self_movingRatingAfter),
-          p1_movingRatingDelta: rDelta(d.player_self_movingRatingAfter, d.player_self_movingRatingBefore),
-          p1_noMoveRatingAfter: n(d.player_self_noMoveRatingAfter),
-          p1_noMoveRatingDelta: rDelta(d.player_self_noMoveRatingAfter, d.player_self_noMoveRatingBefore),
-          p1_nmpzRatingAfter: n(d.player_self_nmpzRatingAfter),
-          p1_nmpzRatingDelta: rDelta(d.player_self_nmpzRatingAfter, d.player_self_nmpzRatingBefore),
-          p2_ratingAfter: n(d.player_opponent_endRating),
-          p2_ratingDelta: rDelta(d.player_opponent_endRating, d.player_opponent_startRating),
-          p2_movingRatingAfter: n(d.player_opponent_movingRatingAfter),
-          p2_movingRatingDelta: rDelta(d.player_opponent_movingRatingAfter, d.player_opponent_movingRatingBefore),
-          p2_noMoveRatingAfter: n(d.player_opponent_noMoveRatingAfter),
-          p2_noMoveRatingDelta: rDelta(d.player_opponent_noMoveRatingAfter, d.player_opponent_noMoveRatingBefore),
-          p2_nmpzRatingAfter: n(d.player_opponent_nmpzRatingAfter),
-          p2_nmpzRatingDelta: rDelta(d.player_opponent_nmpzRatingAfter, d.player_opponent_nmpzRatingBefore),
-          playedAt
-        });
-        duelGameIds.add(d.gameId);
-      } else if (d.modeFamily === "teamduels") {
-        addPlayer(d.player_self_id, d.player_self_name, d.player_self_country, fetchedAt);
-        addPlayer(d.player_mate_id, d.player_mate_name, d.player_mate_country, fetchedAt);
-        addPlayer(d.player_opponent_id, d.player_opponent_name, d.player_opponent_country, fetchedAt);
-        addPlayer(d.player_opponent_mate_id, d.player_opponent_mate_name, d.player_opponent_mate_country, fetchedAt);
-        const winnerTeam = d.player_self_victory === true ? "blue" : d.player_self_victory === false ? "red" : null;
-        tdGames.push({
-          gameId: d.gameId,
-          p1_playerId: d.player_self_id || null,
-          p2_playerId: d.player_mate_id || null,
-          p3_playerId: d.player_opponent_id || null,
-          p4_playerId: d.player_opponent_mate_id || null,
-          mapSlug: d.mapSlug || null,
-          mapName: d.mapName || null,
-          movementType: d.movementType || null,
-          isRated: d.isRated != null ? d.isRated ? 1 : 0 : null,
-          totalRounds: d.totalRounds ?? null,
-          winnerTeam,
-          p1_ratingAfter: n(d.player_self_endRating),
-          p1_ratingDelta: rDelta(d.player_self_endRating, d.player_self_startRating),
-          p2_ratingAfter: n(d.player_mate_endRating),
-          p2_ratingDelta: rDelta(d.player_mate_endRating, d.player_mate_startRating),
-          p3_ratingAfter: n(d.player_opponent_endRating),
-          p3_ratingDelta: rDelta(d.player_opponent_endRating, d.player_opponent_startRating),
-          p4_ratingAfter: n(d.player_opponent_mate_endRating),
-          p4_ratingDelta: rDelta(d.player_opponent_mate_endRating, d.player_opponent_mate_startRating),
-          playedAt
-        });
-        tdGameIds.add(d.gameId);
-      }
-    }
-    const duelRounds = [];
-    const tdRounds = [];
-    for (const r of allRounds) {
-      const playedAt = playedAtByGameId.get(r.gameId) ?? null;
-      if (duelGameIds.has(r.gameId)) {
-        duelRounds.push({
-          gameId: r.gameId,
-          roundNumber: r.roundNumber,
-          trueLat: n(r.trueLat),
-          trueLng: n(r.trueLng),
-          trueCountry: uc(r.trueCountry),
-          trueHeading: n(r.trueHeadingDeg),
-          startTime: n(r.startTime),
-          durationSec: n(r.durationSeconds),
-          isHealingRound: b(r.isHealingRound),
-          damageMultiplier: n(r.damageMultiplier),
-          p1_lat: n(r.player_self_guessLat),
-          p1_lng: n(r.player_self_guessLng),
-          p1_country: uc(r.player_self_guessCountry),
-          p1_score: n(r.player_self_score),
-          p1_distanceKm: n(r.player_self_distanceKm),
-          p1_timeSec: null,
-          p1_timedOut: 0,
-          p1_healthAfter: n(r.player_self_healthAfter),
-          p1_isBestGuess: 0,
-          p2_lat: n(r.player_opponent_guessLat),
-          p2_lng: n(r.player_opponent_guessLng),
-          p2_country: uc(r.player_opponent_guessCountry),
-          p2_score: n(r.player_opponent_score),
-          p2_distanceKm: n(r.player_opponent_distanceKm),
-          p2_healthAfter: n(r.player_opponent_healthAfter),
-          p2_isBestGuess: 0,
-          playedAt
-        });
-      } else if (tdGameIds.has(r.gameId)) {
-        tdRounds.push({
-          gameId: r.gameId,
-          roundNumber: r.roundNumber,
-          trueLat: n(r.trueLat),
-          trueLng: n(r.trueLng),
-          trueCountry: uc(r.trueCountry),
-          trueHeading: n(r.trueHeadingDeg),
-          startTime: n(r.startTime),
-          durationSec: n(r.durationSeconds),
-          isHealingRound: b(r.isHealingRound),
-          damageMultiplier: n(r.damageMultiplier),
-          p1_lat: n(r.player_self_guessLat),
-          p1_lng: n(r.player_self_guessLng),
-          p1_country: uc(r.player_self_guessCountry),
-          p1_score: n(r.player_self_score),
-          p1_distanceKm: n(r.player_self_distanceKm),
-          p1_timeSec: null,
-          p1_isBestGuess: b(r.player_self_isBestGuess),
-          p2_lat: n(r.player_mate_guessLat),
-          p2_lng: n(r.player_mate_guessLng),
-          p2_country: uc(r.player_mate_guessCountry),
-          p2_score: n(r.player_mate_score),
-          p2_distanceKm: n(r.player_mate_distanceKm),
-          p3_lat: n(r.player_opponent_guessLat),
-          p3_lng: n(r.player_opponent_guessLng),
-          p3_country: uc(r.player_opponent_guessCountry),
-          p3_score: n(r.player_opponent_score),
-          p3_distanceKm: n(r.player_opponent_distanceKm),
-          p4_lat: n(r.player_opponent_mate_guessLat),
-          p4_lng: n(r.player_opponent_mate_guessLng),
-          p4_country: uc(r.player_opponent_mate_guessCountry),
-          p4_score: n(r.player_opponent_mate_score),
-          p4_distanceKm: n(r.player_opponent_mate_distanceKm),
-          blue_healthAfter: n(r.team_self_healthAfter),
-          red_healthAfter: n(r.team_opponent_healthAfter),
-          playedAt
-        });
-      }
-    }
-    const players = Array.from(playerMap.values());
-    const envelope = {
-      schema: "geoanalyzr-v3-sync",
-      schemaVersion: 1,
-      createdAt: Date.now(),
-      appVersion: getUserscriptVersion3(),
-      owner: { playerId: ownPlayerId, playerName: ownPlayerName },
-      cursor: { from: cursorFrom },
-      players,
-      duel_games: duelGames,
-      duel_rounds: duelRounds,
-      team_duel_games: tdGames,
-      team_duel_rounds: tdRounds
-    };
-    const jsonBody = JSON.stringify(envelope);
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...getUserscriptVersion3() ? { "X-GA-Script-Version": String(getUserscriptVersion3()) } : {}
-    };
-    const res = await gmPostJson(endpointUrl, jsonBody, headers);
-    const httpOk = res.status >= 200 && res.status < 300;
-    const parsed = (() => {
-      try {
-        return JSON.parse(res.text);
-      } catch {
-        return null;
-      }
-    })();
-    if (httpOk) {
-      const maxFetchedAt = okDetails.reduce((m, d) => Math.max(m, Number(d.fetchedAt) || 0), 0);
-      if (maxFetchedAt > 0) {
-        await db.meta.put({
-          key: SYNC_META_KEY_V3,
-          value: { cursorFrom, cursorTo: maxFetchedAt, lastSyncAt: Date.now() },
-          updatedAt: Date.now()
-        });
-      }
-    }
-    const serverCounts = parsed?.counts ?? null;
-    return {
-      ok: httpOk,
-      status: res.status,
-      responseText: res.text,
-      counts: serverCounts ?? {
-        players: players.length,
-        duel_games: duelGames.length,
-        duel_rounds: duelRounds.length,
-        team_duel_games: tdGames.length,
-        team_duel_rounds: tdRounds.length
-      },
-      bytesJson: jsonBody.length
-    };
-  }
-
   // src/ui/settingsModal.ts
   function attachSettingsModal(opts) {
     const {
@@ -26389,10 +26593,10 @@ ${describeError(err2)}` : message;
       const text = await file.text();
       return JSON.parse(text);
     };
-    const formatBytes = (n2) => {
-      if (!Number.isFinite(n2) || n2 <= 0) return "0 B";
+    const formatBytes = (n3) => {
+      if (!Number.isFinite(n3) || n3 <= 0) return "0 B";
       const units = ["B", "KB", "MB", "GB"];
-      let v = n2;
+      let v = n3;
       let i = 0;
       while (v >= 1024 && i < units.length - 1) {
         v /= 1024;
@@ -27412,7 +27616,7 @@ ${describeError(err2)}` : message;
       this.modal.innerHTML = "";
       this.modal.style.display = "block";
       const normalizeTitle = (raw) => {
-        const shortId = (id, n2 = 8) => id.length > n2 ? `${id.slice(0, n2)}\u2026` : id;
+        const shortId = (id, n3 = 8) => id.length > n3 ? `${id.slice(0, n3)}\u2026` : id;
         let t = String(raw ?? "").trim();
         if (!t) return "Drilldown";
         t = t.replace(/\s*\(\s*\d+\s*\)\s*$/, "").trim();
@@ -27750,9 +27954,9 @@ ${describeError(err2)}` : message;
         const trimmed = value.trim();
         if (looksLikeDateColumn) {
           if (/^[0-9]{10,13}$/.test(trimmed)) {
-            const n2 = Number(trimmed);
-            if (Number.isFinite(n2)) {
-              const ts = trimmed.length === 10 ? n2 * 1e3 : n2;
+            const n3 = Number(trimmed);
+            if (Number.isFinite(n3)) {
+              const ts = trimmed.length === 10 ? n3 * 1e3 : n3;
               if (ts > 9466848e5 && ts < 41024448e5) return this.formatDate(ts, dateMode);
             }
           }
@@ -27962,12 +28166,12 @@ ${describeError(err2)}` : message;
   }
   function stddevOf(values) {
     const finite = values.filter((v) => typeof v === "number" && Number.isFinite(v));
-    const n2 = finite.length;
-    if (n2 <= 1) return 0;
-    const mean = finite.reduce((a, b3) => a + b3, 0) / n2;
+    const n3 = finite.length;
+    if (n3 <= 1) return 0;
+    const mean = finite.reduce((a, b3) => a + b3, 0) / n3;
     let sumSq = 0;
     for (const v of finite) sumSq += (v - mean) * (v - mean);
-    return Math.sqrt(sumSq / n2);
+    return Math.sqrt(sumSq / n3);
   }
   function is5k(r) {
     const s = getSelfScore(r);
@@ -27992,24 +28196,24 @@ ${describeError(err2)}` : message;
     return denom ? num2 / denom : 0;
   }
   function countStringFieldEq(rows, trueKey, guessKey) {
-    let n2 = 0;
+    let n3 = 0;
     for (const r of rows) {
       const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
       const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
       if (!t || !g) continue;
-      if (t === g) n2++;
+      if (t === g) n3++;
     }
-    return n2;
+    return n3;
   }
   function countStringFieldNeq(rows, trueKey, guessKey) {
-    let n2 = 0;
+    let n3 = 0;
     for (const r of rows) {
       const t = typeof r?.[trueKey] === "string" ? String(r[trueKey]).trim() : "";
       const g = typeof r?.[guessKey] === "string" ? String(r[guessKey]).trim() : "";
       if (!t || !g) continue;
-      if (t !== g) n2++;
+      if (t !== g) n3++;
     }
-    return n2;
+    return n3;
   }
   function isThrowLt50(r) {
     const s = getSelfScore(r);
@@ -28111,7 +28315,7 @@ ${describeError(err2)}` : message;
         counts.set(k, (counts.get(k) ?? 0) + 1);
       }
       let groups = 0;
-      for (const n2 of counts.values()) if (n2 > 1) groups++;
+      for (const n3 of counts.values()) if (n3 > 1) groups++;
       return groups;
     },
     count_true_location_repeat_rounds: (rows) => {
@@ -28124,7 +28328,7 @@ ${describeError(err2)}` : message;
         counts.set(k, (counts.get(k) ?? 0) + 1);
       }
       let sum = 0;
-      for (const n2 of counts.values()) if (n2 > 1) sum += n2;
+      for (const n3 of counts.values()) if (n3 > 1) sum += n3;
       return sum;
     },
     count_true_location_repeat_pairs: (rows) => {
@@ -28137,14 +28341,14 @@ ${describeError(err2)}` : message;
         counts.set(k, (counts.get(k) ?? 0) + 1);
       }
       let pairs = 0;
-      for (const n2 of counts.values()) {
-        if (n2 > 1) pairs += n2 * (n2 - 1) / 2;
+      for (const n3 of counts.values()) {
+        if (n3 > 1) pairs += n3 * (n3 - 1) / 2;
       }
       return pairs;
     },
     rate_true_location_repeat_rounds: (rows) => {
-      const n2 = rows.length;
-      if (!n2) return 0;
+      const n3 = rows.length;
+      if (!n3) return 0;
       const counts = /* @__PURE__ */ new Map();
       for (const r of rows) {
         const lat = typeof r?.trueLat === "number" && Number.isFinite(r.trueLat) ? r.trueLat : null;
@@ -28155,7 +28359,7 @@ ${describeError(err2)}` : message;
       }
       let repeatRounds = 0;
       for (const v of counts.values()) if (v > 1) repeatRounds += v;
-      return repeatRounds / n2;
+      return repeatRounds / n3;
     },
     min_played_at_ts: (rows) => {
       let min = Infinity;
@@ -28176,15 +28380,15 @@ ${describeError(err2)}` : message;
     spread_player_self_score: (rows) => {
       let min = Infinity;
       let max2 = -Infinity;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const s = getSelfScore(r);
         if (typeof s !== "number" || !Number.isFinite(s)) continue;
-        n2++;
+        n3++;
         if (s < min) min = s;
         if (s > max2) max2 = s;
       }
-      if (n2 < 2 || !Number.isFinite(min) || !Number.isFinite(max2)) return NaN;
+      if (n3 < 2 || !Number.isFinite(min) || !Number.isFinite(max2)) return NaN;
       return Math.max(0, max2 - min);
     },
     // Share-of-total measures are normalized in chart/breakdown widgets (they need access to total rows).
@@ -28193,15 +28397,15 @@ ${describeError(err2)}` : message;
     share_damage_taken: (_rows) => 1,
     mean_player_self_score: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const s = getSelfScore(r);
         if (typeof s === "number") {
           sum += s;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     // Record-style per-round measures: return NaN if value is missing so Record widgets can skip invalid groups.
     round_score_value: (rows) => {
@@ -28253,18 +28457,18 @@ ${describeError(err2)}` : message;
     median_player_self_score: (rows) => medianOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
     stddev_player_self_score: (rows) => stddevOf(rows.map((r) => getSelfScore(r)).filter((v) => typeof v === "number")),
     rate_player_self_score_eq_5000: (rows) => {
-      const n2 = rows.length;
-      if (!n2) return 0;
+      const n3 = rows.length;
+      if (!n3) return 0;
       let k = 0;
       for (const r of rows) if (is5k(r)) k++;
-      return k / n2;
+      return k / n3;
     },
     rate_true_country_hit: (rows) => {
-      const n2 = rows.length;
-      if (!n2) return 0;
+      const n3 = rows.length;
+      if (!n3) return 0;
       let k = 0;
       for (const r of rows) if (isHit(r)) k++;
-      return k / n2;
+      return k / n3;
     },
     rate_de_state_hit: (rows) => rateStringFieldEq(rows, "trueState", "guessState"),
     rate_de_district_hit: (rows) => rateStringFieldEq(rows, "trueDistrict", "guessDistrict"),
@@ -28279,11 +28483,11 @@ ${describeError(err2)}` : message;
     count_admin_unit_hit: (rows) => countStringFieldEq(rows, "adminTrueUnit", "adminGuessUnit"),
     count_admin_unit_miss: (rows) => countStringFieldNeq(rows, "adminTrueUnit", "adminGuessUnit"),
     rate_throw_round: (rows) => {
-      const n2 = rows.length;
-      if (!n2) return 0;
+      const n3 = rows.length;
+      if (!n3) return 0;
       let k = 0;
       for (const r of rows) if (isThrowLt50(r)) k++;
-      return k / n2;
+      return k / n3;
     },
     count_5k_round: (rows) => {
       let k = 0;
@@ -28291,11 +28495,11 @@ ${describeError(err2)}` : message;
       return k;
     },
     rate_near_perfect_round: (rows) => {
-      const n2 = rows.length;
-      if (!n2) return 0;
+      const n3 = rows.length;
+      if (!n3) return 0;
       let k = 0;
       for (const r of rows) if (isNearPerfect(r)) k++;
-      return k / n2;
+      return k / n3;
     },
     count_near_perfect_round: (rows) => {
       let k = 0;
@@ -28313,11 +28517,11 @@ ${describeError(err2)}` : message;
       return k;
     },
     rate_low_score_round: (rows) => {
-      const n2 = rows.length;
-      if (!n2) return 0;
+      const n3 = rows.length;
+      if (!n3) return 0;
       let k = 0;
       for (const r of rows) if (isLowScoreLt500(r)) k++;
-      return k / n2;
+      return k / n3;
     },
     count_low_score_round: (rows) => {
       let k = 0;
@@ -28326,28 +28530,28 @@ ${describeError(err2)}` : message;
     },
     mean_player_self_score_hit_only: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         if (!isHit(r)) continue;
         const s = getSelfScore(r);
         if (typeof s === "number") {
           sum += s;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     mean_duration_seconds: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const v = getDurationSeconds(r);
         if (typeof v === "number" && Number.isFinite(v)) {
           sum += v;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     median_duration_seconds: (rows) => medianOf(rows.map((r) => getDurationSeconds(r)).filter((v) => typeof v === "number")),
     sum_duration_seconds: (rows) => {
@@ -28368,44 +28572,44 @@ ${describeError(err2)}` : message;
     },
     mean_player_self_distance_km: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const v = getDistanceKm(r);
         if (typeof v === "number" && Number.isFinite(v)) {
           sum += v;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     median_player_self_distance_km: (rows) => medianOf(rows.map((r) => getDistanceKm(r)).filter((v) => typeof v === "number")),
     mean_damage_dealt: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const dmg = r.damage;
         if (typeof dmg === "number" && Number.isFinite(dmg)) {
           sum += Math.max(0, dmg);
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     mean_damage_taken: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const dmg = r.damage;
         if (typeof dmg === "number" && Number.isFinite(dmg)) {
           sum += Math.max(0, -dmg);
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     mean_hit_signed: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const truth = getTrueCountry(r);
         if (!truth) continue;
@@ -28415,20 +28619,20 @@ ${describeError(err2)}` : message;
         const mateGuess = typeof mateGuessRaw === "string" ? mateGuessRaw : void 0;
         const hit = mf === "teamduels" ? typeof selfGuess === "string" && selfGuess === truth || typeof mateGuess === "string" && mateGuess === truth : typeof selfGuess === "string" && selfGuess === truth;
         sum += hit ? 1 : -1;
-        n2++;
+        n3++;
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     mean_damage_net: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const dmg = r?.damage;
         if (typeof dmg !== "number" || !Number.isFinite(dmg)) continue;
         sum += dmg;
-        n2++;
+        n3++;
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     }
   };
   var GAME_MEASURES_BY_FORMULA_ID = {
@@ -28451,38 +28655,38 @@ ${describeError(err2)}` : message;
     },
     mean_game_length_rounds: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const g of rows) {
         const v = g?.roundsCount;
         if (typeof v === "number" && Number.isFinite(v) && v > 0) {
           sum += v;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     rate_player_self_win: (rows) => {
-      let n2 = 0;
+      let n3 = 0;
       let k = 0;
       for (const g of rows) {
         const o = getGameOutcome2(g);
         if (!o) continue;
-        n2++;
+        n3++;
         if (o === "win") k++;
       }
-      return n2 ? k / n2 : 0;
+      return n3 ? k / n3 : 0;
     },
     mean_player_self_end_rating: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const g of rows) {
         const v = getGameSelfEndRating(g);
         if (typeof v === "number") {
           sum += v;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     last_player_self_end_rating: (rows) => {
       const sorted = [...rows].sort((a, b3) => (Number(a?.ts) || Number(a?.playedAt) || 0) - (Number(b3?.ts) || Number(b3?.playedAt) || 0));
@@ -28523,16 +28727,16 @@ ${describeError(err2)}` : message;
     },
     mean_player_self_rating_delta: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const g of rows) {
         const start = getGameSelfStartRating(g);
         const end = getGameSelfEndRating(g);
         if (typeof start === "number" && typeof end === "number") {
           sum += end - start;
-          n2++;
+          n3++;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     max_player_self_rating_delta: (rows) => {
       let best = -Infinity;
@@ -28722,16 +28926,16 @@ ${describeError(err2)}` : message;
     },
     session_avg_score_hit: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const ss = r.hitScoreSum;
         const sc = r.hitScoreCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
           sum += ss;
-          n2 += sc;
+          n3 += sc;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     session_5k_count: (rows) => rows.reduce((a, r) => a + (typeof r.fivekCount === "number" ? r.fivekCount : 0), 0),
     session_hit_count: (rows) => rows.reduce((a, r) => a + (typeof r.hitCount === "number" ? r.hitCount : 0), 0),
@@ -28739,16 +28943,16 @@ ${describeError(err2)}` : message;
     session_win_count: (rows) => rows.reduce((a, r) => a + (typeof r.winCount === "number" ? r.winCount : 0), 0),
     session_win_rate: (rows) => {
       let wins = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const w = r.winCount;
         const g = r.gamesWithOutcome;
         if (typeof w === "number" && Number.isFinite(w) && typeof g === "number" && Number.isFinite(g) && g > 0) {
           wins += w;
-          n2 += g;
+          n3 += g;
         }
       }
-      return n2 ? wins / n2 : 0;
+      return n3 ? wins / n3 : 0;
     },
     session_start_rating: (rows) => {
       const sorted = [...rows].sort((a, b3) => Number(a?.sessionStartTs ?? 0) - Number(b3?.sessionStartTs ?? 0));
@@ -28810,81 +29014,81 @@ ${describeError(err2)}` : message;
     session_rounds_count: (rows) => rows.reduce((a, r) => a + (typeof r.roundsCount === "number" ? r.roundsCount : 0), 0),
     session_avg_score: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const ss = r.scoreSum;
         const sc = r.scoreCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
           sum += ss;
-          n2 += sc;
+          n3 += sc;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     session_avg_guess_duration: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const ss = r.durationSum;
         const sc = r.durationCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
           sum += ss;
-          n2 += sc;
+          n3 += sc;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     session_avg_distance_km: (rows) => {
       let sum = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const ss = r.distanceSum;
         const sc = r.distanceCount;
         if (typeof ss === "number" && typeof sc === "number" && sc > 0) {
           sum += ss;
-          n2 += sc;
+          n3 += sc;
         }
       }
-      return n2 ? sum / n2 : 0;
+      return n3 ? sum / n3 : 0;
     },
     session_fivek_rate: (rows) => {
       let fivek = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const fk = r.fivekCount;
         const rc = r.roundsCount;
         if (typeof fk === "number" && typeof rc === "number" && rc > 0) {
           fivek += fk;
-          n2 += rc;
+          n3 += rc;
         }
       }
-      return n2 ? fivek / n2 : 0;
+      return n3 ? fivek / n3 : 0;
     },
     session_hit_rate: (rows) => {
       let k = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const hk = r.hitCount;
         const rc = r.roundsCount;
         if (typeof hk === "number" && typeof rc === "number" && rc > 0) {
           k += hk;
-          n2 += rc;
+          n3 += rc;
         }
       }
-      return n2 ? k / n2 : 0;
+      return n3 ? k / n3 : 0;
     },
     session_throw_rate: (rows) => {
       let k = 0;
-      let n2 = 0;
+      let n3 = 0;
       for (const r of rows) {
         const tk = r.throwCount;
         const rc = r.roundsCount;
         if (typeof tk === "number" && typeof rc === "number" && rc > 0) {
           k += tk;
-          n2 += rc;
+          n3 += rc;
         }
       }
-      return n2 ? k / n2 : 0;
+      return n3 ? k / n3 : 0;
     },
     session_delta_rating: (rows) => {
       let sum = 0;
@@ -29774,9 +29978,9 @@ ${describeError(err2)}` : message;
     return typeof v === "number" && Number.isFinite(v);
   }
   async function runPool(items, concurrency, fn) {
-    const n2 = Math.max(1, Math.min(32, Math.floor(concurrency)));
+    const n3 = Math.max(1, Math.min(32, Math.floor(concurrency)));
     let idx = 0;
-    const workers = Array.from({ length: Math.min(n2, items.length) }, async () => {
+    const workers = Array.from({ length: Math.min(n3, items.length) }, async () => {
       let localCount = 0;
       for (; ; ) {
         const i = idx++;
@@ -30592,8 +30796,8 @@ ${describeError(err2)}` : message;
         if (!Number.isFinite(raw) || raw <= 0) return 0.01;
         const exp = Math.floor(Math.log10(raw));
         const base = 10 ** exp;
-        const n2 = raw / base;
-        const nice = n2 <= 1 ? 1 : n2 <= 2 ? 2 : n2 <= 2.5 ? 2.5 : n2 <= 5 ? 5 : 10;
+        const n3 = raw / base;
+        const nice = n3 <= 1 ? 1 : n3 <= 2 ? 2 : n3 <= 2.5 ? 2.5 : n3 <= 5 ? 5 : 10;
         return nice * base;
       };
       const tickCount2 = 5;
@@ -30620,8 +30824,8 @@ ${describeError(err2)}` : message;
       if (!Number.isFinite(raw) || raw <= 0) return 1;
       const exp = Math.floor(Math.log10(raw));
       const base = 10 ** exp;
-      const n2 = raw / base;
-      const nice = n2 <= 1 ? 1 : n2 <= 2 ? 2 : n2 <= 2.5 ? 2.5 : n2 <= 5 ? 5 : 10;
+      const n3 = raw / base;
+      const nice = n3 <= 1 ? 1 : n3 <= 2 ? 2 : n3 <= 2.5 ? 2.5 : n3 <= 5 ? 5 : 10;
       return nice * base;
     };
     const tickCount = 5;
@@ -30732,9 +30936,9 @@ ${describeError(err2)}` : message;
     const doc = svg.ownerDocument;
     const vars = /* @__PURE__ */ new Map();
     const varNames = ["--ga-axis-color", "--ga-axis-grid", "--ga-axis-text", "--ga-graph-color", "--ga-surface", "--ga-card-2"];
-    for (const n2 of varNames) {
-      const v = readCssVar(doc, n2);
-      if (v) vars.set(n2, v);
+    for (const n3 of varNames) {
+      const v = readCssVar(doc, n3);
+      if (v) vars.set(n3, v);
     }
     for (const [k, v] of vars.entries()) clone.style.setProperty(k, v);
     const bgSource = svg.closest(".ga-chart-box") ?? svg.closest(".ga-widget") ?? doc.querySelector(".ga-root");
@@ -30985,8 +31189,8 @@ ${describeError(err2)}` : message;
           const toIndex = (sid) => {
             const m = /^s(\d+)$/.exec(sid);
             if (!m) return null;
-            const n2 = Number(m[1]);
-            return Number.isFinite(n2) ? n2 : null;
+            const n3 = Number(m[1]);
+            return Number.isFinite(n3) ? n3 : null;
           };
           const mkSessionRowFromBucket = (sid, bucketRows) => {
             const ts = bucketRows.map((x) => extractRowTsMs(x)).filter((t) => typeof t === "number" && Number.isFinite(t));
@@ -31459,11 +31663,11 @@ ${describeError(err2)}` : message;
         });
         maybeAnimateChartSvg(svg, doc);
       } else {
-        const n2 = Math.max(1, data.length);
-        const slotW = innerW / n2;
+        const n3 = Math.max(1, data.length);
+        const slotW = innerW / n3;
         const outerPad = Math.min(28, slotW * 0.6);
         const xSpan = Math.max(1, innerW - outerPad * 2);
-        const barW = xSpan / n2;
+        const barW = xSpan / n3;
         data.forEach((d, i) => {
           const x = PAD_L + outerPad + i * barW;
           const h = (clampForMeasure(semantic, activeMeasure, d.y) - minY) / yRange * innerH;
@@ -32133,38 +32337,38 @@ ${describeError(err2)}` : message;
       const v = (() => {
         if (grain === "round" && metricId === "avg_score") {
           let sum = 0;
-          let n2 = 0;
+          let n3 = 0;
           for (const r of g) {
             const s = getScore(r, semantic);
             if (s === null) continue;
             sum += s;
-            n2++;
+            n3++;
           }
-          return n2 ? sum / n2 : NaN;
+          return n3 ? sum / n3 : NaN;
         }
         if (grain === "round" && metricId === "avg_guess_duration") {
           let sum = 0;
-          let n2 = 0;
+          let n3 = 0;
           for (const r of g) {
             const s = getTrustedGuessDurationSeconds(r, semantic);
             if (s === null) continue;
             sum += s;
-            n2++;
+            n3++;
           }
-          return n2 ? sum / n2 : NaN;
+          return n3 ? sum / n3 : NaN;
         }
         if (grain === "round" && metricId === "score_spread") {
           let min = Infinity;
           let max2 = -Infinity;
-          let n2 = 0;
+          let n3 = 0;
           for (const r of g) {
             const s = getScore(r, semantic);
             if (s === null) continue;
-            n2++;
+            n3++;
             if (s < min) min = s;
             if (s > max2) max2 = s;
           }
-          return n2 >= 2 && Number.isFinite(min) && Number.isFinite(max2) ? Math.max(0, max2 - min) : NaN;
+          return n3 >= 2 && Number.isFinite(min) && Number.isFinite(max2) ? Math.max(0, max2 - min) : NaN;
         }
         return fn(g);
       })();
@@ -32199,25 +32403,25 @@ ${describeError(err2)}` : message;
       const v = (() => {
         if (grain === "round" && metricId === "avg_score") {
           let sum = 0;
-          let n2 = 0;
+          let n3 = 0;
           for (const r of g) {
             const s = getScore(r, semantic);
             if (s === null) continue;
             sum += s;
-            n2++;
+            n3++;
           }
-          return n2 ? sum / n2 : NaN;
+          return n3 ? sum / n3 : NaN;
         }
         if (grain === "round" && metricId === "avg_guess_duration") {
           let sum = 0;
-          let n2 = 0;
+          let n3 = 0;
           for (const r of g) {
             const s = getTrustedGuessDurationSeconds(r, semantic);
             if (s === null) continue;
             sum += s;
-            n2++;
+            n3++;
           }
-          return n2 ? sum / n2 : NaN;
+          return n3 ? sum / n3 : NaN;
         }
         return fn(g);
       })();
@@ -34469,8 +34673,8 @@ ${describeError(err2)}` : message;
     set(80, "Saving enriched rounds...");
     const batchSize = 200;
     for (let offset = 0; offset < total; offset += batchSize) {
-      const chunk = rows.slice(offset, offset + batchSize);
-      await db.rounds.bulkPut(chunk);
+      const chunk2 = rows.slice(offset, offset + batchSize);
+      await db.rounds.bulkPut(chunk2);
       set(80 + offset / Math.max(1, total) * 18, "Saving enriched rounds...");
       if (offset > 0 && offset % (batchSize * 4) === 0) await new Promise((r) => setTimeout(r, 0));
     }
@@ -34859,14 +35063,14 @@ ${describeError(err2)}` : message;
   async function listAvailableLevels(iso2) {
     const iso3 = await iso2ToIso3(iso2);
     if (!iso3) return [];
-    const jobs = [1, 2, 3, 4].map(async (n2) => {
-      const adm = `ADM${n2}`;
+    const jobs = [1, 2, 3, 4].map(async (n3) => {
+      const adm = `ADM${n3}`;
       try {
         const meta = await fetchGeoBoundariesMeta(iso3, adm);
         if (!meta) return null;
         const geojsonUrl = typeof meta.simplifiedGeometryGeoJSON === "string" ? meta.simplifiedGeometryGeoJSON.trim() : "";
         if (!geojsonUrl) return null;
-        const name = typeof meta.boundaryName === "string" && meta.boundaryName.trim() ? meta.boundaryName.trim() : n2 === 1 ? "Provinces / States" : n2 === 2 ? "Counties / Districts" : `Admin level ${n2}`;
+        const name = typeof meta.boundaryName === "string" && meta.boundaryName.trim() ? meta.boundaryName.trim() : n3 === 1 ? "Provinces / States" : n3 === 2 ? "Counties / Districts" : `Admin level ${n3}`;
         return {
           id: adm,
           label: `${name} (${adm})`,
@@ -35014,7 +35218,7 @@ ${describeError(err2)}` : message;
     const DEBUG_MAX_LINES = 5e3;
     let debugOpen = false;
     const fmtTime = (d) => {
-      const pad2 = (n2, w) => String(Math.floor(Math.abs(n2))).padStart(w, "0");
+      const pad2 = (n3, w) => String(Math.floor(Math.abs(n3))).padStart(w, "0");
       return `${pad2(d.getHours(), 2)}:${pad2(d.getMinutes(), 2)}:${pad2(d.getSeconds(), 2)}.${pad2(d.getMilliseconds(), 3)}`;
     };
     const appendDebug = (msg) => {
@@ -35030,8 +35234,8 @@ ${describeError(err2)}` : message;
     const flushDebugUi = () => {
       debugUiFlushScheduled = false;
       if (!debugOpen || !debugUiQueue.length) return;
-      const chunk = debugUiQueue.splice(0, debugUiQueue.length).join("\n") + "\n";
-      debugPre.appendChild(doc.createTextNode(chunk));
+      const chunk2 = debugUiQueue.splice(0, debugUiQueue.length).join("\n") + "\n";
+      debugPre.appendChild(doc.createTextNode(chunk2));
       debugPre.scrollTop = debugPre.scrollHeight;
     };
     const scheduleDebugUiFlush = () => {
@@ -35578,15 +35782,15 @@ ${describeError(err2)}` : message;
       accuracyBox.className = "ga-statlist-box";
       chartsHost.appendChild(accuracyBox);
       const overall = (() => {
-        let n2 = 0, hit = 0;
+        let n3 = 0, hit = 0;
         for (const r of derived) {
           const tt = typeof r.adminTrueUnit === "string" ? r.adminTrueUnit.trim() : "";
           const gg = typeof r.adminGuessUnit === "string" ? r.adminGuessUnit.trim() : "";
           if (!tt || !gg) continue;
-          n2++;
+          n3++;
           if (tt === gg) hit++;
         }
-        return n2 ? hit / n2 : 0;
+        return n3 ? hit / n3 : 0;
       })();
       const line = doc.createElement("div");
       line.className = "ga-statrow";
@@ -35931,7 +36135,7 @@ ${describeError(err2)}` : message;
           const v = extractor(r);
           if (typeof v === "string" && v.length) counts.set(v, (counts.get(v) ?? 0) + 1);
         }
-        let values = Array.from(counts.entries()).map(([value, n2]) => ({ value, n: n2 })).sort((a, b3) => b3.n - a.n || a.value.localeCompare(b3.value));
+        let values = Array.from(counts.entries()).map(([value, n3]) => ({ value, n: n3 })).sort((a, b3) => b3.n - a.n || a.value.localeCompare(b3.value));
         if (dimId === "duration_bucket") values = values.sort((a, b3) => (durationRank2.get(a.value) ?? 999) - (durationRank2.get(b3.value) ?? 999));
         return values.map((v) => {
           const baseLabel = dimId === "movement_type" ? movementLabel2(v.value) : dimId === "true_country" || dimId === "guess_country" || dimId === "opponent_country" ? formatCountry5(v.value) : v.value;
@@ -36033,9 +36237,9 @@ ${describeError(err2)}` : message;
       return nextState;
     };
     async function runPool2(items, concurrency, fn) {
-      const n2 = Math.max(1, Math.min(8, Math.floor(concurrency)));
+      const n3 = Math.max(1, Math.min(8, Math.floor(concurrency)));
       let idx = 0;
-      const workers = Array.from({ length: Math.min(n2, items.length) }, async () => {
+      const workers = Array.from({ length: Math.min(n3, items.length) }, async () => {
         for (; ; ) {
           const i = idx++;
           if (i >= items.length) return;
@@ -36560,9 +36764,9 @@ ${describeError(err2)}` : message;
         return "";
       };
       const pushOpp = (name, id, country) => {
-        const n2 = pickFirstNonEmpty(name);
+        const n3 = pickFirstNonEmpty(name);
         const pid = pickFirstNonEmpty(id);
-        const label = n2 || (pid ? `Unknown (${pid.slice(0, 6)}\u2026)` : "");
+        const label = n3 || (pid ? `Unknown (${pid.slice(0, 6)}\u2026)` : "");
         if (!label) return;
         const c = pickFirstNonEmpty(country);
         out.push({ ...base, opponentName: label, opponentCountry: c || "Unknown", matchups });
