@@ -108,11 +108,12 @@ export async function syncV3FromDb2(opts: {
   gameIds?: string[];
 } = {}): Promise<SyncV3Db2Result> {
   const settings = loadServerSyncSettings();
-  if (!settings.token) return { ok: false, error: "no_token" };
+  if (!settings.token) { console.warn("[v3sync] no_token"); return { ok: false, error: "no_token" }; }
 
   const url = deriveV3SyncUrl(settings.endpointUrl);
-  if (!url) return { ok: false, error: "no_endpoint" };
+  if (!url) { console.warn("[v3sync] no_endpoint"); return { ok: false, error: "no_endpoint" }; }
 
+  console.log("[v3sync] starting", { url, forceFull: opts.forceFull });
   const forceFull = opts.forceFull === true;
 
   const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
@@ -156,62 +157,6 @@ export async function syncV3FromDb2(opts: {
     classicGames = await dbV2.classicGames
       .filter((g) => g.detailFetchedAt != null && (forceFull || (g.detailFetchedAt! > stdCursorFrom)))
       .toArray();
-  }
-
-  if (ownPlayerId) {
-    const stdGameRows: any[] = classicGames.map((g) => ({
-      gameId: g.gameId,
-      p1_playerId: ownPlayerId,
-      mapSlug: null,
-      mapName: g.mapName ?? null,
-      movementType: g.movement ?? "moving",
-      timeLimit: g.timeLimit ?? null,
-      roundCount: g.roundCount ?? null,
-      totalScore: g.totalScore ?? null,
-      totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1000 : null,
-      totalTimeSec: g.totalTimeSec ?? null,
-      totalSteps: g.totalSteps ?? null,
-      playedAt: g.playedAt ?? null,
-    }));
-
-    for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
-      await postBatch(url, settings.token, { standard_games: batch });
-      totalCounts.standard_games += batch.length;
-    }
-
-    // Standard rounds
-    if (classicGames.length > 0) {
-      const stdGameIds = classicGames.map((g) => g.gameId);
-      const classicRounds: ClassicRoundRow[] = await dbV2.classicRounds
-        .where("gameId").anyOf(stdGameIds).toArray();
-
-      const stdRoundRows: any[] = classicRounds.map((r) => ({
-        gameId: r.gameId,
-        roundNumber: r.roundNumber,
-        panoId: r.panoId ?? null,
-        trueLat: n(r.trueLat),
-        trueLng: n(r.trueLng),
-        trueCountry: uc(r.trueCountry),
-        trueHeading: n(r.trueHeadingDeg),
-        truePitch: null,
-        trueZoom: null,
-        p1_lat: n(r.selfLat),
-        p1_lng: n(r.selfLng),
-        p1_country: uc(r.selfCountry),
-        p1_score: n(r.selfScore),
-        p1_distanceKm: n(r.selfDistance),
-        p1_timeSec: n(r.selfTimeSec),
-        p1_steps: n(r.selfSteps),
-        timedOut: r.timedOut ? 1 : 0,
-        skippedRound: r.skippedRound ? 1 : 0,
-        playedAt: r.playedAt ?? null,
-      }));
-
-      for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
-        await postBatch(url, settings.token, { standard_rounds: batch });
-        totalCounts.standard_rounds += batch.length;
-      }
-    }
   }
 
   // ── Duels & Teamduels ──────────────────────────────────────────────────────
@@ -401,11 +346,43 @@ export async function syncV3FromDb2(opts: {
     }
   }
 
-  // ── Send sequentially: players → duel_games → duel_rounds → td_games → td_rounds
+  // ── Send sequentially: std_games → std_rounds → players → duel_games → duel_rounds → td_games → td_rounds
 
   try {
+    // Standard games & rounds (moved into try so auth errors don't abort before duel data)
+    if (ownPlayerId) {
+      const stdGameRows: any[] = classicGames.map((g) => ({
+        gameId: g.gameId, p1_playerId: ownPlayerId, mapSlug: null, mapName: g.mapName ?? null,
+        movementType: g.movement ?? "moving", timeLimit: g.timeLimit ?? null, roundCount: g.roundCount ?? null,
+        totalScore: g.totalScore ?? null, totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1000 : null,
+        totalTimeSec: g.totalTimeSec ?? null, totalSteps: g.totalSteps ?? null, playedAt: g.playedAt ?? null,
+      }));
+      console.log("[v3sync] standard_games", stdGameRows.length);
+      for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
+        await postBatch(url, settings.token, { standard_games: batch });
+        totalCounts.standard_games += batch.length;
+      }
+      if (classicGames.length > 0) {
+        const stdGameIds = classicGames.map((g) => g.gameId);
+        const classicRounds: ClassicRoundRow[] = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
+        const stdRoundRows: any[] = classicRounds.map((r) => ({
+          gameId: r.gameId, roundNumber: r.roundNumber, panoId: r.panoId ?? null,
+          trueLat: n(r.trueLat), trueLng: n(r.trueLng), trueCountry: uc(r.trueCountry), trueHeading: n(r.trueHeadingDeg),
+          truePitch: null, trueZoom: null, p1_lat: n(r.selfLat), p1_lng: n(r.selfLng), p1_country: uc(r.selfCountry),
+          p1_score: n(r.selfScore), p1_distanceKm: n(r.selfDistance), p1_timeSec: n(r.selfTimeSec), p1_steps: n(r.selfSteps),
+          timedOut: r.timedOut ? 1 : 0, skippedRound: r.skippedRound ? 1 : 0, playedAt: r.playedAt ?? null,
+        }));
+        console.log("[v3sync] standard_rounds", stdRoundRows.length);
+        for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
+          await postBatch(url, settings.token, { standard_rounds: batch });
+          totalCounts.standard_rounds += batch.length;
+        }
+      }
+    }
+
     // Players (always send, even if empty, to update lastSyncedAt)
     const players = Array.from(playerMap.values());
+    console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
     for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
       await postBatch(url, settings.token, { players: batch });
       totalCounts.players += batch.length;

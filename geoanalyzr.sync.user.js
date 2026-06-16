@@ -11917,9 +11917,16 @@ ${shapes}`.trim();
   }
   async function syncV3FromDb2(opts = {}) {
     const settings = loadServerSyncSettings();
-    if (!settings.token) return { ok: false, error: "no_token" };
+    if (!settings.token) {
+      console.warn("[v3sync] no_token");
+      return { ok: false, error: "no_token" };
+    }
     const url = deriveV3SyncUrl(settings.endpointUrl);
-    if (!url) return { ok: false, error: "no_endpoint" };
+    if (!url) {
+      console.warn("[v3sync] no_endpoint");
+      return { ok: false, error: "no_endpoint" };
+    }
+    console.log("[v3sync] starting", { url, forceFull: opts.forceFull });
     const forceFull = opts.forceFull === true;
     const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
     const ownCountry = ownPlayerId ? await fetchOwnCountryCode2(ownPlayerId) : null;
@@ -11954,55 +11961,6 @@ ${shapes}`.trim();
       classicGames = await dbV2.classicGames.filter((g) => idSet.has(g.gameId) && g.detailFetchedAt != null).toArray();
     } else {
       classicGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt != null && (forceFull || g.detailFetchedAt > stdCursorFrom)).toArray();
-    }
-    if (ownPlayerId) {
-      const stdGameRows = classicGames.map((g) => ({
-        gameId: g.gameId,
-        p1_playerId: ownPlayerId,
-        mapSlug: null,
-        mapName: g.mapName ?? null,
-        movementType: g.movement ?? "moving",
-        timeLimit: g.timeLimit ?? null,
-        roundCount: g.roundCount ?? null,
-        totalScore: g.totalScore ?? null,
-        totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1e3 : null,
-        totalTimeSec: g.totalTimeSec ?? null,
-        totalSteps: g.totalSteps ?? null,
-        playedAt: g.playedAt ?? null
-      }));
-      for (const batch of chunk(stdGameRows, BATCH_SIZE2)) {
-        await postBatch(url, settings.token, { standard_games: batch });
-        totalCounts.standard_games += batch.length;
-      }
-      if (classicGames.length > 0) {
-        const stdGameIds = classicGames.map((g) => g.gameId);
-        const classicRounds = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
-        const stdRoundRows = classicRounds.map((r) => ({
-          gameId: r.gameId,
-          roundNumber: r.roundNumber,
-          panoId: r.panoId ?? null,
-          trueLat: n2(r.trueLat),
-          trueLng: n2(r.trueLng),
-          trueCountry: uc2(r.trueCountry),
-          trueHeading: n2(r.trueHeadingDeg),
-          truePitch: null,
-          trueZoom: null,
-          p1_lat: n2(r.selfLat),
-          p1_lng: n2(r.selfLng),
-          p1_country: uc2(r.selfCountry),
-          p1_score: n2(r.selfScore),
-          p1_distanceKm: n2(r.selfDistance),
-          p1_timeSec: n2(r.selfTimeSec),
-          p1_steps: n2(r.selfSteps),
-          timedOut: r.timedOut ? 1 : 0,
-          skippedRound: r.skippedRound ? 1 : 0,
-          playedAt: r.playedAt ?? null
-        }));
-        for (const batch of chunk(stdRoundRows, BATCH_SIZE2)) {
-          await postBatch(url, settings.token, { standard_rounds: batch });
-          totalCounts.standard_rounds += batch.length;
-        }
-      }
     }
     const duelCursorFrom = forceFull ? 0 : await getSyncState(CURSOR_KEY_DUELS) ?? 0;
     let games;
@@ -12172,7 +12130,59 @@ ${shapes}`.trim();
       }
     }
     try {
+      if (ownPlayerId) {
+        const stdGameRows = classicGames.map((g) => ({
+          gameId: g.gameId,
+          p1_playerId: ownPlayerId,
+          mapSlug: null,
+          mapName: g.mapName ?? null,
+          movementType: g.movement ?? "moving",
+          timeLimit: g.timeLimit ?? null,
+          roundCount: g.roundCount ?? null,
+          totalScore: g.totalScore ?? null,
+          totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1e3 : null,
+          totalTimeSec: g.totalTimeSec ?? null,
+          totalSteps: g.totalSteps ?? null,
+          playedAt: g.playedAt ?? null
+        }));
+        console.log("[v3sync] standard_games", stdGameRows.length);
+        for (const batch of chunk(stdGameRows, BATCH_SIZE2)) {
+          await postBatch(url, settings.token, { standard_games: batch });
+          totalCounts.standard_games += batch.length;
+        }
+        if (classicGames.length > 0) {
+          const stdGameIds = classicGames.map((g) => g.gameId);
+          const classicRounds = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
+          const stdRoundRows = classicRounds.map((r) => ({
+            gameId: r.gameId,
+            roundNumber: r.roundNumber,
+            panoId: r.panoId ?? null,
+            trueLat: n2(r.trueLat),
+            trueLng: n2(r.trueLng),
+            trueCountry: uc2(r.trueCountry),
+            trueHeading: n2(r.trueHeadingDeg),
+            truePitch: null,
+            trueZoom: null,
+            p1_lat: n2(r.selfLat),
+            p1_lng: n2(r.selfLng),
+            p1_country: uc2(r.selfCountry),
+            p1_score: n2(r.selfScore),
+            p1_distanceKm: n2(r.selfDistance),
+            p1_timeSec: n2(r.selfTimeSec),
+            p1_steps: n2(r.selfSteps),
+            timedOut: r.timedOut ? 1 : 0,
+            skippedRound: r.skippedRound ? 1 : 0,
+            playedAt: r.playedAt ?? null
+          }));
+          console.log("[v3sync] standard_rounds", stdRoundRows.length);
+          for (const batch of chunk(stdRoundRows, BATCH_SIZE2)) {
+            await postBatch(url, settings.token, { standard_rounds: batch });
+            totalCounts.standard_rounds += batch.length;
+          }
+        }
+      }
       const players = Array.from(playerMap.values());
+      console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
       for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE2)) {
         await postBatch(url, settings.token, { players: batch });
         totalCounts.players += batch.length;
