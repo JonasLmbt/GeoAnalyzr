@@ -13928,7 +13928,6 @@ ${shapes}`.trim();
             }
           });
           await v3SyncPromise;
-          await v3ClassicSyncPromise;
           if (v2res.ok) {
             syncClassicToServer().catch(() => {
             });

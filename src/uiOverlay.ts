@@ -670,7 +670,7 @@ export function createUIOverlay(): UIOverlay {
           },
         });
         await v3SyncPromise;
-        await v3ClassicSyncPromise;
+
         if (v2res.ok) {
           // Also sync classic games (non-fatal)
           syncClassicToServer().catch(() => {});
