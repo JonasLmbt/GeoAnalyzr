@@ -13905,9 +13905,11 @@ ${shapes}`.trim();
         }
         if (isSyncVariant) {
           const modeLabel = forceFull ? "Synced full" : "Synced";
-          const v3SyncPromise = syncV3FromDb2({ gameIds: opts.gameIds }).catch(() => {
+          const v3SyncPromise = syncV3FromDb2({ forceFull, gameIds: opts.gameIds }).then((r) => {
+            setMsg(`v3 sync: ${r.ok ? `ok \u2014 players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}` : `failed (${r.error})`}`);
+          }).catch((e) => {
+            setMsg(`v3 sync error: ${e?.message ?? e}`);
           });
-          const v3ClassicSyncPromise = Promise.resolve();
           const v2res = await syncToServerV2({
             full: forceFull,
             gameIds: opts.gameIds,
