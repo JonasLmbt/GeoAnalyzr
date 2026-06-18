@@ -60,22 +60,29 @@ async function fetchPlayerProfiles(playerIds: string[]): Promise<Map<string, Pla
     await Promise.all(toFetch.slice(i, i + PROFILE_CONCURRENCY).map(async (playerId) => {
       try {
         const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
+        console.log("[v3sync] profile response", playerId, res.status, res.data);
         if (res.status >= 200 && res.status < 300) {
           const d = res.data as any;
           const user = d?.user ?? d;
+          const comp = user?.competitive ?? user?.competitiveStats ?? null;
           const profile: PlayerProfileCache = {
             playerId,
             fetchedAt: now,
-            currentRating: typeof user?.competitive?.rating === "number" ? user.competitive.rating : undefined,
-            currentDivision: user?.competitive?.division?.type ?? undefined,
-            currentLevel: typeof user?.progress?.level === "number" ? user.progress.level : undefined,
-            geoCreatedAt: user?.created ? new Date(user.created).getTime() : undefined,
-            isBanned: user?.isBanned === true,
-            clubTag: user?.club?.tag ?? null,
+            currentRating: typeof comp?.rating === "number" ? comp.rating : undefined,
+            currentDivision: comp?.division?.type ?? comp?.divisionType ?? undefined,
+            currentLevel: typeof user?.progress?.level === "number" ? user.progress.level
+                        : typeof user?.level === "number" ? user.level : undefined,
+            geoCreatedAt: user?.created ? new Date(user.created).getTime()
+                        : user?.createdAt ? new Date(user.createdAt).getTime() : undefined,
+            isBanned: user?.isBanned === true || user?.banned === true,
+            clubTag: user?.club?.tag ?? user?.clubTag ?? null,
             streakProgress: user?.streakProgress ?? null,
           };
+          console.log("[v3sync] parsed profile", playerId, profile);
           await dbV2.playerProfiles.put(profile);
           map.set(playerId, profile);
+        } else {
+          console.warn("[v3sync] profile fetch non-2xx", playerId, res.status, res.text);
         }
       } catch (e) { console.warn("[v3sync] profile fetch failed for", playerId, e); }
     }));
