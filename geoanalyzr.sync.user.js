@@ -11680,6 +11680,7 @@ ${shapes}`.trim();
           isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
           totalRounds: g.totalRounds ?? null,
           winnerPlayerId,
+          winnerStyle: g.winnerStyle ?? null,
           initialHealth: n2(g.initialHealth),
           p1_ratingAfter: n2(g.p1RatingAfter),
           p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),

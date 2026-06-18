@@ -216,6 +216,7 @@ export async function syncV3FromDb2(opts: {
         isRated: g.isRated != null ? (g.isRated ? 1 : 0) : null,
         totalRounds: g.totalRounds ?? null,
         winnerPlayerId,
+        winnerStyle: g.winnerStyle ?? null,
         initialHealth: n(g.initialHealth),
         p1_ratingAfter: n(g.p1RatingAfter),
         p1_ratingDelta: rDelta(g.p1RatingAfter, g.p1RatingBefore),
