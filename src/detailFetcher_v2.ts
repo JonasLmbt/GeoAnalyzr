@@ -332,11 +332,16 @@ async function normalizeDuelsRounds(
       const lng = asNum(guess?.lng ?? guess?.lon ?? guess?.longitude);
       const distanceMeters = asNum(guess?.distance ?? guess?.distanceInMeters);
       const country = await resolveGuessCountry(guess, lat, lng);
+      const guessCreatedTs = toTs(guess?.created);
+      const timeSec = asNum(guess?.time) ??
+        (guessCreatedTs !== undefined && startTs !== undefined
+          ? (guessCreatedTs - startTs) / 1000
+          : undefined);
       guessData.push({
         lat, lng, country,
         score:            asNum(guess?.score),
         distance:         distanceMeters !== undefined ? distanceMeters / 1e3 : undefined,
-        timeSec:          asNum(guess?.time),
+        timeSec,
         timedOut:         asBool(guess?.timedOut),
         teamHealthAfter:  teamR?.healthAfter,
         teamHealthBefore: teamR?.healthBefore,

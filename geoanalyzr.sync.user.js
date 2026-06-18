@@ -10712,7 +10712,7 @@ ${shapes}`.trim();
 
   // src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
-  var CURRENT_NORMALIZE_VERSION = 3;
+  var CURRENT_NORMALIZE_VERSION = 4;
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
@@ -12330,13 +12330,15 @@ ${shapes}`.trim();
         const lng = asNum2(guess?.lng ?? guess?.lon ?? guess?.longitude);
         const distanceMeters = asNum2(guess?.distance ?? guess?.distanceInMeters);
         const country = await resolveGuessCountry(guess, lat, lng);
+        const guessCreatedTs = toTs2(guess?.created);
+        const timeSec = asNum2(guess?.time) ?? (guessCreatedTs !== void 0 && startTs !== void 0 ? (guessCreatedTs - startTs) / 1e3 : void 0);
         guessData.push({
           lat,
           lng,
           country,
           score: asNum2(guess?.score),
           distance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
-          timeSec: asNum2(guess?.time),
+          timeSec,
           timedOut: asBool2(guess?.timedOut),
           teamHealthAfter: teamR?.healthAfter,
           teamHealthBefore: teamR?.healthBefore,
