@@ -11313,7 +11313,8 @@ ${shapes}`.trim();
     const playerMap = /* @__PURE__ */ new Map();
     const addPlayer = (id, name, country, fetchedAt) => {
       if (typeof id !== "string" || !id) return;
-      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+      const ccRaw = typeof country === "string" ? country.trim() : "";
+      const cc = /^[a-zA-Z]{2}$/.test(ccRaw) ? ccRaw.toUpperCase() : null;
       const nm = typeof name === "string" && name.trim() ? name.trim() : null;
       const existing = playerMap.get(id);
       if (!existing) {
@@ -11684,7 +11685,8 @@ ${shapes}`.trim();
     const playerMap = /* @__PURE__ */ new Map();
     const addPlayer = (id, name, country, playedAt) => {
       if (typeof id !== "string" || !id) return;
-      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+      const ccRaw = typeof country === "string" ? country.trim() : "";
+      const cc = /^[a-zA-Z]{2}$/.test(ccRaw) ? ccRaw.toUpperCase() : null;
       const nm = typeof name === "string" && name.trim() ? name.trim() : null;
       const existing = playerMap.get(id);
       if (!existing) {

@@ -189,7 +189,8 @@ export async function syncV3FromDb2(opts: {
   const playerMap = new Map<string, PlayerEntry>();
   const addPlayer = (id: unknown, name: unknown, country: unknown, playedAt?: number) => {
     if (typeof id !== "string" || !id) return;
-    const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+    const ccRaw = typeof country === "string" ? country.trim() : "";
+    const cc = /^[a-zA-Z]{2}$/.test(ccRaw) ? ccRaw.toUpperCase() : null;
     const nm = typeof name === "string" && name.trim() ? name.trim() : null;
     const existing = playerMap.get(id);
     if (!existing) {
