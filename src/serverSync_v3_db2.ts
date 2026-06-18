@@ -465,13 +465,26 @@ export async function syncV3FromDb2(opts: {
       }
     }
 
-    // Fetch profiles: always fetch own player, plus up to 20 opponents not yet cached with rating
-    const MAX_OPPONENT_PROFILES = 20;
+    // Fetch profiles: own player always, plus opponents not yet cached.
+    // Source: ALL known player IDs from IndexedDB (not just this session's games),
+    // so gaps get filled over multiple syncs even when there are no new games.
+    const MAX_OPPONENT_PROFILES = 30;
     const now = Date.now();
-    const opponentIds = Array.from(playerMap.keys()).filter(id => id !== ownPlayerId);
-    const cachedOpponents = await dbV2.playerProfiles.where("playerId").anyOf(opponentIds).toArray();
+
+    // Collect all player IDs ever seen (from all games in local DB)
+    const allGamePlayerIds = new Set<string>();
+    (await dbV2.games.toArray()).forEach(g => {
+      if (g.p1Id) allGamePlayerIds.add(g.p1Id);
+      if (g.p2Id) allGamePlayerIds.add(g.p2Id);
+      if (g.p3Id) allGamePlayerIds.add(g.p3Id);
+      if (g.p4Id) allGamePlayerIds.add(g.p4Id);
+    });
+    if (ownPlayerId) allGamePlayerIds.delete(ownPlayerId);
+    const allOpponentIds = Array.from(allGamePlayerIds);
+
+    const cachedOpponents = await dbV2.playerProfiles.where("playerId").anyOf(allOpponentIds).toArray();
     const cachedMap = new Map(cachedOpponents.map(p => [p.playerId, p]));
-    const opponentsToFetch = opponentIds
+    const opponentsToFetch = allOpponentIds
       .filter(id => {
         const c = cachedMap.get(id);
         if (!c) return true;
@@ -482,6 +495,13 @@ export async function syncV3FromDb2(opts: {
       .slice(0, MAX_OPPONENT_PROFILES);
     const profileIds = [...(ownPlayerId ? [ownPlayerId] : []), ...opponentsToFetch];
     const profileMap = await fetchPlayerProfiles(profileIds);
+
+    // Also add fetched opponents to playerMap so their data is sent to the server
+    for (const [pid, prof] of profileMap) {
+      if (!playerMap.has(pid)) {
+        playerMap.set(pid, { playerId: pid, playerName: null, countryCode: null, firstSeenAt: null, lastSeenAt: null });
+      }
+    }
     for (const [playerId, entry] of playerMap) {
       const p = profileMap.get(playerId);
       if (!p) continue;
