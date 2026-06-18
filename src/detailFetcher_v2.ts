@@ -402,6 +402,31 @@ async function normalizeDuelsRounds(
     result.push(row);
   }
 
+  // Derive healthBefore and damageDealt from healthAfter sequence.
+  // API only provides healthAfter; healthBefore[N] = healthAfter[N-1], healthBefore[1] = initialHealth.
+  const initialHealth = asNum(gameData?.options?.initialHealth);
+  result.sort((a, b) => (a.roundNumber ?? 0) - (b.roundNumber ?? 0));
+  for (let i = 0; i < result.length; i++) {
+    const row = result[i];
+    const prev = i > 0 ? result[i - 1] : null;
+    if (row.team0HealthBefore === undefined) {
+      const hb = prev?.team0HealthAfter ?? (i === 0 ? initialHealth : undefined);
+      if (hb !== undefined) row.team0HealthBefore = hb;
+    }
+    if (row.team1HealthBefore === undefined) {
+      const hb = prev?.team1HealthAfter ?? (i === 0 ? initialHealth : undefined);
+      if (hb !== undefined) row.team1HealthBefore = hb;
+    }
+    // team0 deals damage to team1: team0DamageDealt = team1.healthBefore - team1.healthAfter
+    if (row.team0DamageDealt === undefined && row.team1HealthBefore !== undefined && row.team1HealthAfter !== undefined) {
+      row.team0DamageDealt = row.team1HealthBefore - row.team1HealthAfter;
+    }
+    // team1 deals damage to team0: team1DamageDealt = team0.healthBefore - team0.healthAfter
+    if (row.team1DamageDealt === undefined && row.team0HealthBefore !== undefined && row.team0HealthAfter !== undefined) {
+      row.team1DamageDealt = row.team0HealthBefore - row.team0HealthAfter;
+    }
+  }
+
   return result;
 }
 

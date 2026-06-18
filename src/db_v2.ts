@@ -18,8 +18,9 @@ export type DetailFetchStatus = "ok" | "not_found" | "error" | "timeout";
  *      initialHealth, winnerStyle
  *  3 — truePitch/trueZoom for classic rounds
  *  4 — p1/p2/p3/p4 timeSec for duel rounds (from guess.created - round.startTime)
+ *  5 — healthBefore/damageDealt derived from healthAfter sequence + initialHealth
  */
-export const CURRENT_NORMALIZE_VERSION = 4;
+export const CURRENT_NORMALIZE_VERSION = 5;
 
 // ─── Processed: Games ────────────────────────────────────────────────────────
 

@@ -10712,7 +10712,7 @@ ${shapes}`.trim();
 
   // src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
-  var CURRENT_NORMALIZE_VERSION = 4;
+  var CURRENT_NORMALIZE_VERSION = 5;
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
@@ -11680,6 +11680,7 @@ ${shapes}`.trim();
           isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
           totalRounds: g.totalRounds ?? null,
           winnerPlayerId,
+          initialHealth: n2(g.initialHealth),
           p1_ratingAfter: n2(g.p1RatingAfter),
           p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),
           p1_movingRatingAfter: n2(g.p1MovingRatingAfter),
@@ -11717,6 +11718,7 @@ ${shapes}`.trim();
           isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
           totalRounds: g.totalRounds ?? null,
           winnerTeam,
+          initialHealth: n2(g.initialHealth),
           p1_ratingAfter: n2(g.p1RatingAfter),
           p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),
           p2_ratingAfter: n2(g.p2RatingAfter),
@@ -12409,6 +12411,26 @@ ${shapes}`.trim();
         if (row[k] === void 0) delete row[k];
       }
       result.push(row);
+    }
+    const initialHealth = asNum2(gameData?.options?.initialHealth);
+    result.sort((a, b3) => (a.roundNumber ?? 0) - (b3.roundNumber ?? 0));
+    for (let i = 0; i < result.length; i++) {
+      const row = result[i];
+      const prev = i > 0 ? result[i - 1] : null;
+      if (row.team0HealthBefore === void 0) {
+        const hb = prev?.team0HealthAfter ?? (i === 0 ? initialHealth : void 0);
+        if (hb !== void 0) row.team0HealthBefore = hb;
+      }
+      if (row.team1HealthBefore === void 0) {
+        const hb = prev?.team1HealthAfter ?? (i === 0 ? initialHealth : void 0);
+        if (hb !== void 0) row.team1HealthBefore = hb;
+      }
+      if (row.team0DamageDealt === void 0 && row.team1HealthBefore !== void 0 && row.team1HealthAfter !== void 0) {
+        row.team0DamageDealt = row.team1HealthBefore - row.team1HealthAfter;
+      }
+      if (row.team1DamageDealt === void 0 && row.team0HealthBefore !== void 0 && row.team0HealthAfter !== void 0) {
+        row.team1DamageDealt = row.team0HealthBefore - row.team0HealthAfter;
+      }
     }
     return result;
   }
