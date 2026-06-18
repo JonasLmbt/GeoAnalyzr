@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      3.0.8-dev
+// @version      3.0.9-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11558,12 +11558,15 @@ ${shapes}`.trim();
     const map = new Map(cached.map((p) => [p.playerId, p]));
     const toFetch = playerIds.filter((id) => {
       const c = map.get(id);
-      return !c || now - c.fetchedAt > PROFILE_CACHE_TTL_MS;
+      if (!c) return true;
+      if (now - c.fetchedAt > PROFILE_CACHE_TTL_MS) return true;
+      if (c.currentRating == null && now - c.fetchedAt > 6e4) return true;
+      return false;
     });
     for (let i = 0; i < toFetch.length; i += PROFILE_CONCURRENCY) {
       await Promise.all(toFetch.slice(i, i + PROFILE_CONCURRENCY).map(async (playerId) => {
         try {
-          const res = await httpGetJson(`https://www.geoguessr.com/api/v3/profiles/${encodeURIComponent(playerId)}`);
+          const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
           if (res.status >= 200 && res.status < 300) {
             const d = res.data;
             const user = d?.user ?? d;
@@ -11581,7 +11584,8 @@ ${shapes}`.trim();
             await dbV2.playerProfiles.put(profile);
             map.set(playerId, profile);
           }
-        } catch {
+        } catch (e) {
+          console.warn("[v3sync] profile fetch failed for", playerId, e);
         }
       }));
     }

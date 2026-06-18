@@ -49,13 +49,17 @@ async function fetchPlayerProfiles(playerIds: string[]): Promise<Map<string, Pla
 
   const toFetch = playerIds.filter(id => {
     const c = map.get(id);
-    return !c || (now - c.fetchedAt) > PROFILE_CACHE_TTL_MS;
+    // Re-fetch if missing, stale, or cached with no rating (from old broken /profiles/ endpoint)
+    if (!c) return true;
+    if ((now - c.fetchedAt) > PROFILE_CACHE_TTL_MS) return true;
+    if (c.currentRating == null && (now - c.fetchedAt) > 60_000) return true;
+    return false;
   });
 
   for (let i = 0; i < toFetch.length; i += PROFILE_CONCURRENCY) {
     await Promise.all(toFetch.slice(i, i + PROFILE_CONCURRENCY).map(async (playerId) => {
       try {
-        const res = await httpGetJson(`https://www.geoguessr.com/api/v3/profiles/${encodeURIComponent(playerId)}`);
+        const res = await httpGetJson(`https://www.geoguessr.com/api/v3/users/${encodeURIComponent(playerId)}`);
         if (res.status >= 200 && res.status < 300) {
           const d = res.data as any;
           const user = d?.user ?? d;
@@ -73,7 +77,7 @@ async function fetchPlayerProfiles(playerIds: string[]): Promise<Map<string, Pla
           await dbV2.playerProfiles.put(profile);
           map.set(playerId, profile);
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.warn("[v3sync] profile fetch failed for", playerId, e); }
     }));
   }
   return map;
