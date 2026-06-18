@@ -520,6 +520,8 @@ async function normalizeClassicRounds(gameId: string, gameData: any): Promise<Cl
       trueHeadingDeg: asNum(r?.heading),
       trueCountry: iso2ToName(normalizeIso2(r?.streakLocationCode ?? r?.countryCode)),
       panoId: typeof r?.panoId === "string" ? r.panoId : undefined,
+      truePitch: asNum(r?.pitch),
+      trueZoom: asNum(r?.zoom),
       selfLat: guessLat,
       selfLng: guessLng,
       selfCountry,

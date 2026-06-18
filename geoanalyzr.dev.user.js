@@ -10712,7 +10712,7 @@ ${shapes}`.trim();
 
   // src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
-  var CURRENT_NORMALIZE_VERSION = 2;
+  var CURRENT_NORMALIZE_VERSION = 3;
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
@@ -11824,7 +11824,7 @@ ${shapes}`.trim();
         const stdGameRows = classicGames.map((g) => ({
           gameId: g.gameId,
           p1_playerId: ownPlayerId,
-          mapSlug: null,
+          mapSlug: g.mapId ?? null,
           mapName: g.mapName ?? null,
           movementType: g.movement ?? "moving",
           timeLimit: g.timeLimit ?? null,
@@ -11851,8 +11851,8 @@ ${shapes}`.trim();
             trueLng: n2(r.trueLng),
             trueCountry: uc2(r.trueCountry),
             trueHeading: n2(r.trueHeadingDeg),
-            truePitch: null,
-            trueZoom: null,
+            truePitch: n2(r.truePitch),
+            trueZoom: n2(r.trueZoom),
             p1_lat: n2(r.selfLat),
             p1_lng: n2(r.selfLng),
             p1_country: uc2(r.selfCountry),
@@ -12489,6 +12489,8 @@ ${shapes}`.trim();
         trueHeadingDeg: asNum2(r?.heading),
         trueCountry: iso2ToName(normalizeIso23(r?.streakLocationCode ?? r?.countryCode)),
         panoId: typeof r?.panoId === "string" ? r.panoId : void 0,
+        truePitch: asNum2(r?.pitch),
+        trueZoom: asNum2(r?.zoom),
         selfLat: guessLat,
         selfLng: guessLng,
         selfCountry,

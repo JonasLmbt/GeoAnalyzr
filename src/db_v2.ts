@@ -16,8 +16,9 @@ export type DetailFetchStatus = "ok" | "not_found" | "error" | "timeout";
  *  1 — initial versioning marker (no new fields, baseline)
  *  2 — panoId, truePitch/Zoom, timeSec, timedOut, healthBefore, damageDealt,
  *      initialHealth, winnerStyle
+ *  3 — truePitch/trueZoom for classic rounds
  */
-export const CURRENT_NORMALIZE_VERSION = 2;
+export const CURRENT_NORMALIZE_VERSION = 3;
 
 // ─── Processed: Games ────────────────────────────────────────────────────────
 
@@ -189,6 +190,8 @@ export interface ClassicRoundRow {
   trueHeadingDeg?: number;
   trueCountry?: string;    // ISO2
   panoId?: string;         // Street View panorama ID
+  truePitch?: number;
+  trueZoom?: number;
   selfLat?: number;
   selfLng?: number;
   selfCountry?: string;    // ISO2, reverse-geocoded from selfLat/selfLng

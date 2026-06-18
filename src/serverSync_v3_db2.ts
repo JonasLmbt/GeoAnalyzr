@@ -366,7 +366,7 @@ export async function syncV3FromDb2(opts: {
     // Standard games & rounds (moved into try so auth errors don't abort before duel data)
     if (ownPlayerId) {
       const stdGameRows: any[] = classicGames.map((g) => ({
-        gameId: g.gameId, p1_playerId: ownPlayerId, mapSlug: null, mapName: g.mapName ?? null,
+        gameId: g.gameId, p1_playerId: ownPlayerId, mapSlug: g.mapId ?? null, mapName: g.mapName ?? null,
         movementType: g.movement ?? "moving", timeLimit: g.timeLimit ?? null, roundCount: g.roundCount ?? null,
         totalScore: g.totalScore ?? null, totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1000 : null,
         totalTimeSec: g.totalTimeSec ?? null, totalSteps: g.totalSteps ?? null, playedAt: g.playedAt ?? null,
@@ -382,7 +382,7 @@ export async function syncV3FromDb2(opts: {
         const stdRoundRows: any[] = classicRounds.map((r) => ({
           gameId: r.gameId, roundNumber: r.roundNumber, panoId: r.panoId ?? null,
           trueLat: n(r.trueLat), trueLng: n(r.trueLng), trueCountry: uc(r.trueCountry), trueHeading: n(r.trueHeadingDeg),
-          truePitch: null, trueZoom: null, p1_lat: n(r.selfLat), p1_lng: n(r.selfLng), p1_country: uc(r.selfCountry),
+          truePitch: n(r.truePitch), trueZoom: n(r.trueZoom), p1_lat: n(r.selfLat), p1_lng: n(r.selfLng), p1_country: uc(r.selfCountry),
           p1_score: n(r.selfScore), p1_distanceKm: n(r.selfDistance), p1_timeSec: n(r.selfTimeSec), p1_steps: n(r.selfSteps),
           timedOut: r.timedOut ? 1 : 0, skippedRound: r.skippedRound ? 1 : 0, playedAt: r.playedAt ?? null,
         }));
