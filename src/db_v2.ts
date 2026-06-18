@@ -154,6 +154,8 @@ export interface RoundRow {
   p4Country?: string;
   p4Score?: number;
   p4Distance?: number; // km
+  p4TimeSec?: number;
+  p4TimedOut?: boolean;
   p4IsBetterGuess?: boolean; // teamduels: p4's guess was the used guess for team[1]
 
   // Team health (indexed by team position in API teams array)

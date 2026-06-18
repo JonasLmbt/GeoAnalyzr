@@ -386,6 +386,7 @@ async function normalizeDuelsRounds(
       p3IsBetterGuess,
       p4Lat: p4g.lat, p4Lng: p4g.lng, p4Country: p4g.country,
       p4Score: p4g.score, p4Distance: p4g.distance,
+      p4TimeSec: p4g.timeSec, p4TimedOut: p4g.timedOut,
       p4IsBetterGuess,
       team0HealthAfter:  team0Health.teamHealthAfter,
       team0HealthBefore: team0Health.teamHealthBefore,

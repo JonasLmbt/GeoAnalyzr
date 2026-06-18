@@ -362,6 +362,8 @@ export async function syncV3FromDb2(opts: {
         p4_country: uc(r.p4Country),
         p4_score: n(r.p4Score),
         p4_distanceKm: n(r.p4Distance),
+        p4_timeSec: n(r.p4TimeSec),
+        p4_timedOut: r.p4TimedOut ? 1 : 0,
         p4_isBestGuess: r.p4IsBetterGuess ? 1 : 0,
         blue_healthBefore: n(r.team0HealthBefore),
         blue_healthAfter: n(r.team0HealthAfter),
