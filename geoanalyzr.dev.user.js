@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      3.0.7-dev
+// @version      3.0.8-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10722,6 +10722,7 @@ ${shapes}`.trim();
     rawGameDetails;
     detailFetchLog;
     syncState;
+    playerProfiles;
     constructor(name = DB_V2_NAME) {
       super(name);
       const GAMES_SCHEMA_V1 = [
@@ -11194,6 +11195,17 @@ ${shapes}`.trim();
           }
         });
       });
+      this.version(5).stores({
+        games: GAMES_SCHEMA_V4,
+        rounds: ROUNDS_SCHEMA_V4,
+        classicGames: CLASSIC_GAMES_SCHEMA,
+        classicRounds: CLASSIC_ROUNDS_SCHEMA,
+        rawFeedEntries: "gameId, fetchedAt",
+        rawGameDetails: "gameId, fetchedAt",
+        detailFetchLog: DETAIL_LOG_SCHEMA,
+        syncState: "key",
+        playerProfiles: "playerId, fetchedAt"
+      });
     }
   };
   var dbV2 = new GGDB_V2();
@@ -11537,6 +11549,43 @@ ${shapes}`.trim();
     const ns = String(info?.namespace || "");
     const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
     return `${v} (${variant})`;
+  }
+  var PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+  var PROFILE_CONCURRENCY = 5;
+  async function fetchPlayerProfiles(playerIds) {
+    const now = Date.now();
+    const cached = await dbV2.playerProfiles.where("playerId").anyOf(playerIds).toArray();
+    const map = new Map(cached.map((p) => [p.playerId, p]));
+    const toFetch = playerIds.filter((id) => {
+      const c = map.get(id);
+      return !c || now - c.fetchedAt > PROFILE_CACHE_TTL_MS;
+    });
+    for (let i = 0; i < toFetch.length; i += PROFILE_CONCURRENCY) {
+      await Promise.all(toFetch.slice(i, i + PROFILE_CONCURRENCY).map(async (playerId) => {
+        try {
+          const res = await httpGetJson(`https://www.geoguessr.com/api/v3/profiles/${encodeURIComponent(playerId)}`);
+          if (res.status >= 200 && res.status < 300) {
+            const d = res.data;
+            const user = d?.user ?? d;
+            const profile = {
+              playerId,
+              fetchedAt: now,
+              currentRating: typeof user?.competitive?.rating === "number" ? user.competitive.rating : void 0,
+              currentDivision: user?.competitive?.division?.type ?? void 0,
+              currentLevel: typeof user?.progress?.level === "number" ? user.progress.level : void 0,
+              geoCreatedAt: user?.created ? new Date(user.created).getTime() : void 0,
+              isBanned: user?.isBanned === true,
+              clubTag: user?.club?.tag ?? null,
+              streakProgress: user?.streakProgress ?? null
+            };
+            await dbV2.playerProfiles.put(profile);
+            map.set(playerId, profile);
+          }
+        } catch {
+        }
+      }));
+    }
+    return map;
   }
   async function fetchOwnCountryCode2(playerId) {
     try {
@@ -11885,6 +11934,19 @@ ${shapes}`.trim();
             totalCounts.standard_rounds += batch.length;
           }
         }
+      }
+      const profileMap = await fetchPlayerProfiles(Array.from(playerMap.keys()));
+      for (const [playerId, entry] of playerMap) {
+        const p = profileMap.get(playerId);
+        if (!p) continue;
+        entry.currentRating = p.currentRating ?? null;
+        entry.currentDivision = p.currentDivision ?? null;
+        entry.currentLevel = p.currentLevel ?? null;
+        entry.geoCreatedAt = p.geoCreatedAt ?? null;
+        entry.isBanned = p.isBanned ? 1 : 0;
+        entry.clubTag = p.clubTag ?? null;
+        entry.streakProgress = p.streakProgress != null ? JSON.stringify(p.streakProgress) : null;
+        entry.profileFetchedAt = p.fetchedAt;
       }
       const players = Array.from(playerMap.values());
       console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
