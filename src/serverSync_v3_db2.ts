@@ -5,7 +5,7 @@
  * duel_games, duel_rounds, team_duel_games, team_duel_rounds)
  * sequentially in batches to /api/v3/sync.
  */
-import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow, getSyncState, setSyncState } from "./db_v2";
+import { dbV2, GameRow, RoundRow, ClassicGameRow, ClassicRoundRow, PlayerProfileCache, getSyncState, setSyncState } from "./db_v2";
 import { loadServerSyncSettings } from "./serverSync";
 import { getCurrentPlayerId, getCurrentPlayerName } from "./app/playerIdentity";
 import { deriveV3SyncUrl } from "./serverSync_v3";
@@ -37,6 +37,46 @@ function getUserscriptVersion(): string | undefined {
   const ns = String(info?.namespace || "");
   const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
   return `${v} (${variant})`;
+}
+
+const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PROFILE_CONCURRENCY = 5;
+
+async function fetchPlayerProfiles(playerIds: string[]): Promise<Map<string, PlayerProfileCache>> {
+  const now = Date.now();
+  const cached = await dbV2.playerProfiles.where("playerId").anyOf(playerIds).toArray();
+  const map = new Map<string, PlayerProfileCache>(cached.map(p => [p.playerId, p]));
+
+  const toFetch = playerIds.filter(id => {
+    const c = map.get(id);
+    return !c || (now - c.fetchedAt) > PROFILE_CACHE_TTL_MS;
+  });
+
+  for (let i = 0; i < toFetch.length; i += PROFILE_CONCURRENCY) {
+    await Promise.all(toFetch.slice(i, i + PROFILE_CONCURRENCY).map(async (playerId) => {
+      try {
+        const res = await httpGetJson(`https://www.geoguessr.com/api/v3/profiles/${encodeURIComponent(playerId)}`);
+        if (res.status >= 200 && res.status < 300) {
+          const d = res.data as any;
+          const user = d?.user ?? d;
+          const profile: PlayerProfileCache = {
+            playerId,
+            fetchedAt: now,
+            currentRating: typeof user?.competitive?.rating === "number" ? user.competitive.rating : undefined,
+            currentDivision: user?.competitive?.division?.type ?? undefined,
+            currentLevel: typeof user?.progress?.level === "number" ? user.progress.level : undefined,
+            geoCreatedAt: user?.created ? new Date(user.created).getTime() : undefined,
+            isBanned: user?.isBanned === true,
+            clubTag: user?.club?.tag ?? null,
+            streakProgress: user?.streakProgress ?? null,
+          };
+          await dbV2.playerProfiles.put(profile);
+          map.set(playerId, profile);
+        }
+      } catch { /* ignore */ }
+    }));
+  }
+  return map;
 }
 
 async function fetchOwnCountryCode(playerId: string): Promise<string | null> {
@@ -408,6 +448,21 @@ export async function syncV3FromDb2(opts: {
           totalCounts.standard_rounds += batch.length;
         }
       }
+    }
+
+    // Fetch GeoGuessr profiles for all players and merge into player rows
+    const profileMap = await fetchPlayerProfiles(Array.from(playerMap.keys()));
+    for (const [playerId, entry] of playerMap) {
+      const p = profileMap.get(playerId);
+      if (!p) continue;
+      (entry as any).currentRating    = p.currentRating    ?? null;
+      (entry as any).currentDivision  = p.currentDivision  ?? null;
+      (entry as any).currentLevel     = p.currentLevel     ?? null;
+      (entry as any).geoCreatedAt     = p.geoCreatedAt     ?? null;
+      (entry as any).isBanned         = p.isBanned ? 1 : 0;
+      (entry as any).clubTag          = p.clubTag          ?? null;
+      (entry as any).streakProgress   = p.streakProgress   != null ? JSON.stringify(p.streakProgress) : null;
+      (entry as any).profileFetchedAt = p.fetchedAt;
     }
 
     // Players (always send, even if empty, to update lastSyncedAt)

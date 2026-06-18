@@ -208,6 +208,20 @@ export interface ClassicRoundRow {
   skippedRound?: boolean;
 }
 
+// ─── Player profile cache (from GeoGuessr /api/v3/profiles) ──────────────────
+
+export interface PlayerProfileCache {
+  playerId: string;
+  fetchedAt: number;
+  currentRating?: number;
+  currentDivision?: string;
+  currentLevel?: number;
+  geoCreatedAt?: number;
+  isBanned?: boolean;
+  clubTag?: string | null;
+  streakProgress?: { bronze: number; silver: number; gold: number; platinum: number } | null;
+}
+
 // ─── Raw storage (never modified after write) ─────────────────────────────────
 
 export interface RawFeedEntry {
@@ -253,6 +267,7 @@ export class GGDB_V2 extends Dexie {
   rawGameDetails!: Table<RawGameDetail, string>;
   detailFetchLog!: Table<DetailFetchLog, string>;
   syncState!: Table<SyncStateRow, string>;
+  playerProfiles!: Table<PlayerProfileCache, string>;
 
   constructor(name: string = DB_V2_NAME) {
     super(name);
@@ -442,6 +457,18 @@ export class GGDB_V2 extends Dexie {
         if ("oppMateScore"    in r) { r.p4Score    = r.oppMateScore;    delete r.oppMateScore; }
         if ("oppMateDistance" in r) { r.p4Distance = r.oppMateDistance; delete r.oppMateDistance; }
       });
+    });
+
+    this.version(5).stores({
+      games: GAMES_SCHEMA_V4,
+      rounds: ROUNDS_SCHEMA_V4,
+      classicGames: CLASSIC_GAMES_SCHEMA,
+      classicRounds: CLASSIC_ROUNDS_SCHEMA,
+      rawFeedEntries: "gameId, fetchedAt",
+      rawGameDetails: "gameId, fetchedAt",
+      detailFetchLog: DETAIL_LOG_SCHEMA,
+      syncState: "key",
+      playerProfiles: "playerId, fetchedAt",
     });
   }
 }
