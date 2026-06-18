@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.9
+// @version      3.0.10
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11636,8 +11636,11 @@ ${shapes}`.trim();
       appVersion: getUserscriptVersion3(),
       ...payload
     });
-    const res = await gmPost(url, body, token);
-    if (res.status < 200 || res.status >= 300) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 2e3 * attempt));
+      const res = await gmPost(url, body, token);
+      if (res.status >= 200 && res.status < 300) return;
+      if (res.status === 502 || res.status === 503 || res.status === 0) continue;
       const parsed = (() => {
         try {
           return JSON.parse(res.text);
@@ -11647,6 +11650,7 @@ ${shapes}`.trim();
       })();
       throw new Error(parsed?.error ?? `HTTP ${res.status}`);
     }
+    throw new Error("HTTP 502 (after retries)");
   }
   function chunk(arr, size) {
     const out = [];
@@ -11944,7 +11948,8 @@ ${shapes}`.trim();
           }
         }
       }
-      const profileMap = await fetchPlayerProfiles(Array.from(playerMap.keys()));
+      const profileIds = ownPlayerId ? [ownPlayerId] : [];
+      const profileMap = await fetchPlayerProfiles(profileIds);
       for (const [playerId, entry] of playerMap) {
         const p = profileMap.get(playerId);
         if (!p) continue;
