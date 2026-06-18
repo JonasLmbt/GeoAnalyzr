@@ -465,43 +465,9 @@ export async function syncV3FromDb2(opts: {
       }
     }
 
-    // Fetch profiles: own player always, plus opponents not yet cached.
-    // Source: ALL known player IDs from IndexedDB (not just this session's games),
-    // so gaps get filled over multiple syncs even when there are no new games.
-    const MAX_OPPONENT_PROFILES = 30;
-    const now = Date.now();
-
-    // Collect all player IDs ever seen (from all games in local DB)
-    const allGamePlayerIds = new Set<string>();
-    (await dbV2.games.toArray()).forEach(g => {
-      if (g.p1Id) allGamePlayerIds.add(g.p1Id);
-      if (g.p2Id) allGamePlayerIds.add(g.p2Id);
-      if (g.p3Id) allGamePlayerIds.add(g.p3Id);
-      if (g.p4Id) allGamePlayerIds.add(g.p4Id);
-    });
-    if (ownPlayerId) allGamePlayerIds.delete(ownPlayerId);
-    const allOpponentIds = Array.from(allGamePlayerIds);
-
-    const cachedOpponents = await dbV2.playerProfiles.where("playerId").anyOf(allOpponentIds).toArray();
-    const cachedMap = new Map(cachedOpponents.map(p => [p.playerId, p]));
-    const opponentsToFetch = allOpponentIds
-      .filter(id => {
-        const c = cachedMap.get(id);
-        if (!c) return true;
-        if ((now - c.fetchedAt) > PROFILE_CACHE_TTL_MS) return true;
-        if (c.currentRating == null && (now - c.fetchedAt) > 60_000) return true;
-        return false;
-      })
-      .slice(0, MAX_OPPONENT_PROFILES);
-    const profileIds = [...(ownPlayerId ? [ownPlayerId] : []), ...opponentsToFetch];
+    // Fetch own profile only here; opponent profiles are handled in syncPlayerProfiles()
+    const profileIds = ownPlayerId ? [ownPlayerId] : [];
     const profileMap = await fetchPlayerProfiles(profileIds);
-
-    // Also add fetched opponents to playerMap so their data is sent to the server
-    for (const [pid, prof] of profileMap) {
-      if (!playerMap.has(pid)) {
-        playerMap.set(pid, { playerId: pid, playerName: null, countryCode: null, firstSeenAt: null, lastSeenAt: null });
-      }
-    }
     for (const [playerId, entry] of playerMap) {
       const p = profileMap.get(playerId);
       if (!p) continue;
@@ -555,4 +521,94 @@ export async function syncV3FromDb2(opts: {
   if (maxStdFetchedAt > 0) await setSyncState(CURSOR_KEY_STANDARD, maxStdFetchedAt);
 
   return { ok: true, counts: totalCounts };
+}
+
+/**
+ * Dedicated phase: fetch GeoGuessr profiles for all players ever seen in local games
+ * and push them to the server. Runs up to `batchSize` uncached/stale players per call.
+ * Returns how many profiles were fetched and sent.
+ */
+export async function syncPlayerProfiles(opts: {
+  batchSize?: number;
+  onProgress?: (msg: string) => void;
+} = {}): Promise<{ ok: boolean; fetched: number; sent: number; error?: string }> {
+  const settings = loadServerSyncSettings();
+  if (!settings.token) return { ok: false, fetched: 0, sent: 0, error: "no_token" };
+  const url = deriveV3SyncUrl(settings.endpointUrl);
+  if (!url) return { ok: false, fetched: 0, sent: 0, error: "no_endpoint" };
+
+  const batchSize = opts.batchSize ?? 50;
+  const now = Date.now();
+
+  // Collect all unique player IDs from all local games
+  const allIds = new Set<string>();
+  try {
+    const allGames = await dbV2.games.toArray();
+    for (const g of allGames) {
+      if (g.p1Id) allIds.add(g.p1Id);
+      if (g.p2Id) allIds.add(g.p2Id);
+      if ((g as any).p3Id) allIds.add((g as any).p3Id);
+      if ((g as any).p4Id) allIds.add((g as any).p4Id);
+    }
+  } catch (e) {
+    return { ok: false, fetched: 0, sent: 0, error: "db_read_failed" };
+  }
+
+  const allPlayerIds = Array.from(allIds);
+  // Check which are uncached or stale
+  const cached = await dbV2.playerProfiles.where("playerId").anyOf(allPlayerIds).toArray();
+  const cachedMap = new Map(cached.map(p => [p.playerId, p]));
+  const toFetch = allPlayerIds.filter(id => {
+    const c = cachedMap.get(id);
+    if (!c) return true;
+    if ((now - c.fetchedAt) > PROFILE_CACHE_TTL_MS) return true;
+    if (c.currentRating == null && (now - c.fetchedAt) > 60_000) return true;
+    return false;
+  }).slice(0, batchSize);
+
+  const remaining = allPlayerIds.filter(id => {
+    const c = cachedMap.get(id);
+    if (!c) return true;
+    if ((now - c.fetchedAt) > PROFILE_CACHE_TTL_MS) return true;
+    if (c.currentRating == null && (now - c.fetchedAt) > 60_000) return true;
+    return false;
+  }).length;
+
+  opts.onProgress?.(`Fetching ${toFetch.length} player profiles (${remaining} remaining)...`);
+
+  const profileMap = await fetchPlayerProfiles(toFetch);
+
+  // Build player rows with profile data and send to server
+  const playerRows: any[] = [];
+  for (const playerId of toFetch) {
+    const p = profileMap.get(playerId);
+    if (!p) continue;
+    playerRows.push({
+      playerId,
+      playerName: null,
+      countryCode: null,
+      firstSeenAt: null,
+      lastSeenAt: null,
+      currentRating:    p.currentRating    ?? null,
+      currentDivision:  p.currentDivision  ?? null,
+      currentLevel:     p.currentLevel     ?? null,
+      geoCreatedAt:     p.geoCreatedAt     ?? null,
+      isBanned:         p.isBanned ? 1 : 0,
+      clubTag:          p.clubTag          ?? null,
+      streakProgress:   p.streakProgress   != null ? JSON.stringify(p.streakProgress) : null,
+      profileFetchedAt: p.fetchedAt,
+    });
+  }
+
+  if (playerRows.length === 0) return { ok: true, fetched: toFetch.length, sent: 0 };
+
+  try {
+    for (const batch of chunk(playerRows, BATCH_SIZE)) {
+      await postBatch(url, settings.token, { players: batch });
+    }
+  } catch (e) {
+    return { ok: false, fetched: toFetch.length, sent: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return { ok: true, fetched: toFetch.length, sent: playerRows.length };
 }

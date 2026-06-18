@@ -3,7 +3,7 @@ import { fetchDetails } from "../detailFetcher_v2";
 import { getCurrentPlayerId } from "../app/playerIdentity";
 import { syncClassicToServer, syncClassicToServerV3 } from "../serverSync_v2";
 import { loadServerSyncSettings } from "../serverSync";
-import { syncV3FromDb2 } from "../serverSync_v3_db2";
+import { syncV3FromDb2, syncPlayerProfiles } from "../serverSync_v3_db2";
 import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
 import { linkDeviceViaDiscord } from "./linkDevice";
 
@@ -127,12 +127,7 @@ export async function runFetchAndSync(opts: {
 
   // Phase 3: Server sync — only upload games touched in this cycle
   const touchedIds = opts.forceFull ? undefined : [...new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
-  if (!opts.forceFull && touchedIds!.length === 0) {
-    log.sync = { gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
-    log.result = "ok";
-    log.message = "Nothing to sync — no new or updated games";
-    return { ok: true, message: log.message, log };
-  }
+  const hasNewGames = opts.forceFull || touchedIds!.length > 0;
 
   let settings = loadServerSyncSettings();
   if (!settings.token) {
@@ -147,12 +142,11 @@ export async function runFetchAndSync(opts: {
     return fail("Missing sync token. Link failed.", "Try linking again. If it keeps failing, disable popup blockers and retry.");
   }
 
-  opts.setStatus(opts.forceFull ? "Syncing to server..." : `Syncing ${touchedIds?.length ?? 0} games to server...`);
+  opts.setStatus(hasNewGames ? (opts.forceFull ? "Syncing to server..." : `Syncing ${touchedIds?.length ?? 0} games to server...`) : "Syncing player profiles...");
   try {
-    const syncResult = await syncV3FromDb2({
-      forceFull: opts.forceFull,
-      gameIds: touchedIds,
-    });
+    const syncResult = hasNewGames
+      ? await syncV3FromDb2({ forceFull: opts.forceFull, gameIds: touchedIds })
+      : { ok: true, counts: { players: 0, standard_games: 0, standard_rounds: 0, duel_games: 0, duel_rounds: 0, team_duel_games: 0, team_duel_rounds: 0 } };
 
     log.sync = {
       gamesUploaded: syncResult.counts?.duel_games ?? 0 + (syncResult.counts?.team_duel_games ?? 0),
@@ -181,6 +175,18 @@ export async function runFetchAndSync(opts: {
     // Classic games sync (non-fatal on failure)
     try { await syncClassicToServer(); } catch { /* ignore */ }
     try { await syncClassicToServerV3(); } catch { /* ignore */ }
+
+    // Phase 4: fill player profiles (own + up to 50 opponents per run)
+    opts.setStatus("Syncing player profiles...");
+    try {
+      const profResult = await syncPlayerProfiles({
+        batchSize: 50,
+        onProgress: (msg) => opts.setStatus(msg),
+      });
+      if (profResult.fetched > 0) {
+        opts.setStatus(`Player profiles: ${profResult.sent} synced (${profResult.fetched} fetched)`);
+      }
+    } catch { /* non-fatal */ }
   } catch (e: any) {
     const msg = e instanceof Error ? e.message : String(e || "Sync failed");
     log.sync.error = msg;

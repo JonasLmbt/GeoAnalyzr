@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      3.0.13-dev
+// @version      3.0.14-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11948,33 +11948,8 @@ ${shapes}`.trim();
           }
         }
       }
-      const MAX_OPPONENT_PROFILES = 30;
-      const now = Date.now();
-      const allGamePlayerIds = /* @__PURE__ */ new Set();
-      (await dbV2.games.toArray()).forEach((g) => {
-        if (g.p1Id) allGamePlayerIds.add(g.p1Id);
-        if (g.p2Id) allGamePlayerIds.add(g.p2Id);
-        if (g.p3Id) allGamePlayerIds.add(g.p3Id);
-        if (g.p4Id) allGamePlayerIds.add(g.p4Id);
-      });
-      if (ownPlayerId) allGamePlayerIds.delete(ownPlayerId);
-      const allOpponentIds = Array.from(allGamePlayerIds);
-      const cachedOpponents = await dbV2.playerProfiles.where("playerId").anyOf(allOpponentIds).toArray();
-      const cachedMap = new Map(cachedOpponents.map((p) => [p.playerId, p]));
-      const opponentsToFetch = allOpponentIds.filter((id) => {
-        const c = cachedMap.get(id);
-        if (!c) return true;
-        if (now - c.fetchedAt > PROFILE_CACHE_TTL_MS) return true;
-        if (c.currentRating == null && now - c.fetchedAt > 6e4) return true;
-        return false;
-      }).slice(0, MAX_OPPONENT_PROFILES);
-      const profileIds = [...ownPlayerId ? [ownPlayerId] : [], ...opponentsToFetch];
+      const profileIds = ownPlayerId ? [ownPlayerId] : [];
       const profileMap = await fetchPlayerProfiles(profileIds);
-      for (const [pid, prof] of profileMap) {
-        if (!playerMap.has(pid)) {
-          playerMap.set(pid, { playerId: pid, playerName: null, countryCode: null, firstSeenAt: null, lastSeenAt: null });
-        }
-      }
       for (const [playerId, entry] of playerMap) {
         const p = profileMap.get(playerId);
         if (!p) continue;
