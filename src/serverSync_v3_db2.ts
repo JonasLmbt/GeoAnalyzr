@@ -145,11 +145,15 @@ async function postBatch(url: string, token: string, payload: Record<string, any
     appVersion: getUserscriptVersion(),
     ...payload,
   });
-  const res = await gmPost(url, body, token);
-  if (res.status < 200 || res.status >= 300) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+    const res = await gmPost(url, body, token);
+    if (res.status >= 200 && res.status < 300) return;
+    if (res.status === 502 || res.status === 503 || res.status === 0) continue; // retry
     const parsed = (() => { try { return JSON.parse(res.text); } catch { return null; } })();
     throw new Error(parsed?.error ?? `HTTP ${res.status}`);
   }
+  throw new Error("HTTP 502 (after retries)");
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -461,8 +465,9 @@ export async function syncV3FromDb2(opts: {
       }
     }
 
-    // Fetch GeoGuessr profiles for all players and merge into player rows
-    const profileMap = await fetchPlayerProfiles(Array.from(playerMap.keys()));
+    // Fetch GeoGuessr profile only for own player (fetching hundreds of opponents is too slow)
+    const profileIds = ownPlayerId ? [ownPlayerId] : [];
+    const profileMap = await fetchPlayerProfiles(profileIds);
     for (const [playerId, entry] of playerMap) {
       const p = profileMap.get(playerId);
       if (!p) continue;
