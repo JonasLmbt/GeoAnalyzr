@@ -31,8 +31,12 @@ function rDelta(after: number | undefined, before: number | undefined): number |
 }
 
 function getUserscriptVersion(): string | undefined {
-  const v = (globalThis as any)?.GM_info?.script?.version;
-  return typeof v === "string" ? v : undefined;
+  const info = (globalThis as any)?.GM_info?.script;
+  const v = info?.version;
+  if (typeof v !== "string") return undefined;
+  const ns = String(info?.namespace || "");
+  const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+  return `${v} (${variant})`;
 }
 
 async function fetchOwnCountryCode(playerId: string): Promise<string | null> {

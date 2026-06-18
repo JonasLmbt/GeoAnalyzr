@@ -11531,8 +11531,12 @@ ${shapes}`.trim();
     return after != null && before != null ? after - before : null;
   }
   function getUserscriptVersion3() {
-    const v = globalThis?.GM_info?.script?.version;
-    return typeof v === "string" ? v : void 0;
+    const info = globalThis?.GM_info?.script;
+    const v = info?.version;
+    if (typeof v !== "string") return void 0;
+    const ns = String(info?.namespace || "");
+    const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+    return `${v} (${variant})`;
   }
   async function fetchOwnCountryCode2(playerId) {
     try {
