@@ -11616,20 +11616,23 @@ ${shapes}`.trim();
       team_duel_rounds: 0
     };
     const playerMap = /* @__PURE__ */ new Map();
-    const addPlayer = (id, name, country, fetchedAt) => {
+    const addPlayer = (id, name, country, playedAt) => {
       if (typeof id !== "string" || !id) return;
       const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
       const nm = typeof name === "string" && name.trim() ? name.trim() : null;
       const existing = playerMap.get(id);
       if (!existing) {
-        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, fetchedAt: fetchedAt ?? null });
+        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, firstSeenAt: playedAt ?? null, lastSeenAt: playedAt ?? null });
       } else {
         if (nm && !existing.playerName) existing.playerName = nm;
         if (cc && !existing.countryCode) existing.countryCode = cc;
-        if (fetchedAt && (!existing.fetchedAt || fetchedAt > existing.fetchedAt)) existing.fetchedAt = fetchedAt;
+        if (playedAt) {
+          if (!existing.firstSeenAt || playedAt < existing.firstSeenAt) existing.firstSeenAt = playedAt;
+          if (!existing.lastSeenAt || playedAt > existing.lastSeenAt) existing.lastSeenAt = playedAt;
+        }
       }
     };
-    if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry, Date.now());
+    if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry);
     const stdCursorFrom = forceFull ? 0 : await getSyncState(CURSOR_KEY_STANDARD) ?? 0;
     let classicGames;
     if (opts.gameIds && !forceFull) {
@@ -11654,11 +11657,14 @@ ${shapes}`.trim();
     const tdGameRows = [];
     const duelGameIds = /* @__PURE__ */ new Set();
     const tdGameIds = /* @__PURE__ */ new Set();
+    for (const g of classicGames) {
+      if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry, g.playedAt);
+    }
     for (const g of games) {
-      const fat = g.detailFetchedAt;
+      const pat = g.playedAt ?? void 0;
       if (g.modeFamily === "duels") {
-        addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
-        addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
+        addPlayer(g.p1Id, g.p1Name, g.p1Country, pat);
+        addPlayer(g.p2Id, g.p2Name, g.p2Country, pat);
         const winnerPlayerId = g.winnerTeamIdx === 0 ? g.p1Id ?? null : g.winnerTeamIdx === 1 ? g.p2Id ?? null : null;
         duelGameRows.push({
           gameId: g.gameId,
@@ -11690,10 +11696,10 @@ ${shapes}`.trim();
         });
         duelGameIds.add(g.gameId);
       } else if (g.modeFamily === "teamduels") {
-        addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
-        addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
-        addPlayer(g.p3Id, g.p3Name, g.p3Country, fat);
-        addPlayer(g.p4Id, g.p4Name, g.p4Country, fat);
+        addPlayer(g.p1Id, g.p1Name, g.p1Country, pat);
+        addPlayer(g.p2Id, g.p2Name, g.p2Country, pat);
+        addPlayer(g.p3Id, g.p3Name, g.p3Country, pat);
+        addPlayer(g.p4Id, g.p4Name, g.p4Country, pat);
         const winnerTeam = g.winnerTeamIdx === 0 ? "blue" : g.winnerTeamIdx === 1 ? "red" : null;
         tdGameRows.push({
           gameId: g.gameId,
