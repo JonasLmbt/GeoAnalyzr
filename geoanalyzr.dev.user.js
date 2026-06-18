@@ -10712,7 +10712,7 @@ ${shapes}`.trim();
 
   // src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
-  var CURRENT_NORMALIZE_VERSION = 5;
+  var CURRENT_NORMALIZE_VERSION = 6;
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
@@ -12735,6 +12735,12 @@ ${shapes}`.trim();
                 if (isDuelType) {
                   const rounds = await normalizeDuelsRounds(game.gameId, cached.json);
                   if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
+                } else if (game.modeFamily === "standard") {
+                  const selfId = opts.currentPlayerId ?? readPlayerId2(cached.json?.player) ?? "";
+                  const classicGame = normalizeClassicGame(game.gameId, selfId, cached.json);
+                  const classicRounds = await normalizeClassicRounds(game.gameId, cached.json);
+                  await dbV2.classicGames.put(classicGame);
+                  if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
                 }
                 opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
                 updatedGameIds.push(game.gameId);

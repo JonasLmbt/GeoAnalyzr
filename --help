@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         GeoAnalyzr (Minimal)
-// @namespace    geoanalyzr-sync
+// @name         GeoAnalyzr
+// @namespace    geoanalyzr
 // @author       JonasLmbt
 // @version      3.0.6
-// @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
-// @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
+// @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
+// @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
 // @match        https://www.geoguessr.com/*
 // @grant        GM_download
@@ -10712,7 +10712,7 @@ ${shapes}`.trim();
 
   // src/db_v2.ts
   var DB_V2_NAME = "gg_analyzer_v2";
-  var CURRENT_NORMALIZE_VERSION = 6;
+  var CURRENT_NORMALIZE_VERSION = 2;
   var GGDB_V2 = class extends import_wrapper_default {
     games;
     rounds;
@@ -11205,6 +11205,330 @@ ${shapes}`.trim();
     await dbV2.syncState.put({ key, value, updatedAt: Date.now() });
   }
 
+  // src/serverSync_v2.ts
+  function getUserscriptVersion2() {
+    const info = globalThis?.GM_info;
+    const v = info?.script?.version;
+    return typeof v === "string" ? v : void 0;
+  }
+  function v2BatchEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v2/sync/batch";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/batch");
+    }
+  }
+  function classicBatchEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v2/sync/classic-batch";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/classic-batch");
+    }
+  }
+  function v2StateEndpoint(syncEndpointUrl) {
+    try {
+      const u = new URL(syncEndpointUrl);
+      u.pathname = "/api/v2/sync/state";
+      u.search = "";
+      return u.toString();
+    } catch {
+      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/state");
+    }
+  }
+  async function httpPost(url, token, body) {
+    const json = JSON.stringify(body);
+    const gm = globalThis?.GM_xmlhttpRequest ?? globalThis?.GM?.xmlHttpRequest;
+    if (typeof gm === "function") {
+      return new Promise((resolve) => {
+        gm({
+          method: "POST",
+          url,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json"
+          },
+          data: json,
+          responseType: "text",
+          timeout: 6e4,
+          withCredentials: false,
+          onload: (res2) => {
+            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+            let data2 = null;
+            try {
+              data2 = JSON.parse(text);
+            } catch {
+            }
+            resolve({ status: Number(res2?.status) || 0, data: data2 });
+          },
+          onerror: () => resolve({ status: 0, data: null }),
+          ontimeout: () => resolve({ status: 0, data: null })
+        });
+      });
+    }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json"
+      },
+      body: json
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+    }
+    return { status: res.status, data };
+  }
+  async function httpGet(url, token) {
+    const gm = globalThis?.GM_xmlhttpRequest ?? globalThis?.GM?.xmlHttpRequest;
+    if (typeof gm === "function") {
+      return new Promise((resolve) => {
+        gm({
+          method: "GET",
+          url,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json"
+          },
+          responseType: "text",
+          timeout: 3e4,
+          withCredentials: false,
+          onload: (res2) => {
+            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
+            let data2 = null;
+            try {
+              data2 = JSON.parse(text);
+            } catch {
+            }
+            resolve({ status: Number(res2?.status) || 0, data: data2 });
+          },
+          onerror: () => resolve({ status: 0, data: null }),
+          ontimeout: () => resolve({ status: 0, data: null })
+        });
+      });
+    }
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch {
+    }
+    return { status: res.status, data };
+  }
+  async function fetchServerState(stateUrl, token, playerId) {
+    const url = `${stateUrl}?playerId=${encodeURIComponent(playerId)}`;
+    const res = await httpGet(url, token);
+    if (res.status !== 200 || !res.data?.ok) return null;
+    return {
+      gameCount: Number(res.data.gameCount) || 0,
+      roundCount: Number(res.data.roundCount) || 0,
+      oldestAt: res.data.oldestAt ?? null,
+      newestAt: res.data.newestAt ?? null
+    };
+  }
+  var BATCH_SIZE = 200;
+  async function syncToServerV2(opts) {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) {
+      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const playerId = await getCurrentPlayerId();
+    if (!playerId) {
+      return { ok: false, error: "no_player_id", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
+    }
+    const batchUrl = v2BatchEndpoint(settings.endpointUrl);
+    const stateUrl = v2StateEndpoint(settings.endpointUrl);
+    const clientVersion = getUserscriptVersion2();
+    opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0 });
+    const serverBefore = await fetchServerState(stateUrl, settings.token, playerId);
+    let localGames;
+    if (opts.gameIds) {
+      const gameIdSet = new Set(opts.gameIds);
+      localGames = await dbV2.games.filter((g) => gameIdSet.has(g.gameId)).toArray();
+    } else {
+      localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
+    }
+    const localGameCount = localGames.length;
+    const serverCount = serverBefore?.gameCount ?? 0;
+    opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, serverCount, localCount: localGameCount });
+    if (localGameCount === 0) {
+      return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0, serverGameCount: serverCount };
+    }
+    if (!opts.gameIds && !opts.full && serverCount >= localGameCount && serverCount > 0) {
+      return {
+        ok: true,
+        gamesUploaded: 0,
+        gamesNew: 0,
+        gamesSkipped: localGameCount,
+        roundsNew: 0,
+        batches: 0,
+        serverGameCount: serverCount
+      };
+    }
+    const allRounds = await dbV2.rounds.toArray();
+    const roundsByGameId = /* @__PURE__ */ new Map();
+    for (const r of allRounds) {
+      const list = roundsByGameId.get(r.gameId);
+      if (list) list.push(r);
+      else roundsByGameId.set(r.gameId, [r]);
+    }
+    const totalBatches = Math.ceil(localGameCount / BATCH_SIZE);
+    let totalGamesUploaded = 0;
+    let totalGamesNew = 0;
+    let totalGamesSkipped = 0;
+    let totalRoundsNew = 0;
+    let batchIndex = 0;
+    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+      batchIndex++;
+      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
+      const roundBatch = [];
+      for (const g of gameBatch) {
+        const rounds = roundsByGameId.get(g.gameId);
+        if (rounds) roundBatch.push(...rounds);
+      }
+      opts.onProgress?.({
+        phase: "upload",
+        batch: batchIndex,
+        totalBatches,
+        gamesUploaded: totalGamesUploaded,
+        gamesNew: totalGamesNew,
+        gamesSkipped: totalGamesSkipped,
+        roundsNew: totalRoundsNew
+      });
+      const batchId = `v2_${playerId}_${Date.now()}_${batchIndex}`;
+      const body = {
+        batchId,
+        playerId,
+        clientVersion: clientVersion ?? void 0,
+        games: gameBatch,
+        rounds: roundBatch
+      };
+      let res;
+      try {
+        res = await httpPost(batchUrl, settings.token, body);
+      } catch (e) {
+        return {
+          ok: false,
+          status: 0,
+          error: e instanceof Error ? e.message : String(e),
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return {
+          ok: false,
+          status: res.status,
+          error: "unauthorized",
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        return {
+          ok: false,
+          status: res.status,
+          error: res.data?.error ?? `HTTP ${res.status}`,
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          gamesSkipped: totalGamesSkipped,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      totalGamesUploaded += gameBatch.length;
+      totalGamesNew += Number(res.data?.gamesNew) || 0;
+      totalGamesSkipped += Number(res.data?.gamesSkipped) || 0;
+      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    }
+    opts.onProgress?.({ phase: "verify", batch: batchIndex, totalBatches, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew });
+    const serverAfter = await fetchServerState(stateUrl, settings.token, playerId);
+    return {
+      ok: true,
+      gamesUploaded: totalGamesUploaded,
+      gamesNew: totalGamesNew,
+      gamesSkipped: totalGamesSkipped,
+      roundsNew: totalRoundsNew,
+      batches: batchIndex,
+      serverGameCount: serverAfter?.gameCount
+    };
+  }
+  async function syncClassicToServer() {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) {
+      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    }
+    const localGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt !== void 0).toArray();
+    if (localGames.length === 0) {
+      return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
+    }
+    const allRounds = await dbV2.classicRounds.toArray();
+    const roundsByGameId = /* @__PURE__ */ new Map();
+    for (const r of allRounds) {
+      const list = roundsByGameId.get(r.gameId);
+      if (list) list.push(r);
+      else roundsByGameId.set(r.gameId, [r]);
+    }
+    const batchUrl = classicBatchEndpoint(settings.endpointUrl);
+    const clientVersion = getUserscriptVersion2();
+    const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
+    let totalGamesUploaded = 0;
+    let totalGamesNew = 0;
+    let totalRoundsNew = 0;
+    let batchIndex = 0;
+    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
+      batchIndex++;
+      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
+      const roundBatch = [];
+      for (const g of gameBatch) {
+        const rounds = roundsByGameId.get(g.gameId);
+        if (rounds) roundBatch.push(...rounds);
+      }
+      const batchId = `classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
+      const body = { batchId, clientVersion: clientVersion ?? void 0, games: gameBatch, rounds: roundBatch };
+      let res;
+      try {
+        res = await httpPost(batchUrl, settings.token, body);
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+          gamesUploaded: totalGamesUploaded,
+          gamesNew: totalGamesNew,
+          roundsNew: totalRoundsNew,
+          batches: batchIndex - 1
+        };
+      }
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      if (res.status < 200 || res.status >= 300) {
+        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
+      }
+      totalGamesUploaded += gameBatch.length;
+      totalGamesNew += Number(res.data?.gamesNew) || 0;
+      totalRoundsNew += Number(res.data?.roundsNew) || 0;
+    }
+    return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
+  }
+
   // src/serverSync_v3.ts
   var SYNC_META_KEY_V3 = "server_sync_v3";
   function rDelta(after, before) {
@@ -11225,7 +11549,7 @@ ${shapes}`.trim();
     const x = v.trim().toUpperCase();
     return x || null;
   }
-  function getUserscriptVersion2() {
+  function getUserscriptVersion3() {
     const anyGlobal = globalThis;
     const info = anyGlobal?.GM_info;
     const v = info?.script?.version;
@@ -11465,7 +11789,7 @@ ${shapes}`.trim();
       schema: "geoanalyzr-v3-sync",
       schemaVersion: 1,
       createdAt: Date.now(),
-      appVersion: getUserscriptVersion2(),
+      appVersion: getUserscriptVersion3(),
       owner: { playerId: ownPlayerId, playerName: ownPlayerName },
       cursor: { from: cursorFrom },
       players,
@@ -11478,7 +11802,7 @@ ${shapes}`.trim();
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      ...getUserscriptVersion2() ? { "X-GA-Script-Version": String(getUserscriptVersion2()) } : {}
+      ...getUserscriptVersion3() ? { "X-GA-Script-Version": String(getUserscriptVersion3()) } : {}
     };
     const res = await gmPostJson(endpointUrl, jsonBody, headers);
     const httpOk = res.status >= 200 && res.status < 300;
@@ -11518,7 +11842,7 @@ ${shapes}`.trim();
   // src/serverSync_v3_db2.ts
   var CURSOR_KEY_DUELS = "server_sync_v3";
   var CURSOR_KEY_STANDARD = "server_sync_v3_standard";
-  var BATCH_SIZE = 500;
+  var BATCH_SIZE2 = 500;
   function n2(v) {
     return typeof v === "number" && Number.isFinite(v) ? v : null;
   }
@@ -11530,13 +11854,9 @@ ${shapes}`.trim();
   function rDelta2(after, before) {
     return after != null && before != null ? after - before : null;
   }
-  function getUserscriptVersion3() {
-    const info = globalThis?.GM_info?.script;
-    const v = info?.version;
-    if (typeof v !== "string") return void 0;
-    const ns = String(info?.namespace || "");
-    const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
-    return `${v} (${variant})`;
+  function getUserscriptVersion4() {
+    const v = globalThis?.GM_info?.script?.version;
+    return typeof v === "string" ? v : void 0;
   }
   async function fetchOwnCountryCode2(playerId) {
     try {
@@ -11559,7 +11879,7 @@ ${shapes}`.trim();
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          ...getUserscriptVersion3() ? { "X-GA-Script-Version": getUserscriptVersion3() } : {}
+          ...getUserscriptVersion4() ? { "X-GA-Script-Version": getUserscriptVersion4() } : {}
         },
         data: body,
         responseType: "text",
@@ -11575,7 +11895,7 @@ ${shapes}`.trim();
       schema: "geoanalyzr-v3-sync",
       schemaVersion: 1,
       createdAt: Date.now(),
-      appVersion: getUserscriptVersion3(),
+      appVersion: getUserscriptVersion4(),
       ...payload
     });
     const res = await gmPost(url, body, token);
@@ -11597,16 +11917,9 @@ ${shapes}`.trim();
   }
   async function syncV3FromDb2(opts = {}) {
     const settings = loadServerSyncSettings();
-    if (!settings.token) {
-      console.warn("[v3sync] no_token");
-      return { ok: false, error: "no_token" };
-    }
+    if (!settings.token) return { ok: false, error: "no_token" };
     const url = deriveV3SyncUrl(settings.endpointUrl);
-    if (!url) {
-      console.warn("[v3sync] no_endpoint");
-      return { ok: false, error: "no_endpoint" };
-    }
-    console.log("[v3sync] starting", { url, forceFull: opts.forceFull });
+    if (!url) return { ok: false, error: "no_endpoint" };
     const forceFull = opts.forceFull === true;
     const [ownPlayerId, ownPlayerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
     const ownCountry = ownPlayerId ? await fetchOwnCountryCode2(ownPlayerId) : null;
@@ -11620,23 +11933,20 @@ ${shapes}`.trim();
       team_duel_rounds: 0
     };
     const playerMap = /* @__PURE__ */ new Map();
-    const addPlayer = (id, name, country, playedAt) => {
+    const addPlayer = (id, name, country, fetchedAt) => {
       if (typeof id !== "string" || !id) return;
       const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
       const nm = typeof name === "string" && name.trim() ? name.trim() : null;
       const existing = playerMap.get(id);
       if (!existing) {
-        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, firstSeenAt: playedAt ?? null, lastSeenAt: playedAt ?? null });
+        playerMap.set(id, { playerId: id, playerName: nm, countryCode: cc, fetchedAt: fetchedAt ?? null });
       } else {
         if (nm && !existing.playerName) existing.playerName = nm;
         if (cc && !existing.countryCode) existing.countryCode = cc;
-        if (playedAt) {
-          if (!existing.firstSeenAt || playedAt < existing.firstSeenAt) existing.firstSeenAt = playedAt;
-          if (!existing.lastSeenAt || playedAt > existing.lastSeenAt) existing.lastSeenAt = playedAt;
-        }
+        if (fetchedAt && (!existing.fetchedAt || fetchedAt > existing.fetchedAt)) existing.fetchedAt = fetchedAt;
       }
     };
-    if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry);
+    if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry, Date.now());
     const stdCursorFrom = forceFull ? 0 : await getSyncState(CURSOR_KEY_STANDARD) ?? 0;
     let classicGames;
     if (opts.gameIds && !forceFull) {
@@ -11644,6 +11954,55 @@ ${shapes}`.trim();
       classicGames = await dbV2.classicGames.filter((g) => idSet.has(g.gameId) && g.detailFetchedAt != null).toArray();
     } else {
       classicGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt != null && (forceFull || g.detailFetchedAt > stdCursorFrom)).toArray();
+    }
+    if (ownPlayerId) {
+      const stdGameRows = classicGames.map((g) => ({
+        gameId: g.gameId,
+        p1_playerId: ownPlayerId,
+        mapSlug: null,
+        mapName: g.mapName ?? null,
+        movementType: g.movement ?? "moving",
+        timeLimit: g.timeLimit ?? null,
+        roundCount: g.roundCount ?? null,
+        totalScore: g.totalScore ?? null,
+        totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1e3 : null,
+        totalTimeSec: g.totalTimeSec ?? null,
+        totalSteps: g.totalSteps ?? null,
+        playedAt: g.playedAt ?? null
+      }));
+      for (const batch of chunk(stdGameRows, BATCH_SIZE2)) {
+        await postBatch(url, settings.token, { standard_games: batch });
+        totalCounts.standard_games += batch.length;
+      }
+      if (classicGames.length > 0) {
+        const stdGameIds = classicGames.map((g) => g.gameId);
+        const classicRounds = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
+        const stdRoundRows = classicRounds.map((r) => ({
+          gameId: r.gameId,
+          roundNumber: r.roundNumber,
+          panoId: r.panoId ?? null,
+          trueLat: n2(r.trueLat),
+          trueLng: n2(r.trueLng),
+          trueCountry: uc2(r.trueCountry),
+          trueHeading: n2(r.trueHeadingDeg),
+          truePitch: null,
+          trueZoom: null,
+          p1_lat: n2(r.selfLat),
+          p1_lng: n2(r.selfLng),
+          p1_country: uc2(r.selfCountry),
+          p1_score: n2(r.selfScore),
+          p1_distanceKm: n2(r.selfDistance),
+          p1_timeSec: n2(r.selfTimeSec),
+          p1_steps: n2(r.selfSteps),
+          timedOut: r.timedOut ? 1 : 0,
+          skippedRound: r.skippedRound ? 1 : 0,
+          playedAt: r.playedAt ?? null
+        }));
+        for (const batch of chunk(stdRoundRows, BATCH_SIZE2)) {
+          await postBatch(url, settings.token, { standard_rounds: batch });
+          totalCounts.standard_rounds += batch.length;
+        }
+      }
     }
     const duelCursorFrom = forceFull ? 0 : await getSyncState(CURSOR_KEY_DUELS) ?? 0;
     let games;
@@ -11661,14 +12020,11 @@ ${shapes}`.trim();
     const tdGameRows = [];
     const duelGameIds = /* @__PURE__ */ new Set();
     const tdGameIds = /* @__PURE__ */ new Set();
-    for (const g of classicGames) {
-      if (ownPlayerId) addPlayer(ownPlayerId, ownPlayerName, ownCountry, g.playedAt);
-    }
     for (const g of games) {
-      const pat = g.playedAt ?? void 0;
+      const fat = g.detailFetchedAt;
       if (g.modeFamily === "duels") {
-        addPlayer(g.p1Id, g.p1Name, g.p1Country, pat);
-        addPlayer(g.p2Id, g.p2Name, g.p2Country, pat);
+        addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
+        addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
         const winnerPlayerId = g.winnerTeamIdx === 0 ? g.p1Id ?? null : g.winnerTeamIdx === 1 ? g.p2Id ?? null : null;
         duelGameRows.push({
           gameId: g.gameId,
@@ -11680,8 +12036,6 @@ ${shapes}`.trim();
           isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
           totalRounds: g.totalRounds ?? null,
           winnerPlayerId,
-          winnerStyle: g.winnerStyle ?? null,
-          initialHealth: n2(g.initialHealth),
           p1_ratingAfter: n2(g.p1RatingAfter),
           p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),
           p1_movingRatingAfter: n2(g.p1MovingRatingAfter),
@@ -11702,10 +12056,10 @@ ${shapes}`.trim();
         });
         duelGameIds.add(g.gameId);
       } else if (g.modeFamily === "teamduels") {
-        addPlayer(g.p1Id, g.p1Name, g.p1Country, pat);
-        addPlayer(g.p2Id, g.p2Name, g.p2Country, pat);
-        addPlayer(g.p3Id, g.p3Name, g.p3Country, pat);
-        addPlayer(g.p4Id, g.p4Name, g.p4Country, pat);
+        addPlayer(g.p1Id, g.p1Name, g.p1Country, fat);
+        addPlayer(g.p2Id, g.p2Name, g.p2Country, fat);
+        addPlayer(g.p3Id, g.p3Name, g.p3Country, fat);
+        addPlayer(g.p4Id, g.p4Name, g.p4Country, fat);
         const winnerTeam = g.winnerTeamIdx === 0 ? "blue" : g.winnerTeamIdx === 1 ? "red" : null;
         tdGameRows.push({
           gameId: g.gameId,
@@ -11719,7 +12073,6 @@ ${shapes}`.trim();
           isRated: g.isRated != null ? g.isRated ? 1 : 0 : null,
           totalRounds: g.totalRounds ?? null,
           winnerTeam,
-          initialHealth: n2(g.initialHealth),
           p1_ratingAfter: n2(g.p1RatingAfter),
           p1_ratingDelta: rDelta2(g.p1RatingAfter, g.p1RatingBefore),
           p2_ratingAfter: n2(g.p2RatingAfter),
@@ -11742,13 +12095,10 @@ ${shapes}`.trim();
         duelRoundRows.push({
           gameId: r.gameId,
           roundNumber: r.roundNumber,
-          panoId: r.panoId ?? null,
           trueLat: n2(r.trueLat),
           trueLng: n2(r.trueLng),
           trueCountry: uc2(r.trueCountry),
           trueHeading: n2(r.trueHeadingDeg),
-          truePitch: n2(r.truePitch),
-          trueZoom: n2(r.trueZoom),
           startTime: n2(r.startTime),
           durationSec: n2(r.durationSec),
           isHealingRound: null,
@@ -11760,9 +12110,7 @@ ${shapes}`.trim();
           p1_distanceKm: n2(r.p1Distance),
           p1_timeSec: n2(r.p1TimeSec),
           p1_timedOut: r.p1TimedOut ? 1 : 0,
-          p1_healthBefore: n2(r.team0HealthBefore),
           p1_healthAfter: n2(r.team0HealthAfter),
-          p1_damageDealt: n2(r.team0DamageDealt),
           p1_isBestGuess: 0,
           p2_lat: n2(r.p2Lat),
           p2_lng: n2(r.p2Lng),
@@ -11771,9 +12119,7 @@ ${shapes}`.trim();
           p2_distanceKm: n2(r.p2Distance),
           p2_timeSec: n2(r.p2TimeSec),
           p2_timedOut: r.p2TimedOut ? 1 : 0,
-          p2_healthBefore: n2(r.team1HealthBefore),
           p2_healthAfter: n2(r.team1HealthAfter),
-          p2_damageDealt: n2(r.team1DamageDealt),
           p2_isBestGuess: 0,
           playedAt: r.startTime ?? null
         });
@@ -11781,13 +12127,10 @@ ${shapes}`.trim();
         tdRoundRows.push({
           gameId: r.gameId,
           roundNumber: r.roundNumber,
-          panoId: r.panoId ?? null,
           trueLat: n2(r.trueLat),
           trueLng: n2(r.trueLng),
           trueCountry: uc2(r.trueCountry),
           trueHeading: n2(r.trueHeadingDeg),
-          truePitch: n2(r.truePitch),
-          trueZoom: n2(r.trueZoom),
           startTime: n2(r.startTime),
           durationSec: n2(r.durationSec),
           isHealingRound: r.isHealing ? 1 : null,
@@ -11821,93 +12164,35 @@ ${shapes}`.trim();
           p4_country: uc2(r.p4Country),
           p4_score: n2(r.p4Score),
           p4_distanceKm: n2(r.p4Distance),
-          p4_timeSec: n2(r.p4TimeSec),
-          p4_timedOut: r.p4TimedOut ? 1 : 0,
           p4_isBestGuess: r.p4IsBetterGuess ? 1 : 0,
-          blue_healthBefore: n2(r.team0HealthBefore),
           blue_healthAfter: n2(r.team0HealthAfter),
-          blue_damageDealt: n2(r.team0DamageDealt),
-          red_healthBefore: n2(r.team1HealthBefore),
           red_healthAfter: n2(r.team1HealthAfter),
-          red_damageDealt: n2(r.team1DamageDealt),
           playedAt: r.startTime ?? null
         });
       }
     }
     try {
-      if (ownPlayerId) {
-        const stdGameRows = classicGames.map((g) => ({
-          gameId: g.gameId,
-          p1_playerId: ownPlayerId,
-          mapSlug: g.mapId ?? null,
-          mapName: g.mapName ?? null,
-          movementType: g.movement ?? "moving",
-          timeLimit: g.timeLimit ?? null,
-          roundCount: g.roundCount ?? null,
-          totalScore: g.totalScore ?? null,
-          totalDistanceKm: g.totalDistanceM != null ? g.totalDistanceM / 1e3 : null,
-          totalTimeSec: g.totalTimeSec ?? null,
-          totalSteps: g.totalSteps ?? null,
-          playedAt: g.playedAt ?? null
-        }));
-        console.log("[v3sync] standard_games", stdGameRows.length);
-        for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
-          await postBatch(url, settings.token, { standard_games: batch });
-          totalCounts.standard_games += batch.length;
-        }
-        if (classicGames.length > 0) {
-          const stdGameIds = classicGames.map((g) => g.gameId);
-          const classicRounds = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
-          const stdRoundRows = classicRounds.map((r) => ({
-            gameId: r.gameId,
-            roundNumber: r.roundNumber,
-            panoId: r.panoId ?? null,
-            trueLat: n2(r.trueLat),
-            trueLng: n2(r.trueLng),
-            trueCountry: uc2(r.trueCountry),
-            trueHeading: n2(r.trueHeadingDeg),
-            truePitch: n2(r.truePitch),
-            trueZoom: n2(r.trueZoom),
-            p1_lat: n2(r.selfLat),
-            p1_lng: n2(r.selfLng),
-            p1_country: uc2(r.selfCountry),
-            p1_score: n2(r.selfScore),
-            p1_distanceKm: n2(r.selfDistance),
-            p1_timeSec: n2(r.selfTimeSec),
-            p1_steps: n2(r.selfSteps),
-            timedOut: r.timedOut ? 1 : 0,
-            skippedRound: r.skippedRound ? 1 : 0,
-            playedAt: r.playedAt ?? null
-          }));
-          console.log("[v3sync] standard_rounds", stdRoundRows.length);
-          for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
-            await postBatch(url, settings.token, { standard_rounds: batch });
-            totalCounts.standard_rounds += batch.length;
-          }
-        }
-      }
       const players = Array.from(playerMap.values());
-      console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
-      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
+      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE2)) {
         await postBatch(url, settings.token, { players: batch });
         totalCounts.players += batch.length;
       }
       if (players.length === 0) {
         await postBatch(url, settings.token, { players: [] });
       }
-      for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
+      for (const batch of chunk(duelGameRows, BATCH_SIZE2)) {
         await postBatch(url, settings.token, { duel_games: batch });
         totalCounts.duel_games += batch.length;
       }
-      for (const batch of chunk(duelRoundRows, BATCH_SIZE)) {
+      for (const batch of chunk(duelRoundRows, BATCH_SIZE2)) {
         await postBatch(url, settings.token, { duel_rounds: batch });
         totalCounts.duel_rounds += batch.length;
       }
-      for (const batch of chunk(tdGameRows, BATCH_SIZE)) {
+      for (const batch of chunk(tdGameRows, BATCH_SIZE2)) {
         await postBatch(url, settings.token, { team_duel_games: batch });
         totalCounts.team_duel_games += batch.length;
       }
-      for (const batch of chunk(tdRoundRows, BATCH_SIZE)) {
+      for (const batch of chunk(tdRoundRows, BATCH_SIZE2)) {
         await postBatch(url, settings.token, { team_duel_rounds: batch });
         totalCounts.team_duel_rounds += batch.length;
       }
@@ -12335,15 +12620,13 @@ ${shapes}`.trim();
         const lng = asNum2(guess?.lng ?? guess?.lon ?? guess?.longitude);
         const distanceMeters = asNum2(guess?.distance ?? guess?.distanceInMeters);
         const country = await resolveGuessCountry(guess, lat, lng);
-        const guessCreatedTs = toTs2(guess?.created);
-        const timeSec = asNum2(guess?.time) ?? (guessCreatedTs !== void 0 && startTs !== void 0 ? (guessCreatedTs - startTs) / 1e3 : void 0);
         guessData.push({
           lat,
           lng,
           country,
           score: asNum2(guess?.score),
           distance: distanceMeters !== void 0 ? distanceMeters / 1e3 : void 0,
-          timeSec,
+          timeSec: asNum2(guess?.time),
           timedOut: asBool2(guess?.timedOut),
           teamHealthAfter: teamR?.healthAfter,
           teamHealthBefore: teamR?.healthBefore,
@@ -12402,8 +12685,6 @@ ${shapes}`.trim();
         p4Country: p4g.country,
         p4Score: p4g.score,
         p4Distance: p4g.distance,
-        p4TimeSec: p4g.timeSec,
-        p4TimedOut: p4g.timedOut,
         p4IsBetterGuess,
         team0HealthAfter: team0Health.teamHealthAfter,
         team0HealthBefore: team0Health.teamHealthBefore,
@@ -12416,26 +12697,6 @@ ${shapes}`.trim();
         if (row[k] === void 0) delete row[k];
       }
       result.push(row);
-    }
-    const initialHealth = asNum2(gameData?.options?.initialHealth);
-    result.sort((a, b3) => (a.roundNumber ?? 0) - (b3.roundNumber ?? 0));
-    for (let i = 0; i < result.length; i++) {
-      const row = result[i];
-      const prev = i > 0 ? result[i - 1] : null;
-      if (row.team0HealthBefore === void 0) {
-        const hb = prev?.team0HealthAfter ?? (i === 0 ? initialHealth : void 0);
-        if (hb !== void 0) row.team0HealthBefore = hb;
-      }
-      if (row.team1HealthBefore === void 0) {
-        const hb = prev?.team1HealthAfter ?? (i === 0 ? initialHealth : void 0);
-        if (hb !== void 0) row.team1HealthBefore = hb;
-      }
-      if (row.team0DamageDealt === void 0 && row.team1HealthBefore !== void 0 && row.team1HealthAfter !== void 0) {
-        row.team0DamageDealt = row.team1HealthBefore - row.team1HealthAfter;
-      }
-      if (row.team1DamageDealt === void 0 && row.team0HealthBefore !== void 0 && row.team0HealthAfter !== void 0) {
-        row.team1DamageDealt = row.team0HealthBefore - row.team0HealthAfter;
-      }
     }
     return result;
   }
@@ -12528,8 +12789,6 @@ ${shapes}`.trim();
         trueHeadingDeg: asNum2(r?.heading),
         trueCountry: iso2ToName(normalizeIso23(r?.streakLocationCode ?? r?.countryCode)),
         panoId: typeof r?.panoId === "string" ? r.panoId : void 0,
-        truePitch: asNum2(r?.pitch),
-        trueZoom: asNum2(r?.zoom),
         selfLat: guessLat,
         selfLng: guessLng,
         selfCountry,
@@ -12735,12 +12994,6 @@ ${shapes}`.trim();
                 if (isDuelType) {
                   const rounds = await normalizeDuelsRounds(game.gameId, cached.json);
                   if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
-                } else if (game.modeFamily === "standard") {
-                  const selfId = opts.currentPlayerId ?? readPlayerId2(cached.json?.player) ?? "";
-                  const classicGame = normalizeClassicGame(game.gameId, selfId, cached.json);
-                  const classicRounds = await normalizeClassicRounds(game.gameId, cached.json);
-                  await dbV2.classicGames.put(classicGame);
-                  if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
                 }
                 opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
                 updatedGameIds.push(game.gameId);
@@ -13333,7 +13586,7 @@ ${shapes}`.trim();
     (document.head ?? document.documentElement ?? document.body ?? document).appendChild(style);
   }
   function createUIOverlay() {
-    const variant = true ? "sync" : "local";
+    const variant = true ? "local" : "local";
     const analysisEnabled = variant !== "sync";
     const isSyncVariant = variant === "sync";
     const isDevBuild = () => {
@@ -13641,11 +13894,43 @@ ${shapes}`.trim();
           settings = loadServerSyncSettings();
         }
         if (isSyncVariant) {
-          const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
-          if (r.ok) {
-            setMsg(`Synced \u2014 players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
+          const modeLabel = forceFull ? "Synced full" : "Synced";
+          const v3SyncPromise = syncV3FromDb2({ gameIds: opts.gameIds }).catch(() => {
+          });
+          const v3ClassicSyncPromise = Promise.resolve();
+          const v2res = await syncToServerV2({
+            full: forceFull,
+            gameIds: opts.gameIds,
+            onProgress: (p) => {
+              if (p.phase === "reconcile" && p.serverCount !== void 0) {
+                setMsg(`Server: ${p.serverCount} games \u2014 local: ${p.localCount} games`);
+              } else if (p.phase === "reconcile") {
+                setMsg("Checking server state...");
+              } else if (p.phase === "upload") {
+                setMsg(`Uploading batch ${p.batch}/${p.totalBatches} \u2014 ${p.gamesUploaded} games sent...`);
+                opts.setProgress?.(67 + Math.round(p.batch / Math.max(1, p.totalBatches) * 26));
+              } else if (p.phase === "verify") {
+                setMsg("Verifying...");
+                opts.setProgress?.(94);
+              }
+            }
+          });
+          await v3SyncPromise;
+          await v3ClassicSyncPromise;
+          if (v2res.ok) {
+            syncClassicToServer().catch(() => {
+            });
+            if (v2res.gamesUploaded === 0) {
+              setMsg(`Server already up to date \u2014 ${v2res.gamesSkipped} games skipped`);
+            } else {
+              setMsg(`${modeLabel} \u2014 ${v2res.gamesNew} new games, ${v2res.roundsNew} new rounds (${v2res.batches} batch${v2res.batches !== 1 ? "es" : ""})`);
+            }
           } else {
-            setMsg(`Sync failed: ${r.error ?? "unknown"}`);
+            const errMap = {
+              no_token: "Not linked. Click Fetch + Sync to link your device.",
+              no_player_id: "Could not determine player ID. Ensure you are logged in to GeoGuessr."
+            };
+            setMsg(errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`);
           }
         } else {
           const res = await runServerSyncOnceWithOptions(settings, { forceFull });
@@ -37567,7 +37852,7 @@ After it finishes, open the dashboard again.`
             const settings = loadServerSyncSettings();
             if (!settings.token) return;
             ui.setStatus("Auto-syncing...");
-            const isSyncVariant = true;
+            const isSyncVariant = false;
             const f = isSyncVariant ? loadFetchGameFilter() : null;
             const res = await runServerSyncOnceWithOptions(
               settings,
