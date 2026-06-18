@@ -1,6 +1,5 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
-import { syncToServerV2, syncClassicToServer } from "./serverSync_v2";
 import { syncV3FromDb2 } from "./serverSync_v3_db2";
 import { fetchFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
@@ -646,45 +645,11 @@ export function createUIOverlay(): UIOverlay {
         settings = loadServerSyncSettings();
       }
       if (isSyncVariant) {
-        const modeLabel = forceFull ? "Synced full" : "Synced";
-        // Start v3 DB sync immediately, don't wait for v2 to finish
-        const v3SyncPromise = syncV3FromDb2({ forceFull, gameIds: opts.gameIds })
-          .then((r) => { setMsg(`v3 sync: ${r.ok ? `ok — players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}` : `failed (${r.error})`}`); })
-          .catch((e) => { setMsg(`v3 sync error: ${e?.message ?? e}`); });
-        const v2res = await syncToServerV2({
-          full: forceFull,
-          gameIds: opts.gameIds,
-          onProgress: (p) => {
-            if (p.phase === "reconcile" && p.serverCount !== undefined) {
-              setMsg(`Server: ${p.serverCount} games — local: ${p.localCount} games`);
-            } else if (p.phase === "reconcile") {
-              setMsg("Checking server state...");
-            } else if (p.phase === "upload") {
-              setMsg(`Uploading batch ${p.batch}/${p.totalBatches} — ${p.gamesUploaded} games sent...`);
-              // upload batches: 67→93%
-              opts.setProgress?.(67 + Math.round((p.batch / Math.max(1, p.totalBatches)) * 26));
-            } else if (p.phase === "verify") {
-              setMsg("Verifying...");
-              opts.setProgress?.(94);
-            }
-          },
-        });
-        await v3SyncPromise;
-
-        if (v2res.ok) {
-          // Also sync classic games (non-fatal)
-          syncClassicToServer().catch(() => {});
-          if (v2res.gamesUploaded === 0) {
-            setMsg(`Server already up to date — ${v2res.gamesSkipped} games skipped`);
-          } else {
-            setMsg(`${modeLabel} — ${v2res.gamesNew} new games, ${v2res.roundsNew} new rounds (${v2res.batches} batch${v2res.batches !== 1 ? "es" : ""})`);
-          }
+        const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
+        if (r.ok) {
+          setMsg(`Synced — players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
         } else {
-          const errMap: Record<string, string> = {
-            no_token: "Not linked. Click Fetch + Sync to link your device.",
-            no_player_id: "Could not determine player ID. Ensure you are logged in to GeoGuessr.",
-          };
-          setMsg(errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`);
+          setMsg(`Sync failed: ${r.error ?? "unknown"}`);
         }
       } else {
         const res = await runServerSyncOnceWithOptions(settings, { forceFull });

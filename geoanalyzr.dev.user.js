@@ -11205,330 +11205,6 @@ ${shapes}`.trim();
     await dbV2.syncState.put({ key, value, updatedAt: Date.now() });
   }
 
-  // src/serverSync_v2.ts
-  function getUserscriptVersion2() {
-    const info = globalThis?.GM_info;
-    const v = info?.script?.version;
-    return typeof v === "string" ? v : void 0;
-  }
-  function v2BatchEndpoint(syncEndpointUrl) {
-    try {
-      const u = new URL(syncEndpointUrl);
-      u.pathname = "/api/v2/sync/batch";
-      u.search = "";
-      return u.toString();
-    } catch {
-      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/batch");
-    }
-  }
-  function classicBatchEndpoint(syncEndpointUrl) {
-    try {
-      const u = new URL(syncEndpointUrl);
-      u.pathname = "/api/v2/sync/classic-batch";
-      u.search = "";
-      return u.toString();
-    } catch {
-      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/classic-batch");
-    }
-  }
-  function v2StateEndpoint(syncEndpointUrl) {
-    try {
-      const u = new URL(syncEndpointUrl);
-      u.pathname = "/api/v2/sync/state";
-      u.search = "";
-      return u.toString();
-    } catch {
-      return syncEndpointUrl.replace(/\/api\/sync.*$/, "/api/v2/sync/state");
-    }
-  }
-  async function httpPost(url, token, body) {
-    const json = JSON.stringify(body);
-    const gm = globalThis?.GM_xmlhttpRequest ?? globalThis?.GM?.xmlHttpRequest;
-    if (typeof gm === "function") {
-      return new Promise((resolve) => {
-        gm({
-          method: "POST",
-          url,
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json"
-          },
-          data: json,
-          responseType: "text",
-          timeout: 6e4,
-          withCredentials: false,
-          onload: (res2) => {
-            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
-            let data2 = null;
-            try {
-              data2 = JSON.parse(text);
-            } catch {
-            }
-            resolve({ status: Number(res2?.status) || 0, data: data2 });
-          },
-          onerror: () => resolve({ status: 0, data: null }),
-          ontimeout: () => resolve({ status: 0, data: null })
-        });
-      });
-    }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json"
-      },
-      body: json
-    });
-    let data = null;
-    try {
-      data = await res.json();
-    } catch {
-    }
-    return { status: res.status, data };
-  }
-  async function httpGet(url, token) {
-    const gm = globalThis?.GM_xmlhttpRequest ?? globalThis?.GM?.xmlHttpRequest;
-    if (typeof gm === "function") {
-      return new Promise((resolve) => {
-        gm({
-          method: "GET",
-          url,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json"
-          },
-          responseType: "text",
-          timeout: 3e4,
-          withCredentials: false,
-          onload: (res2) => {
-            const text = typeof res2?.responseText === "string" ? res2.responseText : "";
-            let data2 = null;
-            try {
-              data2 = JSON.parse(text);
-            } catch {
-            }
-            resolve({ status: Number(res2?.status) || 0, data: data2 });
-          },
-          onerror: () => resolve({ status: 0, data: null }),
-          ontimeout: () => resolve({ status: 0, data: null })
-        });
-      });
-    }
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
-    });
-    let data = null;
-    try {
-      data = await res.json();
-    } catch {
-    }
-    return { status: res.status, data };
-  }
-  async function fetchServerState(stateUrl, token, playerId) {
-    const url = `${stateUrl}?playerId=${encodeURIComponent(playerId)}`;
-    const res = await httpGet(url, token);
-    if (res.status !== 200 || !res.data?.ok) return null;
-    return {
-      gameCount: Number(res.data.gameCount) || 0,
-      roundCount: Number(res.data.roundCount) || 0,
-      oldestAt: res.data.oldestAt ?? null,
-      newestAt: res.data.newestAt ?? null
-    };
-  }
-  var BATCH_SIZE = 200;
-  async function syncToServerV2(opts) {
-    const settings = loadServerSyncSettings();
-    if (!settings.token) {
-      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
-    }
-    const playerId = await getCurrentPlayerId();
-    if (!playerId) {
-      return { ok: false, error: "no_player_id", gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0 };
-    }
-    const batchUrl = v2BatchEndpoint(settings.endpointUrl);
-    const stateUrl = v2StateEndpoint(settings.endpointUrl);
-    const clientVersion = getUserscriptVersion2();
-    opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0 });
-    const serverBefore = await fetchServerState(stateUrl, settings.token, playerId);
-    let localGames;
-    if (opts.gameIds) {
-      const gameIdSet = new Set(opts.gameIds);
-      localGames = await dbV2.games.filter((g) => gameIdSet.has(g.gameId)).toArray();
-    } else {
-      localGames = await dbV2.games.filter((g) => !opts.detailsOnly || g.detailFetchedAt !== void 0).toArray();
-    }
-    const localGameCount = localGames.length;
-    const serverCount = serverBefore?.gameCount ?? 0;
-    opts.onProgress?.({ phase: "reconcile", batch: 0, totalBatches: 0, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, serverCount, localCount: localGameCount });
-    if (localGameCount === 0) {
-      return { ok: true, gamesUploaded: 0, gamesNew: 0, gamesSkipped: 0, roundsNew: 0, batches: 0, serverGameCount: serverCount };
-    }
-    if (!opts.gameIds && !opts.full && serverCount >= localGameCount && serverCount > 0) {
-      return {
-        ok: true,
-        gamesUploaded: 0,
-        gamesNew: 0,
-        gamesSkipped: localGameCount,
-        roundsNew: 0,
-        batches: 0,
-        serverGameCount: serverCount
-      };
-    }
-    const allRounds = await dbV2.rounds.toArray();
-    const roundsByGameId = /* @__PURE__ */ new Map();
-    for (const r of allRounds) {
-      const list = roundsByGameId.get(r.gameId);
-      if (list) list.push(r);
-      else roundsByGameId.set(r.gameId, [r]);
-    }
-    const totalBatches = Math.ceil(localGameCount / BATCH_SIZE);
-    let totalGamesUploaded = 0;
-    let totalGamesNew = 0;
-    let totalGamesSkipped = 0;
-    let totalRoundsNew = 0;
-    let batchIndex = 0;
-    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
-      batchIndex++;
-      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
-      const roundBatch = [];
-      for (const g of gameBatch) {
-        const rounds = roundsByGameId.get(g.gameId);
-        if (rounds) roundBatch.push(...rounds);
-      }
-      opts.onProgress?.({
-        phase: "upload",
-        batch: batchIndex,
-        totalBatches,
-        gamesUploaded: totalGamesUploaded,
-        gamesNew: totalGamesNew,
-        gamesSkipped: totalGamesSkipped,
-        roundsNew: totalRoundsNew
-      });
-      const batchId = `v2_${playerId}_${Date.now()}_${batchIndex}`;
-      const body = {
-        batchId,
-        playerId,
-        clientVersion: clientVersion ?? void 0,
-        games: gameBatch,
-        rounds: roundBatch
-      };
-      let res;
-      try {
-        res = await httpPost(batchUrl, settings.token, body);
-      } catch (e) {
-        return {
-          ok: false,
-          status: 0,
-          error: e instanceof Error ? e.message : String(e),
-          gamesUploaded: totalGamesUploaded,
-          gamesNew: totalGamesNew,
-          gamesSkipped: totalGamesSkipped,
-          roundsNew: totalRoundsNew,
-          batches: batchIndex - 1
-        };
-      }
-      if (res.status === 401 || res.status === 403) {
-        return {
-          ok: false,
-          status: res.status,
-          error: "unauthorized",
-          gamesUploaded: totalGamesUploaded,
-          gamesNew: totalGamesNew,
-          gamesSkipped: totalGamesSkipped,
-          roundsNew: totalRoundsNew,
-          batches: batchIndex - 1
-        };
-      }
-      if (res.status < 200 || res.status >= 300) {
-        return {
-          ok: false,
-          status: res.status,
-          error: res.data?.error ?? `HTTP ${res.status}`,
-          gamesUploaded: totalGamesUploaded,
-          gamesNew: totalGamesNew,
-          gamesSkipped: totalGamesSkipped,
-          roundsNew: totalRoundsNew,
-          batches: batchIndex - 1
-        };
-      }
-      totalGamesUploaded += gameBatch.length;
-      totalGamesNew += Number(res.data?.gamesNew) || 0;
-      totalGamesSkipped += Number(res.data?.gamesSkipped) || 0;
-      totalRoundsNew += Number(res.data?.roundsNew) || 0;
-    }
-    opts.onProgress?.({ phase: "verify", batch: batchIndex, totalBatches, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, gamesSkipped: totalGamesSkipped, roundsNew: totalRoundsNew });
-    const serverAfter = await fetchServerState(stateUrl, settings.token, playerId);
-    return {
-      ok: true,
-      gamesUploaded: totalGamesUploaded,
-      gamesNew: totalGamesNew,
-      gamesSkipped: totalGamesSkipped,
-      roundsNew: totalRoundsNew,
-      batches: batchIndex,
-      serverGameCount: serverAfter?.gameCount
-    };
-  }
-  async function syncClassicToServer() {
-    const settings = loadServerSyncSettings();
-    if (!settings.token) {
-      return { ok: false, error: "no_token", gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
-    }
-    const localGames = await dbV2.classicGames.filter((g) => g.detailFetchedAt !== void 0).toArray();
-    if (localGames.length === 0) {
-      return { ok: true, gamesUploaded: 0, gamesNew: 0, roundsNew: 0, batches: 0 };
-    }
-    const allRounds = await dbV2.classicRounds.toArray();
-    const roundsByGameId = /* @__PURE__ */ new Map();
-    for (const r of allRounds) {
-      const list = roundsByGameId.get(r.gameId);
-      if (list) list.push(r);
-      else roundsByGameId.set(r.gameId, [r]);
-    }
-    const batchUrl = classicBatchEndpoint(settings.endpointUrl);
-    const clientVersion = getUserscriptVersion2();
-    const totalBatches = Math.ceil(localGames.length / BATCH_SIZE);
-    let totalGamesUploaded = 0;
-    let totalGamesNew = 0;
-    let totalRoundsNew = 0;
-    let batchIndex = 0;
-    for (let i = 0; i < localGames.length; i += BATCH_SIZE) {
-      batchIndex++;
-      const gameBatch = localGames.slice(i, i + BATCH_SIZE);
-      const roundBatch = [];
-      for (const g of gameBatch) {
-        const rounds = roundsByGameId.get(g.gameId);
-        if (rounds) roundBatch.push(...rounds);
-      }
-      const batchId = `classic_${localGames[0]?.playerId ?? "?"}_${Date.now()}_${batchIndex}`;
-      const body = { batchId, clientVersion: clientVersion ?? void 0, games: gameBatch, rounds: roundBatch };
-      let res;
-      try {
-        res = await httpPost(batchUrl, settings.token, body);
-      } catch (e) {
-        return {
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-          gamesUploaded: totalGamesUploaded,
-          gamesNew: totalGamesNew,
-          roundsNew: totalRoundsNew,
-          batches: batchIndex - 1
-        };
-      }
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, status: res.status, error: "unauthorized", gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
-      }
-      if (res.status < 200 || res.status >= 300) {
-        return { ok: false, status: res.status, error: res.data?.error ?? `HTTP ${res.status}`, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex - 1 };
-      }
-      totalGamesUploaded += gameBatch.length;
-      totalGamesNew += Number(res.data?.gamesNew) || 0;
-      totalRoundsNew += Number(res.data?.roundsNew) || 0;
-    }
-    return { ok: true, gamesUploaded: totalGamesUploaded, gamesNew: totalGamesNew, roundsNew: totalRoundsNew, batches: batchIndex };
-  }
-
   // src/serverSync_v3.ts
   var SYNC_META_KEY_V3 = "server_sync_v3";
   function rDelta(after, before) {
@@ -11549,7 +11225,7 @@ ${shapes}`.trim();
     const x = v.trim().toUpperCase();
     return x || null;
   }
-  function getUserscriptVersion3() {
+  function getUserscriptVersion2() {
     const anyGlobal = globalThis;
     const info = anyGlobal?.GM_info;
     const v = info?.script?.version;
@@ -11789,7 +11465,7 @@ ${shapes}`.trim();
       schema: "geoanalyzr-v3-sync",
       schemaVersion: 1,
       createdAt: Date.now(),
-      appVersion: getUserscriptVersion3(),
+      appVersion: getUserscriptVersion2(),
       owner: { playerId: ownPlayerId, playerName: ownPlayerName },
       cursor: { from: cursorFrom },
       players,
@@ -11802,7 +11478,7 @@ ${shapes}`.trim();
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      ...getUserscriptVersion3() ? { "X-GA-Script-Version": String(getUserscriptVersion3()) } : {}
+      ...getUserscriptVersion2() ? { "X-GA-Script-Version": String(getUserscriptVersion2()) } : {}
     };
     const res = await gmPostJson(endpointUrl, jsonBody, headers);
     const httpOk = res.status >= 200 && res.status < 300;
@@ -11842,7 +11518,7 @@ ${shapes}`.trim();
   // src/serverSync_v3_db2.ts
   var CURSOR_KEY_DUELS = "server_sync_v3";
   var CURSOR_KEY_STANDARD = "server_sync_v3_standard";
-  var BATCH_SIZE2 = 500;
+  var BATCH_SIZE = 500;
   function n2(v) {
     return typeof v === "number" && Number.isFinite(v) ? v : null;
   }
@@ -11854,7 +11530,7 @@ ${shapes}`.trim();
   function rDelta2(after, before) {
     return after != null && before != null ? after - before : null;
   }
-  function getUserscriptVersion4() {
+  function getUserscriptVersion3() {
     const v = globalThis?.GM_info?.script?.version;
     return typeof v === "string" ? v : void 0;
   }
@@ -11879,7 +11555,7 @@ ${shapes}`.trim();
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
-          ...getUserscriptVersion4() ? { "X-GA-Script-Version": getUserscriptVersion4() } : {}
+          ...getUserscriptVersion3() ? { "X-GA-Script-Version": getUserscriptVersion3() } : {}
         },
         data: body,
         responseType: "text",
@@ -11895,7 +11571,7 @@ ${shapes}`.trim();
       schema: "geoanalyzr-v3-sync",
       schemaVersion: 1,
       createdAt: Date.now(),
-      appVersion: getUserscriptVersion4(),
+      appVersion: getUserscriptVersion3(),
       ...payload
     });
     const res = await gmPost(url, body, token);
@@ -12146,7 +11822,7 @@ ${shapes}`.trim();
           playedAt: g.playedAt ?? null
         }));
         console.log("[v3sync] standard_games", stdGameRows.length);
-        for (const batch of chunk(stdGameRows, BATCH_SIZE2)) {
+        for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
           await postBatch(url, settings.token, { standard_games: batch });
           totalCounts.standard_games += batch.length;
         }
@@ -12175,7 +11851,7 @@ ${shapes}`.trim();
             playedAt: r.playedAt ?? null
           }));
           console.log("[v3sync] standard_rounds", stdRoundRows.length);
-          for (const batch of chunk(stdRoundRows, BATCH_SIZE2)) {
+          for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
             await postBatch(url, settings.token, { standard_rounds: batch });
             totalCounts.standard_rounds += batch.length;
           }
@@ -12183,26 +11859,26 @@ ${shapes}`.trim();
       }
       const players = Array.from(playerMap.values());
       console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
-      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE2)) {
+      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
         await postBatch(url, settings.token, { players: batch });
         totalCounts.players += batch.length;
       }
       if (players.length === 0) {
         await postBatch(url, settings.token, { players: [] });
       }
-      for (const batch of chunk(duelGameRows, BATCH_SIZE2)) {
+      for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
         await postBatch(url, settings.token, { duel_games: batch });
         totalCounts.duel_games += batch.length;
       }
-      for (const batch of chunk(duelRoundRows, BATCH_SIZE2)) {
+      for (const batch of chunk(duelRoundRows, BATCH_SIZE)) {
         await postBatch(url, settings.token, { duel_rounds: batch });
         totalCounts.duel_rounds += batch.length;
       }
-      for (const batch of chunk(tdGameRows, BATCH_SIZE2)) {
+      for (const batch of chunk(tdGameRows, BATCH_SIZE)) {
         await postBatch(url, settings.token, { team_duel_games: batch });
         totalCounts.team_duel_games += batch.length;
       }
-      for (const batch of chunk(tdRoundRows, BATCH_SIZE2)) {
+      for (const batch of chunk(tdRoundRows, BATCH_SIZE)) {
         await postBatch(url, settings.token, { team_duel_rounds: batch });
         totalCounts.team_duel_rounds += batch.length;
       }
@@ -13904,44 +13580,11 @@ ${shapes}`.trim();
           settings = loadServerSyncSettings();
         }
         if (isSyncVariant) {
-          const modeLabel = forceFull ? "Synced full" : "Synced";
-          const v3SyncPromise = syncV3FromDb2({ forceFull, gameIds: opts.gameIds }).then((r) => {
-            setMsg(`v3 sync: ${r.ok ? `ok \u2014 players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}` : `failed (${r.error})`}`);
-          }).catch((e) => {
-            setMsg(`v3 sync error: ${e?.message ?? e}`);
-          });
-          const v2res = await syncToServerV2({
-            full: forceFull,
-            gameIds: opts.gameIds,
-            onProgress: (p) => {
-              if (p.phase === "reconcile" && p.serverCount !== void 0) {
-                setMsg(`Server: ${p.serverCount} games \u2014 local: ${p.localCount} games`);
-              } else if (p.phase === "reconcile") {
-                setMsg("Checking server state...");
-              } else if (p.phase === "upload") {
-                setMsg(`Uploading batch ${p.batch}/${p.totalBatches} \u2014 ${p.gamesUploaded} games sent...`);
-                opts.setProgress?.(67 + Math.round(p.batch / Math.max(1, p.totalBatches) * 26));
-              } else if (p.phase === "verify") {
-                setMsg("Verifying...");
-                opts.setProgress?.(94);
-              }
-            }
-          });
-          await v3SyncPromise;
-          if (v2res.ok) {
-            syncClassicToServer().catch(() => {
-            });
-            if (v2res.gamesUploaded === 0) {
-              setMsg(`Server already up to date \u2014 ${v2res.gamesSkipped} games skipped`);
-            } else {
-              setMsg(`${modeLabel} \u2014 ${v2res.gamesNew} new games, ${v2res.roundsNew} new rounds (${v2res.batches} batch${v2res.batches !== 1 ? "es" : ""})`);
-            }
+          const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
+          if (r.ok) {
+            setMsg(`Synced \u2014 players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
           } else {
-            const errMap = {
-              no_token: "Not linked. Click Fetch + Sync to link your device.",
-              no_player_id: "Could not determine player ID. Ensure you are logged in to GeoGuessr."
-            };
-            setMsg(errMap[v2res.error ?? ""] ?? `Sync failed: ${v2res.error ?? "unknown"}`);
+            setMsg(`Sync failed: ${r.error ?? "unknown"}`);
           }
         } else {
           const res = await runServerSyncOnceWithOptions(settings, { forceFull });
