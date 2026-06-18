@@ -11729,10 +11729,13 @@ ${shapes}`.trim();
         duelRoundRows.push({
           gameId: r.gameId,
           roundNumber: r.roundNumber,
+          panoId: r.panoId ?? null,
           trueLat: n2(r.trueLat),
           trueLng: n2(r.trueLng),
           trueCountry: uc2(r.trueCountry),
           trueHeading: n2(r.trueHeadingDeg),
+          truePitch: n2(r.truePitch),
+          trueZoom: n2(r.trueZoom),
           startTime: n2(r.startTime),
           durationSec: n2(r.durationSec),
           isHealingRound: null,
@@ -11744,7 +11747,9 @@ ${shapes}`.trim();
           p1_distanceKm: n2(r.p1Distance),
           p1_timeSec: n2(r.p1TimeSec),
           p1_timedOut: r.p1TimedOut ? 1 : 0,
+          p1_healthBefore: n2(r.team0HealthBefore),
           p1_healthAfter: n2(r.team0HealthAfter),
+          p1_damageDealt: n2(r.team0DamageDealt),
           p1_isBestGuess: 0,
           p2_lat: n2(r.p2Lat),
           p2_lng: n2(r.p2Lng),
@@ -11753,7 +11758,9 @@ ${shapes}`.trim();
           p2_distanceKm: n2(r.p2Distance),
           p2_timeSec: n2(r.p2TimeSec),
           p2_timedOut: r.p2TimedOut ? 1 : 0,
+          p2_healthBefore: n2(r.team1HealthBefore),
           p2_healthAfter: n2(r.team1HealthAfter),
+          p2_damageDealt: n2(r.team1DamageDealt),
           p2_isBestGuess: 0,
           playedAt: r.startTime ?? null
         });
@@ -11761,10 +11768,13 @@ ${shapes}`.trim();
         tdRoundRows.push({
           gameId: r.gameId,
           roundNumber: r.roundNumber,
+          panoId: r.panoId ?? null,
           trueLat: n2(r.trueLat),
           trueLng: n2(r.trueLng),
           trueCountry: uc2(r.trueCountry),
           trueHeading: n2(r.trueHeadingDeg),
+          truePitch: n2(r.truePitch),
+          trueZoom: n2(r.trueZoom),
           startTime: n2(r.startTime),
           durationSec: n2(r.durationSec),
           isHealingRound: r.isHealing ? 1 : null,
@@ -11799,8 +11809,12 @@ ${shapes}`.trim();
           p4_score: n2(r.p4Score),
           p4_distanceKm: n2(r.p4Distance),
           p4_isBestGuess: r.p4IsBetterGuess ? 1 : 0,
+          blue_healthBefore: n2(r.team0HealthBefore),
           blue_healthAfter: n2(r.team0HealthAfter),
+          blue_damageDealt: n2(r.team0DamageDealt),
+          red_healthBefore: n2(r.team1HealthBefore),
           red_healthAfter: n2(r.team1HealthAfter),
+          red_damageDealt: n2(r.team1DamageDealt),
           playedAt: r.startTime ?? null
         });
       }
