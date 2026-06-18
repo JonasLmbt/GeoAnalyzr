@@ -19,8 +19,9 @@ export type DetailFetchStatus = "ok" | "not_found" | "error" | "timeout";
  *  3 — truePitch/trueZoom for classic rounds
  *  4 — p1/p2/p3/p4 timeSec for duel rounds (from guess.created - round.startTime)
  *  5 — healthBefore/damageDealt derived from healthAfter sequence + initialHealth
+ *  6 — fix: classic rounds (truePitch/trueZoom) now re-normalized from raw cache
  */
-export const CURRENT_NORMALIZE_VERSION = 5;
+export const CURRENT_NORMALIZE_VERSION = 6;
 
 // ─── Processed: Games ────────────────────────────────────────────────────────
 

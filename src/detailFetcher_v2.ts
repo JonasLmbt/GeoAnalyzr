@@ -838,6 +838,12 @@ export async function fetchDetails(opts: {
               if (isDuelType) {
                 const rounds = await normalizeDuelsRounds(game.gameId, cached.json);
                 if (rounds.length > 0) await dbV2.rounds.bulkPut(rounds);
+              } else if (game.modeFamily === "standard") {
+                const selfId = opts.currentPlayerId ?? readPlayerId((cached.json as any)?.player) ?? "";
+                const classicGame = normalizeClassicGame(game.gameId, selfId, cached.json);
+                const classicRounds = await normalizeClassicRounds(game.gameId, cached.json);
+                await dbV2.classicGames.put(classicGame);
+                if (classicRounds.length > 0) await dbV2.classicRounds.bulkPut(classicRounds);
               }
               opts.onGameEvent?.({ gameId: game.gameId, playedAt: game.playedAt, mode: game.modeFamily, missing, status: "ok", source: "cache" });
               updatedGameIds.push(game.gameId);
