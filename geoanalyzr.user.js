@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.10
+// @version      3.0.11
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11948,7 +11948,19 @@ ${shapes}`.trim();
           }
         }
       }
-      const profileIds = ownPlayerId ? [ownPlayerId] : [];
+      const MAX_OPPONENT_PROFILES = 20;
+      const now = Date.now();
+      const opponentIds = Array.from(playerMap.keys()).filter((id) => id !== ownPlayerId);
+      const cachedOpponents = await dbV2.playerProfiles.where("playerId").anyOf(opponentIds).toArray();
+      const cachedMap = new Map(cachedOpponents.map((p) => [p.playerId, p]));
+      const opponentsToFetch = opponentIds.filter((id) => {
+        const c = cachedMap.get(id);
+        if (!c) return true;
+        if (now - c.fetchedAt > PROFILE_CACHE_TTL_MS) return true;
+        if (c.currentRating == null && now - c.fetchedAt > 6e4) return true;
+        return false;
+      }).slice(0, MAX_OPPONENT_PROFILES);
+      const profileIds = [...ownPlayerId ? [ownPlayerId] : [], ...opponentsToFetch];
       const profileMap = await fetchPlayerProfiles(profileIds);
       for (const [playerId, entry] of playerMap) {
         const p = profileMap.get(playerId);
