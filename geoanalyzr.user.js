@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.17
+// @version      3.0.18
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -12068,8 +12068,8 @@ ${shapes}`.trim();
     const parsed = typeof raw === "string" ? Date.parse(raw) : NaN;
     return Number.isFinite(parsed) ? parsed : Date.now();
   }
-  async function fetchFeedPage(paginationToken) {
-    const base = "https://www.geoguessr.com/api/v4/feed/private";
+  async function fetchFeedPage(paginationToken, feedBase = "https://www.geoguessr.com/api/v4/feed/private") {
+    const base = feedBase;
     const url = paginationToken ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}` : base;
     const res = await httpGetJsonWithRetry(url, {
       retries: 6,
@@ -12089,11 +12089,14 @@ ${shapes}`.trim();
     }
     return res;
   }
-  async function fetchFeed(opts) {
+  async function fetchFeedCore(opts) {
     const maxPages = opts.maxPages ?? 5e3;
     const delayMs = opts.delayMs ?? 150;
     const overlapThreshold = opts.overlapThreshold ?? 5;
-    const savedCursor = opts.full ? await getSyncState("feedCursor") : void 0;
+    const feedBase = opts.feedBase ?? "https://www.geoguessr.com/api/v4/feed/private";
+    const cursorKey = opts.cursorKey ?? "feedCursor";
+    const onlyModeFamilies = opts.onlyModeFamilies;
+    const savedCursor = opts.full ? await getSyncState(cursorKey) : void 0;
     let paginationToken = savedCursor ?? void 0;
     const seenTokens = /* @__PURE__ */ new Set();
     let totalNew = 0;
@@ -12104,7 +12107,7 @@ ${shapes}`.trim();
     for (let page = 1; page <= maxPages; page++) {
       let res;
       try {
-        res = await fetchFeedPage(paginationToken);
+        res = await fetchFeedPage(paginationToken, feedBase);
       } catch (e) {
         stopped = "error";
         break;
@@ -12126,6 +12129,7 @@ ${shapes}`.trim();
           if (!gameId) continue;
           const playedAt = extractPlayedAt(ev, entry);
           const modeFamily = classifyModeFamily(ev, entry);
+          if (onlyModeFamilies && !onlyModeFamilies.includes(modeFamily)) continue;
           if (!candidates.has(gameId) || candidates.get(gameId).playedAt < playedAt) {
             const partial = { gameId, playedAt, modeFamily };
             const p = ev?.payload;
@@ -12155,7 +12159,7 @@ ${shapes}`.trim();
       opts.onProgress?.({ page, newGames: totalNew, skipped: totalSkipped });
       const nextToken = typeof res.data?.paginationToken === "string" && res.data.paginationToken ? res.data.paginationToken : void 0;
       if (opts.full && nextToken) {
-        await setSyncState("feedCursor", nextToken);
+        await setSyncState(cursorKey, nextToken);
       }
       if (!opts.full && consecutiveKnown >= overlapThreshold) {
         stopped = "overlap";
@@ -12175,9 +12179,20 @@ ${shapes}`.trim();
       }
     }
     if (opts.full && stopped === "exhausted") {
-      await dbV2.syncState.delete("feedCursor");
+      await dbV2.syncState.delete(cursorKey);
     }
     return { newGames: totalNew, newGameIds: allNewGameIds, pages: 0, stopped };
+  }
+  async function fetchFeed(opts) {
+    return fetchFeedCore(opts);
+  }
+  async function fetchFriendsFeed(opts) {
+    return fetchFeedCore({
+      ...opts,
+      feedBase: "https://www.geoguessr.com/api/v4/feed/friends",
+      cursorKey: "friendsFeedCursor",
+      onlyModeFamilies: ["duels", "teamduels"]
+    });
   }
 
   // src/detailFetcher_v2.ts
@@ -13155,7 +13170,8 @@ ${shapes}`.trim();
     const rated = normalizeRated(readGmValue2(`${GM_VALUE_PREFIX2}rated`));
     const fromMs = normalizeMs(readGmValue2(`${GM_VALUE_PREFIX2}from_ms`));
     const toMs = normalizeMs(readGmValue2(`${GM_VALUE_PREFIX2}to_ms`));
-    return { modeFamily, movementAnyOf: movementAnyOfMerged, rated, fromMs, toMs };
+    const includeFriends = readGmValue2(`${GM_VALUE_PREFIX2}include_friends`) === "1";
+    return { modeFamily, movementAnyOf: movementAnyOfMerged, rated, fromMs, toMs, includeFriends };
   }
   function saveFetchGameFilter(next) {
     if (typeof next.modeFamily === "string") writeGmValue2(`${GM_VALUE_PREFIX2}mode_family`, String(next.modeFamily));
@@ -13167,6 +13183,7 @@ ${shapes}`.trim();
     if (typeof next.rated === "string") writeGmValue2(`${GM_VALUE_PREFIX2}rated`, String(next.rated));
     if (typeof next.fromMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}from_ms`, String(Math.max(0, Math.floor(next.fromMs))));
     if (typeof next.toMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}to_ms`, String(Math.max(0, Math.floor(next.toMs))));
+    if (typeof next.includeFriends === "boolean") writeGmValue2(`${GM_VALUE_PREFIX2}include_friends`, next.includeFriends ? "1" : "0");
   }
 
   // src/syncOnly/linkDevice.ts
@@ -13992,6 +14009,24 @@ ${shapes}`.trim();
           fetchSyncLogModal?.finish(false);
           return;
         }
+        if (loadFetchGameFilter().includeFriends) {
+          try {
+            setMsg("Fetching friends' games...");
+            const friendsResult = await fetchFriendsFeed({
+              full: opts.forceFull,
+              maxPages: 5e3,
+              delayMs: 150,
+              overlapThreshold: 5,
+              onProgress: (p) => {
+                if (fetchSyncLogModal) setMsg(`Friends feed page ${p.page} \u2014 ${p.newGames} new games...`);
+              }
+            });
+            feedNewGameIds.push(...friendsResult.newGameIds);
+            if (fetchSyncLogModal) setMsg(`Friends feed done \u2014 ${friendsResult.newGames} new games, stopped: ${friendsResult.stopped}`);
+          } catch (e) {
+            if (fetchSyncLogModal) setMsg(`Friends feed error (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
         fetchSyncLogModal?.setProgress(32);
         setMsg("Fetching game details...");
         let detailUpdatedGameIds = [];
@@ -14227,13 +14262,24 @@ ${shapes}`.trim();
         if (rated !== "all") parts.push(`Rated: ${rated}`);
         if (mv.length) parts.push(`Movement: ${mv.join(", ")}`);
         if (from || to) parts.push(`Date: ${from || "\u2026"} \u2192 ${to || "\u2026"}`);
+        if (friendsCheckbox.checked) parts.push(`Friends' games: on`);
         summaryText.innerHTML = parts.length ? `<strong>Active:</strong> ${parts.join(" \u2022 ")}` : "<strong>Active:</strong> All games";
       };
+      const friendsCheckbox = el("input");
+      friendsCheckbox.type = "checkbox";
+      friendsCheckbox.checked = Boolean(opts.cur.includeFriends);
+      const friendsLabel = el("label");
+      friendsLabel.style.cssText = "display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12.5px;line-height:1.5;color:rgba(255,255,255,0.85)";
+      const friendsLabelText = el("span");
+      friendsLabelText.textContent = "Also sync Duels/Team Duels your GeoGuessr friends played (whether or not you were in them). They have not installed this script or consented to this \u2014 only enable it if you accept that.";
+      friendsLabel.appendChild(friendsCheckbox);
+      friendsLabel.appendChild(friendsLabelText);
       selFamily.addEventListener("change", applySummary);
       selRated.addEventListener("change", applySummary);
       fromInput.addEventListener("change", applySummary);
       toInput.addEventListener("change", applySummary);
       movementMulti.box.addEventListener("change", applySummary);
+      friendsCheckbox.addEventListener("change", applySummary);
       const secBasics = mkSection("Scope");
       const basicsGrid = el("div");
       basicsGrid.className = "ga-ui-modal-grid";
@@ -14281,6 +14327,11 @@ ${shapes}`.trim();
       );
       secDate.appendChild(presets);
       wrap.appendChild(secDate);
+      if (opts.showFriendsOption) {
+        const secFriends = mkSection("Friends (off by default)");
+        secFriends.appendChild(friendsLabel);
+        wrap.appendChild(secFriends);
+      }
       if (opts.note) wrap.appendChild(mkHelp(opts.note));
       const resetAll = () => {
         selFamily.value = "all";
@@ -14288,6 +14339,7 @@ ${shapes}`.trim();
         fromInput.value = "";
         toInput.value = "";
         movementMulti.setSelectedAnyOf([]);
+        friendsCheckbox.checked = false;
         applySummary();
       };
       summaryBtn.addEventListener("click", resetAll);
@@ -14303,7 +14355,8 @@ ${shapes}`.trim();
           const rated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? ratedRaw : "all";
           const fromMs = parseDateStartMs(fromInput.value);
           const toMs = parseDateEndMs(toInput.value);
-          opts.onSave({ modeFamily, movementAnyOf, rated, fromMs, toMs });
+          const includeFriends = friendsCheckbox.checked;
+          opts.onSave({ modeFamily, movementAnyOf, rated, fromMs, toMs, includeFriends });
           status.textContent = opts.savedMessage;
         }
       });
@@ -14314,6 +14367,7 @@ ${shapes}`.trim();
         title: isSyncVariant ? "Filters" : "Fetch filters",
         intro: isSyncVariant ? "Filters applied to both fetch and sync (always game-level; never partial rounds):" : "Fetch filters (always game-level; never partial rounds):",
         note: isSyncVariant ? "Tip: This minimal build syncs only the data you fetch. Adjust these filters to control what is stored and uploaded." : "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps.",
+        showFriendsOption: true,
         cur,
         onSave: (next) => saveFetchGameFilter(next),
         savedMessage: isSyncVariant ? "Filters saved." : "Fetch filters saved."

@@ -1,7 +1,7 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { syncV3FromDb2 } from "./serverSync_v3_db2";
-import { fetchFeed } from "./feedFetcher_v2";
+import { fetchFeed, fetchFriendsFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { getCurrentPlayerId } from "./app/playerIdentity";
 import { isMigrationNeeded, migrateV1ToV2 } from "./migration_v1_to_v2";
@@ -868,6 +868,28 @@ export function createUIOverlay(): UIOverlay {
         return;
       }
 
+      // Opt-in only (see fetchGameFilter.ts): also pull Duels/Team Duels your
+      // GeoGuessr friends played, whether or not you were in them. Failure
+      // here is non-fatal — it never blocks your own feed/sync.
+      if (loadFetchGameFilter().includeFriends) {
+        try {
+          setMsg("Fetching friends' games...");
+          const friendsResult = await fetchFriendsFeed({
+            full: opts.forceFull,
+            maxPages: 5000,
+            delayMs: 150,
+            overlapThreshold: 5,
+            onProgress: (p) => {
+              if (fetchSyncLogModal) setMsg(`Friends feed page ${p.page} — ${p.newGames} new games...`);
+            },
+          });
+          feedNewGameIds.push(...friendsResult.newGameIds);
+          if (fetchSyncLogModal) setMsg(`Friends feed done — ${friendsResult.newGames} new games, stopped: ${friendsResult.stopped}`);
+        } catch (e: any) {
+          if (fetchSyncLogModal) setMsg(`Friends feed error (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
       fetchSyncLogModal?.setProgress(32);
       setMsg("Fetching game details...");
       let detailUpdatedGameIds: string[] = [];
@@ -1100,12 +1122,15 @@ export function createUIOverlay(): UIOverlay {
     title: string;
     intro: string;
     note?: string;
+    /** Only the local fetch-filter modal (not the server-side sync-filter one) shows this. */
+    showFriendsOption?: boolean;
     cur: {
       modeFamily: "all" | "duels" | "teamduels";
       movementAnyOf: Array<"moving" | "no_move" | "nmpz" | "unknown">;
       rated: "all" | "rated" | "unrated" | "unknown";
       fromMs: number;
       toMs: number;
+      includeFriends?: boolean;
     };
     onSave: (next: {
       modeFamily: "all" | "duels" | "teamduels";
@@ -1113,6 +1138,7 @@ export function createUIOverlay(): UIOverlay {
       rated: "all" | "rated" | "unrated" | "unknown";
       fromMs: number;
       toMs: number;
+      includeFriends: boolean;
     }) => void;
     savedMessage: string;
   }) => {
@@ -1160,14 +1186,26 @@ export function createUIOverlay(): UIOverlay {
       if (rated !== "all") parts.push(`Rated: ${rated}`);
       if (mv.length) parts.push(`Movement: ${mv.join(", ")}`);
       if (from || to) parts.push(`Date: ${from || "…"} → ${to || "…"}`);
+      if (friendsCheckbox.checked) parts.push(`Friends' games: on`);
       summaryText.innerHTML = parts.length ? `<strong>Active:</strong> ${parts.join(" • ")}` : "<strong>Active:</strong> All games";
     };
+
+    const friendsCheckbox = el("input");
+    friendsCheckbox.type = "checkbox";
+    friendsCheckbox.checked = Boolean(opts.cur.includeFriends);
+    const friendsLabel = el("label");
+    friendsLabel.style.cssText = "display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12.5px;line-height:1.5;color:rgba(255,255,255,0.85)";
+    const friendsLabelText = el("span");
+    friendsLabelText.textContent = "Also sync Duels/Team Duels your GeoGuessr friends played (whether or not you were in them). They have not installed this script or consented to this — only enable it if you accept that.";
+    friendsLabel.appendChild(friendsCheckbox);
+    friendsLabel.appendChild(friendsLabelText);
 
     selFamily.addEventListener("change", applySummary);
     selRated.addEventListener("change", applySummary);
     fromInput.addEventListener("change", applySummary);
     toInput.addEventListener("change", applySummary);
     movementMulti.box.addEventListener("change", applySummary);
+    friendsCheckbox.addEventListener("change", applySummary);
 
     const secBasics = mkSection("Scope");
     const basicsGrid = el("div");
@@ -1220,6 +1258,12 @@ export function createUIOverlay(): UIOverlay {
     secDate.appendChild(presets);
     wrap.appendChild(secDate);
 
+    if (opts.showFriendsOption) {
+      const secFriends = mkSection("Friends (off by default)");
+      secFriends.appendChild(friendsLabel);
+      wrap.appendChild(secFriends);
+    }
+
     if (opts.note) wrap.appendChild(mkHelp(opts.note));
 
     const resetAll = () => {
@@ -1228,6 +1272,7 @@ export function createUIOverlay(): UIOverlay {
       fromInput.value = "";
       toInput.value = "";
       movementMulti.setSelectedAnyOf([]);
+      friendsCheckbox.checked = false;
       applySummary();
     };
     summaryBtn.addEventListener("click", resetAll);
@@ -1245,7 +1290,8 @@ export function createUIOverlay(): UIOverlay {
         const rated = ratedRaw === "rated" || ratedRaw === "unrated" || ratedRaw === "unknown" ? (ratedRaw as any) : "all";
         const fromMs = parseDateStartMs(fromInput.value);
         const toMs = parseDateEndMs(toInput.value);
-        opts.onSave({ modeFamily, movementAnyOf, rated, fromMs, toMs });
+        const includeFriends = friendsCheckbox.checked;
+        opts.onSave({ modeFamily, movementAnyOf, rated, fromMs, toMs, includeFriends });
         status.textContent = opts.savedMessage;
       }
     });
@@ -1261,6 +1307,7 @@ export function createUIOverlay(): UIOverlay {
       note: isSyncVariant
         ? "Tip: This minimal build syncs only the data you fetch. Adjust these filters to control what is stored and uploaded."
         : "Note: some fields (movement/rated) may only be known after details are fetched. Filters are applied consistently for storage + future fetch/sync steps.",
+      showFriendsOption: true,
       cur,
       onSave: (next) => saveFetchGameFilter(next),
       savedMessage: isSyncVariant ? "Filters saved." : "Fetch filters saved."

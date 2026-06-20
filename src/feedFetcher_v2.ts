@@ -91,9 +91,10 @@ function extractPlayedAt(ev: any, entry: any): number {
 // ─── Feed HTTP ────────────────────────────────────────────────────────────────
 
 async function fetchFeedPage(
-  paginationToken?: string
+  paginationToken?: string,
+  feedBase: string = "https://www.geoguessr.com/api/v4/feed/private"
 ): Promise<{ data: any; status: number }> {
-  const base = "https://www.geoguessr.com/api/v4/feed/private";
+  const base = feedBase;
   const url = paginationToken
     ? `${base}?paginationToken=${encodeURIComponent(paginationToken)}`
     : base;
@@ -122,10 +123,13 @@ async function fetchFeedPage(
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
- * Fetch the GeoGuessr activity feed and write new games to dbV2.
- * Stops early if the cursor overlaps with already-stored games (incremental mode).
+ * Shared implementation for both the private feed and the friends feed.
+ * `feedBase`/`cursorKey` swap which GeoGuessr endpoint + cursor storage slot
+ * is used; `onlyModeFamilies`, when set, drops every candidate whose mode
+ * isn't in the list (used to restrict the friends feed to Duels/Team Duels —
+ * see fetchFriendsFeed for why).
  */
-export async function fetchFeed(opts: {
+async function fetchFeedCore(opts: {
   onProgress?: (p: FeedFetchProgress) => void;
   maxPages?: number;
   delayMs?: number;
@@ -133,16 +137,22 @@ export async function fetchFeed(opts: {
   overlapThreshold?: number;
   /** Full re-fetch: ignore cursor and keep going until the feed is exhausted */
   full?: boolean;
+  feedBase?: string;
+  cursorKey?: string;
+  onlyModeFamilies?: ModeFamily[];
 }): Promise<FeedFetchResult> {
   const maxPages = opts.maxPages ?? 5000;
   const delayMs = opts.delayMs ?? 150;
   const overlapThreshold = opts.overlapThreshold ?? 5;
+  const feedBase = opts.feedBase ?? "https://www.geoguessr.com/api/v4/feed/private";
+  const cursorKey = opts.cursorKey ?? "feedCursor";
+  const onlyModeFamilies = opts.onlyModeFamilies;
 
   // For full re-fetch: resume from saved cursor if interrupted mid-way.
   // For incremental: always start from the top (newest games), the overlap
   // threshold will stop early once we've caught up.
   const savedCursor = opts.full
-    ? await getSyncState<string>("feedCursor")
+    ? await getSyncState<string>(cursorKey)
     : undefined;
 
   let paginationToken: string | undefined = savedCursor ?? undefined;
@@ -156,7 +166,7 @@ export async function fetchFeed(opts: {
   for (let page = 1; page <= maxPages; page++) {
     let res: { data: any; status: number };
     try {
-      res = await fetchFeedPage(paginationToken);
+      res = await fetchFeedPage(paginationToken, feedBase);
     } catch (e) {
       stopped = "error";
       break;
@@ -183,6 +193,7 @@ export async function fetchFeed(opts: {
         if (!gameId) continue;
         const playedAt = extractPlayedAt(ev, entry);
         const modeFamily = classifyModeFamily(ev, entry);
+        if (onlyModeFamilies && !onlyModeFamilies.includes(modeFamily)) continue;
 
         if (!candidates.has(gameId) || candidates.get(gameId)!.playedAt < playedAt) {
           const partial: GameRow = { gameId, playedAt, modeFamily };
@@ -228,7 +239,7 @@ export async function fetchFeed(opts: {
     // Only persist the cursor during full syncs so interrupted runs can resume.
     // Incremental syncs always start from the top (savedCursor is ignored).
     if (opts.full && nextToken) {
-      await setSyncState("feedCursor", nextToken);
+      await setSyncState(cursorKey, nextToken);
     }
 
     // Stop if we're seeing too many already-known games in a row (caught up)
@@ -257,8 +268,52 @@ export async function fetchFeed(opts: {
   // Clear saved cursor once a full fetch completes so the next full fetch
   // starts from the top of the feed (not from a stale end-of-feed position).
   if (opts.full && stopped === "exhausted") {
-    await dbV2.syncState.delete("feedCursor");
+    await dbV2.syncState.delete(cursorKey);
   }
 
   return { newGames: totalNew, newGameIds: allNewGameIds, pages: 0, stopped };
+}
+
+/**
+ * Fetch the GeoGuessr activity feed and write new games to dbV2.
+ * Stops early if the cursor overlaps with already-stored games (incremental mode).
+ */
+export async function fetchFeed(opts: {
+  onProgress?: (p: FeedFetchProgress) => void;
+  maxPages?: number;
+  delayMs?: number;
+  /** Stop paginating once we see this many consecutive already-known game IDs */
+  overlapThreshold?: number;
+  /** Full re-fetch: ignore cursor and keep going until the feed is exhausted */
+  full?: boolean;
+}): Promise<FeedFetchResult> {
+  return fetchFeedCore(opts);
+}
+
+/**
+ * Fetch GeoGuessr friends' activity feed (/v4/feed/friends) — games your
+ * friends played, whether or not you were a participant. Restricted to
+ * Duels/Team Duels: those are the only modes where assigning a "self" slot
+ * during detail-normalization doesn't depend on the script owner actually
+ * being one of the players, so they're the only modes that come out correct
+ * when the owner isn't in the game. Uses its own pagination cursor so it
+ * never interferes with the private-feed cursor.
+ *
+ * This stores other people's game data without their knowledge or consent —
+ * only call this when the user has explicitly opted in (see
+ * FetchGameFilter.includeFriends).
+ */
+export async function fetchFriendsFeed(opts: {
+  onProgress?: (p: FeedFetchProgress) => void;
+  maxPages?: number;
+  delayMs?: number;
+  overlapThreshold?: number;
+  full?: boolean;
+}): Promise<FeedFetchResult> {
+  return fetchFeedCore({
+    ...opts,
+    feedBase: "https://www.geoguessr.com/api/v4/feed/friends",
+    cursorKey: "friendsFeedCursor",
+    onlyModeFamilies: ["duels", "teamduels"],
+  });
 }

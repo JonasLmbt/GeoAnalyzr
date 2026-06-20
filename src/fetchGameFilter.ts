@@ -8,6 +8,11 @@ export type FetchGameFilter = {
   rated: RatedFilter;
   fromMs: number; // inclusive lower bound (playedAt)
   toMs: number; // inclusive upper bound (playedAt)
+  // Off by default. When on, also pulls Duels/Team Duels from
+  // /v4/feed/friends — i.e. games your GeoGuessr friends played, whether or
+  // not you were in them. Those players never installed this script or
+  // consented to being tracked; only enable this deliberately.
+  includeFriends: boolean;
 };
 
 const GM_VALUE_PREFIX = "geoanalyzr_fetch_filter_v1_";
@@ -98,7 +103,8 @@ export function loadFetchGameFilter(): FetchGameFilter {
   const rated = normalizeRated(readGmValue(`${GM_VALUE_PREFIX}rated`));
   const fromMs = normalizeMs(readGmValue(`${GM_VALUE_PREFIX}from_ms`));
   const toMs = normalizeMs(readGmValue(`${GM_VALUE_PREFIX}to_ms`));
-  return { modeFamily, movementAnyOf: movementAnyOfMerged, rated, fromMs, toMs };
+  const includeFriends = readGmValue(`${GM_VALUE_PREFIX}include_friends`) === "1";
+  return { modeFamily, movementAnyOf: movementAnyOfMerged, rated, fromMs, toMs, includeFriends };
 }
 
 export function saveFetchGameFilter(next: Partial<FetchGameFilter>): void {
@@ -113,4 +119,5 @@ export function saveFetchGameFilter(next: Partial<FetchGameFilter>): void {
   if (typeof next.rated === "string") writeGmValue(`${GM_VALUE_PREFIX}rated`, String(next.rated));
   if (typeof next.fromMs === "number") writeGmValue(`${GM_VALUE_PREFIX}from_ms`, String(Math.max(0, Math.floor(next.fromMs))));
   if (typeof next.toMs === "number") writeGmValue(`${GM_VALUE_PREFIX}to_ms`, String(Math.max(0, Math.floor(next.toMs))));
+  if (typeof next.includeFriends === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_friends`, next.includeFriends ? "1" : "0");
 }
