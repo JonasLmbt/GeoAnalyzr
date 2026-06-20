@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.15
+// @version      3.0.16
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -13323,6 +13323,8 @@ ${shapes}`.trim();
     }
     .ga-ui-btn:active { transform: translateY(1px); }
     .ga-ui-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+    .ga-ui-btn-busy { opacity: 0.65; }
+    .ga-ui-btn-busy:active { transform: none; }
     .ga-ui-btn-icon { display: inline-flex; width: 16px; height: 16px; opacity: 0.95; }
     .ga-ui-btn-icon svg { width: 16px; height: 16px; display: block; }
     .ga-ui-row { display: grid; grid-template-columns: 1fr 36px 36px; gap: 8px; align-items: stretch; }
@@ -13509,6 +13511,10 @@ ${shapes}`.trim();
       const ns = String(info?.script?.namespace || "");
       const name = String(info?.script?.name || "");
       return ns === "geoanalyzr-dev" || /\bdev\b/i.test(name);
+    };
+    const getUserscriptVersion4 = () => {
+      const v = globalThis?.GM_info?.script?.version;
+      return typeof v === "string" ? v : void 0;
     };
     const formatBytes = (n3) => {
       if (!Number.isFinite(n3) || n3 <= 0) return "0 B";
@@ -13890,6 +13896,7 @@ ${shapes}`.trim();
         logArea.appendChild(span);
         logArea.scrollTop = logArea.scrollHeight;
       };
+      appendLine(`GeoAnalyzr v${getUserscriptVersion4() ?? "?"}`);
       const setProgress = (pct) => {
         progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
         if (pct >= 100) progressFill.style.background = "#22c55e";
@@ -13912,15 +13919,29 @@ ${shapes}`.trim();
       };
       return { log: appendLine, finish, setProgress };
     };
+    let fetchSyncBusy = false;
+    let fetchSyncForceFull = false;
+    let fetchSyncLogLines = [];
+    let fetchSyncLogModal = null;
+    const revealFetchSyncLog = () => {
+      if (!fetchSyncBusy || fetchSyncLogModal) return;
+      fetchSyncLogModal = openSyncLogModal(fetchSyncForceFull);
+      for (const line of fetchSyncLogLines) fetchSyncLogModal.log(line);
+    };
     const runFetchAndSyncImpl = async (opts) => {
       if (!isSyncVariant) return;
-      const btns = [fetchSyncBtn, fetchGearBtn, deleteBtn].filter((b3) => !!b3);
-      if (btns.some((b3) => b3.disabled)) return;
+      const btns = [fetchGearBtn, deleteBtn].filter((b3) => !!b3);
+      if (fetchSyncBusy) return;
+      fetchSyncBusy = true;
+      fetchSyncForceFull = opts.forceFull;
+      fetchSyncLogLines = [];
+      fetchSyncBtn?.classList.add("ga-ui-btn-busy");
       btns.forEach((b3) => b3.disabled = true);
-      const logModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
+      fetchSyncLogModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
       const setMsg = (msg) => {
         status.textContent = msg;
-        logModal?.log(msg);
+        fetchSyncLogLines.push(msg);
+        fetchSyncLogModal?.log(msg);
       };
       try {
         const ev = opts.ev ?? new MouseEvent("click");
@@ -13930,7 +13951,7 @@ ${shapes}`.trim();
         }
         if (!updateHandler) {
           setMsg("Fetch handler not ready yet. Try again in a moment.");
-          logModal?.finish(false);
+          fetchSyncLogModal?.finish(false);
           return;
         }
         try {
@@ -13940,7 +13961,7 @@ ${shapes}`.trim();
           }
         } catch {
         }
-        logModal?.setProgress(2);
+        fetchSyncLogModal?.setProgress(2);
         setMsg(opts.forceFull ? "Fetching full history..." : "Fetching feed...");
         let feedNewGameIds = [];
         try {
@@ -13951,8 +13972,8 @@ ${shapes}`.trim();
             delayMs: 150,
             overlapThreshold: 5,
             onProgress: (p) => {
-              logModal?.setProgress(2 + Math.min(26, p.page * 4));
-              if (logModal) {
+              fetchSyncLogModal?.setProgress(2 + Math.min(26, p.page * 4));
+              if (fetchSyncLogModal) {
                 const pageNew = p.newGames - prevNewGames;
                 prevNewGames = p.newGames;
                 setMsg(`Page ${p.page}: ${pageNew > 0 ? `+${pageNew} new` : "0 new"} (total: ${p.newGames})`);
@@ -13962,20 +13983,20 @@ ${shapes}`.trim();
             }
           });
           feedNewGameIds = feedResult.newGameIds;
-          logModal?.setProgress(30);
-          if (logModal) setMsg(`Feed done \u2014 ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
+          fetchSyncLogModal?.setProgress(30);
+          if (fetchSyncLogModal) setMsg(`Feed done \u2014 ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
         } catch (e) {
           setMsg(`Feed error: ${e instanceof Error ? e.message : String(e)}`);
-          logModal?.finish(false);
+          fetchSyncLogModal?.finish(false);
           return;
         }
-        logModal?.setProgress(32);
+        fetchSyncLogModal?.setProgress(32);
         setMsg("Fetching game details...");
         let detailUpdatedGameIds = [];
         try {
           const fmtDate2 = (ts) => ts ? new Date(ts).toISOString().slice(0, 10) : "?";
           const fmtId = (id) => id.length > 8 ? id.slice(0, 6) + ".." : id;
-          const onGameEvent = logModal ? (e) => {
+          const onGameEvent = fetchSyncLogModal ? (e) => {
             if (e.status === "checking") {
               setMsg(`${fmtId(e.gameId)} (${e.mode}, ${fmtDate2(e.playedAt)}): missing ${e.missing.join(", ")}`);
             } else if (e.status === "ok") {
@@ -13985,49 +14006,57 @@ ${shapes}`.trim();
             }
           } : void 0;
           const detailResult = await fetchDetails({
-            concurrency: logModal ? 1 : 3,
+            concurrency: fetchSyncLogModal ? 1 : 3,
             delayMs: 400,
             force: opts.forceFull,
             currentPlayerId: await getCurrentPlayerId() ?? void 0,
             onProgress: (p) => {
-              if (logModal) logModal.setProgress(32 + Math.round(p.processed / Math.max(1, p.total) * 33));
+              if (fetchSyncLogModal) fetchSyncLogModal.setProgress(32 + Math.round(p.processed / Math.max(1, p.total) * 33));
               else setMsg(`Details ${p.processed}/${p.total} \u2014 ok: ${p.succeeded}...`);
             },
             onGameEvent
           });
           detailUpdatedGameIds = detailResult.updatedGameIds;
-          logModal?.setProgress(65);
-          if (logModal) setMsg(`Details done \u2014 ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
+          fetchSyncLogModal?.setProgress(65);
+          if (fetchSyncLogModal) setMsg(`Details done \u2014 ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
         } catch {
         }
         const touchedIds = opts.forceFull ? void 0 : [.../* @__PURE__ */ new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
         if (!opts.forceFull && touchedIds.length === 0) {
           setMsg("Nothing to sync \u2014 no new or updated games");
-          logModal?.finish(true);
+          fetchSyncLogModal?.finish(true);
           return;
         }
-        logModal?.setProgress(67);
-        if (logModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
-        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds, setProgress: logModal ? (p) => logModal.setProgress(p) : void 0 });
-        logModal?.finish(true);
+        fetchSyncLogModal?.setProgress(67);
+        if (fetchSyncLogModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
+        await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds, setProgress: (p) => fetchSyncLogModal?.setProgress(p) });
+        fetchSyncLogModal?.finish(true);
       } catch (e) {
         setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
-        logModal?.finish(false);
+        fetchSyncLogModal?.finish(false);
       } finally {
         btns.forEach((b3) => b3.disabled = false);
+        fetchSyncBtn?.classList.remove("ga-ui-btn-busy");
+        fetchSyncBusy = false;
+        fetchSyncLogModal = null;
+        fetchSyncLogLines = [];
       }
     };
     fetchBtn.addEventListener("click", (ev) => void updateHandler?.(ev));
     if (fetchSyncBtn) {
-      fetchSyncBtn.addEventListener(
-        "click",
-        (ev) => void runFetchAndSyncImpl({
+      fetchSyncBtn.addEventListener("click", (ev) => {
+        const wantLog = !!(ev && ev.ctrlKey);
+        if (fetchSyncBusy) {
+          if (wantLog) revealFetchSyncLog();
+          return;
+        }
+        void runFetchAndSyncImpl({
           forceFull: !!(ev && ev.shiftKey),
           auto: false,
-          showLog: !!(ev && ev.ctrlKey),
+          showLog: wantLog,
           ev
-        })
-      );
+        });
+      });
     }
     fetchTrashBtn.addEventListener("click", () => void resetHandler?.({ confirm: true }));
     const mkHelp = (t) => {

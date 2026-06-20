@@ -1,6 +1,6 @@
 import { loadServerSyncSettings, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { createSyncMiniButton } from "./syncOnly/miniButton";
-import { markAutoRun, runFetchAndSync, shouldAutoRun, SyncLog } from "./syncOnly/runFetchAndSync";
+import { getCurrentSyncLog, markAutoRun, runFetchAndSync, shouldAutoRun, SyncLog } from "./syncOnly/runFetchAndSync";
 import { linkDeviceViaDiscord } from "./syncOnly/linkDevice";
 
 function downloadLog(log: SyncLog): void {
@@ -91,6 +91,15 @@ const ui = createSyncMiniButton({
     const forceFull = !!(ev && (ev as any).shiftKey);
     const wantLog = !!(ev && ((ev as any).ctrlKey || (ev as any).metaKey));
     const wantUnsync = !!(ev && (ev as any).shiftKey && (ev as any).altKey);
+
+    // Ctrl/Cmd+Click always downloads the log — even mid-run, when a sync is
+    // already in progress (the regular flow below is a no-op while running).
+    if (wantLog && running) {
+      const log = getCurrentSyncLog();
+      if (log) downloadLog(log);
+      else ui.showToast("No sync log yet.", "warn");
+      return;
+    }
 
     if (wantUnsync) {
       if (running) return;

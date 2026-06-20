@@ -27,7 +27,14 @@ function writeLocalNumber(key: string, value: number): void {
 
 const AUTO_KEY = "geoanalyzr_sync_only_last_auto_ms";
 
+function getUserscriptVersion(): string | undefined {
+  const info = (globalThis as any)?.GM_info?.script;
+  const v = info?.version;
+  return typeof v === "string" ? v : undefined;
+}
+
 export interface SyncLog {
+  version?: string;
   timestamp: string;
   mode: "incremental" | "full";
   feed: { newGames: number; stopped: string; error?: string };
@@ -37,12 +44,21 @@ export interface SyncLog {
   message: string;
 }
 
+// Tracks the in-progress (or most recently finished) run, so the UI can
+// download/inspect the log even while a sync is still running.
+let currentLog: SyncLog | null = null;
+
+export function getCurrentSyncLog(): SyncLog | null {
+  return currentLog;
+}
+
 export async function runFetchAndSync(opts: {
   forceFull: boolean;
   setStatus: (msg: string) => void;
   ensureLinked: boolean;
 }): Promise<{ ok: boolean; message: string; hint?: string; log: SyncLog }> {
   const log: SyncLog = {
+    version: getUserscriptVersion(),
     timestamp: new Date().toISOString(),
     mode: opts.forceFull ? "full" : "incremental",
     feed: { newGames: 0, stopped: "" },
@@ -51,6 +67,7 @@ export async function runFetchAndSync(opts: {
     result: "error",
     message: "",
   };
+  currentLog = log;
 
   const fail = (message: string, hint?: string): { ok: false; message: string; hint?: string; log: SyncLog } => {
     log.result = "error";
