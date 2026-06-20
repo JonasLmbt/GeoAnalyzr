@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      3.0.17-dev
+// @version      3.0.18-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11577,11 +11577,13 @@ ${shapes}`.trim();
             const d = res.data;
             const user = d?.user ?? d;
             const comp = user?.competitive ?? user?.competitiveStats ?? null;
+            const rawDivision = comp?.division?.type ?? comp?.divisionType ?? void 0;
+            const currentDivision = typeof rawDivision === "string" && rawDivision.trim() && !/^-?\d+(\.\d+)?$/.test(rawDivision.trim()) ? rawDivision.trim() : void 0;
             const profile = {
               playerId,
               fetchedAt: now,
               currentRating: typeof comp?.rating === "number" ? comp.rating : void 0,
-              currentDivision: comp?.division?.type ?? comp?.divisionType ?? void 0,
+              currentDivision,
               currentLevel: typeof user?.progress?.level === "number" ? user.progress.level : typeof user?.level === "number" ? user.level : void 0,
               geoCreatedAt: user?.created ? new Date(user.created).getTime() : user?.createdAt ? new Date(user.createdAt).getTime() : void 0,
               isBanned: user?.isBanned === true || user?.banned === true,

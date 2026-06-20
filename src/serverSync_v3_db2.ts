@@ -65,11 +65,21 @@ async function fetchPlayerProfiles(playerIds: string[]): Promise<Map<string, Pla
           const d = res.data as any;
           const user = d?.user ?? d;
           const comp = user?.competitive ?? user?.competitiveStats ?? null;
+          // comp.division.type / comp.divisionType are numeric tier codes from
+          // GeoGuessr's API (e.g. "40.0"), not the human-readable division name
+          // ("Champion" etc.) — that name only exists in the GeoLeaderboard CSV
+          // import (see csvSync.js). Only accept this field if it's actually a
+          // non-numeric string, so a numeric code never clobbers the CSV value
+          // (the server's sync upsert keeps the existing value when this is null).
+          const rawDivision = comp?.division?.type ?? comp?.divisionType ?? undefined;
+          const currentDivision = (typeof rawDivision === "string" && rawDivision.trim() && !/^-?\d+(\.\d+)?$/.test(rawDivision.trim()))
+            ? rawDivision.trim()
+            : undefined;
           const profile: PlayerProfileCache = {
             playerId,
             fetchedAt: now,
             currentRating: typeof comp?.rating === "number" ? comp.rating : undefined,
-            currentDivision: comp?.division?.type ?? comp?.divisionType ?? undefined,
+            currentDivision,
             currentLevel: typeof user?.progress?.level === "number" ? user.progress.level
                         : typeof user?.level === "number" ? user.level : undefined,
             geoCreatedAt: user?.created ? new Date(user.created).getTime()
