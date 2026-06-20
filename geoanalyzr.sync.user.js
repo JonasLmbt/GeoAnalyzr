@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      3.0.14
+// @version      3.0.15
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -13351,6 +13351,29 @@ ${shapes}`.trim();
       white-space: normal;
     }
 
+    .ga-ui-discordlink {
+      margin-top: 6px;
+      font-size: 12px;
+      opacity: 0.92;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .ga-ui-discordlink-relink {
+      border: 1px solid rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.08);
+      color: white;
+      cursor: pointer;
+      border-radius: 8px;
+      padding: 4px 9px;
+      font-size: 11.5px;
+      font-weight: 650;
+      flex-shrink: 0;
+    }
+    .ga-ui-discordlink-relink:active { transform: translateY(1px); }
+    .ga-ui-discordlink-relink:disabled { opacity: 0.6; cursor: not-allowed; }
+
     .ga-ui-modal {
       position: fixed;
       inset: 0;
@@ -13612,6 +13635,40 @@ ${shapes}`.trim();
     const counts = el("div");
     counts.className = "ga-ui-counts";
     counts.textContent = "Data: 0 games, 0 rounds.";
+    const discordLinkRow = el("div");
+    discordLinkRow.className = "ga-ui-discordlink";
+    const discordLinkText = el("span");
+    const discordRelinkBtn = el("button");
+    discordRelinkBtn.type = "button";
+    discordRelinkBtn.className = "ga-ui-discordlink-relink";
+    discordLinkRow.appendChild(discordLinkText);
+    discordLinkRow.appendChild(discordRelinkBtn);
+    const refreshDiscordLinkRow = () => {
+      const settings = loadServerSyncSettings();
+      if (settings.discordUsername) {
+        discordLinkText.textContent = `Linked with @${settings.discordUsername}`;
+        discordRelinkBtn.textContent = "Relink";
+      } else if (settings.token) {
+        discordLinkText.textContent = "Linked (Discord name unknown)";
+        discordRelinkBtn.textContent = "Relink";
+      } else {
+        discordLinkText.textContent = "Not linked";
+        discordRelinkBtn.textContent = "Link";
+      }
+    };
+    refreshDiscordLinkRow();
+    discordRelinkBtn.addEventListener("click", async () => {
+      discordRelinkBtn.disabled = true;
+      discordLinkText.textContent = "Opening Discord login...";
+      try {
+        await linkDeviceViaDiscord();
+      } catch (e) {
+        discordLinkText.textContent = e instanceof Error ? e.message : String(e || "Link failed");
+      } finally {
+        discordRelinkBtn.disabled = false;
+        refreshDiscordLinkRow();
+      }
+    });
     const actions = el("div");
     actions.className = "ga-ui-actions";
     if (isSyncVariant) {
@@ -13646,6 +13703,7 @@ ${shapes}`.trim();
     panel.appendChild(status);
     panel.appendChild(actions);
     panel.appendChild(counts);
+    panel.appendChild(discordLinkRow);
     let open = false;
     const setOpen = (next) => {
       open = next;
@@ -13731,6 +13789,8 @@ ${shapes}`.trim();
           } catch (e) {
             setMsg(e instanceof Error ? e.message : String(e || "Link failed"));
             return;
+          } finally {
+            refreshDiscordLinkRow();
           }
           settings = loadServerSyncSettings();
         }
@@ -14241,6 +14301,7 @@ ${shapes}`.trim();
         return;
       }
       saveServerSyncSettings({ token: "", discordUsername: "" });
+      refreshDiscordLinkRow();
       status.textContent = "Server data deleted. Device unlinked.";
     }
     if (deleteBtn) {
@@ -14365,6 +14426,7 @@ ${shapes}`.trim();
           return;
         }
         saveServerSyncSettings({ token: "", discordUsername: "" });
+        refreshDiscordLinkRow();
         status.textContent = "Unsynced. Server data deleted and device unlinked.";
       } catch (e) {
         status.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
