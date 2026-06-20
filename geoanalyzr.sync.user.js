@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      3.0.18
+// @version      3.0.19
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11973,11 +11973,11 @@ ${shapes}`.trim();
       const players = Array.from(playerMap.values());
       console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
       for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
-        await postBatch(url, settings.token, { players: batch });
+        await postBatch(url, settings.token, { players: batch, ownPlayerId: ownPlayerId || void 0 });
         totalCounts.players += batch.length;
       }
       if (players.length === 0) {
-        await postBatch(url, settings.token, { players: [] });
+        await postBatch(url, settings.token, { players: [], ownPlayerId: ownPlayerId || void 0 });
       }
       for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
         await postBatch(url, settings.token, { duel_games: batch });

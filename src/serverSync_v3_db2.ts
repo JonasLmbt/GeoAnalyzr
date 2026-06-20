@@ -495,13 +495,18 @@ export async function syncV3FromDb2(opts: {
     // Players (always send, even if empty, to update lastSyncedAt)
     const players = Array.from(playerMap.values());
     console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
+    // Tell the server explicitly which playerId is "self" instead of letting it
+    // assume players[0] — if getCurrentPlayerId() failed this run, ownPlayerId is
+    // undefined and the server now skips owner-specific behavior rather than
+    // guessing (a guess here previously mis-attributed Discord links to whichever
+    // opponent happened to land in slot 0).
     for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
-      await postBatch(url, settings.token, { players: batch });
+      await postBatch(url, settings.token, { players: batch, ownPlayerId: ownPlayerId || undefined });
       totalCounts.players += batch.length;
     }
     // Send empty player ping if no players but we still want server to register the sync
     if (players.length === 0) {
-      await postBatch(url, settings.token, { players: [] });
+      await postBatch(url, settings.token, { players: [], ownPlayerId: ownPlayerId || undefined });
     }
 
     for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
