@@ -85,6 +85,7 @@ function cssOnce(): void {
 
 export function createSyncMiniButton(opts: {
   onClick: (ev: MouseEvent) => void | Promise<void>;
+  onContextMenu?: (ev: MouseEvent) => void | Promise<void>;
 }): {
   setState: (state: MiniButtonState) => void;
   setTitle: (title: string) => void;
@@ -103,6 +104,12 @@ export function createSyncMiniButton(opts: {
   spinner.setAttribute("aria-hidden", "true");
   btn.appendChild(spinner);
   btn.addEventListener("click", (ev) => void opts.onClick(ev));
+  if (opts.onContextMenu) {
+    btn.addEventListener("contextmenu", (ev) => {
+      ev.preventDefault();
+      void opts.onContextMenu!(ev);
+    });
+  }
 
   const toast = el("div");
   toast.className = "ga-sync-toast";

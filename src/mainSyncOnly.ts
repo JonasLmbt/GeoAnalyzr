@@ -1,6 +1,7 @@
 import { loadServerSyncSettings, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { createSyncMiniButton } from "./syncOnly/miniButton";
 import { markAutoRun, runFetchAndSync, shouldAutoRun, SyncLog } from "./syncOnly/runFetchAndSync";
+import { linkDeviceViaDiscord } from "./syncOnly/linkDevice";
 
 function downloadLog(log: SyncLog): void {
   const filename = `geoanalyzr-sync-${log.timestamp.replace(/[:.]/g, "-")}.json`;
@@ -12,6 +13,11 @@ function downloadLog(log: SyncLog): void {
   document.body.appendChild(a);
   a.click();
   setTimeout(() => document.body.removeChild(a), 1000);
+}
+
+function linkedSuffix(): string {
+  const username = loadServerSyncSettings().discordUsername;
+  return username ? ` - Linked with @${username}` : "";
 }
 
 let running: Promise<void> | null = null;
@@ -104,7 +110,7 @@ const ui = createSyncMiniButton({
           const settings = loadServerSyncSettings();
           const res = await runServerUnsync(settings, { deleteUploads: true });
           if (!res.ok) throw new Error(`Failed (HTTP ${res.status})`);
-          saveServerSyncSettings({ token: "" });
+          saveServerSyncSettings({ token: "", discordUsername: "" });
           ui.setState("needs_link");
           ui.setTitle("GeoAnalyzr Sync - Click to link device");
           ui.showToast("Server data deleted. Device unlinked.", "warn");
@@ -123,18 +129,43 @@ const ui = createSyncMiniButton({
     const settings = loadServerSyncSettings();
     const ensureLinked = !settings.token; // click can open linking tab when token missing
     await runOnce(ui, { forceFull, ensureLinked, showHints: true, downloadLog: wantLog });
+  },
+  onContextMenu: async () => {
+    // Right-click: force a fresh Discord link, even if a token already exists
+    // (e.g. relinking to a different Discord account, or recovering a broken link).
+    if (running) return;
+    running = (async () => {
+      ui.setState("working");
+      ui.setTitle("GeoAnalyzr Sync - Linking device...");
+      try {
+        const result = await linkDeviceViaDiscord();
+        ui.setState("idle");
+        ui.setTitle(`GeoAnalyzr Sync${result.discordUsername ? ` - Linked with @${result.discordUsername}` : ""}`);
+        ui.showToast(result.discordUsername ? `Linked with @${result.discordUsername}.` : "Linked.", "success");
+      } catch (e: any) {
+        const msg = e instanceof Error ? e.message : String(e || "Link failed");
+        ui.setState("error");
+        ui.setTitle(`GeoAnalyzr Sync - ${msg}`);
+        ui.showToast(msg, "error");
+      } finally {
+        running = null;
+      }
+    })();
+    return running;
   }
 });
 
-// Auto-run once in a while (no popups). Only if a token exists already.
+// Show baseline "Linked with @X" tooltip immediately, and auto-run once in a
+// while (no popups). Right-click the button any time to (re)link manually.
 window.setTimeout(() => {
   try {
     const settings = loadServerSyncSettings();
     if (!settings.token) {
       ui.setState("needs_link");
-      ui.setTitle("GeoAnalyzr Sync - Click to link device");
+      ui.setTitle("GeoAnalyzr Sync - Click to link device (or right-click to relink)");
       return;
     }
+    ui.setTitle(`GeoAnalyzr Sync${linkedSuffix()} (right-click to relink)`);
 
     const now = Date.now();
     const intervalMs = 12 * 60 * 60 * 1000; // 12h

@@ -12,6 +12,7 @@ type ColumnarTable = {
 export type ServerSyncSettings = {
   endpointUrl: string;
   token: string;
+  discordUsername: string;
   compact: boolean;
   includeAggregates: boolean;
   filterModeFamily: "all" | "duels" | "teamduels";
@@ -176,6 +177,8 @@ export function loadServerSyncSettings(): ServerSyncSettings {
   if (endpointNorm.migrated) writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, endpointNorm.endpointUrl);
   const endpointUrl = endpointNorm.endpointUrl;
   const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+  const discordUsernameRaw = readGmValue(`${GM_VALUE_PREFIX}discord_username`);
+  const discordUsername = typeof discordUsernameRaw === "string" ? discordUsernameRaw.trim() : "";
   const compact =
     typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
   const includeAggregates =
@@ -224,6 +227,7 @@ export function loadServerSyncSettings(): ServerSyncSettings {
   return {
     endpointUrl,
     token,
+    discordUsername,
     compact,
     includeAggregates,
     filterModeFamily,
@@ -237,6 +241,7 @@ export function loadServerSyncSettings(): ServerSyncSettings {
 export function saveServerSyncSettings(next: Partial<ServerSyncSettings>): void {
   if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
   if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
+  if (typeof next.discordUsername === "string") writeGmValue(`${GM_VALUE_PREFIX}discord_username`, next.discordUsername.trim());
   if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
   if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
   if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);

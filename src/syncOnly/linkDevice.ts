@@ -3,7 +3,7 @@ import { getGmXmlhttpRequest } from "../gm";
 
 const LINK_ORIGIN = "https://geoanalyzr.lmbt.app";
 
-export async function linkDeviceViaDiscord(): Promise<{ token: string; endpointUrl?: string }> {
+export async function linkDeviceViaDiscord(): Promise<{ token: string; endpointUrl?: string; discordUsername?: string }> {
   const gm = getGmXmlhttpRequest();
   if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
 
@@ -30,11 +30,12 @@ export async function linkDeviceViaDiscord(): Promise<{ token: string; endpointU
     });
   });
 
-  // No overlay/popups: open a regular tab and wait for postMessage.
-  const linkTab = window.open(pair.linkUrl, "_blank", "noopener,noreferrer");
+  // IMPORTANT: must NOT use noopener/noreferrer here — the linking page posts the
+  // token back via window.opener.postMessage(), which requires a real opener reference.
+  const linkTab = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
   if (!linkTab) throw new Error("Could not open linking tab (popup blocked).");
 
-  const token = await new Promise<{ token: string; endpointUrl?: string }>((resolve, reject) => {
+  const result = await new Promise<{ token: string; endpointUrl?: string; discordUsername?: string }>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error("Link timeout"));
@@ -46,9 +47,10 @@ export async function linkDeviceViaDiscord(): Promise<{ token: string; endpointU
       if (!d || d.type !== "geoanalyzr_sync_token") return;
       const t = typeof d.token === "string" ? d.token.trim() : "";
       const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+      const discordUsername = typeof d.discordUsername === "string" ? d.discordUsername.trim() : "";
       if (!t) return;
       cleanup();
-      resolve({ token: t, endpointUrl: endpointUrl || undefined });
+      resolve({ token: t, endpointUrl: endpointUrl || undefined, discordUsername: discordUsername || undefined });
     };
 
     const cleanup = () => {
@@ -64,7 +66,11 @@ export async function linkDeviceViaDiscord(): Promise<{ token: string; endpointU
     window.addEventListener("message", onMsg as any);
   });
 
-  saveServerSyncSettings({ token: token.token, ...(token.endpointUrl ? { endpointUrl: token.endpointUrl } : {}) });
-  return token;
+  saveServerSyncSettings({
+    token: result.token,
+    ...(result.endpointUrl ? { endpointUrl: result.endpointUrl } : {}),
+    ...(result.discordUsername ? { discordUsername: result.discordUsername } : {})
+  });
+  return result;
 }
 

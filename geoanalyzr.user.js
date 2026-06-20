@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.13
+// @version      3.0.14
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -10156,6 +10156,8 @@ ${shapes}`.trim();
     if (endpointNorm.migrated) writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, endpointNorm.endpointUrl);
     const endpointUrl = endpointNorm.endpointUrl;
     const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+    const discordUsernameRaw = readGmValue(`${GM_VALUE_PREFIX}discord_username`);
+    const discordUsername = typeof discordUsernameRaw === "string" ? discordUsernameRaw.trim() : "";
     const compact = typeof compactRaw === "string" ? compactRaw === "1" : typeof compactRaw === "boolean" ? compactRaw : false;
     const includeAggregates = typeof includeAggRaw === "string" ? includeAggRaw === "1" : typeof includeAggRaw === "boolean" ? includeAggRaw : false;
     const filterModeFamilyRaw = readGmValue(`${GM_VALUE_PREFIX}filter_mode_family`);
@@ -10198,6 +10200,7 @@ ${shapes}`.trim();
     return {
       endpointUrl,
       token,
+      discordUsername,
       compact,
       includeAggregates,
       filterModeFamily,
@@ -10210,6 +10213,7 @@ ${shapes}`.trim();
   function saveServerSyncSettings(next) {
     if (typeof next.endpointUrl === "string") writeGmValue(`${GM_VALUE_PREFIX}endpoint_url`, next.endpointUrl.trim());
     if (typeof next.token === "string") writeGmValue(`${GM_VALUE_PREFIX}token`, next.token.trim());
+    if (typeof next.discordUsername === "string") writeGmValue(`${GM_VALUE_PREFIX}discord_username`, next.discordUsername.trim());
     if (typeof next.compact === "boolean") writeGmValue(`${GM_VALUE_PREFIX}compact`, next.compact ? "1" : "0");
     if (typeof next.includeAggregates === "boolean") writeGmValue(`${GM_VALUE_PREFIX}include_agg`, next.includeAggregates ? "1" : "0");
     if (typeof next.filterModeFamily === "string") writeGmValue(`${GM_VALUE_PREFIX}filter_mode_family`, next.filterModeFamily);
@@ -11313,7 +11317,8 @@ ${shapes}`.trim();
     const playerMap = /* @__PURE__ */ new Map();
     const addPlayer = (id, name, country, fetchedAt) => {
       if (typeof id !== "string" || !id) return;
-      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+      const ccRaw = typeof country === "string" ? country.trim() : "";
+      const cc = /^[a-zA-Z]{2}$/.test(ccRaw) ? ccRaw.toUpperCase() : null;
       const nm = typeof name === "string" && name.trim() ? name.trim() : null;
       const existing = playerMap.get(id);
       if (!existing) {
@@ -11684,7 +11689,8 @@ ${shapes}`.trim();
     const playerMap = /* @__PURE__ */ new Map();
     const addPlayer = (id, name, country, playedAt) => {
       if (typeof id !== "string" || !id) return;
-      const cc = typeof country === "string" && country.trim() ? country.trim().toUpperCase() : null;
+      const ccRaw = typeof country === "string" ? country.trim() : "";
+      const cc = /^[a-zA-Z]{2}$/.test(ccRaw) ? ccRaw.toUpperCase() : null;
       const nm = typeof name === "string" && name.trim() ? name.trim() : null;
       const existing = playerMap.get(id);
       if (!existing) {
@@ -13161,6 +13167,69 @@ ${shapes}`.trim();
     if (typeof next.toMs === "number") writeGmValue2(`${GM_VALUE_PREFIX2}to_ms`, String(Math.max(0, Math.floor(next.toMs))));
   }
 
+  // src/syncOnly/linkDevice.ts
+  var LINK_ORIGIN = "https://geoanalyzr.lmbt.app";
+  async function linkDeviceViaDiscord() {
+    const gm = getGmXmlhttpRequest();
+    if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
+    const pairStartUrl = `${LINK_ORIGIN}/pair/start`;
+    const pair = await new Promise((resolve, reject) => {
+      gm({
+        method: "GET",
+        url: pairStartUrl,
+        headers: { Accept: "application/json" },
+        onload: (res) => {
+          const text = typeof res?.responseText === "string" ? res.responseText : "";
+          try {
+            const parsed = JSON.parse(text);
+            if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
+              return reject(new Error("Pairing failed (invalid response)."));
+            }
+            resolve({ linkUrl: String(parsed.linkUrl) });
+          } catch {
+            reject(new Error("Pairing failed (invalid JSON)."));
+          }
+        },
+        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
+        ontimeout: () => reject(new Error("Pairing timeout"))
+      });
+    });
+    const linkTab = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
+    if (!linkTab) throw new Error("Could not open linking tab (popup blocked).");
+    const result = await new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Link timeout"));
+      }, 2 * 60 * 1e3);
+      const onMsg = (ev) => {
+        if (ev.origin !== LINK_ORIGIN) return;
+        const d = ev.data;
+        if (!d || d.type !== "geoanalyzr_sync_token") return;
+        const t = typeof d.token === "string" ? d.token.trim() : "";
+        const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
+        const discordUsername = typeof d.discordUsername === "string" ? d.discordUsername.trim() : "";
+        if (!t) return;
+        cleanup();
+        resolve({ token: t, endpointUrl: endpointUrl || void 0, discordUsername: discordUsername || void 0 });
+      };
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        window.removeEventListener("message", onMsg);
+        try {
+          linkTab.close();
+        } catch {
+        }
+      };
+      window.addEventListener("message", onMsg);
+    });
+    saveServerSyncSettings({
+      token: result.token,
+      ...result.endpointUrl ? { endpointUrl: result.endpointUrl } : {},
+      ...result.discordUsername ? { discordUsername: result.discordUsername } : {}
+    });
+    return result;
+  }
+
   // src/uiOverlay.ts
   function el(tag) {
     return document.createElement(tag);
@@ -13656,64 +13725,13 @@ ${shapes}`.trim();
             setMsg("Not linked. Click Fetch + Sync once to link your device.");
             return;
           }
-          const gm = getGmXmlhttpRequest();
-          if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
           setMsg("Linking device...");
-          const linkOrigin = "https://geoanalyzr.lmbt.app";
-          const pairStartUrl = `${linkOrigin}/pair/start`;
-          const pair = await new Promise((resolve, reject) => {
-            gm({
-              method: "GET",
-              url: pairStartUrl,
-              headers: { Accept: "application/json" },
-              onload: (res) => {
-                const text = typeof res?.responseText === "string" ? res.responseText : "";
-                try {
-                  const parsed = JSON.parse(text);
-                  if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                    return reject(new Error("Pairing failed (invalid response)."));
-                  }
-                  resolve({ linkUrl: String(parsed.linkUrl) });
-                } catch {
-                  reject(new Error("Pairing failed (invalid JSON)."));
-                }
-              },
-              onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("Pairing failed")),
-              ontimeout: () => reject(new Error("Pairing timeout"))
-            });
-          });
-          const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-          if (!linkWin) {
-            setMsg("Popup blocked. Allow popups for geoanalyzr.lmbt.app.");
+          try {
+            await linkDeviceViaDiscord();
+          } catch (e) {
+            setMsg(e instanceof Error ? e.message : String(e || "Link failed"));
             return;
           }
-          const token = await new Promise((resolve, reject) => {
-            const timeout = window.setTimeout(() => {
-              cleanup();
-              reject(new Error("Link timeout"));
-            }, 2 * 60 * 1e3);
-            const onMsg = (ev2) => {
-              if (ev2.origin !== linkOrigin) return;
-              const d = ev2.data;
-              if (!d || d.type !== "geoanalyzr_sync_token") return;
-              const t = typeof d.token === "string" ? d.token.trim() : "";
-              const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-              if (!t) return;
-              cleanup();
-              if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-              resolve(t);
-            };
-            const cleanup = () => {
-              window.clearTimeout(timeout);
-              window.removeEventListener("message", onMsg);
-              try {
-                linkWin.close();
-              } catch {
-              }
-            };
-            window.addEventListener("message", onMsg);
-          });
-          saveServerSyncSettings({ token });
           settings = loadServerSyncSettings();
         }
         if (isSyncVariant) {
@@ -14222,7 +14240,7 @@ ${shapes}`.trim();
         status.textContent = `Delete failed (HTTP ${res.status})`;
         return;
       }
-      saveServerSyncSettings({ token: "" });
+      saveServerSyncSettings({ token: "", discordUsername: "" });
       status.textContent = "Server data deleted. Device unlinked.";
     }
     if (deleteBtn) {
@@ -14346,7 +14364,7 @@ ${shapes}`.trim();
           status.textContent = `Unsync failed (HTTP ${res.status})`;
           return;
         }
-        saveServerSyncSettings({ token: "" });
+        saveServerSyncSettings({ token: "", discordUsername: "" });
         status.textContent = "Unsynced. Server data deleted and device unlinked.";
       } catch (e) {
         status.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
@@ -26614,8 +26632,16 @@ ${describeError(err2)}` : message;
       syncGrid.appendChild(syncCompactField);
       syncGrid.appendChild(syncAggField);
       dataPane.appendChild(syncGrid);
+      const discordLinkStatus = doc.createElement("div");
+      discordLinkStatus.className = "ga-settings-note";
+      dataPane.appendChild(discordLinkStatus);
       const syncActions = doc.createElement("div");
       syncActions.className = "ga-settings-actions";
+      const relinkBtn = doc.createElement("button");
+      relinkBtn.type = "button";
+      relinkBtn.className = "ga-filter-btn";
+      relinkBtn.title = "Open a Discord login popup and connect this device to your Discord account";
+      syncActions.appendChild(relinkBtn);
       const syncNowBtn = doc.createElement("button");
       syncNowBtn.type = "button";
       syncNowBtn.className = "ga-filter-btn";
@@ -26638,6 +26664,35 @@ ${describeError(err2)}` : message;
       syncTokenInput.value = syncSettings.token;
       syncCompactSelect.value = syncSettings.compact ? "compact" : "full";
       syncAggSelect.value = syncSettings.includeAggregates ? "yes" : "no";
+      const refreshDiscordLinkUi = () => {
+        const current = loadServerSyncSettings();
+        if (current.discordUsername) {
+          discordLinkStatus.textContent = `Linked with Discord as @${current.discordUsername}.`;
+          relinkBtn.textContent = "Relink with Discord";
+        } else if (current.token) {
+          discordLinkStatus.textContent = "A sync token is set, but no Discord account is confirmed yet.";
+          relinkBtn.textContent = "Link with Discord";
+        } else {
+          discordLinkStatus.textContent = "Not linked to a Discord account.";
+          relinkBtn.textContent = "Link with Discord";
+        }
+      };
+      refreshDiscordLinkUi();
+      relinkBtn.addEventListener("click", async () => {
+        relinkBtn.disabled = true;
+        discordLinkStatus.textContent = "Opening Discord login...";
+        try {
+          const result = await linkDeviceViaDiscord();
+          syncTokenInput.value = result.token;
+          if (result.endpointUrl) syncEndpointInput.value = result.endpointUrl;
+          refreshDiscordLinkUi();
+          discordLinkStatus.textContent = result.discordUsername ? `Linked with Discord as @${result.discordUsername}.` : "Linked.";
+        } catch (e) {
+          discordLinkStatus.textContent = e instanceof Error ? e.message : String(e || "Link failed");
+        } finally {
+          relinkBtn.disabled = false;
+        }
+      });
       const refreshSyncMeta = async () => {
         const meta = await getLastServerSyncMeta();
         const cursor = await getLastServerSyncCursor();
@@ -26673,7 +26728,9 @@ ${describeError(err2)}` : message;
         void refreshSyncMeta();
       });
       syncTokenInput.addEventListener("change", () => {
+        saveServerSyncSettings({ discordUsername: "" });
         persistSyncSettings();
+        refreshDiscordLinkUi();
         void refreshSyncMeta();
       });
       syncCompactSelect.addEventListener("change", () => {
@@ -26720,8 +26777,9 @@ ${describeError(err2)}` : message;
             syncStatus.textContent = `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
             return;
           }
-          saveServerSyncSettings({ token: "" });
+          saveServerSyncSettings({ token: "", discordUsername: "" });
           syncTokenInput.value = "";
+          refreshDiscordLinkUi();
           syncStatus.textContent = "OK - server data deleted and device unlinked.";
         } catch (e) {
           syncStatus.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");

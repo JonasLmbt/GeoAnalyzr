@@ -5,8 +5,8 @@ import { fetchFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { getCurrentPlayerId } from "./app/playerIdentity";
 import { isMigrationNeeded, migrateV1ToV2 } from "./migration_v1_to_v2";
-import { getGmXmlhttpRequest } from "./gm";
 import { loadFetchGameFilter, saveFetchGameFilter } from "./fetchGameFilter";
+import { linkDeviceViaDiscord } from "./syncOnly/linkDevice";
 
 type Counts = {
   games: number;
@@ -575,73 +575,13 @@ export function createUIOverlay(): UIOverlay {
           return;
         }
 
-        const gm = getGmXmlhttpRequest();
-        if (!gm) throw new Error("GM_xmlhttpRequest is not available.");
-
         setMsg("Linking device...");
-        const linkOrigin = "https://geoanalyzr.lmbt.app";
-        const pairStartUrl = `${linkOrigin}/pair/start`;
-
-        const pair = await new Promise<{ linkUrl: string }>((resolve, reject) => {
-          gm({
-            method: "GET",
-            url: pairStartUrl,
-            headers: { Accept: "application/json" },
-            onload: (res: any) => {
-              const text = typeof res?.responseText === "string" ? res.responseText : "";
-              try {
-                const parsed = JSON.parse(text);
-                if (!parsed?.ok || typeof parsed?.linkUrl !== "string" || !parsed.linkUrl) {
-                  return reject(new Error("Pairing failed (invalid response)."));
-                }
-                resolve({ linkUrl: String(parsed.linkUrl) });
-              } catch {
-                reject(new Error("Pairing failed (invalid JSON)."));
-              }
-            },
-            onerror: (err: any) => reject(err instanceof Error ? err : new Error("Pairing failed")),
-            ontimeout: () => reject(new Error("Pairing timeout"))
-          });
-        });
-
-        const linkWin = window.open(pair.linkUrl, "geoanalyzr_link", "popup,width=520,height=700");
-        if (!linkWin) {
-          setMsg("Popup blocked. Allow popups for geoanalyzr.lmbt.app.");
+        try {
+          await linkDeviceViaDiscord();
+        } catch (e: any) {
+          setMsg(e instanceof Error ? e.message : String(e || "Link failed"));
           return;
         }
-
-        const token = await new Promise<string>((resolve, reject) => {
-          const timeout = window.setTimeout(() => {
-            cleanup();
-            reject(new Error("Link timeout"));
-          }, 2 * 60 * 1000);
-
-          const onMsg = (ev2: MessageEvent) => {
-            if (ev2.origin !== linkOrigin) return;
-            const d: any = ev2.data;
-            if (!d || d.type !== "geoanalyzr_sync_token") return;
-            const t = typeof d.token === "string" ? d.token.trim() : "";
-            const endpointUrl = typeof d.endpointUrl === "string" ? d.endpointUrl.trim() : "";
-            if (!t) return;
-            cleanup();
-            if (endpointUrl) saveServerSyncSettings({ endpointUrl });
-            resolve(t);
-          };
-
-          const cleanup = () => {
-            window.clearTimeout(timeout);
-            window.removeEventListener("message", onMsg as any);
-            try {
-              linkWin.close();
-            } catch {
-              // ignore
-            }
-          };
-
-          window.addEventListener("message", onMsg as any);
-        });
-
-        saveServerSyncSettings({ token });
         settings = loadServerSyncSettings();
       }
       if (isSyncVariant) {
@@ -1237,7 +1177,7 @@ export function createUIOverlay(): UIOverlay {
       status.textContent = `Delete failed (HTTP ${res.status})`;
       return;
     }
-    saveServerSyncSettings({ token: "" });
+    saveServerSyncSettings({ token: "", discordUsername: "" });
     status.textContent = "Server data deleted. Device unlinked.";
   }
 
@@ -1381,7 +1321,7 @@ export function createUIOverlay(): UIOverlay {
         status.textContent = `Unsync failed (HTTP ${res.status})`;
         return;
       }
-      saveServerSyncSettings({ token: "" });
+      saveServerSyncSettings({ token: "", discordUsername: "" });
       status.textContent = "Unsynced. Server data deleted and device unlinked.";
     } catch (e: any) {
       status.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");

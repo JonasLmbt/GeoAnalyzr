@@ -21,6 +21,7 @@ import {
 } from "../serverSync";
 import { runServerSyncV3 } from "../serverSync_v3";
 import { getCurrentPlayerId } from "../app/playerIdentity";
+import { linkDeviceViaDiscord } from "../syncOnly/linkDevice";
 
 type SettingsModalOptions = {
   doc: Document;
@@ -337,8 +338,19 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     syncGrid.appendChild(syncAggField);
     dataPane.appendChild(syncGrid);
 
+    const discordLinkStatus = doc.createElement("div");
+    discordLinkStatus.className = "ga-settings-note";
+    dataPane.appendChild(discordLinkStatus);
+
     const syncActions = doc.createElement("div");
     syncActions.className = "ga-settings-actions";
+
+    const relinkBtn = doc.createElement("button");
+    relinkBtn.type = "button";
+    relinkBtn.className = "ga-filter-btn";
+    relinkBtn.title = "Open a Discord login popup and connect this device to your Discord account";
+    syncActions.appendChild(relinkBtn);
+
     const syncNowBtn = doc.createElement("button");
     syncNowBtn.type = "button";
     syncNowBtn.className = "ga-filter-btn";
@@ -364,6 +376,39 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
     syncTokenInput.value = syncSettings.token;
     syncCompactSelect.value = syncSettings.compact ? "compact" : "full";
     syncAggSelect.value = syncSettings.includeAggregates ? "yes" : "no";
+
+    const refreshDiscordLinkUi = () => {
+      const current = loadServerSyncSettings();
+      if (current.discordUsername) {
+        discordLinkStatus.textContent = `Linked with Discord as @${current.discordUsername}.`;
+        relinkBtn.textContent = "Relink with Discord";
+      } else if (current.token) {
+        discordLinkStatus.textContent = "A sync token is set, but no Discord account is confirmed yet.";
+        relinkBtn.textContent = "Link with Discord";
+      } else {
+        discordLinkStatus.textContent = "Not linked to a Discord account.";
+        relinkBtn.textContent = "Link with Discord";
+      }
+    };
+    refreshDiscordLinkUi();
+
+    relinkBtn.addEventListener("click", async () => {
+      relinkBtn.disabled = true;
+      discordLinkStatus.textContent = "Opening Discord login...";
+      try {
+        const result = await linkDeviceViaDiscord();
+        syncTokenInput.value = result.token;
+        if (result.endpointUrl) syncEndpointInput.value = result.endpointUrl;
+        refreshDiscordLinkUi();
+        discordLinkStatus.textContent = result.discordUsername
+          ? `Linked with Discord as @${result.discordUsername}.`
+          : "Linked.";
+      } catch (e: any) {
+        discordLinkStatus.textContent = e instanceof Error ? e.message : String(e || "Link failed");
+      } finally {
+        relinkBtn.disabled = false;
+      }
+    });
 
     const refreshSyncMeta = async () => {
       const meta = await getLastServerSyncMeta();
@@ -405,7 +450,11 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
       void refreshSyncMeta();
     });
     syncTokenInput.addEventListener("change", () => {
+      // A manually-typed token didn't come from the Discord link flow, so any
+      // previously displayed "Linked as @X" no longer applies to it.
+      saveServerSyncSettings({ discordUsername: "" });
       persistSyncSettings();
+      refreshDiscordLinkUi();
       void refreshSyncMeta();
     });
     syncCompactSelect.addEventListener("change", () => {
@@ -459,8 +508,9 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
           return;
         }
 
-        saveServerSyncSettings({ token: "" });
+        saveServerSyncSettings({ token: "", discordUsername: "" });
         syncTokenInput.value = "";
+        refreshDiscordLinkUi();
         syncStatus.textContent = "OK - server data deleted and device unlinked.";
       } catch (e: any) {
         syncStatus.textContent = e instanceof Error ? e.message : String(e || "Unsync failed");
