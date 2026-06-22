@@ -11905,6 +11905,29 @@ ${shapes}`.trim();
       }
     }
     try {
+      const profileIds = ownPlayerId ? [ownPlayerId] : [];
+      const profileMap = await fetchPlayerProfiles(profileIds);
+      for (const [playerId, entry] of playerMap) {
+        const p = profileMap.get(playerId);
+        if (!p) continue;
+        entry.currentRating = p.currentRating ?? null;
+        entry.currentDivision = p.currentDivision ?? null;
+        entry.currentLevel = p.currentLevel ?? null;
+        entry.geoCreatedAt = p.geoCreatedAt ?? null;
+        entry.isBanned = p.isBanned ? 1 : 0;
+        entry.clubTag = p.clubTag ?? null;
+        entry.streakProgress = p.streakProgress != null ? JSON.stringify(p.streakProgress) : null;
+        entry.profileFetchedAt = p.fetchedAt;
+      }
+      const players = Array.from(playerMap.values());
+      console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
+      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
+        await postBatch(url, settings.token, { players: batch, ownPlayerId: ownPlayerId || void 0 });
+        totalCounts.players += batch.length;
+      }
+      if (players.length === 0) {
+        await postBatch(url, settings.token, { players: [], ownPlayerId: ownPlayerId || void 0 });
+      }
       if (ownPlayerId) {
         const stdGameRows = classicGames.map((g) => ({
           gameId: g.gameId,
@@ -11955,29 +11978,6 @@ ${shapes}`.trim();
             totalCounts.standard_rounds += batch.length;
           }
         }
-      }
-      const profileIds = ownPlayerId ? [ownPlayerId] : [];
-      const profileMap = await fetchPlayerProfiles(profileIds);
-      for (const [playerId, entry] of playerMap) {
-        const p = profileMap.get(playerId);
-        if (!p) continue;
-        entry.currentRating = p.currentRating ?? null;
-        entry.currentDivision = p.currentDivision ?? null;
-        entry.currentLevel = p.currentLevel ?? null;
-        entry.geoCreatedAt = p.geoCreatedAt ?? null;
-        entry.isBanned = p.isBanned ? 1 : 0;
-        entry.clubTag = p.clubTag ?? null;
-        entry.streakProgress = p.streakProgress != null ? JSON.stringify(p.streakProgress) : null;
-        entry.profileFetchedAt = p.fetchedAt;
-      }
-      const players = Array.from(playerMap.values());
-      console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
-      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
-        await postBatch(url, settings.token, { players: batch, ownPlayerId: ownPlayerId || void 0 });
-        totalCounts.players += batch.length;
-      }
-      if (players.length === 0) {
-        await postBatch(url, settings.token, { players: [], ownPlayerId: ownPlayerId || void 0 });
       }
       for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
         await postBatch(url, settings.token, { duel_games: batch });
