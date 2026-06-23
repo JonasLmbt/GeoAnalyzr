@@ -20,6 +20,7 @@ import {
   saveServerSyncSettings
 } from "../serverSync";
 import { runServerSyncV3 } from "../serverSync_v3";
+import { sendSyncLog } from "../serverSync_v3_db2";
 import { getCurrentPlayerId } from "../app/playerIdentity";
 import { linkDeviceViaDiscord } from "../syncOnly/linkDevice";
 
@@ -479,6 +480,10 @@ export function attachSettingsModal(opts: SettingsModalOptions): void {
           `${rowsTotal} rows (${c.duel_games} duel games, ${c.team_duel_games} team games, ${c.duel_rounds + c.team_duel_rounds} rounds) - ` +
           `payload ${formatBytes(res.bytesJson)} (json)`;
         syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
+        void sendSyncLog(
+          { timestamp: new Date().toISOString(), source: "settings-sync-now", ok: res.ok, status: res.status, counts: res.counts },
+          res.ownPlayerId
+        );
       } catch (e: any) {
         syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
       } finally {

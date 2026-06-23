@@ -16,6 +16,7 @@ export type ServerSyncV3Status = {
     team_duel_rounds: number;
   };
   bytesJson: number;
+  ownPlayerId: string | null;
 };
 
 const SYNC_META_KEY_V3 = "server_sync_v3";
@@ -46,7 +47,10 @@ function getUserscriptVersion(): string | undefined {
   const anyGlobal = globalThis as any;
   const info = anyGlobal?.GM_info;
   const v = info?.script?.version;
-  return typeof v === "string" ? v : undefined;
+  if (typeof v !== "string") return undefined;
+  const ns = String(info?.script?.namespace || "");
+  const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+  return `${v} (${variant})`;
 }
 
 function gmPostJson(
@@ -330,6 +334,7 @@ export async function runServerSyncV3(opts: { forceFull?: boolean } = {}): Promi
     schemaVersion: 1,
     createdAt: Date.now(),
     appVersion: getUserscriptVersion(),
+    ownPlayerId: ownPlayerId || undefined,
     owner: { playerId: ownPlayerId, playerName: ownPlayerName },
     cursor: { from: cursorFrom },
     players,
@@ -377,5 +382,6 @@ export async function runServerSyncV3(opts: { forceFull?: boolean } = {}): Promi
       team_duel_rounds: tdRounds.length,
     },
     bytesJson: jsonBody.length,
+    ownPlayerId: ownPlayerId ?? null,
   };
 }

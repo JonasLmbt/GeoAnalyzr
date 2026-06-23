@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.20
+// @version      3.0.21
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11245,7 +11245,10 @@ ${shapes}`.trim();
     const anyGlobal = globalThis;
     const info = anyGlobal?.GM_info;
     const v = info?.script?.version;
-    return typeof v === "string" ? v : void 0;
+    if (typeof v !== "string") return void 0;
+    const ns = String(info?.script?.namespace || "");
+    const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+    return `${v} (${variant})`;
   }
   function gmPostJson(url, body, headers) {
     return new Promise((resolve, reject) => {
@@ -11483,6 +11486,7 @@ ${shapes}`.trim();
       schemaVersion: 1,
       createdAt: Date.now(),
       appVersion: getUserscriptVersion2(),
+      ownPlayerId: ownPlayerId || void 0,
       owner: { playerId: ownPlayerId, playerName: ownPlayerName },
       cursor: { from: cursorFrom },
       players,
@@ -11528,7 +11532,8 @@ ${shapes}`.trim();
         team_duel_games: tdGames.length,
         team_duel_rounds: tdRounds.length
       },
-      bytesJson: jsonBody.length
+      bytesJson: jsonBody.length,
+      ownPlayerId: ownPlayerId ?? null
     };
   }
 
@@ -26919,6 +26924,10 @@ ${describeError(err2)}` : message;
           const rowsTotal = c.duel_games + c.duel_rounds + c.team_duel_games + c.team_duel_rounds;
           const msg = `OK (HTTP ${res.status}) - ${rowsTotal} rows (${c.duel_games} duel games, ${c.team_duel_games} team games, ${c.duel_rounds + c.team_duel_rounds} rounds) - payload ${formatBytes(res.bytesJson)} (json)`;
           syncStatus.textContent = res.ok ? msg : `Failed (HTTP ${res.status}) - ${res.responseText || "no response"}`;
+          void sendSyncLog(
+            { timestamp: (/* @__PURE__ */ new Date()).toISOString(), source: "settings-sync-now", ok: res.ok, status: res.status, counts: res.counts },
+            res.ownPlayerId
+          );
         } catch (e) {
           syncStatus.textContent = e instanceof Error ? e.message : String(e || "Sync failed");
         } finally {
