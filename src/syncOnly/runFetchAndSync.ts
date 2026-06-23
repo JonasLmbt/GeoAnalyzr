@@ -37,7 +37,7 @@ export interface SyncLog {
   version?: string;
   timestamp: string;
   mode: "incremental" | "full";
-  feed: { newGames: number; stopped: string; error?: string };
+  feed: { newGames: number; stopped: string; pages?: number; error?: string };
   details: { queued: number; succeeded: number; failed: number; permanentlySkipped: number; selfIdFixed: number; error?: string };
   sync: { gamesUploaded: number; gamesNew: number; roundsNew: number; batches: number; error?: string };
   result: "ok" | "error";
@@ -103,6 +103,7 @@ export async function runFetchAndSync(opts: {
       delayMs: 150,
       overlapThreshold: 5,
       onProgress: (p) => {
+        log.feed.pages = p.page;
         opts.setStatus(`Feed page ${p.page} — ${p.newGames} new games...`);
       },
     });

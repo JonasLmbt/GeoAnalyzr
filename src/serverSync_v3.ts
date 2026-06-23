@@ -48,8 +48,9 @@ function getUserscriptVersion(): string | undefined {
   const info = anyGlobal?.GM_info;
   const v = info?.script?.version;
   if (typeof v !== "string") return undefined;
-  const ns = String(info?.script?.namespace || "");
-  const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+  // Build-time constant (see build-release.cjs), not a runtime read of
+  // GM_info.script.namespace — more reliable across userscript managers.
+  const variant = __GA_VARIANT__ === "local" ? "full" : __GA_VARIANT__;
   return `${v} (${variant})`;
 }
 

@@ -815,6 +815,25 @@ export function createUIOverlay(): UIOverlay {
     fetchSyncBtn?.classList.add("ga-ui-btn-busy");
     btns.forEach((b) => (b.disabled = true));
 
+    // Structured run summary sent to /api/v3/sync-log (sendSyncLog below),
+    // mirroring the sync-only variant's SyncLog shape so DevOps can render
+    // the same Stop reason / Pages / Details columns for this variant too.
+    const runLog: {
+      timestamp: string;
+      mode: "incremental" | "full";
+      feed: { newGames: number; stopped: string; pages?: number };
+      details: { queued: number; succeeded: number; failed: number };
+      result: "ok" | "error";
+      lines: string[];
+    } = {
+      timestamp: new Date().toISOString(),
+      mode: opts.forceFull ? "full" : "incremental",
+      feed: { newGames: 0, stopped: "" },
+      details: { queued: 0, succeeded: 0, failed: 0 },
+      result: "error",
+      lines: fetchSyncLogLines,
+    };
+
     fetchSyncLogModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
     const setMsg = (msg: string) => {
       status.textContent = msg;
@@ -853,6 +872,7 @@ export function createUIOverlay(): UIOverlay {
           delayMs: 150,
           overlapThreshold: 5,
           onProgress: (p) => {
+            runLog.feed.pages = p.page;
             // feed: pages fill 2→28% (asymptotic so bar doesn't stall on long feeds)
             fetchSyncLogModal?.setProgress(2 + Math.min(26, p.page * 4));
             if (fetchSyncLogModal) {
@@ -865,6 +885,8 @@ export function createUIOverlay(): UIOverlay {
           },
         });
         feedNewGameIds = feedResult.newGameIds;
+        runLog.feed.newGames = feedResult.newGames;
+        runLog.feed.stopped = feedResult.stopped;
         fetchSyncLogModal?.setProgress(30);
         if (fetchSyncLogModal) setMsg(`Feed done — ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
       } catch (e: any) {
@@ -923,6 +945,9 @@ export function createUIOverlay(): UIOverlay {
           onGameEvent,
         });
         detailUpdatedGameIds = detailResult.updatedGameIds;
+        runLog.details.queued = detailResult.queued;
+        runLog.details.succeeded = detailResult.succeeded;
+        runLog.details.failed = detailResult.failed;
         fetchSyncLogModal?.setProgress(65);
         if (fetchSyncLogModal) setMsg(`Details done — ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
       } catch { /* non-fatal */ }
@@ -931,6 +956,7 @@ export function createUIOverlay(): UIOverlay {
       const touchedIds = opts.forceFull ? undefined : [...new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
       if (!opts.forceFull && touchedIds!.length === 0) {
         setMsg("Nothing to sync — no new or updated games");
+        runLog.result = "ok";
         fetchSyncLogModal?.finish(true);
         return;
       }
@@ -938,6 +964,7 @@ export function createUIOverlay(): UIOverlay {
       if (fetchSyncLogModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
 
       await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds, setProgress: (p) => fetchSyncLogModal?.setProgress(p) });
+      runLog.result = "ok";
       fetchSyncLogModal?.finish(true);
     } catch (e: any) {
       setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
@@ -947,10 +974,7 @@ export function createUIOverlay(): UIOverlay {
       // most recent run's detail for this player (overwritten every run).
       try {
         const ownPlayerId = (await getCurrentPlayerId().catch(() => null)) ?? null;
-        void sendSyncLog(
-          { timestamp: new Date().toISOString(), mode: fetchSyncForceFull ? "full" : "incremental", lines: fetchSyncLogLines.slice() },
-          ownPlayerId
-        );
+        void sendSyncLog(runLog, ownPlayerId);
       } catch { /* non-fatal */ }
       btns.forEach((b) => (b.disabled = false));
       fetchSyncBtn?.classList.remove("ga-ui-btn-busy");

@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Dev)
 // @namespace    geoanalyzr-dev
 // @author       JonasLmbt
-// @version      3.0.22-dev
+// @version      3.0.23-dev
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.dev.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -11246,8 +11246,7 @@ ${shapes}`.trim();
     const info = anyGlobal?.GM_info;
     const v = info?.script?.version;
     if (typeof v !== "string") return void 0;
-    const ns = String(info?.script?.namespace || "");
-    const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+    const variant = false ? "full" : "dev";
     return `${v} (${variant})`;
   }
   function gmPostJson(url, body, headers) {
@@ -11556,8 +11555,7 @@ ${shapes}`.trim();
     const info = globalThis?.GM_info?.script;
     const v = info?.version;
     if (typeof v !== "string") return void 0;
-    const ns = String(info?.namespace || "");
-    const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+    const variant = false ? "full" : "dev";
     return `${v} (${variant})`;
   }
   var PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
@@ -13974,6 +13972,14 @@ ${shapes}`.trim();
       fetchSyncLogLines = [];
       fetchSyncBtn?.classList.add("ga-ui-btn-busy");
       btns.forEach((b3) => b3.disabled = true);
+      const runLog = {
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        mode: opts.forceFull ? "full" : "incremental",
+        feed: { newGames: 0, stopped: "" },
+        details: { queued: 0, succeeded: 0, failed: 0 },
+        result: "error",
+        lines: fetchSyncLogLines
+      };
       fetchSyncLogModal = opts.showLog ? openSyncLogModal(opts.forceFull) : null;
       const setMsg = (msg) => {
         status.textContent = msg;
@@ -14009,6 +14015,7 @@ ${shapes}`.trim();
             delayMs: 150,
             overlapThreshold: 5,
             onProgress: (p) => {
+              runLog.feed.pages = p.page;
               fetchSyncLogModal?.setProgress(2 + Math.min(26, p.page * 4));
               if (fetchSyncLogModal) {
                 const pageNew = p.newGames - prevNewGames;
@@ -14020,6 +14027,8 @@ ${shapes}`.trim();
             }
           });
           feedNewGameIds = feedResult.newGameIds;
+          runLog.feed.newGames = feedResult.newGames;
+          runLog.feed.stopped = feedResult.stopped;
           fetchSyncLogModal?.setProgress(30);
           if (fetchSyncLogModal) setMsg(`Feed done \u2014 ${feedResult.newGames} new games, stopped: ${feedResult.stopped}`);
         } catch (e) {
@@ -14072,6 +14081,9 @@ ${shapes}`.trim();
             onGameEvent
           });
           detailUpdatedGameIds = detailResult.updatedGameIds;
+          runLog.details.queued = detailResult.queued;
+          runLog.details.succeeded = detailResult.succeeded;
+          runLog.details.failed = detailResult.failed;
           fetchSyncLogModal?.setProgress(65);
           if (fetchSyncLogModal) setMsg(`Details done \u2014 ${detailResult.succeeded} ok, ${detailResult.failed} failed, ${detailResult.permanentlySkipped} skipped`);
         } catch {
@@ -14079,12 +14091,14 @@ ${shapes}`.trim();
         const touchedIds = opts.forceFull ? void 0 : [.../* @__PURE__ */ new Set([...feedNewGameIds, ...detailUpdatedGameIds])];
         if (!opts.forceFull && touchedIds.length === 0) {
           setMsg("Nothing to sync \u2014 no new or updated games");
+          runLog.result = "ok";
           fetchSyncLogModal?.finish(true);
           return;
         }
         fetchSyncLogModal?.setProgress(67);
         if (fetchSyncLogModal && touchedIds) setMsg(`Syncing ${touchedIds.length} touched game${touchedIds.length !== 1 ? "s" : ""}...`);
         await runSyncOnce({ forceFull: opts.forceFull, allowLinking: !opts.auto, setMsg, gameIds: touchedIds, setProgress: (p) => fetchSyncLogModal?.setProgress(p) });
+        runLog.result = "ok";
         fetchSyncLogModal?.finish(true);
       } catch (e) {
         setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
@@ -14092,10 +14106,7 @@ ${shapes}`.trim();
       } finally {
         try {
           const ownPlayerId = await getCurrentPlayerId().catch(() => null) ?? null;
-          void sendSyncLog(
-            { timestamp: (/* @__PURE__ */ new Date()).toISOString(), mode: fetchSyncForceFull ? "full" : "incremental", lines: fetchSyncLogLines.slice() },
-            ownPlayerId
-          );
+          void sendSyncLog(runLog, ownPlayerId);
         } catch {
         }
         btns.forEach((b3) => b3.disabled = false);

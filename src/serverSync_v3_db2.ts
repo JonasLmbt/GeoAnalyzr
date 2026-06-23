@@ -34,8 +34,11 @@ function getUserscriptVersion(): string | undefined {
   const info = (globalThis as any)?.GM_info?.script;
   const v = info?.version;
   if (typeof v !== "string") return undefined;
-  const ns = String(info?.namespace || "");
-  const variant = ns === "geoanalyzr-sync" ? "sync" : ns === "geoanalyzr-dev" ? "dev" : "full";
+  // __GA_VARIANT__ is a build-time esbuild `define` constant (see
+  // build-release.cjs), not a runtime read of GM_info.script.namespace —
+  // some userscript managers don't reliably populate that field, which
+  // silently dropped the "(sync)"/"(dev)" suffix for some users.
+  const variant = __GA_VARIANT__ === "local" ? "full" : __GA_VARIANT__;
   return `${v} (${variant})`;
 }
 
