@@ -1,6 +1,6 @@
 import { logoSvgMarkup } from "./ui/logo";
 import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
-import { syncV3FromDb2 } from "./serverSync_v3_db2";
+import { syncV3FromDb2, sendSyncLog } from "./serverSync_v3_db2";
 import { fetchFeed, fetchFriendsFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
 import { getCurrentPlayerId } from "./app/playerIdentity";
@@ -637,13 +637,18 @@ export function createUIOverlay(): UIOverlay {
     setMsg(forceFull ? "Syncing full snapshot..." : "Syncing...");
     try {
       let settings = loadServerSyncSettings();
-      if (!settings.token) {
+      // Also force a relink when the Discord username is unknown — a token
+      // can outlive it (cleared locally, or never set by an older script
+      // version), which otherwise left the server unable to show a real
+      // player name for this user's syncs going forward.
+      const missingIdentity = !settings.token || !settings.discordUsername;
+      if (missingIdentity) {
         if (!opts.allowLinking) {
           setMsg("Not linked. Click Fetch + Sync once to link your device.");
           return;
         }
 
-        setMsg("Linking device...");
+        setMsg(settings.token ? "Re-linking device (Discord identity missing)..." : "Linking device...");
         try {
           await linkDeviceViaDiscord();
         } catch (e: any) {
@@ -938,6 +943,15 @@ export function createUIOverlay(): UIOverlay {
       setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
       fetchSyncLogModal?.finish(false);
     } finally {
+      // Best-effort: send whatever this run logged so far so DevOps has the
+      // most recent run's detail for this player (overwritten every run).
+      try {
+        const ownPlayerId = (await getCurrentPlayerId().catch(() => null)) ?? null;
+        void sendSyncLog(
+          { timestamp: new Date().toISOString(), mode: fetchSyncForceFull ? "full" : "incremental", lines: fetchSyncLogLines.slice() },
+          ownPlayerId
+        );
+      } catch { /* non-fatal */ }
       btns.forEach((b) => (b.disabled = false));
       fetchSyncBtn?.classList.remove("ga-ui-btn-busy");
       fetchSyncBusy = false;

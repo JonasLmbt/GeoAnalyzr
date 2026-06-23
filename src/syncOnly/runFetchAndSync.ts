@@ -3,7 +3,7 @@ import { fetchDetails } from "../detailFetcher_v2";
 import { getCurrentPlayerId } from "../app/playerIdentity";
 import { syncClassicToServer, syncClassicToServerV3 } from "../serverSync_v2";
 import { loadServerSyncSettings } from "../serverSync";
-import { syncV3FromDb2, syncPlayerProfiles } from "../serverSync_v3_db2";
+import { syncV3FromDb2, syncPlayerProfiles, sendSyncLog } from "../serverSync_v3_db2";
 import { isMigrationNeeded, migrateV1ToV2 } from "../migration_v1_to_v2";
 import { linkDeviceViaDiscord } from "./linkDevice";
 
@@ -69,9 +69,14 @@ export async function runFetchAndSync(opts: {
   };
   currentLog = log;
 
+  // Resolved once and reused so every outcome (success or early failure) can
+  // be attributed to the right player when the log is sent to the server.
+  const ownPlayerId = (await getCurrentPlayerId().catch(() => null)) ?? null;
+
   const fail = (message: string, hint?: string): { ok: false; message: string; hint?: string; log: SyncLog } => {
     log.result = "error";
     log.message = message;
+    void sendSyncLog(log, ownPlayerId);
     return { ok: false, message, hint, log };
   };
 
@@ -147,11 +152,17 @@ export async function runFetchAndSync(opts: {
   const hasNewGames = opts.forceFull || touchedIds!.length > 0;
 
   let settings = loadServerSyncSettings();
-  if (!settings.token) {
+  // Force a fresh Discord link whenever the local identity is unknown — not
+  // just when the token itself is missing. A token can outlive its Discord
+  // username (e.g. cleared locally, or never set by an older script
+  // version), which otherwise left the server unable to show a real player
+  // name for this user's syncs going forward.
+  const missingIdentity = !settings.token || !settings.discordUsername;
+  if (missingIdentity) {
     if (!opts.ensureLinked) {
       return fail("Missing sync token. Click to link device.", "Click the button to link your device (Discord), then try again.");
     }
-    opts.setStatus("Linking device...");
+    opts.setStatus(settings.token ? "Re-linking device (Discord identity missing)..." : "Linking device...");
     await linkDeviceViaDiscord();
     settings = loadServerSyncSettings();
   }
@@ -221,6 +232,7 @@ export async function runFetchAndSync(opts: {
   const message = `${label} — ${parts.join(", ")}`;
   log.result = "ok";
   log.message = message;
+  void sendSyncLog(log, ownPlayerId);
   return { ok: true, message, log };
 }
 

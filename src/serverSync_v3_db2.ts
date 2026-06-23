@@ -166,6 +166,27 @@ async function postBatch(url: string, token: string, payload: Record<string, any
   throw new Error("HTTP 502 (after retries)");
 }
 
+/**
+ * Sends the full rich run log (the same object the mini-button's
+ * Ctrl+click download offers) to the server, which overwrites
+ * players.lastSyncLogJson for ownPlayerId — so DevOps always has the most
+ * recent run's full detail, not just the sparse per-batch jsonl lines.
+ * Best-effort: failures here must never fail the overall sync run.
+ */
+export async function sendSyncLog(log: unknown, ownPlayerId: string | null): Promise<void> {
+  try {
+    const settings = loadServerSyncSettings();
+    if (!settings.token) return;
+    const syncUrl = deriveV3SyncUrl(settings.endpointUrl);
+    if (!syncUrl) return;
+    const url = syncUrl.replace(/\/sync$/, "/sync-log");
+    const body = JSON.stringify({ ownPlayerId: ownPlayerId || undefined, log });
+    await gmPost(url, body, settings.token);
+  } catch {
+    // best-effort — never let log delivery break the sync run
+  }
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -492,7 +513,7 @@ export async function syncV3FromDb2(opts: {
       }));
       console.log("[v3sync] standard_games", stdGameRows.length);
       for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
-        await postBatch(url, settings.token, { standard_games: batch });
+        await postBatch(url, settings.token, { standard_games: batch, ownPlayerId: ownPlayerId || undefined });
         totalCounts.standard_games += batch.length;
       }
       if (classicGames.length > 0) {
@@ -507,26 +528,26 @@ export async function syncV3FromDb2(opts: {
         }));
         console.log("[v3sync] standard_rounds", stdRoundRows.length);
         for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
-          await postBatch(url, settings.token, { standard_rounds: batch });
+          await postBatch(url, settings.token, { standard_rounds: batch, ownPlayerId: ownPlayerId || undefined });
           totalCounts.standard_rounds += batch.length;
         }
       }
     }
 
     for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
-      await postBatch(url, settings.token, { duel_games: batch });
+      await postBatch(url, settings.token, { duel_games: batch, ownPlayerId: ownPlayerId || undefined });
       totalCounts.duel_games += batch.length;
     }
     for (const batch of chunk(duelRoundRows, BATCH_SIZE)) {
-      await postBatch(url, settings.token, { duel_rounds: batch });
+      await postBatch(url, settings.token, { duel_rounds: batch, ownPlayerId: ownPlayerId || undefined });
       totalCounts.duel_rounds += batch.length;
     }
     for (const batch of chunk(tdGameRows, BATCH_SIZE)) {
-      await postBatch(url, settings.token, { team_duel_games: batch });
+      await postBatch(url, settings.token, { team_duel_games: batch, ownPlayerId: ownPlayerId || undefined });
       totalCounts.team_duel_games += batch.length;
     }
     for (const batch of chunk(tdRoundRows, BATCH_SIZE)) {
-      await postBatch(url, settings.token, { team_duel_rounds: batch });
+      await postBatch(url, settings.token, { team_duel_rounds: batch, ownPlayerId: ownPlayerId || undefined });
       totalCounts.team_duel_rounds += batch.length;
     }
   } catch (e) {

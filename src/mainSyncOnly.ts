@@ -136,7 +136,10 @@ const ui = createSyncMiniButton({
     }
 
     const settings = loadServerSyncSettings();
-    const ensureLinked = !settings.token; // click can open linking tab when token missing
+    // Also force a relink when the Discord username is unknown (token can
+    // outlive it) — a user click carries a gesture, so the linking popup
+    // won't be blocked here.
+    const ensureLinked = !settings.token || !settings.discordUsername;
     await runOnce(ui, { forceFull, ensureLinked, showHints: true, downloadLog: wantLog });
   },
   onContextMenu: async () => {
@@ -172,6 +175,14 @@ window.setTimeout(() => {
     if (!settings.token) {
       ui.setState("needs_link");
       ui.setTitle("GeoAnalyzr Sync - Click to link device (or right-click to relink)");
+      return;
+    }
+    if (!settings.discordUsername) {
+      // Token exists but Discord identity is unknown — don't attempt a
+      // silent popup here (auto-run is popup-free by design); surface the
+      // need to relink instead and wait for a user-gesture click.
+      ui.setState("needs_link");
+      ui.setTitle("GeoAnalyzr Sync - Click to (re)link device (Discord identity missing)");
       return;
     }
     ui.setTitle(`GeoAnalyzr Sync${linkedSuffix()} (right-click to relink)`);

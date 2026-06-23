@@ -11659,6 +11659,18 @@ ${shapes}`.trim();
     }
     throw new Error("HTTP 502 (after retries)");
   }
+  async function sendSyncLog(log, ownPlayerId) {
+    try {
+      const settings = loadServerSyncSettings();
+      if (!settings.token) return;
+      const syncUrl = deriveV3SyncUrl(settings.endpointUrl);
+      if (!syncUrl) return;
+      const url = syncUrl.replace(/\/sync$/, "/sync-log");
+      const body = JSON.stringify({ ownPlayerId: ownPlayerId || void 0, log });
+      await gmPost(url, body, settings.token);
+    } catch {
+    }
+  }
   function chunk(arr, size) {
     const out = [];
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
@@ -11905,6 +11917,29 @@ ${shapes}`.trim();
       }
     }
     try {
+      const profileIds = ownPlayerId ? [ownPlayerId] : [];
+      const profileMap = await fetchPlayerProfiles(profileIds);
+      for (const [playerId, entry] of playerMap) {
+        const p = profileMap.get(playerId);
+        if (!p) continue;
+        entry.currentRating = p.currentRating ?? null;
+        entry.currentDivision = p.currentDivision ?? null;
+        entry.currentLevel = p.currentLevel ?? null;
+        entry.geoCreatedAt = p.geoCreatedAt ?? null;
+        entry.isBanned = p.isBanned ? 1 : 0;
+        entry.clubTag = p.clubTag ?? null;
+        entry.streakProgress = p.streakProgress != null ? JSON.stringify(p.streakProgress) : null;
+        entry.profileFetchedAt = p.fetchedAt;
+      }
+      const players = Array.from(playerMap.values());
+      console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
+      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
+        await postBatch(url, settings.token, { players: batch, ownPlayerId: ownPlayerId || void 0 });
+        totalCounts.players += batch.length;
+      }
+      if (players.length === 0) {
+        await postBatch(url, settings.token, { players: [], ownPlayerId: ownPlayerId || void 0 });
+      }
       if (ownPlayerId) {
         const stdGameRows = classicGames.map((g) => ({
           gameId: g.gameId,
@@ -11922,7 +11957,7 @@ ${shapes}`.trim();
         }));
         console.log("[v3sync] standard_games", stdGameRows.length);
         for (const batch of chunk(stdGameRows, BATCH_SIZE)) {
-          await postBatch(url, settings.token, { standard_games: batch });
+          await postBatch(url, settings.token, { standard_games: batch, ownPlayerId: ownPlayerId || void 0 });
           totalCounts.standard_games += batch.length;
         }
         if (classicGames.length > 0) {
@@ -11951,48 +11986,25 @@ ${shapes}`.trim();
           }));
           console.log("[v3sync] standard_rounds", stdRoundRows.length);
           for (const batch of chunk(stdRoundRows, BATCH_SIZE)) {
-            await postBatch(url, settings.token, { standard_rounds: batch });
+            await postBatch(url, settings.token, { standard_rounds: batch, ownPlayerId: ownPlayerId || void 0 });
             totalCounts.standard_rounds += batch.length;
           }
         }
       }
-      const profileIds = ownPlayerId ? [ownPlayerId] : [];
-      const profileMap = await fetchPlayerProfiles(profileIds);
-      for (const [playerId, entry] of playerMap) {
-        const p = profileMap.get(playerId);
-        if (!p) continue;
-        entry.currentRating = p.currentRating ?? null;
-        entry.currentDivision = p.currentDivision ?? null;
-        entry.currentLevel = p.currentLevel ?? null;
-        entry.geoCreatedAt = p.geoCreatedAt ?? null;
-        entry.isBanned = p.isBanned ? 1 : 0;
-        entry.clubTag = p.clubTag ?? null;
-        entry.streakProgress = p.streakProgress != null ? JSON.stringify(p.streakProgress) : null;
-        entry.profileFetchedAt = p.fetchedAt;
-      }
-      const players = Array.from(playerMap.values());
-      console.log("[v3sync] players", players.length, "duel_games", duelGameRows.length, "duel_rounds", duelRoundRows.length, "td_games", tdGameRows.length, "td_rounds", tdRoundRows.length);
-      for (const batch of chunk(players.length > 0 ? players : [], BATCH_SIZE)) {
-        await postBatch(url, settings.token, { players: batch, ownPlayerId: ownPlayerId || void 0 });
-        totalCounts.players += batch.length;
-      }
-      if (players.length === 0) {
-        await postBatch(url, settings.token, { players: [], ownPlayerId: ownPlayerId || void 0 });
-      }
       for (const batch of chunk(duelGameRows, BATCH_SIZE)) {
-        await postBatch(url, settings.token, { duel_games: batch });
+        await postBatch(url, settings.token, { duel_games: batch, ownPlayerId: ownPlayerId || void 0 });
         totalCounts.duel_games += batch.length;
       }
       for (const batch of chunk(duelRoundRows, BATCH_SIZE)) {
-        await postBatch(url, settings.token, { duel_rounds: batch });
+        await postBatch(url, settings.token, { duel_rounds: batch, ownPlayerId: ownPlayerId || void 0 });
         totalCounts.duel_rounds += batch.length;
       }
       for (const batch of chunk(tdGameRows, BATCH_SIZE)) {
-        await postBatch(url, settings.token, { team_duel_games: batch });
+        await postBatch(url, settings.token, { team_duel_games: batch, ownPlayerId: ownPlayerId || void 0 });
         totalCounts.team_duel_games += batch.length;
       }
       for (const batch of chunk(tdRoundRows, BATCH_SIZE)) {
-        await postBatch(url, settings.token, { team_duel_rounds: batch });
+        await postBatch(url, settings.token, { team_duel_rounds: batch, ownPlayerId: ownPlayerId || void 0 });
         totalCounts.team_duel_rounds += batch.length;
       }
     } catch (e) {
@@ -13803,12 +13815,13 @@ ${shapes}`.trim();
       setMsg(forceFull ? "Syncing full snapshot..." : "Syncing...");
       try {
         let settings = loadServerSyncSettings();
-        if (!settings.token) {
+        const missingIdentity = !settings.token || !settings.discordUsername;
+        if (missingIdentity) {
           if (!opts.allowLinking) {
             setMsg("Not linked. Click Fetch + Sync once to link your device.");
             return;
           }
-          setMsg("Linking device...");
+          setMsg(settings.token ? "Re-linking device (Discord identity missing)..." : "Linking device...");
           try {
             await linkDeviceViaDiscord();
           } catch (e) {
@@ -14072,6 +14085,14 @@ ${shapes}`.trim();
         setMsg(`Error: ${e instanceof Error ? e.message : String(e)}`);
         fetchSyncLogModal?.finish(false);
       } finally {
+        try {
+          const ownPlayerId = await getCurrentPlayerId().catch(() => null) ?? null;
+          void sendSyncLog(
+            { timestamp: (/* @__PURE__ */ new Date()).toISOString(), mode: fetchSyncForceFull ? "full" : "incremental", lines: fetchSyncLogLines.slice() },
+            ownPlayerId
+          );
+        } catch {
+        }
         btns.forEach((b3) => b3.disabled = false);
         fetchSyncBtn?.classList.remove("ga-ui-btn-busy");
         fetchSyncBusy = false;
