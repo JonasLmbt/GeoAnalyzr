@@ -26,6 +26,47 @@ function uc(v: unknown): string | null {
   return x || null;
 }
 
+// db_v2 (the legacy sync-only IndexedDB) stores country fields as full English
+// names (e.g. "Russia"), not ISO2 — see detailFetcher_v2.ts's iso2ToName(). The
+// v3 server schema is ISO2-only, so anything synced through this path without
+// converting back produced two divergent rows for the same country ("RU" vs
+// "RUSSIA") everywhere a country is grouped/compared (Country Insight, hit
+// rate). Build the reverse (name -> ISO2) map once, lazily, from the same
+// Intl.DisplayNames source used to create the names in the first place.
+const COUNTRY_NAME_ALIASES: Record<string, string> = {
+  "FALKLAND ISLANDS (ISLAS MALVINAS)": "FK",
+  "HONG KONG": "HK",
+  "HONG KONG SAR": "HK",
+  "KOREA": "KR",
+  "MACAO": "MO",
+  "PALESTINE": "PS",
+  "PALESTINIAN AUTHORITY": "PS",
+};
+
+const ISO2_REGION_CODES = [
+  "AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW",
+];
+
+const _nameToIso2: Map<string, string> = (() => {
+  const map = new Map<string, string>();
+  try {
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    for (const c of ISO2_REGION_CODES) {
+      const name = dn.of(c);
+      if (name) map.set(name.toUpperCase(), c);
+    }
+  } catch { /* Intl.DisplayNames unavailable — fall back to passthrough below */ }
+  for (const [name, code] of Object.entries(COUNTRY_NAME_ALIASES)) map.set(name, code);
+  return map;
+})();
+
+function ucCountry(v: unknown): string | null {
+  const x = uc(v);
+  if (!x) return null;
+  if (/^[A-Z]{2}$/.test(x)) return x; // already ISO2
+  return _nameToIso2.get(x) ?? x; // full name -> ISO2, else pass through unchanged
+}
+
 function rDelta(after: number | undefined, before: number | undefined): number | null {
   return after != null && before != null ? after - before : null;
 }
@@ -376,7 +417,7 @@ export async function syncV3FromDb2(opts: {
         panoId: r.panoId ?? null,
         trueLat: n(r.trueLat),
         trueLng: n(r.trueLng),
-        trueCountry: uc(r.trueCountry),
+        trueCountry: ucCountry(r.trueCountry),
         trueHeading: n(r.trueHeadingDeg),
         truePitch: n(r.truePitch),
         trueZoom: n(r.trueZoom),
@@ -386,7 +427,7 @@ export async function syncV3FromDb2(opts: {
         damageMultiplier: n(r.damageMultiplier),
         p1_lat: n(r.p1Lat),
         p1_lng: n(r.p1Lng),
-        p1_country: uc(r.p1Country),
+        p1_country: ucCountry(r.p1Country),
         p1_score: n(r.p1Score),
         p1_distanceKm: n(r.p1Distance),
         p1_timeSec: n(r.p1TimeSec),
@@ -397,7 +438,7 @@ export async function syncV3FromDb2(opts: {
         p1_isBestGuess: 0,
         p2_lat: n(r.p2Lat),
         p2_lng: n(r.p2Lng),
-        p2_country: uc(r.p2Country),
+        p2_country: ucCountry(r.p2Country),
         p2_score: n(r.p2Score),
         p2_distanceKm: n(r.p2Distance),
         p2_timeSec: n(r.p2TimeSec),
@@ -415,7 +456,7 @@ export async function syncV3FromDb2(opts: {
         panoId: r.panoId ?? null,
         trueLat: n(r.trueLat),
         trueLng: n(r.trueLng),
-        trueCountry: uc(r.trueCountry),
+        trueCountry: ucCountry(r.trueCountry),
         trueHeading: n(r.trueHeadingDeg),
         truePitch: n(r.truePitch),
         trueZoom: n(r.trueZoom),
@@ -425,7 +466,7 @@ export async function syncV3FromDb2(opts: {
         damageMultiplier: n(r.damageMultiplier),
         p1_lat: n(r.p1Lat),
         p1_lng: n(r.p1Lng),
-        p1_country: uc(r.p1Country),
+        p1_country: ucCountry(r.p1Country),
         p1_score: n(r.p1Score),
         p1_distanceKm: n(r.p1Distance),
         p1_timeSec: n(r.p1TimeSec),
@@ -433,7 +474,7 @@ export async function syncV3FromDb2(opts: {
         p1_isBestGuess: r.p1IsBetterGuess ? 1 : 0,
         p2_lat: n(r.p2Lat),
         p2_lng: n(r.p2Lng),
-        p2_country: uc(r.p2Country),
+        p2_country: ucCountry(r.p2Country),
         p2_score: n(r.p2Score),
         p2_distanceKm: n(r.p2Distance),
         p2_timeSec: n(r.p2TimeSec),
@@ -441,7 +482,7 @@ export async function syncV3FromDb2(opts: {
         p2_isBestGuess: r.p2IsBetterGuess ? 1 : 0,
         p3_lat: n(r.p3Lat),
         p3_lng: n(r.p3Lng),
-        p3_country: uc(r.p3Country),
+        p3_country: ucCountry(r.p3Country),
         p3_score: n(r.p3Score),
         p3_distanceKm: n(r.p3Distance),
         p3_timeSec: n(r.p3TimeSec),
@@ -449,7 +490,7 @@ export async function syncV3FromDb2(opts: {
         p3_isBestGuess: r.p3IsBetterGuess ? 1 : 0,
         p4_lat: n(r.p4Lat),
         p4_lng: n(r.p4Lng),
-        p4_country: uc(r.p4Country),
+        p4_country: ucCountry(r.p4Country),
         p4_score: n(r.p4Score),
         p4_distanceKm: n(r.p4Distance),
         p4_timeSec: n(r.p4TimeSec),
@@ -524,8 +565,8 @@ export async function syncV3FromDb2(opts: {
         const classicRounds: ClassicRoundRow[] = await dbV2.classicRounds.where("gameId").anyOf(stdGameIds).toArray();
         const stdRoundRows: any[] = classicRounds.map((r) => ({
           gameId: r.gameId, roundNumber: r.roundNumber, panoId: r.panoId ?? null,
-          trueLat: n(r.trueLat), trueLng: n(r.trueLng), trueCountry: uc(r.trueCountry), trueHeading: n(r.trueHeadingDeg),
-          truePitch: n(r.truePitch), trueZoom: n(r.trueZoom), p1_lat: n(r.selfLat), p1_lng: n(r.selfLng), p1_country: uc(r.selfCountry),
+          trueLat: n(r.trueLat), trueLng: n(r.trueLng), trueCountry: ucCountry(r.trueCountry), trueHeading: n(r.trueHeadingDeg),
+          truePitch: n(r.truePitch), trueZoom: n(r.trueZoom), p1_lat: n(r.selfLat), p1_lng: n(r.selfLng), p1_country: ucCountry(r.selfCountry),
           p1_score: n(r.selfScore), p1_distanceKm: n(r.selfDistance), p1_timeSec: n(r.selfTimeSec), p1_steps: n(r.selfSteps),
           timedOut: r.timedOut ? 1 : 0, skippedRound: r.skippedRound ? 1 : 0, playedAt: r.playedAt ?? null,
         }));
