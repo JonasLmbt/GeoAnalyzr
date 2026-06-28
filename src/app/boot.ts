@@ -1,6 +1,6 @@
 import { createUIOverlay } from "../uiOverlay";
-import { loadServerSyncSettings, runServerSyncOnceWithOptions } from "../serverSync";
-import { loadFetchGameFilter } from "../fetchGameFilter";
+import { loadServerSyncSettings } from "../serverSync";
+import { syncV3FromDb2 } from "../serverSync_v3_db2";
 import { registerUiActions, refreshUI } from "./uiActions";
 import { watchRoutes } from "./routing";
 
@@ -35,27 +35,18 @@ export async function bootApp(): Promise<void> {
           if (!settings.token) return; // not linked => do not sync
 
           ui.setStatus("Auto-syncing...");
-          const isSyncVariant = __GA_VARIANT__ === "sync";
-          const f = isSyncVariant ? loadFetchGameFilter() : null;
-          const res = await runServerSyncOnceWithOptions(
-            settings,
-            isSyncVariant
-              ? {
-                  forceFull: false,
-                  filterModeFamily: f?.modeFamily,
-                  filterMovementAnyOf: f?.movementAnyOf,
-                  filterRated: f?.rated,
-                  filterFromMs: f?.fromMs,
-                  filterToMs: f?.toMs
-                }
-              : { forceFull: false }
-          );
+          // All variants talk to the v3 endpoint now -- the previous
+          // runServerSyncOnceWithOptions() call posted a gzip delta blob
+          // that /api/v3/sync can't parse, so auto-sync silently uploaded
+          // nothing for every user regardless of variant.
+          const res = await syncV3FromDb2({ forceFull: false });
 
           if (res.ok) {
-            const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-            ui.setStatus(`Auto-sync OK - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB (gz)`);
+            const c = res.counts;
+            const rowsTotal = (c?.duel_games ?? 0) + (c?.team_duel_games ?? 0) + (c?.standard_games ?? 0);
+            ui.setStatus(`Auto-sync OK - games ${rowsTotal}`);
           } else {
-            ui.setStatus(`Auto-sync failed (HTTP ${res.status})`);
+            ui.setStatus(`Auto-sync failed: ${res.error ?? "unknown"}`);
           }
         } catch {
           // ignore (never block the UI on auto-run)

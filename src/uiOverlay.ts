@@ -1,5 +1,5 @@
 import { logoSvgMarkup } from "./ui/logo";
-import { loadServerSyncSettings, runServerSyncOnceWithOptions, runServerUnsync, saveServerSyncSettings } from "./serverSync";
+import { loadServerSyncSettings, runServerUnsync, saveServerSyncSettings } from "./serverSync";
 import { syncV3FromDb2, sendSyncLog } from "./serverSync_v3_db2";
 import { fetchFeed, fetchFriendsFeed } from "./feedFetcher_v2";
 import { fetchDetails, DetailGameEvent } from "./detailFetcher_v2";
@@ -320,18 +320,6 @@ export function createUIOverlay(): UIOverlay {
   const getUserscriptVersion = (): string | undefined => {
     const v = (globalThis as any)?.GM_info?.script?.version;
     return typeof v === "string" ? v : undefined;
-  };
-
-  const formatBytes = (n: number): string => {
-    if (!Number.isFinite(n) || n <= 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB"];
-    let v = n;
-    let i = 0;
-    while (v >= 1024 && i < units.length - 1) {
-      v /= 1024;
-      i++;
-    }
-    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
   };
 
   const mount = () => {
@@ -659,29 +647,19 @@ export function createUIOverlay(): UIOverlay {
         }
         settings = loadServerSyncSettings();
       }
-      if (isSyncVariant) {
-        const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
-        if (r.ok) {
-          setMsg(`Synced — players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
-        } else {
-          setMsg(`Sync failed: ${r.error ?? "unknown"}`);
-        }
+      // All variants (sync / dev / local-full) talk to the v3 endpoint --
+      // the legacy runServerSyncOnceWithOptions() path posted a gzip delta
+      // blob that /api/v3/sync can't parse, so it silently synced nothing
+      // for the "full" variant and for every auto-sync (see boot.ts).
+      const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
+      if (r.ok) {
+        setMsg(`Synced — players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
       } else {
-        const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-        const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-        const modeLabel = forceFull ? "Synced full" : "Synced";
-        const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-        if (res.ok) {
-          setMsg(`${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`);
+        const errMsg = r.error ?? "unknown";
+        if (/^(401|403)$/.test(errMsg) || /HTTP (401|403)/.test(errMsg)) {
+          setMsg(`Sync failed (${errMsg}) - token invalid/expired. Re-link your device and try again.`);
         } else {
-          const size = formatBytes(res.bytesGzip);
-          if (res.status === 413) {
-            setMsg(`Sync failed (HTTP 413) - payload ${size}. Try Compact mode or narrow Sync filters.`);
-          } else if (res.status === 401 || res.status === 403) {
-            setMsg(`Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`);
-          } else {
-            setMsg(`Sync failed (HTTP ${res.status})`);
-          }
+          setMsg(`Sync failed: ${errMsg}`);
         }
       }
     } catch (e: any) {

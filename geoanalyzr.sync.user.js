@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr (Minimal)
 // @namespace    geoanalyzr-sync
 // @author       JonasLmbt
-// @version      3.0.23
+// @version      3.0.24
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.sync.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -3783,8 +3783,8 @@
         function verifyInstalledSchema(db2, tmpTrans) {
           var installedSchema = buildGlobalSchema(db2, db2.idbdb, tmpTrans);
           var diff = getSchemaDiff(installedSchema, db2._dbSchema);
-          return !(diff.add.length || diff.change.some(function(ch3) {
-            return ch3.add.length || ch3.change.length;
+          return !(diff.add.length || diff.change.some(function(ch) {
+            return ch.add.length || ch.change.length;
           }));
         }
         function adjustToExistingIndexNames(db2, schema, idbtrans) {
@@ -6819,24 +6819,6 @@ ${shapes}`.trim();
   }
 
   // node_modules/fflate/esm/browser.js
-  var ch2 = {};
-  var wk = (function(c, id, msg, transfer, cb) {
-    var w = new Worker(ch2[id] || (ch2[id] = URL.createObjectURL(new Blob([
-      c + ';addEventListener("error",function(e){e=e.error;postMessage({$e$:[e.message,e.code,e.stack]})})'
-    ], { type: "text/javascript" }))));
-    w.onmessage = function(e) {
-      var d = e.data, ed = d.$e$;
-      if (ed) {
-        var err2 = new Error(ed[0]);
-        err2["code"] = ed[1];
-        err2.stack = ed[2];
-        cb(err2, null);
-      } else
-        cb(null, d);
-    };
-    w.postMessage(msg, transfer);
-    return w;
-  });
   var u8 = Uint8Array;
   var u16 = Uint16Array;
   var i32 = Int32Array;
@@ -6994,9 +6976,7 @@ ${shapes}`.trim();
   for (i = 0; i < 32; ++i)
     fdt[i] = 5;
   var i;
-  var flm = /* @__PURE__ */ hMap(flt, 9, 0);
   var flrm = /* @__PURE__ */ hMap(flt, 9, 1);
-  var fdm = /* @__PURE__ */ hMap(fdt, 5, 0);
   var fdrm = /* @__PURE__ */ hMap(fdt, 5, 1);
   var max = function(a) {
     var m = a[0];
@@ -7191,417 +7171,7 @@ ${shapes}`.trim();
     } while (!final);
     return bt != buf.length && noBuf ? slc(buf, 0, bt) : buf.subarray(0, bt);
   };
-  var wbits = function(d, p, v) {
-    v <<= p & 7;
-    var o = p / 8 | 0;
-    d[o] |= v;
-    d[o + 1] |= v >> 8;
-  };
-  var wbits16 = function(d, p, v) {
-    v <<= p & 7;
-    var o = p / 8 | 0;
-    d[o] |= v;
-    d[o + 1] |= v >> 8;
-    d[o + 2] |= v >> 16;
-  };
-  var hTree = function(d, mb) {
-    var t = [];
-    for (var i = 0; i < d.length; ++i) {
-      if (d[i])
-        t.push({ s: i, f: d[i] });
-    }
-    var s = t.length;
-    var t2 = t.slice();
-    if (!s)
-      return { t: et, l: 0 };
-    if (s == 1) {
-      var v = new u8(t[0].s + 1);
-      v[t[0].s] = 1;
-      return { t: v, l: 1 };
-    }
-    t.sort(function(a, b3) {
-      return a.f - b3.f;
-    });
-    t.push({ s: -1, f: 25001 });
-    var l = t[0], r = t[1], i0 = 0, i1 = 1, i2 = 2;
-    t[0] = { s: -1, f: l.f + r.f, l, r };
-    while (i1 != s - 1) {
-      l = t[t[i0].f < t[i2].f ? i0++ : i2++];
-      r = t[i0 != i1 && t[i0].f < t[i2].f ? i0++ : i2++];
-      t[i1++] = { s: -1, f: l.f + r.f, l, r };
-    }
-    var maxSym = t2[0].s;
-    for (var i = 1; i < s; ++i) {
-      if (t2[i].s > maxSym)
-        maxSym = t2[i].s;
-    }
-    var tr = new u16(maxSym + 1);
-    var mbt = ln(t[i1 - 1], tr, 0);
-    if (mbt > mb) {
-      var i = 0, dt = 0;
-      var lft = mbt - mb, cst = 1 << lft;
-      t2.sort(function(a, b3) {
-        return tr[b3.s] - tr[a.s] || a.f - b3.f;
-      });
-      for (; i < s; ++i) {
-        var i2_1 = t2[i].s;
-        if (tr[i2_1] > mb) {
-          dt += cst - (1 << mbt - tr[i2_1]);
-          tr[i2_1] = mb;
-        } else
-          break;
-      }
-      dt >>= lft;
-      while (dt > 0) {
-        var i2_2 = t2[i].s;
-        if (tr[i2_2] < mb)
-          dt -= 1 << mb - tr[i2_2]++ - 1;
-        else
-          ++i;
-      }
-      for (; i >= 0 && dt; --i) {
-        var i2_3 = t2[i].s;
-        if (tr[i2_3] == mb) {
-          --tr[i2_3];
-          ++dt;
-        }
-      }
-      mbt = mb;
-    }
-    return { t: new u8(tr), l: mbt };
-  };
-  var ln = function(n3, l, d) {
-    return n3.s == -1 ? Math.max(ln(n3.l, l, d + 1), ln(n3.r, l, d + 1)) : l[n3.s] = d;
-  };
-  var lc = function(c) {
-    var s = c.length;
-    while (s && !c[--s])
-      ;
-    var cl = new u16(++s);
-    var cli = 0, cln = c[0], cls = 1;
-    var w = function(v) {
-      cl[cli++] = v;
-    };
-    for (var i = 1; i <= s; ++i) {
-      if (c[i] == cln && i != s)
-        ++cls;
-      else {
-        if (!cln && cls > 2) {
-          for (; cls > 138; cls -= 138)
-            w(32754);
-          if (cls > 2) {
-            w(cls > 10 ? cls - 11 << 5 | 28690 : cls - 3 << 5 | 12305);
-            cls = 0;
-          }
-        } else if (cls > 3) {
-          w(cln), --cls;
-          for (; cls > 6; cls -= 6)
-            w(8304);
-          if (cls > 2)
-            w(cls - 3 << 5 | 8208), cls = 0;
-        }
-        while (cls--)
-          w(cln);
-        cls = 1;
-        cln = c[i];
-      }
-    }
-    return { c: cl.subarray(0, cli), n: s };
-  };
-  var clen = function(cf, cl) {
-    var l = 0;
-    for (var i = 0; i < cl.length; ++i)
-      l += cf[i] * cl[i];
-    return l;
-  };
-  var wfblk = function(out, pos, dat) {
-    var s = dat.length;
-    var o = shft(pos + 2);
-    out[o] = s & 255;
-    out[o + 1] = s >> 8;
-    out[o + 2] = out[o] ^ 255;
-    out[o + 3] = out[o + 1] ^ 255;
-    for (var i = 0; i < s; ++i)
-      out[o + i + 4] = dat[i];
-    return (o + 4 + s) * 8;
-  };
-  var wblk = function(dat, out, final, syms, lf, df, eb, li, bs, bl, p) {
-    wbits(out, p++, final);
-    ++lf[256];
-    var _a2 = hTree(lf, 15), dlt = _a2.t, mlb = _a2.l;
-    var _b2 = hTree(df, 15), ddt = _b2.t, mdb = _b2.l;
-    var _c = lc(dlt), lclt = _c.c, nlc = _c.n;
-    var _d = lc(ddt), lcdt = _d.c, ndc = _d.n;
-    var lcfreq = new u16(19);
-    for (var i = 0; i < lclt.length; ++i)
-      ++lcfreq[lclt[i] & 31];
-    for (var i = 0; i < lcdt.length; ++i)
-      ++lcfreq[lcdt[i] & 31];
-    var _e = hTree(lcfreq, 7), lct = _e.t, mlcb = _e.l;
-    var nlcc = 19;
-    for (; nlcc > 4 && !lct[clim[nlcc - 1]]; --nlcc)
-      ;
-    var flen = bl + 5 << 3;
-    var ftlen = clen(lf, flt) + clen(df, fdt) + eb;
-    var dtlen = clen(lf, dlt) + clen(df, ddt) + eb + 14 + 3 * nlcc + clen(lcfreq, lct) + 2 * lcfreq[16] + 3 * lcfreq[17] + 7 * lcfreq[18];
-    if (bs >= 0 && flen <= ftlen && flen <= dtlen)
-      return wfblk(out, p, dat.subarray(bs, bs + bl));
-    var lm, ll, dm, dl;
-    wbits(out, p, 1 + (dtlen < ftlen)), p += 2;
-    if (dtlen < ftlen) {
-      lm = hMap(dlt, mlb, 0), ll = dlt, dm = hMap(ddt, mdb, 0), dl = ddt;
-      var llm = hMap(lct, mlcb, 0);
-      wbits(out, p, nlc - 257);
-      wbits(out, p + 5, ndc - 1);
-      wbits(out, p + 10, nlcc - 4);
-      p += 14;
-      for (var i = 0; i < nlcc; ++i)
-        wbits(out, p + 3 * i, lct[clim[i]]);
-      p += 3 * nlcc;
-      var lcts = [lclt, lcdt];
-      for (var it = 0; it < 2; ++it) {
-        var clct = lcts[it];
-        for (var i = 0; i < clct.length; ++i) {
-          var len = clct[i] & 31;
-          wbits(out, p, llm[len]), p += lct[len];
-          if (len > 15)
-            wbits(out, p, clct[i] >> 5 & 127), p += clct[i] >> 12;
-        }
-      }
-    } else {
-      lm = flm, ll = flt, dm = fdm, dl = fdt;
-    }
-    for (var i = 0; i < li; ++i) {
-      var sym = syms[i];
-      if (sym > 255) {
-        var len = sym >> 18 & 31;
-        wbits16(out, p, lm[len + 257]), p += ll[len + 257];
-        if (len > 7)
-          wbits(out, p, sym >> 23 & 31), p += fleb[len];
-        var dst = sym & 31;
-        wbits16(out, p, dm[dst]), p += dl[dst];
-        if (dst > 3)
-          wbits16(out, p, sym >> 5 & 8191), p += fdeb[dst];
-      } else {
-        wbits16(out, p, lm[sym]), p += ll[sym];
-      }
-    }
-    wbits16(out, p, lm[256]);
-    return p + ll[256];
-  };
-  var deo = /* @__PURE__ */ new i32([65540, 131080, 131088, 131104, 262176, 1048704, 1048832, 2114560, 2117632]);
   var et = /* @__PURE__ */ new u8(0);
-  var dflt = function(dat, lvl, plvl, pre, post, st) {
-    var s = st.z || dat.length;
-    var o = new u8(pre + s + 5 * (1 + Math.ceil(s / 7e3)) + post);
-    var w = o.subarray(pre, o.length - post);
-    var lst = st.l;
-    var pos = (st.r || 0) & 7;
-    if (lvl) {
-      if (pos)
-        w[0] = st.r >> 3;
-      var opt = deo[lvl - 1];
-      var n3 = opt >> 13, c = opt & 8191;
-      var msk_1 = (1 << plvl) - 1;
-      var prev = st.p || new u16(32768), head = st.h || new u16(msk_1 + 1);
-      var bs1_1 = Math.ceil(plvl / 3), bs2_1 = 2 * bs1_1;
-      var hsh = function(i2) {
-        return (dat[i2] ^ dat[i2 + 1] << bs1_1 ^ dat[i2 + 2] << bs2_1) & msk_1;
-      };
-      var syms = new i32(25e3);
-      var lf = new u16(288), df = new u16(32);
-      var lc_1 = 0, eb = 0, i = st.i || 0, li = 0, wi = st.w || 0, bs = 0;
-      for (; i + 2 < s; ++i) {
-        var hv = hsh(i);
-        var imod = i & 32767, pimod = head[hv];
-        prev[imod] = pimod;
-        head[hv] = imod;
-        if (wi <= i) {
-          var rem = s - i;
-          if ((lc_1 > 7e3 || li > 24576) && (rem > 423 || !lst)) {
-            pos = wblk(dat, w, 0, syms, lf, df, eb, li, bs, i - bs, pos);
-            li = lc_1 = eb = 0, bs = i;
-            for (var j = 0; j < 286; ++j)
-              lf[j] = 0;
-            for (var j = 0; j < 30; ++j)
-              df[j] = 0;
-          }
-          var l = 2, d = 0, ch_1 = c, dif = imod - pimod & 32767;
-          if (rem > 2 && hv == hsh(i - dif)) {
-            var maxn = Math.min(n3, rem) - 1;
-            var maxd = Math.min(32767, i);
-            var ml = Math.min(258, rem);
-            while (dif <= maxd && --ch_1 && imod != pimod) {
-              if (dat[i + l] == dat[i + l - dif]) {
-                var nl = 0;
-                for (; nl < ml && dat[i + nl] == dat[i + nl - dif]; ++nl)
-                  ;
-                if (nl > l) {
-                  l = nl, d = dif;
-                  if (nl > maxn)
-                    break;
-                  var mmd = Math.min(dif, nl - 2);
-                  var md = 0;
-                  for (var j = 0; j < mmd; ++j) {
-                    var ti = i - dif + j & 32767;
-                    var pti = prev[ti];
-                    var cd = ti - pti & 32767;
-                    if (cd > md)
-                      md = cd, pimod = ti;
-                  }
-                }
-              }
-              imod = pimod, pimod = prev[imod];
-              dif += imod - pimod & 32767;
-            }
-          }
-          if (d) {
-            syms[li++] = 268435456 | revfl[l] << 18 | revfd[d];
-            var lin = revfl[l] & 31, din = revfd[d] & 31;
-            eb += fleb[lin] + fdeb[din];
-            ++lf[257 + lin];
-            ++df[din];
-            wi = i + l;
-            ++lc_1;
-          } else {
-            syms[li++] = dat[i];
-            ++lf[dat[i]];
-          }
-        }
-      }
-      for (i = Math.max(i, wi); i < s; ++i) {
-        syms[li++] = dat[i];
-        ++lf[dat[i]];
-      }
-      pos = wblk(dat, w, lst, syms, lf, df, eb, li, bs, i - bs, pos);
-      if (!lst) {
-        st.r = pos & 7 | w[pos / 8 | 0] << 3;
-        pos -= 7;
-        st.h = head, st.p = prev, st.i = i, st.w = wi;
-      }
-    } else {
-      for (var i = st.w || 0; i < s + lst; i += 65535) {
-        var e = i + 65535;
-        if (e >= s) {
-          w[pos / 8 | 0] = lst;
-          e = s;
-        }
-        pos = wfblk(w, pos + 1, dat.subarray(i, e));
-      }
-      st.i = s;
-    }
-    return slc(o, 0, pre + shft(pos) + post);
-  };
-  var crct = /* @__PURE__ */ (function() {
-    var t = new Int32Array(256);
-    for (var i = 0; i < 256; ++i) {
-      var c = i, k = 9;
-      while (--k)
-        c = (c & 1 && -306674912) ^ c >>> 1;
-      t[i] = c;
-    }
-    return t;
-  })();
-  var crc = function() {
-    var c = -1;
-    return {
-      p: function(d) {
-        var cr = c;
-        for (var i = 0; i < d.length; ++i)
-          cr = crct[cr & 255 ^ d[i]] ^ cr >>> 8;
-        c = cr;
-      },
-      d: function() {
-        return ~c;
-      }
-    };
-  };
-  var dopt = function(dat, opt, pre, post, st) {
-    if (!st) {
-      st = { l: 1 };
-      if (opt.dictionary) {
-        var dict = opt.dictionary.subarray(-32768);
-        var newDat = new u8(dict.length + dat.length);
-        newDat.set(dict);
-        newDat.set(dat, dict.length);
-        dat = newDat;
-        st.w = dict.length;
-      }
-    }
-    return dflt(dat, opt.level == null ? 6 : opt.level, opt.mem == null ? st.l ? Math.ceil(Math.max(8, Math.min(13, Math.log(dat.length))) * 1.5) : 20 : 12 + opt.mem, pre, post, st);
-  };
-  var mrg = function(a, b3) {
-    var o = {};
-    for (var k in a)
-      o[k] = a[k];
-    for (var k in b3)
-      o[k] = b3[k];
-    return o;
-  };
-  var wcln = function(fn, fnStr, td2) {
-    var dt = fn();
-    var st = fn.toString();
-    var ks = st.slice(st.indexOf("[") + 1, st.lastIndexOf("]")).replace(/\s+/g, "").split(",");
-    for (var i = 0; i < dt.length; ++i) {
-      var v = dt[i], k = ks[i];
-      if (typeof v == "function") {
-        fnStr += ";" + k + "=";
-        var st_1 = v.toString();
-        if (v.prototype) {
-          if (st_1.indexOf("[native code]") != -1) {
-            var spInd = st_1.indexOf(" ", 8) + 1;
-            fnStr += st_1.slice(spInd, st_1.indexOf("(", spInd));
-          } else {
-            fnStr += st_1;
-            for (var t in v.prototype)
-              fnStr += ";" + k + ".prototype." + t + "=" + v.prototype[t].toString();
-          }
-        } else
-          fnStr += st_1;
-      } else
-        td2[k] = v;
-    }
-    return fnStr;
-  };
-  var ch = [];
-  var cbfs = function(v) {
-    var tl = [];
-    for (var k in v) {
-      if (v[k].buffer) {
-        tl.push((v[k] = new v[k].constructor(v[k])).buffer);
-      }
-    }
-    return tl;
-  };
-  var wrkr = function(fns, init, id, cb) {
-    if (!ch[id]) {
-      var fnStr = "", td_1 = {}, m = fns.length - 1;
-      for (var i = 0; i < m; ++i)
-        fnStr = wcln(fns[i], fnStr, td_1);
-      ch[id] = { c: wcln(fns[m], fnStr, td_1), e: td_1 };
-    }
-    var td2 = mrg({}, ch[id].e);
-    return wk(ch[id].c + ";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage=" + init.toString() + "}", id, td2, cbfs(td2), cb);
-  };
-  var bDflt = function() {
-    return [u8, u16, i32, fleb, fdeb, clim, revfl, revfd, flm, flt, fdm, fdt, rev, deo, et, hMap, wbits, wbits16, hTree, ln, lc, clen, wfblk, wblk, shft, slc, dflt, dopt, deflateSync, pbf];
-  };
-  var gze = function() {
-    return [gzh, gzhl, wbytes, crc, crct];
-  };
-  var pbf = function(msg) {
-    return postMessage(msg, [msg.buffer]);
-  };
-  var cbify = function(dat, opts, fns, init, id, cb) {
-    var w = wrkr(fns, init, id, function(err2, dat2) {
-      w.terminate();
-      cb(err2, dat2);
-    });
-    w.postMessage([dat, opts], opts.consume ? [dat.buffer] : []);
-    return function() {
-      w.terminate();
-    };
-  };
   var b2 = function(d, b3) {
     return d[b3] | d[b3 + 1] << 8;
   };
@@ -7611,54 +7181,9 @@ ${shapes}`.trim();
   var b8 = function(d, b3) {
     return b4(d, b3) + b4(d, b3 + 4) * 4294967296;
   };
-  var wbytes = function(d, b3, v) {
-    for (; v; ++b3)
-      d[b3] = v, v >>>= 8;
-  };
-  var gzh = function(c, o) {
-    var fn = o.filename;
-    c[0] = 31, c[1] = 139, c[2] = 8, c[8] = o.level < 2 ? 4 : o.level == 9 ? 2 : 0, c[9] = 3;
-    if (o.mtime != 0)
-      wbytes(c, 4, Math.floor(new Date(o.mtime || Date.now()) / 1e3));
-    if (fn) {
-      c[3] = 8;
-      for (var i = 0; i <= fn.length; ++i)
-        c[i + 10] = fn.charCodeAt(i);
-    }
-  };
-  var gzhl = function(o) {
-    return 10 + (o.filename ? o.filename.length + 1 : 0);
-  };
-  function deflateSync(data, opts) {
-    return dopt(data, opts || {}, 0, 0);
-  }
   function inflateSync(data, opts) {
     return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
   }
-  function gzip(data, opts, cb) {
-    if (!cb)
-      cb = opts, opts = {};
-    if (typeof cb != "function")
-      err(7);
-    return cbify(data, opts, [
-      bDflt,
-      gze,
-      function() {
-        return [gzipSync];
-      }
-    ], function(ev) {
-      return pbf(gzipSync(ev.data[0], ev.data[1]));
-    }, 2, cb);
-  }
-  function gzipSync(data, opts) {
-    if (!opts)
-      opts = {};
-    var c = crc(), l = data.length;
-    c.p(data);
-    var d = dopt(data, opts, gzhl(opts), 8), s = d.length;
-    return gzh(d, opts), wbytes(d, s - 8, c.d()), wbytes(d, s - 4, l), d;
-  }
-  var te = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder();
   var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
   var tds = 0;
   try {
@@ -7682,39 +7207,6 @@ ${shapes}`.trim();
         r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
     }
   };
-  function strToU8(str2, latin1) {
-    if (latin1) {
-      var ar_1 = new u8(str2.length);
-      for (var i = 0; i < str2.length; ++i)
-        ar_1[i] = str2.charCodeAt(i);
-      return ar_1;
-    }
-    if (te)
-      return te.encode(str2);
-    var l = str2.length;
-    var ar = new u8(str2.length + (str2.length >> 1));
-    var ai = 0;
-    var w = function(v) {
-      ar[ai++] = v;
-    };
-    for (var i = 0; i < l; ++i) {
-      if (ai + 5 > ar.length) {
-        var n3 = new u8(ai + 8 + (l - i << 1));
-        n3.set(ar);
-        ar = n3;
-      }
-      var c = str2.charCodeAt(i);
-      if (c < 128 || latin1)
-        w(c);
-      else if (c < 2048)
-        w(192 | c >> 6), w(128 | c & 63);
-      else if (c > 55295 && c < 57344)
-        c = 65536 + (c & 1023 << 10) | str2.charCodeAt(++i) & 1023, w(240 | c >> 18), w(128 | c >> 12 & 63), w(128 | c >> 6 & 63), w(128 | c & 63);
-      else
-        w(224 | c >> 12), w(128 | c >> 6 & 63), w(128 | c & 63);
-    }
-    return slc(ar, 0, ai);
-  }
   function strFromU8(dat, latin1) {
     if (latin1) {
       var r = "";
@@ -10077,38 +9569,6 @@ ${shapes}`.trim();
       return { endpointUrl: trimmed, migrated: false };
     }
   }
-  var COMPACT_DROP_KEYS = /* @__PURE__ */ new Set(["raw"]);
-  function compactRecord(row) {
-    const out = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (value === void 0) continue;
-      if (COMPACT_DROP_KEYS.has(key)) continue;
-      out[key] = value;
-    }
-    return out;
-  }
-  function unionOrderedKeys(rows, prefer) {
-    const set = /* @__PURE__ */ new Set();
-    for (const key of prefer) set.add(key);
-    for (const row of rows) {
-      for (const key of Object.keys(row)) set.add(key);
-    }
-    const preferSet = new Set(prefer);
-    const rest = Array.from(set).filter((k) => !preferSet.has(k)).sort();
-    return prefer.concat(rest.filter((k) => !preferSet.has(k)));
-  }
-  function toColumnar(rows, prefer) {
-    if (rows.length === 0) return { cols: [], rows: [] };
-    const cols = unionOrderedKeys(rows, prefer);
-    const outRows = new Array(rows.length);
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      const arr = new Array(cols.length);
-      for (let c = 0; c < cols.length; c++) arr[c] = r[cols[c]];
-      outRows[i] = arr;
-    }
-    return { cols, rows: outRows };
-  }
   function getUserscriptVersion() {
     const anyGlobal = globalThis;
     const info = anyGlobal?.GM_info;
@@ -10231,235 +9691,6 @@ ${shapes}`.trim();
     const cursor = meta?.value?.cursorTo;
     return typeof cursor === "number" && Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
   }
-  async function setLastServerSyncCursor(status) {
-    await db.meta.put({
-      key: SYNC_META_KEY,
-      value: {
-        cursorFrom: status.cursorFrom,
-        cursorTo: status.cursorTo,
-        lastSyncAt: Date.now(),
-        lastStatus: status.status,
-        lastOk: status.ok,
-        lastBytesJson: status.bytesJson,
-        lastBytesGzip: status.bytesGzip,
-        lastCounts: status.counts
-      },
-      updatedAt: Date.now()
-    });
-  }
-  async function gzipJson(json) {
-    return await new Promise((resolve, reject) => {
-      gzip(strToU8(json), { level: 6 }, (err2, out) => {
-        if (err2) reject(err2);
-        else resolve(out);
-      });
-    });
-  }
-  async function ensureSyncDetailCoverage() {
-    const games = await db.games.orderBy("playedAt").reverse().limit(500).toArray();
-    if (!games.length) return;
-    await fetchDetailsForGames({
-      games,
-      concurrency: 4,
-      retryErrors: true,
-      verifyCompleteness: true,
-      reason: "pre-sync",
-      onStatus: () => {
-      }
-    });
-  }
-  async function buildDelta(since, opts) {
-    const cursorFrom = Math.max(0, Math.floor(since || 0));
-    const cursorUpper = typeof opts.maxCursorTo === "number" && Number.isFinite(opts.maxCursorTo) && opts.maxCursorTo > 0 ? Math.max(cursorFrom, Math.floor(opts.maxCursorTo)) : 0;
-    const [ownerId, ownerName] = await Promise.all([getCurrentPlayerId(), getCurrentPlayerName()]);
-    const byTime = (table, index, tsFrom, tsTo, includeTo) => {
-      const w = table.where(index);
-      if (tsTo > 0) return w.between(tsFrom, tsTo, false, includeTo).toArray();
-      return w.above(tsFrom).toArray();
-    };
-    const [gamesByTime, roundsByTime, detailsByTime, gameAggByTime] = await Promise.all([
-      byTime(db.games, "playedAt", cursorFrom, cursorUpper, true),
-      byTime(db.rounds, "playedAt", cursorFrom, cursorUpper, true),
-      byTime(db.details, "fetchedAt", cursorFrom, cursorUpper, true),
-      opts.includeAggregates ? byTime(db.gameAgg, "computedAt", cursorFrom, cursorUpper, true) : Promise.resolve([])
-    ]);
-    const gameIds = gamesByTime.map((g) => g.gameId);
-    const [roundsByGame, detailsByGame] = await Promise.all([
-      gameIds.length > 0 ? db.rounds.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([]),
-      gameIds.length > 0 ? db.details.where("gameId").anyOf(gameIds).toArray() : Promise.resolve([])
-    ]);
-    const roundsMerged = (() => {
-      const byId = /* @__PURE__ */ new Map();
-      for (const r of roundsByGame) byId.set(r.id, r);
-      for (const r of roundsByTime) byId.set(r.id, r);
-      return Array.from(byId.values());
-    })();
-    const detailsMerged = (() => {
-      const byId = /* @__PURE__ */ new Map();
-      for (const d of detailsByGame) byId.set(d.gameId, d);
-      for (const d of detailsByTime) byId.set(d.gameId, d);
-      return Array.from(byId.values());
-    })();
-    const roundsNeedingTsGameIds = Array.from(
-      new Set(
-        roundsMerged.filter((r) => !(typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0)).map((r) => typeof r?.gameId === "string" ? r.gameId : "").filter(Boolean)
-      )
-    );
-    if (roundsNeedingTsGameIds.length > 0) {
-      const gamesForBackfill = await db.games.where("gameId").anyOf(roundsNeedingTsGameIds).toArray();
-      const gamePlayedAt = /* @__PURE__ */ new Map();
-      for (const g of gamesForBackfill) {
-        if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > 0) gamePlayedAt.set(g.gameId, g.playedAt);
-      }
-      for (const r of roundsMerged) {
-        if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > 0) continue;
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        const ts = gid ? gamePlayedAt.get(gid) : void 0;
-        if (typeof ts === "number") r.playedAt = ts;
-      }
-    }
-    const filterModeFamily = opts.filterModeFamily || "all";
-    const filterRated = opts.filterRated || "all";
-    const filterMovementAnyOf = Array.isArray(opts.filterMovementAnyOf) ? opts.filterMovementAnyOf : [];
-    const filterFromMs = typeof opts.filterFromMs === "number" && Number.isFinite(opts.filterFromMs) ? Math.max(0, Math.floor(opts.filterFromMs)) : 0;
-    const filterToMs = typeof opts.filterToMs === "number" && Number.isFinite(opts.filterToMs) ? Math.max(0, Math.floor(opts.filterToMs)) : 0;
-    const ratedByGameId = (() => {
-      const m = /* @__PURE__ */ new Map();
-      for (const d of detailsMerged) {
-        const gid = typeof d?.gameId === "string" ? d.gameId : "";
-        if (!gid) continue;
-        if (typeof d?.isRated === "boolean") m.set(gid, d.isRated);
-      }
-      return m;
-    })();
-    const movementForGame = (() => {
-      const out = /* @__PURE__ */ new Map();
-      const counts = /* @__PURE__ */ new Map();
-      for (const r of roundsMerged) {
-        const gid = typeof r?.gameId === "string" ? r.gameId : "";
-        if (!gid) continue;
-        const mtRaw = typeof r?.movementType === "string" ? r.movementType.trim().toLowerCase() : "";
-        const mt = mtRaw === "moving" || mtRaw === "no_move" || mtRaw === "nmpz" ? mtRaw : "unknown";
-        let m = counts.get(gid);
-        if (!m) {
-          m = /* @__PURE__ */ new Map();
-          counts.set(gid, m);
-        }
-        m.set(mt, (m.get(mt) || 0) + 1);
-      }
-      for (const [gid, m] of counts.entries()) {
-        let best = { k: "unknown", n: 0 };
-        for (const [k, n3] of m.entries()) {
-          const kk = k;
-          if (typeof n3 === "number" && n3 > best.n) best = { k: kk, n: n3 };
-        }
-        out.set(gid, best.k);
-      }
-      return out;
-    })();
-    const allowedGameIds = (() => {
-      const ids = /* @__PURE__ */ new Set();
-      for (const g of gamesByTime) {
-        const gid = typeof g?.gameId === "string" ? g.gameId : "";
-        if (!gid) continue;
-        if (filterModeFamily !== "all" && String(g?.modeFamily || "") !== filterModeFamily) continue;
-        if (filterFromMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) < filterFromMs)) continue;
-        if (filterToMs && (!Number.isFinite(g?.playedAt) || Number(g.playedAt) > filterToMs)) continue;
-        const mt = movementForGame.get(gid) || "unknown";
-        if (filterMovementAnyOf.length > 0 && !filterMovementAnyOf.includes(mt)) continue;
-        const rated = ratedByGameId.get(gid);
-        if (filterRated === "rated" && rated !== true) continue;
-        if (filterRated === "unrated" && rated !== false) continue;
-        if (filterRated === "unknown" && typeof rated === "boolean") continue;
-        ids.add(gid);
-      }
-      return ids;
-    })();
-    const gamesByTimeFiltered = gamesByTime.filter((g) => allowedGameIds.has(g.gameId));
-    const roundsMergedFiltered = roundsMerged.filter((r) => allowedGameIds.has(String(r?.gameId || "")));
-    const detailsMergedFiltered = detailsMerged.filter((d) => allowedGameIds.has(String(d?.gameId || "")));
-    const gameAggByTimeFiltered = gameAggByTime.filter((a) => allowedGameIds.has(String(a?.gameId || "")));
-    const games = opts.compact ? gamesByTimeFiltered.map(compactRecord) : gamesByTimeFiltered;
-    const roundsPayloadBase = roundsMergedFiltered.map((r) => {
-      const out = { ...r };
-      delete out.playedAt;
-      return out;
-    });
-    const rounds = opts.compact ? roundsPayloadBase.map(compactRecord) : roundsPayloadBase;
-    const details = opts.compact ? detailsMergedFiltered.map(compactRecord) : detailsMergedFiltered;
-    const gameAgg = opts.compact ? gameAggByTimeFiltered.map(compactRecord) : gameAggByTimeFiltered;
-    const cursorToCandidates = [];
-    for (const g of gamesByTime) if (typeof g.playedAt === "number") cursorToCandidates.push(g.playedAt);
-    for (const r of roundsMerged) if (typeof r.playedAt === "number") cursorToCandidates.push(r.playedAt);
-    for (const d of detailsMerged) if (typeof d.fetchedAt === "number") cursorToCandidates.push(d.fetchedAt);
-    for (const a of gameAggByTime) if (typeof a.computedAt === "number") cursorToCandidates.push(a.computedAt);
-    const cursorToRaw = cursorToCandidates.length > 0 ? Math.max(...cursorToCandidates) : cursorFrom;
-    const cursorTo = cursorUpper > 0 ? Math.min(cursorUpper, cursorToRaw) : cursorToRaw;
-    const tables = {
-      games: toColumnar(games, ["gameId", "playedAt", "type", "modeFamily", "gameMode", "isTeamDuels"]),
-      rounds: toColumnar(rounds, ["id", "gameId", "roundNumber", "movementType"]),
-      details: toColumnar(details, ["gameId", "status", "fetchedAt", "modeFamily", "gameMode", "mapSlug"]),
-      ...opts.includeAggregates ? { gameAgg: toColumnar(gameAgg, ["gameId", "computedAt", "aggVersion"]) } : {}
-    };
-    const envelope = {
-      schema: "geoanalyzr-sync",
-      schemaVersion: 1,
-      createdAt: Date.now(),
-      appVersion: getUserscriptVersion(),
-      owner: { playerId: ownerId, playerName: ownerName },
-      cursor: { from: cursorFrom, to: cursorTo },
-      options: { compact: opts.compact, includeAggregates: opts.includeAggregates, ...opts.forceFull ? { forceFull: true } : {} },
-      counts: {
-        games: gamesByTimeFiltered.length,
-        rounds: roundsMergedFiltered.length,
-        details: detailsMergedFiltered.length,
-        gameAgg: gameAggByTimeFiltered.length
-      },
-      tables
-    };
-    const json = JSON.stringify(envelope);
-    const bytesGzip = await gzipJson(json);
-    return {
-      cursorFrom,
-      cursorTo,
-      counts: envelope.counts,
-      json,
-      bytesJson: json.length,
-      bytesGzip
-    };
-  }
-  function gmPostBytes(url, body, opts) {
-    return new Promise((resolve, reject) => {
-      const gm = getGmXmlhttpRequest();
-      if (!gm) return reject(new Error("GM_xmlhttpRequest is not available."));
-      gm({
-        method: "POST",
-        url,
-        headers: opts.headers,
-        data: body,
-        responseType: "text",
-        timeout: opts.timeoutMs ?? 45e3,
-        onload: (res) => {
-          const status = typeof res?.status === "number" ? res.status : Number(res?.status) || 0;
-          const text = typeof res?.responseText === "string" ? res.responseText : "";
-          const rawHeaders = typeof res?.responseHeaders === "string" ? res.responseHeaders : "";
-          const headers = {};
-          for (const line of rawHeaders.split(/\r?\n/)) {
-            const idx = line.indexOf(":");
-            if (idx <= 0) continue;
-            const k = line.slice(0, idx).trim().toLowerCase();
-            const v = line.slice(idx + 1).trim();
-            if (!k) continue;
-            if (headers[k]) headers[k] = `${headers[k]}, ${v}`;
-            else headers[k] = v;
-          }
-          resolve({ status, text, headers });
-        },
-        onerror: (err2) => reject(err2 instanceof Error ? err2 : new Error("GM_xmlhttpRequest failed")),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout"))
-      });
-    });
-  }
   function gmRequestText(opts) {
     return new Promise((resolve, reject) => {
       const gm = getGmXmlhttpRequest();
@@ -10578,136 +9809,6 @@ ${shapes}`.trim();
       });
     }
     return { ok, status: res.status, responseText: res.text, deleted: parsed?.deleted };
-  }
-  async function runServerSyncOnceWithOptions(settings, opts = {}) {
-    const endpointUrl = (settings.endpointUrl || "").trim();
-    if (!endpointUrl) throw new Error("Missing sync endpoint URL.");
-    const token = (settings.token || "").trim();
-    if (!token) throw new Error("Missing sync token.");
-    const forceFull = opts.forceFull === true;
-    const cursorFrom = forceFull ? 0 : await getLastServerSyncCursor();
-    await ensureSyncDetailCoverage();
-    const effectiveCompact = settings.compact === true;
-    const MAX_GZIP_BYTES = 4.5 * 1024 * 1024;
-    const MAX_CHUNKS = 60;
-    const baseDeltaOpts = {
-      compact: effectiveCompact,
-      includeAggregates: settings.includeAggregates,
-      forceFull,
-      filterModeFamily: opts.filterModeFamily ?? settings.filterModeFamily,
-      filterMovementAnyOf: opts.filterMovementAnyOf ?? settings.filterMovementAnyOf,
-      filterRated: opts.filterRated ?? settings.filterRated,
-      filterFromMs: opts.filterFromMs ?? settings.filterFromMs,
-      filterToMs: opts.filterToMs ?? settings.filterToMs
-    };
-    const buildHeaders = (d) => ({
-      "Content-Type": "application/json",
-      "Content-Encoding": "gzip",
-      Authorization: `Bearer ${token}`,
-      "X-GA-Cursor-From": String(d.cursorFrom),
-      "X-GA-Cursor-To": String(d.cursorTo),
-      "X-GA-Schema-Version": "1",
-      ...getUserscriptVersion() ? { "X-GA-Script-Version": String(getUserscriptVersion()) } : {}
-    });
-    const postDelta = async (d) => {
-      const headers = buildHeaders(d);
-      const res = await gmPostBytes(endpointUrl, d.bytesGzip, { headers, timeoutMs: 6e4 });
-      const ok = res.status >= 200 && res.status < 300;
-      const status = {
-        ok,
-        status: res.status,
-        responseText: res.text,
-        cursorFrom: d.cursorFrom,
-        cursorTo: d.cursorTo,
-        counts: d.counts,
-        bytesJson: d.bytesJson,
-        bytesGzip: d.bytesGzip.length
-      };
-      if (ok) await setLastServerSyncCursor(status);
-      return status;
-    };
-    const pickChunkUpperBound = async (since, targetCount) => {
-      const lim = Math.max(50, Math.floor(targetCount || 0));
-      const [games, rounds, details, aggs] = await Promise.all([
-        db.games.where("playedAt").above(since).limit(lim).toArray(),
-        db.rounds.where("playedAt").above(since).limit(lim).toArray(),
-        db.details.where("fetchedAt").above(since).limit(lim).toArray(),
-        settings.includeAggregates ? db.gameAgg.where("computedAt").above(since).limit(lim).toArray() : Promise.resolve([])
-      ]);
-      const ts = [];
-      for (const g of games) if (typeof g?.playedAt === "number" && Number.isFinite(g.playedAt) && g.playedAt > since) ts.push(g.playedAt);
-      for (const r of rounds) if (typeof r?.playedAt === "number" && Number.isFinite(r.playedAt) && r.playedAt > since) ts.push(r.playedAt);
-      for (const d of details) if (typeof d?.fetchedAt === "number" && Number.isFinite(d.fetchedAt) && d.fetchedAt > since) ts.push(d.fetchedAt);
-      for (const a of aggs) if (typeof a?.computedAt === "number" && Number.isFinite(a.computedAt) && a.computedAt > since) ts.push(a.computedAt);
-      if (ts.length === 0) return null;
-      ts.sort((a, b3) => a - b3);
-      const uniq = [];
-      for (const t of ts) if (!uniq.length || uniq[uniq.length - 1] !== t) uniq.push(t);
-      const idx = Math.min(uniq.length - 1, Math.max(0, Math.floor(targetCount) - 1));
-      const pick2 = uniq[idx] ?? uniq[uniq.length - 1];
-      return typeof pick2 === "number" && Number.isFinite(pick2) && pick2 > since ? pick2 : uniq[uniq.length - 1] ?? null;
-    };
-    const runChunked = async (startCursorFrom) => {
-      let since = Math.max(0, Math.floor(startCursorFrom || 0));
-      let targetCount = forceFull ? 1800 : 3200;
-      let chunks = 0;
-      const totalCounts = { games: 0, rounds: 0, details: 0, gameAgg: 0 };
-      let totalBytesJson = 0;
-      let totalBytesGzip = 0;
-      let last = null;
-      for (let guard = 0; guard < MAX_CHUNKS; guard++) {
-        const upper = await pickChunkUpperBound(since, targetCount);
-        if (!upper || upper <= since) break;
-        const delta = await buildDelta(since, { ...baseDeltaOpts, maxCursorTo: upper });
-        if (!(delta.cursorTo > since)) break;
-        if (delta.bytesGzip.length > MAX_GZIP_BYTES && targetCount > 60) {
-          targetCount = Math.max(60, Math.floor(targetCount / 2));
-          continue;
-        }
-        const st = await postDelta(delta);
-        last = st;
-        if (!st.ok) {
-          if (st.status === 413 && targetCount > 60) {
-            targetCount = Math.max(60, Math.floor(targetCount / 2));
-            continue;
-          }
-          return st;
-        }
-        chunks++;
-        totalCounts.games += Number(delta.counts?.games) || 0;
-        totalCounts.rounds += Number(delta.counts?.rounds) || 0;
-        totalCounts.details += Number(delta.counts?.details) || 0;
-        totalCounts.gameAgg += Number(delta.counts?.gameAgg) || 0;
-        totalBytesJson += delta.bytesJson;
-        totalBytesGzip += delta.bytesGzip.length;
-        since = delta.cursorTo;
-        if (delta.bytesGzip.length < MAX_GZIP_BYTES * 0.55) targetCount = Math.min(2e4, Math.floor(targetCount * 1.35));
-      }
-      if (!last) {
-        const d = await buildDelta(since, { ...baseDeltaOpts, maxCursorTo: 0 });
-        const st = await postDelta(d);
-        return st;
-      }
-      return {
-        ok: true,
-        status: last.status,
-        responseText: last.responseText,
-        cursorFrom: startCursorFrom,
-        cursorTo: since,
-        counts: totalCounts,
-        bytesJson: totalBytesJson,
-        bytesGzip: totalBytesGzip,
-        chunks
-      };
-    };
-    if (!forceFull) {
-      const delta = await buildDelta(cursorFrom, { ...baseDeltaOpts, maxCursorTo: 0 });
-      if (delta.bytesGzip.length <= MAX_GZIP_BYTES) {
-        const st = await postDelta(delta);
-        if (st.ok || st.status !== 413) return st;
-      }
-    }
-    return runChunked(cursorFrom);
   }
   async function getLastServerSyncMeta() {
     const meta = await db.meta.get(SYNC_META_KEY);
@@ -13829,17 +12930,6 @@ ${shapes}`.trim();
       const v = globalThis?.GM_info?.script?.version;
       return typeof v === "string" ? v : void 0;
     };
-    const formatBytes = (n3) => {
-      if (!Number.isFinite(n3) || n3 <= 0) return "0 B";
-      const units = ["B", "KB", "MB", "GB"];
-      let v = n3;
-      let i = 0;
-      while (v >= 1024 && i < units.length - 1) {
-        v /= 1024;
-        i++;
-      }
-      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-    };
     const mount = () => {
       cssOnce();
       if (!document.documentElement.contains(iconBtn)) document.documentElement.appendChild(iconBtn);
@@ -14114,29 +13204,15 @@ ${shapes}`.trim();
           }
           settings = loadServerSyncSettings();
         }
-        if (isSyncVariant) {
-          const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
-          if (r.ok) {
-            setMsg(`Synced \u2014 players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
-          } else {
-            setMsg(`Sync failed: ${r.error ?? "unknown"}`);
-          }
+        const r = await syncV3FromDb2({ forceFull, gameIds: opts.gameIds });
+        if (r.ok) {
+          setMsg(`Synced \u2014 players:${r.counts?.players ?? 0} duel_games:${r.counts?.duel_games ?? 0} duel_rounds:${r.counts?.duel_rounds ?? 0} td_games:${r.counts?.team_duel_games ?? 0} td_rounds:${r.counts?.team_duel_rounds ?? 0} std_games:${r.counts?.standard_games ?? 0}`);
         } else {
-          const res = await runServerSyncOnceWithOptions(settings, { forceFull });
-          const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-          const modeLabel = forceFull ? "Synced full" : "Synced";
-          const chunkText = typeof res.chunks === "number" && res.chunks > 1 ? ` - ${res.chunks} chunks` : "";
-          if (res.ok) {
-            setMsg(`${modeLabel} - rows ${rowsTotal} - ${formatBytes(res.bytesGzip)}${chunkText}`);
+          const errMsg = r.error ?? "unknown";
+          if (/^(401|403)$/.test(errMsg) || /HTTP (401|403)/.test(errMsg)) {
+            setMsg(`Sync failed (${errMsg}) - token invalid/expired. Re-link your device and try again.`);
           } else {
-            const size = formatBytes(res.bytesGzip);
-            if (res.status === 413) {
-              setMsg(`Sync failed (HTTP 413) - payload ${size}. Try Compact mode or narrow Sync filters.`);
-            } else if (res.status === 401 || res.status === 403) {
-              setMsg(`Sync failed (HTTP ${res.status}) - token invalid/expired. Re-link your device and try again.`);
-            } else {
-              setMsg(`Sync failed (HTTP ${res.status})`);
-            }
+            setMsg(`Sync failed: ${errMsg}`);
           }
         }
       } catch (e) {
@@ -26002,10 +25078,10 @@ ${shapes}`.trim();
       const typeOpts = widgetTypes.map((t) => ({ value: t, label: t }));
       const cardsBox = doc.createElement("div");
       cardsBox.className = "ga-le-box";
-      const ch3 = doc.createElement("div");
-      ch3.className = "ga-le-box-head";
-      ch3.textContent = "Cards";
-      cardsBox.appendChild(ch3);
+      const ch = doc.createElement("div");
+      ch.className = "ga-le-box-head";
+      ch.textContent = "Cards";
+      cardsBox.appendChild(ch);
       const patchCard = (cardIdx, partial) => {
         const next = cloneJson2(draft);
         const sec = next.dashboard.sections[active.idx];
@@ -38168,24 +37244,13 @@ After it finishes, open the dashboard again.`
             const settings = loadServerSyncSettings();
             if (!settings.token) return;
             ui.setStatus("Auto-syncing...");
-            const isSyncVariant = true;
-            const f = isSyncVariant ? loadFetchGameFilter() : null;
-            const res = await runServerSyncOnceWithOptions(
-              settings,
-              isSyncVariant ? {
-                forceFull: false,
-                filterModeFamily: f?.modeFamily,
-                filterMovementAnyOf: f?.movementAnyOf,
-                filterRated: f?.rated,
-                filterFromMs: f?.fromMs,
-                filterToMs: f?.toMs
-              } : { forceFull: false }
-            );
+            const res = await syncV3FromDb2({ forceFull: false });
             if (res.ok) {
-              const rowsTotal = res.counts.games + res.counts.rounds + res.counts.details + res.counts.gameAgg;
-              ui.setStatus(`Auto-sync OK - rows ${rowsTotal} - ${Math.round(res.bytesGzip / 1024)} KB (gz)`);
+              const c = res.counts;
+              const rowsTotal = (c?.duel_games ?? 0) + (c?.team_duel_games ?? 0) + (c?.standard_games ?? 0);
+              ui.setStatus(`Auto-sync OK - games ${rowsTotal}`);
             } else {
-              ui.setStatus(`Auto-sync failed (HTTP ${res.status})`);
+              ui.setStatus(`Auto-sync failed: ${res.error ?? "unknown"}`);
             }
           } catch {
           }
