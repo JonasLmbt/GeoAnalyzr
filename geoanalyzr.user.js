@@ -2,7 +2,7 @@
 // @name         GeoAnalyzr
 // @namespace    geoanalyzr
 // @author       JonasLmbt
-// @version      3.0.24
+// @version      3.0.25
 // @updateURL    https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @downloadURL  https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/geoanalyzr.user.js
 // @icon         https://raw.githubusercontent.com/JonasLmbt/GeoAnalyzr/master/images/logo-light.svg
@@ -7601,27 +7601,6 @@ ${shapes}`.trim();
       return void 0;
     }
   }
-  async function guessPlayerNameFromDb() {
-    try {
-      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-      for (const d of latest) {
-        const candidate = asTrimmedString(d?.player_self_name) ?? asTrimmedString(d?.playerOneName) ?? asTrimmedString(d?.playerOneNick) ?? asTrimmedString(d?.playerOneNickname);
-        if (candidate) return candidate;
-      }
-    } catch (e) {
-      try {
-        const all = await db.details.toArray();
-        const sorted = all.slice().sort((a, b3) => Number(b3?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-        for (const d of sorted.slice(0, 25)) {
-          const candidate = asTrimmedString(d?.player_self_name) ?? asTrimmedString(d?.playerOneName) ?? asTrimmedString(d?.playerOneNick) ?? asTrimmedString(d?.playerOneNickname);
-          if (candidate) return candidate;
-        }
-      } catch {
-      }
-      console.warn("Failed to guess player name from DB", e);
-    }
-    return void 0;
-  }
   async function fetchPlayerIdFromApi() {
     const idCandidates = [
       "https://www.geoguessr.com/api/v3/profiles",
@@ -7640,48 +7619,17 @@ ${shapes}`.trim();
     }
     return void 0;
   }
-  async function guessPlayerIdFromDb() {
-    try {
-      const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-      for (const d of latest) {
-        const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
-        if (candidate) return candidate;
-      }
-    } catch (e) {
-      try {
-        const all = await db.details.toArray();
-        const sorted = all.slice().sort((a, b3) => Number(b3?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-        for (const d of sorted.slice(0, 25)) {
-          const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
-          if (candidate) return candidate;
-        }
-      } catch {
-      }
-      console.warn("Failed to guess player id from DB", e);
-    }
-    return void 0;
-  }
   async function getCurrentPlayerId() {
     if (cachedPlayerId !== void 0) return cachedPlayerId || void 0;
     const fromApi = await fetchPlayerIdFromApi();
-    if (fromApi) {
-      cachedPlayerId = fromApi;
-      return fromApi;
-    }
-    const fromDb = await guessPlayerIdFromDb();
-    cachedPlayerId = fromDb ?? null;
-    return fromDb;
+    cachedPlayerId = fromApi ?? null;
+    return fromApi;
   }
   async function getCurrentPlayerName() {
     if (cachedPlayerName !== void 0) return cachedPlayerName || void 0;
     const fromApi = await fetchPlayerNameFromApi();
-    if (fromApi) {
-      cachedPlayerName = fromApi;
-      return fromApi;
-    }
-    const fromDb = await guessPlayerNameFromDb();
-    cachedPlayerName = fromDb ?? null;
-    return fromDb;
+    cachedPlayerName = fromApi ?? null;
+    return fromApi;
   }
 
   // node_modules/@rapideditor/country-coder/dist/country-coder.mjs

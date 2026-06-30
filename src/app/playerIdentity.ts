@@ -1,4 +1,3 @@
-import { db } from "../db";
 import { httpGetJson } from "../http";
 
 let cachedPlayerName: string | null | undefined;
@@ -59,40 +58,6 @@ async function fetchPlayerNameFromApi(): Promise<string | undefined> {
   }
 }
 
-async function guessPlayerNameFromDb(): Promise<string | undefined> {
-  try {
-    const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-    for (const d of latest as any[]) {
-      const candidate =
-        asTrimmedString(d?.player_self_name) ??
-        asTrimmedString(d?.playerOneName) ??
-        asTrimmedString(d?.playerOneNick) ??
-        asTrimmedString(d?.playerOneNickname);
-      if (candidate) return candidate;
-    }
-  } catch (e) {
-    // Fallback for rare IndexedDB key-range errors (e.g. "IDBKeyRange.bound ... not a valid key").
-    try {
-      const all = await db.details.toArray();
-      const sorted = (all as any[])
-        .slice()
-        .sort((a, b) => (Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0)));
-      for (const d of sorted.slice(0, 25)) {
-        const candidate =
-          asTrimmedString(d?.player_self_name) ??
-          asTrimmedString(d?.playerOneName) ??
-          asTrimmedString(d?.playerOneNick) ??
-          asTrimmedString(d?.playerOneNickname);
-        if (candidate) return candidate;
-      }
-    } catch {
-      // ignore
-    }
-    console.warn("Failed to guess player name from DB", e);
-  }
-  return undefined;
-}
-
 async function fetchPlayerIdFromApi(): Promise<string | undefined> {
   const idCandidates = [
     "https://www.geoguessr.com/api/v3/profiles",
@@ -114,53 +79,23 @@ async function fetchPlayerIdFromApi(): Promise<string | undefined> {
   return undefined;
 }
 
-async function guessPlayerIdFromDb(): Promise<string | undefined> {
-  try {
-    const latest = await db.details.orderBy("fetchedAt").reverse().limit(10).toArray();
-    for (const d of latest as any[]) {
-      const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
-      if (candidate) return candidate;
-    }
-  } catch (e) {
-    try {
-      const all = await db.details.toArray();
-      const sorted = (all as any[]).slice().sort((a, b) => Number(b?.fetchedAt ?? 0) - Number(a?.fetchedAt ?? 0));
-      for (const d of sorted.slice(0, 25)) {
-        const candidate = asTrimmedString(d?.player_self_id) ?? asTrimmedString(d?.playerOneId) ?? asTrimmedString(d?.playerId);
-        if (candidate) return candidate;
-      }
-    } catch {
-      // ignore
-    }
-    console.warn("Failed to guess player id from DB", e);
-  }
-  return undefined;
-}
-
+// Identity must come from GeoGuessr's own authenticated API -- never guessed
+// from locally-cached game details (an opponent's row can land in the
+// "player one" slot of a stored detail record just as easily as our own,
+// which previously caused sync to attribute a Discord link to whichever
+// opponent happened to be in slot 0; see serverSync_v3_db2.ts).
 export async function getCurrentPlayerId(): Promise<string | undefined> {
   if (cachedPlayerId !== undefined) return cachedPlayerId || undefined;
 
   const fromApi = await fetchPlayerIdFromApi();
-  if (fromApi) {
-    cachedPlayerId = fromApi;
-    return fromApi;
-  }
-
-  const fromDb = await guessPlayerIdFromDb();
-  cachedPlayerId = fromDb ?? null;
-  return fromDb;
+  cachedPlayerId = fromApi ?? null;
+  return fromApi;
 }
 
 export async function getCurrentPlayerName(): Promise<string | undefined> {
   if (cachedPlayerName !== undefined) return cachedPlayerName || undefined;
 
   const fromApi = await fetchPlayerNameFromApi();
-  if (fromApi) {
-    cachedPlayerName = fromApi;
-    return fromApi;
-  }
-
-  const fromDb = await guessPlayerNameFromDb();
-  cachedPlayerName = fromDb ?? null;
-  return fromDb;
+  cachedPlayerName = fromApi ?? null;
+  return fromApi;
 }
